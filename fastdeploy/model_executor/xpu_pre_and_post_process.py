@@ -40,9 +40,7 @@ if current_platform.is_xpu():
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_clear_accept_nums,
-        speculate_get_output_padding_offset,
-        speculate_get_padding_offset,
-        speculate_get_seq_lens_output,
+        speculate_pre_process,
         speculate_save_output,
         speculate_set_stop_value_multi_seqs,
         speculate_set_value_by_flags_and_idx,
@@ -109,51 +107,32 @@ def xpu_pre_process(
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
-    token_num = paddle.sum(seq_lens_this_time)
 
+    token_num_cpu = paddle.sum(seq_lens_this_time).cpu()
     if use_speculate_method:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = speculate_get_padding_offset(
-            input_ids,
-            draft_tokens,
-            cum_offsets_now,
-            token_num,
-            seq_lens_this_time,
-            seq_lens_encoder,
+            cu_seqlens_q_output,
+            batch_id_per_token_output,
+            real_output_token_num,
+        ) = speculate_pre_process(
+            token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder
         )
-        seq_lens_output = speculate_get_seq_lens_output(
-            seq_lens_this_time,
-            seq_lens_encoder,
-            seq_lens_decoder,
-        )
-        if isinstance(seq_lens_output, list):
-            seq_lens_output = seq_lens_output[0]
-        output_token_num = paddle.sum(seq_lens_output)
-        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output, dtype="int32")
-        output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
-            output_cum_offsets_tmp,
-            output_token_num,
-            seq_lens_output,
-            max_len,
-        )
-        share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
-        share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
+        share_inputs["cu_seqlens_q_output"] = cu_seqlens_q_output
+        share_inputs["batch_id_per_token_output"] = batch_id_per_token_output
     else:
+        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         (
             ids_remove_padding,
             cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
+        ) = get_padding_offset(input_ids, cum_offsets_now, token_num_cpu, seq_lens_this_time)
 
-    share_inputs["cum_offsets"] = cum_offsets
     share_inputs["batch_id_per_token"] = batch_id_per_token
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
@@ -165,12 +144,12 @@ def xpu_pre_process(
         seq_lens_encoder=share_inputs["seq_lens_encoder"],
         seq_lens_decoder=share_inputs["seq_lens_decoder"],
         seq_lens_this_time=share_inputs["seq_lens_this_time"],
-        cum_offsets=share_inputs["cum_offsets"],
         batch_id_per_token=share_inputs["batch_id_per_token"],
         cu_seqlens_q=share_inputs["cu_seqlens_q"],
         cu_seqlens_k=share_inputs["cu_seqlens_k"],
         block_tables=share_inputs["block_tables"],
         caches=share_inputs["caches"],
+        max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
     )
 
     (
@@ -205,7 +184,6 @@ def xpu_pre_process(
 
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
-        cum_offsets,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
         xpu_forward_meta.encoder_batch_idx,
@@ -237,7 +215,6 @@ def xpu_pre_process(
 
 def xpu_process_output(
     forward_output,
-    cum_offsets: paddle.Tensor,
     xpu_forward_meta: XPUForwardMeta,
     share_inputs,
 ) -> paddle.Tensor:
@@ -250,7 +227,6 @@ def xpu_process_output(
 
     hiddden_states = gather_next_token(
         forward_output,
-        cum_offsets,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
         xpu_forward_meta.encoder_batch_map,
@@ -261,7 +237,7 @@ def xpu_process_output(
         xpu_forward_meta.decoder_batch_map_cpu,
         xpu_forward_meta.len_info_cpu,
         output_padding_offset,  # output_padding_offset
-        -1,  # max_input_length
+        xpu_forward_meta.max_num_seqs,
     )
     return hiddden_states
 

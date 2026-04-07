@@ -561,15 +561,31 @@ def get_sm_version():
 def modules_to_convert(prefix: str, fd_config: FDConfig):
     import fnmatch
 
+    exclude_patterns = []
+
     if (
         hasattr(fd_config.model_config, "quantization_config")
         and fd_config.model_config.quantization_config is not None
     ):
         if "modules_to_not_convert" in fd_config.model_config.quantization_config:
-            patterns = fd_config.model_config.quantization_config["modules_to_not_convert"]
-            for p in patterns:
-                if fnmatch.fnmatch(prefix, p) or fnmatch.fnmatch(prefix, p + ".*"):
-                    return False
-        return True
-    else:
-        return True
+            exclude_patterns.extend(fd_config.model_config.quantization_config["modules_to_not_convert"])
+        # 2. Check quantization_config["ignore"] (used by some models like NVFP4)
+        if "ignore" in fd_config.model_config.quantization_config:
+            exclude_patterns.extend(fd_config.model_config.quantization_config["ignore"])
+
+    # Get the model's actual prefix_name (e.g., "ernie" or "model")
+    prefix_name = "model"  # default
+    if hasattr(fd_config, "model_config") and hasattr(fd_config.model_config, "pretrained_config"):
+        prefix_name = getattr(fd_config.model_config.pretrained_config, "prefix_name", "model")
+
+    # Check if prefix matches any exclude pattern
+    for p in exclude_patterns:
+        # Direct match
+        if fnmatch.fnmatch(prefix, p) or fnmatch.fnmatch(prefix, p + ".*"):
+            return False
+        # Handle case where pattern uses "model" but actual prefix is "ernie" (or vice versa)
+        if p.startswith("model."):
+            adapted_pattern = prefix_name + "." + p[6:]
+            if fnmatch.fnmatch(prefix, adapted_pattern) or fnmatch.fnmatch(prefix, adapted_pattern + ".*"):
+                return False
+    return True

@@ -10,7 +10,7 @@ tqdm
 pynvml
 uvicorn>=0.38.0
 fastapi
-paddleformers==1.0.0
+paddleformers>=1.1.1
 redis
 etcd3
 httpx

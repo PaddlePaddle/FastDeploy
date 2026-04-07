@@ -222,9 +222,10 @@ func RegisterInstanceCore(ctx context.Context, rawInstance *InstanceInfo) error 
 func RegisterInstance(c *gin.Context) {
 	bodyBytes, err := io.ReadAll(c.Request.Body)
 	if err != nil {
+		logger.Error(c.Request.Context(), "Failed to read register request body: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
-			"msg":  "Invalid request body",
+			"msg":  fmt.Sprintf("Invalid request body: %v", err),
 		})
 		return
 	}
@@ -232,6 +233,7 @@ func RegisterInstance(c *gin.Context) {
 	var rawInstance InstanceInfo
 	err = json.Unmarshal(bodyBytes, &rawInstance)
 	if err != nil {
+		logger.Error(c.Request.Context(), "Failed to unmarshal register request JSON: %v", err)
 		c.JSON(http.StatusBadRequest, gin.H{
 			"code": 400,
 			"msg":  fmt.Sprintf("Invalid InstanceInfo JSON format: %v", err),

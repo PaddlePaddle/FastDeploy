@@ -137,7 +137,7 @@ class TestDraftModelPreprocess(unittest.TestCase):
         seq_lens_encoder = paddle.randint(0, input_ids_len, [bsz], dtype="int32")
         seq_lens_decoder = paddle.randint(0, input_ids_len, [bsz], dtype="int32")
         step_idx = paddle.randint(0, 100, [bsz], dtype="int64")
-        not_need_stop = paddle.zeros([1], dtype="bool").cpu()  # must be CPU: kernel writes back via raw pointer
+        not_need_stop = paddle.zeros([1], dtype="bool")
         pre_ids = input_ids.clone()
 
         accept_tokens = paddle.randint(0, 100, [bsz, 100], dtype="int64")
@@ -230,7 +230,7 @@ class TestDraftModelPreprocess(unittest.TestCase):
         seq_lens_encoder = paddle.zeros([bsz], dtype="int32")  # all decode for simplicity
         seq_lens_decoder = paddle.randint(max_draft_token + 1, 100, [bsz], dtype="int32")
         step_idx = paddle.randint(0, 100, [bsz], dtype="int64")
-        not_need_stop = paddle.zeros([1], dtype="bool").cpu()  # must be CPU: kernel writes back via raw pointer
+        not_need_stop = paddle.zeros([1], dtype="bool")
         pre_ids = input_ids.clone()
 
         accept_tokens = paddle.randint(0, 100, [bsz, 100], dtype="int64")

@@ -1041,7 +1041,7 @@ class SpeculativeSampler(nn.Layer):
             )
             sampler_output.logprobs_tensors = logprobs_tensors
             if cu_batch_token_offset is not None:
-                sampler_output.cu_batch_token_offset = cu_batch_token_offset
+                sampler_output.cu_batch_token_offset = cu_batch_token_offset.cpu()
         return sampler_output
 
     def forward_xpu(
@@ -1069,8 +1069,8 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
             share_inputs["seq_lens_this_time"],
-            share_inputs["output_padding_offset"],
-            share_inputs["output_cum_offsets"],
+            share_inputs["batch_id_per_token_output"],
+            share_inputs["cu_seqlens_q_output"],
             max_model_len,
             sampling_metadata.pre_token_ids,
         )
@@ -1091,7 +1091,7 @@ class SpeculativeSampler(nn.Layer):
         verify_scores, verify_tokens, actual_candidate_len = top_p_candidates(
             probs,
             sampling_metadata.top_p,
-            share_inputs["output_padding_offset"],
+            share_inputs["batch_id_per_token_output"],
             self.speculative_max_candidate_len,
             max_model_len,
         )
@@ -1113,7 +1113,7 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["max_dec_len"],
             sampling_metadata.eos_token_ids,
             share_inputs["is_block_step"],
-            share_inputs["output_cum_offsets"],
+            share_inputs["cu_seqlens_q_output"],
             actual_candidate_len,
             share_inputs["actual_draft_token_num"],
             sampling_metadata.top_p,
@@ -1290,35 +1290,7 @@ class MTPSampler(nn.Layer):
             elif self.logprobs_mode == "raw_logits":
                 raw_logprobs = share_inputs["draft_logits"][:real_token_num, :].clone()
 
-        if sampling_metadata.token_ids_all is not None:
-            token_ids_all = sampling_metadata.token_ids_all
-            prompt_lens = sampling_metadata.prompt_lens
-        else:
-            token_ids_all = sampling_metadata.pre_token_ids
-            prompt_lens = sampling_metadata.fake_prompt_lens
-
-        logits = apply_speculative_penalty_multi_scores(
-            token_ids_all,
-            prompt_lens,
-            logits,
-            sampling_metadata.repetition_penalties,
-            sampling_metadata.frequency_penalties,
-            sampling_metadata.presence_penalties,
-            sampling_metadata.temperature,
-            sampling_metadata.bad_words_token_ids,
-            sampling_metadata.bad_words_token_len,
-            sampling_metadata.step_idx,
-            sampling_metadata.min_dec_lens,
-            sampling_metadata.eos_token_ids,
-            share_inputs["seq_lens_this_time"],
-            share_inputs["batch_id_per_token_output"],
-            share_inputs["cu_seqlens_q_output"],
-            max_model_len,
-            sampling_metadata.pre_token_ids,
-        )
-        probs = F.softmax(logits)
-
-        next_tokens = paddle.argmax(probs, axis=-1)
+        next_tokens = paddle.argmax(logits, axis=-1)
 
         token_ids = None
         logprobs_tensors = None
@@ -1366,8 +1338,8 @@ class MTPSampler(nn.Layer):
             sampling_metadata.min_dec_lens,
             sampling_metadata.eos_token_ids,
             share_inputs["seq_lens_this_time"],
-            share_inputs["output_padding_offset"],
-            share_inputs["output_cum_offsets"],
+            share_inputs["batch_id_per_token_output"],
+            share_inputs["cu_seqlens_q_output"],
             max_model_len,
             sampling_metadata.pre_token_ids,
         )

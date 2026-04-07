@@ -158,7 +158,11 @@ class ForwardMeta:
     # for prefill
     exist_prefill: bool = False
 
+    # for mla & dsa
     position_ids: Optional[paddle.Tensor] = None
+    mask_encoder_batch: Optional[paddle.Tensor] = None
+
+    real_bsz: int = 0
 
     def clear_caches(self):
         """Safely clean up the caches"""
@@ -271,6 +275,8 @@ class XPUForwardMeta(ForwardMeta):
     hidden_states: Optional[paddle.Tensor] = None
 
     is_draft: bool = False
+    # max bs
+    max_num_seqs: int = 0
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """

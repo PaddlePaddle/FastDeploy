@@ -172,17 +172,19 @@ std::vector<paddle::Tensor> DepermutePrefillCombine(
     case paddle::DataType::FLOAT8_E4M3FN: {
       switch (topk) {
         DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, 4)
+        DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, 6)
         DISPATCH_TOPK(paddle::DataType::FLOAT8_E4M3FN, 8)
         default:
-          PD_THROW("Unsupported topk value, must be 4 or 8");
+          PD_THROW("Unsupported topk value, must be 4, 6 or 8");
       }
     }
     case paddle::DataType::BFLOAT16: {
       switch (topk) {
         DISPATCH_TOPK(paddle::DataType::BFLOAT16, 4)
+        DISPATCH_TOPK(paddle::DataType::BFLOAT16, 6)
         DISPATCH_TOPK(paddle::DataType::BFLOAT16, 8)
         default:
-          PD_THROW("Unsupported topk value, must be 4 or 8");
+          PD_THROW("Unsupported topk value, must be 4, 6 or 8");
       }
     }
     default:
