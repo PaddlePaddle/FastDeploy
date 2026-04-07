@@ -23,11 +23,12 @@ from functools import lru_cache
 from pathlib import Path
 
 import paddle
+from packaging import tags
 from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 from setuptools.command.install import install
 from wheel.bdist_wheel import bdist_wheel
-from packaging import tags
+
 long_description = "FastDeploy: Large Language Model Serving.\n\n"
 long_description += "GitHub: https://github.com/PaddlePaddle/FastDeploy\n"
 long_description += "Email: dltp@baidu.com"
@@ -42,10 +43,10 @@ PLAT_TO_CMAKE = {
 
 
 class CustomBdistWheel(bdist_wheel):
-    """Custom wheel builder for pure Python packages."""
+    """Custom wheel builder."""
 
     def finalize_options(self):
-        """Configure wheel as pure Python and platform-independent."""
+        """Configure wheel as {python tag}-{abi tag}-{platform tag}."""
         super().finalize_options()
         tag = next(tags.sys_tags())
         self.root_is_pure = False
