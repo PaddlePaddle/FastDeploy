@@ -24,6 +24,18 @@
 #define MAXBATCHSIZE 1024
 #endif
 
+// CAS-based atomicMin for int64_t
+__device__ __forceinline__ void atomicMin_int64(int64_t* addr, int64_t val) {
+  unsigned long long* ull_addr = reinterpret_cast<unsigned long long*>(addr);
+  unsigned long long val_ull = static_cast<unsigned long long>(val);
+  unsigned long long old_ull = *ull_addr;
+  while (static_cast<int64_t>(old_ull) > val) {
+    unsigned long long prev = atomicCAS(ull_addr, old_ull, val_ull);
+    if (prev == old_ull) break;
+    old_ull = prev;
+  }
+}
+
 __device__ __forceinline__ void sliding_window_search(
     const int64_t* cur_input_ids,
     const int64_t* ngram,
@@ -41,8 +53,7 @@ __device__ __forceinline__ void sliding_window_search(
       }
     }
     if (match) {
-      atomicMin(reinterpret_cast<unsigned long long*>(shared_start_idx),
-                static_cast<unsigned long long>(i));
+      atomicMin_int64(shared_start_idx, i);
       break;
     }
   }

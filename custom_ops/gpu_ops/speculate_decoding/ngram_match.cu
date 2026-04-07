@@ -16,6 +16,7 @@
 #include <cassert>
 #include <cstdlib>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <vector>
 #include "helper.h"
@@ -310,12 +311,23 @@ void NgramMatch(const paddle::Tensor &input_ids,
     tokennum_threshold = std::stoi(env_var);
   }
 
-  static int one_wave_capacity = []() {
-    int dev = 0, sm_count = 0, tpm = 0;
-    cudaGetDevice(&dev);
-    cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev);
-    cudaDeviceGetAttribute(&tpm, cudaDevAttrMaxThreadsPerMultiProcessor, dev);
-    return sm_count * tpm / NGRAM_SEARCH_THREADS;
+  static std::vector<int> one_wave_capacity_cache;
+  static std::mutex capacity_cache_mutex;
+  int one_wave_capacity = [&]() {
+    int dev = 0;
+    CUDA_CHECK(cudaGetDevice(&dev));
+    std::lock_guard<std::mutex> lock(capacity_cache_mutex);
+    if (dev >= static_cast<int>(one_wave_capacity_cache.size()))
+      one_wave_capacity_cache.resize(dev + 1, -1);
+    if (one_wave_capacity_cache[dev] < 0) {
+      int sm_count = 0, tpm = 0;
+      CUDA_CHECK(cudaDeviceGetAttribute(
+          &sm_count, cudaDevAttrMultiProcessorCount, dev));
+      CUDA_CHECK(cudaDeviceGetAttribute(
+          &tpm, cudaDevAttrMaxThreadsPerMultiProcessor, dev));
+      one_wave_capacity_cache[dev] = sm_count * tpm / NGRAM_SEARCH_THREADS;
+    }
+    return one_wave_capacity_cache[dev];
   }();
 
   int launch_size = static_cast<int>(max_batch_size);
@@ -323,8 +335,8 @@ void NgramMatch(const paddle::Tensor &input_ids,
   if (tokennum_threshold < static_cast<int>(max_batch_size) &&
       static_cast<int>(max_batch_size) > one_wave_capacity) {
     int *d_cutoff_ptr;
-    cudaGetSymbolAddress(reinterpret_cast<void **>(&d_cutoff_ptr),
-                         d_ngram_cutoff);
+    CUDA_CHECK(cudaGetSymbolAddress(reinterpret_cast<void **>(&d_cutoff_ptr),
+                                    d_ngram_cutoff));
     ngram_compute_active_prefix<MAXBATCHSIZE>
         <<<1, MAXBATCHSIZE, 0, cu_stream>>>(
             const_cast<int32_t *>(seq_lens_encoder.data<int32_t>()),
@@ -335,12 +347,12 @@ void NgramMatch(const paddle::Tensor &input_ids,
             tokennum_threshold,
             d_cutoff_ptr);
     int h_cutoff = static_cast<int>(max_batch_size);
-    cudaMemcpyAsync(&h_cutoff,
-                    d_cutoff_ptr,
-                    sizeof(int),
-                    cudaMemcpyDeviceToHost,
-                    cu_stream);
-    cudaStreamSynchronize(cu_stream);
+    CUDA_CHECK(cudaMemcpyAsync(&h_cutoff,
+                               d_cutoff_ptr,
+                               sizeof(int),
+                               cudaMemcpyDeviceToHost,
+                               cu_stream));
+    CUDA_CHECK(cudaStreamSynchronize(cu_stream));
     launch_size = h_cutoff;
   }
 
