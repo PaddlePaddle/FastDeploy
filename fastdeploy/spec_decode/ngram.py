@@ -50,8 +50,10 @@ class NgramProposer(Proposer):
         """
         run
         """
-        # Lazy initialization of GPU copy buffers
-        if self._draft_tokens_copy is None:
+        # Lazy initialization of reusable buffers; reallocate when shape changes
+        if self._draft_tokens_copy is None or list(self._draft_tokens_copy.shape) != list(
+            share_inputs["draft_tokens"].shape
+        ):
             self._draft_tokens_copy = paddle.zeros_like(share_inputs["draft_tokens"])
             self._seq_lens_this_time_copy = paddle.zeros_like(share_inputs["seq_lens_this_time"])
 

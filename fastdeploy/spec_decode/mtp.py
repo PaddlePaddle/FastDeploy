@@ -1233,8 +1233,12 @@ class MTPProposer(Proposer):
             )
 
     def _extend_draft_token_with_ngram_match(self):
-        # Lazy initialization of GPU copy buffers
-        if not hasattr(self, "_ngram_draft_tokens_copy") or self._ngram_draft_tokens_copy is None:
+        # Lazy initialization of reusable buffers; reallocate when shape changes
+        if (
+            not hasattr(self, "_ngram_draft_tokens_copy")
+            or self._ngram_draft_tokens_copy is None
+            or list(self._ngram_draft_tokens_copy.shape) != list(self.target_model_inputs["draft_tokens"].shape)
+        ):
             self._ngram_draft_tokens_copy = paddle.zeros_like(self.target_model_inputs["draft_tokens"])
             self._ngram_seq_lens_this_time_copy = paddle.zeros_like(self.target_model_inputs["seq_lens_this_time"])
 
