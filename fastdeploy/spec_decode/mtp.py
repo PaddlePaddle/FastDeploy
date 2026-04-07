@@ -1233,28 +1233,20 @@ class MTPProposer(Proposer):
             )
 
     def _extend_draft_token_with_ngram_match(self):
-        # TODO(liuzichang): Optimize this Kernel to CUDA Kernel to reduce lantency
-        device = paddle.CUDAPinnedPlace()
-
-        draft_tokens = self.target_model_inputs["draft_tokens"].cpu()
-        seq_lens_this_time = self.target_model_inputs["seq_lens_this_time"].cpu()
-        seq_lens_decoder = self.model_inputs["seq_lens_decoder"].cpu()
         hybrid_mtp_ngram(
-            self.model_inputs["input_ids_cpu"],
-            self.model_inputs["input_ids_len"],
-            self.model_inputs["pre_ids"]._copy_to(device, True),
-            self.model_inputs["step_idx"].cpu(),
-            self.target_model_inputs["actual_draft_token_num"].cpu(),
-            draft_tokens,
-            seq_lens_this_time,
-            seq_lens_decoder,
-            self.model_inputs["max_dec_len"].cpu(),
+            self.model_inputs["input_ids_cpu"].cuda(),
+            self.model_inputs["input_ids_len"].cuda(),
+            self.model_inputs["pre_ids"],
+            self.model_inputs["step_idx"],
+            self.target_model_inputs["actual_draft_token_num"],
+            self.target_model_inputs["draft_tokens"],
+            self.target_model_inputs["seq_lens_this_time"],
+            self.model_inputs["seq_lens_decoder"],
+            self.model_inputs["max_dec_len"],
             self.max_ngram_size,
             self.min_ngram_size,
             self.max_draft_token_num,
         )
-        self.target_model_inputs["draft_tokens"][:] = draft_tokens.cuda()
-        self.target_model_inputs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()
 
     def _run_impl(
         self,
