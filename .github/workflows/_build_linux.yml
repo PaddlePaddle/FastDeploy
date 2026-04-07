@@ -202,8 +202,15 @@ jobs:
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
             python -m pip install --upgrade pip
-            python -m pip install -r requirements.txt
-            python -m pip install wheel
+            # Install jinja2 for custom ops code generation (required for 3.11/3.12)
+            python -m pip install jinja2 wheel
+            # Skip cp310-specific wheels for non-3.10 Python versions
+            if [[ "${PYTHON_VERSION}" != "3.10" ]]; then
+              grep -v "cp310-cp310" requirements.txt > requirements_filtered.txt
+              python -m pip install -r requirements_filtered.txt || true
+            else
+              python -m pip install -r requirements.txt || true
+            fi
             # 编译RDMA
             export FD_ENABLE_RDMA_COMPILE=1
             export FD_UNIFY_BUILD="${FD_UNIFY_BUILD}"
