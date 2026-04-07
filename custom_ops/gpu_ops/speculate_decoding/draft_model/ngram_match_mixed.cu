@@ -25,11 +25,47 @@
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-static __device__ int d_mixed_unprocessed_batch_size;
+static __device__ int d_mixed_cutoff;
+
+// Phase 0: Finds cutoff batch id so Phase 1 only launches blocks for active
+// batches (decoder-only). Handles seq_lens bookkeeping for skipped batches.
+template <int NUM_THREADS>
+__global__ void mixed_compute_active_prefix(int32_t *seq_lens_decoder,
+                                            int32_t *seq_lens_this_time,
+                                            int32_t *seq_lens_this_time_copy,
+                                            int64_t max_batch_size,
+                                            int threshold,
+                                            int *cutoff_out) {
+  int tid = threadIdx.x;
+
+  int is_active = 0;
+  if (tid < (int)max_batch_size) {
+    if (seq_lens_decoder[tid] > 0) is_active = 1;
+  }
+
+  typedef cub::BlockScan<int, NUM_THREADS> BlockScan;
+  __shared__ typename BlockScan::TempStorage scan_storage;
+  int exclusive_sum;
+  BlockScan(scan_storage).ExclusiveSum(is_active, exclusive_sum);
+
+  __shared__ int s_cutoff;
+  if (tid == 0) s_cutoff = (int)max_batch_size;
+  __syncthreads();
+
+  if (tid < (int)max_batch_size && exclusive_sum >= threshold - 1)
+    atomicMin(&s_cutoff, tid);
+  __syncthreads();
+
+  // Bookkeeping for batches >= cutoff: preserve seq_lens_this_time as-is.
+  if (tid >= s_cutoff && tid < (int)max_batch_size) {
+    seq_lens_this_time_copy[tid] = seq_lens_this_time[tid];
+  }
+
+  if (tid == 0) *cutoff_out = s_cutoff;
+}
 
 // Phase 1: Block 0 counts unprocessed batches (seq_lens_decoder > 0).
 //          Blocks 1..N find ngram candidates for each batch in parallel.
-template <int NUM_THREADS>
 __global__ void mixed_count_and_find_candidate_kernel(
     const int64_t *input_ids,
     const int64_t *input_ids_len,
@@ -48,63 +84,43 @@ __global__ void mixed_count_and_find_candidate_kernel(
     int max_ngram_size,
     int min_ngram_size,
     int max_draft_tokens,
-    int32_t *unprocessed_batch_size_global,
     int64_t max_batch_size) {
   int tid = threadIdx.x;
   int bid = blockIdx.x;
 
-  // Block 0: count unprocessed batches
-  if (bid == 0) {
-    typedef cub::BlockReduce<int, NUM_THREADS> BlockReduce;
-    __shared__ typename BlockReduce::TempStorage temp_storage;
-
-    int is_unprocessed = 0;
-    if (tid < max_batch_size) {
-      if (seq_lens_decoder[tid] > 0) {
-        is_unprocessed = 1;
-      }
-    }
-    int unprocessed = BlockReduce(temp_storage).Sum(is_unprocessed);
-    if (tid == 0) {
-      *unprocessed_batch_size_global = unprocessed;
-    }
-    return;
-  }
-
-  int actual_bid = bid - 1;
-  if (actual_bid >= max_batch_size) return;
+  if (bid >= (int)max_batch_size) return;
 
   __shared__ int32_t s_ori_seq_len;
   __shared__ bool skip;
   __shared__ int s_max_draft_tokens_query;
+  __shared__ int64_t shared_match_idx;
 
   if (tid == 0) {
-    s_ori_seq_len = seq_lens_this_time[actual_bid];
+    s_ori_seq_len = seq_lens_this_time[bid];
     int mdtq = max_draft_tokens - s_ori_seq_len + 1;
-    int64_t remaining = max_dec_len[actual_bid] - step_idx[actual_bid] - 1;
+    int64_t remaining = max_dec_len[bid] - step_idx[bid] - 1;
     if (static_cast<int64_t>(mdtq) > remaining)
       mdtq = static_cast<int>(remaining);
     s_max_draft_tokens_query = mdtq;
 
     // Initialize copy with original value
-    seq_lens_this_time_copy[actual_bid] = s_ori_seq_len;
+    seq_lens_this_time_copy[bid] = s_ori_seq_len;
 
     skip = (s_ori_seq_len == 0 || mdtq <= 0);
+    shared_match_idx = 0x7FFFFFFFFFFFFFFF;
   }
   __syncthreads();
 
   if (skip) return;
 
-  const int64_t *cur_input_ids = input_ids + actual_bid * input_ids_stride;
+  const int64_t *cur_input_ids = input_ids + bid * input_ids_stride;
   int64_t *cur_draft_tokens_copy =
-      draft_tokens_copy + actual_bid * draft_tokens_stride;
-  const int64_t *cur_pre_ids = pre_ids + actual_bid * pre_ids_stride;
-  const int64_t cur_step_idx = step_idx[actual_bid];
-  const int64_t cur_input_ids_len = input_ids_len[actual_bid];
+      draft_tokens_copy + bid * draft_tokens_stride;
+  const int64_t *cur_pre_ids = pre_ids + bid * pre_ids_stride;
+  const int64_t cur_step_idx = step_idx[bid];
+  const int64_t cur_input_ids_len = input_ids_len[bid];
   const int ori_seq_len = s_ori_seq_len;
   const int max_draft_q = s_max_draft_tokens_query;
-
-  __shared__ int64_t shared_match_idx;
 
   for (int ngram_size = max_ngram_size; ngram_size >= min_ngram_size;
        --ngram_size) {
@@ -113,16 +129,12 @@ __global__ void mixed_count_and_find_candidate_kernel(
     const int64_t *ngram = cur_pre_ids + (cur_step_idx + 1 - ngram_size);
 
     // Search in input_ids
-    if (tid == 0) shared_match_idx = 0x7FFFFFFFFFFFFFFF;
-    __syncthreads();
-
     sliding_window_search(cur_input_ids,
                           ngram,
                           cur_input_ids_len - ngram_size,
                           &shared_match_idx,
                           tid,
                           ngram_size);
-    __syncthreads();
 
     if (shared_match_idx < 0x7FFFFFFFFFFFFFFF) {
       if (tid == 0) {
@@ -131,7 +143,7 @@ __global__ void mixed_count_and_find_candidate_kernel(
         if (end_idx > cur_input_ids_len) end_idx = cur_input_ids_len;
         if (start_idx < end_idx) {
           int64_t count = end_idx - start_idx;
-          seq_lens_this_time_copy[actual_bid] =
+          seq_lens_this_time_copy[bid] =
               ori_seq_len + static_cast<int32_t>(count);
           memcpy(cur_draft_tokens_copy + ori_seq_len,
                  cur_input_ids + start_idx,
@@ -142,16 +154,12 @@ __global__ void mixed_count_and_find_candidate_kernel(
     }
 
     // Search in generated tokens (pre_ids)
-    if (tid == 0) shared_match_idx = 0x7FFFFFFFFFFFFFFF;
-    __syncthreads();
-
     sliding_window_search(cur_pre_ids,
                           ngram,
                           cur_step_idx - ngram_size,
                           &shared_match_idx,
                           tid,
                           ngram_size);
-    __syncthreads();
 
     if (shared_match_idx < 0x7FFFFFFFFFFFFFFF) {
       if (tid == 0) {
@@ -160,7 +168,7 @@ __global__ void mixed_count_and_find_candidate_kernel(
         if (end_idx > cur_step_idx) end_idx = cur_step_idx;
         if (start_idx < end_idx) {
           int64_t count = end_idx - start_idx;
-          seq_lens_this_time_copy[actual_bid] =
+          seq_lens_this_time_copy[bid] =
               ori_seq_len + static_cast<int32_t>(count);
           memcpy(cur_draft_tokens_copy + ori_seq_len,
                  cur_pre_ids + start_idx,
@@ -174,20 +182,28 @@ __global__ void mixed_count_and_find_candidate_kernel(
 
 // Phase 2: Single block truncation with threshold.
 template <int NUM_THREADS>
-__global__ void mixed_truncate_candidate(
-    const int64_t *step_idx,
-    const int *draft_token_num,
-    int64_t *max_dec_len,
-    int32_t *seq_lens_this_time,
-    int32_t *seq_lens_this_time_copy,
-    int64_t *draft_tokens,
-    int64_t *draft_tokens_copy,
-    int64_t draft_tokens_stride,
-    int64_t max_batch_size,
-    int max_draft_tokens,
-    int threshold,
-    int32_t *unprocessed_batch_size_global) {
+__global__ void mixed_truncate_candidate(const int64_t *step_idx,
+                                         const int *draft_token_num,
+                                         int64_t *max_dec_len,
+                                         int32_t *seq_lens_this_time,
+                                         int32_t *seq_lens_this_time_copy,
+                                         int64_t *draft_tokens,
+                                         int64_t *draft_tokens_copy,
+                                         int64_t draft_tokens_stride,
+                                         int64_t max_batch_size,
+                                         int max_draft_tokens,
+                                         int threshold) {
   int tid = threadIdx.x;
+
+  int is_active_here =
+      (tid < (int)max_batch_size && seq_lens_this_time[tid] > 0) ? 1 : 0;
+  typedef cub::BlockReduce<int, NUM_THREADS> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage reduce_storage;
+  int total_active = BlockReduce(reduce_storage).Sum(is_active_here);
+  __shared__ int s_unprocessed;
+  if (tid == 0) s_unprocessed = total_active;
+  __syncthreads();
+
   int is_processed = 0;
   int allocating_token_num = 0;
   int ori_seq_len = 0;
@@ -223,7 +239,7 @@ __global__ void mixed_truncate_candidate(
   if (is_processed && tid < max_batch_size) {
     // Sum before this batch: prefix_sum - this_allocation + ori_seq_len
     int sum_before = sum_token_num - allocating_token_num + ori_seq_len;
-    int unprocessed_tid = *unprocessed_batch_size_global - processed_batch_size;
+    int unprocessed_tid = s_unprocessed - processed_batch_size;
 
     if (sum_before + unprocessed_tid < threshold - 1) {
       int64_t *cur_draft_tokens = draft_tokens + tid * draft_tokens_stride;
@@ -286,47 +302,67 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
     tokennum_threshold = std::stoi(env_var);
   }
 
-  const int NTHREADS = 1024;
+  static int one_wave_capacity = []() {
+    int dev = 0, sm_count = 0, tpm = 0;
+    cudaGetDevice(&dev);
+    cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev);
+    cudaDeviceGetAttribute(&tpm, cudaDevAttrMaxThreadsPerMultiProcessor, dev);
+    return sm_count * tpm / NGRAM_SEARCH_THREADS;
+  }();
 
-  int *d_unprocessed_ptr;
-  cudaGetSymbolAddress(reinterpret_cast<void **>(&d_unprocessed_ptr),
-                       d_mixed_unprocessed_batch_size);
+  int launch_size = static_cast<int>(max_batch_size);
 
-  mixed_count_and_find_candidate_kernel<NTHREADS>
-      <<<max_batch_size + 1, NTHREADS>>>(
-          input_ids.data<int64_t>(),
-          input_ids_len.data<int64_t>(),
-          pre_ids.data<int64_t>(),
-          step_idx.data<int64_t>(),
-          draft_token_num.data<int>(),
-          const_cast<int64_t *>(draft_tokens.data<int64_t>()),
-          const_cast<int64_t *>(draft_tokens_copy.data<int64_t>()),
-          const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
-          const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
-          const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
-          const_cast<int64_t *>(max_dec_len.data<int64_t>()),
-          input_ids_stride,
-          pre_ids_stride,
-          draft_tokens_stride,
-          max_ngram_size,
-          min_ngram_size,
-          max_draft_tokens,
-          d_unprocessed_ptr,
-          max_batch_size);
+  if (tokennum_threshold < static_cast<int>(max_batch_size) &&
+      static_cast<int>(max_batch_size) > one_wave_capacity) {
+    int *d_cutoff_ptr;
+    cudaGetSymbolAddress(reinterpret_cast<void **>(&d_cutoff_ptr),
+                         d_mixed_cutoff);
+    mixed_compute_active_prefix<MAXBATCHSIZE><<<1, MAXBATCHSIZE>>>(
+        const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
+        const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+        const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
+        max_batch_size,
+        tokennum_threshold,
+        d_cutoff_ptr);
+    int h_cutoff = static_cast<int>(max_batch_size);
+    cudaMemcpy(&h_cutoff, d_cutoff_ptr, sizeof(int), cudaMemcpyDeviceToHost);
+    launch_size = h_cutoff;
+  }
 
-  mixed_truncate_candidate<NTHREADS><<<1, NTHREADS>>>(
+  mixed_count_and_find_candidate_kernel<<<launch_size, NGRAM_SEARCH_THREADS>>>(
+
+      input_ids.data<int64_t>(),
+      input_ids_len.data<int64_t>(),
+      pre_ids.data<int64_t>(),
       step_idx.data<int64_t>(),
       draft_token_num.data<int>(),
-      const_cast<int64_t *>(max_dec_len.data<int64_t>()),
-      const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
-      const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
       const_cast<int64_t *>(draft_tokens.data<int64_t>()),
       const_cast<int64_t *>(draft_tokens_copy.data<int64_t>()),
+      const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+      const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
+      const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
+      const_cast<int64_t *>(max_dec_len.data<int64_t>()),
+      input_ids_stride,
+      pre_ids_stride,
       draft_tokens_stride,
-      max_batch_size,
+      max_ngram_size,
+      min_ngram_size,
       max_draft_tokens,
-      tokennum_threshold,
-      d_unprocessed_ptr);
+      max_batch_size);
+
+  mixed_truncate_candidate<NGRAM_TRUNCATION_THREADS>
+      <<<1, NGRAM_TRUNCATION_THREADS>>>(
+          step_idx.data<int64_t>(),
+          draft_token_num.data<int>(),
+          const_cast<int64_t *>(max_dec_len.data<int64_t>()),
+          const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+          const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
+          const_cast<int64_t *>(draft_tokens.data<int64_t>()),
+          const_cast<int64_t *>(draft_tokens_copy.data<int64_t>()),
+          draft_tokens_stride,
+          max_batch_size,
+          max_draft_tokens,
+          tokennum_threshold);
 }
 
 PD_BUILD_STATIC_OP(hybrid_mtp_ngram)

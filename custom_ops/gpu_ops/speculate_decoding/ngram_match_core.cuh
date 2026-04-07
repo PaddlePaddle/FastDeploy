@@ -14,10 +14,16 @@
 
 #pragma once
 
-// Shared device function: parallel sliding window ngram search.
-// Searches for the first occurrence of ngram[0..ngram_size-1] within
-// cur_input_ids[0..search_len+ngram_size-1] using multiple threads.
-// The minimum matching index is atomically written to shared_start_idx.
+#ifndef NGRAM_SEARCH_THREADS
+#define NGRAM_SEARCH_THREADS 1024
+#endif
+#ifndef NGRAM_TRUNCATION_THREADS
+#define NGRAM_TRUNCATION_THREADS 1024
+#endif
+#ifndef MAXBATCHSIZE
+#define MAXBATCHSIZE 1024
+#endif
+
 __device__ __forceinline__ void sliding_window_search(
     const int64_t* cur_input_ids,
     const int64_t* ngram,
@@ -26,6 +32,7 @@ __device__ __forceinline__ void sliding_window_search(
     int tid,
     int ngram_size) {
   for (int64_t i = tid; i <= search_len; i += blockDim.x) {
+    if (i > *shared_start_idx) break;
     bool match = true;
     for (int j = 0; j < ngram_size; ++j) {
       if (ngram[j] != cur_input_ids[i + j]) {
@@ -39,4 +46,5 @@ __device__ __forceinline__ void sliding_window_search(
       break;
     }
   }
+  __syncthreads();
 }
