@@ -296,6 +296,8 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
 
   const int64_t max_batch_size = seq_lens_this_time.shape()[0];
 
+  auto cu_stream = input_ids.stream();
+
   int tokennum_threshold = 1024;
   char *env_var = getenv("SPEC_TOKENUM_THRESHOLD");
   if (env_var) {
@@ -317,19 +319,28 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
     int *d_cutoff_ptr;
     cudaGetSymbolAddress(reinterpret_cast<void **>(&d_cutoff_ptr),
                          d_mixed_cutoff);
-    mixed_compute_active_prefix<MAXBATCHSIZE><<<1, MAXBATCHSIZE>>>(
-        const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
-        const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
-        const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
-        max_batch_size,
-        tokennum_threshold,
-        d_cutoff_ptr);
+    mixed_compute_active_prefix<MAXBATCHSIZE>
+        <<<1, MAXBATCHSIZE, 0, cu_stream>>>(
+            const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
+            const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+            const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
+            max_batch_size,
+            tokennum_threshold,
+            d_cutoff_ptr);
     int h_cutoff = static_cast<int>(max_batch_size);
-    cudaMemcpy(&h_cutoff, d_cutoff_ptr, sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync(&h_cutoff,
+                    d_cutoff_ptr,
+                    sizeof(int),
+                    cudaMemcpyDeviceToHost,
+                    cu_stream);
+    cudaStreamSynchronize(cu_stream);
     launch_size = h_cutoff;
   }
 
-  mixed_count_and_find_candidate_kernel<<<launch_size, NGRAM_SEARCH_THREADS>>>(
+  mixed_count_and_find_candidate_kernel<<<launch_size,
+                                          NGRAM_SEARCH_THREADS,
+                                          0,
+                                          cu_stream>>>(
 
       input_ids.data<int64_t>(),
       input_ids_len.data<int64_t>(),
@@ -351,7 +362,7 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
       max_batch_size);
 
   mixed_truncate_candidate<NGRAM_TRUNCATION_THREADS>
-      <<<1, NGRAM_TRUNCATION_THREADS>>>(
+      <<<1, NGRAM_TRUNCATION_THREADS, 0, cu_stream>>>(
           step_idx.data<int64_t>(),
           draft_token_num.data<int>(),
           const_cast<int64_t *>(max_dec_len.data<int64_t>()),

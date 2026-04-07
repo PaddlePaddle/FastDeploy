@@ -300,6 +300,8 @@ void NgramMatch(const paddle::Tensor &input_ids,
 
   const int64_t max_batch_size = seq_lens_this_time.shape()[0];
 
+  auto cu_stream = input_ids.stream();
+
   int tokennum_threshold = 128;
   char *env_var = getenv("INFER_WITH_REFERENCE_TOKENUM_THRESHOLD");
   if (env_var) {
@@ -321,20 +323,29 @@ void NgramMatch(const paddle::Tensor &input_ids,
     int *d_cutoff_ptr;
     cudaGetSymbolAddress(reinterpret_cast<void **>(&d_cutoff_ptr),
                          d_ngram_cutoff);
-    ngram_compute_active_prefix<MAXBATCHSIZE><<<1, MAXBATCHSIZE>>>(
-        const_cast<int32_t *>(seq_lens_encoder.data<int32_t>()),
-        const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
-        const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
-        const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
-        max_batch_size,
-        tokennum_threshold,
-        d_cutoff_ptr);
+    ngram_compute_active_prefix<MAXBATCHSIZE>
+        <<<1, MAXBATCHSIZE, 0, cu_stream>>>(
+            const_cast<int32_t *>(seq_lens_encoder.data<int32_t>()),
+            const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
+            const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
+            const_cast<int32_t *>(seq_lens_this_time_copy.data<int32_t>()),
+            max_batch_size,
+            tokennum_threshold,
+            d_cutoff_ptr);
     int h_cutoff = static_cast<int>(max_batch_size);
-    cudaMemcpy(&h_cutoff, d_cutoff_ptr, sizeof(int), cudaMemcpyDeviceToHost);
+    cudaMemcpyAsync(&h_cutoff,
+                    d_cutoff_ptr,
+                    sizeof(int),
+                    cudaMemcpyDeviceToHost,
+                    cu_stream);
+    cudaStreamSynchronize(cu_stream);
     launch_size = h_cutoff;
   }
 
-  ngram_count_and_find_candidate_kernel<<<launch_size, NGRAM_SEARCH_THREADS>>>(
+  ngram_count_and_find_candidate_kernel<<<launch_size,
+                                          NGRAM_SEARCH_THREADS,
+                                          0,
+                                          cu_stream>>>(
       input_ids.data<int64_t>(),
       input_ids_len.data<int64_t>(),
       token_ids_all.data<int64_t>(),
@@ -356,7 +367,7 @@ void NgramMatch(const paddle::Tensor &input_ids,
       max_batch_size);
 
   ngram_truncate_candidate<NGRAM_TRUNCATION_THREADS>
-      <<<1, NGRAM_TRUNCATION_THREADS>>>(
+      <<<1, NGRAM_TRUNCATION_THREADS, 0, cu_stream>>>(
           step_idx.data<int64_t>(),
           draft_token_num.data<int>(),
           const_cast<int64_t *>(max_dec_len.data<int64_t>()),
