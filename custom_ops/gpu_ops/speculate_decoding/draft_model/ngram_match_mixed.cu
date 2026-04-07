@@ -295,6 +295,7 @@ void HybridMtpNgram(const paddle::Tensor &input_ids,
   const int64_t draft_tokens_stride = draft_tokens_shape[1];
 
   const int64_t max_batch_size = seq_lens_this_time.shape()[0];
+  assert(max_batch_size <= MAXBATCHSIZE);
 
   auto cu_stream = input_ids.stream();
 

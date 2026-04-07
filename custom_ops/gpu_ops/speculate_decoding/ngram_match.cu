@@ -1,4 +1,4 @@
-// Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <algorithm>
+#include <cassert>
 #include <cstdlib>
 #include <iostream>
 #include <string>
@@ -299,6 +300,7 @@ void NgramMatch(const paddle::Tensor &input_ids,
   const int64_t draft_tokens_stride = draft_tokens_shape[1];
 
   const int64_t max_batch_size = seq_lens_this_time.shape()[0];
+  assert(max_batch_size <= MAXBATCHSIZE);
 
   auto cu_stream = input_ids.stream();
 
