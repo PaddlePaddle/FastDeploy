@@ -135,6 +135,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CONSOLE_DECODE_LOG_INTERVAL": lambda: int(os.getenv("FD_CONSOLE_DECODE_LOG_INTERVAL", "5")),
     # enable internal module to access LLMEngine.
     "FD_ENABLE_INTERNAL_ADAPTER": lambda: int(os.getenv("FD_ENABLE_INTERNAL_ADAPTER", "0")),
+    # Enable head-wise KV cache (0 or 1)
+    "FD_HEAD_WISE_KV_CACHE": lambda: int(os.getenv("FD_HEAD_WISE_KV_CACHE", "0")),
     # LLMEngine receive requests port, used when FD_ENABLE_INTERNAL_ADAPTER=1
     "FD_ZMQ_RECV_REQUEST_SERVER_PORT": lambda: os.getenv("FD_ZMQ_RECV_REQUEST_SERVER_PORT", None),
     # LLMEngine send response port, used when FD_ENABLE_INTERNAL_ADAPTER=1

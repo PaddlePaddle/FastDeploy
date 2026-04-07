@@ -15,6 +15,7 @@
 """
 
 import copy
+import logging
 import os
 import queue
 import time
@@ -56,6 +57,23 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import print_gpu_memory_use
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
+
+
+def _debug_logging_enabled() -> bool:
+    for candidate in (logger, getattr(logger, "logger", None), getattr(logger, "_logger", None)):
+        if candidate is None:
+            continue
+        is_enabled_for = getattr(candidate, "isEnabledFor", None)
+        if callable(is_enabled_for):
+            try:
+                return bool(is_enabled_for(logging.DEBUG))
+            except Exception:
+                continue
+        level = getattr(candidate, "level", None)
+        if isinstance(level, int):
+            return level <= logging.DEBUG
+    return False
+
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -123,8 +141,15 @@ class GPUModelRunner(ModelRunnerBase):
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
+        self.enable_head_wise_kv_cache = envs.FD_HEAD_WISE_KV_CACHE == 1
+        self.head_wise_debug_log = bool(int(os.getenv("FD_HEAD_WISE_KV_LOG", "0")))
+        self.kv_num_heads = max(
+            1,
+            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
+        )
         self.spec_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.spec_method is not None
+        self.speculative_method = self.spec_method
         self.enable_logprob = fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
@@ -203,6 +228,7 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
         self.share_inputs.init_share_inputs()
+        self._init_head_wise_slot_states()
         self.increment_value = (
             4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
         )
@@ -839,12 +865,37 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(
                     input_ids[prefill_start_index:prefill_end_index]
                 )
-                encoder_block_num = len(request.block_tables)
+                if self.enable_head_wise_kv_cache:
+                    cache_ids_2d = getattr(request, "block_tables_3d", None)
+                    if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
+                        cache_ids_2d = request.block_tables
+                    cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
+                    if cache_ids_2d is not None:
+                        request.block_tables_3d = cache_ids_2d
+                        head0_row = cache_ids_2d[0] if len(cache_ids_2d) > 0 and cache_ids_2d[0] is not None else []
+                        request.block_tables = list(head0_row)
+                    elif request.block_tables and isinstance(request.block_tables[0], list):
+                        request.block_tables = list(request.block_tables[0] or [])
+                    self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
+                    if cache_ids_2d:
+                        head0_row = cache_ids_2d[0] if cache_ids_2d[0] is not None else []
+                        encoder_block_num = sum(1 for cid in head0_row if cid is not None and cid >= 0)
+                    else:
+                        encoder_block_num = 0
+                else:
+                    encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
-                self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
-                    request.block_tables, dtype="int32"
-                )
+                if encoder_block_num > 0:
+                    if self.enable_head_wise_kv_cache:
+                        # In head-wise mode, expand cache_ids_2d to include all heads
+                        # block_tables format: [bsz, kv_num_heads * max_blocks_per_head]
+                        tables = self._flatten_head_wise_cache_ids_2d(cache_ids_2d)
+                        if self.head_wise_debug_log and _debug_logging_enabled():
+                            logger.debug(f"[headwise prefill] req {idx} cache_ids_2d={cache_ids_2d} tables={tables}")
+                    else:
+                        tables = request.block_tables
+                    self.share_inputs["block_tables"][idx : idx + 1, : len(tables)] = np.array(tables, dtype="int32")
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length
@@ -889,17 +940,49 @@ class GPUModelRunner(ModelRunnerBase):
                         )
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 logger.debug(f"Handle decode request {request} at idx {idx}")
-                encoder_block_num = len(request.block_tables)
+                if self.enable_head_wise_kv_cache:
+                    cache_ids_2d = getattr(request, "block_tables_3d", None)
+                    if cache_ids_2d is None and request.block_tables and isinstance(request.block_tables[0], list):
+                        cache_ids_2d = request.block_tables
+                    cache_ids_2d = self._normalize_head_wise_cache_ids_2d(cache_ids_2d)
+                    if cache_ids_2d is not None:
+                        request.block_tables_3d = cache_ids_2d
+                        head0_row = cache_ids_2d[0] if len(cache_ids_2d) > 0 and cache_ids_2d[0] is not None else []
+                        request.block_tables = list(head0_row)
+                    elif request.block_tables and isinstance(request.block_tables[0], list):
+                        request.block_tables = list(request.block_tables[0] or [])
+                    self._update_block_tables_3d_slot(idx, cache_ids_2d, str(request.request_id))
+                    # Keep cached request metadata in sync for subsequent forward_meta assembly.
+                    cached_req = self.forward_batch_reqs_list[idx]
+                    if cached_req is not None:
+                        cached_req.block_tables = list(request.block_tables)
+                        if cache_ids_2d is not None:
+                            cached_req.block_tables_3d = cache_ids_2d
+                    else:
+                        # Keep metadata for requests that enter decode path directly.
+                        self.forward_batch_reqs_list[idx] = request
+                    if cache_ids_2d:
+                        head0_row = cache_ids_2d[0] if cache_ids_2d[0] is not None else []
+                        encoder_block_num = sum(1 for cid in head0_row if cid is not None and cid >= 0)
+                    else:
+                        encoder_block_num = 0
+                else:
+                    encoder_block_num = len(request.block_tables)
                 self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
-                if current_platform.is_cuda():
-                    async_set_value(
-                        self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num], request.block_tables
-                    )
-                else:
-                    self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
-                        request.block_tables, dtype="int32"
-                    )
+                if encoder_block_num > 0:
+                    if self.enable_head_wise_kv_cache:
+                        # In head-wise mode, expand cache_ids_2d to include all heads
+                        # block_tables format: [bsz, kv_num_heads * max_blocks_per_head]
+                        tables = self._flatten_head_wise_cache_ids_2d(cache_ids_2d)
+                    else:
+                        tables = request.block_tables
+                    if current_platform.is_cuda():
+                        async_set_value(self.share_inputs["block_tables"][idx : idx + 1, : len(tables)], tables)
+                    else:
+                        self.share_inputs["block_tables"][idx : idx + 1, : len(tables)] = np.array(
+                            tables, dtype="int32"
+                        )
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
@@ -917,6 +1000,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.prompt_logprobs_reqs.pop(request.request_id, None)
                 self.in_progress_prompt_logprobs.pop(request.request_id, None)
                 self.forward_batch_reqs_list[idx] = None
+                self._clear_block_tables_3d_slot(idx)
 
                 # Routing Replay
                 if self.fd_config.routing_replay_config.enable_routing_replay:
@@ -994,7 +1078,152 @@ class GPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:num_running_requests]
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
+            try:
+                self.proposer.insert_tasks_v1(req_dicts, num_running_requests, self.share_inputs.index_to_batch_id)
+            except TypeError:
+                # Backward compatibility with older proposer signature.
+                self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
+
+    def _get_head_wise_block_tables_buffer(self) -> paddle.Tensor:
+        block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+        if block_tables_3d is not None:
+            return block_tables_3d
+
+        # Fallback guard. InputBatch should already allocate this when head-wise mode is enabled.
+        max_num_seqs = self.scheduler_config.max_num_seqs
+        max_blocks_per_head = self.share_inputs["block_tables"].shape[1] // self.kv_num_heads
+        block_tables_3d = paddle.full([max_num_seqs * self.kv_num_heads, max_blocks_per_head], -1, dtype="int32")
+        self.share_inputs["block_tables_3d"] = block_tables_3d
+        return block_tables_3d
+
+    def _init_head_wise_slot_states(self) -> None:
+        slot_cap = self.scheduler_config.max_num_seqs
+        self._head_wise_slot_req_ids: list[Optional[str]] = [None for _ in range(slot_cap)]
+        self._head_wise_slot_active_rows: list[list[int]] = [
+            [0 for _ in range(self.kv_num_heads)] for _ in range(slot_cap)
+        ]
+
+    def _clear_block_tables_3d_slot(self, idx: int) -> None:
+        if not self.enable_head_wise_kv_cache:
+            return
+        if idx < 0 or idx >= len(self._head_wise_slot_active_rows):
+            return
+
+        block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+        active_lens = self._head_wise_slot_active_rows[idx]
+        if block_tables_3d is not None:
+            max_blocks_per_head = block_tables_3d.shape[1]
+            base_row = idx * self.kv_num_heads
+            for h in range(self.kv_num_heads):
+                clear_len = min(int(active_lens[h]), max_blocks_per_head)
+                if clear_len > 0:
+                    block_tables_3d[base_row + h, :clear_len] = -1
+        for h in range(self.kv_num_heads):
+            active_lens[h] = 0
+        self._head_wise_slot_req_ids[idx] = None
+
+    def _update_block_tables_3d_slot(self, idx: int, cache_ids_2d, req_id: Optional[str] = None) -> None:
+        if not self.enable_head_wise_kv_cache:
+            return
+        if idx < 0 or idx >= len(self._head_wise_slot_active_rows):
+            return
+        if cache_ids_2d is None:
+            self._clear_block_tables_3d_slot(idx)
+            return
+
+        if req_id is not None and self._head_wise_slot_req_ids[idx] not in (None, req_id):
+            self._clear_block_tables_3d_slot(idx)
+
+        block_tables_3d = self._get_head_wise_block_tables_buffer()
+        max_blocks_per_head = block_tables_3d.shape[1]
+        base_row = idx * self.kv_num_heads
+        active_lens = self._head_wise_slot_active_rows[idx]
+
+        for h in range(self.kv_num_heads):
+            clear_len = min(int(active_lens[h]), max_blocks_per_head)
+            if clear_len > 0:
+                block_tables_3d[base_row + h, :clear_len] = -1
+
+            row = cache_ids_2d[h] if h < len(cache_ids_2d) and cache_ids_2d[h] is not None else []
+            copy_len = min(len(row), max_blocks_per_head)
+            if copy_len > 0:
+                normalized_row = [(-1 if cid is None else int(cid)) for cid in row[:copy_len]]
+                if current_platform.is_cuda():
+                    async_set_value(block_tables_3d[base_row + h, :copy_len], normalized_row)
+                else:
+                    block_tables_3d[base_row + h, :copy_len] = np.array(normalized_row, dtype="int32")
+            active_lens[h] = copy_len
+
+        self._head_wise_slot_req_ids[idx] = req_id
+
+    def _reset_head_wise_block_tables_state(self) -> None:
+        self._init_head_wise_slot_states()
+        if self.enable_head_wise_kv_cache:
+            block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+            if block_tables_3d is not None:
+                block_tables_3d[:] = -1
+
+    def _prepare_block_tables_3d_from_flat_tables(self, num_running_requests: int):
+        """
+        Build head-wise tables from flattened self.share_inputs["block_tables"] in-place.
+        Used in dummy/profile runs where Request objects are not available.
+        """
+        block_tables_3d = self._get_head_wise_block_tables_buffer()
+        block_tables_3d[:] = -1
+        if num_running_requests is None or num_running_requests <= 0:
+            return
+
+        flat_block_tables = self.share_inputs["block_tables"][:num_running_requests].numpy()
+        max_blocks_per_head = block_tables_3d.shape[1]
+        for b in range(num_running_requests):
+            for h in range(self.kv_num_heads):
+                start = h * max_blocks_per_head
+                if start >= flat_block_tables.shape[1]:
+                    break
+                end = min(start + max_blocks_per_head, flat_block_tables.shape[1])
+                copy_len = end - start
+                if copy_len <= 0:
+                    continue
+                row_idx = b * self.kv_num_heads + h
+                block_tables_3d[row_idx, :copy_len] = paddle.to_tensor(flat_block_tables[b][start:end], dtype="int32")
+
+    def _normalize_head_wise_cache_ids_2d(self, cache_ids_2d):
+        """Normalize per-head cache rows while preserving block index layout."""
+        if cache_ids_2d is None:
+            return None
+
+        normalized_cache_ids_2d = []
+        for head_tables in cache_ids_2d:
+            if head_tables is None:
+                normalized_cache_ids_2d.append([])
+                continue
+
+            # Keep row indices stable: None -> -1, keep negative holes in-place.
+            normalized_row = [(-1 if cid is None else int(cid)) for cid in head_tables]
+
+            # Trim only trailing invalid entries to keep row compact.
+            while normalized_row and normalized_row[-1] < 0:
+                normalized_row.pop()
+
+            normalized_cache_ids_2d.append(normalized_row)
+        return normalized_cache_ids_2d
+
+    def _flatten_head_wise_cache_ids_2d(self, cache_ids_2d):
+        """
+        Runtime compatibility helper for share_inputs["block_tables"] mirror.
+        This intentionally flattens by concatenation (variable valid length), while
+        authoritative head-wise routing uses block_tables_3d.
+        Fixed-stride layout for dummy/profile is handled in _dummy_prefill_inputs
+        + _prepare_block_tables_3d_from_flat_tables.
+        """
+        if not cache_ids_2d:
+            return []
+        tables = []
+        for head_tables in cache_ids_2d:
+            if head_tables is None:
+                continue
+            tables.extend(head_tables)
+        return tables
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
@@ -1089,6 +1318,13 @@ class GPUModelRunner(ModelRunnerBase):
     def _dummy_prefill_inputs(self, input_length_list: List[int], max_dec_len_list: List[int], block_num: int):
         """Set dummy prefill inputs to share_inputs"""
         batch_size = len(input_length_list)
+        self.share_inputs["block_tables"][:, :] = -1
+        # Clear stale lengths from previous dummy/profile rounds.
+        self.share_inputs["seq_lens_this_time_buffer"][:] = 0
+        self.share_inputs["step_seq_lens_encoder"][:] = 0
+        self.share_inputs["seq_lens_encoder"][:] = 0
+        self.share_inputs["seq_lens_decoder"][:] = 0
+        self.share_inputs["encoder_block_lens"][:] = 0
         for i in range(batch_size):
             idx = i
             input_length = input_length_list[i]
@@ -1111,9 +1347,20 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["temperature"][idx : idx + 1] = 1
 
             self.share_inputs["encoder_block_lens"][idx : idx + 1] = block_num
-            self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
-                idx * block_num, (idx + 1) * block_num, 1
-            )
+            if self.enable_head_wise_kv_cache:
+                # In head-wise mode, block_tables should have shape [bsz, kv_num_heads * max_blocks_per_head]
+                # Each head is laid out with fixed stride max_blocks_per_head.
+                max_blocks_per_head = self.share_inputs["block_tables"].shape[1] // self.kv_num_heads
+                base = idx * self.kv_num_heads * block_num
+                for head_idx in range(self.kv_num_heads):
+                    head_offset = head_idx * max_blocks_per_head
+                    head_base = base + head_idx * block_num
+                    head_block_ids = np.arange(head_base, head_base + block_num, 1, dtype="int32")
+                    self.share_inputs["block_tables"][idx, head_offset : head_offset + block_num] = head_block_ids
+            else:
+                self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
+                    idx * block_num, (idx + 1) * block_num, 1
+                )
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
@@ -1136,6 +1383,22 @@ class GPUModelRunner(ModelRunnerBase):
             self.cache_config.block_size,
             self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
         )
+        # Prepare block_tables_3d for head-wise KV cache
+        if self.enable_head_wise_kv_cache:
+            if is_dummy_or_profile_run:
+                # In dummy/profile run, construct block_tables_3d from block_tables
+                # seq_lens_this_time may point to max_num_seqs-sized buffer;
+                # only positive-length rows are active in dummy/profile rounds.
+                seq_lens_this_time = self.share_inputs["seq_lens_this_time"]
+                num_running_requests = int((seq_lens_this_time > 0).astype("int64").sum().item())
+                self._prepare_block_tables_3d_from_flat_tables(num_running_requests)
+                if num_running_requests > 0 and self.head_wise_debug_log and _debug_logging_enabled():
+                    rows_np = self.share_inputs["block_tables_3d"][: num_running_requests * self.kv_num_heads].numpy()
+                    logger.debug(
+                        f"[headwise dummy run] block_tables_3d shape={rows_np.shape} "
+                        f"max_blocks_per_head={self.share_inputs['block_tables_3d'].shape[1]} "
+                        f"first_rows={rows_np[:min(4, len(rows_np))].tolist() if len(rows_np) > 0 else []}"
+                    )
         logprobs_reqs = [
             req
             for req in self.forward_batch_reqs_list
@@ -1237,11 +1500,93 @@ class GPUModelRunner(ModelRunnerBase):
     def _process_reorder(self) -> None:
         if self.attn_backends and getattr(self.attn_backends[0], "enable_ids_reorder", False):
             self.share_inputs.enable_pd_reorder = True
+            before_reorder = tuple(sorted(self.share_inputs.index_to_batch_id.items()))
             self.share_inputs.condense()
             reorder_split_prefill_and_decode(input_batch=self.share_inputs)
-            if self.speculative_decoding:
-                if self.spec_method == SpecMethod.MTP:
-                    self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+            after_reorder = tuple(sorted(self.share_inputs.index_to_batch_id.items()))
+            changed = before_reorder != after_reorder
+            if changed:
+                self._sync_forward_batch_reqs_after_reorder()
+                if self.speculative_decoding:
+                    if self.spec_method == SpecMethod.MTP:
+                        try:
+                            self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+                        except TypeError:
+                            # Backward compatibility with older proposer signature.
+                            self.proposer.reorder_inputs()
+            else:
+                return
+
+    def _sync_forward_batch_reqs_after_reorder(self) -> None:
+        """
+        Keep forward_batch_reqs_list aligned with current batch slots after PD reorder.
+
+        InputBatch reorder updates share_inputs tensors and index_to_batch_id mapping,
+        but forward_batch_reqs_list needs to be realigned explicitly.
+        """
+        index_to_batch_id = getattr(self.share_inputs, "index_to_batch_id", None)
+        if not index_to_batch_id:
+            return
+
+        list_cap = len(self.forward_batch_reqs_list)
+        req_by_batch_id = {}
+        old_slot_by_batch_id = {}
+        for old_slot, req in enumerate(self.forward_batch_reqs_list):
+            if req is None:
+                continue
+            req_batch_id = getattr(req, "idx", None)
+            if req_batch_id is None:
+                continue
+            req_by_batch_id[req_batch_id] = req
+            old_slot_by_batch_id[req_batch_id] = old_slot
+
+        aligned_reqs = [None for _ in range(list_cap)]
+        for slot_idx, batch_id in index_to_batch_id.items():
+            if slot_idx < 0 or slot_idx >= list_cap:
+                continue
+            aligned_reqs[slot_idx] = req_by_batch_id.get(batch_id)
+
+        self.forward_batch_reqs_list = aligned_reqs
+
+        if not self.enable_head_wise_kv_cache:
+            return
+
+        # Reorder block_tables_3d once after PD permutation instead of per-swap updates.
+        block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+        if block_tables_3d is not None:
+            old_block_tables_3d = block_tables_3d.clone()
+            block_tables_3d[:] = -1
+            slot_cap_by_tensor = block_tables_3d.shape[0] // self.kv_num_heads
+            for new_slot, batch_id in index_to_batch_id.items():
+                if new_slot < 0 or new_slot >= slot_cap_by_tensor:
+                    continue
+                old_slot = old_slot_by_batch_id.get(batch_id)
+                if old_slot is None or old_slot < 0 or old_slot >= slot_cap_by_tensor:
+                    continue
+                new_start = new_slot * self.kv_num_heads
+                old_start = old_slot * self.kv_num_heads
+                block_tables_3d[new_start : new_start + self.kv_num_heads, :] = old_block_tables_3d[
+                    old_start : old_start + self.kv_num_heads, :
+                ]
+
+        old_slot_req_ids = list(self._head_wise_slot_req_ids)
+        old_slot_active_rows = [list(rows) for rows in self._head_wise_slot_active_rows]
+        slot_cap = len(old_slot_req_ids)
+
+        new_slot_req_ids = [None for _ in range(slot_cap)]
+        new_slot_active_rows = [[0 for _ in range(self.kv_num_heads)] for _ in range(slot_cap)]
+
+        for new_slot, batch_id in index_to_batch_id.items():
+            if new_slot < 0 or new_slot >= slot_cap:
+                continue
+            old_slot = old_slot_by_batch_id.get(batch_id)
+            if old_slot is None or old_slot < 0 or old_slot >= slot_cap:
+                continue
+            new_slot_req_ids[new_slot] = old_slot_req_ids[old_slot]
+            new_slot_active_rows[new_slot] = list(old_slot_active_rows[old_slot])
+
+        self._head_wise_slot_req_ids = new_slot_req_ids
+        self._head_wise_slot_active_rows = new_slot_active_rows
 
     def load_model(self) -> None:
         """load or download model"""
@@ -1280,8 +1625,11 @@ class GPUModelRunner(ModelRunnerBase):
         routing_replay_table = None
         if self.routing_replay_manager is not None:
             routing_replay_table = self.routing_replay_manager.get_routing_table()
-
         num_running_requests = self.share_inputs["seq_lens_this_time"].shape[0]
+        block_tables_3d = self.share_inputs.get("block_tables_3d", None)
+        if self.enable_head_wise_kv_cache and block_tables_3d is not None:
+            active_rows = int(num_running_requests) * self.kv_num_heads
+            block_tables_3d = block_tables_3d[:active_rows, :]
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1301,6 +1649,7 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"][:num_running_requests],
+            block_tables_3d=block_tables_3d,
             caches=self.share_inputs["caches"],
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
@@ -1397,7 +1746,11 @@ class GPUModelRunner(ModelRunnerBase):
             )
             indexer_cache_shape = []
         if kv_cache_quant_type == "block_wise_fp8":
-            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
+            if self.enable_head_wise_kv_cache:
+                # head-wise: scale layout [max_cache_ids, block_size]
+                kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1]]
+            else:
+                kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         # Check if gpu runner needs to create kv cache
@@ -1751,7 +2104,7 @@ class GPUModelRunner(ModelRunnerBase):
             enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
         )
 
-        post_process(
+        post_process_kwargs = dict(
             sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
@@ -1763,7 +2116,17 @@ class GPUModelRunner(ModelRunnerBase):
             think_end_id=self.model_config.think_end_id,
             splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
+            is_naive_mode=(self.speculative_decoding and self.proposer is None),
+            prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
         )
+        try:
+            post_process(**post_process_kwargs)
+        except TypeError:
+            # Backward/forward compatibility with post_process signatures that
+            # do not accept speculative compatibility kwargs.
+            post_process_kwargs.pop("is_naive_mode", None)
+            post_process_kwargs.pop("prefill_one_step_stop", None)
+            post_process(**post_process_kwargs)
         self.exist_prefill_flag = False
         if self.speculative_decoding:
             if self.spec_method == SpecMethod.MTP:
@@ -2695,9 +3058,13 @@ class GPUModelRunner(ModelRunnerBase):
         self.in_progress_prompt_logprobs.clear()
         self.forward_batch_reqs_list = [None for _ in range(self.scheduler_config.max_num_seqs)]
 
+        self._reset_head_wise_block_tables_state()
         # Routing Replay
         if self.routing_replay_manager:
-            self.routing_replay_manager.clear_all_request()
+            if hasattr(self.routing_replay_manager, "put_table_to_store"):
+                self.routing_replay_manager.put_table_to_store()
+            else:
+                self.routing_replay_manager.clear_all_request()
 
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
@@ -2708,6 +3075,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Reset share_inputs
         self.share_inputs.reset_share_inputs()
+        self._reset_head_wise_block_tables_state()
         if self.spec_method == SpecMethod.MTP:
             self.proposer.model_inputs.reset_model_inputs()
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)

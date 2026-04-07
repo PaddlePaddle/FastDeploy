@@ -18,4 +18,17 @@ speculative decoding module
 from .base import Proposer
 from .types import SpecMethod, VerifyStrategy
 
-__all__ = ["Proposer", "SpecMethod", "VerifyStrategy"]
+__all__ = ["Proposer", "SpecMethod", "VerifyStrategy", "MTPProposer", "NgramProposer"]
+
+
+def __getattr__(name: str):
+    """Backward-compatible lazy exports for external plugins."""
+    if name == "MTPProposer":
+        from .mtp import MTPProposer
+
+        return MTPProposer
+    if name == "NgramProposer":
+        from .ngram import NgramProposer
+
+        return NgramProposer
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

@@ -126,20 +126,30 @@ __device__ __forceinline__ void produce_kv(CacheT* smem,
                                            const uint32_t chunk_start,
                                            const uint32_t chunk_end) {
   int block_id = __ldg(&block_table_smem[seq_offset_gmem / BLOCK_SIZE]);
-  if (block_id < 0) {
-    block_id = 0;
-  }
+  const bool valid_block = block_id >= 0;
+  // Keep address legal for cp.async even when the slot is invalid.
+  const int safe_block_id = valid_block ? block_id : 0;
   const uint32_t block_offset = seq_offset_gmem % BLOCK_SIZE;
   // 8/16 T/int8 each time
   const uint32_t k_offset_base =
-      ((block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE + block_offset) *
+      ((safe_block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE +
+       block_offset) *
       HEAD_DIM_QK;
   const uint32_t smem_offset_base = seq_offset_smem * HEAD_DIM_QK;
   for (uint32_t vid = tidx; vid < NUM_VEC_PER_HEAD; vid += bdx) {
-    pred_load<128, PrefetchMode::kPrefetch, fill_mode, CacheT>(
-        smem + smem_offset_base + vid * CACHE_VEC_SIZE,
-        kv_base_gptr + k_offset_base + vid * CACHE_VEC_SIZE,
-        seq_offset_gmem < chunk_end);
+    if (valid_block) {
+      pred_load<128, PrefetchMode::kPrefetch, fill_mode, CacheT>(
+          smem + smem_offset_base + vid * CACHE_VEC_SIZE,
+          kv_base_gptr + k_offset_base + vid * CACHE_VEC_SIZE,
+          seq_offset_gmem < chunk_end);
+    } else {
+      pred_load<128,
+                PrefetchMode::kPrefetch,
+                SharedMemFillMode::kFillZero,
+                CacheT>(smem + smem_offset_base + vid * CACHE_VEC_SIZE,
+                        kv_base_gptr + k_offset_base + vid * CACHE_VEC_SIZE,
+                        false);
+    }
   }
 }
 

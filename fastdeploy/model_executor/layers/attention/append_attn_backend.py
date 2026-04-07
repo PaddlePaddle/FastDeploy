@@ -16,11 +16,13 @@
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
@@ -46,6 +48,22 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
 from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
+
+
+def _debug_logging_enabled() -> bool:
+    for candidate in (logger, getattr(logger, "logger", None), getattr(logger, "_logger", None)):
+        if candidate is None:
+            continue
+        is_enabled_for = getattr(candidate, "isEnabledFor", None)
+        if callable(is_enabled_for):
+            try:
+                return bool(is_enabled_for(logging.DEBUG))
+            except Exception:
+                continue
+        level = getattr(candidate, "level", None)
+        if isinstance(level, int):
+            return level <= logging.DEBUG
+    return False
 
 
 @dataclass
@@ -162,6 +180,9 @@ class AppendAttentionBackend(AttentionBackend):
         self.sink_size: int = getattr(fd_config.model_config, "sink_size", 0)
         self.window_attn_skip_freq: int = getattr(fd_config.model_config, "window_attn_skip_freq", 0)
         self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
+        self.enable_head_wise_kv_cache: bool = envs.FD_HEAD_WISE_KV_CACHE == 1
+        self.head_wise_debug_log: bool = bool(int(os.getenv("FD_HEAD_WISE_KV_LOG", "0")))
+        self._head_wise_debug_log_count: int = 0
 
         if self.head_wise_swa_ratio > 0.0:
             self.head_wise_full_hidden = int((1 - self.head_wise_swa_ratio) * self.num_heads * self.head_dim)
@@ -266,6 +287,12 @@ class AppendAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape
         """
+        if self.enable_head_wise_kv_cache:
+            if kv_cache_quant_type is not None and kv_cache_quant_type not in ("none", "block_wise_fp8"):
+                raise NotImplementedError(f"Head-wise KV cache does not support {kv_cache_quant_type} cache.")
+            key_cache_shape = [max_num_blocks * self.kv_num_heads, self.block_size, self.head_dim]
+            value_cache_shape = key_cache_shape
+            return key_cache_shape, value_cache_shape
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             key_cache_shape[-1] = self.head_dim // 2
@@ -350,6 +377,60 @@ class AppendAttentionBackend(AttentionBackend):
                 self.block_size,
             )
 
+        block_tables = forward_meta.block_tables_3d if self.enable_head_wise_kv_cache else forward_meta.block_tables
+        if (
+            self.enable_head_wise_kv_cache
+            and self.head_wise_debug_log
+            and _debug_logging_enabled()
+            and not getattr(forward_meta, "is_dummy_or_profile_run", False)
+            and self._head_wise_debug_log_count < 200
+        ):
+            block_tables_3d = getattr(forward_meta, "block_tables_3d", None)
+            batch_size = forward_meta.seq_lens_this_time.shape[0]
+            expected_dim0 = batch_size * self.kv_num_heads
+            cache_id_capacity = int(cache_k.shape[0]) if len(cache_k.shape) > 0 else -1
+            min_id = -1
+            max_id = -1
+            neg_count = 0
+            out_of_range_cnt = 0
+            sample_rows = []
+            if block_tables_3d is not None:
+                bt_np = block_tables_3d.numpy()
+                valid = bt_np[bt_np >= 0]
+                min_id = int(valid.min()) if valid.size > 0 else -1
+                max_id = int(valid.max()) if valid.size > 0 else -1
+                neg_count = int((bt_np < 0).sum())
+                if cache_id_capacity > 0:
+                    out_of_range_cnt = int((valid >= cache_id_capacity).sum())
+                sample_rows = bt_np[: min(4, bt_np.shape[0])].tolist()
+
+            seq_lens_this_time_list = forward_meta.seq_lens_this_time[:batch_size].numpy().tolist()
+            seq_lens_encoder_list = forward_meta.seq_lens_encoder[:batch_size].numpy().tolist()
+            seq_lens_decoder_list = forward_meta.seq_lens_decoder[:batch_size].numpy().tolist()
+            logger.debug(
+                f"[headwise kernel input] layer={layer.layer_id} q_heads={self.num_heads} kv_heads={self.kv_num_heads} "
+                f"group={self.num_heads // max(self.kv_num_heads, 1)} batch={batch_size} "
+                f"block_tables_3d_shape={block_tables_3d.shape if block_tables_3d is not None else None} "
+                f"expected_dim0={expected_dim0} block_tables_3d_dtype={block_tables_3d.dtype if block_tables_3d is not None else None} "
+                f"cache_k_shape={cache_k.shape} cache_id_capacity={cache_id_capacity} "
+                f"cache_quant_type={cache_quant_type_str} qkv_dtype={qkv.dtype} cache_dtype={cache_k.dtype} "
+                f"use_output={self.use_output} enc_block_q={self.encoder_block_shape_q} dec_block_q={self.decoder_block_shape_q} "
+                f"seq_lens_this_time={seq_lens_this_time_list} seq_lens_encoder={seq_lens_encoder_list} seq_lens_decoder={seq_lens_decoder_list} "
+                f"min_id={min_id} max_id={max_id} neg_count={neg_count} out_of_range_cnt={out_of_range_cnt} "
+                f"sample_rows={sample_rows}"
+            )
+            if block_tables_3d is None or block_tables_3d.shape[0] < expected_dim0:
+                logger.warning(
+                    f"[headwise kernel input mismatch] layer={layer.layer_id} "
+                    f"block_tables_3d_shape={block_tables_3d.shape if block_tables_3d is not None else None} "
+                    f"expected_dim0={expected_dim0}"
+                )
+            if out_of_range_cnt > 0:
+                logger.error(
+                    f"[headwise kernel input invalid] layer={layer.layer_id} "
+                    f"found {out_of_range_cnt} cache ids >= cache_id_capacity({cache_id_capacity})"
+                )
+            self._head_wise_debug_log_count += 1
         if self.use_output:
             quant_max_bound = getattr(layer, "quant_max_bound", 0.0)
             cache_quant_type = getattr(layer, "cache_quant_type_str", "none")
@@ -394,7 +475,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                forward_meta.block_tables,
+                block_tables,
                 forward_meta.encoder_batch_ids,
                 forward_meta.encoder_tile_ids_per_batch,
                 forward_meta.encoder_num_blocks_x_cpu,
@@ -451,7 +532,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.seq_lens_this_time,
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                forward_meta.block_tables,
+                block_tables,
                 forward_meta.encoder_batch_ids,
                 forward_meta.encoder_tile_ids_per_batch,
                 forward_meta.encoder_num_blocks_x_cpu,

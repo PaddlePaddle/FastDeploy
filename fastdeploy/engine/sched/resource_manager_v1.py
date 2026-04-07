@@ -61,6 +61,7 @@ class ScheduledDecodeTask:
     idx: int
     request_id: str
     block_tables: list[int]
+    block_tables_3d: Union[list[list[int]], None] = None
     task_type: RequestType = RequestType.DECODE
 
 
@@ -231,6 +232,41 @@ class ResourceManagerV1(ResourceManager):
         # Scheduler-side requests that have not been moved into resource manager waiting queue yet.
         self.scheduler_unhandled_request_num = 0
 
+        # SWA recycle
+        self.request_head_recycle_upto = {}
+        # request_id -> num_total_tokens captured at last decode dispatch.
+        # Used as a lightweight overlap safety gate for SWA timely recycle.
+        self.request_last_decode_dispatch_tokens = {}
+        self.swa_window_size = getattr(self.config.model_config, "window_size", 0)
+        try:
+            self.swa_sink_size = int(getattr(self.config.model_config, "sink_size", 0) or 0)
+        except (TypeError, ValueError):
+            self.swa_sink_size = 0
+        self.swa_sink_size = max(0, self.swa_sink_size)
+        self.swa_kv_head_indices = []
+        self.full_kv_head_indices = []
+
+        if self.enable_head_wise_kv_cache:
+            # Use local kv_num_heads (after tensor-parallel split) to keep indices
+            # aligned with request.block_tables_3d shape on this rank.
+            num_kv_heads = self.kv_num_heads
+            swa_ratio = getattr(self.config.model_config, "head_wise_swa_ratio", 0.75)
+            try:
+                swa_ratio = float(swa_ratio)
+            except (TypeError, ValueError):
+                swa_ratio = 0.75
+            swa_ratio = max(0.0, min(1.0, swa_ratio))
+            num_swa_heads = int(num_kv_heads * swa_ratio)
+            num_swa_heads = max(0, min(num_kv_heads, num_swa_heads))
+
+            self.swa_kv_head_indices = list(range(num_kv_heads - num_swa_heads, num_kv_heads))
+            self.full_kv_head_indices = list(range(0, num_kv_heads - num_swa_heads))
+            llm_logger.debug(
+                f"[SWA Config] window_size={self.swa_window_size}, sink_size={self.swa_sink_size}, "
+                f"swa_ratio={swa_ratio}, num_kv_heads={num_kv_heads}, "
+                f"swa_heads={self.swa_kv_head_indices}, full_heads={self.full_kv_head_indices}"
+            )
+
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
@@ -252,7 +288,50 @@ class ResourceManagerV1(ResourceManager):
         return request
 
     def _prepare_decode_task(self, request):
-        return ScheduledDecodeTask(idx=request.idx, request_id=request.request_id, block_tables=request.block_tables)
+        block_tables_3d = getattr(request, "block_tables_3d", None)
+        if block_tables_3d is not None:
+            block_tables_3d = [list(head_blocks) if head_blocks is not None else [] for head_blocks in block_tables_3d]
+        return ScheduledDecodeTask(
+            idx=request.idx,
+            request_id=request.request_id,
+            block_tables=list(request.block_tables),
+            block_tables_3d=block_tables_3d,
+        )
+
+    def _mark_decode_dispatched(self, request: Request) -> None:
+        if not self.config.scheduler_config.enable_overlap_schedule:
+            return
+        self.request_last_decode_dispatch_tokens[request.request_id] = request.num_total_tokens
+
+    def _should_skip_swa_recycle_for_overlap(self, request: Request) -> bool:
+        """
+        In overlap scheduling, delay SWA recycle until request token count advances
+        beyond the last decode-dispatched snapshot.
+        """
+        if not self.config.scheduler_config.enable_overlap_schedule:
+            return False
+        last_dispatched_tokens = self.request_last_decode_dispatch_tokens.get(request.request_id)
+        if last_dispatched_tokens is None:
+            return True
+        return request.num_total_tokens <= last_dispatched_tokens
+
+    def _append_decode_task(self, scheduled_reqs, request: Request) -> None:
+        scheduled_reqs.append(self._prepare_decode_task(request))
+        self._mark_decode_dispatched(request)
+
+    def _extend_head_wise_block_tables(self, request: Request, new_blocks):
+        """Append newly allocated blocks/cache_ids to request block tables."""
+        if self.enable_head_wise_kv_cache:
+            if not hasattr(request, "block_tables_3d") or request.block_tables_3d is None:
+                request.block_tables_3d = []
+            for head_idx, head_blocks in enumerate(new_blocks):
+                if head_idx < len(request.block_tables_3d):
+                    request.block_tables_3d[head_idx].extend(head_blocks)
+                else:
+                    request.block_tables_3d.append(list(head_blocks))
+            request.block_tables = request.block_tables_3d[0] if request.block_tables_3d else []
+        else:
+            request.block_tables.extend(new_blocks)
 
     def _prepare_preempt_task(self, request):
         return ScheduledPreemptTask(idx=request.idx, request_id=request.request_id)
@@ -723,6 +802,109 @@ class ResourceManagerV1(ResourceManager):
         # Compatible with scenarios without images and videos.
         return num_new_tokens
 
+    def _get_swa_recycle_start_block(self):
+        # Keep sink tokens resident in KV cache. Convert sink token count to block index.
+        block_size = self.config.cache_config.block_size
+        if block_size <= 0:
+            return 0
+        return (self.swa_sink_size + block_size - 1) // block_size
+
+    def _get_swa_recycle_end_block(self, total_tokens):
+        block_size = self.config.cache_config.block_size
+        window_size = self.swa_window_size or 0
+        if window_size <= 0 or total_tokens <= window_size:
+            return 0
+
+        return max(0, (total_tokens - window_size) // block_size)
+
+    def _recycle_request_swa_head_cache_helper(
+        self,
+        request,
+        head_idx,
+        start_block_idx,
+        end_block_idx,
+    ):
+        if not hasattr(request, "block_tables_3d") or not request.block_tables_3d:
+            return start_block_idx, 0
+        if head_idx >= len(request.block_tables_3d):
+            return start_block_idx, 0
+
+        row = request.block_tables_3d[head_idx]
+        if start_block_idx >= len(row):
+            return start_block_idx, 0
+
+        end_block_idx = min(end_block_idx, len(row))
+        if end_block_idx <= start_block_idx:
+            return start_block_idx, 0
+
+        cache_ids_to_recycle = []
+        for i in range(start_block_idx, end_block_idx):
+            cid = row[i]
+            if cid is not None and cid >= 0:
+                cache_ids_to_recycle.append(cid)
+                row[i] = -1
+
+        if cache_ids_to_recycle:
+            self.cache_manager.recycle_gpu_blocks(cache_ids_to_recycle, request.request_id)
+        return end_block_idx, len(cache_ids_to_recycle)
+
+    def recycle_request_swa_head_cache(self, request):
+        if not self.enable_head_wise_kv_cache:
+            return
+        if self.config.cache_config.enable_prefix_caching:
+            llm_logger.error("not support enable_prefix_caching and enable_head_wise_kv_caching at the same time")
+            return
+        if not hasattr(request, "block_tables_3d") or not request.block_tables_3d:
+            return
+        if not self.swa_kv_head_indices:
+            return
+
+        total_tokens = request.num_total_tokens
+        start_block = self._get_swa_recycle_start_block()
+        end_block = self._get_swa_recycle_end_block(total_tokens)
+
+        if end_block <= start_block:
+            return
+
+        if request.request_id not in self.request_head_recycle_upto:
+            self.request_head_recycle_upto[request.request_id] = [0] * self.kv_num_heads
+
+        recycle_upto = self.request_head_recycle_upto[request.request_id]
+        total_recycled = 0
+        head_recycled = {}
+        head_progress = {}
+        window_moved = False
+
+        for head_idx in self.swa_kv_head_indices:
+            old_upto = max(recycle_upto[head_idx], start_block)
+            if end_block > old_upto:
+                window_moved = True
+                new_upto, recycled_count = self._recycle_request_swa_head_cache_helper(
+                    request, head_idx, old_upto, end_block
+                )
+                recycle_upto[head_idx] = max(recycle_upto[head_idx], new_upto)
+                total_recycled += recycled_count
+                head_recycled[head_idx] = recycled_count
+                head_progress[head_idx] = (old_upto, new_upto)
+
+        if window_moved:
+            head_recycled_str = ",".join(f"h{h}:{c}" for h, c in head_recycled.items())
+            head_progress_str = ",".join(f"h{h}:{s}->{e}" for h, (s, e) in head_progress.items())
+            if total_recycled > 0:
+                llm_logger.debug(
+                    f"[SWA_RECYCLE] request_id={request.request_id}, total_tokens={total_tokens}, "
+                    f"start_block={start_block}, end_block={end_block}, recycled_blocks={total_recycled}, "
+                    f"swa_heads={len(self.swa_kv_head_indices)}, recycled_by_head={head_recycled_str}, "
+                    f"recycle_upto_by_head={head_progress_str}"
+                )
+            else:
+                llm_logger.debug(
+                    f"[SWA_RECYCLE] request_id={request.request_id}, total_tokens={total_tokens}, "
+                    f"start_block={start_block}, end_block={end_block}, recycled_blocks=0, "
+                    f"swa_heads={len(self.swa_kv_head_indices)}, recycled_by_head={head_recycled_str}, "
+                    f"recycle_upto_by_head={head_progress_str}"
+                )
+
     def exist_mm_prefill(self, scheduled_reqs):
         for request in scheduled_reqs:
             if request.task_type == RequestType.PREFILL and self._is_mm_request(request):
@@ -797,6 +979,20 @@ class ResourceManagerV1(ResourceManager):
                         continue
 
                     if (
+                        self.enable_head_wise_kv_cache
+                        and self.swa_kv_head_indices
+                        and not self.config.cache_config.enable_prefix_caching
+                    ):  # recycle for swa
+                        if self._should_skip_swa_recycle_for_overlap(request):
+                            llm_logger.debug(
+                                f"[SWA_RECYCLE] skip by overlap gate, request_id={request.request_id}, "
+                                f"num_total_tokens={request.num_total_tokens}, "
+                                f"last_dispatched_tokens={self.request_last_decode_dispatch_tokens.get(request.request_id)}"
+                            )
+                        else:
+                            self.recycle_request_swa_head_cache(request)
+
+                    if (
                         self.allocated_slots(request) - request.num_total_tokens
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
                     ):
@@ -805,13 +1001,12 @@ class ResourceManagerV1(ResourceManager):
                             llm_logger.debug(
                                 f"schedule decoding task: {request} request.num_total_tokens {request.num_total_tokens} request.num_computed_tokens {request.num_computed_tokens}"
                             )
-                            request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(
-                                    self.config.cache_config.enc_dec_block_num, request.request_id
-                                )
+                            decode_extend_blocks = self.cache_manager.allocate_gpu_blocks(
+                                self.config.cache_config.enc_dec_block_num, request.request_id
                             )
+                            self._extend_head_wise_block_tables(request, decode_extend_blocks)
                             # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            self._append_decode_task(scheduled_reqs, request)
                         else:
                             # Not enough blocks to allocate, trigger preemption
                             can_schedule = self._trigger_preempt(
@@ -820,17 +1015,17 @@ class ResourceManagerV1(ResourceManager):
                             if not can_schedule:
                                 break
                             # Allocation for next decoding blocks
-                            request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(
-                                    self.config.cache_config.enc_dec_block_num, request.request_id
-                                )
+                            decode_extend_blocks = self.cache_manager.allocate_gpu_blocks(
+                                self.config.cache_config.enc_dec_block_num, request.request_id
                             )
+                            self._extend_head_wise_block_tables(request, decode_extend_blocks)
                             # Prepare decoding task
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            self._append_decode_task(scheduled_reqs, request)
                         num_decoding_req_nums += 1
                     token_budget -= 1
                     if (
                         request.use_extend_tables
+                        and not self.enable_head_wise_kv_cache
                         and request.request_id not in self.using_extend_tables_req_id
                         and self.need_block_num_map[request.request_id].watch() > 0
                     ):
@@ -838,10 +1033,11 @@ class ResourceManagerV1(ResourceManager):
                         def _allocate_decode_and_extend():
                             allocate_block_num = self.need_block_num_map[request.request_id].consume()
                             # Prepare decoding task
-                            request.block_tables.extend(
-                                self.cache_manager.allocate_gpu_blocks(allocate_block_num, request.request_id)
+                            decode_blocks = self.cache_manager.allocate_gpu_blocks(
+                                allocate_block_num, request.request_id
                             )
-                            scheduled_reqs.append(self._prepare_decode_task(request))
+                            self._extend_head_wise_block_tables(request, decode_blocks)
+                            self._append_decode_task(scheduled_reqs, request)
 
                             # Prepare extend task
                             reuse_block_num = request.num_total_tokens // self.config.cache_config.block_size
@@ -908,18 +1104,16 @@ class ResourceManagerV1(ResourceManager):
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
-                        request.block_tables.extend(
-                            self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
-                        )
+                        prefill_blocks = self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
+                        self._extend_head_wise_block_tables(request, prefill_blocks)
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     else:  # Not enough blocks to allocate, trigger preemption
                         can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
                         if not can_schedule:
                             break
-                        request.block_tables.extend(
-                            self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
-                        )
+                        prefill_blocks = self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
+                        self._extend_head_wise_block_tables(request, prefill_blocks)
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
                     token_budget -= num_new_tokens
@@ -1011,7 +1205,7 @@ class ResourceManagerV1(ResourceManager):
                                 extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(
                                     num_new_block, request.request_id
                                 )
-                                request.block_tables.extend(extra_gpu_block_ids)
+                                self._extend_head_wise_block_tables(request, extra_gpu_block_ids)
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
@@ -1080,7 +1274,7 @@ class ResourceManagerV1(ResourceManager):
                                 extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(
                                     num_new_block, request.request_id
                                 )
-                                request.block_tables.extend(extra_gpu_block_ids)
+                                self._extend_head_wise_block_tables(request, extra_gpu_block_ids)
                             self.waiting.popleft()
                             self.running.append(request)
                             scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
@@ -1262,7 +1456,13 @@ class ResourceManagerV1(ResourceManager):
             )
 
             request.cache_info = [matched_block_num, no_cache_block_num]
-            request.block_tables = common_block_ids
+            # In head-wise mode, common_block_ids is 2D cache_ids
+            if self.enable_head_wise_kv_cache:
+                request.block_tables_3d = common_block_ids
+                request.block_tables = common_block_ids[0] if common_block_ids else []
+            else:
+                request.block_tables = common_block_ids
+            request.skip_allocate = False
             request.num_cached_tokens = matched_token_num
             if self.config.cache_config.disable_chunked_mm_input:
                 if matched_token_num == request.need_prefill_tokens:
@@ -1367,7 +1567,7 @@ class ResourceManagerV1(ResourceManager):
                     extra_gpu_block_ids = self.cache_manager.allocate_gpu_blocks(
                         need_extra_prefill_blocks, request.request_id
                     )
-                    request.block_tables.extend(extra_gpu_block_ids)
+                    self._extend_head_wise_block_tables(request, extra_gpu_block_ids)
                     allocated_position = self.get_available_position()
                     request.idx = allocated_position
                     self.tasks_list[request.idx] = request
@@ -1381,9 +1581,13 @@ class ResourceManagerV1(ResourceManager):
 
             else:
                 if self.cache_manager.can_allocate_gpu_blocks(need_prealloc_prefill_blocks):
-                    request.block_tables.extend(
-                        self.cache_manager.allocate_gpu_blocks(need_prealloc_prefill_blocks, request.request_id)
+                    prealloc_blocks = self.cache_manager.allocate_gpu_blocks(
+                        need_prealloc_prefill_blocks, request.request_id
                     )
+                    if self.enable_head_wise_kv_cache:
+                        request.block_tables = []
+                        request.block_tables_3d = []
+                    self._extend_head_wise_block_tables(request, prealloc_blocks)
                     request.num_computed_tokens = 0
                     allocated_position = self.get_available_position()
                     request.idx = allocated_position
@@ -1416,9 +1620,16 @@ class ResourceManagerV1(ResourceManager):
             if not self.cache_manager.can_allocate_gpu_blocks(total_need_blocks):
                 return False
 
-            request.block_tables = self.cache_manager.allocate_gpu_blocks(
+            # In head-wise mode, allocate_gpu_blocks returns 2D cache_ids
+            allocated_cache_ids = self.cache_manager.allocate_gpu_blocks(
                 need_prealloc_prefill_blocks, request.request_id
             )
+            if self.enable_head_wise_kv_cache:
+                request.block_tables = []
+                request.block_tables_3d = []
+                self._extend_head_wise_block_tables(request, allocated_cache_ids)
+            else:
+                request.block_tables = allocated_cache_ids
             request.num_computed_tokens = request.need_prefill_tokens
             request.disaggregate_info["block_tables"] = request.block_tables
             allocated_position = self.get_available_position()
@@ -1472,12 +1683,38 @@ class ResourceManagerV1(ResourceManager):
     def _free_blocks(self, request: Request):
         if self.config.cache_config.enable_prefix_caching and self.config.scheduler_config.splitwise_role != "decode":
             self.cache_manager.release_block_ids(request)
-            self.cache_manager.recycle_gpu_blocks(
-                request.block_tables[request.num_cached_blocks :], request.request_id
-            )
+            # In head-wise mode, block_tables_3d contains cache_ids for all heads
+            if self.enable_head_wise_kv_cache and hasattr(request, "block_tables_3d") and request.block_tables_3d:
+                # Flatten block_tables_3d for recycling: [[head0_ids], [head1_ids], ...]
+                # Only recycle blocks after num_cached_blocks (for each head)
+                if request.num_cached_blocks > 0 and request.num_cached_blocks < len(request.block_tables_3d[0]):
+                    cache_ids_to_recycle = []
+                    for head_ids in request.block_tables_3d:
+                        cache_ids_to_recycle.extend(head_ids[request.num_cached_blocks :])
+                    self.cache_manager.recycle_gpu_blocks(cache_ids_to_recycle, request.request_id)
+                else:
+                    # Recycle all cache_ids
+                    cache_ids_to_recycle = []
+                    for head_ids in request.block_tables_3d:
+                        cache_ids_to_recycle.extend(head_ids)
+                    self.cache_manager.recycle_gpu_blocks(cache_ids_to_recycle, request.request_id)
+            else:
+                self.cache_manager.recycle_gpu_blocks(
+                    request.block_tables[request.num_cached_blocks :], request.request_id
+                )
         else:
-            self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
+            # In head-wise mode, recycle all cache_ids from block_tables_3d
+            if self.enable_head_wise_kv_cache and hasattr(request, "block_tables_3d") and request.block_tables_3d:
+                cache_ids_to_recycle = []
+                for head_ids in request.block_tables_3d:
+                    cache_ids_to_recycle.extend(head_ids)
+                self.cache_manager.recycle_gpu_blocks(cache_ids_to_recycle, request.request_id)
+            else:
+                self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
         request.block_tables = []
+        if hasattr(request, "block_tables_3d"):
+            # Avoid stale head-wise cache-id tables on reschedule/reuse.
+            request.block_tables_3d = []
 
         if request.request_id in self.using_extend_tables_req_id:
             reuse_block_num = self.reuse_block_num_map[request.request_id]
@@ -1490,6 +1727,8 @@ class ResourceManagerV1(ResourceManager):
             request.extend_block_tables = []
             del self.reuse_block_num_map[request.request_id]
             del self.need_block_num_map[request.request_id]
+        self.request_head_recycle_upto.pop(request.request_id, None)
+        self.request_last_decode_dispatch_tokens.pop(request.request_id, None)
 
     def finish_requests_async(self, request_ids: Union[str, Iterable[str]]):
         return self.finish_execution_pool.submit(self.finish_requests, request_ids)
@@ -1554,6 +1793,7 @@ class ResourceManagerV1(ResourceManager):
     def clear_data(self):
         self.waiting: deque[Request] = deque()
         self.to_be_rescheduled_request_id_set = set()
+        self.request_last_decode_dispatch_tokens = {}
         self.update_metrics(verbose=True)
 
     def update_metrics(self, verbose=False):
@@ -1562,7 +1802,18 @@ class ResourceManagerV1(ResourceManager):
         blocks_used_by_tasks = set()
         for task in self.tasks_list:
             if task is not None:
-                blocks_used_by_tasks.update(task.block_tables)
+                # In head-wise mode, use block_tables_3d to get all cache_ids
+                if self.enable_head_wise_kv_cache and hasattr(task, "block_tables_3d") and task.block_tables_3d:
+                    # block_tables_3d is a 2D list: [[cache_ids_head0], [cache_ids_head1], ...]
+                    for head_blocks in task.block_tables_3d:
+                        for cache_id in head_blocks:
+                            if cache_id is not None and cache_id >= 0:
+                                blocks_used_by_tasks.add(cache_id)
+                else:
+                    # Non-head-wise mode: block_tables is a list of block_ids
+                    for block_id in task.block_tables:
+                        if block_id is not None and block_id >= 0:
+                            blocks_used_by_tasks.add(block_id)
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())

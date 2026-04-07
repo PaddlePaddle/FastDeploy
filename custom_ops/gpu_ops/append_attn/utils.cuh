@@ -27,6 +27,8 @@ struct AppendAttnMetaData {
   int head_dims;
   int head_dims_v;
   int max_blocks_per_seq;
+  bool use_head_wise = false;
+  int max_blocks_per_head = 0;
   const int* mask_offset = nullptr;
 };
 

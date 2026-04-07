@@ -92,6 +92,21 @@ struct prefill_softmax_state_t {
   }
 };
 
+template <SharedMemFillMode fill_mode, typename T>
+__device__ __forceinline__ void load_128b_async_zero_on_invalid(
+    smem_t smem, uint32_t offset, const T* gmem_ptr, bool predicate) {
+  if constexpr (fill_mode == SharedMemFillMode::kFillZero) {
+    smem.load_128b_async<fill_mode>(offset, gmem_ptr, predicate);
+  } else {
+    if (predicate) {
+      smem.load_128b_async<fill_mode>(offset, gmem_ptr, true);
+    } else {
+      smem.load_128b_async<SharedMemFillMode::kFillZero>(
+          offset, gmem_ptr, false);
+    }
+  }
+}
+
 template <typename T, uint32_t num_frags_x, uint32_t num_frags_y>
 __device__ __forceinline__ void init_states(float (*o_frag)[num_frags_y][8],
                                             float (*m)[2],
@@ -330,14 +345,19 @@ __device__ __forceinline__ void produce_v_blockwise_c8(
   uint32_t kv_idx = kv_idx_base + tx % 4 * num_elems_per_128b<CacheT>();
   if constexpr (NUM_WARP_Q == 4) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
-    if (block_id < 0) block_id = 0;
-    CacheT* cache_v_now = cache_v + block_id * kv_n_stride + const_v_offset;
+    const bool valid_block = block_id >= 0;
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
+    const int safe_block_id = valid_block ? block_id : 0;
+    CacheT* cache_v_now =
+        cache_v + safe_block_id * kv_n_stride + const_v_offset;
 #pragma unroll
     for (uint32_t i = 0; i < num_frags_y * 2 / num_warps;
          ++i) {  // m (num_frags_y * 16 / (num_warps * 8))
 #pragma unroll
       for (uint32_t j = 0; j < num_frags_z / 4; ++j) {
-        smem.load_128b_async<fill_mode>(*smem_offset, cache_v_now, true);
+        load_128b_async_zero_on_invalid<fill_mode>(
+            smem, *smem_offset, cache_v_now, valid_block);
         *smem_offset = smem.advance_offset_by_column<4, num_vecs_per_blocksize>(
             *smem_offset, j);
         cache_v_now += 4 * num_elems_per_128b<CacheT>();
@@ -354,15 +374,20 @@ __device__ __forceinline__ void produce_v_blockwise_c8(
 #pragma unroll
     for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
       int block_id = __ldg(&block_table_now[kv_idx / block_size]);
-      if (block_id < 0) block_id = 0;
-      CacheT* cache_v_now = cache_v + block_id * kv_n_stride + const_v_offset;
+      const bool valid_block = block_id >= 0;
+      // Keep address valid for cp.async; data path is still zero-filled when
+      // !valid_block.
+      const int safe_block_id = valid_block ? block_id : 0;
+      CacheT* cache_v_now =
+          cache_v + safe_block_id * kv_n_stride + const_v_offset;
 
 #pragma unroll
       for (uint32_t i = 0; i < num_frags_y * 2 / num_warps;
            ++i) {  // m (num_frags_y * 16 / (num_warps * 8))
 #pragma unroll
         for (uint32_t j = 0; j < 2 * num_frags_z / 4; ++j) {
-          smem.load_128b_async<fill_mode>(*smem_offset, cache_v_now, true);
+          load_128b_async_zero_on_invalid<fill_mode>(
+              smem, *smem_offset, cache_v_now, valid_block);
           *smem_offset =
               smem.advance_offset_by_column<4, num_vecs_per_blocksize>(
                   *smem_offset, j);
@@ -395,33 +420,46 @@ __device__ __forceinline__ void produce_kv_dynamic_scale_gmem2smem_async(
     const uint32_t kv_idx,
     const uint32_t kv_num_heads,
     const uint32_t kv_head_idx,
-    const uint32_t chunk_end) {
+    const uint32_t chunk_end,
+    const bool use_head_wise) {
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
   const uint32_t tid = ty * 32 + tx;
   if constexpr (NUM_WARP_Q == 4) {
     // 4 warps shared block_size
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
-    if (block_id < 0) block_id = 0;
+    const bool valid_block = block_id >= 0;
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
+    const int safe_block_id = valid_block ? block_id : 0;
     if (tid < block_size / 8) {
-      const T* cache_k_scale_now = cache_kv_scale +
-                                   block_id * kv_num_heads * block_size +
-                                   kv_head_idx * block_size + tid * 8;
+      const T* cache_k_scale_now =
+          use_head_wise
+              ? cache_kv_scale + safe_block_id * block_size + tid * 8
+              : cache_kv_scale + safe_block_id * kv_num_heads * block_size +
+                    kv_head_idx * block_size + tid * 8;
       const int kv_idx_this_thread = kv_idx + tid * 8;
-      kv_scale_smem.load_128b_async<fill_mode>(
-          tid, cache_k_scale_now, kv_idx_this_thread < chunk_end);
+      const bool valid_load = valid_block && (kv_idx_this_thread < chunk_end);
+      load_128b_async_zero_on_invalid<fill_mode>(
+          kv_scale_smem, tid, cache_k_scale_now, valid_load);
     }
   } else {
     // 1 warp 32 tokens
     if (tid < block_size / 8 * 2) {
       const uint32_t kv_idx_now = kv_idx + block_size * tid / 8;
       int block_id = __ldg(&block_table_now[kv_idx_now / block_size]);
-      if (block_id < 0) block_id = 0;
+      const bool valid_block = block_id >= 0;
+      // Keep address valid for cp.async; data path is still zero-filled when
+      // !valid_block.
+      const int safe_block_id = valid_block ? block_id : 0;
       const int kv_idx_this_thread = kv_idx + tid * 8;
-      const T* cache_k_scale_now = cache_kv_scale +
-                                   block_id * kv_num_heads * block_size +
-                                   kv_head_idx * block_size + tid % 8 * 8;
-      kv_scale_smem.load_128b_async<fill_mode>(
-          tid, cache_k_scale_now, kv_idx_this_thread < chunk_end);
+      const T* cache_k_scale_now =
+          use_head_wise
+              ? cache_kv_scale + safe_block_id * block_size + tid % 8 * 8
+              : cache_kv_scale + safe_block_id * kv_num_heads * block_size +
+                    kv_head_idx * block_size + tid % 8 * 8;
+      const bool valid_load = valid_block && (kv_idx_this_thread < chunk_end);
+      load_128b_async_zero_on_invalid<fill_mode>(
+          kv_scale_smem, tid, cache_k_scale_now, valid_load);
     }
   }
 }
@@ -510,8 +548,12 @@ __device__ __forceinline__ void produce_k_blockwise_c8(
   uint32_t kv_idx = kv_idx_base + ty * 4 + tx / 8;
   if constexpr (NUM_WARP_Q == 4) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
-    if (block_id < 0) block_id = 0;
-    CacheT* cache_k_now = cache_k + block_id * kv_n_stride + const_k_offset;
+    const bool valid_block = block_id >= 0;
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
+    const int safe_block_id = valid_block ? block_id : 0;
+    CacheT* cache_k_now =
+        cache_k + safe_block_id * kv_n_stride + const_k_offset;
 #pragma unroll
     for (uint32_t i = 0; i < num_frags_z * 4 / num_warps;
          ++i) {  // m num_frags_z * 16 / (num_warps * 4)
@@ -520,7 +562,8 @@ __device__ __forceinline__ void produce_k_blockwise_c8(
            ++j) {  // k num_frags_y * 16 / 8 / num_elems_per_128b<CacheT>()
         // smem.load_128b_async<fill_mode>(*smem_offset, *gptr, kv_idx <
         // kv_len);
-        smem.load_128b_async<fill_mode>(*smem_offset, cache_k_now, true);
+        load_128b_async_zero_on_invalid<fill_mode>(
+            smem, *smem_offset, cache_k_now, valid_block);
         *smem_offset = smem.advance_offset_by_column<8, num_vecs_per_head>(
             *smem_offset, j);
         cache_k_now += 8 * num_elems_per_128b<CacheT>();
@@ -538,14 +581,19 @@ __device__ __forceinline__ void produce_k_blockwise_c8(
 #pragma unroll
     for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
       int block_id = __ldg(&block_table_now[kv_idx / block_size]);
-      if (block_id < 0) block_id = 0;
-      CacheT* cache_k_now = cache_k + block_id * kv_n_stride + const_k_offset;
+      const bool valid_block = block_id >= 0;
+      // Keep address valid for cp.async; data path is still zero-filled when
+      // !valid_block.
+      const int safe_block_id = valid_block ? block_id : 0;
+      CacheT* cache_k_now =
+          cache_k + safe_block_id * kv_n_stride + const_k_offset;
 #pragma unroll
       for (uint32_t i = 0; i < 2 * num_frags_z * 4 / num_warps;
            ++i) {  // m num_frags_z * 16 / (num_warps * 4)
 #pragma unroll
         for (uint32_t j = 0; j < num_frags_y / 8; ++j) {
-          smem.load_128b_async<fill_mode>(*smem_offset, cache_k_now, true);
+          load_128b_async_zero_on_invalid<fill_mode>(
+              smem, *smem_offset, cache_k_now, valid_block);
           *smem_offset = smem.advance_offset_by_column<8, num_vecs_per_head>(
               *smem_offset, j);
           cache_k_now += 8 * num_elems_per_128b<CacheT>();
@@ -592,13 +640,18 @@ __device__ __forceinline__ void produce_v_blockwise_c4(
 #pragma unroll
   for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV; ++kv_i) {
     int block_id = __ldg(&block_table_now[(kv_idx) / block_size]);
-    if (block_id < 0) block_id = 0;
-    CacheT* cache_v_now = cache_v + block_id * kv_n_stride + const_v_offset;
+    const bool valid_block = block_id >= 0;
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
+    const int safe_block_id = valid_block ? block_id : 0;
+    CacheT* cache_v_now =
+        cache_v + safe_block_id * kv_n_stride + const_v_offset;
 #pragma unroll
     for (uint32_t i = 0; i < num_frags_y / num_warps; ++i) {  // m
 #pragma unroll
       for (uint32_t j = 0; j < num_frags_z / 4; ++j) {
-        smem.load_128b_async<fill_mode>(*smem_offset, cache_v_now, true);
+        load_128b_async_zero_on_invalid<fill_mode>(
+            smem, *smem_offset, cache_v_now, valid_block);
         *smem_offset = smem.advance_offset_by_column<2, num_vecs_per_blocksize>(
             *smem_offset, j);
         cache_v_now += 2 * num_elems_per_128b<CacheT>();
@@ -646,15 +699,20 @@ __device__ __forceinline__ void produce_k_blockwise_c4(
 #pragma unroll
   for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV; ++kv_i) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
-    if (block_id < 0) block_id = 0;
-    CacheT* cache_k_now = cache_k + block_id * kv_n_stride + const_k_offset;
+    const bool valid_block = block_id >= 0;
+    // Keep address valid for cp.async; data path is still zero-filled when
+    // !valid_block.
+    const int safe_block_id = valid_block ? block_id : 0;
+    CacheT* cache_k_now =
+        cache_k + safe_block_id * kv_n_stride + const_k_offset;
 
 #pragma unroll
     for (uint32_t i = 0; i < num_frags_z * 2 / num_warps;
          ++i) {  // m num_frags_z * 16 / (num_warps * 8)
 #pragma unroll
       for (uint32_t j = 0; j < num_frags_y / 8; ++j) {
-        smem.load_128b_async<fill_mode>(*smem_offset, cache_k_now, true);
+        load_128b_async_zero_on_invalid<fill_mode>(
+            smem, *smem_offset, cache_k_now, valid_block);
         *smem_offset = smem.advance_offset_by_column<4, num_vecs_per_head>(
             *smem_offset, j);
         cache_k_now += 4 * num_elems_per_128b<CacheT>();

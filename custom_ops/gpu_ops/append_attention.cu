@@ -511,8 +511,32 @@ std::vector<paddle::Tensor> AppendAttention(
   const auto& qkv_dims = qkv.dims();
   const auto& key_cache_dims = key_cache.dims();
   meta_data.token_nums = qkv_dims[0];
-  meta_data.kv_num_heads = key_cache_dims[1];
-  meta_data.head_dims = key_cache_dims[3];
+  meta_data.batch_size = seq_lens_this_time.dims()[0];
+  meta_data.use_head_wise = (key_cache_dims.size() == 3);
+  meta_data.max_blocks_per_seq = block_tables.dims()[1];
+  meta_data.max_blocks_per_head = meta_data.max_blocks_per_seq;
+  if (meta_data.use_head_wise) {
+    if (meta_data.batch_size <= 0) {
+      PD_THROW(
+          "Invalid batch_size %d in head-wise mode. batch_size must be > 0.",
+          meta_data.batch_size);
+    }
+    const auto block_tables_dim0 = block_tables.dims()[0];
+    if (block_tables_dim0 % meta_data.batch_size != 0) {
+      PD_THROW(
+          "Inconsistent dimensions in head-wise mode: block_tables.dims()[0] "
+          "(%lld) must be divisible by batch_size (%d).",
+          static_cast<long long>(block_tables_dim0),
+          meta_data.batch_size);
+    }
+    meta_data.kv_num_heads = block_tables_dim0 / meta_data.batch_size;
+    meta_data.block_size = key_cache_dims[1];
+    meta_data.head_dims = key_cache_dims[2];
+  } else {
+    meta_data.kv_num_heads = key_cache_dims[1];
+    meta_data.block_size = key_cache_dims[2];
+    meta_data.head_dims = key_cache_dims[3];
+  }
   // TODO: trick method support c4, add attr head_dims in the future
   if (cache_quant_type_str == "cache_int4_zp") {
     meta_data.head_dims *= 2;
@@ -520,10 +544,6 @@ std::vector<paddle::Tensor> AppendAttention(
   const int total_num_head =
       qkv_dims[qkv_dims.size() - 1] / meta_data.head_dims;
   meta_data.q_num_heads = total_num_head - 2 * meta_data.kv_num_heads;
-
-  meta_data.max_blocks_per_seq = block_tables.dims()[1];
-  meta_data.block_size = key_cache.dims()[2];
-  meta_data.batch_size = seq_lens_this_time.dims()[0];
 
   // template dtype generation
   phi::DataType dtype_id;
@@ -723,8 +743,32 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
   const auto& qkv_dims = qkv.dims();
   const auto& key_cache_dims = key_cache.dims();
   meta_data.token_nums = qkv_dims[0];
-  meta_data.kv_num_heads = key_cache_dims[1];
-  meta_data.head_dims = key_cache_dims[3];
+  meta_data.batch_size = seq_lens_this_time.dims()[0];
+  meta_data.use_head_wise = (key_cache_dims.size() == 3);
+  meta_data.max_blocks_per_seq = block_tables.dims()[1];
+  meta_data.max_blocks_per_head = meta_data.max_blocks_per_seq;
+  if (meta_data.use_head_wise) {
+    if (meta_data.batch_size <= 0) {
+      PD_THROW(
+          "Invalid batch_size %d in head-wise mode. batch_size must be > 0.",
+          meta_data.batch_size);
+    }
+    const auto block_tables_dim0 = block_tables.dims()[0];
+    if (block_tables_dim0 % meta_data.batch_size != 0) {
+      PD_THROW(
+          "Inconsistent dimensions in head-wise mode: block_tables.dims()[0] "
+          "(%lld) must be divisible by batch_size (%d).",
+          static_cast<long long>(block_tables_dim0),
+          meta_data.batch_size);
+    }
+    meta_data.kv_num_heads = block_tables_dim0 / meta_data.batch_size;
+    meta_data.block_size = key_cache_dims[1];
+    meta_data.head_dims = key_cache_dims[2];
+  } else {
+    meta_data.kv_num_heads = key_cache_dims[1];
+    meta_data.block_size = key_cache_dims[2];
+    meta_data.head_dims = key_cache_dims[3];
+  }
   // TODO: trick method support c4, add attr head_dims in the future
   if (cache_quant_type_str == "cache_int4_zp") {
     meta_data.head_dims *= 2;
@@ -732,10 +776,6 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
   const int total_num_head =
       qkv_dims[qkv_dims.size() - 1] / meta_data.head_dims;
   meta_data.q_num_heads = total_num_head - 2 * meta_data.kv_num_heads;
-
-  meta_data.max_blocks_per_seq = block_tables.dims()[1];
-  meta_data.block_size = key_cache.dims()[2];
-  meta_data.batch_size = seq_lens_this_time.dims()[0];
 
   if (mask_offset) {
     meta_data.mask_offset = mask_offset.get().data<int>();
@@ -889,15 +929,51 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const bool speculate_decoder,
     const int sliding_window,
     const int sink_size) {
-  const int token_num = qkv_shape[0];
-  const int kv_num_heads = key_cache_shape[1];
-  int head_dim = key_cache_shape[3];
+  const int64_t token_num = qkv_shape[0];
+  const bool use_head_wise = key_cache_shape.size() == 3;
+  int64_t head_dim = use_head_wise ? key_cache_shape[2] : key_cache_shape[3];
   if (cache_quant_type_str == "cache_int4_zp") {
     head_dim *= 2;
   }
-  const int total_num_head = qkv_shape[qkv_shape.size() - 1] / head_dim;
-  const int num_heads = total_num_head - 2 * kv_num_heads;
-  return {{token_num, num_heads * head_dim}};
+  const int64_t batch_size =
+      seq_lens_this_time_shape.empty() ? -1 : seq_lens_this_time_shape[0];
+
+  int64_t kv_num_heads = -1;
+  if (use_head_wise) {
+    if (batch_size == 0) {
+      PD_THROW(
+          "Invalid batch_size %lld in head-wise mode. batch_size must be > 0.",
+          static_cast<long long>(batch_size));
+    }
+    const int64_t block_tables_dim0 =
+        block_tables_shape.empty() ? -1 : block_tables_shape[0];
+    // Keep infer-shape behavior conservative for dynamic/unknown dims.
+    if (batch_size > 0 && block_tables_dim0 >= 0) {
+      if (block_tables_dim0 % batch_size != 0) {
+        PD_THROW(
+            "Inconsistent dimensions in head-wise mode: block_tables_shape[0] "
+            "(%lld) must be divisible by batch_size (%lld).",
+            static_cast<long long>(block_tables_dim0),
+            static_cast<long long>(batch_size));
+      }
+      kv_num_heads = block_tables_dim0 / batch_size;
+    }
+  } else {
+    kv_num_heads = key_cache_shape[1];
+  }
+
+  int64_t total_num_head = -1;
+  const int64_t qkv_hidden_dim = qkv_shape[qkv_shape.size() - 1];
+  if (head_dim > 0 && qkv_hidden_dim >= 0) {
+    total_num_head = qkv_hidden_dim / head_dim;
+  }
+
+  int64_t out_hidden_dim = -1;
+  if (total_num_head >= 0 && kv_num_heads >= 0 && head_dim >= 0) {
+    const int64_t num_heads = total_num_head - 2 * kv_num_heads;
+    out_hidden_dim = num_heads * head_dim;
+  }
+  return {{token_num, out_hidden_dim}};
 }
 
 std::vector<paddle::DataType> AppendAttentionInferDtype(
