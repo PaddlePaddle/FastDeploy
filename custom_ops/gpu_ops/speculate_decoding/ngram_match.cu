@@ -196,6 +196,7 @@ __global__ void ngram_count_and_find_candidate_kernel(
 }
 
 // Phase 2: Single block truncation with threshold.
+template <int NUM_THREADS>
 __global__ void ngram_truncate_candidate(const int64_t *step_idx,
                                          const int *draft_token_num,
                                          int64_t *max_dec_len,

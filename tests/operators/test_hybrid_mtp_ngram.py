@@ -24,6 +24,8 @@ from fastdeploy.model_executor.ops.gpu import hybrid_mtp_ngram
 
 class TestNgramMatchMixed(unittest.TestCase):
     def setUp(self):
+        if not paddle.is_compiled_with_cuda():
+            self.skipTest("CUDA is not available, skipping GPU test")
         paddle.set_device("gpu")
         self.max_bsz = 2
         self.max_draft_tokens = 5
