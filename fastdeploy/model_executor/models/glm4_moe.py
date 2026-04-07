@@ -170,6 +170,7 @@ class Glm4Moe(nn.Layer):
             layer_idx=layer_id,
             gate_correction_bias=self.gate.e_score_correction_bias,
             weight_key_map=weight_key_map,
+            topk_reduce_func=lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
         )
 
         if self.n_shared_experts > 0:
