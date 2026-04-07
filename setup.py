@@ -48,7 +48,7 @@ class CustomBdistWheel(bdist_wheel):
         """Configure wheel as pure Python and platform-independent."""
         super().finalize_options()
         tag = next(tags.sys_tags())
-        self.root_is_pure = True
+        self.root_is_pure = False
         self.python_tag = tag.interpreter
         self.abi_tag = tag.abi
         self.plat_name_supplied = True
