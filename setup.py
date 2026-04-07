@@ -27,7 +27,7 @@ from setuptools import Extension, find_packages, setup
 from setuptools.command.build_ext import build_ext
 from setuptools.command.install import install
 from wheel.bdist_wheel import bdist_wheel
-
+from packaging import tags
 long_description = "FastDeploy: Large Language Model Serving.\n\n"
 long_description += "GitHub: https://github.com/PaddlePaddle/FastDeploy\n"
 long_description += "Email: dltp@baidu.com"
@@ -47,11 +47,12 @@ class CustomBdistWheel(bdist_wheel):
     def finalize_options(self):
         """Configure wheel as pure Python and platform-independent."""
         super().finalize_options()
+        tag = next(tags.sys_tags())
         self.root_is_pure = True
-        self.python_tag = "py3"
-        self.abi_tag = "none"
+        self.python_tag = tag.interpreter
+        self.abi_tag = tag.abi
         self.plat_name_supplied = True
-        self.plat_name = "any"
+        self.plat_name = tag.platform
 
 
 class CMakeExtension(Extension):
