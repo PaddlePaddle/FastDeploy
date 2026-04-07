@@ -19,6 +19,7 @@ from typing import Optional
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.kv_cache import (
     KvCacheQuantzationTypes,
 )
@@ -42,6 +43,7 @@ class XPUKvCacheQuantConfig(QuantConfigBase):
         super().__init__()
         self.kv_cache_quant_type = kv_cache_quant_type
         self.is_channel_wise = is_channel_wise
+        self.has_zero_point = has_zero_point
 
         try:
             self.quant_type = KvCacheQuantzationTypes(kv_cache_quant_type)
@@ -139,6 +141,62 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         scale_shape = [layer.fd_config.model_config.num_key_value_heads]
         if self.cache_quant_config.is_channel_wise:
             scale_shape = [layer.kv_num_heads * layer.head_dim]
+            # Custom weight_loader for C8+TP: the safetensors scale/zp shape is
+            # [1, num_kv_heads, 1, head_dim]. We must split along the kv_heads
+            # dimension (dim=1), not the last dimension. The default_weight_loader
+            # treats output_dim as boolean and always splits along dim=-1, which
+            # is incorrect for 4D tensors where we need to split along dim=1.
+            fd_config = layer.fd_config
+            total_kv_heads = fd_config.model_config.num_key_value_heads
+            tp_size = fd_config.parallel_config.tensor_parallel_size
+            tp_rank = fd_config.parallel_config.tensor_parallel_rank
+            max_bound = self.cache_quant_config.max_bound
+
+            def _kv_scale_weight_loader(
+                param,
+                loaded_weight,
+                shard_id=None,
+                _total_kv_heads=total_kv_heads,
+                _tp_size=tp_size,
+                _tp_rank=tp_rank,
+                _max_bound=max_bound,
+            ):
+                loaded_weight = get_tensor(loaded_weight).cast("float32")
+                # TP split along kv_heads dimension
+                if _tp_size > 1 and not fd_config.load_config.is_pre_sharded:
+                    head_dim = loaded_weight.numel() // _total_kv_heads
+                    loaded_weight = loaded_weight.reshape([_total_kv_heads, head_dim])
+                    assert (
+                        _total_kv_heads % _tp_size == 0
+                    ), f"num_kv_heads ({_total_kv_heads}) must be divisible by tp_size ({_tp_size})"
+                    kv_heads_per_rank = _total_kv_heads // _tp_size
+                    start = _tp_rank * kv_heads_per_rank
+                    end = start + kv_heads_per_rank
+                    loaded_weight = loaded_weight[start:end, :]
+                loaded_weight = paddle.clip(loaded_weight, min=1e-8)
+                loaded_weight = (_max_bound / loaded_weight).reshape(param.shape).cast(param.dtype)
+                param.copy_(loaded_weight, False)
+
+            def _kv_zp_weight_loader(
+                param, loaded_weight, shard_id=None, _total_kv_heads=total_kv_heads, _tp_size=tp_size, _tp_rank=tp_rank
+            ):
+                loaded_weight = get_tensor(loaded_weight).cast(param.dtype)
+                # TP split along kv_heads dimension
+                if _tp_size > 1 and not fd_config.load_config.is_pre_sharded:
+                    head_dim = loaded_weight.numel() // _total_kv_heads
+                    loaded_weight = loaded_weight.reshape([_total_kv_heads, head_dim])
+                    kv_heads_per_rank = _total_kv_heads // _tp_size
+                    start = _tp_rank * kv_heads_per_rank
+                    end = start + kv_heads_per_rank
+                    loaded_weight = loaded_weight[start:end, :]
+                loaded_weight = loaded_weight.reshape(param.shape)
+                param.copy_(loaded_weight, False)
+
+            scale_weight_attrs = {**extra_weight_attrs, "weight_loader": _kv_scale_weight_loader}
+            zp_weight_attrs = {**extra_weight_attrs, "weight_loader": _kv_zp_weight_loader}
+        else:
+            scale_weight_attrs = extra_weight_attrs
+            zp_weight_attrs = extra_weight_attrs
 
         layer.cache_k_scale = layer.create_parameter(
             shape=scale_shape,
@@ -154,13 +212,13 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         set_weight_attrs(
             layer.cache_k_scale,
             {
-                **extra_weight_attrs,
+                **scale_weight_attrs,
             },
         )
         set_weight_attrs(
             layer.cache_v_scale,
             {
-                **extra_weight_attrs,
+                **scale_weight_attrs,
             },
         )
 
@@ -189,13 +247,13 @@ class XPUKVCacheMethodBase(QuantMethodBase):
             set_weight_attrs(
                 layer.cache_k_zp,
                 {
-                    **extra_weight_attrs,
+                    **zp_weight_attrs,
                 },
             )
             set_weight_attrs(
                 layer.cache_v_zp,
                 {
-                    **extra_weight_attrs,
+                    **zp_weight_attrs,
                 },
             )
 
@@ -219,10 +277,20 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         use for loader v1
         """
         # cache_k_out_scale is the reciprocal of cache_k_scale
-        if layer.cache_k_scale._is_initialized():
-            layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)  # cache_k_out_scale
-        if layer.cache_v_scale._is_initialized():
-            layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
+        if envs.FD_XPU_USE_YIYAN_MODEL:
+            if layer.cache_k_scale._is_initialized():
+                layer.cache_k_out_scale.set_value(
+                    self.cache_quant_config.max_bound / layer.cache_k_scale.cast("float32").reshape_([-1])
+                )
+            if layer.cache_v_scale._is_initialized():
+                layer.cache_v_out_scale.set_value(
+                    self.cache_quant_config.max_bound / layer.cache_v_scale.cast("float32").reshape_([-1])
+                )
+        else:
+            if layer.cache_k_scale._is_initialized():
+                layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)
+            if layer.cache_v_scale._is_initialized():
+                layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
 
     def apply(self, layer):
         """

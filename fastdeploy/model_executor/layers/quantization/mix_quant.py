@@ -42,7 +42,7 @@ class MixQuantConfig(QuantConfigBase):
         hadamard_block_size: int = 128,
         moe_dynamic_quant: bool = False,
         is_moe_quantized: bool = False,
-        modules_to_quant: dict = {},
+        modules_to_quant: dict = None,
     ) -> None:
         super().__init__()
         self.dense_quant_type = dense_quant_type
@@ -63,7 +63,7 @@ class MixQuantConfig(QuantConfigBase):
         self.hadamard_block_size = hadamard_block_size
         self.moe_dynamic_quant = moe_dynamic_quant
         self.is_moe_quantized = is_moe_quantized
-        self.modules_to_quant = modules_to_quant
+        self.modules_to_quant = modules_to_quant if modules_to_quant is not None else {}
 
     def name(self) -> str:
         return "mix_quant"
