@@ -257,7 +257,30 @@ class TestMarlinWeightOnlyMoEMethod:
         m = _init(layer)
         gate = paddle.nn.Linear(64, 2, bias_attr=False)
         x = paddle.ones([2, 64], dtype="float32")
+
+        # Build a lightweight stub for the ``moe`` module so that the
+        # ``from fastdeploy.model_executor.layers.moe.moe import
+        # get_moe_scores`` executed inside ``apply()`` resolves without
+        # triggering the real (heavy) ``moe.py`` import chain which loads
+        # distributed/worker modules and can segfault during teardown.
+        _MOE_MOD = "fastdeploy.model_executor.layers.moe.moe"
+        _moe_stub = types.ModuleType(_MOE_MOD)
+        _moe_stub.get_moe_scores = lambda g, ng, tg, k, s, b, r: (
+            g,
+            paddle.ones([g.shape[0], k], "float32"),
+            paddle.zeros([g.shape[0], k], "int64"),
+        )
+
         with (
+            patch.dict(
+                sys.modules,
+                {
+                    _GPU_OPS: _gpu_ops_stub,
+                    _DEEP_GEMM: _deep_gemm_stub,
+                    _MOE_MOD: _moe_stub,
+                },
+                clear=False,
+            ),
             patch.object(
                 mb,
                 "MoeWna16MarlinGemmApi",
@@ -270,14 +293,6 @@ class TestMarlinWeightOnlyMoEMethod:
                     paddle.zeros([4], "int32"),
                     paddle.zeros([1], "int32"),
                     paddle.to_tensor([4], "int32"),
-                ),
-            ),
-            patch(
-                "fastdeploy.model_executor.layers.moe.moe.get_moe_scores",
-                lambda g, ng, tg, k, s, b, r: (
-                    g,
-                    paddle.ones([g.shape[0], k], "float32"),
-                    paddle.zeros([g.shape[0], k], "int64"),
                 ),
             ),
             patch(
