@@ -309,7 +309,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                     q,
                     k,
                     v,
-                    forward_meta.cu_seqlens_q,
+                    forward_meta.cu_seqlens_q[: forward_meta.attn_cu_seqlens_k.shape[0]],
                     forward_meta.attn_cu_seqlens_k,
                     forward_meta.seq_lens_encoder,
                     res_encoder,
