@@ -26,6 +26,7 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import per_token_group_fp8_quant
 
+
 from ..utils import get_sm_version
 
 
