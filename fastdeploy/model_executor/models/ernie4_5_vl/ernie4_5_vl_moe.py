@@ -228,68 +228,8 @@ class Ernie4_5_VLMoE(nn.Layer):
                 vl_moe_meta.image_index,
                 True,
             )
-            # text_out = self.text_fused_moe(vl_moe_meta.text_input)
-            # image_out = self.image_fused_moe(vl_moe_meta.image_input)
-            # print("[real_input_forward][debug1]")
-
-            # ===== text gate + image gate  ====
-            (text_x, text_topk_idx, text_topk_weights, text_x_scale_tensor) = self.text_fused_moe.ep_stage0(
-                vl_moe_meta.text_input
-            )  # text gate
-
-            (image_x, image_topk_idx, image_topk_weights, image_x_scale_tensor) = self.image_fused_moe.ep_stage0(
-                vl_moe_meta.image_input
-            )  # image gate
-
-            # ==== text dispatch + image dipatch ====
-            (
-                text_recv_x,
-                text_recv_topk_idx,
-                text_recv_topk_weights,
-                text_recv_num_tokens_per_expert_list,
-                text_handle,
-                text_event,
-            ) = self.text_fused_moe.ep_stage1(
-                text_x, text_topk_idx, text_topk_weights, text_x_scale_tensor
-            )  # text dispatch
-            (
-                image_recv_x,
-                image_recv_topk_idx,
-                image_recv_topk_weights,
-                image_recv_num_tokens_per_expert_list,
-                image_handle,
-                image_event,
-            ) = self.image_fused_moe.ep_stage1(
-                image_x, image_topk_idx, image_topk_weights, image_x_scale_tensor
-            )  # image dispatch
-            # ===================================
-
-            # ==== text ffn + text combine ====
-            text_tmp_ffn_out, text_recv_topk_weights = self.text_fused_moe.ep_stage2(  # text ffn
-                text_recv_x,
-                text_recv_topk_idx,
-                text_recv_topk_weights,
-                text_recv_num_tokens_per_expert_list,
-                text_event,
-            )
-            text_out, _ = self.text_fused_moe.ep_stage3(
-                text_tmp_ffn_out, text_handle, text_recv_topk_weights
-            )  # text combine
-            # ===================================
-
-            # ==== image ffn + image combine ====
-            image_tmp_ffn_out, image_recv_topk_weights = self.image_fused_moe.ep_stage2(
-                image_recv_x,
-                image_recv_topk_idx,
-                image_recv_topk_weights,
-                image_recv_num_tokens_per_expert_list,
-                image_event,
-            )
-            image_out, combine_event = self.image_fused_moe.ep_stage3(
-                image_tmp_ffn_out, image_handle, image_recv_topk_weights
-            )  # image combine
-            # ===================================
-
+            text_out = self.text_fused_moe(vl_moe_meta.text_input)
+            image_out = self.image_fused_moe(vl_moe_meta.image_input)
             text_image_gather_scatter(
                 hidden_states,
                 text_out,
@@ -300,72 +240,9 @@ class Ernie4_5_VLMoE(nn.Layer):
                 False,
             )
         else:
-            # hidden_states = self.text_fused_moe(hidden_states)
-            # if vl_moe_meta.fake_hidden_states is not None:
-            #     self.image_fused_moe(vl_moe_meta.fake_hidden_states)
+            hidden_states = self.text_fused_moe(hidden_states)
             if vl_moe_meta.fake_hidden_states is not None:
-                # print("[real_input_forward][debug2]")
-                (text_x, text_topk_idx, text_topk_weights, text_x_scale_tensor) = self.text_fused_moe.ep_stage0(
-                    hidden_states
-                )  # text gate
-
-                (image_x, image_topk_idx, image_topk_weights, image_x_scale_tensor) = self.image_fused_moe.ep_stage0(
-                    vl_moe_meta.fake_hidden_states
-                )  # image gate
-
-                # ==== text dispatch + image dipatch ====
-                (
-                    text_recv_x,
-                    text_recv_topk_idx,
-                    text_recv_topk_weights,
-                    text_recv_num_tokens_per_expert_list,
-                    text_handle,
-                    text_event,
-                ) = self.text_fused_moe.ep_stage1(
-                    text_x, text_topk_idx, text_topk_weights, text_x_scale_tensor
-                )  # text dispatch
-                (
-                    image_recv_x,
-                    image_recv_topk_idx,
-                    image_recv_topk_weights,
-                    image_recv_num_tokens_per_expert_list,
-                    image_handle,
-                    image_event,
-                ) = self.image_fused_moe.ep_stage1(
-                    image_x, image_topk_idx, image_topk_weights, image_x_scale_tensor
-                )  # image dispatch
-                # ===================================
-
-                # ==== text ffn + text combine ====
-                text_tmp_ffn_out, text_recv_topk_weights = self.text_fused_moe.ep_stage2(  # text ffn
-                    text_recv_x,
-                    text_recv_topk_idx,
-                    text_recv_topk_weights,
-                    text_recv_num_tokens_per_expert_list,
-                    text_event,
-                )
-                text_out, _ = self.text_fused_moe.ep_stage3(
-                    text_tmp_ffn_out, text_handle, text_recv_topk_weights
-                )  # text combine
-                # ===================================
-
-                # ==== image ffn + image combine ====
-                image_tmp_ffn_out, image_recv_topk_weights = self.image_fused_moe.ep_stage2(
-                    image_recv_x,
-                    image_recv_topk_idx,
-                    image_recv_topk_weights,
-                    image_recv_num_tokens_per_expert_list,
-                    image_event,
-                )
-                image_out, combine_event = self.image_fused_moe.ep_stage3(
-                    image_tmp_ffn_out, image_handle, image_recv_topk_weights
-                )  # image combine
-                # ===================================
-
-                hidden_states = text_out
-            else:
-                hidden_states, combine_event = self.text_fused_moe(hidden_states)
-        combine_event.current_stream_wait()
+                self.image_fused_moe(vl_moe_meta.fake_hidden_states)
         if self.num_shared_experts > 0:
             hidden_states += shared_experts_out
         if self.tp_size > 1:
@@ -695,68 +572,8 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
             self.fd_config.model_config.moe_layer_start_index,
             self.fd_config.model_config.num_hidden_layers,
         ):
-            # print("[empty_input_forward][debug1]")
-            # self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
-            # self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
-            (text_x, text_topk_idx, text_topk_weights, text_x_scale_tensor) = self.ernie.layers[
-                i
-            ].mlp.text_fused_moe.ep_stage0(
-                fake_hidden_states
-            )  # text gate
-            (image_x, image_topk_idx, image_topk_weights, image_x_scale_tensor) = self.ernie.layers[
-                i
-            ].mlp.image_fused_moe.ep_stage0(
-                fake_hidden_states
-            )  # image gate
-
-            # ==== text dispatch + image dipatch ====
-            (
-                text_recv_x,
-                text_recv_topk_idx,
-                text_recv_topk_weights,
-                text_recv_num_tokens_per_expert_list,
-                text_handle,
-                text_event,
-            ) = self.ernie.layers[i].mlp.text_fused_moe.ep_stage1(
-                text_x, text_topk_idx, text_topk_weights, text_x_scale_tensor
-            )  # text dispatch
-            (
-                image_recv_x,
-                image_recv_topk_idx,
-                image_recv_topk_weights,
-                image_recv_num_tokens_per_expert_list,
-                image_handle,
-                image_event,
-            ) = self.ernie.layers[i].mlp.image_fused_moe.ep_stage1(
-                image_x, image_topk_idx, image_topk_weights, image_x_scale_tensor
-            )  # image dispatch
-            # ===================================
-
-            # ==== text ffn + text combine ====
-            text_tmp_ffn_out, text_recv_topk_weights = self.ernie.layers[i].mlp.text_fused_moe.ep_stage2(  # text ffn
-                text_recv_x,
-                text_recv_topk_idx,
-                text_recv_topk_weights,
-                text_recv_num_tokens_per_expert_list,
-                text_event,
-            )
-            self.ernie.layers[i].mlp.text_fused_moe.ep_stage3(
-                text_tmp_ffn_out, text_handle, text_recv_topk_weights
-            )  # text combine
-            # ===================================
-
-            # ==== image ffn + image combine ====
-            image_tmp_ffn_out, image_recv_topk_weights = self.ernie.layers[i].mlp.image_fused_moe.ep_stage2(
-                image_recv_x,
-                image_recv_topk_idx,
-                image_recv_topk_weights,
-                image_recv_num_tokens_per_expert_list,
-                image_event,
-            )
-            self.ernie.layers[i].mlp.image_fused_moe.ep_stage3(
-                image_tmp_ffn_out, image_handle, image_recv_topk_weights
-            )  # image combine
-            # ===================================
+            self.ernie.layers[i].mlp.text_fused_moe(fake_hidden_states)
+            self.ernie.layers[i].mlp.image_fused_moe(fake_hidden_states)
 
     def forward(
         self,

@@ -410,30 +410,3 @@ class FusedMoE(nn.Layer):
         gate_out = paddle.matmul(x.cast("float32"), self.gate_weight)
         out = self.quant_method.apply(self, x, gate_out)
         return out
-
-    def ep_stage0(self, x: paddle.Tensor):
-        gate_out = paddle.matmul(x.cast("float32"), self.gate_weight)
-        return self.quant_method.apply_stage0(self, x, gate_out)
-
-    def ep_stage1(self, x, topk_idx, topk_weights, x_scale_tensor):
-        return self.quant_method.apply_stage1(x, topk_idx, topk_weights, x_scale_tensor)
-
-    def ep_stage2(
-        self,
-        recv_x: paddle.Tensor,
-        recv_topk_idx: paddle.Tensor,
-        recv_topk_weights: paddle.Tensor,
-        recv_num_tokens_per_expert_list: paddle.Tensor,
-        event,
-    ):
-        return self.quant_method.apply_stage2(
-            self, recv_x, recv_topk_idx, recv_topk_weights, recv_num_tokens_per_expert_list, event
-        )
-
-    def ep_stage3(
-        self,
-        tmp_ffn_out: paddle.Tensor,
-        handle: paddle.Tensor,
-        recv_topk_weights: paddle.Tensor,
-    ):
-        return self.quant_method.apply_stage3(tmp_ffn_out, handle, recv_topk_weights)
