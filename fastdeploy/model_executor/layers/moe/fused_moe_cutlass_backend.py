@@ -318,6 +318,69 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+        if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
+            if layer.topk_method == "noaux_tc":
+                gate_out, topk_weights, topk_idx = get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
+                )
+            else:
+                topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                    gate_out,
+                    layer.gate_correction_bias,
+                    layer.top_k,
+                    True,  # apply_norm_weight
+                    False,
+                )
+            topk_idx_i32 = topk_idx.astype(paddle.int32)
+            override_buffer_size = x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
+            (permute_input, permute_indices_per_token, dst_weights, _scale_out) = (  # zipped_expertwise_rowmap
+                paddle.nn.functional.moe_permute(
+                    hidden_states=x,
+                    scale=None,
+                    expert_routemap_topk=topk_idx_i32,
+                    expert_prob_topk=topk_weights,
+                    num_experts=layer.num_experts,
+                    tokens_per_expert=[],
+                    padding_alignment=128,
+                    override_buffer_size=override_buffer_size,
+                )
+            )
+
+            # Row 2 of count_tokens_per_expert_func is the prefix sum token_nums_per_expert.
+            token_nums_per_expert_cumsum = count_tokens_per_expert_func(topk_idx, layer.num_experts, True)[2].cast(
+                paddle.int64
+            )
+            if topk_ids_hookfunc is not None:
+                topk_ids_hookfunc(topk_ids=topk_idx)
+
+            ffn_out = self.compute_ffn(
+                layer,
+                permute_input,
+                token_nums_per_expert_cumsum,
+                None,  # expert_idx_per_token not needed for w16a16 without bias
+                False,
+                -1,
+                None,  # dequant_scale
+                None,  # max_tokens_per_expert
+            )
+
+            fused_moe_out, _out_probs = paddle.nn.functional.moe_unpermute(
+                hidden_states_unzipped=ffn_out,
+                zipped_expertwise_rowmap=permute_indices_per_token,
+                expert_routemap_topk=topk_idx_i32,
+                token_prob_unzipped=dst_weights,
+                total_zipped_tokens=x.shape[0],
+                num_experts=layer.num_experts,
+                using_weighted_combine=True,
+            )
+            return fused_moe_out
+
         if layer.topk_method == "noaux_tc":
             gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
@@ -328,50 +391,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
             )
-            if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
-                topk_idx_i32 = topk_idx.astype(paddle.int32)
-                override_buffer_size = x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
-                (permute_input, permute_indices_per_token, dst_weights, _scale_out) = (  # zipped_expertwise_rowmap
-                    paddle.nn.functional.moe_permute(
-                        hidden_states=x,
-                        scale=None,
-                        expert_routemap_topk=topk_idx_i32,
-                        expert_prob_topk=topk_weights,
-                        num_experts=layer.num_experts,
-                        tokens_per_expert=[],
-                        padding_alignment=128,
-                        override_buffer_size=override_buffer_size,
-                    )
-                )
-
-                # Row 2 of count_tokens_per_expert_func is the prefix sum token_nums_per_expert.
-                token_nums_per_expert_cumsum = count_tokens_per_expert_func(topk_idx, layer.num_experts, True)[2].cast(
-                    paddle.int64
-                )
-                if topk_ids_hookfunc is not None:
-                    topk_ids_hookfunc(topk_ids=topk_idx)
-
-                ffn_out = self.compute_ffn(
-                    layer,
-                    permute_input,
-                    token_nums_per_expert_cumsum,
-                    None,  # expert_idx_per_token not needed for w16a16 without bias
-                    False,
-                    -1,
-                    None,  # dequant_scale
-                    None,  # max_tokens_per_expert
-                )
-
-                fused_moe_out, _out_probs = paddle.nn.functional.moe_unpermute(
-                    hidden_states_unzipped=ffn_out,
-                    zipped_expertwise_rowmap=permute_indices_per_token,
-                    expert_routemap_topk=topk_idx_i32,
-                    token_prob_unzipped=dst_weights,
-                    total_zipped_tokens=x.shape[0],
-                    num_experts=layer.num_experts,
-                    using_weighted_combine=True,
-                )
-                return fused_moe_out
 
             (
                 permute_input,
