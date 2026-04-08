@@ -86,7 +86,7 @@ def get_moe_scores(
     expert_in_rank_num_list: paddle.Tensor = None,
     tokens_per_expert_stats_list: paddle.Tensor = None,
     redundant_ep_rank_num_plus_one: int = 1,
-    topk_reduce_func: Callable = None,
+    topk_reduce_func: Callable = lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
 ) -> paddle.Tensor:
     """
     compute moe scores using e_score_correction_bias.
@@ -129,11 +129,15 @@ def get_moe_scores(
             redundant_ep_rank_num_plus_one,
         )
     if envs.FD_USE_PHI_MOE_TOPK:
-        if topk_reduce_func is not None and original_renormalize:
-            topk_values = topk_values / topk_reduce_func(topk_values)
+        if original_renormalize:
+            if topk_reduce_func is not None:
+                topk_values = topk_values / topk_reduce_func(topk_values)
+            else:
+                # 使用默认的 sum + epsilon
+                topk_values = topk_values / (topk_values.sum(axis=-1, keepdim=True) + 1e-20)
 
-            if original_routed_scaling_factor != 1.0:
-                topk_values *= original_routed_scaling_factor
+        if original_routed_scaling_factor != 1.0:
+            topk_values *= original_routed_scaling_factor
     return scores, topk_values, topk_idx
 
 
@@ -163,7 +167,8 @@ class FusedMoE(nn.Layer):
         with_bias: bool = False,
         activation="swiglu",
         model_format: Optional[str] = None,
-        topk_reduce_func: Callable = None,  # only used when FD_USE_PHI_MOE_TOPK=1
+        topk_reduce_func: Callable = lambda x: x.sum(axis=-1, keepdim=True)
+        + 1e-20,  # only used when FD_USE_PHI_MOE_TOPK=1, default is same as noaux_tc kernel
     ):
         """
         Initialize the Moe layer with given parameters.
