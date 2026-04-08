@@ -94,7 +94,7 @@ void VerifyDraftTokens(
   auto dev_curand_states_tensor =
       paddle::empty({static_cast<int64_t>(dev_curand_states_cpu.size())},
                     paddle::DataType::FLOAT32,
-                    draft_tokens.place());
+                    seq_lens_this_time.place());
   int ret;
   if (xpu_ctx_flag) {
     ret = xpu::do_host2device(ctx,
@@ -137,7 +137,7 @@ void VerifyDraftTokens(
       }
     }
   }
-  int ret = fastdeploy::plugin::verify_draft_tokens(
+  ret = fastdeploy::plugin::verify_draft_tokens(
       ctx,
       // Core I/O
       const_cast<int64_t *>(step_output_ids.data<int64_t>()),
