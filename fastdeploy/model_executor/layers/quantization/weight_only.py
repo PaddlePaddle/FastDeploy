@@ -35,6 +35,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
 )
 from fastdeploy.platforms import current_platform
+from fastdeploy.utils import console_logger as logger
 
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import (
@@ -167,26 +168,51 @@ class WeightOnlyConfig(QuantConfigBase):
                 return IluvatarWeightOnlyLinearMethod(self)
         else:
             if isinstance(layer, FusedMoE):
-                if layer.use_method == "cutlass":
+                use_method = layer.use_method
+                # Check backend compatibility for current GPU architecture (V100/SM70)
+                if current_platform.is_cuda():
+                    from fastdeploy.platforms.cuda import CUDAPlatform
+
+                    sm_version = CUDAPlatform.get_sm_version()
+
+                    # Marlin requires SM80+ (Ampere)
+                    if use_method == "marlin" and not CUDAPlatform.supports_marlin():
+                        logger.warning(
+                            f"Marlin GEMM is not supported on SM{sm_version} "
+                            f"(requires SM{CUDAPlatform.SM_MARLIN_MIN}+). "
+                            f"Automatically falling back to cutlass backend."
+                        )
+                        use_method = "cutlass"
+
+                    # Triton MoE backend requires tritonmoe_preprocess_func which needs SM80+
+                    if use_method == "triton" and sm_version < 80:
+                        logger.warning(
+                            f"Triton MoE backend is not fully supported on SM{sm_version} "
+                            f"(requires SM80+). "
+                            f"Automatically falling back to cutlass backend."
+                        )
+                        use_method = "cutlass"
+
+                if use_method == "cutlass":
                     from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
                         CutlassWeightOnlyMoEMethod,
                     )
 
                     return CutlassWeightOnlyMoEMethod(self)
-                elif layer.use_method == "triton":
+                elif use_method == "triton":
                     from fastdeploy.model_executor.layers.moe.fused_moe_triton_backend import (
                         TritonWeightOnlyMoEMethod,
                     )
 
                     return TritonWeightOnlyMoEMethod(self)
-                elif layer.use_method == "marlin":
+                elif use_method == "marlin":
                     from fastdeploy.model_executor.layers.moe.fused_moe_marlin_backend import (
                         MarlinWeightOnlyMoEMethod,
                     )
 
                     return MarlinWeightOnlyMoEMethod(self)
                 else:
-                    raise ValueError(f"Unsupported MOE backend {layer.use_method}")
+                    raise ValueError(f"Unsupported MOE backend {use_method}")
             else:
                 if (
                     _ENABLE_MACHETE

@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-#include "helper.h"
+#include "../helper.h"
 #include "group_swiglu_with_masked.h"
-
-#pragma once
 
 template <typename index, typename T, int VecSize>
 __global__ void group_swiglu_with_masked_kernel(
@@ -91,34 +88,41 @@ paddle::Tensor GroupSwigluWithMasked(
                                        fc1_out_tensor.place());
 
   constexpr int VecSize = 8;
-  PD_CHECK(fc1_out_tensor.dtype() == paddle::DataType::BFLOAT16);
+  // Support both FP16 and BF16 for V100 compatibility
+  PD_CHECK(fc1_out_tensor.dtype() == paddle::DataType::BFLOAT16 ||
+               fc1_out_tensor.dtype() == paddle::DataType::FLOAT16,
+           "GroupSwigluWithMasked only supports BFLOAT16 or FLOAT16, but got ",
+           fc1_out_tensor.dtype());
   PD_CHECK(hidden_dim % VecSize == 0);
-
-  constexpr paddle::DataType D = paddle::DataType::BFLOAT16;
-  typedef PDTraits<D> traits_;
-  typedef typename traits_::DataType DataType_;
-  typedef typename traits_::data_t data_t;
 
   const int threads = 512;
   const int blocks = 256;
 
-#define dispatch_by_index(index)                                               \
-  {                                                                            \
-    group_swiglu_with_masked_kernel<index, DataType_, VecSize>                 \
-        <<<blocks, threads, 0, fc1_out_tensor.stream()>>>(                     \
-            reinterpret_cast<DataType_*>(                                      \
-                const_cast<data_t*>(act_out_tensor.data<data_t>())),           \
-            reinterpret_cast<const DataType_*>(fc1_out_tensor.data<data_t>()), \
-            token_nums_per_expert.data<index>(),                               \
-            group_num,                                                         \
-            group_size,                                                        \
-            hidden_dim);                                                       \
-  }                                                                            \
-  while (0)
+  // Dispatch based on both tensor dtype and index type
   if (token_nums_per_expert.dtype() == paddle::DataType::INT64) {
-    dispatch_by_index(int64_t);
+    PD_DISPATCH_FLOATING_AND_HALF_TYPES(
+        fc1_out_tensor.dtype(), "group_swiglu_with_masked", [&] {
+          group_swiglu_with_masked_kernel<int64_t, data_t, VecSize>
+              <<<blocks, threads, 0, fc1_out_tensor.stream()>>>(
+                  act_out_tensor.data<data_t>(),
+                  fc1_out_tensor.data<data_t>(),
+                  token_nums_per_expert.data<int64_t>(),
+                  group_num,
+                  group_size,
+                  hidden_dim);
+        });
   } else if (token_nums_per_expert.dtype() == paddle::DataType::INT32) {
-    dispatch_by_index(int32_t);
+    PD_DISPATCH_FLOATING_AND_HALF_TYPES(
+        fc1_out_tensor.dtype(), "group_swiglu_with_masked", [&] {
+          group_swiglu_with_masked_kernel<int32_t, data_t, VecSize>
+              <<<blocks, threads, 0, fc1_out_tensor.stream()>>>(
+                  act_out_tensor.data<data_t>(),
+                  fc1_out_tensor.data<data_t>(),
+                  token_nums_per_expert.data<int32_t>(),
+                  group_num,
+                  group_size,
+                  hidden_dim);
+        });
   } else {
     PD_THROW("Unsupported token_nums_per_expert's data dtype.");
   }

@@ -2387,6 +2387,13 @@ class EngineService:
         if self.cfg.enable_mm_runtime:
             variables["FLAGS_max_partition_size"] = 1024
 
+        # Cap Paddle BFC allocator to gpu_memory_utilization to prevent OOM.
+        # Default BFC fraction is 0.92; with 32GB V100, KV cache + weights + forward
+        # pass activations exhaust this pool causing lm_head matmul OOM after ~24 requests.
+        # Setting this env var before worker subprocess starts ensures BFC pool is capped
+        # before NCCL/fleet.init triggers the first GPU allocation.
+        variables["FLAGS_fraction_of_gpu_memory_to_use"] = self.cfg.cache_config.gpu_memory_utilization
+
         command_prefix = ""
         for k, v in variables.items():
             command_prefix += f"{k}={v} "

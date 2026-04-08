@@ -18,10 +18,17 @@ import paddle
 
 from fastdeploy.platforms import current_platform
 
+# get_block_shape_and_split_kv_block requires SM80+ (part of append_attn)
+get_block_shape_and_split_kv_block_cuda = None
+
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import (
-        get_block_shape_and_split_kv_block as get_block_shape_and_split_kv_block_cuda,
-    )
+    try:
+        from fastdeploy.model_executor.ops.gpu import (
+            get_block_shape_and_split_kv_block as get_block_shape_and_split_kv_block_cuda,
+        )
+    except ImportError:
+        # Not available on SM70 (V100)
+        pass
 
 
 def get_block_shape_and_split_kv_block(
@@ -49,6 +56,11 @@ def get_block_shape_and_split_kv_block(
     get_block_shape_and_split_kv_block
     """
     if current_platform.is_cuda():
+        if get_block_shape_and_split_kv_block_cuda is None:
+            raise NotImplementedError(
+                "get_block_shape_and_split_kv_block is not available on this GPU architecture (requires SM80+). "
+                "V100 (SM70) does not support this operation."
+            )
         get_block_shape_and_split_kv_block_cuda(
             seq_lens_encoder,
             seq_lens_decoder,

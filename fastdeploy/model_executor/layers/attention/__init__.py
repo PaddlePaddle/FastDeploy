@@ -24,9 +24,15 @@ from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import PlasAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
 
+try:
+    from .v100_flash_attn_backend import V100FlashAttentionBackend
+except Exception:
+    V100FlashAttentionBackend = None
+
 __all__ = [
     "AttentionBackend",
     "PaddleNativeAttnBackend",
+    "V100FlashAttentionBackend",
     "get_attention_backend",
     "AppendAttentionBackend",
     "MLAAttentionBackend",

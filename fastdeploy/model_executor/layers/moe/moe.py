@@ -194,6 +194,32 @@ class FusedMoE(nn.Layer):
         self.weight_key_map = weight_key_map
 
         self.use_method = envs.FD_MOE_BACKEND.lower()
+
+        # Check if backend is supported on current GPU architecture (V100/SM70 compatibility)
+        if current_platform.is_cuda():
+            from fastdeploy.platforms.cuda import CUDAPlatform
+
+            sm_version = CUDAPlatform.get_sm_version()
+
+            # Marlin requires SM80+ (Ampere)
+            if self.use_method == "marlin" and not CUDAPlatform.supports_marlin():
+                logger.warning(
+                    f"Marlin MoE backend is not supported on SM{sm_version} "
+                    f"(requires SM{CUDAPlatform.SM_MARLIN_MIN}+). "
+                    f"Automatically falling back to cutlass backend."
+                )
+                self.use_method = "cutlass"
+
+            # Triton MoE backend requires tritonmoe_preprocess_func which needs SM80+
+            # On SM70, the tritonmoe_preprocess_func CUDA op may not be available
+            if self.use_method == "triton" and sm_version < 80:
+                logger.warning(
+                    f"Triton MoE backend is not fully supported on SM{sm_version} "
+                    f"(requires SM80+). "
+                    f"Automatically falling back to cutlass backend."
+                )
+                self.use_method = "cutlass"
+
         self.moe_tag = moe_tag
         self.with_bias = with_bias
         self.activation = activation

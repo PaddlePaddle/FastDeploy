@@ -2033,6 +2033,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         return prefill_done_idxs
 
+    @paddle.no_grad()
     def _execute_empty_mtp_input(self, forward_meta) -> None:
         """
         run ep inference forward with empty input.
@@ -2064,6 +2065,8 @@ class GPUModelRunner(ModelRunnerBase):
         model_forward_batch: Optional[List[Request]] = None,
         num_running_requests: int = None,
     ) -> None:
+        # V100 BFC flush: defragment CUDA memory pool before each forward pass to prevent lm_head OOM.
+        paddle.device.cuda.empty_cache()
         model_inputs, p_done_idxs, _ = self._preprocess(model_forward_batch, num_running_requests)
         model_output = self._execute(model_inputs)
         real_bsz = (self.share_inputs["seq_lens_this_time_cpu"].numpy() > 0).sum().item()

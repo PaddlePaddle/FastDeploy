@@ -1523,8 +1523,22 @@ class ResourceManagerV1(ResourceManager):
                         llm_logger.info(f"finish preempeted request: {req_id}")
                         self.to_be_rescheduled_request_id_set.remove(request.request_id)
 
-                    self.tasks_list[request.idx] = None
-                    self.stop_flags[request.idx] = True
+                    # Only clear slot if this request still owns it (not already reused by a new request)
+                    llm_logger.info(
+                        f"[DEBUG_STOP] finish_requests: req={req_id}, slot={request.idx}, "
+                        f'tasks_list[{request.idx}]={getattr(self.tasks_list[request.idx], "request_id", self.tasks_list[request.idx])}, '
+                        f"is_same={self.tasks_list[request.idx] is request}"
+                    )
+                    if self.tasks_list[request.idx] is request or self.tasks_list[request.idx] is None:
+                        self.tasks_list[request.idx] = None
+                        self.stop_flags[request.idx] = True
+                        llm_logger.info(f"[DEBUG_STOP] SET stop_flags[{request.idx}]=True for {req_id}")
+                    else:
+                        llm_logger.info(
+                            f"[DEBUG_STOP] finish_requests: slot {request.idx} already reused by "
+                            f'{getattr(self.tasks_list[request.idx], "request_id", "?")}, '
+                            f"skip stop_flags overwrite for {req_id}"
+                        )
                     del self.requests[req_id]
                     if req_id in self.req_dict:
                         del self.req_dict[req_id]

@@ -27,8 +27,18 @@ from fastdeploy.platforms import current_platform
 from ..utils import get_tensor, group_wise_int4_weight_quantize, pack, rotate_model
 from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
+# These ops may not be available on older GPU architectures (V100/SM70)
+moe_expert_dispatch = None
+moe_expert_reduce = None
+
 if current_platform.is_cuda():
-    from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch, moe_expert_reduce
+    try:
+        from fastdeploy.model_executor.ops.gpu import (
+            moe_expert_dispatch,
+            moe_expert_reduce,
+        )
+    except ImportError:
+        pass
 
     try:
         from fastdeploy.model_executor.ops.gpu import (
@@ -37,6 +47,14 @@ if current_platform.is_cuda():
         )
     except:
         logger.warning("import w4afp8_gemm_scale_permute Failed!")
+elif current_platform.is_iluvatar():
+    try:
+        from fastdeploy.model_executor.ops.iluvatar import (
+            moe_expert_dispatch,
+            moe_expert_reduce,
+        )
+    except ImportError:
+        pass
 
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.utils import (

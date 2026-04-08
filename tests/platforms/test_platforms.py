@@ -62,9 +62,18 @@ class TestCUDAPlatform(unittest.TestCase):
     def test_attention_backend_valid(self):
         """Verify valid attention backends return correct class names"""
         self.assertIn("PaddleNativeAttnBackend", self.platform.get_attention_backend_cls(_Backend.NATIVE_ATTN))
-        self.assertIn("AppendAttentionBackend", self.platform.get_attention_backend_cls(_Backend.APPEND_ATTN))
-        self.assertIn("MLAAttentionBackend", self.platform.get_attention_backend_cls(_Backend.MLA_ATTN))
-        self.assertIn("FlashAttentionBackend", self.platform.get_attention_backend_cls(_Backend.FLASH_ATTN))
+
+        # APPEND_ATTN, MLA_ATTN, FLASH_ATTN require SM80+ (cp.async)
+        # On V100 (SM70), they fallback to V100_FLASH_ATTN
+        if self.platform.supports_async_copy():
+            self.assertIn("AppendAttentionBackend", self.platform.get_attention_backend_cls(_Backend.APPEND_ATTN))
+            self.assertIn("MLAAttentionBackend", self.platform.get_attention_backend_cls(_Backend.MLA_ATTN))
+            self.assertIn("FlashAttentionBackend", self.platform.get_attention_backend_cls(_Backend.FLASH_ATTN))
+        else:
+            # V100 (SM70) fallback to V100_FLASH_ATTN
+            self.assertIn("V100FlashAttentionBackend", self.platform.get_attention_backend_cls(_Backend.APPEND_ATTN))
+            self.assertIn("V100FlashAttentionBackend", self.platform.get_attention_backend_cls(_Backend.MLA_ATTN))
+            self.assertIn("V100FlashAttentionBackend", self.platform.get_attention_backend_cls(_Backend.FLASH_ATTN))
 
     def test_attention_backend_invalid(self):
         """Verify invalid backend raises ValueError"""

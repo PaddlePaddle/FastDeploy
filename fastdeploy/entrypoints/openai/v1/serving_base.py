@@ -188,6 +188,8 @@ class OpenAiServingBase(OpenAIServing):
         try:
             generator: AsyncGenerator[RequestOutput] = self._pipeline(ctx)
             async for request_output in generator:
+                if isinstance(request_output, ErrorResponse):
+                    return request_output
                 choice_res_acc = accumula_output_map.get(request_output.outputs.index)
                 if choice_res_acc is None:
                     accumula_output_map[request_output.outputs.index] = [request_output]
@@ -199,6 +201,9 @@ class OpenAiServingBase(OpenAIServing):
                         accumula_output_map[request_output.outputs.index].append(request_output)
                 response_ctx.usage.add(self._calc_usage(request_output))
             return await self._build_full_response(ctx, accumula_output_map, response_ctx)
+        except Exception as e:
+            api_server_logger.error(f"handle_non_stream error for {ctx.request_id}: {e}", exc_info=True)
+            return self._create_error_response(str(e))
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, ctx.request_id, getattr(ctx.request, "user", ""))
 

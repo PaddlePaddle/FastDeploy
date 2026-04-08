@@ -12,15 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <math.h>
 #include "helper.h"
 #include "paddle/extension.h"
 
 #ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
 __forceinline__ __device__ float tanh_ptx(float x) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 750
+  // Use hardware tanh instruction for sm_75 and above
   float y;
   asm volatile("tanh.approx.f32 %0, %1;" : "=f"(y) : "f"(x));
   return y;
+#else
+  // Fallback implementation for sm_70 and below
+  return tanhf(x);
+#endif
 }
 #endif
 
@@ -89,7 +94,7 @@ std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input) {
   DISPATCH_FLOAT_FP6_DTYPE(input.dtype(), scalar_t, {
     uint32_t vec_size = 16 / sizeof(scalar_t);
     dim3 grid(num_tokens);
-    dim3 block(std::max(d / vec_size, 1024U));
+    dim3 block(std::min(d / vec_size, 1024U));
 
 #ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
     gelu_tanh_kernel<scalar_t><<<grid, block, 0, stream>>>(

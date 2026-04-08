@@ -76,6 +76,7 @@ void FlashAttentionMask(const paddle::Tensor& q_input,
                         const int kv_head_num,
                         const int head_dim);
 
+#ifdef ENABLE_APPEND_ATTENTION
 std::vector<paddle::Tensor> AppendAttention(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
@@ -229,6 +230,7 @@ std::vector<paddle::Tensor> PreCacheLenConcat(
     const paddle::Tensor& seq_lens_this_time,
     const int max_dec_len,
     const int block_size);
+#endif  // ENABLE_APPEND_ATTENTION
 
 paddle::Tensor FusedExpertMoeFunc(
     const paddle::Tensor& input,
@@ -312,13 +314,6 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchFP8(
     const bool use_in_ep,
     const int token_nums_this_rank_padded);
 
-std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
-                                          const int block_size,
-                                          const bool use_ue8m0);
-std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
-                                                 const int block_size,
-                                                 const bool use_ue8m0);
-
 std::vector<paddle::Tensor> FusedMaskSwigluFP8Quant(
     paddle::Tensor& input,
     paddle::Tensor& token_nums_per_expert,
@@ -401,6 +396,7 @@ paddle::Tensor OpenShmAndGetMetaSignalFunc(const int rank,
 paddle::Tensor InitSignalLayerwiseFunc(const paddle::Tensor& kv_signal_metadata,
                                        const int layer_id);
 
+#ifdef ENABLE_APPEND_ATTENTION
 void GetBlockShapeAndSplitKVBlock(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder,
@@ -421,6 +417,7 @@ void GetBlockShapeAndSplitKVBlock(
     const int decoder_block_shape_q,
     const int group_size,
     const int block_size);
+#endif  // ENABLE_APPEND_ATTENTION
 
 std::vector<paddle::Tensor> GetPaddingOffset(
     const paddle::Tensor& input_ids,
@@ -764,40 +761,21 @@ std::vector<paddle::Tensor> SpeculateGetSeqLensOutput(
     const paddle::Tensor& seq_lens_encoder,
     const paddle::Tensor& seq_lens_decoder);
 
-std::vector<paddle::Tensor> SpeculatePreProcess(
-    const int64_t cpu_token_num,
-    const paddle::Tensor& input_ids,
-    const paddle::Tensor& seq_len,
-    const paddle::Tensor& draft_tokens,
-    const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& seq_lens_decoder);
-
-std::vector<paddle::Tensor> BuildSamplingParams(
-    const paddle::Tensor& top_p,
-    const paddle::Tensor& top_k,
-    paddle::Tensor& infer_seed,
-    const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& cu_seqlens_q_output,
-    const int64_t token_num_output_cpu,
-    const int64_t increment_value);
-
-void SpecTokenPenaltyMultiScores(
-    const paddle::Tensor& token_ids_all,
-    const paddle::Tensor& prompt_lens,
-    const paddle::Tensor& logits,
-    const paddle::Tensor& penalty_scores,
-    const paddle::Tensor& frequency_scores,
-    const paddle::Tensor& presence_scores,
-    const paddle::Tensor& temperatures,
-    const paddle::Tensor& bad_tokens,
-    const paddle::Tensor& bad_tokens_len,
-    const paddle::Tensor& cur_len,
-    const paddle::Tensor& min_len,
-    const paddle::Tensor& eos_token_id,
-    const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& batch_id_per_token_output,
-    const paddle::Tensor& cu_seqlens_q_output,
-    const int max_seq_len);
+void SpecTokenPenaltyMultiScores(const paddle::Tensor& pre_ids,
+                                 const paddle::Tensor& logits,
+                                 const paddle::Tensor& penalty_scores,
+                                 const paddle::Tensor& frequency_scores,
+                                 const paddle::Tensor& presence_scores,
+                                 const paddle::Tensor& temperatures,
+                                 const paddle::Tensor& bad_tokens,
+                                 const paddle::Tensor& bad_tokens_len,
+                                 const paddle::Tensor& cur_len,
+                                 const paddle::Tensor& min_len,
+                                 const paddle::Tensor& eos_token_id,
+                                 const paddle::Tensor& seq_lens_this_time,
+                                 const paddle::Tensor& output_padding_offset,
+                                 const paddle::Tensor& output_cum_offsets,
+                                 const int max_seq_len);
 
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor& accept_tokens,
                                const paddle::Tensor& accept_num,
@@ -848,7 +826,7 @@ void SpeculateVerify(const paddle::Tensor& sampled_token_ids,
                      const paddle::Tensor& max_dec_len,
                      const paddle::Tensor& end_tokens,
                      const paddle::Tensor& is_block_step,
-                     const paddle::Tensor& cu_seqlens_q_output,
+                     const paddle::Tensor& output_cum_offsets,
                      const paddle::Tensor& actual_candidate_len,
                      const paddle::Tensor& actual_draft_token_nums,
                      const paddle::Tensor& topp,
@@ -992,7 +970,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& seq_lens_encoder,
                       const paddle::Tensor& seq_lens_decoder,
                       const paddle::Tensor& step_idx,
-                      const paddle::Tensor& cu_seqlens_q_output,
+                      const paddle::Tensor& output_cum_offsets,
                       const paddle::Tensor& stop_flags,
                       const paddle::Tensor& not_need_stop,
                       const paddle::Tensor& max_dec_len,
@@ -1167,84 +1145,25 @@ std::vector<paddle::Tensor> FusedNeoxRopeEmbedding(
 
 std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input);
 
-void ReasoningPhaseTokenConstraint(
-    const paddle::Tensor& logits,
-    const paddle::Tensor& token_ids_all,
-    const paddle::Tensor& prompt_lens,
-    const paddle::Tensor& stop_flags,
-    const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& step_idx,
-    const paddle::Tensor& allowed_tokens,
-    const paddle::Tensor& reasoning_status,
-    const paddle::Tensor& batch_id_per_token_output,
-    const paddle::Tensor& cu_seqlens_q_output,
-    const paddle::Tensor& enable_thinking,
-    int64_t think_end_id,
-    int64_t line_break_id);
+void ReasoningPhaseTokenConstraint(const paddle::Tensor& logits,
+                                   const paddle::Tensor& pre_ids,
+                                   const paddle::Tensor& stop_flags,
+                                   const paddle::Tensor& seq_lens_this_time,
+                                   const paddle::Tensor& seq_lens_encoder,
+                                   const paddle::Tensor& step_idx,
+                                   const paddle::Tensor& allowed_tokens,
+                                   const paddle::Tensor& reasoning_status,
+                                   const paddle::Tensor& output_padding_offset,
+                                   const paddle::Tensor& output_cum_offsets,
+                                   const paddle::Tensor& enable_thinking,
+                                   int64_t think_end_id,
+                                   int64_t line_break_id);
 
 std::vector<paddle::Tensor> get_attn_mask_q(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& cu_seqlens_k,
     const paddle::optional<paddle::Tensor>& attn_mask_kv,
     const int kv_token_num);
-
-std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
-    const paddle::Tensor& x,
-    const paddle::Tensor& scale,
-    const paddle::Tensor& topk_ids,
-    const int num_local_experts,
-    const int max_token_num);
-
-std::vector<paddle::Tensor> DepermutePrefillCombine(
-    const paddle::Tensor& x,
-    const paddle::Tensor& indice_map,
-    const paddle::Tensor& topk_weights,
-    const int num_worst_tokens);
-
-void RadixTopkRaggedTransform(
-    paddle::Tensor& input,
-    paddle::Tensor& output_indices,
-    const paddle::Tensor& offsets,
-    paddle::Tensor& lengths,
-    paddle::optional<paddle::Tensor>& seq_len_decoder,
-    paddle::optional<paddle::Tensor>& batch_id_per_token,
-    paddle::optional<paddle::Tensor>& block_tables,
-    paddle::optional<paddle::Tensor>& maybe_row_states_buffer,
-    int max_block_num,
-    int top_k,
-    int q_num_heads = 0);
-
-std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
-    const paddle::Tensor& kv_nope,
-    const paddle::Tensor& kv_pe,
-    const paddle::Tensor& kv_cache,
-    const paddle::Tensor& slot_mapping,
-    const paddle::optional<paddle::Tensor>& scale,
-    const std::string& cache_quant_type_str);
-
-std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
-    const paddle::Tensor& k,
-    const paddle::Tensor& kv_cache,
-    const paddle::Tensor& slot_mapping,
-    const int64_t quant_block_size,
-    const std::string& scale_fmt);
-
-std::vector<paddle::Tensor> CpGatherIndexerKQuantCacheKernel(
-    const paddle::Tensor& kv_cache,
-    paddle::Tensor& dst_k,
-    paddle::Tensor& dst_scale,
-    const paddle::Tensor& block_table,
-    const paddle::Tensor& cu_seq_lens);
-
-void PerTokenGroupQuantFp8(const paddle::Tensor& input,
-                           paddle::Tensor& output_q,
-                           paddle::Tensor& output_s,
-                           int64_t group_size,
-                           double eps,
-                           double fp8_min,
-                           double fp8_max,
-                           bool scale_ue8m0);
 
 PYBIND11_MODULE(fastdeploy_ops, m) {
 #ifdef ENABLE_SM80_EXT_OPS
@@ -1296,7 +1215,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("wait_flag"),
         "get_output_kv_signal function");
 
-#ifdef ENABLE_SM75_EXT_OPS
+#ifdef ENABLE_BF16
   m.def("moe_deepgemm_permute", &MoEDeepGEMMPermute, "MoEDeepGEMMPermute");
   m.def(
       "moe_deepgemm_depermute", &MoEDeepGEMMDePermute, "MoEDeepGEMMDePermute");
@@ -1314,7 +1233,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def(
       "cuda_host_free", &cuda_host_free, "Free pinned memory", py::arg("ptr"));
   py::register_exception<CudaError>(m, "CudaError");
-#ifdef ENABLE_SM80_EXT_OPS
+#ifdef ENABLE_APPEND_ATTENTION
   /**
    * append_attention.cu
    * append_attention
@@ -1344,7 +1263,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("pre_cache_len_concat",
         &PreCacheLenConcat,
         "pre_cache len concat function");
-
+#endif  // ENABLE_APPEND_ATTENTION
   /**
    * moe/fused_moe/fused_moe.cu
    * fused_moe
@@ -1374,7 +1293,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "moe export dispatch function");
 
   /**
-   * moe/fused_moe/ep_moe_prefill_func.cu
+   * moe/ep_moe_expert_dispatch.cu
    * ep_moe_dispatch
    */
   m.def("ep_moe_expert_dispatch",
@@ -1401,20 +1320,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("routed_scaling_factor"),
         "ep moe export combine function");
 #endif
-
-  m.def("per_token_quant",
-        &PerTokenQuant,
-        py::arg("input"),
-        py::arg("block_size"),
-        py::arg("use_ue8m0"),
-        "per token per block quant");
-
-  m.def("per_token_quant_padding",
-        &PerTokenQuantPadding,
-        py::arg("input"),
-        py::arg("block_size"),
-        py::arg("use_ue8m0"),
-        "per token per block quant and padding transpose scale");
 
   m.def("fused_mask_swiglu_fp8_quant",
         &FusedMaskSwigluFP8Quant,
@@ -1523,7 +1428,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &OpenShmAndGetMetaSignalFunc,
         "open_shm_and_get_meta_signal function");
 
-#ifdef ENABLE_SM80_EXT_OPS
+#ifdef ENABLE_APPEND_ATTENTION
   /**
    * append_attn/get_block_shape_and_split_kv_block.cu
    * get_block_shape_and_split_kv_block
@@ -1531,7 +1436,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_block_shape_and_split_kv_block",
         &GetBlockShapeAndSplitKVBlock,
         "get_block_shape_and_split_kv_block function");
-#endif
+#endif  // ENABLE_APPEND_ATTENTION
 
   /**
    * get_padding_offset.cu
@@ -1597,11 +1502,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &TextImageGatherScatter,
         "text_image_gather_scatter function");
 
-#ifdef ENABLE_SM80_EXT_OPS
+  // tritonmoe_preprocess_func does not depend on BF16, keep it unconditionally
+  // available
   m.def("count_tokens_per_expert_func", &count_tokens_per_expert_func);
 
   m.def("tritonmoe_preprocess_func", &tritonmoe_preprocess_kernel);
 
+#ifdef ENABLE_BF16
   m.def("MoeWna16MarlinGemmApi",
         &MoeWna16MarlinGemmApi,
         py::arg("a"),
@@ -1697,6 +1604,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("noaux_tc_redundant",
         &NoauxTcRedundant,
         "noaux_tc_redundant for MoE compute");
+#endif
 
 #ifdef ENABLE_FP8
   m.def("cutlass_fp8_fp8_half_gemm_fused",
@@ -1710,6 +1618,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("output_dtype"),
         py::arg("activation_type"),
         "cutlass_fp8_fp8_half_gemm_fused function");
+
   m.def("moe_fused_hadamard_quant_fp8",
         &MoeFusedHadamardQuantFp8Func,
         py::arg("input"),
@@ -1756,18 +1665,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &get_graph_buffer_ipc_meta,
         "get_graph_buffer_ipc_meta");
 
-#ifdef ENABLE_SM80_EXT_OPS
   m.def("speculate_get_seq_lens_output",
         &SpeculateGetSeqLensOutput,
         "speculate_get_seq_lens_output function");
-
-  m.def("speculate_pre_process",
-        &SpeculatePreProcess,
-        "speculate_pre_process function");
-
-  m.def("build_sampling_params",
-        &BuildSamplingParams,
-        "build_sampling_params function");
 
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,
@@ -1893,17 +1793,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
 
-  m.def("custom_numpy_to_tensor",
-        &CustomNumpyToTensor,
-        "custom_numpy_to_tensor function");
-  m.def("prefill_permute_to_masked_gemm",
-        &PrefillPermuteToMaskedGemm,
-        py::arg("x"),
-        py::arg("scale"),
-        py::arg("topk_ids"),
-        py::arg("num_local_experts"),
-        py::arg("max_token_num"),
-        "Prefill permute to masked GEMM for MoE");
+  m.def("get_stop", &GetStop, "get_stop function");
 
   m.def("depermute_prefill_combine",
         &DepermutePrefillCombine,

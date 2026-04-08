@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import functools
 import traceback
 
 import paddle
@@ -29,6 +30,84 @@ class CUDAPlatform(Platform):
     """
 
     device_name = "gpu"
+
+    # SM architecture thresholds
+    SM_BF16_MIN = 80  # BF16 requires SM80+ (Ampere)
+    SM_FP8_MIN = 89  # FP8 requires SM89+ (Ada Lovelace)
+    SM_ASYNC_COPY_MIN = 80  # cp.async requires SM80+ (Ampere)
+    SM_MARLIN_MIN = 80  # Marlin GEMM requires SM80+ (Ampere)
+
+    @classmethod
+    @functools.lru_cache(maxsize=1)
+    def get_sm_version(cls) -> int:
+        """
+        Get the SM version of the current CUDA device.
+        Returns the compute capability as an integer (e.g., 70 for V100, 80 for A100).
+        """
+        try:
+            prop = paddle.device.cuda.get_device_properties()
+            return prop.major * 10 + prop.minor
+        except Exception:
+            return 0
+
+    @classmethod
+    def supports_bf16(cls) -> bool:
+        """
+        Check if the current GPU supports BF16 (bfloat16).
+        BF16 requires SM80+ (Ampere architecture or newer).
+        V100 (SM70) does NOT support BF16.
+        """
+        return cls.get_sm_version() >= cls.SM_BF16_MIN
+
+    @classmethod
+    def supports_fp8(cls) -> bool:
+        """
+        Check if the current GPU supports FP8 quantization.
+        FP8 requires SM89+ (Ada Lovelace architecture or newer).
+        V100 (SM70) and A100 (SM80) do NOT support FP8.
+        """
+        return cls.get_sm_version() >= cls.SM_FP8_MIN
+
+    @classmethod
+    def supports_async_copy(cls) -> bool:
+        """
+        Check if the current GPU supports cp.async instructions.
+        cp.async requires SM80+ (Ampere architecture or newer).
+        V100 (SM70) does NOT support cp.async.
+        This affects Append Attention and MLA Attention backends.
+        """
+        return cls.get_sm_version() >= cls.SM_ASYNC_COPY_MIN
+
+    @classmethod
+    def supports_marlin(cls) -> bool:
+        """
+        Check if the current GPU supports Marlin GEMM kernels.
+        Marlin requires SM80+ (Ampere architecture or newer).
+        V100 (SM70) does NOT support Marlin.
+        """
+        return cls.get_sm_version() >= cls.SM_MARLIN_MIN
+
+    @classmethod
+    def get_recommended_dtype(cls, requested_dtype: str) -> str:
+        """
+        Get the recommended dtype based on hardware capabilities.
+        Automatically downgrades BF16 to FP16 on unsupported hardware.
+
+        Args:
+            requested_dtype: The requested dtype (e.g., "bfloat16", "float16")
+
+        Returns:
+            The recommended dtype that is supported by the hardware.
+        """
+        sm_version = cls.get_sm_version()
+        if requested_dtype in ("bfloat16", "bf16"):
+            if not cls.supports_bf16():
+                logger.warning(
+                    f"BF16 is not supported on SM{sm_version} (requires SM{cls.SM_BF16_MIN}+). "
+                    f"Automatically falling back to FP16."
+                )
+                return "float16"
+        return requested_dtype
 
     @classmethod
     def available(self):
@@ -48,13 +127,46 @@ class CUDAPlatform(Platform):
             return False
 
     @classmethod
+    def supports_cudagraph_with_attention(cls) -> bool:
+        """
+        Check if the current GPU supports CUDA graph with the attention backend.
+        V100 (SM70) uses a Python-based attention implementation that is not
+        compatible with CUDA graph capture/replay.
+        """
+        return cls.supports_async_copy()  # SM80+ supports CUDA graph with fused kernels
+
+    @classmethod
     def get_attention_backend_cls(cls, selected_backend: _Backend):
         """
-        get_attention_backend_cls
+        get_attention_backend_cls with automatic fallback for SM70 (V100)
         """
+        sm_version = cls.get_sm_version()
+
+        # Check for SM70 (V100) compatibility and apply fallbacks
+        if not cls.supports_async_copy():
+            # APPEND_ATTN, MLA_ATTN, FLASH_ATTN require SM80+
+            # - APPEND_ATTN/MLA_ATTN: require cp.async instructions
+            # - FLASH_ATTN: flash_attn_unpadded requires SM80+
+            # V100 (SM70) should use V100_FLASH_ATTN which uses scaled_dot_product_attention
+            if selected_backend in (
+                _Backend.APPEND_ATTN,
+                _Backend.MLA_ATTN,
+                _Backend.FLASH_ATTN,
+            ):
+                logger.warning(
+                    f"{selected_backend} backend requires SM{cls.SM_ASYNC_COPY_MIN}+ "
+                    f"(flash_attn_unpadded or cp.async instructions), "
+                    f"but current GPU is SM{sm_version}. "
+                    f"Automatically falling back to V100_FLASH_ATTN backend."
+                )
+                selected_backend = _Backend.V100_FLASH_ATTN
+
         if selected_backend == _Backend.NATIVE_ATTN:
             logger.info("Using NATIVE ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.PaddleNativeAttnBackend"
+        elif selected_backend == _Backend.V100_FLASH_ATTN:
+            logger.info("Using V100 FLASH ATTN backend (SM70 compatible, using scaled_dot_product_attention).")
+            return "fastdeploy.model_executor.layers.attention.V100FlashAttentionBackend"
         elif selected_backend == _Backend.APPEND_ATTN:
             logger.info("Using APPEND ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.AppendAttentionBackend"
@@ -76,5 +188,5 @@ class CUDAPlatform(Platform):
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"
-                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN] in cuda place."
+                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN, V100_FLASH_ATTN] in cuda place."
             )

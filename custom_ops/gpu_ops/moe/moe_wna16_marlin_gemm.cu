@@ -22,13 +22,13 @@
 #ifndef MARLIN_NAMESPACE_NAME
 #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
-#include "paddle/phi/core/enforce.h"
 #include "paddle/phi/api/include/api.h"
+#include "paddle/phi/core/enforce.h"
 
+#include "helper.h"
+#include "moe/moe_wna16_marlin_gemm.h"
 #include "moe/moe_wna16_marlin_utils/kernel.h"
 #include "moe/moe_wna16_marlin_utils/types.h"
-#include "moe/moe_wna16_marlin_gemm.h"
-#include "helper.h"
 
 #include <cuda.h>
 #include <cuda_fp16.h>
@@ -89,7 +89,8 @@ MARLIN_NAMESPACE_NAME::Tensor moe_wna16_marlin_gemm(
     bool is_zp_float) {
   // TORCH_CHECK_NOT_IMPLEMENTED(false,
   //                             "marlin_gemm(..) requires CUDA_ARCH >= 8.0");
-  return torch::empty({1, 1});
+  PD_THROW("moe_wna16_marlin_gemm requires CUDA_ARCH >= 8.0");
+  return MARLIN_NAMESPACE_NAME::Tensor();
 }
 
 #else

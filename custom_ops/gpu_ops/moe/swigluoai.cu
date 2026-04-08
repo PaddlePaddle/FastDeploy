@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-#include "helper.h"
+#include "../helper.h"
 #include "swigluoai.h"
-
-#pragma once
 
 // dim3 grid(256)
 // dim3 block(512)
@@ -124,55 +121,26 @@ paddle::Tensor SwigluOAI(const paddle::Tensor& fc1_out_tensor,
       {seq_len, hidden_dim}, fc1_out_tensor.dtype(), fc1_out_tensor.place());
 
   constexpr int VecSize = 8;
-  PD_CHECK(fc1_out_tensor.dtype() == paddle::DataType::BFLOAT16);
+  // Support both FP16 and BF16 for V100 compatibility
+  PD_CHECK(fc1_out_tensor.dtype() == paddle::DataType::BFLOAT16 ||
+               fc1_out_tensor.dtype() == paddle::DataType::FLOAT16,
+           "SwigluOAI only supports BFLOAT16 or FLOAT16, but got ",
+           fc1_out_tensor.dtype());
   PD_CHECK(hidden_dim % VecSize == 0);
-
-  constexpr paddle::DataType D = paddle::DataType::BFLOAT16;
-  typedef PDTraits<D> traits_;
-  typedef typename traits_::DataType DataType_;
-  typedef typename traits_::data_t data_t;
 
   const int block_size = 512;
   const int grid_size = 256;
 
-#define dispatch_norm()                                                        \
-  do {                                                                         \
-    swigluoai_norm_kernel<DataType_, VecSize>                                  \
-        <<<grid_size, block_size, 0, fc1_out_tensor.stream()>>>(               \
-            reinterpret_cast<DataType_*>(                                      \
-                const_cast<data_t*>(act_out_tensor.data<data_t>())),           \
-            reinterpret_cast<const DataType_*>(fc1_out_tensor.data<data_t>()), \
-            alpha,                                                             \
-            limit,                                                             \
-            seq_len,                                                           \
-            hidden_dim);                                                       \
-  } while (0)
-
-#define dispatch_interleave()                                                  \
-  do {                                                                         \
-    swigluoai_interleave_kernel<DataType_, VecSize>                            \
-        <<<grid_size, block_size, 0, fc1_out_tensor.stream()>>>(               \
-            reinterpret_cast<DataType_*>(                                      \
-                const_cast<data_t*>(act_out_tensor.data<data_t>())),           \
-            reinterpret_cast<const DataType_*>(fc1_out_tensor.data<data_t>()), \
-            alpha,                                                             \
-            limit,                                                             \
-            seq_len,                                                           \
-            hidden_dim);                                                       \
-  } while (0)
-
-  if (type == "interleave") {
-    dispatch_interleave();
-  } else {
-    dispatch_norm();
-  }
-  // if (token_nums_per_expert.dtype() == paddle::DataType::INT64) {
-  //     dispatch_by_index(int64_t);
-  // } else if(token_nums_per_expert.dtype() == paddle::DataType::INT32) {
-  //     dispatch_by_index(int32_t);
-  // } else {
-  //     PD_THROW("Unsupported token_nums_per_expert's data dtype.");
-  // }
+  PD_DISPATCH_FLOATING_AND_HALF_TYPES(fc1_out_tensor.dtype(), "swigluoai", [&] {
+    swigluoai_norm_kernel<data_t, VecSize>
+        <<<grid_size, block_size, 0, fc1_out_tensor.stream()>>>(
+            act_out_tensor.data<data_t>(),
+            fc1_out_tensor.data<data_t>(),
+            alpha,
+            limit,
+            seq_len,
+            hidden_dim);
+  });
 
   return act_out_tensor;
 }

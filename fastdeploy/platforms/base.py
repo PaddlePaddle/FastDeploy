@@ -30,6 +30,7 @@ class _Backend(enum.Enum):
     PLAS_ATTN = enum.auto()
     HPU_ATTN = enum.auto()
     FLASH_MASK_ATTN = enum.auto()
+    V100_FLASH_ATTN = enum.auto()  # V100 (SM70) compatible flash attention
 
 
 class Platform:

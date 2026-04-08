@@ -39,9 +39,10 @@ class TemplateConfig:
 class UniversalTemplateInstantiator:
     """Universal template instantiator - fully based on configuration file."""
 
-    def __init__(self, config_file: str):
+    def __init__(self, config_file: str, skip_fp8: bool = False):
         """Initialize the instantiator."""
         self.config_file = config_file
+        self.skip_fp8 = skip_fp8
         self.configs = self._load_configs()
 
     def _load_configs(self) -> Dict[str, TemplateConfig]:
@@ -52,6 +53,17 @@ class UniversalTemplateInstantiator:
         configs = {}
         for name, config_dict in config_data.items():
             config = TemplateConfig(**config_dict)
+            # Filter out FP8 data types if skip_fp8 is enabled
+            if self.skip_fp8 and config.data_types:
+                filtered_types = []
+                for dt in config.data_types:
+                    # Skip types containing fp8 or float8
+                    if not any("fp8" in str(t).lower() or "float8" in str(t).lower() for t in dt):
+                        filtered_types.append(dt)
+                config.data_types = filtered_types if filtered_types else None
+                # Also filter IsFP8 from dispatch_params if present
+                if "IsFP8" in config.dispatch_params:
+                    config.dispatch_params["IsFP8"] = [0]  # Only use non-FP8
             self._validate_config(config)
             configs[name] = config
         return configs
@@ -291,11 +303,16 @@ def main():
         type=str,
         help="Output directory",
     )
+    parser.add_argument(
+        "--skip-fp8",
+        action="store_true",
+        help="Skip FP8 data types (for SM70 V100 compatibility)",
+    )
 
     args = parser.parse_args()
 
     try:
-        instantiator = UniversalTemplateInstantiator(args.config)
+        instantiator = UniversalTemplateInstantiator(args.config, skip_fp8=args.skip_fp8)
         instantiator.generate_all(args.output)
     except Exception as e:
         print(f"Error: {e}")

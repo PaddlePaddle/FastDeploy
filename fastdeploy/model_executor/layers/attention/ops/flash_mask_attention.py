@@ -35,7 +35,13 @@ def flash_mask_attention(
     head_dim: int = 128,
 ):
     if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import flash_mask_attention
+        try:
+            from fastdeploy.model_executor.ops.gpu import flash_mask_attention
+        except ImportError:
+            raise NotImplementedError(
+                "flash_mask_attention is not available on this GPU architecture (requires SM90+). "
+                "V100 (SM70) does not support this operation."
+            )
 
         flash_mask_attention(
             q,

@@ -51,11 +51,22 @@ from fastdeploy.model_executor.models.ernie4_5_moe import Ernie4_5_Attention
 from fastdeploy.model_executor.ops.gpu import get_padding_offset
 from fastdeploy.worker.worker_process import init_distributed_environment
 
+
+def _check_fp8_support():
+    """Check if current GPU supports FP8 (SM89+)."""
+    try:
+        prop = paddle.device.cuda.get_device_properties()
+        return prop.major * 10 + prop.minor >= 89
+    except Exception:
+        return False
+
+
 if "nvidia graphics device" in paddle.device.cuda.get_device_name().lower():
     # (ZKK): CI machine.
     os.environ.setdefault("DG_NVCC_OVERRIDE_CPP_STANDARD", "17")
 
 
+@unittest.skipIf(not _check_fp8_support(), "FP8 quantization requires SM89+ (Ada Lovelace or newer)")
 class TestAttentionPerformance(unittest.TestCase):
     def setUp(self):
         """

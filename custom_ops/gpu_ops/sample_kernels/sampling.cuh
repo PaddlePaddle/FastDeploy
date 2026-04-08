@@ -24,6 +24,7 @@
 #include <cub/block/block_adjacent_difference.cuh>
 #include <cub/block/block_reduce.cuh>
 #include <cub/block/block_scan.cuh>
+#include <limits>
 #include <numeric>
 
 #include "sample_kernels/utils.cuh"
@@ -746,8 +747,11 @@ __global__ void TopKRenormProbKernel(DType* probs,
   const uint32_t bx = blockIdx.x, tx = threadIdx.x;
   const uint32_t row_idx = bx;
   const uint32_t k = top_k_arr[row_idx] == 0 ? d : top_k_arr[row_idx];
-#if defined(PADDLE_WITH_COREX) || defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU)
-  double pivot = std::numeric_limits<float>::infinity(), normalizer = 1;
+// Use std::numeric_limits for SM70 and custom devices (no libcu++ support)
+// Use cuda::std::numeric_limits for SM80+ with full libcu++ support
+#if defined(PADDLE_WITH_COREX) || \
+    defined(PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU) || (__CUDA_ARCH__ < 800)
+  double pivot = -std::numeric_limits<float>::infinity(), normalizer = 1;
 #else
   double pivot = -cuda::std::numeric_limits<float>::infinity(), normalizer = 1;
 #endif

@@ -23,10 +23,26 @@
 #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
 
+#include "moe/moe_wna16_marlin_utils/dequant.h"
 #include "moe/moe_wna16_marlin_utils/marlin.cuh"
 #include "moe/moe_wna16_marlin_utils/marlin_dtypes.cuh"
-#include "moe/moe_wna16_marlin_utils/dequant.h"
 #include "moe/moe_wna16_marlin_utils/types.h"
+
+#ifndef MARLIN_KERNEL_PARAMS
+#define MARLIN_KERNEL_PARAMS                                          \
+  const int4 *__restrict__ A, const int4 *__restrict__ B,             \
+      int4 *__restrict__ C, int4 *__restrict__ C_tmp,                 \
+      const int4 *__restrict__ scales_ptr,                            \
+      const uint16_t *__restrict__ scale2_ptr,                        \
+      const int4 *__restrict__ zp_ptr, const int *__restrict__ g_idx, \
+      const int32_t *__restrict__ sorted_token_ids_ptr,               \
+      const int32_t *__restrict__ expert_ids_ptr,                     \
+      const int32_t *__restrict__ num_tokens_past_padded_ptr,         \
+      const float *__restrict__ topk_weights_ptr, int top_k,          \
+      bool mul_topk_weights, bool is_ep, int num_groups, int prob_m,  \
+      int prob_n, int prob_k, int *locks, bool use_atomic_add,        \
+      bool use_fp32_reduce, int max_shared_mem
+#endif
 
 #define STATIC_ASSERT_SCALAR_TYPE_VALID(scalar_t)               \
   static_assert(std::is_same<scalar_t, half>::value ||          \
@@ -54,31 +70,7 @@ template <typename scalar_t,  // compute dtype, half or nv_float16
                                    // with a separate quantization scale
           const bool is_zp_float   // is zero point of float16 type?
           >
-__global__ void Marlin(
-    const int4* __restrict__ A,  // fp16 input matrix of shape mxk
-    const int4* __restrict__ B,  // 4bit quantized weight matrix of shape kxn
-    int4* __restrict__ C,        // fp16 output buffer of shape mxn
-    int4* __restrict__ C_tmp,    // fp32 tmp output buffer (for reduce)
-    const int4* __restrict__ scales_ptr,  // fp16 quantization scales of shape
-                                          // (k/groupsize)xn
-    const int4* __restrict__ zp_ptr,      // 4bit packed zero-points of shape
-                                          // (k/groupsize)x(n/pack_factor)
-    const int* __restrict__ g_idx,        // int32 group indices of shape k
-    const int32_t* __restrict__ sorted_token_ids_ptr,        // moe sorted_ids
-    const int32_t* __restrict__ expert_ids_ptr,              // moe expert ids
-    const int32_t* __restrict__ num_tokens_past_padded_ptr,  // moe num tokens
-    const float* __restrict__ topk_weights_ptr,              // moe top weights
-    int top_k,              // num of experts per token
-    bool mul_topk_weights,  // mul topk weights or not
-    bool is_ep,             // expert parallelism
-    int num_groups,         // number of scale groups per output channel
-    int prob_m,             // batch dimension m
-    int prob_n,             // output dimension n
-    int prob_k,             // reduction dimension k
-    int* locks,             // extra global storage for barrier synchronization
-    bool use_atomic_add,    // whether to use atomic add to reduce
-    bool use_fp32_reduce,   // whether to use fp32 global reduce
-    int max_shared_mem) {}
+__global__ void Marlin(MARLIN_KERNEL_PARAMS) {}
 
 }  // namespace MARLIN_NAMESPACE_NAME
 

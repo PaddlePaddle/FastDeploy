@@ -66,13 +66,25 @@ def layers_are_grouped(keys):
     return True
 
 
+def _maybe_view_bf16_as_fp16(tensor):
+    """On V100 (SM70), BF16 is not natively supported. If the model weights are
+    stored as BF16, cast them to FP16 for V100 compatibility."""
+    if isinstance(tensor, paddle.Tensor) and tensor.dtype == paddle.bfloat16:
+        from fastdeploy.platforms import current_platform
+
+        if not current_platform.supports_bf16():
+            return tensor.cast(paddle.float16)
+    return tensor
+
+
 def pdparams_weight_iterator(paddle_file_list: list[str]):
     for pdparams_file in tqdm(
         paddle_file_list,
         desc="Loading pdparams checkpoint shards",
     ):
         state_dict = paddle.load(pdparams_file)
-        yield from state_dict.items()
+        for name, tensor in state_dict.items():
+            yield name, _maybe_view_bf16_as_fp16(tensor)
         del state_dict
 
 
@@ -398,7 +410,7 @@ def safetensors_weights_iterator(safe_tensor_list: list[str]):
         with safe_open(st_file, framework="paddle", device="cpu") as f:
             for name in f.keys():
                 param = f.get_tensor(name)
-                yield name, param
+                yield name, _maybe_view_bf16_as_fp16(param)
 
 
 def safetensors_weights_iterator_ordered(ordered_weight_map: dict[str, str]):
@@ -418,7 +430,7 @@ def safetensors_weights_iterator_ordered(ordered_weight_map: dict[str, str]):
                 current_handle = stack.enter_context(safe_open(st_file, framework="paddle", device="cpu"))
                 current_file = st_file
 
-            yield key, current_handle.get_tensor(key)
+            yield key, _maybe_view_bf16_as_fp16(current_handle.get_tensor(key))
 
 
 def fast_weights_iterator(safe_tensor_list: list[str]):

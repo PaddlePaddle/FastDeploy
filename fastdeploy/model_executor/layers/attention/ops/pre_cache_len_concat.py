@@ -31,7 +31,13 @@ def pre_cache_len_concat(
     block_size: int = 64,
 ):
     if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import pre_cache_len_concat
+        try:
+            from fastdeploy.model_executor.ops.gpu import pre_cache_len_concat
+        except ImportError:
+            raise NotImplementedError(
+                "pre_cache_len_concat is not available on this GPU architecture (requires SM80+). "
+                "V100 (SM70) does not support this operation."
+            )
 
         out = pre_cache_len_concat(seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, max_dec_len, block_size)
         return out

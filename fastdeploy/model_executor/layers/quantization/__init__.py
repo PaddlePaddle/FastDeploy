@@ -54,6 +54,95 @@ def _compute_hadamard_block_size(moe_intermediate_size: int, tp_size: int) -> in
     return block_size
 
 
+# FP8 quantization methods that require SM89+
+FP8_QUANTIZATION_METHODS = [
+    "block_wise_fp8",
+    "w4afp8",
+    "wfp8afp8",
+    "tensor_wise_fp8",
+]
+
+
+def _check_and_adjust_fp8_quantization(quant_config_name, quantization_config):
+    """
+    Check if FP8 quantization is supported on the current hardware.
+    If not supported (SM < 89), return a fallback configuration or raise an error.
+
+    V100 (SM70) and A100 (SM80) do NOT support FP8 quantization.
+
+    Args:
+        quant_config_name: The requested quantization method name
+        quantization_config: The quantization configuration dict
+
+    Returns:
+        tuple: (adjusted_quant_name, adjusted_config, warning_message)
+    """
+    from fastdeploy.platforms import current_platform
+    from fastdeploy.utils import console_logger as logger
+
+    if not current_platform.is_cuda():
+        return quant_config_name, quantization_config, None
+
+    from fastdeploy.platforms.cuda import CUDAPlatform
+
+    if quant_config_name not in FP8_QUANTIZATION_METHODS:
+        return quant_config_name, quantization_config, None
+
+    if CUDAPlatform.supports_fp8():
+        return quant_config_name, quantization_config, None
+
+    # FP8 not supported - provide fallback or warning
+    sm_version = CUDAPlatform.get_sm_version()
+
+    # For block_wise_fp8, fall back to wint8 (consistent with mix_quant.py)
+    if quant_config_name == "block_wise_fp8":
+        logger.warning(
+            f"FP8 quantization (block_wise_fp8) is not supported on SM{sm_version} "
+            f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
+            f"Falling back to WINT8 quantization."
+        )
+        if quantization_config:
+            quantization_config["quantization"] = "wint8"
+        return "wint8", quantization_config, "Fallback from block_wise_fp8 to WINT8"
+
+    # For w4afp8, fall back to wint4
+    if quant_config_name == "w4afp8":
+        logger.warning(
+            f"W4AFP8 quantization is not supported on SM{sm_version} "
+            f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
+            f"Falling back to WINT4 quantization."
+        )
+        if quantization_config:
+            quantization_config["quantization"] = "wint4"
+            if "dense_quant_type" in quantization_config:
+                quantization_config["dense_quant_type"] = "wint8"
+            if "moe_quant_type" in quantization_config:
+                quantization_config["moe_quant_type"] = "wint4"
+        return "wint4", quantization_config, "Fallback from W4AFP8 to WINT4"
+
+    # For wfp8afp8, fall back to wint8
+    if quant_config_name == "wfp8afp8":
+        logger.warning(
+            f"WFP8AFP8 quantization is not supported on SM{sm_version} "
+            f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
+            f"Falling back to WINT8 quantization."
+        )
+        if quantization_config:
+            quantization_config["quantization"] = "wint8"
+        return "wint8", quantization_config, "Fallback from WFP8AFP8 to WINT8"
+
+    # For tensor_wise_fp8, fall back to no quantization
+    if quant_config_name == "tensor_wise_fp8":
+        logger.warning(
+            f"Tensor-wise FP8 quantization is not supported on SM{sm_version} "
+            f"(requires SM{CUDAPlatform.SM_FP8_MIN}+). "
+            f"Disabling quantization and using FP16 inference instead."
+        )
+        return None, None, "Tensor-wise FP8 quantization disabled due to hardware limitation"
+
+    return quant_config_name, quantization_config, None
+
+
 def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     if args.quantization is not None and isinstance(args.quantization, str):
         args.quantization = parse_quantization(args.quantization)
@@ -119,6 +208,13 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
             quant_config_name = "mix_quant"
     else:
         quant_config_name = None
+
+    # Check and adjust FP8 quantization for hardware compatibility (V100/SM70 fallback)
+    if quant_config_name is not None:
+        quant_config_name, quantization_config, _ = _check_and_adjust_fp8_quantization(
+            quant_config_name, quantization_config
+        )
+
     if quant_config_name is None:
         quant_config = None
     else:

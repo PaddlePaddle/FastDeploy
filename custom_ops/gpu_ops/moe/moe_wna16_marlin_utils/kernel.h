@@ -1,4 +1,3 @@
-
 #ifndef MARLIN_NAMESPACE_NAME
 #define MARLIN_NAMESPACE_NAME marlin_moe_wna16
 #endif
@@ -32,8 +31,8 @@ template <typename scalar_t,  // compute dtype, half or nv_float16
           const int thread_k_blocks,  // same for k dimension (reduction)
           const bool m_block_size_8,  // whether m_block_size == 8
                                       // only works when thread_m_blocks == 1
-          const int stages,  // number of stages for the async global->shared
-                             // fetch pipeline
+          const int stages,        // number of stages for async global->shared
+                                   // fetch pipeline
           const int group_blocks,  // number of consecutive 16x16 blocks
                                    // with a separate quantization scale
           const bool is_zp_float   // is zero point of float16 type?

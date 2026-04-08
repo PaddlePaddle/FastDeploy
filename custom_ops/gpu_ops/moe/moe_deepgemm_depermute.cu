@@ -47,7 +47,12 @@ __global__ void MoEDeepGEMMDePermuteKernel(T* out,
                        &in_vec);
 #pragma unroll
       for (int i = 0; i < VecSize; i++) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
+        // SM70/SM75: BF16 doesn't support native arithmetic operators
+        in_vec[i] = static_cast<T>(static_cast<float>(in_vec[i]) * weight);
+#else
         in_vec[i] *= weight;
+#endif
       }
       Store<T, VecSize>(in_vec,
                         shm_hidden + wid * hidden + hidden_vec_id * VecSize);
@@ -67,7 +72,14 @@ __global__ void MoEDeepGEMMDePermuteKernel(T* out,
       for (int i = 0; i < VecSize; i++) {
 #pragma unroll
         for (int topk_id = 1; topk_id < TopK; topk_id++) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ < 800
+          // SM70/SM75: BF16 doesn't support native arithmetic operators
+          acc_vec[0][i] =
+              static_cast<T>(static_cast<float>(acc_vec[0][i]) +
+                             static_cast<float>(acc_vec[topk_id][i]));
+#else
           acc_vec[0][i] += acc_vec[topk_id][i];
+#endif
         }
       }
       Store<T, VecSize>(acc_vec[0],

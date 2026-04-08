@@ -344,6 +344,24 @@ class ModelConfig:
         self.override_name_from_config()
         self.read_from_env()
         self.read_model_config()
+        self._adjust_dtype_for_hardware()
+
+    def _adjust_dtype_for_hardware(self):
+        """
+        Automatically adjust dtype based on hardware capabilities.
+        On V100 (SM70), BF16 is not supported, so we fall back to FP16.
+        """
+        if current_platform.is_cuda():
+            from fastdeploy.platforms.cuda import CUDAPlatform
+
+            original_dtype = self.dtype
+            self.dtype = CUDAPlatform.get_recommended_dtype(self.dtype)
+
+            if original_dtype != self.dtype:
+                logger.info(
+                    f"Dtype adjusted from '{original_dtype}' to '{self.dtype}' "
+                    f"based on hardware capabilities (SM{CUDAPlatform.get_sm_version()})."
+                )
 
     @property
     def registry(self):
@@ -1626,6 +1644,17 @@ class CacheConfig:
             if any(t in self.cache_dtype.lower() for t in ["int4", "int8", "float4", "float8"]):
                 self.cache_dtype = "uint8"
 
+            # Adjust cache_dtype for hardware: V100 (SM70) does not support BF16
+            if current_platform.is_cuda() and self.cache_dtype in ("bfloat16", "bf16"):
+                from fastdeploy.platforms.cuda import CUDAPlatform
+
+                if not CUDAPlatform.supports_bf16():
+                    logger.info(
+                        f"Cache dtype adjusted from '{self.cache_dtype}' to 'float16' "
+                        f"(SM{CUDAPlatform.get_sm_version()} does not support BF16)."
+                    )
+                    self.cache_dtype = "float16"
+
             self.head_num = getattr(self.model_cfg, "num_key_value_heads", None) or getattr(
                 self.model_cfg, "num_attention_heads", None
             )
@@ -1643,6 +1672,25 @@ class CacheConfig:
                 self.num_cpu_blocks = 0
             else:
                 self.num_cpu_blocks = int(self.swap_space * 1024**3 / self.bytes_per_block)
+
+        # Adjust cache_dtype based on hardware capabilities
+        # V100 (SM70) does not support BF16, fall back to FP16
+        # Note: This check is placed AFTER model_cfg processing to ensure head_num, head_dim are set
+        if self.model_cfg is not None and current_platform.is_cuda():
+            from fastdeploy.platforms.cuda import CUDAPlatform
+
+            if self.cache_dtype in ("bfloat16", "bf16") and not CUDAPlatform.supports_bf16():
+                logger.warning(
+                    f"KV cache dtype '{self.cache_dtype}' is not supported on SM{CUDAPlatform.get_sm_version()} "
+                    f"(requires SM{CUDAPlatform.SM_BF16_MIN}+). Automatically falling back to FP16."
+                )
+                self.cache_dtype = "float16"
+                # Recalculate byte_size since cache_dtype changed
+                self.byte_size = self.get_cache_bytes(self.cache_dtype)
+                self.bytes_per_token_per_layer = int(self.head_num * self.head_dim * self.byte_size * self.kv_factor)
+                self.bytes_per_block = int(
+                    self.bytes_per_token_per_layer * self.block_size * self.model_cfg.num_hidden_layers
+                )
 
         self._verify_args()
 
@@ -2160,6 +2208,16 @@ class FDConfig:
                 "Current Platform can not support CUDAGraph, CUDAGraph currently only support on GPU/XPU/Metax GPU !"
             )
 
+        # Disable CUDA graph for V100 (SM70) as it uses Python-based attention
+        # that is not compatible with CUDA graph capture/replay
+        if current_platform.is_cuda() and hasattr(current_platform, "supports_cudagraph_with_attention"):
+            if not current_platform.supports_cudagraph_with_attention() and self.graph_opt_config.use_cudagraph:
+                self.graph_opt_config.use_cudagraph = False
+                logger.warning(
+                    "V100 (SM70) uses Python-based attention backend that is not compatible with CUDA graph. "
+                    "Automatically disabling CUDA graph for correct results."
+                )
+
         # adjust speculative config
         if self.speculative_config is not None and self.speculative_config.method == SpecMethod.MTP:
             if self.scheduler_config.splitwise_role == "prefill":
@@ -2414,6 +2472,17 @@ class FDConfig:
             "return_full_hidden_states",
         )
         reset_value(self.cache_config, "cache_dtype", "infer_model_dtype")
+
+        # Ensure cache_dtype is compatible with hardware after reset
+        if current_platform.is_cuda() and self.cache_config.cache_dtype in ("bfloat16", "bf16"):
+            from fastdeploy.platforms.cuda import CUDAPlatform
+
+            if not CUDAPlatform.supports_bf16():
+                logger.info(
+                    f"Cache dtype re-adjusted from '{self.cache_config.cache_dtype}' to 'float16' "
+                    f"after read_from_config (SM{CUDAPlatform.get_sm_version()} does not support BF16)."
+                )
+                self.cache_config.cache_dtype = "float16"
 
     def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
         """
