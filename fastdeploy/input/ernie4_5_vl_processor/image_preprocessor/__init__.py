@@ -14,7 +14,13 @@
 # limitations under the License.
 """
 
-from .get_image_preprocessor import get_image_preprocessor
-from .image_preprocessor_adaptive import AdaptiveImageProcessor
+# Backward compatibility: this module has been migrated to
+# fastdeploy.input.image_processors.adaptive_processor
+# This file will be removed in a future version.
+
+from fastdeploy.input.image_processors.adaptive_processor import (  # noqa: F401
+    AdaptiveImageProcessor,
+    get_image_preprocessor,
+)
 
 __all__ = ["get_image_preprocessor", "AdaptiveImageProcessor"]
