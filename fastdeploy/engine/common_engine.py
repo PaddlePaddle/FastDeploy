@@ -330,6 +330,7 @@ class EngineService:
             self.cfg.limit_mm_per_prompt,
             self.cfg.mm_processor_kwargs,
             self.cfg.tool_parser,
+            enable_mm_runtime=self.cfg.enable_mm_runtime,
         )
         self.data_processor = self.input_processor.create_processor()
         self.mm_max_tokens_per_item = self.data_processor.get_mm_max_tokens_per_item(
@@ -601,7 +602,7 @@ class EngineService:
                         LoggingEventName.RESCHEDULED_INFERENCE_START, task.request_id, getattr(task, "user", "")
                     )
             if not is_prefill:
-                if not self.cfg.model_config.enable_mm:
+                if not self.cfg.enable_mm_runtime:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
@@ -1152,8 +1153,7 @@ class EngineService:
                     time.sleep(0.005)
 
             except RuntimeError as e:
-                if "cannot schedule new futures after shutdown" in str(e):
-                    break
+                raise e
             except Exception as e:
                 err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
@@ -1218,7 +1218,7 @@ class EngineService:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm:
+                if not self.cfg.enable_mm_runtime:
                     err, data = self.recv_request_server.receive_json_once(block)
                 else:
                     err, data = self.recv_request_server.receive_pyobj_once(block)
@@ -1276,6 +1276,7 @@ class EngineService:
                     err_msg = None
                     try:
                         request = Request.from_dict(data)
+
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
                         trace_carrier = data.get("trace_carrier")
@@ -1443,10 +1444,16 @@ class EngineService:
         # pause cache transfer
         if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
             self.llm_logger.info("Start to pause cache transfer.")
-            pause_transfer_request = ControlRequest(request_id="pause_transfer", method="pause")
+            pause_transfer_request = ControlRequest(
+                request_id=f"{control_request.request_id}_pause_transfer", method="pause"
+            )
             self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
             # Wait for cache_transfer responses
-            asyncio.run(self._wait_for_control_responses("pause_transfer", 60, executors=["cache_transfer"]))
+            asyncio.run(
+                self._wait_for_control_responses(
+                    f"{pause_transfer_request.request_id}", 60, executors=["cache_transfer"]
+                )
+            )
             self.llm_logger.info("Successfully paused cache transfer.")
 
         self.resource_manager.cache_manager.reset()
@@ -1473,10 +1480,14 @@ class EngineService:
         # resume cache transfer
         if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
             self.llm_logger.info("Start to resume cache transfer.")
-            resume_transfer_request = ControlRequest(request_id="resume_transfer", method="resume")
+            resume_transfer_request = ControlRequest(
+                request_id=f"{control_request.request_id}_resume_transfer", method="resume"
+            )
             self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, resume_transfer_request))
             # Wait for cache_transfer responses
-            asyncio.run(self._wait_for_control_responses("resume_transfer", 60, executors=["cache_transfer"]))
+            asyncio.run(
+                self._wait_for_control_responses(resume_transfer_request.request_id, 60, executors=["cache_transfer"])
+            )
             self.llm_logger.info("Successfully resumed cache transfer.")
 
         self.llm_logger.info("Successfully resumed request generation.")
@@ -1530,6 +1541,19 @@ class EngineService:
                     break
             if new_version is not None:
                 self.cfg.model_config.version = new_version
+
+        if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+            self.llm_logger.info("Start to update cache-transfer metadata after weight update.")
+            update_cache_request = ControlRequest(
+                request_id=f"{control_request.request_id}_update_weights",
+                method="update_weights",
+                args=copy.deepcopy(control_request.args),
+            )
+            self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, update_cache_request))
+            asyncio.run(
+                self._wait_for_control_responses(update_cache_request.request_id, 60, executors=["cache_transfer"])
+            )
+            self.llm_logger.info("Successfully updated cache-transfer metadata after weight update.")
 
         return responses
 
@@ -1911,6 +1935,11 @@ class EngineService:
                 token_ids = cum_tokens[prefix_offset:read_offset]
             else:
                 token_ids = []
+
+            if is_end and delta_text == "" and len(cum_tokens) > 0:
+                read_offset = self.data_processor.decode_status[req_id][1]
+                token_ids = cum_tokens[read_offset:]
+
             if is_end:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
@@ -2355,7 +2384,7 @@ class EngineService:
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
 
-        if self.cfg.model_config.enable_mm:
+        if self.cfg.enable_mm_runtime:
             variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""

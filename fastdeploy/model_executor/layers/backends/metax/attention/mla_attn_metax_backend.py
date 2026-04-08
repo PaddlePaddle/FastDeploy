@@ -105,7 +105,7 @@ class MetaxMLAAttentionBackend(AttentionBackend):
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
+        self.rope_3d: bool = fd_config.enable_rope_3d_runtime
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method = fd_config.speculative_config.method
         self.use_speculate: bool = self.speculative_method is not None

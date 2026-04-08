@@ -131,11 +131,11 @@ class TestErnieX1ToolParser(unittest.TestCase):
         self.assertEqual(result.tool_calls[0].function.name, "fn")
 
     def test_extract_tool_calls_no_match(self):
-        """Cover lines 96, 111-114: no tool_call tags -> tools_called=True with empty list"""
+        """Cover lines 96, 111-114: no tool_call tags -> tools_called=False and content passthrough"""
         output = "just plain text"
         result = self.parser.extract_tool_calls(output, self.dummy_request)
-        self.assertTrue(result.tools_called)
-        self.assertEqual(len(result.tool_calls), 0)
+        self.assertFalse(result.tools_called)
+        self.assertEqual(result.content, output)
 
     def test_extract_tool_calls_invalid_json(self):
         """Cover lines 115-117: malformed JSON triggers exception branch"""
