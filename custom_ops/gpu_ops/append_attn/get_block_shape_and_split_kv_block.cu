@@ -435,12 +435,6 @@ void GetBlockShapeAndSplitKVBlock(
     encoder_num_blocks_x_cpu.copy_(
         encoder_num_blocks_x, encoder_num_blocks_x_cpu.place(), true);
   }
-#ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  if (!phi::backends::gpu::IsCUDAGraphCapturing())
-    cudaStreamSynchronize(stream);
-#else
-  cudaStreamSynchronize(stream);
-#endif
 }
 
 std::vector<std::vector<int64_t>> GetBlockShapeAndSplitKVBlockInferShape(
