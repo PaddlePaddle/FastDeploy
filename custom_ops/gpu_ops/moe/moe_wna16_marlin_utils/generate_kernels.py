@@ -9,8 +9,7 @@ try:
     import jinja2
 except ImportError:
     raise ImportError(
-        "jinja2 is required to generate marlin moe wna16 kernels. "
-        "Please install it with: pip install jinja2"
+        "jinja2 is required to generate marlin moe wna16 kernels. " "Please install it with: pip install jinja2"
     )
 
 FILE_HEAD = """

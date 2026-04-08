@@ -15,10 +15,7 @@ from typing import Optional, Union
 try:
     import jinja2
 except ImportError:
-    raise ImportError(
-        "jinja2 is required to generate kernels. "
-        "Please install it with: pip install jinja2"
-    )
+    raise ImportError("jinja2 is required to generate kernels. " "Please install it with: pip install jinja2")
 
 cur_dir = os.path.dirname(os.path.abspath(__file__))
 p = os.path.abspath(os.path.join(cur_dir, "../../third_party/cutlass/python"))
