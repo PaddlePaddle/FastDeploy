@@ -153,7 +153,7 @@ def build_output_logprobs(
             scaling and top_p normalization. Used when logprobs_mode == "raw_logprobs".
 
     Returns:
-        tuple: (logprobs_tensors, cu_batch_token_offset)
+        tuple: (logprobs_tensors, cu_batch_token_offset, output_logits)
     """
     num_logprobs = sampling_metadata.max_num_logprobs
     logprobs_tensors = None

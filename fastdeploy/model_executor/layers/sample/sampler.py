@@ -1188,9 +1188,9 @@ class SpeculativeSampler(nn.Layer):
                 reject_all_drafts,
             )
 
-        sampling_mask = sampling_metadata.keep_sampling_mask
+        keep_sampling_mask = sampling_metadata.keep_sampling_mask
         # Build logprobs via unified path (outside of sampling logic)
-        if sampling_metadata.max_num_logprobs is not None or sampling_mask:
+        if sampling_metadata.max_num_logprobs is not None or keep_sampling_mask:
             logprobs_tensors, cu_batch_token_offset, target_logits = build_output_logprobs(
                 logits,
                 sampling_metadata,
@@ -1202,7 +1202,7 @@ class SpeculativeSampler(nn.Layer):
             sampler_output.logprobs_tensors = logprobs_tensors
             if cu_batch_token_offset is not None:
                 sampler_output.cu_batch_token_offset = cu_batch_token_offset.cpu()
-            if sampling_mask:
+            if keep_sampling_mask:
                 real_bsz = share_inputs["seq_lens_this_time"].shape[0]
                 accept_nums = share_inputs["accept_num"][:real_bsz].reshape([-1])
                 # Derive target probs from already-extracted target_logits; avoids a second kernel call.

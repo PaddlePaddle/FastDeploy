@@ -21,7 +21,7 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
-from fastdeploy.config import SpeculativeConfig
+from fastdeploy.config import PREEMPTED_TOKEN_ID, SpeculativeConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import (
     InputBatch,
@@ -263,6 +263,7 @@ def _build_speculative_stream_transfer_data(
     sampling_mask=None,
     cu_batch_token_offset=None,
     output_type: int = 3,
+    last_preempted_idx=None,
 ):
     """Build StreamTransferData list for speculative decoding output.
 
@@ -279,6 +280,14 @@ def _build_speculative_stream_transfer_data(
     accept_num_np = accept_num_cpu.numpy().flatten()
     accept_tokens_np = accept_tokens_cpu.numpy()
     batch_size = accept_num_np.shape[0]
+
+    # Inject PREEMPTED_TOKEN_ID for slots that were preempted this step,
+    # mirroring what speculate_save_output kernel does in the non-ZMQ path.
+    if last_preempted_idx is not None:
+        preempted_np = last_preempted_idx.numpy().flatten()
+        for bid in range(min(len(preempted_np), batch_size)):
+            if preempted_np[bid] != 0:
+                accept_num_np[bid] = PREEMPTED_TOKEN_ID
 
     # Build cumulative offset for logprobs slicing
     logprobs_offset = 0
@@ -667,6 +676,7 @@ def save_output_specualate(
                 sampling_mask=sampler_output.sampling_mask,
                 cu_batch_token_offset=sampler_output.cu_batch_token_offset,
                 output_type=3,
+                last_preempted_idx=recover_share_inputs["last_preempted_idx"],
             )
             async_output_queue.put(output)
 
@@ -676,6 +686,7 @@ def save_output_specualate(
                     accept_tokens_cpu=recover_share_inputs["accept_tokens_cpu"],
                     accept_num_cpu=recover_share_inputs["accept_num_cpu"],
                     logprobs=sampler_output.logprobs_tensors,
+                    sampling_mask=None,
                     cu_batch_token_offset=sampler_output.cu_batch_token_offset,
                     output_type=4,
                 )
