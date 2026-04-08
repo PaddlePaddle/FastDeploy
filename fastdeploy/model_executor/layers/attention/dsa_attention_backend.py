@@ -174,6 +174,8 @@ class DSAAttentionBackend(AttentionBackend):
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
         self.useless_tensor = paddle.randn([1]).cast("int32")
+        self.k_range = paddle.full(shape=1, fill_value=200.0)
+
 
     def _cast_scale_inv_to_ue8m0(self, scales_inv: paddle.Tensor, out_dtype=paddle.float32) -> paddle.Tensor:
         return paddle.pow(2, paddle.clamp_min(scales_inv, 1e-4).log2().ceil()).to(out_dtype)
@@ -344,7 +346,7 @@ class DSAAttentionBackend(AttentionBackend):
 
             from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
-        k_range = paddle.tensor(200.0)
+        k_range = paddle.full(shape=1, fill_value=200.0)
         scale = paddle.abs(compressed_kv).max() / k_range
 
         slot_mapping = compute_slot_mapping(
@@ -378,10 +380,14 @@ class DSAAttentionBackend(AttentionBackend):
         if forward_meta.max_len_tensor_cpu[2]:  # max_enc_len_this_time
 
             tile_scheduler_metadata, _ = flash_mla.get_mla_metadata()
-
+            # 外面的开源仓库的kv cache存储格式和FD的不同
+            # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
+            new_cache_shape = latent_cache.shape
+            assert new_cache_shape[1] == 1
+            new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
             fmha_out_decode, _ = flash_mla.flash_mla_with_kvcache(
                 q.unsqueeze(1).contiguous(),
-                latent_cache.transpose([0, 2, 1, 3]).contiguous(),
+                latent_cache.view(new_cache_shape),
                 None,  # forward_meta.block_tables,
                 None,  # cache_seqlens
                 512,  # self.qk_nope_head_dim,
