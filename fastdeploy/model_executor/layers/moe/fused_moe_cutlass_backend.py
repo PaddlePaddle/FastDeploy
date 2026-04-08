@@ -17,7 +17,6 @@
 from typing import Callable
 
 import paddle
-from fxy_debug import dump_tensor
 from paddle import nn
 from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
@@ -131,6 +130,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         # 2. EP Dispatch
+        dispatch_kwargs = {"expert_alignment": 128} if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE else {}
         (
             recv_x,
             recv_topk_idx,
@@ -138,7 +138,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             recv_num_tokens_per_expert_list,
             handle,
             event,
-        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights)
+        ) = self.ep_prefill_runner.dispatch(x, topk_idx, topk_weights, **dispatch_kwargs)
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
@@ -169,7 +169,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 token_nums_per_expert_cumsum = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)[
                     2
                 ].cast(paddle.int64)
-
                 ffn_out = self.compute_ffn(
                     layer,
                     permute_input,
@@ -349,17 +348,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 token_nums_per_expert_cumsum = count_tokens_per_expert_func(topk_idx, layer.num_experts)[2].cast(
                     paddle.int64
                 )
-                dump_tensor(
-                    x,
-                    topk_idx_i32,
-                    topk_weights,
-                    layer.num_experts,
-                    override_buffer_size,
-                    permute_input,
-                    permute_indices_per_token,
-                    dst_weights,
-                    token_nums_per_expert_cumsum,
-                )
                 if topk_ids_hookfunc is not None:
                     topk_ids_hookfunc(topk_ids=topk_idx)
 
@@ -383,7 +371,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     num_experts=layer.num_experts,
                     using_weighted_combine=True,
                 )
-                dump_tensor(ffn_out, permute_indices_per_token, topk_idx_i32, fused_moe_out, dst_weights)
                 return fused_moe_out
 
             (
@@ -406,17 +393,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 False,
                 self.moe_quant_type,
                 topk_only_mode=True,
-            )
-            dump_tensor(
-                x,
-                gate_out,
-                token_nums_per_expert,
-                permute_input,
-                topk_weights,
-                topk_idx,
-                expert_idx_per_token,
-                dequant_scale,
-                max_tokens_per_expert,
             )
         else:
             (
@@ -451,7 +427,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             expert_idx_per_token = None
         else:
             expert_idx_per_token = expert_idx_per_token.cast("int64")
-        dump_tensor(permute_input, token_nums_per_expert, expert_idx_per_token, dequant_scale, max_tokens_per_expert)
         ffn_out = self.compute_ffn(
             layer,
             permute_input,
@@ -473,7 +448,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             norm_topk_prob=False if layer.topk_method == "noaux_tc" else True,
             routed_scaling_factor=1.0,
         )
-        dump_tensor(ffn_out, topk_weights, permute_indices_per_token, topk_idx, fused_moe_out)
         return fused_moe_out
 
 
