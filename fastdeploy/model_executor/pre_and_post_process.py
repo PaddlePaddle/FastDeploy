@@ -355,6 +355,26 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
+    # Renormalize logprobs to match truncated sampling distribution (when enabled).
+    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
+        # logprobs_tensors.logprobs: [B, max_num_logprobs + 1]
+        logprobs = sampler_output.logprobs_tensors.logprobs
+        # logz_per_batch: [B], log(sum(probs in candidate set K)) for each request
+        logz = paddle.to_tensor(sampler_output.logz_per_batch, dtype=logprobs.dtype)
+        # Renormalize: log π_masked = log π_full - log Z_K
+        # Only normalize valid candidates; padding positions use -inf
+        valid_mask = paddle.isfinite(logprobs)
+        normalized_logprobs = paddle.where(
+            valid_mask,
+            logprobs - logz.unsqueeze(1),  # broadcast subtraction
+            paddle.full_like(logprobs, float("-inf")),
+        )
+        # Update logprobs_tensors with normalized values
+        sampler_output.logprobs_tensors = LogprobsTensors(
+            logprob_token_ids=sampler_output.logprobs_tensors.logprob_token_ids,
+            logprobs=normalized_logprobs,
+            selected_token_ranks=sampler_output.logprobs_tensors.selected_token_ranks,
+        )
 
 
 def save_output_normal(
@@ -503,6 +523,20 @@ def post_process_specualate(
         model_output.is_block_step,
         model_output.mask_rollback,
     )
+
+    # Renormalize logprobs to match truncated sampling distribution (when enabled).
+    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
+        logprobs = sampler_output.logprobs_tensors.logprobs
+        logz = paddle.to_tensor(sampler_output.logz_per_batch, dtype=logprobs.dtype)
+        valid_mask = paddle.isfinite(logprobs)
+        normalized_logprobs = paddle.where(
+            valid_mask, logprobs - logz.unsqueeze(1), paddle.full_like(logprobs, float("-inf"))
+        )
+        sampler_output.logprobs_tensors = LogprobsTensors(
+            logprob_token_ids=sampler_output.logprobs_tensors.logprob_token_ids,
+            logprobs=normalized_logprobs,
+            selected_token_ranks=sampler_output.logprobs_tensors.selected_token_ranks,
+        )
 
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
