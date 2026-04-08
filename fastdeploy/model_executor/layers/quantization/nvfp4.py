@@ -448,7 +448,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         return out
 
 
-# TBO: 全局变量存储每个线程的中间结果
 global_values = {}
 
 
@@ -679,7 +678,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         event = deep_ep.Buffer.capture()
 
-        # TBO: dispatch 前同步（仅非 worst_tokens 模式）
         if self.ep_prefill_runner.num_worst_tokens <= 0:
             let_another_thread_run()
 
@@ -757,6 +755,10 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             max_token_num = layer.ep_size * max_tokens_per_rank
             permute_input = permute_input.reshape([layer.num_local_experts, max_token_num, recv_x_value.shape[-1]])
 
+            # ffn_out: [num_local_experts, m, hidden_size]
+            # NVFP4 dispatch returns BF16 (no pre-quantized scale), so permute_scale is empty.
+            # Use per-expert 1/input_scale (up_gate_proj_input_scale_quant) as input_global_scale,
+            # consistent with apply_ep_decode which also uses this value directly.
             ffn_out = flashinfer_cutedsl_moe_masked(
                 hidden_states=(permute_input, None),
                 input_global_scale=layer.up_gate_proj_input_scale_quant.expand([layer.num_local_experts]),
@@ -799,7 +801,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         if self.ep_prefill_runner.num_worst_tokens > 0:
             let_another_thread_run()
 
-        # TBO: combine 后同步
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
 
