@@ -1844,6 +1844,7 @@ class FDConfig:
                 int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
                 and self.model_config is not None
                 and self.model_config.enable_mm
+                and self.deploy_modality != DeployModality.TEXT
             ):
                 self.max_prefill_batch = 1  # TODO:当前V0多模prefill阶段只支持并行度为1,待优化
         else:
@@ -1872,6 +1873,20 @@ class FDConfig:
             return
         self.check()
         # self.print()    # NOTE: it's better to explicitly call .print() when FDConfig is initialized
+
+    @property
+    def enable_mm_runtime(self) -> bool:
+        return (
+            self.model_config is not None
+            and self.model_config.enable_mm
+            and self.deploy_modality != DeployModality.TEXT
+        )
+
+    @property
+    def enable_rope_3d_runtime(self) -> bool:
+        return self.enable_mm_runtime and (
+            getattr(self.model_config, "rope_3d", False) or getattr(self.model_config, "use_3d_rope", False)
+        )
 
     def _disable_sequence_parallel_moe_if_needed(self, mode_name):
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
@@ -1914,9 +1929,21 @@ class FDConfig:
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
+        if (
+            self.model_config is not None
+            and self.model_config.enable_mm
+            and self.deploy_modality == DeployModality.TEXT
+        ):
+            if getattr(self.model_config, "rope_3d", False) or getattr(self.model_config, "use_3d_rope", False):
+                logger.info(
+                    "Deploy modality is text; forcing the multimodal-capable model onto the 2D RoPE runtime path."
+                )
+            setattr(self.model_config, "rope_3d", False)
+            setattr(self.model_config, "use_3d_rope", False)
+
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
         self.cache_config.postprocess(self.get_max_chunk_tokens(), self.scheduler_config.max_num_seqs)
-        if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+        if self.model_config is not None and self.enable_mm_runtime and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None
@@ -1942,7 +1969,7 @@ class FDConfig:
                     f"Guided decoding backend '{self.structured_outputs_config.guided_decoding_backend}' is not implemented. [auto, xgrammar, guidance, off]"
                 )
 
-        if self.model_config.enable_mm:
+        if self.enable_mm_runtime:
             if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
                 self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
             elif self.cache_config.max_encoder_cache != 0:
@@ -2241,7 +2268,7 @@ class FDConfig:
                 num_tokens = self.scheduler_config.max_num_seqs
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
-            if mm_max_tokens_per_item is not None and self.deploy_modality != DeployModality.TEXT:
+            if self.enable_mm_runtime and mm_max_tokens_per_item is not None:
                 max_mm_tokens = max(
                     mm_max_tokens_per_item.get("image", 0),
                     mm_max_tokens_per_item.get("video", 0),

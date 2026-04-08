@@ -91,6 +91,7 @@ class MockFDConfig:
     model_config = MockModelConfig()
     cache_config = MockCacheConfig()
     speculative_config = MockSpecaulativeConfig()
+    enable_mm_runtime = MockModelConfig.enable_mm
 
 
 class MockAttentionBackend:
@@ -135,7 +136,7 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner.model_config = mock_model_config
         model_runner.cache_config = mock_cache_config
         model_runner.attn_backends = [MockAttentionBackend()]
-        model_runner.enable_mm = True
+        model_runner.enable_mm = mock_fd_config.enable_mm_runtime
         model_runner.cudagraph_only_prefill = False
         model_runner.use_cudagraph = False
         model_runner.speculative_decoding = False

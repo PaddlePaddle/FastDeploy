@@ -968,6 +968,7 @@ class TokenProcessor:
                     if not is_prefill:
                         self._record_completion_metrics(task, current_time)
                     llm_logger.info(f"task {task_id} received eos token. Recycling.")
+
                     if (
                         envs.ENABLE_V1_KVCACHE_SCHEDULER
                         and self.cfg.cache_config.enable_prefix_caching

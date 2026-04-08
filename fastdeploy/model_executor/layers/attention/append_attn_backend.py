@@ -137,9 +137,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
-            fd_config.model_config, "use_3d_rope", False
-        )
+        self.rope_3d: bool = fd_config.enable_rope_3d_runtime
         if fd_config.speculative_config.model_type != "main":
             self.rope_3d = False
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
