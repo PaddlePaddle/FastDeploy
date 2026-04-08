@@ -43,3 +43,4 @@ python -m fastdeploy.entrypoints.openai.api_server \
 - 当前版本优先完成模型组网与后端接线。
 - 各类低比特量化推理能力还需要结合真实权重进一步验证。
 - Lightning Attention 的 prefill/decode 路径仍需在 GPU 环境完成端到端验证。
+- 线性注意力的 KV history 当前使用实例变量存储，多请求并发场景下需迁移至 slot-based cache（已有 TODO 标注）。

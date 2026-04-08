@@ -665,7 +665,7 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
 
     @paddle.no_grad()
     def set_state_dict(self, state_dict: Dict[str, Union[np.ndarray, paddle.Tensor]]):
-        """Load model parameters (v0 loader path).
+        """Load model parameters from a given state dictionary.
 
         Pre-processes HF weight keys to match FD naming conventions, then
         delegates to sub-layer ``load_state_dict`` calls.
