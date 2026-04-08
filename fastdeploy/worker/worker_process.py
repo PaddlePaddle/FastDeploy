@@ -300,6 +300,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
+        self.worker.model_runner.set_engine_signal(self.engine_forward_signal)
         # gpu_cache_lock: file-based lock for mutual exclusion between worker
         # and CPU transfer when accessing GPU KV cache.
         self.gpu_cache_lock = IPCLock(

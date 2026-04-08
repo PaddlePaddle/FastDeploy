@@ -2068,7 +2068,13 @@ class GPUModelRunner(ModelRunnerBase):
                 and self.parallel_config.use_ep
             ):
                 self._execute_empty_mtp_input(self.forward_meta)
+
+            if self.fd_config.scheduler_config.splitwise_role == "prefill":
+                paddle.device.synchronize()
+            self.engine_forward_signal.value[0] = 0
             return
+
+        self.engine_forward_signal.value[0] = 0
         model_output_data, sampler_output, post_process_event = self._postprocess(
             model_output, p_done_idxs, model_forward_batch, num_running_requests, real_bsz
         )
@@ -3105,3 +3111,12 @@ class GPUModelRunner(ModelRunnerBase):
             block_table=self.share_inputs["block_tables"],
             total_block_num=self.num_gpu_blocks,
         )
+
+    def set_engine_signal(self, engine_forward_signal):
+        """Set the engine forward signal shared with worker process.
+
+        The signal indicates whether the engine is currently in forward pass (1) or idle (0).
+        In PD disaggregation + EP parallel, the scheduler relies on this signal to decide
+        when to send the next batch to the worker.
+        """
+        self.engine_forward_signal = engine_forward_signal
