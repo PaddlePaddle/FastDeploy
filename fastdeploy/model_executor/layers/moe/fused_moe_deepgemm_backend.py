@@ -180,7 +180,7 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         # down_proj
         if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
             ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                ffn_out, quant_config_weight_block_size_0, not disable_ue8m0_cast
+                ffn_out, quant_config_weight_block_size_0
             )
 
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous()
@@ -651,7 +651,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 # down_proj
                 if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
                     ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                        ffn_out, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
+                        ffn_out, self.quant_config.weight_block_size[0]
                     )
                     ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous().transpose([1, 0])
                 else:
