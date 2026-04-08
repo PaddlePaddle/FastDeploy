@@ -119,7 +119,7 @@ class GPUModelRunner(ModelRunnerBase):
     ):
         super().__init__(fd_config=fd_config, device=device)
         self.MAX_INFER_SEED = 9223372036854775806
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -1118,10 +1118,12 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
+
         if self.enable_mm and self.share_inputs["image_features_list"] is not None:
             tensor_feats = [t for t in self.share_inputs["image_features_list"] if isinstance(t, paddle.Tensor)]
             if tensor_feats:
                 self.share_inputs["image_features"] = paddle.concat(tensor_feats, axis=0)
+
         recover_decode_task(
             self.share_inputs["stop_flags"],
             self.share_inputs["seq_lens_this_time"],

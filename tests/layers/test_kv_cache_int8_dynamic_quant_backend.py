@@ -92,6 +92,7 @@ class DummyFDConfig:
                 "max_model_len": 2048,
                 "head_dim": 128,
                 "num_hidden_layers": 2,
+                "enable_mm": False,
                 "causal": True,
                 "start_layer_index": 0,
                 "rope_3d": False,
@@ -124,6 +125,8 @@ class DummyFDConfig:
                 "model_type": "main",
             },
         )()
+        self.enable_mm_runtime = self.model_config.enable_mm
+        self.enable_rope_3d_runtime = self.model_config.enable_mm
 
 
 class DummyLayer:

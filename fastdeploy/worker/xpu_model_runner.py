@@ -97,7 +97,7 @@ class XPUModelRunner(ModelRunnerBase):
         local_rank: int,
     ):
         super().__init__(fd_config=fd_config, device=device)
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
