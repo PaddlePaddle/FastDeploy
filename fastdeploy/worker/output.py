@@ -193,6 +193,10 @@ class SamplerOutput:
     # check whether the current path is speculative or non-speculative when
     # interpreting the dimension.
     sampling_mask: Optional[List[np.ndarray]] = None
+    # logZ_K for each request: log(sum(probs in candidate set K))
+    # Used for renormalizing logprobs to match the truncated sampling distribution.
+    # Shape: [num_reqs]
+    logz_per_batch: Optional[np.ndarray] = None
 
 
 @dataclass
