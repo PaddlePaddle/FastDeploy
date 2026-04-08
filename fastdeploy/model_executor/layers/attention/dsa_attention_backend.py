@@ -175,8 +175,6 @@ class DSAAttentionBackend(AttentionBackend):
 
         self.useless_tensor = paddle.randn([1]).cast("int32")
 
-
-
     def _cast_scale_inv_to_ue8m0(self, scales_inv: paddle.Tensor, out_dtype=paddle.float32) -> paddle.Tensor:
         return paddle.pow(2, paddle.clamp_min(scales_inv, 1e-4).log2().ceil()).to(out_dtype)
 
