@@ -290,16 +290,10 @@ void GetBlockShapeAndSplitKVBlock(
   // Note (sunxin): Skip capturing the DtoH copy (it's time-consuming); CPU data
   // is only for branching in attention.
 #ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  if (!phi::backends::gpu::IsCUDAGraphCapturing()) {
-    max_len_tensor_cpu.copy_(
-        max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
-    cudaStreamSynchronize(stream);
-  }
-#else
-  max_len_tensor_cpu.copy_(
-      max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
-  cudaStreamSynchronize(stream);
+  if (!phi::backends::gpu::IsCUDAGraphCapturing())
 #endif
+    max_len_tensor_cpu.copy_(
+        max_len_tensor_gpu, max_len_tensor_cpu.place(), blocking = true);
 
   auto max_len_cpu_ptr = max_len_tensor_cpu.data<int>();
   int max_len_this_time = max_len_cpu_ptr[0];
@@ -342,10 +336,11 @@ void GetBlockShapeAndSplitKVBlock(
                                  block_size,
                                  sm_cout);
 
-      decoder_num_blocks_cpu.copy_(
-          decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
-      auto decoder_chunk_size_cpu =
-          decoder_chunk_size_device.copy_to(paddle::CPUPlace(), false);
+      decoder_num_blocks_cpu.copy_(decoder_num_blocks_device,
+                                   decoder_num_blocks_cpu.place(),
+                                   blocking = true);
+      auto decoder_chunk_size_cpu = decoder_chunk_size_device.copy_to(
+          paddle::CPUPlace(), blocking = true);
       const int chunk_size = decoder_chunk_size_cpu.data<int>()[0];
 
       CUDA_CHECK(cudaMemsetAsync(decoder_batch_ids.data<int>(),
@@ -392,8 +387,9 @@ void GetBlockShapeAndSplitKVBlock(
 #ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
       if (!phi::backends::gpu::IsCUDAGraphCapturing())
 #endif
-        decoder_num_blocks_cpu.copy_(
-            decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
+        decoder_num_blocks_cpu.copy_(decoder_num_blocks_device,
+                                     decoder_num_blocks_cpu.place(),
+                                     blocking = true);
     }
   }
 
@@ -422,7 +418,7 @@ void GetBlockShapeAndSplitKVBlock(
         block_size);
 
     kv_num_blocks_x_cpu.copy_(
-        kv_num_blocks_x, kv_num_blocks_x_cpu.place(), false);
+        kv_num_blocks_x, kv_num_blocks_x_cpu.place(), blocking = true);
     // Clear buffer
     const uint32_t encoder_max_tile_size_per_bs_q =
         div_up((max_enc_dec_len_this_time * group_size), encoder_block_shape_q);
@@ -445,15 +441,10 @@ void GetBlockShapeAndSplitKVBlock(
                                         bsz,
                                         encoder_block_shape_q,
                                         group_size);
-    encoder_num_blocks_x_cpu.copy_(
-        encoder_num_blocks_x, encoder_num_blocks_x_cpu.place(), false);
+    encoder_num_blocks_x_cpu.copy_(encoder_num_blocks_x,
+                                   encoder_num_blocks_x_cpu.place(),
+                                   blocking = true);
   }
-#ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  if (!phi::backends::gpu::IsCUDAGraphCapturing())
-    cudaStreamSynchronize(stream);
-#else
-  cudaStreamSynchronize(stream);
-#endif
 }
 
 std::vector<std::vector<int64_t>> GetBlockShapeAndSplitKVBlockInferShape(
