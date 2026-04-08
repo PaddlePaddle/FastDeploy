@@ -326,6 +326,7 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
             p3.worker.cal_theortical_kvcache.return_value = 1024
             with self.assertRaises(ValueError):
                 p3.initialize_kv_cache()
+        self.gw.return_value.reset_mock()
         with patch(f"{WP}.IPCSignal"), patch(f"{WP}.dist"):
             p4 = _make(**{"parallel_config.do_profile": True})
             p4.worker.determine_available_memory.return_value = 100 * 1024**3
@@ -353,7 +354,7 @@ class TestPaddleDisWorkerProc(unittest.TestCase):
         p = _make()
         responses = []
 
-        async def _capture(resp):
+        async def _capture(resp, **kwargs):
             responses.append(resp)
 
         p._ctrl_output = types.SimpleNamespace(put=_capture)
