@@ -668,19 +668,25 @@ class TokenProcessor:
 
                     batch_result = self._process_batch_output_use_zmq(receive_datas)
 
-                    # Batch-level speculative decoding metrics
-                    if self.speculative_decoding:
-                        accept_nums = []
-                        for sd in receive_datas:
-                            if getattr(sd, "accept_num", None) is not None:
-                                accept_nums.append(int(sd.accept_num[0]))
-                        if accept_nums:
-                            self._record_speculative_decoding_metrics(accept_nums)
-
-                    # Determine mtype for postprocess
+                    # Determine mtype for metrics and postprocess
                     mtype = 3
                     if receive_datas and hasattr(receive_datas[0], "output_type"):
                         mtype = receive_datas[0].output_type
+
+                    # Batch-level speculative decoding metrics: only record for
+                    # mtype=3 (target tokens); skip mtype=4 (draft logprobs) to
+                    # avoid double-counting draft_tokens / max_emitted_tokens.
+                    # Also filter out non-positive values (preempted=-9, recovery=-3,
+                    # skipped=0) which do not represent real decoding steps.
+                    if self.speculative_decoding and mtype == 3:
+                        accept_nums = [
+                            int(sd.accept_num[0])
+                            for sd in receive_datas
+                            if getattr(sd, "accept_num", None) is not None and int(sd.accept_num[0]) > 0
+                        ]
+                        if accept_nums:
+                            self._record_speculative_decoding_metrics(accept_nums)
+
                     self.postprocess(batch_result, mtype)
             except Exception as e:
                 llm_logger.error(f"Receive message:{receive_datas}, error:{e}")
