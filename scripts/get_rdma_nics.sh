@@ -27,6 +27,7 @@ function __JUDGE_NIC_TYPE__() {
     gpu_first=true
     xpu_first=true
     cpu_first=true
+    local xpu_nics=""  # 用于累积 xpu 网卡列表
 
     for (( xgbe_no=0; xgbe_no < XGBE_NUM; xgbe_no++ ))
     do
@@ -55,10 +56,10 @@ function __JUDGE_NIC_TYPE__() {
             ibdev=$(ibdev2netdev 2>/dev/null | awk -v nic="${NICNAME_TYPE}${xgbe_no}" '$5 == nic {print $1}')
             if [ -n "$ibdev" ] && ip link show "${NICNAME_TYPE}${xgbe_no}" | grep -q "state UP"; then
                 if $xpu_first; then
-                    printf "KVCACHE_RDMA_NICS=%s,%s" "$ibdev" "$ibdev"
+                    xpu_nics="${ibdev},${ibdev}"
                     xpu_first=false
                 else
-                    printf ",%s,%s" "$ibdev" "$ibdev"
+                    xpu_nics="${xpu_nics},${ibdev},${ibdev}"
                 fi
             fi
         fi
@@ -101,7 +102,7 @@ function __JUDGE_NIC_TYPE__() {
 
     case "$type" in
         gpu) ! $gpu_first && printf "\n" ;;
-        xpu) ! $xpu_first && printf "\n" ;;
+        xpu) ! $xpu_first && printf "KVCACHE_RDMA_NICS=%s\nBKCL_RDMA_NICS=%s\n" "$xpu_nics" "$xpu_nics" ;;
         cpu) ! $cpu_first && printf "\n" ;;
         cpu_ib) ! $cpu_ib_first && printf "\n" ;;
     esac

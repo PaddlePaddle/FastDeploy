@@ -27,7 +27,7 @@
 <details>
 <summary><b>ERNIE-4.5-300B-A47B (32K, WINT8, 8 XPUs)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -40,11 +40,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=eth1,eth1,eth3,eth4  # Consistent with your network card name
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4 # Check the RDMA network card names of the machine using `bash scripts/get_rdma_nics.sh xpu`
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -71,7 +71,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 4 XPUs)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3"  # or "4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -84,11 +84,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3"  # or "4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=eth1,eth1,eth3,eth4  # Consistent with your network card name
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2  # Check the RDMA network card names of the machine using `bash scripts/get_rdma_nics.sh xpu`
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -115,7 +115,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 8 XPUs)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -128,11 +128,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.95
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=eth1,eth1,eth3,eth4  # Consistent with your network card name
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # Check the RDMA network card names of the machine using `bash scripts/get_rdma_nics.sh xpu`
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -159,7 +159,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-300B-A47B (128K, WINT4, 8 XPUs)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -172,11 +172,11 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=eth1,eth1,eth3,eth4  # Consistent with your network card name
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # Check the RDMA network card names of the machine using `bash scripts/get_rdma_nics.sh xpu`
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -203,7 +203,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-21B-A3B (32K, BF16, 1 XPU)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -215,7 +215,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -232,7 +232,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-21B-A3B (32K, WINT8, 1 XPU)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -245,7 +245,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -263,7 +263,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-21B-A3B (32K, WINT4, 1 XPU)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -276,7 +276,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -294,7 +294,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-21B-A3B (128K, BF16, 1 XPU)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -306,7 +306,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -323,7 +323,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-21B-A3B (128K, WINT8, 1 XPU)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -336,7 +336,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -354,7 +354,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 <details>
 <summary><b>ERNIE-4.5-21B-A3B (128K, WINT4, 1 XPU)</b> - Click to view deployment commands</summary>
 
-**Quick Deployment:**
+**Quick Launch:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -367,7 +367,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --gpu-memory-utilization 0.9
 ```
 
-**Best Deployment:**
+**Optimal Performance:**
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -538,7 +538,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 </details>
 
-## Quick start
+## Examples
 
 ### Deploy online serving based on ERNIE-4.5-300B-A47B-Paddle
 

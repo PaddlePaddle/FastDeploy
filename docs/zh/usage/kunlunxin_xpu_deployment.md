@@ -44,7 +44,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=eth1,eth1,eth3,eth4  # 与线上网卡名一致
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # 通过 `bash scripts/get_rdma_nics.sh xpu` 命令查看机器的RDMA网卡名称
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -88,7 +88,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3"  # 或 "4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=eth1,eth1,eth3,eth4  # 与线上网卡名一致
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2  # # 通过 `bash scripts/get_rdma_nics.sh xpu` 命令查看机器的RDMA网卡名称
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -132,7 +132,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=eth1,eth1,eth3,eth4  # 与线上网卡名一致
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # 通过 `bash scripts/get_rdma_nics.sh xpu` 命令查看机器的RDMA网卡名称
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -176,7 +176,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=eth1,eth1,eth3,eth4  # 与线上网卡名一致
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4 # 通过 `bash scripts/get_rdma_nics.sh xpu` 命令查看机器的RDMA网卡名称
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
