@@ -648,6 +648,7 @@ def save_output_specualate(
     async_output_queue: queue.Queue = None,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
+    enable_draft_logprob: bool = False,
 ):
     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
         if save_each_rank or model_output.mp_rank == 0:
@@ -681,7 +682,7 @@ def save_output_specualate(
             async_output_queue.put(output)
 
             # draft tokens (mtype=4): when enable_draft_logprob and logprobs available
-            if sampler_output.logprobs_tensors is not None and getattr(model_output, "enable_draft_logprob", False):
+            if sampler_output.logprobs_tensors is not None and enable_draft_logprob:
                 draft_output = _build_speculative_stream_transfer_data(
                     accept_tokens_cpu=recover_share_inputs["accept_tokens_cpu"],
                     accept_num_cpu=recover_share_inputs["accept_num_cpu"],
