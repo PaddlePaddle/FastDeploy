@@ -269,6 +269,15 @@ async def async_request_eb_openai_chat_completions(
     if request_func_input.response_format:
         payload["response_format"] = request_func_input.response_format
 
+    # 随机输入开关
+    if request_func_input.random_flag:
+        payload["max_tokens"] = request_func_input.output_len
+        payload["min_tokens"] = request_func_input.output_len
+        # 随机token_ids场景
+        if isinstance(request_func_input.prompt, list):
+            request_func_input.prompt_token_ids = request_func_input.prompt
+            request_func_input.prompt = ""
+
     # 支持传入prompt_token_ids
     if request_func_input.prompt_token_ids:
         # 不走messages

@@ -16,7 +16,7 @@
 
 import asyncio
 
-from fastdeploy.input.tokenzier_client import (
+from fastdeploy.input.tokenizer_client import (
     AsyncTokenizerClient,
     ImageDecodeRequest,
     ImageEncodeRequest,

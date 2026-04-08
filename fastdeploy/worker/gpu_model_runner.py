@@ -119,7 +119,7 @@ class GPUModelRunner(ModelRunnerBase):
     ):
         super().__init__(fd_config=fd_config, device=device)
         self.MAX_INFER_SEED = 9223372036854775806
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -638,12 +638,12 @@ class GPUModelRunner(ModelRunnerBase):
                                 image_features_output is not None
                             ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
                             grid_thw = multi_vision_inputs["grid_thw_lst_batches"][index][thw_idx]
-                            mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                            mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                            mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                            mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                             # add feature to encoder cache
                             self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
-                            feature_idx += mm_token_lenght
+                            feature_idx += mm_token_length
                             thw_idx += 1
 
                         feature_start = feature_position.offset
@@ -663,13 +663,13 @@ class GPUModelRunner(ModelRunnerBase):
                 merge_image_features, thw_idx = [], 0
                 for feature_position in feature_position_item:
                     grid_thw = grid_thw_lst[thw_idx]
-                    mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                    mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                    mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                    mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                     feature_start = feature_position.offset
                     feature_end = feature_position.offset + feature_position.length
                     merge_image_features.append(mm_feature[feature_start:feature_end])
-                    feature_idx += mm_token_lenght
+                    feature_idx += mm_token_length
                     thw_idx += 1
                 image_features_list.append(paddle.concat(merge_image_features, axis=0))
             for idx, index in req_idx_img_index_map.items():
@@ -1118,10 +1118,12 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
+
         if self.enable_mm and self.share_inputs["image_features_list"] is not None:
             tensor_feats = [t for t in self.share_inputs["image_features_list"] if isinstance(t, paddle.Tensor)]
             if tensor_feats:
                 self.share_inputs["image_features"] = paddle.concat(tensor_feats, axis=0)
+
         recover_decode_task(
             self.share_inputs["stop_flags"],
             self.share_inputs["seq_lens_this_time"],
@@ -1893,8 +1895,7 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding and self.spec_method == SpecMethod.MTP:
-                # Capture Target Model without bsz 1
+            elif self.speculative_decoding and self.spec_method in [SpecMethod.MTP, SpecMethod.SUFFIX]:
                 for capture_size in sorted(capture_sizes, reverse=True):
                     expected_decode_len = (self.speculative_config.num_speculative_tokens + 1) * 2
                     self._dummy_run(

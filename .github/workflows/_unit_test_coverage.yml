@@ -86,12 +86,27 @@ jobs:
             if ls "${REPO_NAME}"* >/dev/null 2>&1; then
               echo "ERROR: Failed to clean ${REPO_NAME}* after multiple attempts"
               ls -ld "${REPO_NAME}"*
-              exit 1
+              echo "Attempting force cleanup with find..."
+              find /workspace -mindepth 1 -maxdepth 1 -name "${REPO_NAME}*" -type d -exec chmod -R u+rwx {} \; -exec rm -rf {} + 2>/dev/null || true
+              if ls "${REPO_NAME}"* >/dev/null 2>&1; then
+                echo "ERROR: Force cleanup still failed"
+                exit 1
+              else
+                echo "Force cleanup succeeded"
+              fi
             fi
           '
 
-          wget -q --no-proxy ${fd_archive_url}
-          tar -xf FastDeploy.tar.gz
+          wget -q --no-proxy ${fd_archive_url} || {
+            echo "ERROR: Failed to download archive from ${fd_archive_url}"
+            exit 1
+          }
+
+          tar --no-same-owner -xf FastDeploy.tar.gz || {
+            echo "ERROR: Failed to extract archive"
+            exit 1
+          }
+
           rm -rf FastDeploy.tar.gz
           cd FastDeploy
           git config --global user.name "FastDeployCI"
@@ -178,10 +193,12 @@ jobs:
           --sysctl kernel.msgmnb=268435456 \
           --name ${runner_name} \
           --cap-add=SYS_PTRACE --cap-add=IPC_LOCK \
-          --shm-size=64G \
+          --shm-size=128G \
           ${RDMA_DEVICES} \
           --device=/dev/infiniband/rdma_cm \
           --ulimit memlock=-1:-1 \
+          --ulimit nofile=65536:65536 \
+          --ulimit nproc=8192:8192 \
           -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
