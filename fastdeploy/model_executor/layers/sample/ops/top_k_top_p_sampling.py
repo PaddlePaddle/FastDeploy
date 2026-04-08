@@ -126,9 +126,15 @@ def top_k_top_p_sampling(
                     topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
                     topp_seed_device.copy_(topp_seed, False)
                 if top_k_list and any(x > 0 for x in top_k_list):
-                    from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
+                    try:
+                        from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
 
-                    x = top_k_renorm_probs(x, top_k)
+                        x = top_k_renorm_probs(x, top_k)
+                    except ImportError:
+                        logger.warning(
+                            "top_k_renorm_probs is not supported on current platform, skipping top_k_renorm_probs."
+                        )
+
                 _, ids = paddle.tensor.top_p_sampling(
                     x,
                     top_p,

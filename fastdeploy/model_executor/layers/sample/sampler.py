@@ -111,7 +111,7 @@ def _compute_sampling_mask(
     top_p: paddle.Tensor,
     top_k: Optional[paddle.Tensor] = None,
     top_k_list: Optional[list] = None,
-) -> List[np.ndarray]:
+) -> tuple[List[np.ndarray], np.ndarray]:
     """
     Compute a combined top-k + top-p (nucleus) sampling mask as sparse
     retained-token indices.
@@ -136,8 +136,11 @@ def _compute_sampling_mask(
                     top-k filtering is needed at all.
 
     Returns:
-        sparse_indices: List of length num_reqs; element i is a 1-D int64
-        numpy array of the retained vocab indices for request i.
+        Tuple of (sparse_indices, logz_per_batch):
+        - sparse_indices: List of length num_reqs; element i is a 1-D int64
+          numpy array of the retained vocab indices for request i.
+        - logz_per_batch: 1-D numpy array of shape [num_reqs] containing
+          log(Z_K) where Z_K is the sum of probabilities in the candidate set.
     """
     real_bsz = probs.shape[0]
     vocab_size = probs.shape[1]
@@ -205,12 +208,45 @@ def _compute_sampling_mask(
     k_per_row = final_mask.astype("int32").sum(axis=-1)  # [B]
     max_k = int(k_per_row.max().item())
 
+    # ------------------------------------------------------------------
+    # Stage 5: compute logZ for renormalization
+    #
+    # Goal: log π_mask(k) = log π_full(k) - logZ, where π_mask is the
+    # distribution actually sampled from (top-k truncated + top-p nucleus).
+    #
+    # When top_k is active the sampling pipeline first renormalises to
+    # π_topk, then applies top-p on π_topk.  The total log-normaliser
+    # that maps π_full → π_mask absorbs both steps:
+    #
+    #   logZ = log Z_topk  +  log Z_topp_on_renorm
+    #
+    # where Z_topk = Σ_{j∈topk} π_full(j)   (= row_sums, already computed)
+    #       Z_topp = Σ_{k∈K}    π_topk(k)   (sum of renorm probs in K)
+    #
+    # Substituting:
+    #   log π_mask(k) = log π_full(k) - log Z_topk - log Z_topp
+    #                 = log π_topk(k) - log Z_topp    ✓
+    #
+    # When top_k is absent Z_topk = 1 → logZ = log Z_topp as before.
+    # ------------------------------------------------------------------
+    if has_top_k:
+        # Z_topp: sum of renormed probs that survive the final mask
+        candidate_probs = paddle.where(final_mask, renorm_sorted_probs, paddle.zeros_like(renorm_sorted_probs))
+        z_topp = candidate_probs.sum(axis=-1)  # [B]
+        # row_sums: [B, 1] already clipped ≥ 1e-9, squeeze to [B]
+        log_z_topk = paddle.log(row_sums.squeeze(-1))
+        logz_per_batch = (log_z_topk + paddle.log(z_topp + 1e-10)).cpu().numpy()  # [B]
+    else:
+        candidate_probs = paddle.where(final_mask, sorted_probs, paddle.zeros_like(sorted_probs))
+        z_k = candidate_probs.sum(axis=-1)  # [B]
+        logz_per_batch = paddle.log(z_k + 1e-10).cpu().numpy()  # [B]
+
     # Transfer only the leading max_k columns — typically max_k << vocab_size.
     indices_window_cpu = sorted_indices[:, :max_k].cpu().numpy()  # [B, max_k]
     mask_window_cpu = final_mask[:, :max_k].cpu().numpy()  # [B, max_k]
 
     sparse_indices = [indices_window_cpu[i, mask_window_cpu[i]] for i in range(real_bsz)]
-    return sparse_indices
+    return sparse_indices, logz_per_batch
 
 
 class GuidedDecoding:
@@ -666,8 +702,9 @@ class Sampler(nn.Layer):
         # Compute sampling mask BEFORE top_k_top_p_sampling modifies probs.
         # Binary mask [num_reqs, vocab_size]: 1 = retained by top_k/top_p, 0 = truncated.
         sampling_mask = None
+        logz_per_batch = None
         if sampling_metadata.keep_sampling_mask:
-            sampling_mask = _compute_sampling_mask(
+            sampling_mask, logz_per_batch = _compute_sampling_mask(
                 probs,
                 sampling_metadata.top_p,
                 top_k=sampling_metadata.top_k,
@@ -698,6 +735,7 @@ class Sampler(nn.Layer):
             logprobs_tensors=logprobs_tensors,
             logits=logits,
             sampling_mask=sampling_mask,
+            logz_per_batch=logz_per_batch,
         )
 
         return sampler_output
@@ -1150,9 +1188,10 @@ class SpeculativeSampler(nn.Layer):
                 reject_all_drafts,
             )
 
+        sampling_mask = sampling_metadata.keep_sampling_mask
         # Build logprobs via unified path (outside of sampling logic)
-        if sampling_metadata.max_num_logprobs is not None:
-            logprobs_tensors, cu_batch_token_offset = build_output_logprobs(
+        if sampling_metadata.max_num_logprobs is not None or sampling_mask:
+            logprobs_tensors, cu_batch_token_offset, target_logits = build_output_logprobs(
                 logits,
                 sampling_metadata,
                 share_inputs,
@@ -1163,6 +1202,33 @@ class SpeculativeSampler(nn.Layer):
             sampler_output.logprobs_tensors = logprobs_tensors
             if cu_batch_token_offset is not None:
                 sampler_output.cu_batch_token_offset = cu_batch_token_offset.cpu()
+            if sampling_mask:
+                real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+                accept_nums = share_inputs["accept_num"][:real_bsz].reshape([-1])
+                # Derive target probs from already-extracted target_logits; avoids a second kernel call.
+                target_probs = F.softmax(target_logits, axis=-1)
+                # Compute sampling mask at accepted token positions.
+                # Shape: [total_accepted_tokens, vocab_size], bool (CPU).
+                # Expand top_p from [batch, 1] to [total_accepted, 1].
+                # total_accepted = accept_nums.sum()
+                accept_top_p = (
+                    sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
+                )
+                accept_top_k = None
+                if (
+                    sampling_metadata.top_k is not None
+                    and sampling_metadata.top_k_list
+                    and any(x > 0 for x in sampling_metadata.top_k_list)
+                ):
+                    accept_top_k = (
+                        sampling_metadata.top_k[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
+                    )
+                sampler_output.sampling_mask, sampler_output.logz_per_batch = _compute_sampling_mask(
+                    target_probs,
+                    accept_top_p,
+                    top_k=accept_top_k,
+                    top_k_list=sampling_metadata.top_k_list,
+                )
         return sampler_output
 
     def forward_xpu(

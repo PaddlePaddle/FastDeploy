@@ -255,6 +255,77 @@ def _build_stream_transfer_data(
     return stream_transfer_datas
 
 
+def _build_speculative_stream_transfer_data(
+    accept_tokens_cpu,
+    accept_num_cpu,
+    logprobs: Optional[LogprobsTensors] = None,
+    prompt_logprobs_list=None,
+    sampling_mask=None,
+    cu_batch_token_offset=None,
+    output_type: int = 3,
+):
+    """Build StreamTransferData list for speculative decoding output.
+
+    Args:
+        accept_tokens_cpu: paddle.Tensor [max_bsz, max_draft+1] of accepted token IDs (CPU pinned).
+        accept_num_cpu: paddle.Tensor [max_bsz] of per-request accept counts (CPU pinned).
+        logprobs: LogprobsTensors with rows flattened across all accepted tokens.
+        prompt_logprobs_list: per-request prompt logprobs list.
+        sampling_mask: per-token sampling mask list.
+        cu_batch_token_offset: paddle.Tensor cumulative token offset for logprobs slicing.
+        output_type: 3=target, 4=draft.
+    """
+    stream_transfer_datas = []
+    accept_num_np = accept_num_cpu.numpy().flatten()
+    accept_tokens_np = accept_tokens_cpu.numpy()
+    batch_size = accept_num_np.shape[0]
+
+    # Build cumulative offset for logprobs slicing
+    logprobs_offset = 0
+    cu_offsets = None
+    if cu_batch_token_offset is not None:
+        cu_offsets = cu_batch_token_offset.numpy().flatten()
+
+    for bid in range(batch_size):
+        accept_num_val = int(accept_num_np[bid])
+        num_tokens = max(accept_num_val, 0)
+
+        tokens_np = accept_tokens_np[bid, :num_tokens] if num_tokens > 0 else np.array([], dtype=np.int64)
+
+        stream_data = StreamTransferData(
+            decoder_state=DecoderState.TEXT,
+            batch_id=bid,
+            tokens=tokens_np,
+            speculaive_decoding=True,
+            accept_tokens=tokens_np,
+            accept_num=np.array([accept_num_val], dtype=np.int32),
+            output_type=output_type,
+        )
+
+        if cu_offsets is not None and len(cu_offsets) > bid + 1:
+            start = int(cu_offsets[bid])
+            end = int(cu_offsets[bid + 1])
+        else:
+            start = logprobs_offset
+            end = logprobs_offset + num_tokens
+
+        # Slice logprobs for this request's accepted tokens
+        if logprobs is not None and num_tokens > 0:
+            stream_data.logprobs = logprobs.slice_rows(start, end)
+
+        if prompt_logprobs_list and bid < len(prompt_logprobs_list):
+            stream_data.prompt_logprobs = prompt_logprobs_list[bid]
+
+        if sampling_mask is not None and num_tokens > 0:
+            # Slice the flat per-token mask list to get this request's masks
+            stream_data.sampling_mask = sampling_mask[start:end]
+
+        logprobs_offset += num_tokens
+        stream_transfer_datas.append(stream_data)
+
+    return stream_transfer_datas
+
+
 def post_process_normal(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
@@ -372,6 +443,26 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
+    # Renormalize logprobs to match truncated sampling distribution (when enabled).
+    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
+        # logprobs_tensors.logprobs: [B, max_num_logprobs + 1]
+        logprobs = sampler_output.logprobs_tensors.logprobs
+        # logz_per_batch: [B], log(sum(probs in candidate set K)) for each request
+        logz = paddle.to_tensor(sampler_output.logz_per_batch, dtype=logprobs.dtype)
+        # Renormalize: log π_masked = log π_full - log Z_K
+        # Only normalize valid candidates; padding positions use -inf
+        valid_mask = paddle.isfinite(logprobs)
+        normalized_logprobs = paddle.where(
+            valid_mask,
+            logprobs - logz.unsqueeze(1),  # broadcast subtraction
+            paddle.full_like(logprobs, float("-inf")),
+        )
+        # Update logprobs_tensors with normalized values
+        sampler_output.logprobs_tensors = LogprobsTensors(
+            logprob_token_ids=sampler_output.logprobs_tensors.logprob_token_ids,
+            logprobs=normalized_logprobs,
+            selected_token_ranks=sampler_output.logprobs_tensors.selected_token_ranks,
+        )
 
 
 def save_output_normal(
@@ -526,40 +617,31 @@ def post_process_specualate(
         model_output.max_dec_len,  # max_dec_len
     )
 
+    # Renormalize logprobs to match truncated sampling distribution (when enabled).
+    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
+        logprobs = sampler_output.logprobs_tensors.logprobs
+        logz = paddle.to_tensor(sampler_output.logz_per_batch, dtype=logprobs.dtype)
+        valid_mask = paddle.isfinite(logprobs)
+        normalized_logprobs = paddle.where(
+            valid_mask, logprobs - logz.unsqueeze(1), paddle.full_like(logprobs, float("-inf"))
+        )
+        sampler_output.logprobs_tensors = LogprobsTensors(
+            logprob_token_ids=sampler_output.logprobs_tensors.logprob_token_ids,
+            logprobs=normalized_logprobs,
+            selected_token_ranks=sampler_output.logprobs_tensors.selected_token_ranks,
+        )
+
 
 def save_output_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
+    async_output_queue: queue.Queue = None,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
 ):
-    if not skip_save_output:
-        if sampler_output.logprobs_tensors is None:
-            recover_share_inputs = recover_batch_index_for_output(
-                share_inputs,
-                model_output.index_to_batch_id,
-                model_output.enable_pd_reorder,
-                [
-                    "accept_tokens_cpu",
-                    "accept_num_cpu",
-                    "seq_lens_decoder_cpu",
-                    "prompt_lens_cpu",
-                    "last_preempted_idx",
-                ],
-            )
-            speculate_save_output(
-                recover_share_inputs["accept_tokens_cpu"],
-                recover_share_inputs["accept_num_cpu"],
-                model_output.not_need_stop,
-                recover_share_inputs["seq_lens_decoder_cpu"],
-                recover_share_inputs["prompt_lens_cpu"],
-                recover_share_inputs["last_preempted_idx"],
-                model_output.mp_rank,
-                save_each_rank,
-                bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
-            )
-        else:
+    if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+        if save_each_rank or model_output.mp_rank == 0:
             recover_batch_index_for_sampler_output(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
@@ -576,22 +658,89 @@ def save_output_specualate(
                     "last_preempted_idx",
                 ],
             )
-            speculate_save_output_topk(
-                recover_share_inputs["sampled_token_ids"],
-                sampler_output.logprobs_tensors.logprob_token_ids,
-                sampler_output.logprobs_tensors.logprobs,
-                sampler_output.logprobs_tensors.selected_token_ranks,
-                recover_share_inputs["accept_num_cpu"],
-                sampler_output.cu_batch_token_offset,
-                model_output.not_need_stop,
-                recover_share_inputs["seq_lens_decoder_cpu"],
-                recover_share_inputs["prompt_lens_cpu"],
-                recover_share_inputs["last_preempted_idx"],
-                3,  # mtype
-                model_output.mp_rank,
-                save_each_rank,
+            # target tokens (mtype=3)
+            output = _build_speculative_stream_transfer_data(
+                accept_tokens_cpu=recover_share_inputs["accept_tokens_cpu"],
+                accept_num_cpu=recover_share_inputs["accept_num_cpu"],
+                logprobs=sampler_output.logprobs_tensors,
+                prompt_logprobs_list=model_output.prompt_logprobs_list,
+                sampling_mask=sampler_output.sampling_mask,
+                cu_batch_token_offset=sampler_output.cu_batch_token_offset,
+                output_type=3,
             )
-    share_inputs["last_preempted_idx"][:] = 0
+            async_output_queue.put(output)
+
+            # draft tokens (mtype=4): when enable_draft_logprob and logprobs available
+            if sampler_output.logprobs_tensors is not None and getattr(model_output, "enable_draft_logprob", False):
+                draft_output = _build_speculative_stream_transfer_data(
+                    accept_tokens_cpu=recover_share_inputs["accept_tokens_cpu"],
+                    accept_num_cpu=recover_share_inputs["accept_num_cpu"],
+                    logprobs=sampler_output.logprobs_tensors,
+                    cu_batch_token_offset=sampler_output.cu_batch_token_offset,
+                    output_type=4,
+                )
+                async_output_queue.put(draft_output)
+
+        share_inputs["last_preempted_idx"][:] = 0
+    else:
+        if not skip_save_output:
+            if sampler_output.logprobs_tensors is None:
+                recover_share_inputs = recover_batch_index_for_output(
+                    share_inputs,
+                    model_output.index_to_batch_id,
+                    model_output.enable_pd_reorder,
+                    [
+                        "accept_tokens_cpu",
+                        "accept_num_cpu",
+                        "seq_lens_decoder_cpu",
+                        "prompt_lens_cpu",
+                        "last_preempted_idx",
+                    ],
+                )
+                speculate_save_output(
+                    recover_share_inputs["accept_tokens_cpu"],
+                    recover_share_inputs["accept_num_cpu"],
+                    model_output.not_need_stop,
+                    recover_share_inputs["seq_lens_decoder_cpu"],
+                    recover_share_inputs["prompt_lens_cpu"],
+                    recover_share_inputs["last_preempted_idx"],
+                    model_output.mp_rank,
+                    save_each_rank,
+                    bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
+                )
+            else:
+                recover_batch_index_for_sampler_output(
+                    sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+                )
+                recover_share_inputs = recover_batch_index_for_output(
+                    share_inputs,
+                    model_output.index_to_batch_id,
+                    model_output.enable_pd_reorder,
+                    [
+                        "sampled_token_ids",
+                        "accept_tokens_cpu",
+                        "accept_num_cpu",
+                        "seq_lens_decoder_cpu",
+                        "prompt_lens_cpu",
+                        "last_preempted_idx",
+                    ],
+                )
+                speculate_save_output_topk(
+                    recover_share_inputs["sampled_token_ids"],
+                    sampler_output.logprobs_tensors.logprob_token_ids,
+                    sampler_output.logprobs_tensors.logprobs,
+                    sampler_output.logprobs_tensors.selected_token_ranks,
+                    recover_share_inputs["accept_num_cpu"],
+                    sampler_output.cu_batch_token_offset,
+                    model_output.not_need_stop,
+                    recover_share_inputs["seq_lens_decoder_cpu"],
+                    recover_share_inputs["prompt_lens_cpu"],
+                    recover_share_inputs["last_preempted_idx"],
+                    3,  # mtype
+                    model_output.mp_rank,
+                    save_each_rank,
+                )
+        share_inputs["last_preempted_idx"][:] = 0
 
 
 def post_process(
