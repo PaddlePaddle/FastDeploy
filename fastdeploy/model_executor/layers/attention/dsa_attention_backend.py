@@ -379,8 +379,6 @@ class DSAAttentionBackend(AttentionBackend):
         if forward_meta.max_len_tensor_cpu[2]:  # max_enc_len_this_time
 
             tile_scheduler_metadata, _ = flash_mla.get_mla_metadata()
-            # 外面的开源仓库的kv cache存储格式和FD的不同
-            # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
             new_cache_shape = latent_cache.shape
             assert new_cache_shape[1] == 1
             new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
