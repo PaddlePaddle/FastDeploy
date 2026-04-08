@@ -1312,6 +1312,8 @@ class GPUModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
+            actual_cu_seq_k=self.share_inputs["actual_cu_seq_k"],
+            seq_lens_kv=self.share_inputs["seq_lens_kv"],
         )
 
         dist_status = self.collect_distributed_status()

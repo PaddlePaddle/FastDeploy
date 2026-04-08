@@ -671,6 +671,8 @@ class MTPProposer(Proposer):
             kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
+            actual_cu_seq_k=self.model_inputs["actual_cu_seq_k"],
+            seq_lens_kv=self.model_inputs["seq_lens_kv"],
         )
 
         # Initialzie attention meta data
