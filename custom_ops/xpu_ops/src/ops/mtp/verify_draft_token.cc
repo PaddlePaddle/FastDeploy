@@ -90,15 +90,19 @@ void VerifyDraftTokens(
     std::mt19937_64 engine(infer_seed[i]);
     dev_curand_states_cpu.push_back(dist(engine));
   }
-  float *dev_curand_states_xpu;
+  float *dev_curand_states = dev_curand_states_cpu.data();
+  auto dev_curand_states_tensor =
+      paddle::empty({static_cast<int64_t>(dev_curand_states_cpu.size())},
+                    paddle::DataType::FLOAT32,
+                    draft_tokens.place());
+  int ret;
   if (xpu_ctx_flag) {
-    xpu::ctx_guard RAII_GUARD(ctx);
-    dev_curand_states_xpu =
-        RAII_GUARD.alloc<float>(dev_curand_states_cpu.size());
-    xpu_memcpy(dev_curand_states_xpu,
-               dev_curand_states_cpu.data(),
-               dev_curand_states_cpu.size() * sizeof(float),
-               XPUMemcpyKind::XPU_HOST_TO_DEVICE);
+    ret = xpu::do_host2device(ctx,
+                              dev_curand_states_cpu.data(),
+                              dev_curand_states_tensor.data<float>(),
+                              dev_curand_states_cpu.size() * sizeof(float));
+    PD_CHECK(ret == 0, "do_host2device failed.");
+    dev_curand_states = dev_curand_states_tensor.data<float>();
   }
 
   // Get data pointers (nullptr if optional not provided)
@@ -146,7 +150,7 @@ void VerifyDraftTokens(
       candidate_scores_ptr,
       candidate_lens_ptr,
       // Sampling params
-      dev_curand_states_xpu,
+      dev_curand_states,
       topp.data<float>(),
       // Metadata
       stop_flags.data<bool>(),
