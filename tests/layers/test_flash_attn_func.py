@@ -99,7 +99,7 @@ class TestFlashAttnFunc(unittest.TestCase):
             max_seqlen_q=max_seqlen_q,
             max_seqlen_k=max_seqlen_k,
             attn_mask_q=attn_mask_q,
-            causal=True,
+            causal=False,
             num_heads=num_heads,
             kv_num_heads=kv_num_heads,
             head_dim=head_dim,
@@ -168,7 +168,7 @@ class TestFlashAttnFunc(unittest.TestCase):
             max_seqlen_q=max_seqlen_q,
             max_seqlen_k=max_seqlen_k,
             attn_mask_q=attn_mask_q,
-            causal=True,
+            causal=False,
             num_heads=num_heads,
             kv_num_heads=kv_num_heads,
             head_dim=head_dim,
@@ -201,6 +201,7 @@ class TestFlashAttnFunc(unittest.TestCase):
             num_heads=num_heads,
             kv_num_heads=kv_num_heads,
             head_dim=head_dim,
+            causal=False,
             version=4,
         )
 

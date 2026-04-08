@@ -137,7 +137,7 @@ def flash_attn_func(
         assert (
             flashmask_attention_v4 is not None
         ), "Cannot import flashmask_attention from flash_mask.cute.interface, please install it first"
-        assert attn_mask_q is not None, "FA4 requires attn_mask_q"
+        # assert attn_mask_q is not None, "FA4 requires attn_mask_q"
         assert num_heads is not None
         assert kv_num_heads is not None
         original_flash_attn_version = paddle.base.framework.get_flags(["FLAGS_flash_attn_version"])[
@@ -146,15 +146,32 @@ def flash_attn_func(
         with paddle.no_grad():
             try:
                 paddle.set_flags({"FLAGS_flash_attn_version": 4})
-                out = flashmask_attention_v4(
-                    q.reshape([1, -1, num_heads, head_dim]),
-                    k.reshape([1, -1, kv_num_heads, head_dim]),
-                    v.reshape([1, -1, kv_num_heads, head_dim]),
-                    startend_row_indices=attn_mask_q,
-                    causal=False,
-                    return_softmax_lse=True,
-                    training=True,
-                )
+                if causal:
+                    from fastdeploy.model_executor.layers.attention.flash_attention_v4 import (
+                        flash_attn_varlen_func,
+                    )
+
+                    out = flash_attn_varlen_func(
+                        q=q.view([-1, num_heads, head_dim]),
+                        k=k.view([-1, kv_num_heads, head_dim]),
+                        v=v.view([-1, kv_num_heads, head_dim]),
+                        cu_seqlens_q=cu_seqlens_q,
+                        cu_seqlens_k=cu_seqlens_k,
+                        max_seqlen_q=max_seqlen_q,
+                        max_seqlen_k=max_seqlen_k,
+                        causal=True,
+                        return_softmax_lse=True,
+                    )
+                else:
+                    out = flashmask_attention_v4(
+                        q.reshape([1, -1, num_heads, head_dim]),
+                        k.reshape([1, -1, kv_num_heads, head_dim]),
+                        v.reshape([1, -1, kv_num_heads, head_dim]),
+                        startend_row_indices=attn_mask_q,
+                        causal=causal,
+                        return_softmax_lse=True,
+                        training=True,
+                    )
             finally:
                 paddle.set_flags({"FLAGS_flash_attn_version": original_flash_attn_version})
         return out
@@ -166,7 +183,7 @@ def flash_attn_func(
             k.reshape([1, -1, kv_num_heads, head_dim]),
             v.reshape([1, -1, kv_num_heads, head_dim]),
             startend_row_indices=attn_mask_q,
-            causal=False,
+            causal=causal,
         )
     else:
         if version == 3:
@@ -335,6 +352,7 @@ class FlashAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ):
         metadata = self.attention_metadata
+        can_prefill_causal = getattr(forward_meta, "can_prefill_causal", self.causal)
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
@@ -407,7 +425,8 @@ class FlashAttentionBackend(AttentionBackend):
                     forward_meta.max_len_tensor_cpu[2],
                     self.block_size,
                 )
-                if FLASH_ATTN_VERSION == 4 or forward_meta.attn_mask_offsets is not None:
+
+                if forward_meta.attn_mask_offsets is not None and (not can_prefill_causal):
                     forward_meta.attn_mask_q = get_attn_mask_q(
                         cu_seqlens_q=forward_meta.cu_seqlens_q,
                         cu_seqlens_k=forward_meta.cu_seqlens_k,
@@ -464,7 +483,7 @@ class FlashAttentionBackend(AttentionBackend):
                 max_seqlen_q=forward_meta.max_len_tensor_cpu[0],
                 max_seqlen_k=forward_meta.max_len_tensor_cpu[3],
                 attn_mask_q=forward_meta.attn_mask_q,
-                causal=self.causal,
+                causal=can_prefill_causal,
                 num_heads=self.num_heads,
                 kv_num_heads=self.kv_num_heads,
                 head_dim=self.head_dim,
