@@ -134,10 +134,14 @@ def get_moe_scores(
         )
     if envs.FD_USE_PHI_MOE_TOPK:
         if original_renormalize:
-            topk_values = topk_values / topk_reduce_func(topk_values)
+            if topk_reduce_func is not None:
+                topk_values = topk_values / topk_reduce_func(topk_values)
+            else:
+                # 使用默认的 sum + epsilon
+                topk_values = topk_values / (topk_values.sum(axis=-1, keepdim=True) + 1e-20)
 
-            if original_routed_scaling_factor != 1.0:
-                topk_values *= original_routed_scaling_factor
+        if original_routed_scaling_factor != 1.0:
+            topk_values *= original_routed_scaling_factor
     return scores, topk_values, topk_idx
 
 

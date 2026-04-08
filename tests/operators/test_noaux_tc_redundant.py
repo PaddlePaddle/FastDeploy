@@ -12,8 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import unittest
+from unittest import mock
 
 import paddle
 
@@ -147,18 +147,17 @@ class TestMoeRouting(unittest.TestCase):
                     e_score_correction_bias=e_score_correction_bias,
                 )
 
-                os.environ["FD_USE_PHI_MOE_TOPK"] = "1"
-                new_score, topk_values, topk_idx = get_moe_scores(
-                    gating_output=gating_output,
-                    n_group=n_group,
-                    topk_group=topk_group,
-                    top_k=top_k,
-                    routed_scaling_factor=routed_scaling_factor,
-                    e_score_correction_bias=e_score_correction_bias,
-                    renormalize=renormalize,
-                    topk_reduce_func=lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
-                )
-                os.environ["FD_USE_PHI_MOE_TOPK"] = "0"
+                with mock.patch.dict("os.environ", {"FD_USE_PHI_MOE_TOPK": "1"}):
+                    new_score, topk_values, topk_idx = get_moe_scores(
+                        gating_output=gating_output,
+                        n_group=n_group,
+                        topk_group=topk_group,
+                        top_k=top_k,
+                        routed_scaling_factor=routed_scaling_factor,
+                        e_score_correction_bias=e_score_correction_bias,
+                        renormalize=renormalize,
+                        topk_reduce_func=lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
+                    )
 
                 equal_topk_value = paddle.allclose(topk_values, ref_topk_values, atol=1e-03, rtol=1e-03).item()
                 equal_topk_ids = paddle.allclose(
