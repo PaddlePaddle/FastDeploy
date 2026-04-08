@@ -330,7 +330,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     getattr(layer, "renormalize", True),
                 )
             else:
-                topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                     gate_out,
                     layer.gate_correction_bias,
                     layer.top_k,
