@@ -354,11 +354,7 @@ class FusedMoE(nn.Layer):
 
         if shard_id is None:
             # 1.gate up fused in disk
-
-            shard_param = param[expert_id - self.expert_id_offset]
-            if shard_param.shape == []:
-                shard_param = shard_param.unsqueeze(0)
-            output_size = shard_param.shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
+            output_size = param[expert_id - self.expert_id_offset].shape[SHARD_ID_TO_SHARDED_DIM["gate"]]
             shard_offsets = [
                 # (shard_id, shard_offset, shard_size)
                 ("gate", 0, output_size // 2 * self.tp_size),
@@ -397,8 +393,6 @@ class FusedMoE(nn.Layer):
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
         expert_param = param[expert_id - self.expert_id_offset]
-        if expert_param.shape == []:
-            expert_param = expert_param.unsqueeze(0)
         dim = -1 if shard_dim else 0
         param_shard_size = expert_param.shape[dim] // 2
         if shard_id == "gate":
@@ -453,8 +447,6 @@ class FusedMoE(nn.Layer):
             shard_size = (self.tp_rank + 1) * block_size
             loaded_weight = slice_fn(loaded_weight, tp_shard_dim, shard_offset, shard_size)
         expert_param = param[expert_id - self.expert_id_offset]
-        if expert_param.shape == []:
-            expert_param = expert_param.unsqueeze(0)
         if hasattr(param, "tensor_track"):
             # for dyn quant
             param.tensor_track.mark(start=0, batch_id=expert_id - self.expert_id_offset)

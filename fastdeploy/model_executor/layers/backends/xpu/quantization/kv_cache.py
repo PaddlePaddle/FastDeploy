@@ -19,7 +19,6 @@ from typing import Optional
 import paddle
 from paddle import nn
 
-from fastdeploy import envs
 from fastdeploy.model_executor.layers.quantization.kv_cache import (
     KvCacheQuantzationTypes,
 )
@@ -277,20 +276,14 @@ class XPUKVCacheMethodBase(QuantMethodBase):
         use for loader v1
         """
         # cache_k_out_scale is the reciprocal of cache_k_scale
-        if envs.FD_XPU_USE_YIYAN_MODEL:
-            if layer.cache_k_scale._is_initialized():
-                layer.cache_k_out_scale.set_value(
-                    self.cache_quant_config.max_bound / layer.cache_k_scale.cast("float32").reshape_([-1])
-                )
-            if layer.cache_v_scale._is_initialized():
-                layer.cache_v_out_scale.set_value(
-                    self.cache_quant_config.max_bound / layer.cache_v_scale.cast("float32").reshape_([-1])
-                )
-        else:
-            if layer.cache_k_scale._is_initialized():
-                layer.cache_k_out_scale.set_value(1 / layer.cache_k_scale)
-            if layer.cache_v_scale._is_initialized():
-                layer.cache_v_out_scale.set_value(1 / layer.cache_v_scale)
+        if layer.cache_k_scale._is_initialized():
+            layer.cache_k_out_scale.set_value(
+                self.cache_quant_config.max_bound / layer.cache_k_scale.cast("float32").reshape_([-1])
+            )
+        if layer.cache_v_scale._is_initialized():
+            layer.cache_v_out_scale.set_value(
+                self.cache_quant_config.max_bound / layer.cache_v_scale.cast("float32").reshape_([-1])
+            )
 
     def apply(self, layer):
         """

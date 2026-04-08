@@ -210,8 +210,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
-    # Whether to use yiyan model
-    "FD_XPU_USE_YIYAN_MODEL": lambda: bool(int(os.getenv("FD_XPU_USE_YIYAN_MODEL", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
     # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,
