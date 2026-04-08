@@ -2483,8 +2483,10 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                async_output_queue=self.async_output_queue,
                 save_each_rank=self.parallel_config.use_ep,
                 skip_save_output=skip_save_output,
+                enable_draft_logprob=self.speculative_config.enable_draft_logprob,
             )
         else:
             save_output_normal(
