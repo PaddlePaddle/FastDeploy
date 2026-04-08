@@ -89,7 +89,7 @@ class MhaAttnBackend(AttentionBackend):
         # note: scale need to change if using MLA
         self.scale = 1.0 / sqrt(head_dim)
         self.dtype = paddle.get_default_dtype()
-        self.enable_mm = fd_config.model_config.enable_mm
+        self.enable_mm = fd_config.enable_mm_runtime
         self.rope_batch_stride = self.max_context_len * self.head_dim if self.enable_mm else 0
         if "paddleocr" in fd_config.model_config.model_type:
             self.is_interleaved_rope_mode = False

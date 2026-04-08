@@ -88,6 +88,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_PD_CHANGEABLE": lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
     # Whether to use DeepGemm for FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
+    # Whether to use DeepGemm for FP8 blockwise MoE.
+    "FD_USE_BLACKWELL_GEMM": lambda: bool(int(os.getenv("FD_USE_BLACKWELL_GEMM", "0"))),
     # Whether to use PFCCLab/DeepEP.
     "FD_USE_PFCC_DEEP_EP": lambda: bool(int(os.getenv("FD_USE_PFCC_DEEP_EP", "0"))),
     # Whether to use aggregate send.
