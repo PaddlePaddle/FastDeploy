@@ -28,7 +28,7 @@ from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
 
 
 @enable_compat_on_triton_kernel
-@triton.jit
+@triton.jit  # pragma: no cover
 def _fwd_diag_kernel(
     Q,
     K,
@@ -144,7 +144,7 @@ def _fwd_diag_kernel(
 
 
 @enable_compat_on_triton_kernel
-@triton.jit
+@triton.jit  # pragma: no cover
 def _fwd_kv_parallel(
     K,
     V,
@@ -240,7 +240,7 @@ def _fwd_kv_parallel(
 
 
 @enable_compat_on_triton_kernel
-@triton.jit
+@triton.jit  # pragma: no cover
 def _fwd_kv_reduce(
     S,
     KV,
@@ -298,7 +298,7 @@ def _fwd_kv_reduce(
 
 
 @enable_compat_on_triton_kernel
-@triton.jit
+@triton.jit  # pragma: no cover
 def _fwd_none_diag_kernel(
     Q,
     Out,
@@ -371,7 +371,7 @@ def _fwd_none_diag_kernel(
 
 
 @enable_compat_on_triton_kernel
-@triton.jit
+@triton.jit  # pragma: no cover
 def _linear_attn_decode_kernel(
     q_ptr,
     k_ptr,
