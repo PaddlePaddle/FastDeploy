@@ -57,7 +57,8 @@ __global__ void cuda_kernel(const scalar_t *__restrict__ topk_ids,
 }
 
 std::vector<paddle::Tensor> count_tokens_per_expert_func(
-    const paddle::Tensor &topk_ids, int64_t num_experts,
+    const paddle::Tensor &topk_ids,
+    int64_t num_experts,
     bool compute_padded_cumsum) {
   int topk_ids_numel = topk_ids.shape()[0] * topk_ids.shape()[1];
 
@@ -69,34 +70,38 @@ std::vector<paddle::Tensor> count_tokens_per_expert_func(
   using scalar_t = int64_t;
 
   if (compute_padded_cumsum) {
-    cuda_kernel<scalar_t, true><<<1, 1024, num_experts * sizeof(int32_t), stream>>>(
-        topk_ids.data<scalar_t>(),
-        token_nums_per_expert.data<int32_t>(),
-        token_nums_per_expert.data<int32_t>() + num_experts,
-        token_nums_per_expert.data<int32_t>() + 2 * num_experts,
-        topk_ids_numel,
-        num_experts);
+    cuda_kernel<scalar_t, true>
+        <<<1, 1024, num_experts * sizeof(int32_t), stream>>>(
+            topk_ids.data<scalar_t>(),
+            token_nums_per_expert.data<int32_t>(),
+            token_nums_per_expert.data<int32_t>() + num_experts,
+            token_nums_per_expert.data<int32_t>() + 2 * num_experts,
+            topk_ids_numel,
+            num_experts);
   } else {
-    cuda_kernel<scalar_t, false><<<1, 1024, num_experts * sizeof(int32_t), stream>>>(
-        topk_ids.data<scalar_t>(),
-        token_nums_per_expert.data<int32_t>(),
-        token_nums_per_expert.data<int32_t>() + num_experts,
-        nullptr,
-        topk_ids_numel,
-        num_experts);
+    cuda_kernel<scalar_t, false>
+        <<<1, 1024, num_experts * sizeof(int32_t), stream>>>(
+            topk_ids.data<scalar_t>(),
+            token_nums_per_expert.data<int32_t>(),
+            token_nums_per_expert.data<int32_t>() + num_experts,
+            nullptr,
+            topk_ids_numel,
+            num_experts);
   }
 
   return {token_nums_per_expert};
 }
 
 std::vector<paddle::DataType> count_tokens_per_expert_func_infer_dtype(
-    const paddle::DataType &topk_ids_dtype, int64_t num_experts,
+    const paddle::DataType &topk_ids_dtype,
+    int64_t num_experts,
     bool compute_padded_cumsum) {
   return {paddle::DataType::INT32};
 }
 
 std::vector<std::vector<int64_t>> count_tokens_per_expert_func_infer_shape(
-    const std::vector<int64_t> &topk_ids_shape, int64_t num_experts,
+    const std::vector<int64_t> &topk_ids_shape,
+    int64_t num_experts,
     bool compute_padded_cumsum) {
   int64_t num_rows = compute_padded_cumsum ? 3 : 2;
   return {{num_rows, num_experts}};
