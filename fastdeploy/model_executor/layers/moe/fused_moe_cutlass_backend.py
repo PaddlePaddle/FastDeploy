@@ -166,7 +166,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     override_buffer_size=token_all_num,
                 )
 
-                token_nums_per_expert_cumsum = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)[
+                token_nums_per_expert_cumsum = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts, True)[
                     2
                 ].cast(paddle.int64)
                 ffn_out = self.compute_ffn(
@@ -345,7 +345,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 )
 
                 # Row 2 of count_tokens_per_expert_func is the prefix sum token_nums_per_expert.
-                token_nums_per_expert_cumsum = count_tokens_per_expert_func(topk_idx, layer.num_experts)[2].cast(
+                token_nums_per_expert_cumsum = count_tokens_per_expert_func(topk_idx, layer.num_experts, True)[2].cast(
                     paddle.int64
                 )
                 if topk_ids_hookfunc is not None:
