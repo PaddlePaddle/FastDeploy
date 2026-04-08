@@ -174,7 +174,7 @@ class DSAAttentionBackend(AttentionBackend):
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
         self.useless_tensor = paddle.randn([1]).cast("int32")
-        self.k_range = paddle.full(shape=1, fill_value=200.0)
+
 
 
     def _cast_scale_inv_to_ue8m0(self, scales_inv: paddle.Tensor, out_dtype=paddle.float32) -> paddle.Tensor:
@@ -346,8 +346,7 @@ class DSAAttentionBackend(AttentionBackend):
 
             from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
-        k_range = paddle.full(shape=1, fill_value=200.0)
-        scale = paddle.abs(compressed_kv).max() / k_range
+        scale = paddle.abs(compressed_kv).max() / 200.0
 
         slot_mapping = compute_slot_mapping(
             forward_meta.block_tables,
