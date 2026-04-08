@@ -1935,6 +1935,11 @@ class EngineService:
                 token_ids = cum_tokens[prefix_offset:read_offset]
             else:
                 token_ids = []
+
+            if is_end and delta_text == "" and len(cum_tokens) > 0:
+                read_offset = self.data_processor.decode_status[req_id][1]
+                token_ids = cum_tokens[read_offset:]
+
             if is_end:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
