@@ -114,8 +114,6 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta, fd_config):
         end_bs += 1
 
         if len(forward_meta.rotary_embs.shape) == 6:
-            max_bs = forward_meta.rotary_embs.shape[0]
-            assert max_bs == forward_meta.block_tables.shape[0]
             assert forward_meta.rotary_embs.shape[1:3] == [2, 1]
             assert forward_meta.rotary_embs.shape[4] == 1
             res[i].rotary_embs = forward_meta.rotary_embs[start_bs:end_bs]

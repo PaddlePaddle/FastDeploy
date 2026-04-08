@@ -66,6 +66,7 @@ class BlockWiseFP8Config(QuantConfigBase):
         self.quant_min_bound = -448
         self.quant_round_type = 1
         self.use_deep_gemm = bool(envs.FD_USE_DEEP_GEMM)
+        self.use_blackwell_gemm = bool(envs.FD_USE_BLACKWELL_GEMM)
         self.is_checkpoint_bf16 = is_checkpoint_bf16
         self.deepgemm_scale_ue8m0 = True if get_sm_version() >= 100 else False
 
@@ -83,7 +84,16 @@ class BlockWiseFP8Config(QuantConfigBase):
         Get quantization method.
         """
         if isinstance(layer, FusedMoE):
-            if layer.ep_size > 1 or self.use_deep_gemm:
+            if self.use_blackwell_gemm:
+                assert (
+                    self.use_deep_gemm
+                ), "Blackwell gemm is supported only for prefill moe, please set FD_USE_DEEP_GEMM=1 as well"
+                from fastdeploy.model_executor.layers.moe.fused_moe_blackwell_backend import (
+                    BlackwellGemmFusedMoeMethod,
+                )
+
+                return BlackwellGemmFusedMoeMethod(self)
+            elif layer.ep_size > 1 or self.use_deep_gemm:
                 from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
                     DeepGemmFusedMoeMethod,
                 )
