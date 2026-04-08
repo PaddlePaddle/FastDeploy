@@ -87,9 +87,9 @@ std::vector<paddle::Tensor> PreCacheLenConcat(
       bsz,
       block_size);
   paddle::Tensor pre_cache_num_blocks_cpu =
-      pre_cache_num_blocks.copy_to(paddle::CPUPlace(), false);
+      pre_cache_num_blocks.copy_to(paddle::CPUPlace(), true);
   paddle::Tensor kv_token_num_cpu =
-      kv_token_num.copy_to(paddle::CPUPlace(), false);
+      kv_token_num.copy_to(paddle::CPUPlace(), true);
 
   return {
       cu_seqlens_k,
