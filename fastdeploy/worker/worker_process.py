@@ -138,7 +138,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     architectures = fd_config.model_config.architectures
-    if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
+    if fd_config.enable_mm_runtime and ErnieArchitectures.contains_ernie_arch(architectures):
         fd_config.model_config.tensor_model_parallel_size = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
@@ -506,7 +506,7 @@ class PaddleDisWorkerProc:
             if tp_rank == 0:
                 if self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
-                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                        self.fd_config.enable_mm_runtime and self.worker.exist_prefill()
                     ):
                         if self.nnode > 1:
                             self.task_queue.read_finish_flag.set(1)

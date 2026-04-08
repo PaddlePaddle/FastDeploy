@@ -40,7 +40,7 @@ class IluvatarWorker(GpuWorker):
         local_rank: int,
         rank: int,
     ):
-        if fd_config.model_config.enable_mm:
+        if fd_config.enable_mm_runtime:
             paddle.set_flags({"FLAGS_enable_ixattnbkd": True, "FLAGS_enable_ixdnn_attn": False})
         super(IluvatarWorker, self).__init__(
             fd_config=fd_config,
