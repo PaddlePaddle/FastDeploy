@@ -30,6 +30,7 @@ from fastdeploy.model_executor.ops.iluvatar import (
     moe_expert_ffn,
     moe_expert_reduce,
 )
+from fastdeploy.model_executor.ops.iluvatar.utils import wi4a16_weight_quantize
 from fastdeploy.model_executor.utils import (
     TensorTracker,
     free_tensor,
@@ -80,8 +81,11 @@ class IluvatarCutlassMoEMethod(UnquantizedFusedMoEMethod):
             getattr(layer, self.added_weight_attrs[1]),
             (layer.up_gate_proj_bias if hasattr(layer, "up_gate_proj_bias") else None),
             (layer.up_gate_proj_weight_scale if hasattr(layer, "up_gate_proj_weight_scale") else None),
+            (layer.up_gate_proj_weight_zeros if hasattr(layer, "up_gate_proj_weight_zeros") else None),
             (layer.down_proj_weight_scale if hasattr(layer, "down_proj_weight_scale") else None),
+            (layer.down_proj_weight_zeros if hasattr(layer, "down_proj_weight_zeros") else None),
             self.moe_quant_type,
+            self.quant_config.group_size,
             layer.fd_config.model_config.moe_phase.phase,
         )
 
@@ -214,7 +218,12 @@ class IluvatarCutlassWeightOnlyMoEMethod(IluvatarCutlassMoEMethod):
         super().__init__(quant_config)
         self.quant_config = quant_config
         self.moe_quant_type = self.quant_config.algo
-        self.pack_num = 1
+        if self.moe_quant_type == "weight_only_int8":
+            self.quant_config.group_size = -1
+        elif self.moe_quant_type == "weight_only_int4":
+            self.quant_config.group_size = 128
+        else:
+            raise NotImplementedError("Iluvarar only support wint8 nand wint4 yet.")
 
     def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
         """
@@ -427,24 +436,33 @@ class IluvatarCutlassWeightOnlyMoEMethod(IluvatarCutlassMoEMethod):
             # quantized_weight_name
             weight_name = self.added_weight_attrs[weight_idx]
             unquantized_weight_name = weight_name.replace("quant_weight", "weight")
-            weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
-            weight_dtype = "int8"
+
             # scale
             scale_name = self.added_scale_attrs[weight_idx]
-            scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
-            scale_dtype = self.default_dtype
+
+            if self.moe_quant_type == "weight_only_int4":
+                # zeros for int4
+                zeros = []
+                zeros_name = scale_name.replace("weight_scale", "weight_zeros")
 
             # 2.crate tmp tensor
-
-            weight = paddle.empty(weight_shape, dtype=weight_dtype)
-            scale = paddle.empty(scale_shape, dtype=scale_dtype)
+            weight, scale = [], []
 
             # 3.quantize weight
-
             for expert_id in range(layer.num_local_experts):
-                weight[expert_id], scale[expert_id] = weight_quantize(
-                    getattr(layer, unquantized_weight_name)[expert_id], algo=self.moe_quant_type
-                )
+                unquantized_weight = getattr(layer, unquantized_weight_name)[expert_id]
+                if self.moe_quant_type == "weight_only_int8":
+                    w, s = weight_quantize(unquantized_weight, algo=self.moe_quant_type)
+                else:
+                    w, s, z = wi4a16_weight_quantize(unquantized_weight)
+                    zeros.append(z)
+                weight.append(w)
+                scale.append(s)
+
+            weight = paddle.stack(weight, axis=0)
+            scale = paddle.stack(scale, axis=0)
+            if self.moe_quant_type == "weight_only_int4":
+                zeros = paddle.stack(zeros, axis=0)
 
             free_tensor(getattr(layer, unquantized_weight_name))
 
@@ -453,8 +471,8 @@ class IluvatarCutlassWeightOnlyMoEMethod(IluvatarCutlassMoEMethod):
                 layer,
                 weight_name,
                 layer.create_parameter(
-                    shape=weight_shape,
-                    dtype=weight_dtype,
+                    shape=weight.shape,
+                    dtype=weight.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
@@ -463,13 +481,26 @@ class IluvatarCutlassWeightOnlyMoEMethod(IluvatarCutlassMoEMethod):
                 layer,
                 scale_name,
                 layer.create_parameter(
-                    shape=scale_shape,
-                    dtype=scale_dtype,
+                    shape=scale.shape,
+                    dtype=scale.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
             getattr(layer, weight_name).copy_(weight, False)
             getattr(layer, scale_name).copy_(scale, False)
+
+            if self.moe_quant_type == "weight_only_int4":
+                # create zeros
+                setattr(
+                    layer,
+                    zeros_name,
+                    layer.create_parameter(
+                        shape=zeros.shape,
+                        dtype=zeros.dtype,
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ),
+                )
+                getattr(layer, zeros_name).copy_(zeros, False)
 
         if self.quant_config.is_checkpoint_bf16:
             weight_id_map = {"gate_up": 0, "down": 1}

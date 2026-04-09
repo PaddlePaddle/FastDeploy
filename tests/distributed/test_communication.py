@@ -52,7 +52,7 @@ class TestCommunicationBasic(unittest.TestCase):
         communication.use_custom_allreduce()
 
         self.assertIsNotNone(communication._TP_AR)
-        mock_custom_ar.assert_called_once_with(fake_group, 64 * 1024 * 1024)
+        mock_custom_ar.assert_called_once_with(fake_group, 8 * 1024 * 1024)
 
     def test_custom_ar_clear_ipc_handles(self):
         mock_tp_ar = MagicMock()

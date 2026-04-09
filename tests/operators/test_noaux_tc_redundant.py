@@ -1,4 +1,19 @@
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 import unittest
+from unittest import mock
 
 import paddle
 
@@ -90,6 +105,59 @@ class TestMoeRouting(unittest.TestCase):
                     expert_in_rank_num_list=expert_in_rank_num_list,
                     tokens_per_expert_stats_list=tokens_per_expert_stats_list,
                 )
+
+                equal_topk_value = paddle.allclose(topk_values, ref_topk_values, atol=1e-03, rtol=1e-03).item()
+                equal_topk_ids = paddle.allclose(
+                    topk_idx.cast("int32"), ref_topk_idx.cast("int32"), atol=0.0, rtol=0.0
+                ).item()
+                print(
+                    f"Test Case[{case_tuple}], num_tokens = {num_tokens}, equal_topk_value: {equal_topk_value}, equal_topk_ids: {equal_topk_ids}"
+                )
+                if not equal_topk_value:
+                    print(f"ref_topk_values = {ref_topk_values}")
+                    print(f"topk_values = {topk_values}")
+                if not equal_topk_ids:
+                    print(f"ref_topk_idx = {ref_topk_idx}")
+                    print(f"topk_idx = {topk_idx}")
+                assert equal_topk_value and equal_topk_ids
+
+    def test_group_topk_using_phi_topk(self):
+
+        renormalize = True
+
+        test_cases = [
+            # (num_experts, n_group, topk_group, top_k, routed_scaling_factor)
+            (128, 1, 1, 8, 1.0),  # glm45-air
+            (256, 8, 4, 8, 2.5),  # deepseek
+        ]
+
+        for case_tuple in test_cases:
+            num_experts, n_group, topk_group, top_k, routed_scaling_factor = case_tuple
+            for num_tokens in [1, 32, 64, 128]:
+                gating_output = paddle.rand([num_tokens, num_experts])
+                e_score_correction_bias = paddle.rand([1, num_experts])
+
+                ref_topk_values, ref_topk_idx = self.native_group_topk(
+                    gating_output=gating_output,
+                    topk=top_k,
+                    renormalize=renormalize,
+                    num_expert_group=n_group,
+                    topk_group=topk_group,
+                    routed_scaling_factor=routed_scaling_factor,
+                    e_score_correction_bias=e_score_correction_bias,
+                )
+
+                with mock.patch.dict("os.environ", {"FD_USE_PHI_MOE_TOPK": "1"}):
+                    new_score, topk_values, topk_idx = get_moe_scores(
+                        gating_output=gating_output,
+                        n_group=n_group,
+                        topk_group=topk_group,
+                        top_k=top_k,
+                        routed_scaling_factor=routed_scaling_factor,
+                        e_score_correction_bias=e_score_correction_bias,
+                        renormalize=renormalize,
+                        topk_reduce_func=lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
+                    )
 
                 equal_topk_value = paddle.allclose(topk_values, ref_topk_values, atol=1e-03, rtol=1e-03).item()
                 equal_topk_ids = paddle.allclose(

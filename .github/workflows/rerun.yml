@@ -14,7 +14,7 @@ jobs:
           rm -rf * .[^.]*
 
       - name: Checkout code
-        uses: actions/checkout@v5
+        uses: actions/checkout@v6
 
       - name: Rerun all failed jobs
         if: ${{ contains(github.event.comment.body, 'all-failed') }}

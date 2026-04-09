@@ -88,6 +88,7 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
         quant_config_name = _get_offline_quant_config_name(
             quantization_config, model_config.model_format == "torch", is_v1_loader
         )
+
     elif args.quantization is not None:
         quantization_config = {}
         try:
@@ -161,7 +162,10 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .block_wise_fp8 import BlockWiseFP8Config
     from .kv_cache import KvCacheQuantConfig
     from .mix_quant import MixQuantConfig
-    from .nvfp4 import ModelOptNvFp4Config
+
+    if quantization == "modelopt_fp4":
+        from .nvfp4 import ModelOptNvFp4Config
+
     from .tensor_wise_fp8 import TensorWiseFP8Config
     from .w4a8 import W4A8Config
     from .w4afp8 import W4AFP8Config
@@ -186,9 +190,10 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "tensor_wise_fp8": TensorWiseFP8Config,
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,
-        "modelopt_fp4": ModelOptNvFp4Config,
     }
     if envs.FD_MOE_MXFP4_BACKEND is not None:
         method_to_config["mxfp4"] = MXFP4Config
+    if quantization == "modelopt_fp4":
+        method_to_config["modelopt_fp4"] = ModelOptNvFp4Config
 
     return method_to_config[quantization]

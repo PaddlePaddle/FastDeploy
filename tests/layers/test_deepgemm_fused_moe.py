@@ -318,6 +318,138 @@ class TestApplyEpPrefill:
         assert len(out.shape) == 2
         assert out.shape[1] == HIDDEN_SIZE
 
+    @requires_deepgemm
+    def test_ep_prefill_prob_in_advance_phi_moe_permute(self, monkeypatch):
+        """FD_MOE_PROB_IN_ADVANCE=True + FD_USE_PHI_MOE_PERMUTE=True:
+        fuse_weighted_swiglu_fp8_quant path → moe_unpermute with using_weighted_combine=False."""
+        import fastdeploy
+
+        monkeypatch.setattr(fastdeploy.envs, "FD_MOE_PROB_IN_ADVANCE", True)
+        monkeypatch.setattr(fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", True)
+
+        # Stub paddlefleet_ops.fuse_weighted_swiglu_fp8_quant
+        from fastdeploy.model_executor.layers.quantization import fp8_utils
+
+        def fake_fuse_weighted_swiglu_fp8_quant(ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=False):
+            half = ffn_out.shape[-1] // 2
+            out_fp8 = ffn_out[:, :half].cast("float8_e4m3fn")
+            scale = paddle.ones([ffn_out.shape[0], 1], dtype="float32")
+            return out_fp8, scale
+
+        fake_ops = types.SimpleNamespace(fuse_weighted_swiglu_fp8_quant=fake_fuse_weighted_swiglu_fp8_quant)
+        monkeypatch.setattr(fp8_utils, "paddlefleet_ops", fake_ops)
+        # Also patch the reference used in the backend module
+        monkeypatch.setattr(backend, "paddlefleet_ops", fake_ops)
+
+        layer = DummyLayer()
+        layer.topk_method = "greedy"
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+        method.ep_prefill_runner = self._make_contiguous_runner(layer)
+
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+        out = method.apply_ep_prefill(layer, x, gate)
+        assert len(out.shape) == 2
+        assert out.shape[1] == HIDDEN_SIZE
+
+    @requires_deepgemm
+    def test_ep_prefill_prob_in_advance_no_phi_moe_permute(self, monkeypatch):
+        """FD_MOE_PROB_IN_ADVANCE=True + FD_USE_PHI_MOE_PERMUTE=False:
+        fuse_weighted_swiglu_fp8_quant path → ep_moe_expert_combine."""
+        import fastdeploy
+
+        monkeypatch.setattr(fastdeploy.envs, "FD_MOE_PROB_IN_ADVANCE", True)
+        monkeypatch.setattr(fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", False)
+
+        from fastdeploy.model_executor.layers.quantization import fp8_utils
+
+        def fake_fuse_weighted_swiglu_fp8_quant(ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=False):
+            half = ffn_out.shape[-1] // 2
+            out_fp8 = ffn_out[:, :half].cast("float8_e4m3fn")
+            scale = paddle.ones([ffn_out.shape[0], 1], dtype="float32")
+            return out_fp8, scale
+
+        fake_ops = types.SimpleNamespace(fuse_weighted_swiglu_fp8_quant=fake_fuse_weighted_swiglu_fp8_quant)
+        monkeypatch.setattr(fp8_utils, "paddlefleet_ops", fake_ops)
+        monkeypatch.setattr(backend, "paddlefleet_ops", fake_ops)
+
+        layer = DummyLayer()
+        layer.topk_method = "greedy"
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+        method.ep_prefill_runner = self._make_contiguous_runner(layer)
+
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+        out = method.apply_ep_prefill(layer, x, gate)
+        assert len(out.shape) == 2
+        assert out.shape[1] == HIDDEN_SIZE
+
+    @requires_deepgemm
+    def test_ep_prefill_prob_in_advance_phi_fp8_quant(self, monkeypatch):
+        """FD_MOE_PROB_IN_ADVANCE=True + FD_USE_PHI_FP8_QUANT=True + FD_USE_PHI_MOE_PERMUTE=True:
+        fp8_quant_blockwise input quant → fuse_weighted_swiglu_fp8_quant → moe_unpermute path."""
+        import fastdeploy
+
+        monkeypatch.setattr(fastdeploy.envs, "FD_MOE_PROB_IN_ADVANCE", True)
+        monkeypatch.setattr(fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", True)
+        monkeypatch.setattr(fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", True)
+
+        from fastdeploy.model_executor.layers.quantization import fp8_utils
+
+        def fake_fuse_weighted_swiglu_fp8_quant(ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=False):
+            half = ffn_out.shape[-1] // 2
+            out_fp8 = ffn_out[:, :half].cast("float8_e4m3fn")
+            scale = paddle.ones([ffn_out.shape[0], 1], dtype="float32")
+            return out_fp8, scale
+
+        fake_ops = types.SimpleNamespace(fuse_weighted_swiglu_fp8_quant=fake_fuse_weighted_swiglu_fp8_quant)
+        monkeypatch.setattr(fp8_utils, "paddlefleet_ops", fake_ops)
+        monkeypatch.setattr(backend, "paddlefleet_ops", fake_ops)
+
+        layer = DummyLayer()
+        layer.topk_method = "greedy"
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+        method.ep_prefill_runner = self._make_contiguous_runner(layer)
+
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+        out = method.apply_ep_prefill(layer, x, gate)
+        assert len(out.shape) == 2
+        assert out.shape[1] == HIDDEN_SIZE
+
+    @requires_deepgemm
+    def test_ep_prefill_prob_in_advance_phi_fp8_quant_no_phi_moe_permute(self, monkeypatch):
+        """FD_MOE_PROB_IN_ADVANCE=True + FD_USE_PHI_FP8_QUANT=True + FD_USE_PHI_MOE_PERMUTE=False:
+        fp8_quant_blockwise input quant → fuse_weighted_swiglu_fp8_quant → ep_moe_expert_combine path."""
+        import fastdeploy
+
+        monkeypatch.setattr(fastdeploy.envs, "FD_MOE_PROB_IN_ADVANCE", True)
+        monkeypatch.setattr(fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", True)
+        monkeypatch.setattr(fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", False)
+
+        from fastdeploy.model_executor.layers.quantization import fp8_utils
+
+        def fake_fuse_weighted_swiglu_fp8_quant(ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=False):
+            half = ffn_out.shape[-1] // 2
+            out_fp8 = ffn_out[:, :half].cast("float8_e4m3fn")
+            scale = paddle.ones([ffn_out.shape[0], 1], dtype="float32")
+            return out_fp8, scale
+
+        fake_ops = types.SimpleNamespace(fuse_weighted_swiglu_fp8_quant=fake_fuse_weighted_swiglu_fp8_quant)
+        monkeypatch.setattr(fp8_utils, "paddlefleet_ops", fake_ops)
+        monkeypatch.setattr(backend, "paddlefleet_ops", fake_ops)
+
+        layer = DummyLayer()
+        layer.topk_method = "greedy"
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+        method.ep_prefill_runner = self._make_contiguous_runner(layer)
+
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+        out = method.apply_ep_prefill(layer, x, gate)
+        assert len(out.shape) == 2
+        assert out.shape[1] == HIDDEN_SIZE
+
 
 # ---------------------------------------------------------------------------
 # Tests: apply_ep_decode

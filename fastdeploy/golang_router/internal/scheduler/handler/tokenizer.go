@@ -102,6 +102,8 @@ func parseTokensFromBody(body []byte) ([]int, error) {
 		if len(input.InputIDs) > 0 {
 			return input.InputIDs, nil
 		}
+	} else {
+		return nil, fmt.Errorf("tokenizer response unmarshal failed: %w", err)
 	}
 
 	return nil, errors.New("tokenizer response missing tokens")

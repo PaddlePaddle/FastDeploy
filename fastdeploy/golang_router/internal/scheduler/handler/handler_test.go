@@ -97,7 +97,16 @@ func TestCounterOperations(t *testing.T) {
 		counter.Inc()
 		assert.Equal(t, uint64(1), counter.Get())
 
-		counter.Dec()
+		ok := counter.Dec()
+		assert.True(t, ok)
+		assert.Equal(t, uint64(0), counter.Get())
+	})
+
+	t.Run("counter underflow protection", func(t *testing.T) {
+		counter := GetOrCreateCounter(ctx, "test-underflow")
+		assert.Equal(t, uint64(0), counter.Get())
+		ok := counter.Dec()
+		assert.False(t, ok)
 		assert.Equal(t, uint64(0), counter.Get())
 	})
 
@@ -117,28 +126,49 @@ func TestCleanupInvalidCounters(t *testing.T) {
 	ctx := context.Background()
 	Init(&config.Config{}, &mockManagerAPI{})
 
-	// Add some counters
-	c1 := GetOrCreateCounter(ctx, "worker1")
-	c1.Inc()
-	GetOrCreateCounter(ctx, "invalid-worker") // Should be cleaned up
+	t.Run("idle invalid counter deleted", func(t *testing.T) {
+		// Add some counters
+		c1 := GetOrCreateCounter(ctx, "worker1")
+		c1.Inc()
+		GetOrCreateCounter(ctx, "invalid-worker") // idle, should be cleaned up
 
-	tc1 := GetOrCreateTokenCounter(ctx, "worker1")
-	tc1.Add(100)
-	GetOrCreateTokenCounter(ctx, "invalid-worker") // Should be cleaned up
+		tc1 := GetOrCreateTokenCounter(ctx, "worker1")
+		tc1.Add(100)
+		GetOrCreateTokenCounter(ctx, "invalid-worker") // idle, should be cleaned up
 
-	CleanupInvalidCounters(ctx)
+		CleanupInvalidCounters(ctx)
 
-	// Verify counters
-	_, exists := GetCounter(ctx, "worker1")
-	assert.True(t, exists)
-	_, exists = GetCounter(ctx, "invalid-worker")
-	assert.False(t, exists)
+		// Healthy worker counters remain
+		_, exists := GetCounter(ctx, "worker1")
+		assert.True(t, exists)
+		_, exists = GetTokenCounter(ctx, "worker1")
+		assert.True(t, exists)
 
-	// Verify token counters
-	_, exists = GetTokenCounter(ctx, "worker1")
-	assert.True(t, exists)
-	_, exists = GetTokenCounter(ctx, "invalid-worker")
-	assert.False(t, exists)
+		// Idle invalid worker counters deleted
+		_, exists = GetCounter(ctx, "invalid-worker")
+		assert.False(t, exists)
+		_, exists = GetTokenCounter(ctx, "invalid-worker")
+		assert.False(t, exists)
+	})
+
+	t.Run("inflight invalid counter preserved", func(t *testing.T) {
+		Init(&config.Config{}, &mockManagerAPI{})
+
+		inflightCounter := GetOrCreateCounter(ctx, "inflight-invalid-worker")
+		inflightCounter.Inc() // simulate inflight request
+		inflightTC := GetOrCreateTokenCounter(ctx, "inflight-invalid-worker")
+		inflightTC.Add(50)
+
+		CleanupInvalidCounters(ctx)
+
+		// Inflight invalid worker counters preserved
+		_, exists := GetCounter(ctx, "inflight-invalid-worker")
+		assert.True(t, exists)
+		_, exists = GetTokenCounter(ctx, "inflight-invalid-worker")
+		assert.True(t, exists)
+		assert.Equal(t, uint64(1), inflightCounter.Get())
+		assert.Equal(t, uint64(50), inflightTC.Get())
+	})
 }
 
 func TestEstimateTokens(t *testing.T) {
@@ -182,19 +212,35 @@ func TestCleanupUnhealthyCounter(t *testing.T) {
 	ctx := context.Background()
 	Init(&config.Config{}, nil)
 
-	// Add counters
-	c := GetOrCreateCounter(ctx, "unhealthy-worker")
-	c.Inc()
-	tc := GetOrCreateTokenCounter(ctx, "unhealthy-worker")
-	tc.Add(100)
+	t.Run("counter preserved when inflight requests exist", func(t *testing.T) {
+		c := GetOrCreateCounter(ctx, "unhealthy-worker-inflight")
+		c.Inc()
+		tc := GetOrCreateTokenCounter(ctx, "unhealthy-worker-inflight")
+		tc.Add(100)
 
-	CleanupUnhealthyCounter(ctx, "unhealthy-worker")
+		CleanupUnhealthyCounter(ctx, "unhealthy-worker-inflight")
 
-	// Verify cleanup
-	_, exists := GetCounter(ctx, "unhealthy-worker")
-	assert.False(t, exists)
-	_, exists = GetTokenCounter(ctx, "unhealthy-worker")
-	assert.False(t, exists)
+		// Counter should be preserved (inflight requests)
+		_, exists := GetCounter(ctx, "unhealthy-worker-inflight")
+		assert.True(t, exists)
+		_, exists = GetTokenCounter(ctx, "unhealthy-worker-inflight")
+		assert.True(t, exists)
+		assert.Equal(t, uint64(1), c.Get())
+		assert.Equal(t, uint64(100), tc.Get())
+	})
+
+	t.Run("counter deleted when no inflight requests", func(t *testing.T) {
+		GetOrCreateCounter(ctx, "unhealthy-worker-idle")
+		GetOrCreateTokenCounter(ctx, "unhealthy-worker-idle")
+
+		CleanupUnhealthyCounter(ctx, "unhealthy-worker-idle")
+
+		// Counter should be deleted (no inflight requests)
+		_, exists := GetCounter(ctx, "unhealthy-worker-idle")
+		assert.False(t, exists)
+		_, exists = GetTokenCounter(ctx, "unhealthy-worker-idle")
+		assert.False(t, exists)
+	})
 }
 
 func TestStartBackupCleanupTask(t *testing.T) {
@@ -214,4 +260,111 @@ func TestStartBackupCleanupTask(t *testing.T) {
 	// Verify cleanup
 	_, exists := GetCounter(ctx, "invalid-worker")
 	assert.False(t, exists)
+}
+
+func TestCounterLifecycle_UnhealthyAndReregister(t *testing.T) {
+	ctx := context.Background()
+	Init(&config.Config{}, &mockManagerAPI{})
+
+	url := "http://10.0.0.1:8080"
+
+	// 1. Simulate request arrival: Inc
+	counter := GetOrCreateCounter(ctx, url)
+	counter.Inc()
+	assert.Equal(t, uint64(1), counter.Get())
+
+	tokenCounter := GetOrCreateTokenCounter(ctx, url)
+	tokenCounter.Add(100)
+	assert.Equal(t, uint64(100), tokenCounter.Get())
+
+	// 2. Instance becomes unhealthy → CleanupUnhealthyCounter (counter preserved due to inflight)
+	CleanupUnhealthyCounter(ctx, url)
+
+	// Counter still exists, value unchanged
+	sameCounter := GetOrCreateCounter(ctx, url)
+	assert.Equal(t, counter, sameCounter) // same object
+	assert.Equal(t, uint64(1), sameCounter.Get())
+
+	// 3. Inflight request completes → Release
+	Release(ctx, url)
+	assert.Equal(t, uint64(0), counter.Get())
+
+	ReleasePrefillTokens(ctx, url, "dummy message with 10 chars")
+
+	// 4. Another Release does not underflow
+	Release(ctx, url)
+	assert.Equal(t, uint64(0), counter.Get()) // stays 0, no underflow
+
+	// 5. Instance re-registers → new request Inc
+	counter.Inc()
+	assert.Equal(t, uint64(1), counter.Get())
+
+	// 6. Request completes → Release
+	Release(ctx, url)
+	assert.Equal(t, uint64(0), counter.Get()) // back to zero
+
+	// 7. Multiple concurrent requests full cycle
+	counter.Inc()
+	counter.Inc()
+	counter.Inc()
+	assert.Equal(t, uint64(3), counter.Get())
+	Release(ctx, url)
+	Release(ctx, url)
+	Release(ctx, url)
+	assert.Equal(t, uint64(0), counter.Get()) // back to zero
+}
+
+func TestCounterLifecycle_CleanupBeforeRelease(t *testing.T) {
+	ctx := context.Background()
+	Init(&config.Config{}, &mockManagerAPI{})
+
+	url := "http://10.0.0.2:8080"
+
+	t.Run("cleanup deletes counter then release is no-op", func(t *testing.T) {
+		// 1. Request arrives → counter=1
+		counter := GetOrCreateCounter(ctx, url)
+		counter.Inc()
+		assert.Equal(t, uint64(1), counter.Get())
+
+		tc := GetOrCreateTokenCounter(ctx, url)
+		tc.Add(200)
+
+		// 2. Request finishes → Release → counter=0
+		Release(ctx, url)
+		assert.Equal(t, uint64(0), counter.Get())
+
+		// 3. Cleanup runs, sees counter=0, deletes it
+		CleanupUnhealthyCounter(ctx, url)
+		_, exists := GetCounter(ctx, url)
+		assert.False(t, exists) // counter deleted
+
+		// 4. A late/duplicate Release after cleanup should NOT create ghost counter
+		Release(ctx, url)
+
+		// Verify no ghost counter was created
+		_, exists = GetCounter(ctx, url)
+		assert.False(t, exists, "Release should not create ghost counter after cleanup")
+	})
+
+	t.Run("cleanup deletes token counter then ReleasePrefillTokens is no-op", func(t *testing.T) {
+		Init(&config.Config{}, &mockManagerAPI{})
+		tokenURL := "http://10.0.0.3:8080"
+
+		tc := GetOrCreateTokenCounter(ctx, tokenURL)
+		tc.Add(200)
+
+		// Sub all tokens so counter=0
+		tc.Sub(200)
+		assert.Equal(t, uint64(0), tc.Get())
+
+		// Cleanup deletes the token counter
+		CleanupUnhealthyCounter(ctx, tokenURL)
+		_, exists := GetTokenCounter(ctx, tokenURL)
+		assert.False(t, exists)
+
+		// Late ReleasePrefillTokens should not create ghost token counter
+		ReleasePrefillTokens(ctx, tokenURL, "hello world")
+		_, exists = GetTokenCounter(ctx, tokenURL)
+		assert.False(t, exists, "ReleasePrefillTokens should not create ghost token counter after cleanup")
+	})
 }

@@ -95,7 +95,8 @@ class InputBatch:
         self.scheduler_config = fd_config.scheduler_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
         self.speculative_decoding = self.speculative_config.method is not None
-        self.enable_mm = self.model_config.enable_mm
+        self.is_mm_model = self.model_config.enable_mm
+        self.enable_mm = fd_config.enable_mm_runtime
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
         self.enable_pd_reorder = False
@@ -225,6 +226,9 @@ class InputBatch:
                 model_config=self.model_config,
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
+            if self.is_mm_model:
+                self.image_features = None
+                self.image_features_list = None
 
         # Set block tables
         pre_max_block_num = (
@@ -310,6 +314,15 @@ class InputBatch:
                 dtype="float32",
             )
             self.cu_batch_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
+            # For mtp overlap
+            self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
+            self.accept_tokens_cpu = paddle.full(
+                shape=[max_num_seqs, max_draft_token_num + 1],
+                fill_value=0,
+                dtype="int64",
+            ).pin_memory()
+            self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
         if self.enable_mm:
             head_dim = self.model_config.head_dim
             if (
@@ -429,7 +442,11 @@ class InputBatch:
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
             swap_data(self.cu_batch_token_offset, i1, i2)
-            swap_data(self.stop_flags, i1, i2)
+            swap_data(self.seq_lens_decoder_cpu, i1, i2)
+            swap_data(self.prompt_lens_cpu, i1, i2)
+            swap_data(self.accept_tokens_cpu, i1, i2)
+            swap_data(self.accept_num_cpu, i1, i2)
+
         if self.enable_mm:
             if self.image_features_list is not None:
                 self.image_features_list[i1], self.image_features_list[i2] = (
@@ -617,6 +634,15 @@ class InputBatch:
                 fill_paddle_tensor(self, "step_seq_lens_this_time", 0)
                 fill_paddle_tensor(self, "draft_logits", -1)
                 fill_paddle_tensor(self, "cu_batch_token_offset", 0)
+                # for mtp overlap
+                self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
+                self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+                self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
+                self.accept_tokens_cpu = paddle.full(
+                    shape=[max_num_seqs, max_draft_token_num + 1],
+                    fill_value=0,
+                    dtype="int64",
+                ).pin_memory()
 
             # Reset multimodal related tensors
             if self.enable_mm:
@@ -649,6 +675,9 @@ class InputBatch:
                     model_config=self.model_config,
                     partial_rotary_factor=self.model_config.partial_rotary_factor,
                 )
+                if self.is_mm_model:
+                    self.image_features = None
+                    self.image_features_list = None
 
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
@@ -661,7 +690,7 @@ class InputBatch:
 
 class ProposerInputBatch(InputBatch):
     def __init__(self, fd_config: FDConfig, target_model_input_batch: InputBatch) -> None:
-        self.enable_mm = fd_config.model_config.enable_mm
+        self.enable_mm = fd_config.enable_mm_runtime
         self.num_model_steps = fd_config.speculative_config.num_model_steps
         self.index_to_batch_id = {}
         self.target_model_input_batch = target_model_input_batch
@@ -675,7 +704,6 @@ class ProposerInputBatch(InputBatch):
     def init_share_inputs(self):
         # share with targe model
         self.enable_pd_reorder = getattr(self.target_model_input_batch, "enable_pd_reorder", False)
-        self.index_to_batch_id = getattr(self.target_model_input_batch, "index_to_batch_id", {})
 
         self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
         self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
@@ -692,6 +720,7 @@ class ProposerInputBatch(InputBatch):
         self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
+        self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
         if current_platform.is_cuda():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
@@ -830,6 +859,11 @@ class ProposerInputBatch(InputBatch):
         )
         # attn_mask
         if self.enable_mm:
+            self.decode_states = paddle.full(
+                [self.scheduler_config.max_num_seqs, self.speculative_config.num_speculative_tokens + 1],
+                -1,
+                dtype="int32",
+            )
             self.attn_mask_offsets = paddle.full(
                 shape=[self.scheduler_config.max_num_seqs * self.model_config.max_model_len],
                 fill_value=-1,
@@ -839,11 +873,6 @@ class ProposerInputBatch(InputBatch):
                 [self.scheduler_config.max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
             )
             self.attn_mask_offsets_decoder = paddle.full([self.scheduler_config.max_num_seqs, 1], -1, dtype="int32")
-            self.decode_states = paddle.full(
-                [self.scheduler_config.max_num_seqs, self.speculative_config.num_speculative_tokens + 1],
-                -1,
-                dtype="int32",
-            )
 
     def swap_states(self, i1, i2) -> None:
         def swap_data(tensor, idx1, idx2):
@@ -852,6 +881,7 @@ class ProposerInputBatch(InputBatch):
             tensor[idx1] = tensor[idx2].clone()
             tensor[idx2] = temp
 
+        self.index_to_batch_id[i1], self.index_to_batch_id[i2] = self.index_to_batch_id[i2], self.index_to_batch_id[i1]
         swap_data(self.block_tables, i1, i2)
         swap_data(self.input_ids, i1, i2)
         swap_data(self.input_ids_cpu, i1, i2)
@@ -859,48 +889,14 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.seq_lens_encoder, i1, i2)
         swap_data(self.seq_lens_decoder, i1, i2)
         swap_data(self.step_idx, i1, i2)
-        swap_data(self.stop_flags, i1, i2)
-        swap_data(self.not_need_stop, i1, i2)
         swap_data(self.pre_ids, i1, i2)
-        if current_platform.is_cuda():
-            swap_data(self.cu_seqlens_q_output, i1, i2)
-            swap_data(self.batch_id_per_token_output, i1, i2)
-            swap_data(self.token_ids_all, i1, i2)
-        else:
-            swap_data(self.output_cum_offsets, i1, i2)
-            swap_data(self.output_padding_offset, i1, i2)
-        swap_data(self.ids_remove_padding, i1, i2)
-        swap_data(self.batch_id_per_token, i1, i2)
-        swap_data(self.cu_seqlens_q, i1, i2)
-        swap_data(self.cu_seqlens_k, i1, i2)
-
-        swap_data(self.target_hidden_states, i1, i2)
-
-        swap_data(self.draft_tokens, i1, i2)
         swap_data(self.encoder_block_lens, i1, i2)
-
-        swap_data(self.is_block_step, i1, i2)
-        swap_data(self.batch_drop, i1, i2)
-        swap_data(self.used_list_len, i1, i2)
-
-        if self.num_model_steps > 1:
-            swap_data(self.last_seq_lens_this_time, i1, i2)
-
         swap_data(self.input_ids_len, i1, i2)
-        swap_data(self.first_token_hidden_states, i1, i2)
-
-        swap_data(self.batch_token_num, i1, i2)
-        swap_data(self.next_token_num, i1, i2)
-        swap_data(self.cu_batch_token_offset, i1, i2)
-        swap_data(self.cu_next_token_offset, i1, i2)
         swap_data(self.mask_rollback, i1, i2)
         swap_data(self.recompute_token_num, i1, i2)
-
         if self.enable_mm:
-            swap_data(self.attn_mask_offsets, i1, i2)
             swap_data(self.attn_mask_offsets_full, i1, i2)
             swap_data(self.attn_mask_offsets_decoder, i1, i2)
-            swap_data(self.decode_states, i1, i2)
 
     def reset_model_inputs(self) -> None:
         """
@@ -927,6 +923,7 @@ class ProposerInputBatch(InputBatch):
             self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
             self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
             self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
+            self.index_to_batch_id = {}
             if current_platform.is_cuda():
                 if "token_ids_all" in self.target_model_input_batch:
                     self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
@@ -947,8 +944,6 @@ class ProposerInputBatch(InputBatch):
                     self.token_ids_all = None
             else:
                 self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
-            self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
-            self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
             self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
             self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
             self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -1032,24 +1027,38 @@ class ProposerInputBatch(InputBatch):
 
             # Reset multimodal tensors if enabled
             if self.enable_mm:
+                fill_paddle_tensor(self, "decode_states", -1)
                 fill_paddle_tensor(self, "attn_mask_offsets", -1)
                 fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
                 fill_paddle_tensor(self, "attn_mask_offsets_decoder", -1)
-                fill_paddle_tensor(self, "decode_states", -1)
 
             logger.info("model_inputs reset completed")
         except Exception as e:
             logger.error(f"Resetting model inputs failed, skipping reset, error message is {e}")
 
 
-def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch):
-    swapped = set()
-    for i, target in input_batch.index_to_batch_id.items():
-        if i in swapped or target in swapped or i == target:
+def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch, target_model_input_batch: dict):
+    mtp_index_2_mtp_id = {v: k for k, v in input_batch.index_to_batch_id.items()}
+    for target_model_id in target_model_input_batch:
+        target_model_index = target_model_input_batch[target_model_id]
+        if input_batch.index_to_batch_id[target_model_id] == target_model_index:
             continue
-        input_batch.swap_states(i, target)
-        swapped.add(i)
-        swapped.add(target)
+        mtp_id = mtp_index_2_mtp_id[target_model_index]
+        v1 = input_batch.index_to_batch_id[target_model_id]
+        v2 = input_batch.index_to_batch_id[mtp_id]
+        input_batch.swap_states(target_model_id, mtp_id)
+        # update mapping
+        mtp_index_2_mtp_id[v1] = mtp_id
+        mtp_index_2_mtp_id[v2] = target_model_id
+
+    keys_to_remove = input_batch.index_to_batch_id.keys() - target_model_input_batch.keys()
+
+    for key in keys_to_remove:
+        del input_batch.index_to_batch_id[key]
+        for k, v in mtp_index_2_mtp_id.items():
+            if v == key:
+                del mtp_index_2_mtp_id[k]
+                break
 
 
 def reorder_split_prefill_and_decode(input_batch: InputBatch):
@@ -1096,6 +1105,7 @@ def _recover_tensor(recover_tensor, index_to_batch_id_list):
     """
     sort_len = len(index_to_batch_id_list)
     if isinstance(recover_tensor.place, paddle.CUDAPinnedPlace):
+        recover_tensor = recover_tensor.cpu()
         recover_res_tensor = paddle.empty_like(recover_tensor, device="cpu")
     else:
         recover_res_tensor = paddle.empty_like(recover_tensor)

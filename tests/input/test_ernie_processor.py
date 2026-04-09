@@ -116,8 +116,7 @@ class TestErnie4_5ProcessorProcessResponseDictStreaming(unittest.TestCase):
         }
         kwargs = {"enable_thinking": True}
 
-        with patch("fastdeploy.input.ernie4_5_processor.data_processor_logger"):
-            result = self.processor.process_response_dict_normal(response_dict, **kwargs)
+        result = self.processor.process_response_dict_normal(response_dict, **kwargs)
 
         self.mock_reasoning_parser.extract_reasoning_content.assert_called_once()
         self.assertEqual(result["outputs"]["reasoning_content"], "Mock reasoning content")

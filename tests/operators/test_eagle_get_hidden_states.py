@@ -135,7 +135,7 @@ class TestEagleGetHiddenStates(unittest.TestCase):
 
         input = np.random.randint(0, 10, (input_token_num, dim_embed), dtype=np.int32)
         input_tensor = paddle.to_tensor(input, dtype=paddle.float16)
-        out = eagle_get_hidden_states(
+        out, output_token_num = eagle_get_hidden_states(
             input_tensor,
             seq_lens_this_time_tensor,
             seq_lens_encoder_tensor,
@@ -157,7 +157,8 @@ class TestEagleGetHiddenStates(unittest.TestCase):
             base_model_seq_lens_encoder_tensor,
             actual_draft_token_num,
         )
-        np.testing.assert_allclose(out.numpy(), out_ref.numpy())
+        actual_num = int(output_token_num)
+        np.testing.assert_allclose(out[:actual_num].numpy(), out_ref.numpy())
 
 
 if __name__ == "__main__":

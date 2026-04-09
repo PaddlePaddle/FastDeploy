@@ -134,7 +134,6 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
       prefill_one_step_stop = true;
     }
   }
-  auto not_need_stop_gpu = not_need_stop.copy_to(stop_flags.place(), false);
   speculate_schedula_cache<BlockSize>
       <<<1, BlockSize, 0, seq_lens_this_time.stream()>>>(
           draft_tokens.data<int64_t>(),
@@ -150,7 +149,7 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
           const_cast<int *>(accept_num.data<int>()),
           const_cast<int64_t *>(accept_tokens.data<int64_t>()),
           const_cast<bool *>(is_block_step.data<bool>()),
-          const_cast<bool *>(not_need_stop_gpu.data<bool>()),
+          const_cast<bool *>(not_need_stop.data<bool>()),
           real_bsz,
           max_bsz,
           max_next_step_tokens,
@@ -159,11 +158,6 @@ void SpeculateScheduleCache(const paddle::Tensor &draft_tokens,
           block_size,
           block_num_per_seq,
           prefill_one_step_stop);
-
-  auto not_need_stop_cpu =
-      not_need_stop_gpu.copy_to(not_need_stop.place(), true);
-  bool *not_need_stop_data = const_cast<bool *>(not_need_stop.data<bool>());
-  not_need_stop_data[0] = not_need_stop_cpu.data<bool>()[0];
 }
 
 PD_BUILD_STATIC_OP(speculate_schedule_cache)

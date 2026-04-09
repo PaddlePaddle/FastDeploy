@@ -25,7 +25,7 @@ __global__ void speculate_update_value_by_repeat_times(
     const T *presence_score,
     const float *temperatures,
     T *logits,
-    const int *output_padding_offset,
+    const int *batch_id_per_token_output,
     const int64_t bs,
     const int64_t length,
     const int64_t token_num,
@@ -46,17 +46,16 @@ __global__ void speculate_update_value_by_repeat_times(
   if (token_end >= token_num) {
     token_end = token_num - 1;
   }
-  int output_padding_offset_start_lm;
-  int output_padding_offset_end_lm;
-  GM2LM_ASYNC(output_padding_offset + token_start,
-              (void *)&output_padding_offset_start_lm,
+  int batch_id_per_token_output_start_lm;
+  int batch_id_per_token_output_end_lm;
+  GM2LM_ASYNC(batch_id_per_token_output + token_start,
+              (void *)&batch_id_per_token_output_start_lm,
               sizeof(int));
-  GM2LM(output_padding_offset + token_end,
-        (void *)&output_padding_offset_end_lm,
+  GM2LM(batch_id_per_token_output + token_end,
+        (void *)&batch_id_per_token_output_end_lm,
         sizeof(int));
-  int64_t bs_start =
-      (token_start + output_padding_offset_start_lm) / max_seq_len;
-  int64_t bs_end = (token_end + output_padding_offset_end_lm) / max_seq_len;
+  int64_t bs_start = batch_id_per_token_output_start_lm;
+  int64_t bs_end = batch_id_per_token_output_end_lm;
   const int param_len = 256;
   // ncores = 64 for xpu2
   __shared__ __simd__ float alpha_buf[param_len * 64];
@@ -89,13 +88,13 @@ __global__ void speculate_update_value_by_repeat_times(
   const int buffer_len = 512;
   __simd__ float logits_lm[buffer_len];
   int times_lm[buffer_len];
-  int output_padding_offset_lm[buffer_len];
+  int batch_id_per_token_output_lm[buffer_len];
 
   for (int64_t i = start; i < end; i += buffer_len) {
     int read_len = min(end - i, buffer_len);
     GM2LM_ASYNC(logits + i, logits_lm, read_len * sizeof(T));
-    GM2LM_ASYNC(output_padding_offset + i / length,
-                output_padding_offset_lm,
+    GM2LM_ASYNC(batch_id_per_token_output + i / length,
+                batch_id_per_token_output_lm,
                 ((read_len + length - 1) / length + 1) * sizeof(int));
     GM2LM(repeat_times + i, times_lm, read_len * sizeof(int));
     primitive_cast<T, float>((const T *)(logits_lm), logits_lm, read_len);
@@ -104,7 +103,7 @@ __global__ void speculate_update_value_by_repeat_times(
       logit_now = logits_lm[j];
       int token_idx = (i + j) / length;
       int bs_idx =
-          (token_idx + output_padding_offset_lm[token_idx - i / length]) /
+          (token_idx + batch_id_per_token_output_lm[token_idx - i / length]) /
           max_seq_len;
       if (bs_idx >= bs) {
         continue;
@@ -134,7 +133,7 @@ __global__ void speculate_update_value_by_repeat_times(
       const DATA_TYPE *presence_score,                             \
       const float *temperatures,                                   \
       DATA_TYPE *logits,                                           \
-      const int *output_padding_offset,                            \
+      const int *batch_id_per_token_output,                        \
       const int64_t bs,                                            \
       const int64_t length,                                        \
       const int64_t token_num,                                     \
@@ -151,7 +150,7 @@ __global__ void speculate_update_value_by_repeat_times_simd(
     const T *presence_score,    // [bs]
     const float *temperatures,  // [bs]
     T *logits,                  // [bs * length]
-    const int *output_padding_offset,
+    const int *batch_id_per_token_output,
     const int64_t bs,
     const int64_t length,
     const int64_t token_num,
@@ -198,7 +197,7 @@ __global__ void speculate_update_value_by_repeat_times_simd(
   const int buffer_len = 512;
   __simd__ float logits_lm[buffer_len];
   __simd__ float times_lm[buffer_len];
-  int output_padding_offset_lm[buffer_len];
+  int batch_id_per_token_output_lm[buffer_len];
 
   float32x16_t logits_;
   float32x16_t logits_tmp_0;
@@ -208,8 +207,8 @@ __global__ void speculate_update_value_by_repeat_times_simd(
   for (int64_t i = start; i < end; i += buffer_len) {
     int read_len = min(end - i, buffer_len);
     GM2LM_ASYNC(logits + i, logits_lm, read_len * sizeof(T));
-    GM2LM_ASYNC(output_padding_offset + i / length,
-                output_padding_offset_lm,
+    GM2LM_ASYNC(batch_id_per_token_output + i / length,
+                batch_id_per_token_output_lm,
                 ((read_len + length - 1) / length + 1) * sizeof(int));
     GM2LM(repeat_times + i, times_lm, read_len * sizeof(int));
     primitive_cast<T, float>((const T *)(logits_lm), logits_lm, read_len);
@@ -220,9 +219,7 @@ __global__ void speculate_update_value_by_repeat_times_simd(
       time_ = vload_lm_float32x16(times_lm + j);
       logits_ = vload_lm_float32x16(logits_lm + j);
       int token_idx = (i + j) / length;
-      int bs_idx =
-          (token_idx + output_padding_offset_lm[token_idx - i / length]) /
-          max_seq_len;
+      int bs_idx = batch_id_per_token_output_lm[token_idx - i / length];
       if (bs_idx >= bs) {
         continue;
       }
@@ -269,7 +266,7 @@ __global__ void speculate_update_value_by_repeat_times_simd(
       const DATA_TYPE *presence_score,                                  \
       const float *temperatures,                                        \
       DATA_TYPE *logits,                                                \
-      const int *output_padding_offset,                                 \
+      const int *batch_id_per_token_output,                             \
       const int64_t bs,                                                 \
       const int64_t length,                                             \
       const int64_t token_num,                                          \

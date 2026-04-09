@@ -41,7 +41,7 @@ namespace api = baidu::xpu::api;
 std::vector<paddle::Tensor> TopPCandidates(
     const paddle::Tensor& probs,
     const paddle::Tensor& top_p,
-    const paddle::Tensor& output_padding_offset,
+    const paddle::Tensor& batch_id_per_token_output,
     int candidates_len,
     int max_seq_len) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
@@ -77,7 +77,7 @@ std::vector<paddle::Tensor> TopPCandidates(
                 ctx,
                 reinterpret_cast<const XPUTypeBF16*>(probs.data<bf16_data_t>()),
                 reinterpret_cast<const XPUTypeBF16*>(top_p.data<bf16_data_t>()),
-                output_padding_offset.data<int>(),
+                batch_id_per_token_output.data<int>(),
                 verify_tokens.data<int64_t>(),
                 reinterpret_cast<XPUTypeBF16*>(
                     verify_scores.data<bf16_data_t>()),
@@ -100,7 +100,7 @@ std::vector<paddle::Tensor> TopPCandidates(
                 ctx,
                 reinterpret_cast<const XPUTypeFP16*>(probs.data<fp16_data_t>()),
                 reinterpret_cast<const XPUTypeFP16*>(top_p.data<fp16_data_t>()),
-                output_padding_offset.data<int>(),
+                batch_id_per_token_output.data<int>(),
                 verify_tokens.data<int64_t>(),
                 reinterpret_cast<XPUTypeFP16*>(
                     verify_scores.data<fp16_data_t>()),
@@ -120,7 +120,7 @@ std::vector<paddle::Tensor> TopPCandidates(
                     ctx,
                     probs.data<float>(),
                     top_p.data<float>(),
-                    output_padding_offset.data<int>(),
+                    batch_id_per_token_output.data<int>(),
                     verify_tokens.data<int64_t>(),
                     verify_scores.data<float>(),
                     actual_candidate_lens.data<int>(),
@@ -139,7 +139,7 @@ std::vector<paddle::Tensor> TopPCandidates(
 std::vector<std::vector<int64_t>> TopPCandidatesInferShape(
     const std::vector<int64_t>& probs_shape,
     const std::vector<int64_t>& top_p_shape,
-    const std::vector<int64_t>& output_padding_offset_shape,
+    const std::vector<int64_t>& batch_id_per_token_output_shape,
     int max_candidates_len) {
   int token_num = probs_shape[0];
   return {{token_num, max_candidates_len},
@@ -150,12 +150,12 @@ std::vector<std::vector<int64_t>> TopPCandidatesInferShape(
 std::vector<paddle::DataType> TopPCandidatesInferDtype(
     const paddle::DataType& probs_dtype,
     const paddle::DataType& top_p_dtype,
-    const paddle::DataType& output_padding_offset_dtype) {
+    const paddle::DataType& batch_id_per_token_output_dtype) {
   return {probs_dtype, paddle::DataType::INT64, paddle::DataType::INT32};
 }
 
 PD_BUILD_STATIC_OP(top_p_candidates)
-    .Inputs({"probs", "top_p", "output_padding_offset"})
+    .Inputs({"probs", "top_p", "batch_id_per_token_output"})
     .Outputs({"verify_scores", "verify_tokens", "actual_candidate_lens"})
     .Attrs({"candidates_len: int", "max_seq_len: int"})
     .SetKernelFn(PD_KERNEL(TopPCandidates))

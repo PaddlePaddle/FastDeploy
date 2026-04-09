@@ -637,3 +637,61 @@ class TestFusedMoeTritonBackend:
             layer, paddle.zeros([0, layer.hidden_size], dtype="float32"), DummyGate(layer.num_local_experts)
         )
         assert out.shape == [0, layer.hidden_size]
+
+    def test_blockwise_process_weights_ue8m0_branch(self, fake_ops, monkeypatch):
+        """Test the quant_weight_ue8m0 branch in BlockWiseFP8MoEMethod.process_weights_after_loading."""
+        quant_config = DummyQuantConfig(is_checkpoint_bf16=True, weight_block_size=(128, 128))
+        quant_config.deepgemm_scale_ue8m0 = True
+        layer = DummyLayer(quant_config, weight_dtype="bfloat16")
+        method = backend.BlockWiseFP8MoEMethod(quant_config)
+        method.create_weights(layer, model_format="torch")
+        method.model_format = "torch"
+
+        # Set FD_USE_PHI_FP8_QUANT to False to enter the target branch
+        monkeypatch.setattr(backend.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False)
+        monkeypatch.setattr(backend, "weight_fully_copied", lambda tensor: True)
+
+        # Mock quant_weight_ue8m0 and transform_scale_ue8m0
+        quant_calls = []
+        transform_calls = []
+
+        def fake_quant_weight_ue8m0(weight_dequant, weight_block_size):
+            quant_calls.append({"weight_shape": weight_dequant.shape, "block_size": weight_block_size})
+            # Return fake quantized weight and scale
+            n, k = weight_dequant.shape[-2], weight_dequant.shape[-1]
+            out_w = paddle.zeros(weight_dequant.shape, dtype=paddle.float8_e4m3fn)
+            out_s = paddle.ones([n, (k + 127) // 128], dtype="float32")
+            return out_w, out_s
+
+        def fake_transform_scale_ue8m0(sf, mn, weight_block_size=None):
+            transform_calls.append({"sf_shape": sf.shape, "mn": mn, "block_size": weight_block_size})
+            # Return fake transformed scale
+            return paddle.ones([sf.shape[0], sf.shape[1], 1], dtype="uint8")
+
+        monkeypatch.setattr(backend, "quant_weight_ue8m0", fake_quant_weight_ue8m0)
+        monkeypatch.setattr(backend, "transform_scale_ue8m0", fake_transform_scale_ue8m0)
+        monkeypatch.setattr(backend, "free_tensor", lambda tensor: None)
+        monkeypatch.setattr(backend, "process_weight_transpose", lambda _layer, name: None)
+
+        # Create unquantized weights for the layer
+        num_experts = layer.num_local_experts
+        hidden_size = layer.hidden_size
+        moe_intermediate_size = layer.moe_intermediate_size
+
+        # Create weight attributes that the method expects
+        layer.up_gate_proj_weight = layer.create_parameter(
+            shape=[num_experts, moe_intermediate_size * 2, hidden_size],
+            dtype="bfloat16",
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        layer.down_proj_weight = layer.create_parameter(
+            shape=[num_experts, hidden_size, moe_intermediate_size],
+            dtype="bfloat16",
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+
+        method.process_weights_after_loading(layer)
+
+        # Verify the quant_weight_ue8m0 branch was executed
+        assert len(quant_calls) > 0, "quant_weight_ue8m0 should have been called"
+        assert len(transform_calls) > 0, "transform_scale_ue8m0 should have been called"

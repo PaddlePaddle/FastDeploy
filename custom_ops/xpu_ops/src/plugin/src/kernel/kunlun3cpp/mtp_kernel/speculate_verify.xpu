@@ -95,50 +95,31 @@ topp_sampling_kernel(__global_ptr__ const int64_t *candidate_ids,
 template <bool ENABLE_TOPP, bool USE_TOPK>
 __global__ void speculate_verify(
     const int64_t *sampled_token_ids,
-    int64_t *accept_tokens,  // out [real_bsz, max_draft_tokens], 输出最终接收的
-                             // token（通过验证或采样）
-    int *accept_num,  // out [real_bsz], 每个序列最终接受的 token
-                      // 数量（只统计通过验证的）
-    int64_t
-        *step_idx,  // out [real_bsz], 记录每个bid序列已经生成或接受的token数
-    bool *stop_flags,  // out [real_bsz], 每个序列的停止标志，遇到 <eos>
-                       // 或长度超限时置 true
-    const int *seq_lens_encoder,  // [real_bsz], 每个样本 encoder
-                                  // 输入长度，用于判断 prefill 阶段
-    const int *seq_lens_decoder,  // [real_bsz], 每个样本 decoder 输出的 token
-                                  // 数（即 draft token 数）
-    const int64_t *
-        draft_tokens,  // [real_bsz, max_draft_tokens], draft model 输出的 token
-    const int *actual_draft_token_nums,  // [real_bsz], draft_tokens
-                                         // 中实际有效的 token 数量
+    int64_t *accept_tokens,              // out [real_bsz, max_draft_tokens]
+    int *accept_num,                     // out [real_bsz],
+    int64_t *step_idx,                   // out [real_bsz],
+    bool *stop_flags,                    // out [real_bsz],
+    const int *seq_lens_encoder,         // [real_bsz]
+    const int *seq_lens_decoder,         // [real_bsz]
+    const int64_t *draft_tokens,         // [real_bsz, max_draft_tokens],
+    const int *actual_draft_token_nums,  // [real_bsz], 实际有效的 token 数量
     const float *dev_curand_states,      // used for random
-    const float *topp,                   // [real_bsz]，TopP 阈值（如
-                        // 0.9），用于控制核采样截断概率和候选数
-    const int *seq_lens_this_time,  // [real_bsz], 本轮 verify
-                                    // 阶段每个样本实际参与验证的 token 数
+    const float *topp,                   // [real_bsz]，
+    const int *seq_lens_this_time,       // [real_bsz],
     const int64_t
-        *verify_tokens,  // [sum(seq_lens_this_time), max_candidate_len], verify
-                         // decoder 输出的候选 token
-    const float
-        *verify_scores,  // 同上， 每个 verify token 对应的概率分布，用于采样
+        *verify_tokens,  // [sum(seq_lens_this_time), max_candidate_len]
+    const float *verify_scores,
     const int64_t *max_dec_len,  // [real_bsz],
-                                 // 每个样本允许生成的最大长度（超过则触发终止）
-    const int64_t
-        *end_tokens,  // [end_length], 终止 token 列表（如 <eos>），命中即终止
-    const bool *is_block_step,  // [real_bsz], 指示是否当前为 block step（为
-                                // true 时跳过 verify）
-    const int
-        *output_cum_offsets,  // [real_bsz], verify_tokens 的起始偏移，用于定位
-                              // token 所在 verify 索引
-    const int *actual_candidate_len,  // [sum(seq_lens_this_time)], 每个 verify
-                                      // token 实际可用候选数（用于 TopP 截断）
-    const int real_bsz,          // batch size
-    const int max_draft_tokens,  // scalar, 每个样本最多允许的 draft token 数
+    const int64_t *end_tokens,   // [end_length]
+    const bool *is_block_step,   // [real_bsz],
+    const int *cu_seqlens_q_output,
+    const int *actual_candidate_len,  // [sum(seq_lens_this_time)],
+    const int real_bsz,               // batch size
+    const int max_draft_tokens,
     const int end_length,
-    const int max_seq_len,  // scalar, 每个序列的最大 token 数（用于偏移计算）
-    const int max_candidate_len,  // scalar, 每个 verify token
-                                  // 的最大候选数（用于验证或采样）
-    const int verify_window,  // scalar, TopK 验证窗口（允许连续 top1 匹配次数）
+    const int max_seq_len,
+    const int max_candidate_len,
+    const int verify_window,
     const bool prefill_one_step_stop,
     const bool benchmark_mode,
     const bool accept_all_drafts,
@@ -151,7 +132,7 @@ __global__ void speculate_verify(
     if (is_block_step[bid]) {
       continue;
     }
-    const int start_token_id = bid * max_seq_len - output_cum_offsets[bid];
+    const int start_token_id = cu_seqlens_q_output[bid];
     if (stop_flags[bid]) {
       stop_flag_now_int = 1;
     } else {  // 这里prefill阶段也会进入，但是因为draft

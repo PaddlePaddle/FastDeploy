@@ -12,9 +12,9 @@ concurrency:
 
 jobs:
   cancel:
-    name: Cancel Coverage for ${{ github.event.pull_request.number }}
+    name: Cancel CI_XPU for ${{ github.event.pull_request.number }}
     runs-on: ubuntu-latest
     steps:
-      - name: Cancel Coverage
+      - name: Cancel CI_XPU
         run: |
           exit 0

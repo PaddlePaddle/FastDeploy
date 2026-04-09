@@ -53,7 +53,9 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
                               int message_flag,  // Target: 3, Draft: 4
                               int64_t rank_id,
                               bool save_each_rank) {
-  if (!save_each_rank && rank_id > 0) {
+  // NOTE(yaohuicong): Skip non-zero TP ranks — they share identical sampling
+  // outputs, so only rank 0 needs to send results to the message queue.
+  if (rank_id > 0) {
     return;
   }
 

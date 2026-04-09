@@ -122,6 +122,7 @@ func SelectWorker(ctx context.Context, message string) (string, error) {
 	workers := WorkerMapToList(ctx, "mixed")
 	selectedWorkerURL, err := scheduler_handler.SelectWorker(ctx, workers, message, "mixed")
 	if err != nil {
+		logger.Error(ctx, "Failed to select mixed worker: %v", err)
 		return "", err
 	}
 	return selectedWorkerURL, nil
@@ -139,6 +140,7 @@ func SelectWorkerPair(ctx context.Context, message string) (string, string, erro
 	logger.Info(ctx,"before SelectWorker prefill. ts_ms=%s", time.Now().Format("2006-01-02 15:04:05.000"))
 	selectedPrefillWorkerURL, err := scheduler_handler.SelectWorker(ctx, prefillWorkers, message, "prefill")
 	if err != nil {
+		logger.Error(ctx, "Failed to select prefill worker: %v", err)
 		return "", "", err
 	}
 	logger.Info(ctx,"before SelectWorker decode, after prefill. ts_ms=%s", time.Now().Format("2006-01-02 15:04:05.000"))

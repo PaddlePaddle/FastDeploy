@@ -26,6 +26,20 @@ from pathlib import Path
 from fastdeploy import envs
 
 
+class MaxLevelFilter(logging.Filter):
+    """过滤低于指定级别的日志记录。
+
+    用于将 INFO/DEBUG 路由到 stdout，ERROR/CRITICAL 路由到 stderr。
+    """
+
+    def __init__(self, level):
+        super().__init__()
+        self.level = logging._nameToLevel.get(level, level)
+
+    def filter(self, record):
+        return record.levelno < self.level
+
+
 def setup_logging(log_dir=None, config_file=None):
     """
     设置FastDeploy的日志配置
@@ -41,7 +55,7 @@ def setup_logging(log_dir=None, config_file=None):
 
     # 使用环境变量中的日志目录，如果没有则使用传入的参数或默认值
     if log_dir is None:
-        log_dir = getattr(envs, "FD_LOG_DIR", "logs")
+        log_dir = getattr(envs, "FD_LOG_DIR", "log")
 
     # 确保日志目录存在
     Path(log_dir).mkdir(parents=True, exist_ok=True)
@@ -58,6 +72,12 @@ def setup_logging(log_dir=None, config_file=None):
     default_config = {
         "version": 1,
         "disable_existing_loggers": False,
+        "filters": {
+            "below_error": {
+                "()": "fastdeploy.logger.setup_logging.MaxLevelFilter",
+                "level": "ERROR",
+            }
+        },
         "formatters": {
             "standard": {
                 "class": "logging.Formatter",
@@ -71,11 +91,20 @@ def setup_logging(log_dir=None, config_file=None):
             },
         },
         "handlers": {
-            "console": {
+            # 控制台标准输出，用于 INFO/DEBUG（低于 ERROR 级别）
+            "console_stdout": {
                 "class": "logging.StreamHandler",
                 "level": FASTDEPLOY_LOGGING_LEVEL,
+                "filters": ["below_error"],
                 "formatter": "colored",
                 "stream": "ext://sys.stdout",
+            },
+            # 控制台错误输出，用于 ERROR/CRITICAL
+            "console_stderr": {
+                "class": "logging.StreamHandler",
+                "level": "ERROR",
+                "formatter": "colored",
+                "stream": "ext://sys.stderr",
             },
             # 默认错误日志，保留最新1个小时的日志，位置在log/error.log
             "error_file": {
@@ -122,7 +151,14 @@ def setup_logging(log_dir=None, config_file=None):
             # 默认日志记录器,全局共享
             "fastdeploy": {
                 "level": "DEBUG",
-                "handlers": ["error_file", "default_file", "error_archive", "default_archive"],
+                "handlers": [
+                    "console_stdout",
+                    "console_stderr",
+                    "error_file",
+                    "default_file",
+                    "error_archive",
+                    "default_archive",
+                ],
                 "propagate": False,
             }
         },

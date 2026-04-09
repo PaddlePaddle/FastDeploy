@@ -26,6 +26,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
+from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -150,9 +151,7 @@ class Glm4Moe(nn.Layer):
             output_size=fd_config.model_config.n_routed_experts,
             with_bias=False,
             skip_quant=True,
-            weight_dtype=(
-                "float32" if fd_config.load_config.dynamic_load_weight or fd_config.model_config.moe_gate_fp32 else ""
-            ),
+            weight_dtype=("float32" if fd_config.model_config.moe_gate_fp32 else ""),
         )
         self.gate.e_score_correction_bias = self.create_parameter(
             shape=[1, fd_config.model_config.n_routed_experts],
@@ -160,8 +159,16 @@ class Glm4Moe(nn.Layer):
             default_initializer=paddle.nn.initializer.Constant(0),
         )
 
+        # In pure-TP mode (tp>1, ep=1) both branches return partial sums, so we
+        # defer the all-reduce to after combining them — saving one collective.
+        # In all other modes (EP, EP+attn-TP, no parallelism) each branch handles
+        # its own reduction internally (reduce_results default=True), so we must
+        # NOT add an extra all-reduce here.
+        self.merge_ffn_tp = self.use_tp and not self.use_ep
+
         self.experts = FusedMoE(
             fd_config,
+            reduce_results=not self.merge_ffn_tp,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.n_routed_experts,
@@ -173,6 +180,7 @@ class Glm4Moe(nn.Layer):
             layer_idx=layer_id,
             gate_correction_bias=self.gate.e_score_correction_bias,
             weight_key_map=weight_key_map,
+            topk_reduce_func=lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
         )
 
         if self.n_shared_experts > 0:
@@ -182,14 +190,16 @@ class Glm4Moe(nn.Layer):
                 intermediate_size=shared_experts_intermediate_size,
                 layer_id=layer_id,
                 prefix=f"{prefix}.shared_experts",
+                reduce_results=not self.merge_ffn_tp,
             )
 
     def forward(self, x, forward_meta: ForwardMeta = None):
         out = self.experts(x, self.gate, forward_meta)
         if self.n_shared_experts > 0:
-            shared_experts_out = self.shared_experts(x)
-            out = out + shared_experts_out
-
+            out = out + self.shared_experts(x)
+        if self.merge_ffn_tp:
+            # Both branches produced partial sums; combine first, then single all-reduce.
+            out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
 

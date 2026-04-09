@@ -18,6 +18,8 @@ var (
 )
 
 type contextKey string
+const TraceIDKey contextKey = "trace_id"
+const ReqIDKey contextKey = "req_id"
 const RequestIDKey contextKey = "request_id"
 const SessionIDKey contextKey = "session_id"
 
@@ -63,6 +65,12 @@ func contextPrefix(ctx context.Context) string {
 		return ""
 	}
 	var prefix string
+	if tid, ok := ctx.Value(TraceIDKey).(string); ok && tid != "" {
+		prefix += "[trace_id:" + tid + "] "
+	}
+	if reqID, ok := ctx.Value(ReqIDKey).(string); ok && reqID != "" {
+		prefix += "[req_id:" + reqID + "] "
+	}
 	if sid, ok := ctx.Value(SessionIDKey).(string); ok && sid != "" {
 		prefix += "[session_id:" + sid + "] "
 	}

@@ -40,7 +40,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
                      const paddle::Tensor &max_dec_len,
                      const paddle::Tensor &end_tokens,
                      const paddle::Tensor &is_block_step,
-                     const paddle::Tensor &output_cum_offsets,
+                     const paddle::Tensor &cu_seqlens_q_output,
                      const paddle::Tensor &actual_candidate_len,
                      const paddle::Tensor &actual_draft_token_nums,
                      const paddle::Tensor &topp,
@@ -91,20 +91,21 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
     std::mt19937_64 engine(infer_seed[i]);
     dev_curand_states_cpu.push_back(dist(engine));
   }
-  float *dev_curand_states_xpu;
+  float *dev_curand_states = dev_curand_states_cpu.data();
+  auto dev_curand_states_tensor =
+      paddle::empty({static_cast<int64_t>(dev_curand_states_cpu.size())},
+                    paddle::DataType::FLOAT32,
+                    draft_tokens.place());
+  int ret;
   if (xpu_ctx_flag) {
-    xpu::ctx_guard RAII_GUARD(ctx);
-    dev_curand_states_xpu =
-        RAII_GUARD.alloc<float>(dev_curand_states_cpu.size());
-    xpu_memcpy(dev_curand_states_xpu,
-               dev_curand_states_cpu.data(),
-               dev_curand_states_cpu.size() * sizeof(float),
-               XPUMemcpyKind::XPU_HOST_TO_DEVICE);
+    ret = xpu::do_host2device(ctx,
+                              dev_curand_states_cpu.data(),
+                              dev_curand_states_tensor.data<float>(),
+                              dev_curand_states_cpu.size() * sizeof(float));
+    PD_CHECK(ret == 0, "do_host2device failed.");
+    dev_curand_states = dev_curand_states_tensor.data<float>();
   }
 
-  auto dev_curand_states =
-      !xpu_ctx_flag ? dev_curand_states_cpu.data() : dev_curand_states_xpu;
-  int ret;
   if (use_topk) {
     if (enable_topp) {
       ret = fastdeploy::plugin::speculate_verify<true, true>(
@@ -126,7 +127,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           max_dec_len.data<int64_t>(),
           end_tokens.data<int64_t>(),
           is_block_step.data<bool>(),
-          output_cum_offsets.data<int>(),
+          cu_seqlens_q_output.data<int>(),
           actual_candidate_len.data<int>(),
           real_bsz,
           max_draft_tokens,
@@ -159,7 +160,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           max_dec_len.data<int64_t>(),
           end_tokens.data<int64_t>(),
           is_block_step.data<bool>(),
-          output_cum_offsets.data<int>(),
+          cu_seqlens_q_output.data<int>(),
           actual_candidate_len.data<int>(),
           real_bsz,
           max_draft_tokens,
@@ -171,8 +172,8 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           benchmark_mode,
           accept_all_drafts,
           use_target_sampling);
+      PD_CHECK(ret == 0, "speculate_verify failed.");
     }
-    PD_CHECK(ret == 0, "speculate_verify failed.");
   } else {
     if (enable_topp) {
       ret = fastdeploy::plugin::speculate_verify<true, false>(
@@ -194,7 +195,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           max_dec_len.data<int64_t>(),
           end_tokens.data<int64_t>(),
           is_block_step.data<bool>(),
-          output_cum_offsets.data<int>(),
+          cu_seqlens_q_output.data<int>(),
           actual_candidate_len.data<int>(),
           real_bsz,
           max_draft_tokens,
@@ -227,7 +228,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           max_dec_len.data<int64_t>(),
           end_tokens.data<int64_t>(),
           is_block_step.data<bool>(),
-          output_cum_offsets.data<int>(),
+          cu_seqlens_q_output.data<int>(),
           actual_candidate_len.data<int>(),
           real_bsz,
           max_draft_tokens,
@@ -239,8 +240,8 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           benchmark_mode,
           accept_all_drafts,
           use_target_sampling);
+      PD_CHECK(ret == 0, "speculate_verify failed.");
     }
-    PD_CHECK(ret == 0, "speculate_verify failed.");
   }
   if (draft_tokens.is_cpu()) {
     delete ctx;
@@ -262,7 +263,7 @@ PD_BUILD_STATIC_OP(speculate_verify)
              "max_dec_len",
              "end_tokens",
              "is_block_step",
-             "output_cum_offsets",
+             "cu_seqlens_q_output",
              "actual_candidate_len",
              "actual_draft_token_nums",
              "topp"})

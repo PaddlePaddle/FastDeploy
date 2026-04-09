@@ -13,12 +13,16 @@
 # limitations under the License.
 
 import os
+import sys
 import unittest
 from unittest.mock import Mock
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.request import Request, RequestStatus
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+from e2e.utils.serving_utils import clean_ports
 
 MODEL_NAME = os.getenv("MODEL_PATH", "/path/to/models") + "/ERNIE-4.5-0.3B-Paddle"
 
@@ -28,6 +32,9 @@ class TestResourceManagerV1(unittest.TestCase):
 
     def setUp(self):
         """Set up test fixtures."""
+        # Clean ports before each test
+        clean_ports()
+
         engine_args = EngineArgs(
             model=MODEL_NAME,
             max_model_len=8192,

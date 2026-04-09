@@ -9,7 +9,6 @@ import time
 import types
 import unittest
 from collections import defaultdict
-from multiprocessing.reduction import ForkingPickler
 from unittest import mock
 
 import msgpack
@@ -264,19 +263,6 @@ class TestZmqServerBase(unittest.TestCase):
         with self.assertRaises(RuntimeError):
             server.send_pyobj({"boom": True})
 
-    def test_pack_aggregated_data_respects_env_flag(self):
-        server = _DummyServer()
-        responses = [_DummyResponse(1), _DummyResponse(2, finished=True)]
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            packed = server.pack_aggregated_data(responses)
-            unpacked = ForkingPickler.loads(packed)
-            self.assertEqual(unpacked[0]["tensor_sum"], 3)
-
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", True):
-            packed = server.pack_aggregated_data(responses)
-            unpacked = ForkingPickler.loads(packed)
-            self.assertIsInstance(unpacked[0], _DummyResponse)
-
     def test_receive_json_once_paths(self):
         fake_socket = _FakeSocket()
         fake_socket.closed = True
@@ -360,8 +346,7 @@ class TestZmqServerBase(unittest.TestCase):
         self.assertIn(req_id, server.cached_results)
 
         server.req_dict[req_id] = b"client"
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            server._send_response_per_query(req_id, [_DummyResponse(4, finished=True)])
+        server._send_response_per_query(req_id, [_DummyResponse(4, finished=True)])
         self.assertNotIn(req_id, server.req_dict)
         self.assertEqual(fake_socket.sent[-1][0], "send_multipart")
 
@@ -370,17 +355,7 @@ class TestZmqServerBase(unittest.TestCase):
         server = _DummyServer(socket=fake_socket)
         server.req_dict["req-agg"] = b"client"
         server.aggregate_send = True
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            server._send_response_per_query("req-agg", [_DummyResponse(5, finished=True)])
-        self.assertEqual(fake_socket.sent[-1][0], "send_multipart")
-
-    def test_send_response_per_query_v1_processor(self):
-        fake_socket = _FakeSocket()
-        server = _DummyServer(socket=fake_socket)
-        server.req_dict["req-v1"] = b"client"
-        server.aggregate_send = False
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", True):
-            server._send_response_per_query("req-v1", [_DummyResponse(6, finished=True)])
+        server._send_response_per_query("req-agg", [_DummyResponse(5, finished=True)])
         self.assertEqual(fake_socket.sent[-1][0], "send_multipart")
 
     def test_send_response_per_query_send_failure(self):
@@ -391,8 +366,7 @@ class TestZmqServerBase(unittest.TestCase):
         server = _DummyServer(socket=_ErrorSocket())
         server.req_dict["req-error"] = b"client"
         server.aggregate_send = False
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            server._send_response_per_query("req-error", [_DummyResponse(7, finished=True)])
+        server._send_response_per_query("req-error", [_DummyResponse(7, finished=True)])
         self.assertEqual(server.req_dict, {})
 
     def test_send_response_per_query_raises_without_socket(self):
@@ -436,21 +410,10 @@ class TestZmqServerBase(unittest.TestCase):
         fake_socket = _FakeSocket()
         server = _DummyServer(socket=fake_socket)
         server.address = "test-address"
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            batch_data = [[_DummyResponse(1, finished=True)]]
-            server._send_batch_response(batch_data)
+        batch_data = [[_DummyResponse(1, finished=True)]]
+        server._send_batch_response(batch_data)
         self.assertEqual(len(fake_socket.sent), 1)
         self.assertEqual(fake_socket.sent[0][0], "send")
-
-    def test_send_batch_response_v1_processor(self):
-        """Test _send_batch_response with ENABLE_V1_DATA_PROCESSOR=True"""
-        fake_socket = _FakeSocket()
-        server = _DummyServer(socket=fake_socket)
-        server.address = "test-address"
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", True):
-            batch_data = [[_DummyResponse(1, finished=True)]]
-            server._send_batch_response(batch_data)
-        self.assertEqual(len(fake_socket.sent), 1)
 
     def test_send_batch_response_raises_without_socket(self):
         """Test _send_batch_response logs error and returns when socket is None"""
@@ -470,9 +433,8 @@ class TestZmqServerBase(unittest.TestCase):
         server = _DummyServer(socket=_ErrorSocket())
         server.address = "test-address"
         batch_data = [[_DummyResponse(1)]]
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            # Should not raise, error is caught and logged
-            server._send_batch_response(batch_data)
+        # Should not raise, error is caught and logged
+        server._send_batch_response(batch_data)
 
     def test_recv_result_handle_paths(self):
         fake_socket = _FakeSocket()
@@ -640,10 +602,9 @@ class TestZmqServers(unittest.TestCase):
         server = _DummyServer(socket=fake_socket)
         server.address = "test-address"
 
-        with mock.patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            batch_data = [[_DummyResponse(1, finished=True)]]
-            # worker_pid=None -> goes to the else branch that calls _ensure_socket / uses self.socket
-            server._send_batch_response(batch_data, worker_pid=None)
+        batch_data = [[_DummyResponse(1, finished=True)]]
+        # worker_pid=None -> goes to the else branch that calls _ensure_socket / uses self.socket
+        server._send_batch_response(batch_data, worker_pid=None)
 
         # The default socket should have been used to send the data
         self.assertEqual(len(fake_socket.sent), 1)

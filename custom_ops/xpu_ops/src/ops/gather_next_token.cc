@@ -22,8 +22,7 @@
 #endif
 
 std::vector<paddle::Tensor> GatherNextToken(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
-    const paddle::Tensor& cum_offsets,  // [bsz, 1]
+    const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_map,
@@ -46,7 +45,7 @@ std::vector<paddle::Tensor> GatherNextToken(
   typedef paddle::bfloat16 data_t;
   const int dim = x.dims()[1];
   const int token_num = x.shape()[0];
-  int bsz = cum_offsets.shape()[0];
+  int bsz = -1;
   int enc_batch = len_info_cpu.data<int32_t>()[0];
   int dec_batch = len_info_cpu.data<int32_t>()[1];
   if (max_bsz > 0) {
@@ -116,7 +115,6 @@ std::vector<paddle::Tensor> GatherNextToken(
 
 std::vector<std::vector<int64_t>> GatherNextTokenInferShape(
     const std::vector<int64_t>& x_shape,
-    const std::vector<int64_t>& cum_offsets_shape,
     const std::vector<int64_t>& encoder_seq_lod_shape,
     const std::vector<int64_t>& decoder_seq_lod_shape,
     const std::vector<int64_t>& encoder_batch_map_shape,
@@ -130,19 +128,18 @@ std::vector<std::vector<int64_t>> GatherNextTokenInferShape(
   // if (output_padding_offset_shape) {
   //   PD_THROW("speculative decoding is not supported in XPU.");
   // }
-  int64_t bsz = cum_offsets_shape[0];
+  // int64_t bsz = cum_offsets_shape[0];
+  int64_t bsz = 0;
   int64_t dim_embed = x_shape[1];
   if (output_padding_offset_shape) {
     return {{-1, dim_embed}};
   } else {
-    int64_t bsz = cum_offsets_shape[0];
     return {{bsz, dim_embed}};
   }
 }
 
 std::vector<paddle::DataType> GatherNextTokenInferDtype(
     const paddle::DataType& x_dtype,
-    const paddle::DataType& cum_offsets_dtype,
     const paddle::DataType& encoder_seq_lod_dtype,
     const paddle::DataType& decoder_seq_lod_dtype,
     const paddle::DataType& encoder_batch_map_dtype,
@@ -158,7 +155,6 @@ std::vector<paddle::DataType> GatherNextTokenInferDtype(
 
 PD_BUILD_STATIC_OP(gather_next_token)
     .Inputs({"x",
-             "cum_offsets",
              "encoder_seq_lod",
              "decoder_seq_lod",
              "encoder_batch_map",

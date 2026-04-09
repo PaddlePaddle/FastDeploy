@@ -143,7 +143,7 @@ def _module_env():
         {
             "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES", "0,1,2,3"),
             "FD_DETERMINISTIC_MODE": "1",
-            "FD_CUSTOM_AR_MAX_SIZE_MB": os.environ.get("FD_CUSTOM_AR_MAX_SIZE_MB", "57"),
+            "FD_CUSTOM_AR_MAX_SIZE_MB": os.environ.get("FD_CUSTOM_AR_MAX_SIZE_MB", "64"),
             "FLAGS_max_partition_size": _CHUNK_SIZE_FOR_TEST,
         }
     ):

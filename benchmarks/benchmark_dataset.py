@@ -818,3 +818,61 @@ class RandomTextDataset(BenchmarkDataset):
                 )
             )
         return samples
+
+
+class RandomTokenDataset(BenchmarkDataset):
+    """
+    Generates random English words for pure text benchmarking.
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+    def sample(
+        self,
+        num_requests: int,
+        lora_path: Optional[str] = None,
+        max_loras: Optional[int] = None,
+        random_input_len: Optional[int] = None,
+        random_output_len: Optional[int] = None,
+        random_range_ratio: Optional[float] = None,
+        enable_multimodal_chat: bool = False,
+        **kwargs,
+    ) -> list:
+        samples = []
+
+        def sample_len(base_len: int, ratio: float) -> int:
+            if base_len is None:
+                return None
+            if ratio is None or ratio <= 0:
+                return base_len
+            lo = max(1, int(base_len * (1 - ratio)))
+            hi = int(base_len * (1 + ratio))
+            return random.randint(lo, hi)
+
+        for i in range(1, num_requests + 1):
+            # [length * (1 - range_ratio), length * (1 + range_ratio)]
+            sampled_input_len = sample_len(random_input_len, random_range_ratio)
+            sampled_output_len = sample_len(random_output_len, random_range_ratio)
+
+            random.seed(21)
+            token_ids = [random.randint(2000, 10000) for _ in range(sampled_input_len)]
+            # prompt_text = " ".join(words)
+
+            data = {
+                "messages": [{"role": "user", "content": [{"type": "text", "text": ""}]}],
+                "prompt_token_ids": token_ids,
+            }
+
+            samples.append(
+                SampleRequest(
+                    no=i,
+                    json_data=data,
+                    prompt=token_ids,
+                    prompt_len=sampled_input_len,
+                    history_QA=data["messages"],
+                    expected_output_len=sampled_output_len,
+                    random_flag=True,
+                )
+            )
+        return samples

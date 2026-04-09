@@ -323,6 +323,7 @@ class DailyRotatingFileHandler(BaseRotatingHandler):
         """
         open new log file
         """
+        self.current_log_path.parent.mkdir(parents=True, exist_ok=True)
         if self.encoding is None:
             stream = open(str(self.current_log_path), self.mode)
         else:

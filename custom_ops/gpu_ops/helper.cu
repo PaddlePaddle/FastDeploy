@@ -157,6 +157,14 @@ bool getEnvEnablePDL() {
   return enablePDL;
 }
 
+bool getEnvEnableRL() {
+  static std::once_flag flag;
+  static bool enableRL = false;
+
+  std::call_once(flag, [&]() { enableRL = getBoolEnv("FD_ENABLE_RL"); });
+  return enableRL;
+}
+
 bool getEnvDeterministicMode() {
   static std::once_flag flag;
   static bool value = false;

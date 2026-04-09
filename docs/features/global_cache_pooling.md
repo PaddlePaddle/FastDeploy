@@ -1,4 +1,4 @@
-[中文文档](../../zh/features/global_cache_pooling.md) | English
+[中文文档](../zh/features/global_cache_pooling.md) | English
 
 # Global Cache Pooling
 

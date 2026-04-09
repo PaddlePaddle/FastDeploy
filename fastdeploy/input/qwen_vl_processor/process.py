@@ -26,14 +26,14 @@ from PIL import Image
 
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
-from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
+from fastdeploy.input.video_utils import read_video_decord
+from fastdeploy.input.video_utils import sample_frames_qwen as sample_frames
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
 from .image_processor import ImageProcessor
-from .process_video import sample_frames
 
 FRAME_FACTOR = 2
 FPS = 2.0

@@ -26,13 +26,14 @@ from PIL import Image
 
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
-from fastdeploy.input.ernie4_5_vl_processor import read_video_decord
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
+from fastdeploy.input.video_utils import read_video_decord
+from fastdeploy.input.video_utils import sample_frames_qwen as sample_frames
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
-from .image_processor import ImageProcessor, ceil_by_factor, floor_by_factor
+from .image_processor import ImageProcessor
 
 VIDEO_MIN_PIXELS = 128 * 28 * 28
 VIDEO_MAX_PIXELS = 768 * 28 * 28
@@ -40,83 +41,6 @@ FRAME_FACTOR = 2
 FPS = 2.0
 FPS_MIN_FRAMES = 4
 FPS_MAX_FRAMES = 768
-
-
-def sample_frames(
-    frame_factor: int,
-    min_frames: int,
-    max_frames: int,
-    metadata: Optional[dict] = None,
-    fps: Optional[Union[int, float]] = -1,
-    num_frames: Optional[int] = -1,
-):
-    """
-    Sample frames from video according to specified criteria.
-
-    Args:
-        frame_factor: Ensure sampled frames are multiples of this factor
-        min_frames: Minimum number of frames to sample
-        max_frames: Maximum number of frames to sample
-        metadata: Video metadata containing fps information
-        fps: Target frames per second for sampling
-        num_frames: Exact number of frames to sample
-
-    Returns:
-        np.ndarray: Sampled video frames
-
-    Raises:
-        ValueError: If both fps and num_frames are specified,
-                   or if required metadata is missing,
-                   or if requested frames exceed available frames
-    """
-    if fps > 0 and num_frames > 0:
-        raise ValueError("`num_frames` and `fps` are mutually exclusive arguments, please use only one!")
-
-    total_num_frames = metadata["num_of_frame"]
-
-    # If num_frames is not given but fps is, calculate num_frames from fps
-    if num_frames > 0:
-        num_frames = round(num_frames / frame_factor) * frame_factor
-    elif fps > 0:
-        if metadata is None:
-            raise ValueError(
-                "Asked to sample `fps` frames per second but no video metadata was provided which is required when sampling with `fps`. "
-                "Please pass in `VideoMetadata` object or use a fixed `num_frames` per input video"
-            )
-        # max_frames = math.floor(min(max_frames, total_num_frames) / frame_factor) * frame_factor
-        min_frames = ceil_by_factor(min_frames, frame_factor)
-        max_frames = floor_by_factor(min(max_frames, total_num_frames), frame_factor)
-
-        num_frames = total_num_frames / metadata["fps"] * fps
-
-        if num_frames > total_num_frames:
-            data_processor_logger.warning(f"smart_nframes: nframes[{num_frames}] > total_frames[{total_num_frames}]")
-
-        num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
-        num_frames = floor_by_factor(num_frames, frame_factor)
-
-    if num_frames > total_num_frames:
-        raise ValueError(
-            f"Video can't be sampled. The inferred `num_frames={num_frames}` exceeds `total_num_frames={total_num_frames}`. "
-            "Decrease `num_frames` or `fps` for sampling."
-        )
-
-    # Hack code ensures that num_frames can always be divided by 4
-    # due to sched/resource_manager_v1.py 中 grid_thw.extend([[2, h, w]] * (t // 2))
-    if num_frames > 2 and num_frames % 4 != 0:
-        num_frames = (num_frames // 4) * 4  # 向下取整到 4 的倍数
-        total_num_frames = (total_num_frames // 4) * 4
-        num_frames = min(min(max(num_frames, min_frames), max_frames), total_num_frames)
-
-    # Calculate frame indices based on sampling strategy
-    if num_frames > 0:
-        # Evenly spaced sampling for target frame count
-        indices = np.arange(0, total_num_frames, total_num_frames / num_frames).astype(np.int32)
-    else:
-        # Keep all frames if no sampling requested
-        indices = np.arange(0, total_num_frames).astype(np.int32)
-
-    return indices
 
 
 class DataProcessor(MMBaseDataProcessor):

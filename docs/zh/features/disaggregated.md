@@ -1,5 +1,7 @@
 [English](../../features/disaggregated.md)
 
+[最佳实践](../best_practices/Disaggregated.md)
+
 # 分离式部署
 
 LLM大模型推理分为Prefill和Decode两个阶段，分别为计算密集型和访存密集型。

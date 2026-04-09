@@ -157,8 +157,6 @@ __global__ void multi_query_append_attention_kernel(
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       wid * num_frags_x * 16 + tid % 16, tid / 16);  // 16 * 16
 
-  const uint32_t q_end =
-      min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
@@ -166,7 +164,7 @@ __global__ void multi_query_append_attention_kernel(
       q_base_ptr,
       &qo_smem,
       q_base_seq_id_this_block,
-      q_end,
+      q_len,
       q_ori_n_stride,
       HEAD_DIM);
   commit_group();
@@ -432,8 +430,7 @@ template <typename T,
           uint32_t num_frags_x,
           uint32_t num_frags_z,
           uint32_t num_frags_y,
-          typename OutT = T,
-          bool ENABLE_PREFILL = true>
+          typename OutT = T>
 __global__ void multi_query_append_attention_warp1_4_kernel(
     T *__restrict__ q,  // [token_num, (num_heads + 2* kv_num_head) * head_dim]
     T *__restrict__ cache_k,  // [max_block_num, num_heads, block_size,
@@ -486,32 +483,9 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   const uint32_t num_rows_per_block = num_frags_x * 16;
   const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
 
-  // When cudagraph capture prefill, may launch more gridDim.x
-  if (btid >= static_cast<uint32_t>(num_blocks_x_cpu)) {
-    return;
-  }
-
   const uint32_t q_len = seq_lens[batch_id];
-  if (q_len <= 0) {
-    return;
-  }
+  const uint32_t kv_len = seq_lens_kv[batch_id] + q_len;
 
-  uint32_t kv_len = seq_lens_kv[batch_id];
-  if (ENABLE_PREFILL) {
-    kv_len += q_len;
-    if (kv_len <= 0) {
-      return;
-    }
-  } else {
-    if (kv_len <= 0) {
-      return;
-    }
-    kv_len += q_len;
-  }
-  const int seq_len_enc = seq_lens_encoder[batch_id];
-  if (seq_len_enc > 0) {
-    return;
-  }
   const uint32_t num_chunks_this_seq = div_up(kv_len, chunk_size);
   if (chunk_idx >= num_chunks_this_seq) {
     return;
@@ -550,17 +524,11 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   if (!partition_kv || num_chunks_this_seq <= 1) {
     o_base_ptr_int8 = out + o_offset;
   } else {
-    if (ENABLE_PREFILL) {
-      o_base_ptr_T = tmp_workspace + batch_id * num_chunks * q_n_stride +
-                     chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
-                     tid % 8 * num_elems_per_128b<T>();
-    } else {
-      o_base_ptr_T =
-          tmp_workspace +
-          batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
-          chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
-          tid % 8 * num_elems_per_128b<T>();
-    }
+    o_base_ptr_T =
+        tmp_workspace +
+        batch_id * speculate_max_draft_token_num * num_chunks * q_n_stride +
+        chunk_idx * q_n_stride + q_head_idx * HEAD_DIM +
+        tid % 8 * num_elems_per_128b<T>();
   }
   const int *mask_offset_this_seq =
       mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
@@ -568,9 +536,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       tid % 16, tid / 16);  // 16 * 16
-
-  const uint32_t q_end =
-      min(q_len, div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE));
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
@@ -583,7 +548,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                                  T>(q_base_ptr,
                                     &qo_smem,
                                     q_base_seq_id_this_block,
-                                    q_end,
+                                    q_len,
                                     q_ori_n_stride,
                                     HEAD_DIM);
   commit_group();
@@ -593,9 +558,10 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, num_frags_y, T>(
       &qo_smem, scale);
 
-  smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
-      v_smem(smem + (num_frags_x + NUM_WARP_KV * num_frags_z) * 16 * HEAD_DIM *
-                        sizeof(T));
+  static_assert(num_rows_per_block == num_frags_x * 16);
+  static_assert(BLOCK_SIZE == NUM_WARP_KV * num_frags_z * 16);
+  smem_t k_smem(smem + num_rows_per_block * HEAD_DIM * sizeof(T)),
+      v_smem(smem + (num_rows_per_block + BLOCK_SIZE) * HEAD_DIM * sizeof(T));
 
   const uint32_t num_iterations = div_up(
       CAUSAL
@@ -605,13 +571,13 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                          div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE),
                      chunk_start)))
           : chunk_len,
-      NUM_WARP_KV * num_frags_z * 16);
+      BLOCK_SIZE);
   const uint32_t mask_check_iteration =
       (CAUSAL        ? (min(chunk_len,
                      sub_if_greater_or_zero(kv_len - q_len, chunk_start)))
        : mask_offset ? 0
                      : chunk_len) /
-      (NUM_WARP_KV * num_frags_z * 16);
+      (BLOCK_SIZE);
 
   uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       wid * num_frags_z * 16 + 8 * (tid / 16) + tid % 8, (tid % 16) / 8);
@@ -698,7 +664,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         s_frag, o_frag, m_frag, d_frag);
     __syncthreads();
 
-    kv_idx_base += NUM_WARP_KV * num_frags_z * 16;
+    kv_idx_base += BLOCK_SIZE;
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
     if (block_id < 0) {
       block_id = 0;
@@ -826,18 +792,12 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
           const uint32_t qo_idx = q_start_seq_id + qo_idx_now / GROUP_SIZE;
 
           if (qo_idx - q_start_seq_id < q_len) {
-            uint32_t offset;
-            if (ENABLE_PREFILL) {
-              offset = (batch_id * num_chunks + chunk_idx) * q_num_heads +
-                       qo_head_idx;
-            } else {
-              offset = ((batch_id * speculate_max_draft_token_num +
-                         qo_idx_now / GROUP_SIZE) *
-                            num_chunks +
-                        chunk_idx) *
-                           q_num_heads +
-                       qo_head_idx;
-            }
+            const uint32_t offset = ((batch_id * speculate_max_draft_token_num +
+                                      qo_idx_now / GROUP_SIZE) *
+                                         num_chunks +
+                                     chunk_idx) *
+                                        q_num_heads +
+                                    qo_head_idx;
             tmp_m[offset] = m_frag[fx][j];
             tmp_d[offset] = d_frag[fx][j];
           }
@@ -1150,8 +1110,7 @@ void MultiQueryAppendAttention(
                                                     num_frags_x,
                                                     num_frags_z,
                                                     num_frags_y,
-                                                    OUT_NV_TYPE,
-                                                    ENABLE_PREFILL>;
+                                                    OUT_NV_TYPE>;
     if (smem_size >= 48 * 1024) {
       cudaFuncSetAttribute(split_kv_kernel,
                            cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -1196,8 +1155,7 @@ void MultiQueryAppendAttention(
                                                       num_frags_x,
                                                       num_frags_z,
                                                       num_frags_y,
-                                                      OUT_NV_TYPE,
-                                                      ENABLE_PREFILL>;
+                                                      OUT_NV_TYPE>;
       if (smem_size >= 48 * 1024) {
         cudaFuncSetAttribute(nosplit_kv_kernel,
                              cudaFuncAttributeMaxDynamicSharedMemorySize,
@@ -1249,43 +1207,18 @@ void MultiQueryAppendAttention(
           sink_size);
     } else {
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
-      if (is_decoder) {
-        tmp_workspace = allocator->Allocate(
-            phi::SizeOf(qkv.dtype()) *
-            static_cast<size_t>(bsz * num_chunks * num_heads * HEAD_DIM));
-        tmp_m = allocator->Allocate(
-            phi::SizeOf(paddle::DataType::FLOAT32) *
-            static_cast<size_t>(bsz * num_chunks * num_heads));
-        tmp_d = allocator->Allocate(
-            phi::SizeOf(paddle::DataType::FLOAT32) *
-            static_cast<size_t>(bsz * num_chunks * num_heads));
-      } else {
-        if (ENABLE_PREFILL) {
-          tmp_workspace =
-              allocator->Allocate(phi::SizeOf(qkv.dtype()) *
-                                  static_cast<size_t>(token_num * num_chunks *
-                                                      num_heads * HEAD_DIM));
-          tmp_m = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(token_num * num_chunks * num_heads));
-          tmp_d = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(token_num * num_chunks * num_heads));
-        } else {
-          tmp_workspace = allocator->Allocate(
-              phi::SizeOf(qkv.dtype()) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads * HEAD_DIM));
-          tmp_m = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads));
-          tmp_d = allocator->Allocate(
-              phi::SizeOf(paddle::DataType::FLOAT32) *
-              static_cast<size_t>(speculate_max_draft_token_num * bsz *
-                                  num_chunks * num_heads));
-        }
-      }
+      tmp_workspace = allocator->Allocate(
+          phi::SizeOf(qkv.dtype()) *
+          static_cast<size_t>(speculate_max_draft_token_num * bsz * num_chunks *
+                              num_heads * HEAD_DIM));
+      tmp_m = allocator->Allocate(
+          phi::SizeOf(paddle::DataType::FLOAT32) *
+          static_cast<size_t>(speculate_max_draft_token_num * bsz * num_chunks *
+                              num_heads));
+      tmp_d = allocator->Allocate(
+          phi::SizeOf(paddle::DataType::FLOAT32) *
+          static_cast<size_t>(speculate_max_draft_token_num * bsz * num_chunks *
+                              num_heads));
       launchWithPdlWhenEnabled(
           split_kv_kernel,
           grids,

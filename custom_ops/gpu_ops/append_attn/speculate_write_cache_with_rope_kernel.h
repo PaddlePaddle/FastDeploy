@@ -15,7 +15,7 @@
 
 #include "speculate_write_cache_with_rope_impl.cuh"
 
-template <typename T, typename QKV_TYPE = int>
+template <typename T, typename QKV_TYPE = int, bool EnforceFmulRN = false>
 void SpeculateWriteCacheWithRoPEKernel(
     const AppendAttnMetaData& meta_data,
     const paddle::Tensor&

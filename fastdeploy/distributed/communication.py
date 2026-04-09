@@ -21,6 +21,7 @@ import paddle.distributed as dist
 from paddle.distributed import fleet
 
 import fastdeploy.envs as envs
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger, register_custom_python_op
 
 logger = get_logger("communication")
@@ -161,12 +162,21 @@ try:
             return _TP_AR.custom_all_reduce(input_)
 
         if paddle.in_dynamic_mode():
-            if group_ is not None:
-                dist.all_reduce(input_, group=group_)
+            if current_platform.is_iluvatar():
+                # use_calc_stream = False will raise event sync error when enable cuda graph and tp_size > 1
+                if group_ is not None:
+                    stream.all_reduce(input_, op=ReduceOp.SUM, group=group_, sync_op=True, use_calc_stream=True)
+                else:
+                    hcg = fleet.get_hybrid_communicate_group()
+                    mp_group = hcg.get_model_parallel_group()
+                    stream.all_reduce(input_, op=ReduceOp.SUM, group=mp_group, sync_op=True, use_calc_stream=True)
             else:
-                hcg = fleet.get_hybrid_communicate_group()
-                mp_group = hcg.get_model_parallel_group()
-                dist.all_reduce(input_, group=mp_group)
+                if group_ is not None:
+                    dist.all_reduce(input_, group=group_)
+                else:
+                    hcg = fleet.get_hybrid_communicate_group()
+                    mp_group = hcg.get_model_parallel_group()
+                    dist.all_reduce(input_, group=mp_group)
         else:
             dist.all_reduce(input_)
         return input_

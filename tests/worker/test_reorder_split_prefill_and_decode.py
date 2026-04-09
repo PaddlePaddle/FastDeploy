@@ -83,6 +83,7 @@ def create_mock_config():
     fd_config.parallel_config = parallel_config
     fd_config.structured_outputs_config = structured_outputs_config
     fd_config.pad_to = 8
+    fd_config.enable_mm_runtime = model_config.enable_mm
 
     def get_max_chunk_tokens(mm_max_tokens_per_item=None):
         return 100

@@ -12,8 +12,16 @@ func (c *Counter) Inc() {
 	c.count.Add(1)
 }
 
-func (c *Counter) Dec() {
-	c.count.Add(^uint64(0))
+func (c *Counter) Dec() bool {
+	for {
+		old := c.count.Load()
+		if old == 0 {
+			return false
+		}
+		if c.count.CompareAndSwap(old, old-1) {
+			return true
+		}
+	}
 }
 
 func (c *Counter) Get() uint64 {

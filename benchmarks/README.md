@@ -49,6 +49,12 @@ python -m pip install -r requirements.txt
 --ip-list：支持多个ip:port，将总请求数以及总并发数均分到每个IP，按整除取余分配。例：0.0.0.0:1211,0.0.0.0:1222，默认为空
 --multi-turn：开启多轮对话，将数据集messages中的多轮对话逐轮请求，默认False不区分多轮。若需要添加tool_call，需在hyperparameter-path超参yaml中配置tools，参考yaml/request_yaml/GLM-32k-tool-call.yaml，数据集中需要指定tool_url，max_loop（非必选，默认10）为单轮调用最大次数
 ```
+多轮对话使用prompt_token_ids模式请求
+```bash
+开启--multi-turn
+--tokenizer-model：使用prompt_token_ids请求时指定，多轮对话tokenizer模型类型，可选"eb": ErnieBotTokenizer, "eb5": Ernie5Tokenizer, "eb_mm": Ernie4_5Tokenizer
+--tokenizer-path：使用prompt_token_ids请求时指定，模型tokenizer路径
+```
 
 ##### /v1/chat/completions接口压测单条数据调试
 
