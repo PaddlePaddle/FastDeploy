@@ -26,8 +26,22 @@ class TestHashFeatures(unittest.TestCase):
         """Test hash features with numpy ndarray"""
         arr = np.random.randint(low=0, high=255, size=(28, 28), dtype=np.uint8)
         arr_hash = MultimodalHasher.hash_features(arr)
-        target_hash = hashlib.sha256((arr.tobytes())).hexdigest()
+        header = f"{arr.shape}|{arr.dtype}|".encode()
+        target_hash = hashlib.sha256(header + arr.tobytes()).hexdigest()
         assert arr_hash == target_hash, f"Ndarray hash mismatch: {arr_hash} != {target_hash}"
+
+    def test_hash_features_ndarray_shape_sensitivity(self):
+        """Arrays with same bytes but different shapes must produce different hashes"""
+        base = np.arange(24, dtype=np.float32)
+        a = base.reshape(6, 4)
+        b = base.reshape(4, 6)
+        assert MultimodalHasher.hash_features(a) != MultimodalHasher.hash_features(b)
+
+    def test_hash_features_ndarray_dtype_sensitivity(self):
+        """Arrays with same shape but different dtypes must produce different hashes"""
+        a = np.zeros((4, 4), dtype=np.float32)
+        b = np.zeros((4, 4), dtype=np.float64)
+        assert MultimodalHasher.hash_features(a) != MultimodalHasher.hash_features(b)
 
     def test_hash_features_object(self):
         """Test hash features with unsupported object type"""

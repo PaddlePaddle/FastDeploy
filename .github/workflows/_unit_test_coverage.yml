@@ -193,10 +193,12 @@ jobs:
           --sysctl kernel.msgmnb=268435456 \
           --name ${runner_name} \
           --cap-add=SYS_PTRACE --cap-add=IPC_LOCK \
-          --shm-size=64G \
+          --shm-size=128G \
           ${RDMA_DEVICES} \
           --device=/dev/infiniband/rdma_cm \
           --ulimit memlock=-1:-1 \
+          --ulimit nofile=65536:65536 \
+          --ulimit nproc=8192:8192 \
           -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \

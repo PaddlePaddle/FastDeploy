@@ -27,7 +27,7 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import PREEMPTED_TOKEN_ID, FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
@@ -56,6 +56,7 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import print_gpu_memory_use
 from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
+from fastdeploy.worker.tbo import GLOBAL_ATTN_BUFFERS
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
@@ -119,7 +120,7 @@ class GPUModelRunner(ModelRunnerBase):
     ):
         super().__init__(fd_config=fd_config, device=device)
         self.MAX_INFER_SEED = 9223372036854775806
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -1118,10 +1119,12 @@ class GPUModelRunner(ModelRunnerBase):
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
+
         if self.enable_mm and self.share_inputs["image_features_list"] is not None:
             tensor_feats = [t for t in self.share_inputs["image_features_list"] if isinstance(t, paddle.Tensor)]
             if tensor_feats:
                 self.share_inputs["image_features"] = paddle.concat(tensor_feats, axis=0)
+
         recover_decode_task(
             self.share_inputs["stop_flags"],
             self.share_inputs["seq_lens_this_time"],
@@ -1528,7 +1531,7 @@ class GPUModelRunner(ModelRunnerBase):
         if envs.FD_DETERMINISTIC_MODE:
             decoder_block_shape_q = envs.FD_DETERMINISTIC_SPLIT_KV_SIZE
 
-        res_buffer = allocate_launch_related_buffer(
+        buffer_kwargs = dict(
             max_batch_size=self.scheduler_config.max_num_seqs,
             max_model_len=self.model_config.max_model_len,
             encoder_block_shape_q=encoder_block_shape_q,
@@ -1538,7 +1541,12 @@ class GPUModelRunner(ModelRunnerBase):
             kv_num_heads=self.model_config.kv_num_heads,
             block_size=self.fd_config.cache_config.block_size,
         )
+        res_buffer = allocate_launch_related_buffer(**buffer_kwargs)
         self.share_inputs.update(res_buffer)
+
+        if int(os.getenv("USE_TBO", "0")) == 1:
+            for j in range(2):
+                GLOBAL_ATTN_BUFFERS[j] = allocate_launch_related_buffer(**buffer_kwargs)
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -2401,6 +2409,16 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 5.1. Async cpy
             post_process_event = paddle.device.cuda.create_event()
+            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                # If one query is preempted, there is no sampled token for it, we use token_id PREEMPTED_TOKEN_ID to signal server, abort is finished.
+                paddle.assign(
+                    paddle.where(
+                        self.share_inputs["last_preempted_idx"][: sampler_output.sampled_token_ids.shape[0]] == 1,
+                        PREEMPTED_TOKEN_ID,
+                        sampler_output.sampled_token_ids,
+                    ),
+                    sampler_output.sampled_token_ids,
+                )
             # if not self.speculative_decoding:
             self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
             if self.speculative_decoding:

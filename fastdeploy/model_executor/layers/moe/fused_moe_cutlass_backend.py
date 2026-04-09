@@ -285,6 +285,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
+                topk_reduce_func=getattr(layer, "topk_reduce_func", None),
             )
             (
                 permute_input,
