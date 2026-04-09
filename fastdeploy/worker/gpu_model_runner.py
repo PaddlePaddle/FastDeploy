@@ -983,7 +983,7 @@ class GPUModelRunner(ModelRunnerBase):
         self._process_mm_features(req_dicts)
         if len(rope_3d_position_ids["position_ids_idx"]) > 0:
             packed_position_ids = paddle.to_tensor(
-                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
+                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="float32"
             )
             rope_3d_lst = self.prepare_rope3d(
                 packed_position_ids,
