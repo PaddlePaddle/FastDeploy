@@ -80,4 +80,15 @@ class GDNAttention(nn.Layer):
         Returns:
             Attention output ``[num_tokens, num_v_heads_local, head_v_dim]``.
         """
-        return forward_meta.gdn_attn_backend.forward(mixed_qkv, a, b, layer, forward_meta)
+        # When all sequences have finished (gdn_active_bs == 0), the runner
+        # does not set gdn_attn_backend.  Return zeros so downstream layers
+        # (norm, out_proj) see the right shape without entering GDN kernels.
+        backend = getattr(forward_meta, "gdn_attn_backend", None)
+        if backend is None:
+            # Return shape: [num_tokens, num_v_heads_local, head_v_dim]
+            num_tokens = mixed_qkv.shape[0]
+            return paddle.zeros(
+                [num_tokens, layer.num_v_heads_local, layer.head_v_dim],
+                dtype=mixed_qkv.dtype,
+            )
+        return backend.forward(mixed_qkv, a, b, layer, forward_meta)

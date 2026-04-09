@@ -1358,33 +1358,33 @@ class GPUModelRunner(ModelRunnerBase):
         if getattr(self, "gdn_state_pool", None) is not None:
             self.forward_meta.gdn_state_pool = self.gdn_state_pool
 
-            # Compute active batch size: requests with seq_lens_this_time > 0.
-            # share_inputs tensors are pre-allocated to [max_num_seqs], but GDN
-            # kernels (causal_conv1d_fn, chunk_gated_delta_rule) need tensors
-            # sized to the actual active batch — unlike AppendAttention which
-            # has its own metadata to handle the full buffer.
-            gdn_active_bs = int((self.share_inputs["seq_lens_this_time"] > 0).sum())
-
-            # gdn_slot_ids: from share_inputs, truncated to active batch
+            # Build active-sequence indices: FD does NOT compact the batch when
+            # a sequence finishes — finished sequences stay in-place with
+            # seq_lens_this_time == 0.  We must filter (not truncate) to get
+            # only the active entries for GDN kernels.
             raw_slot_ids = self.share_inputs.get("gdn_slot_ids")
-            if raw_slot_ids is not None:
-                self.forward_meta.gdn_slot_ids = raw_slot_ids[:gdn_active_bs]
+            seq_lens_flat = self.share_inputs["seq_lens_this_time"].flatten()
+            active_idx = paddle.nonzero(seq_lens_flat > 0).flatten()
+            gdn_active_bs = active_idx.shape[0]
 
-            # gdn_has_initial_state: True if request has prior state (seq_lens_decoder > 0)
-            # For prefill of a new request, seq_lens_decoder=0 → has_initial_state=False
-            # For decode or chunked prefill continuation, seq_lens_decoder>0 → has_initial_state=True
-            if self.forward_meta.seq_lens_decoder is not None:
-                self.forward_meta.gdn_has_initial_state = self.forward_meta.seq_lens_decoder[:gdn_active_bs] > 0
+            if raw_slot_ids is not None and gdn_active_bs > 0:
+                self.forward_meta.gdn_slot_ids = raw_slot_ids.index_select(active_idx)
 
-            # Derive gdn_seq_lens_cpu from seq_lens_this_time, truncated to active batch
-            if self.forward_meta.seq_lens_this_time is not None:
-                self.forward_meta.gdn_seq_lens_cpu = (
-                    self.forward_meta.seq_lens_this_time[:gdn_active_bs].numpy().tolist()
+            if gdn_active_bs > 0 and self.forward_meta.seq_lens_decoder is not None:
+                self.forward_meta.gdn_has_initial_state = (
+                    self.forward_meta.seq_lens_decoder.flatten().index_select(active_idx) > 0
                 )
 
-            # GDN attention backend
-            if getattr(self, "gdn_attn_backend", None) is not None:
+            if gdn_active_bs > 0 and self.forward_meta.seq_lens_this_time is not None:
+                self.forward_meta.gdn_seq_lens_cpu = (
+                    self.forward_meta.seq_lens_this_time.flatten().index_select(active_idx).numpy().tolist()
+                )
+
+            # GDN attention backend — only set when there are active sequences.
+            if gdn_active_bs > 0 and getattr(self, "gdn_attn_backend", None) is not None:
                 self.forward_meta.gdn_attn_backend = self.gdn_attn_backend
+            else:
+                self.forward_meta.gdn_attn_backend = None
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """

@@ -40,9 +40,9 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import numpy as np
 import paddle
 
-from fastdeploy.cache_manager.gdn_state_pool import GDNStatePool
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
@@ -204,17 +204,28 @@ class GDNAttentionBackend(AttentionBackend):
             [num_tokens, num_v_heads_local, head_v_dim]
         """
         num_tokens = mixed_qkv.shape[0]
-        is_decode = forward_meta.forward_mode.is_decode()
+
+        # Determine decode vs prefill from actual per-sequence lengths.
+        # NOTE: forward_meta.forward_mode is always MIXED on GPU path (never
+        # set to DECODE/EXTEND), so we must NOT use forward_mode.is_decode().
+        # Instead, check gdn_seq_lens_cpu: pure decode iff every active seq
+        # has exactly 1 token this step.
+        seq_lens_cpu = forward_meta.gdn_seq_lens_cpu  # List[int], active seqs only
+        is_pure_decode = all(s == 1 for s in seq_lens_cpu)
 
         # Get pool views for this layer
         gdn_pool = forward_meta.gdn_state_pool
-        raw_slot_ids = forward_meta.gdn_slot_ids  # [active_bs] — already truncated
+        raw_slot_ids = forward_meta.gdn_slot_ids  # [active_bs] — already filtered
 
         conv_pool = gdn_pool.get_layer_conv_pool(layer.gdn_layer_idx)
         ssm_pool = gdn_pool.get_layer_ssm_pool(layer.gdn_layer_idx)
 
-        # Offset slot_ids: PAD_SLOT_ID (-1) → slot 0
-        slot_ids = GDNStatePool.offset_slot_ids(raw_slot_ids)
+        # GDNSlotAllocator already returns 1-based slot IDs (1..max_num_seqs).
+        # PAD_SLOT_ID (-1) entries have been filtered out by the active_idx
+        # mask in gpu_model_runner, so raw_slot_ids only contains valid
+        # 1-based IDs.  No +1 offset needed (that would push max slot_id
+        # past pool_size, causing out-of-bounds access).
+        slot_ids = raw_slot_ids
         batch_size = slot_ids.shape[0]
 
         # ============================================================
@@ -222,7 +233,7 @@ class GDNAttentionBackend(AttentionBackend):
         # ============================================================
         conv_weight_local = layer.conv1d_weight[: layer.conv_dim]
 
-        if is_decode:
+        if is_pure_decode:
             mixed_qkv = causal_conv1d_update(
                 x=mixed_qkv,
                 conv_state=conv_pool,
@@ -232,15 +243,21 @@ class GDNAttentionBackend(AttentionBackend):
                 conv_state_indices=slot_ids,
             )
         else:
-            # Slice cu_seqlens_q to active batch (it's a shared full buffer)
-            cu_seqlens = forward_meta.cu_seqlens_q[: batch_size + 1]
+            # Build cu_seqlens from gdn_seq_lens_cpu (active seqs only).
+            # We must NOT slice forward_meta.cu_seqlens_q — it covers ALL
+            # batch slots (including finished ones) so indices don't align
+            # with the filtered active-only gdn_slot_ids.
+            cu_np = np.zeros(batch_size + 1, dtype=np.int32)
+            np.cumsum(seq_lens_cpu, out=cu_np[1:])
+            cu_seqlens = paddle.to_tensor(cu_np, dtype=paddle.int32, place=paddle.CUDAPlace(0))
+
             mixed_qkv = causal_conv1d_fn(
                 x=mixed_qkv.T,  # [dim, total_tokens]
                 weight=conv_weight_local,
                 bias=None,
                 conv_states=conv_pool,
                 query_start_loc=cu_seqlens,
-                seq_lens_cpu=forward_meta.gdn_seq_lens_cpu,
+                seq_lens_cpu=seq_lens_cpu,
                 cache_indices=slot_ids,
                 has_initial_state=forward_meta.gdn_has_initial_state,
                 activation="silu",
@@ -294,7 +311,7 @@ class GDNAttentionBackend(AttentionBackend):
         # ============================================================
         # 5. Core SSM Attention (via dispatcher)
         # ============================================================
-        if is_decode:
+        if is_pure_decode:
             # Decode: fused recurrent (Triton)
             q_4d = q.unsqueeze(1)  # [batch, 1, H, K]
             k_4d = k.unsqueeze(1)
@@ -314,8 +331,12 @@ class GDNAttentionBackend(AttentionBackend):
             core_attn_out = o.squeeze(1)  # [batch, H, V]
 
         else:
-            # Prefill/extend: chunk (Triton)
-            cu_seqlens = forward_meta.cu_seqlens_q[: batch_size + 1]
+            # Prefill / extend / mixed: chunk kernel (Triton).
+            # Build cu_seqlens from gdn_seq_lens_cpu (same as conv1d above).
+            cu_np = np.zeros(batch_size + 1, dtype=np.int32)
+            np.cumsum(seq_lens_cpu, out=cu_np[1:])
+            cu_seqlens = paddle.to_tensor(cu_np, dtype=paddle.int32, place=paddle.CUDAPlace(0))
+
             q_4d = q.unsqueeze(0)  # [1, total_tokens, H, K]
             k_4d = k.unsqueeze(0)
             v_4d = v.unsqueeze(0)
