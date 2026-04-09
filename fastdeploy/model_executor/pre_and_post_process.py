@@ -270,30 +270,51 @@ def _build_speculative_stream_transfer_data(
         output_type: 3=target, 4=draft.
         last_preempted_idx: paddle.Tensor [max_bsz] of per-request last preempted token IDs (CPU pinned).
     """
-    stream_transfer_datas = []
     accept_num_np = accept_num_cpu.numpy().flatten()
     accept_tokens_np = accept_tokens_cpu.numpy()
     batch_size = accept_num_np.shape[0]
 
     # Inject PREEMPTED_TOKEN_ID for slots that were preempted this step,
     # mirroring what speculate_save_output kernel does in the non-ZMQ path.
+    # Vectorized: avoid Python for-loop over batch.
     if last_preempted_idx is not None:
-        preempted_np = last_preempted_idx.numpy().flatten()
-        for bid in range(min(len(preempted_np), batch_size)):
-            if preempted_np[bid] != 0:
-                accept_num_np[bid] = PREEMPTED_TOKEN_ID
+        preempted_np = last_preempted_idx.numpy().flatten()[:batch_size]
+        accept_num_np[preempted_np != 0] = PREEMPTED_TOKEN_ID
 
-    # Build cumulative offset for logprobs slicing
-    logprobs_offset = 0
+    # Pre-compute integer accept counts and clamped num_tokens as contiguous arrays
+    accept_num_int = accept_num_np.astype(np.intp)
+    num_tokens_arr = np.maximum(accept_num_int, 0)
+
+    # Build cumulative offset for logprobs slicing (once, outside loop)
     cu_offsets = None
+    use_cu_offsets = False
     if cu_batch_token_offset is not None:
         cu_offsets = cu_batch_token_offset.numpy().flatten()
+        use_cu_offsets = len(cu_offsets) > batch_size  # need at least batch_size+1 entries
 
+    # Pre-compute per-bid logprobs start/end to avoid per-iteration branching
+    if use_cu_offsets:
+        logprobs_starts = cu_offsets[:batch_size].astype(np.intp)
+        logprobs_ends = cu_offsets[1 : batch_size + 1].astype(np.intp)
+    else:
+        cumsum = np.concatenate([[0], np.cumsum(num_tokens_arr[:batch_size])])
+        logprobs_starts = cumsum[:-1]
+        logprobs_ends = cumsum[1:]
+
+    # Reusable empty array to avoid repeated allocation
+    _empty_tokens = np.array([], dtype=np.int64)
+
+    # Pre-compute per-bid accept_num arrays (avoid np.array() call per iteration)
+    accept_num_2d = accept_num_int[:batch_size].reshape(-1, 1).astype(np.int32)
+
+    has_prompt_logprobs = bool(prompt_logprobs_list)
+    prompt_logprobs_len = len(prompt_logprobs_list) if has_prompt_logprobs else 0
+    has_logprobs = logprobs is not None
+
+    stream_transfer_datas = [None] * batch_size
     for bid in range(batch_size):
-        accept_num_val = int(accept_num_np[bid])
-        num_tokens = max(accept_num_val, 0)
-
-        tokens_np = accept_tokens_np[bid, :num_tokens] if num_tokens > 0 else np.array([], dtype=np.int64)
+        nt = num_tokens_arr[bid]
+        tokens_np = accept_tokens_np[bid, :nt] if nt > 0 else _empty_tokens
 
         stream_data = StreamTransferData(
             decoder_state=DecoderState.TEXT,
@@ -301,26 +322,18 @@ def _build_speculative_stream_transfer_data(
             tokens=tokens_np,
             speculative_decoding=True,
             accept_tokens=tokens_np,
-            accept_num=np.array([accept_num_val], dtype=np.int32),
+            accept_num=accept_num_2d[bid : bid + 1].reshape(-1),
             output_type=output_type,
         )
 
-        if cu_offsets is not None and len(cu_offsets) > bid + 1:
-            start = int(cu_offsets[bid])
-            end = int(cu_offsets[bid + 1])
-        else:
-            start = logprobs_offset
-            end = logprobs_offset + num_tokens
-
         # Slice logprobs for this request's accepted tokens
-        if logprobs is not None and num_tokens > 0:
-            stream_data.logprobs = logprobs.slice_rows(start, end)
+        if has_logprobs and nt > 0:
+            stream_data.logprobs = logprobs.slice_rows(int(logprobs_starts[bid]), int(logprobs_ends[bid]))
 
-        if prompt_logprobs_list and bid < len(prompt_logprobs_list):
+        if has_prompt_logprobs and bid < prompt_logprobs_len:
             stream_data.prompt_logprobs = prompt_logprobs_list[bid]
 
-        logprobs_offset += num_tokens
-        stream_transfer_datas.append(stream_data)
+        stream_transfer_datas[bid] = stream_data
 
     return stream_transfer_datas
 
@@ -638,14 +651,22 @@ def save_output_specualate(
             async_output_queue.put(output)
 
             # draft tokens (mtype=4): when enable_draft_logprob and logprobs available
+            # Reuse the numpy arrays already computed in the target build to avoid
+            # a second numpy conversion + batch loop. Only output_type differs.
             if sampler_output.logprobs_tensors is not None and enable_draft_logprob:
-                draft_output = _build_speculative_stream_transfer_data(
-                    accept_tokens_cpu=recover_share_inputs["accept_tokens_cpu"],
-                    accept_num_cpu=recover_share_inputs["accept_num_cpu"],
-                    logprobs=sampler_output.logprobs_tensors,
-                    cu_batch_token_offset=sampler_output.cu_batch_token_offset,
-                    output_type=4,
-                )
+                draft_output = []
+                for sd in output:
+                    draft_sd = StreamTransferData(
+                        decoder_state=sd.decoder_state,
+                        batch_id=sd.batch_id,
+                        tokens=sd.tokens,
+                        speculative_decoding=True,
+                        accept_tokens=sd.accept_tokens,
+                        accept_num=sd.accept_num,
+                        output_type=4,
+                    )
+                    draft_sd.logprobs = sd.logprobs
+                    draft_output.append(draft_sd)
                 async_output_queue.put(draft_output)
 
         share_inputs["last_preempted_idx"][:] = 0
