@@ -12,7 +12,7 @@ The following installation methods are available when your environment meets the
 
 ## 1. Pre-built Docker Installation (Recommended)
 
-**Notice**: The pre-built image supports SM 80/86/89/90 architecture GPUs (e.g. A800/H800/L20/L40/4090).
+**Notice**: The pre-built image supports SM 80/86/89/90 architecture GPUs (e.g. A800/H800/L20/L40/4090), and requires Python 3.10.
 
 ```shell
 # CUDA 12.6
@@ -57,7 +57,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 
 ## 3. Build from Source Using Docker
 
-- Note: ```dockerfiles/Dockerfile.gpu``` by default supports SM 80/86/89/90 architectures. To support other architectures, modify ```bash build.sh 1 python false [80,90]``` in the Dockerfile. It's recommended to specify no more than 2 architectures.
+> Note: `dockerfiles/Dockerfile.gpu` currently supports CUDA 12.6 only, targeting SM 80/86/89/90 architectures, and requires Python 3.10. To support other architectures, modify ```bash build.sh 1 python false [80,90]``` in the Dockerfile. It's recommended to specify no more than 2 architectures.
 
 ```shell
 git clone https://github.com/PaddlePaddle/FastDeploy

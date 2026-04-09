@@ -14,7 +14,7 @@
 
 ## 1. 预编译Docker安装(推荐)
 
-**注意**： 预编译镜像支持 80/86/89/90 架构的GPU硬件 (如 A800/H800/L20/L40/4090)。
+**注意**： 预编译镜像支持 80/86/89/90 架构的GPU硬件 (如 A800/H800/L20/L40/4090) 且仅支持 Python 3.10。
 
 ``` shell
 # CUDA 12.6
@@ -60,7 +60,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 
 ## 3. 镜像自行构建
 
-> 注意 ```dockerfiles/Dockerfile.gpu``` 默认编译的架构支持SM 80/86/89/90，如若需要支持其它架构，需自行修改Dockerfile中的 ```bash build.sh 1 python false [80,90]```，建议不超过2个架构。
+> 注意 ```dockerfiles/Dockerfile.gpu``` 默认编译产物仅支持 SM 80/86/89/90 架构，基于 CUDA 12.6 环境构建，且仅支持 Python 3.10，如若需要支持其它架构，需自行修改Dockerfile中的 ```bash build.sh 1 python false [80,90]```，建议不超过2个架构。
 
 ```
 git clone https://github.com/PaddlePaddle/FastDeploy
