@@ -97,7 +97,7 @@ class XPUModelRunner(ModelRunnerBase):
         local_rank: int,
     ):
         super().__init__(fd_config=fd_config, device=device)
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -485,12 +485,12 @@ class XPUModelRunner(ModelRunnerBase):
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
                         grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                        mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                        mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                         # add feature to encoder cache
                         self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
-                        feature_idx += mm_token_lenght
+                        feature_idx += mm_token_length
                         thw_idx += 1
 
                     feature_start = feature_position.offset
@@ -510,13 +510,13 @@ class XPUModelRunner(ModelRunnerBase):
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             for feature_position in multi_vision_inputs["feature_position_list"]:
                 grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                 feature_start = feature_position.offset
                 feature_end = feature_position.offset + feature_position.length
                 merge_image_features.append(mm_feature[feature_start:feature_end])
-                feature_idx += mm_token_lenght
+                feature_idx += mm_token_length
                 thw_idx += 1
             self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
 
@@ -1585,6 +1585,12 @@ class XPUModelRunner(ModelRunnerBase):
             sampler_output = None
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        sampler_output.sampled_token_ids,
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
             else:
                 sampler_output = self.sampler(
                     logits,
@@ -1592,6 +1598,27 @@ class XPUModelRunner(ModelRunnerBase):
                     self.model_config.max_model_len,
                     self.share_inputs,
                 )
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_tokens"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_num"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["step_idx"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["stop_flags"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
 
             prompt_logprobs_list = None
             if not self.speculative_decoding:

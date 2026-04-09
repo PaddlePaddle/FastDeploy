@@ -75,7 +75,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass", "flashinfer-cutedsl" and "flashinfer-trtllm" can be set currently.
     "FD_MOE_BACKEND": lambda: os.getenv("FD_MOE_BACKEND", "cutlass"),
     # Set nvfp4 load interleaved weight scale.
-    "FD_NVFP4_LOAD_BLOCKSCALE_LEAVE": lambda: os.getenv("FD_NVFP4_LOAD_BLOCKSCALE_LEAVE", "0"),
+    "FD_NVFP4_LOAD_BLOCKSCALE_LEAVE": lambda: bool(int(os.getenv("FD_NVFP4_LOAD_BLOCKSCALE_LEAVE", "0"))),
     # Set mxfp4 backend."flashinfer" can be set currently.
     "FD_MOE_MXFP4_BACKEND": lambda: os.getenv("FD_MOE_MXFP4_BACKEND", "flashinfer"),
     # Whether to use Machete for wint4 dense gemm.
@@ -88,6 +88,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_PD_CHANGEABLE": lambda: os.getenv("FD_PD_CHANGEABLE", "0"),
     # Whether to use DeepGemm for FP8 blockwise MoE.
     "FD_USE_DEEP_GEMM": lambda: bool(int(os.getenv("FD_USE_DEEP_GEMM", "0"))),
+    # Whether to use DeepGemm for FP8 blockwise MoE.
+    "FD_USE_BLACKWELL_GEMM": lambda: bool(int(os.getenv("FD_USE_BLACKWELL_GEMM", "0"))),
     # Whether to use PFCCLab/DeepEP.
     "FD_USE_PFCC_DEEP_EP": lambda: bool(int(os.getenv("FD_USE_PFCC_DEEP_EP", "0"))),
     # Whether to use aggregate send.
@@ -266,6 +268,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Whether to align RoPE and moe gate precision with training
+    "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),
 }
 
 

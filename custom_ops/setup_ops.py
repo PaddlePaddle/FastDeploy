@@ -723,6 +723,8 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
             "-Igpu_ops",
             "-DPADDLE_DEV",
             "-DPADDLE_WITH_CUSTOM_DEVICE_METAX_GPU",
+            "-Xcompiler",
+            "-Wno-non-pod-varargs",
         ],
     }
 

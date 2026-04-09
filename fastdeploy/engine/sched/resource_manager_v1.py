@@ -205,11 +205,11 @@ class ResourceManagerV1(ResourceManager):
         self.need_block_num_map = dict()
 
         self.encoder_cache = None
-        if config.model_config.enable_mm and config.cache_config.max_encoder_cache > 0:
+        if config.enable_mm_runtime and config.cache_config.max_encoder_cache > 0:
             self.encoder_cache = EncoderCacheManager(config.cache_config.max_encoder_cache)
 
         self.processor_cache = None
-        if config.model_config.enable_mm and config.cache_config.max_processor_cache > 0:
+        if config.enable_mm_runtime and config.cache_config.max_processor_cache > 0:
             max_processor_cache_in_bytes = int(config.cache_config.max_processor_cache * 1024 * 1024 * 1024)
             self.processor_cache = ProcessorCacheManager(max_processor_cache_in_bytes)
 
@@ -550,7 +550,7 @@ class ResourceManagerV1(ResourceManager):
             num_new_tokens = token_budget // self.config.cache_config.block_size * self.config.cache_config.block_size
         request.with_image = False
 
-        if not self.config.model_config.enable_mm:
+        if not self.config.enable_mm_runtime:
             return num_new_tokens
 
         inputs = request.multimodal_inputs
@@ -941,7 +941,13 @@ class ResourceManagerV1(ResourceManager):
             if not preempted_reqs:
                 skip_requests: list[Request] = []
                 while self.waiting and token_budget > 0:
-                    if len(self.running) == self.max_num_seqs:
+                    if (
+                        len(self.running)
+                        + len(self.to_be_rescheduled_request_id_set)
+                        + len(self.to_be_aborted_req_id_set)
+                        + sum([req.status == RequestStatus.PREEMPTED for req in self.waiting])
+                        >= self.max_num_seqs
+                    ):
                         break
 
                     request = self.waiting[0]
@@ -984,6 +990,10 @@ class ResourceManagerV1(ResourceManager):
                         ):
                             continue
                         # Allocate blocks for the tokens that does not hit cache
+                        if envs.FD_DISABLE_CHUNKED_PREFILL:
+                            # Disable chunk prefill
+                            if token_budget < request.need_prefill_tokens:
+                                break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         if num_new_tokens == 0:
                             if self.config.cache_config.enable_prefix_caching:
@@ -1049,6 +1059,10 @@ class ResourceManagerV1(ResourceManager):
                                 break
 
                         # Allocate blocks for the tokens that does not hit cache
+                        if envs.FD_DISABLE_CHUNKED_PREFILL:
+                            # Disable chunk prefill
+                            if token_budget < request.need_prefill_tokens:
+                                break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         if num_new_tokens == 0:
                             if self.config.cache_config.enable_prefix_caching:
