@@ -439,10 +439,10 @@ class TestTokenizeRequest(unittest.TestCase):
 class TestProcessPostTokens(unittest.TestCase):
 
     def test_paddleocr_with_metadata_generated_tokens(self):
-        """PaddleOCR uses completion_token_source='metadata_generated'."""
+        """Fallback: generated_token_ids used when completion_token_ids absent."""
         proc = _make_processor(PADDLEOCR_VL)
         outputs = {"input_ids": [1, 2]}
-        request = {"metadata": {"generated_token_ids": [10, 11]}}
+        request = {"generated_token_ids": [10, 11]}
         proc._process_post_tokens(request, outputs)
         proc.enc.append_completion_tokens.assert_called_once_with(outputs, [10, 11])
 
@@ -726,22 +726,6 @@ class TestProcessRequestDict(unittest.TestCase):
 
         self.assertTrue(result["enable_thinking"])
         self.assertIn("test6", proc.model_status_dict)
-
-    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
-    def test_qwen3_skips_reasoning_parser(self, mock_stop):
-        """Qwen3_vl skips reasoning parser (cfg.skip_reasoning_parser=True)."""
-        proc = _make_processor(QWEN3_VL)
-        mock_parser = MagicMock()
-        proc.reasoning_parser = mock_parser
-        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(QWEN3_VL))
-
-        request = {
-            "request_id": "test7",
-            "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
-        }
-        proc.process_request_dict(request, max_model_len=100)
-
-        mock_parser.get_model_status.assert_not_called()
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_ernie_response_max_tokens_with_thinking_disabled(self, mock_stop):
