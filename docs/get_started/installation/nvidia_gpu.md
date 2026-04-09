@@ -69,6 +69,8 @@ First install paddlepaddle-gpu. For detailed instructions, refer to [PaddlePaddl
 ```shell
 python -m pip install paddlepaddle-gpu==3.3.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
+
+Then clone the source code and build:
 ```shell
 git clone https://github.com/PaddlePaddle/FastDeploy
 cd FastDeploy
