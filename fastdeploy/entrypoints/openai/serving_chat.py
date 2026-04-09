@@ -44,6 +44,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
+from fastdeploy.logger.request_logger import log_request, log_request_error
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
@@ -112,14 +113,14 @@ class OpenAIServingChat:
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
-            api_server_logger.error(err_msg)
+            log_request_error(message=err_msg)
             return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
 
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
-                api_server_logger.error(err_msg)
+                log_request_error(message=err_msg)
                 return ErrorResponse(
                     error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
@@ -129,7 +130,7 @@ class OpenAIServingChat:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            api_server_logger.info(f"current {self.engine_client.semaphore.status()}")
+            log_request(level=1, message="semaphore status: {status}", status=self.engine_client.semaphore.status())
 
             if request.request_id is not None:
                 request_id = request.request_id
@@ -141,7 +142,11 @@ class OpenAIServingChat:
                 request_id = f"chatcmpl-{uuid.uuid4()}"
             tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
             del request.trace_context
-            api_server_logger.info(f"create chat completion request: {request_id}")
+            log_request(
+                level=0,
+                message="create chat completion request: {request_id}",
+                request_id=request_id,
+            )
             prompt_tokens = None
             max_tokens = None
             try:
@@ -156,14 +161,19 @@ class OpenAIServingChat:
                 if isinstance(prompt_token_ids, np.ndarray):
                     prompt_token_ids = prompt_token_ids.tolist()
             except ParameterError as e:
-                api_server_logger.error(f"request[{request_id}] generator error: {str(e)}, {e.message}")
+                log_request_error(
+                    message="request[{request_id}] generator error: {error}, {error_message}",
+                    request_id=request_id,
+                    error=str(e),
+                    error_message=e.message,
+                )
                 self.engine_client.semaphore.release()
                 return ErrorResponse(
                     error=ErrorInfo(message=str(e.message), type=ErrorType.INVALID_REQUEST_ERROR, param=e.param)
                 )
             except Exception as e:
                 error_msg = f"request[{request_id}] generator error: {str(e)}, {str(traceback.format_exc())}"
-                api_server_logger.error(error_msg)
+                log_request_error(message=error_msg)
                 self.engine_client.semaphore.release()
                 return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR))
 
@@ -178,12 +188,12 @@ class OpenAIServingChat:
                     )
                 except Exception as e:
                     error_msg = f"request[{request_id}]full generator error: {str(e)}, {str(traceback.format_exc())}"
-                    api_server_logger.error(error_msg)
+                    log_request_error(message=error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
         except asyncio.CancelledError as e:
             await self.engine_client.abort(f"{request_id}_0", 1 if request.n is None else request.n)
             error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
             return ErrorResponse(
                 error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
             )
@@ -192,13 +202,13 @@ class OpenAIServingChat:
                 f"request[{request_id}] waiting error: {str(e)}, {str(traceback.format_exc())}, "
                 f"max waiting time: {self.max_waiting_time}"
             )
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
             return ErrorResponse(
                 error=ErrorInfo(message=error_msg, type=ErrorType.TIMEOUT_ERROR, code=ErrorCode.TIMEOUT)
             )
 
     def _create_streaming_error_response(self, message: str) -> str:
-        api_server_logger.error(message)
+        log_request_error(message=message)
         error_response = ErrorResponse(error=ErrorInfo(message=message, type=ErrorType.INTERNAL_ERROR))
         return error_response.model_dump_json()
 
@@ -249,7 +259,7 @@ class OpenAIServingChat:
             choices=[],
             model=model_name,
         )
-        api_server_logger.info(f"create chat completion request: {request_id}")
+        log_request(level=0, message="create chat completion request: {request_id}", request_id=request_id)
 
         try:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
@@ -372,7 +382,12 @@ class OpenAIServingChat:
                                     completion_tokens_details=CompletionTokenUsageInfo(reasoning_tokens=0),
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
-                            api_server_logger.info(f"Chat Streaming response send_idx 0: {chunk.model_dump_json()}")
+                            log_request(
+                                level=0,
+                                message="Chat Streaming response send_idx 0: request_id={request_id}, completion_tokens={completion_tokens}",
+                                request_id=request_id,
+                                completion_tokens=0,
+                            )
                         first_iteration = False
 
                     output = res["outputs"]
@@ -497,7 +512,13 @@ class OpenAIServingChat:
                         chunk.choices = choices
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         if res["finished"]:
-                            api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
+                            log_request(
+                                level=0,
+                                message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}",
+                                request_id=request_id,
+                                finish_reason=choice.finish_reason,
+                                completion_tokens=previous_num_tokens[idx],
+                            )
                         choices = []
 
             if include_usage:
@@ -525,7 +546,7 @@ class OpenAIServingChat:
         except asyncio.CancelledError as e:
             await self.engine_client.abort(f"{request_id}_0", 1 if request.n is None else request.n)
             error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
         except Exception as e:
             error_data = self._create_streaming_error_response(
                 f"request[{request_id}] generate stream error: {str(e)}, {str(traceback.format_exc())}"
@@ -536,7 +557,12 @@ class OpenAIServingChat:
             tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
-            api_server_logger.info(f"release {request_id} {self.engine_client.semaphore.status()}")
+            log_request(
+                level=2,
+                message="release {request_id} {status}",
+                request_id=request_id,
+                status=self.engine_client.semaphore.status(),
+            )
             yield "data: [DONE]\n\n"
 
     async def chat_completion_full_generator(
@@ -704,7 +730,7 @@ class OpenAIServingChat:
             tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
-            api_server_logger.info(f"release {self.engine_client.semaphore.status()}")
+            log_request(level=1, message="release {status}", status=self.engine_client.semaphore.status())
 
         num_prompt_tokens = len(prompt_token_ids)
         num_generated_tokens = sum(previous_num_tokens)
@@ -731,7 +757,7 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage,
         )
-        api_server_logger.info(f"Chat response: {res.model_dump_json()}")
+        log_request(level=2, message="Chat response: {response}", response=res.model_dump_json())
         return res
 
     async def _create_chat_completion_choice(
@@ -904,7 +930,7 @@ class OpenAIServingChat:
 
         except Exception as e:
             error_msg = f"Error in _build_logprobs_response: {e}, {str(traceback.format_exc())}"
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
             return None
 
     def _build_prompt_logprobs(

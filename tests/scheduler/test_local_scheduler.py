@@ -449,12 +449,14 @@ class TestLocalScheduler(unittest.TestCase):
         # Add request first
         self.scheduler.put_requests([self.mock_request_1])
 
-        with patch.object(scheduler_logger, "info") as mock_info:
+        with patch("fastdeploy.scheduler.local_scheduler.log_request") as mock_log_request:
             mock_output = self._create_test_request_output("req_1", finished=True)
             self.scheduler.put_results([mock_output])
 
-            # Should log finished response
-            self._assert_log_contains(mock_info, "finished responses")
+            # Should log finished response via log_request
+            mock_log_request.assert_called_once()
+            call_kwargs = mock_log_request.call_args[1]
+            self.assertIn("finished responses", call_kwargs.get("message", ""))
 
 
 if __name__ == "__main__":

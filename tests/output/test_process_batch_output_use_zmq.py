@@ -171,16 +171,20 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         # Mock _recycle_resources to track if it's called
         self.processor._recycle_resources = MagicMock()
 
-        # Mock the llm_logger module and envs.ENABLE_V1_KVCACHE_SCHEDULER
+        # Mock the log_request function and envs.ENABLE_V1_KVCACHE_SCHEDULER
         with (
-            patch("fastdeploy.output.token_processor.llm_logger") as mock_logger,
+            patch("fastdeploy.output.token_processor.log_request") as mock_log_request,
             patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1),
         ):
             # Call the method
             result = self.processor._process_batch_output_use_zmq([stream_data])
 
-            # Verify the recycling logic was triggered
-            mock_logger.info.assert_any_call(f"start to recycle abort request_id {task_id}")
+            # Verify the recycling logic was triggered via log_request
+            mock_log_request.assert_any_call(
+                level=1,
+                message="start to recycle abort request_id {request_id}",
+                request_id=task_id,
+            )
             self.processor.resource_manager.recycle_abort_task.assert_called_once_with(task_id)
             self.assertNotIn(task_id, self.processor.resource_manager.to_be_aborted_req_id_set)
             self.assertEqual(len(result), 0)  # Aborted task is skipped (continue)

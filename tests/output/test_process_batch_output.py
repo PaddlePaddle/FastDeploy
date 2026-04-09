@@ -295,9 +295,9 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         processor.tokens_counter[task_id] = 0
         processor.tokens_counter[task2.request_id] = 0
 
-        # Mock llm_logger to capture the log message and envs.ENABLE_V1_KVCACHE_SCHEDULER
+        # Mock log_request to capture the log message and envs.ENABLE_V1_KVCACHE_SCHEDULER
         with (
-            patch("fastdeploy.output.token_processor.llm_logger") as mock_logger,
+            patch("fastdeploy.output.token_processor.log_request") as mock_log_request,
             patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0),
         ):
             # Call the method
@@ -306,7 +306,11 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
             # In speculative decoding mode, when accept_num[i] == PREEMPTED_TOKEN_ID,
             # the code logs "sync preemption" and continues without triggering abort recycling
             # This is the expected behavior for speculative decoding mode
-            mock_logger.info.assert_any_call(f"sync preemption for request_id {task_id} done.")
+            mock_log_request.assert_any_call(
+                level=1,
+                message="sync preemption for request_id {request_id} done.",
+                request_id=task_id,
+            )
             # Verify that _recycle_resources was NOT called for the aborted task
             # (it may be called for other tasks like test_request_2 if they receive EOS tokens)
             for call in processor._recycle_resources.call_args_list:

@@ -54,7 +54,7 @@ class TestSetupLogging(unittest.TestCase):
         logger = logging.getLogger("fastdeploy")
         self.assertTrue(logger.handlers)
         handler_classes = [h.__class__.__name__ for h in logger.handlers]
-        self.assertIn("TimedRotatingFileHandler", handler_classes)
+        self.assertIn("LazyFileHandler", handler_classes)
 
     def test_debug_level_affects_handlers(self):
         """FD_DEBUG=1 should force DEBUG level"""
@@ -179,6 +179,62 @@ class TestMaxLevelFilter(unittest.TestCase):
         )
         self.assertTrue(filter.filter(info_record))
         self.assertFalse(filter.filter(warning_record))
+
+
+class TestChannelLoggers(unittest.TestCase):
+    """测试日志通道配置"""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp(prefix="logger_channel_test_")
+        if hasattr(setup_logging, "_configured"):
+            delattr(setup_logging, "_configured")
+        self.patches = [
+            patch("fastdeploy.envs.FD_LOG_DIR", self.temp_dir),
+            patch("fastdeploy.envs.FD_DEBUG", 0),
+            patch("fastdeploy.envs.FD_LOG_BACKUP_COUNT", "3"),
+            patch("fastdeploy.envs.FD_LOG_LEVEL", None),
+        ]
+        [p.start() for p in self.patches]
+
+    def tearDown(self):
+        [p.stop() for p in self.patches]
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+        if hasattr(setup_logging, "_configured"):
+            delattr(setup_logging, "_configured")
+
+    @patch("logging.config.dictConfig")
+    def test_request_channel_configured(self, mock_dict):
+        """request 通道应该配置 request_file handler"""
+        setup_logging()
+        config_used = mock_dict.call_args[0][0]
+        self.assertIn("fastdeploy.request", config_used["loggers"])
+        self.assertIn("request_file", config_used["loggers"]["fastdeploy.request"]["handlers"])
+
+    @patch("logging.config.dictConfig")
+    def test_main_channel_configured(self, mock_dict):
+        """main 通道应该配置 main_file 和 console_file handlers"""
+        setup_logging()
+        config_used = mock_dict.call_args[0][0]
+        self.assertIn("fastdeploy.main", config_used["loggers"])
+        self.assertIn("main_file", config_used["loggers"]["fastdeploy.main"]["handlers"])
+        self.assertIn("console_file", config_used["loggers"]["fastdeploy.main"]["handlers"])
+
+    @patch("logging.config.dictConfig")
+    def test_console_channel_configured(self, mock_dict):
+        """console 通道应该配置 console_file 和 console_stdout handlers"""
+        setup_logging()
+        config_used = mock_dict.call_args[0][0]
+        self.assertIn("fastdeploy.console", config_used["loggers"])
+        self.assertIn("console_file", config_used["loggers"]["fastdeploy.console"]["handlers"])
+        self.assertIn("console_stdout", config_used["loggers"]["fastdeploy.console"]["handlers"])
+
+    @patch("logging.config.dictConfig")
+    def test_request_file_handler_configured(self, mock_dict):
+        """request_file handler 应该输出到 request.log"""
+        setup_logging()
+        config_used = mock_dict.call_args[0][0]
+        self.assertIn("request_file", config_used["handlers"])
+        self.assertTrue(config_used["handlers"]["request_file"]["filename"].endswith("request.log"))
 
 
 if __name__ == "__main__":

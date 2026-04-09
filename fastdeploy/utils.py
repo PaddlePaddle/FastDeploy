@@ -54,6 +54,7 @@ from typing_extensions import TypeIs, assert_never
 from fastdeploy import envs
 from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
 from fastdeploy.logger.logger import FastDeployLogger
+from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.worker.output import PromptLogprobs
 
 T = TypeVar("T")
@@ -201,7 +202,12 @@ class ExceptionHandler:
                 param=param,
             )
         )
-        api_server_logger.error(f"invalid_request_error: {request.url} {param} {message}")
+        log_request_error(
+            message="invalid_request_error: {url} {param} {msg}",
+            url=str(request.url),
+            param=param,
+            msg=message,
+        )
         return JSONResponse(content=err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
 
 
@@ -1055,9 +1061,9 @@ def parse_quantization(value: str):
 
 
 # 日志使用全局访问点（兼容原有使用方式）
-def get_logger(name, file_name=None, without_formater=False, print_to_console=False):
+def get_logger(name, file_name=None, without_formater=False, print_to_console=False, channel=None):
     """全局函数包装器，保持向后兼容"""
-    return FastDeployLogger().get_logger(name, file_name, without_formater, print_to_console)
+    return FastDeployLogger().get_logger(name, file_name, without_formater, print_to_console, channel=channel)
 
 
 def check_download_links(bos_client, links, timeout=1):
@@ -1156,16 +1162,16 @@ def download_from_bos(bos_client, bos_links, retry: int = 0):
             break
 
 
-llm_logger = get_logger("fastdeploy", "fastdeploy.log")
-data_processor_logger = get_logger("data_processor", "data_processor.log")
-scheduler_logger = get_logger("scheduler", "scheduler.log")
-api_server_logger = get_logger("api_server", "api_server.log")
-console_logger = get_logger("console", "console.log", print_to_console=True)
+llm_logger = get_logger("fastdeploy", channel="main")
+data_processor_logger = get_logger("data_processor", channel="main")
+scheduler_logger = get_logger("scheduler", channel="main")
+api_server_logger = get_logger("api_server", channel="main")
+console_logger = get_logger(None, channel="console")
 spec_logger = get_logger("speculate", "speculate.log")
-zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
+zmq_client_logger = get_logger("zmq_client", "comm.log")
 trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
-router_logger = get_logger("router", "router.log")
-fmq_logger = get_logger("fmq", "fmq.log")
+router_logger = get_logger("router", "comm.log")
+fmq_logger = get_logger("fmq", "comm.log")
 obj_logger = get_logger("obj", "obj.log")  # debug内存问题
 register_manager_logger = get_logger("register_manager", "register_manager.log")
 

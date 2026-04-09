@@ -41,6 +41,7 @@ from fastdeploy.entrypoints.openai.tool_parsers.abstract_tool_parser import (
     ToolParser,
     ToolParserManager,
 )
+from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.utils import data_processor_logger as logger
 
 
@@ -254,8 +255,10 @@ class ErnieX1ToolParser(ToolParser):
                 logger.debug("Skipping text %s - no arguments", delta_text)
                 delta = None
 
-            elif cur_arguments is None and prev_arguments is not None:
-                logger.error("should be impossible to have arguments reset " "mid-call. skipping streaming anything.")
+            elif not cur_arguments and prev_arguments:
+                log_request_error(
+                    message="should be impossible to have arguments reset mid-call. skipping streaming anything."
+                )
                 delta = None
 
             elif cur_arguments is not None and prev_arguments is None:

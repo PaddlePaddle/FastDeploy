@@ -50,7 +50,7 @@ class FastDeployLogger:
                 setup_logging()
                 self._initialized = True
 
-    def get_logger(self, name, file_name=None, without_formater=False, print_to_console=False):
+    def get_logger(self, name, file_name=None, without_formater=False, print_to_console=False, channel=None):
         """
         Get logger (compatible with the original interface)
 
@@ -59,7 +59,14 @@ class FastDeployLogger:
             file_name: Log file name (for compatibility)
             without_formater: Whether to not use a formatter
             print_to_console: Whether to print to console
+            channel: Log channel (main, request, console)
         """
+        # If channel is specified, use channel-based logging
+        if channel is not None:
+            if not self._initialized:
+                self._initialize()
+            return self._get_channel_logger(name, channel)
+
         # If only one parameter is provided, use the new unified naming convention
         if file_name is None and not without_formater and not print_to_console:
             # Lazy initialization
@@ -74,8 +81,18 @@ class FastDeployLogger:
         """
         New unified way to get logger
         """
-        if name is None:
-            return logging.getLogger("fastdeploy")
+        return self._get_channel_logger(name, "main")
+
+    def _get_channel_logger(self, name, channel):
+        """
+        Get logger through channel
+
+        Args:
+            name: logger name
+            channel: log channel (main, request, console)
+        """
+        if name is None or name == "fastdeploy":
+            return logging.getLogger(f"fastdeploy.{channel}")
 
         # Handle __main__ special case
         if name == "__main__":
@@ -86,15 +103,14 @@ class FastDeployLogger:
                 # Get the main module file name
                 base_name = Path(__main__.__file__).stem
                 # Create logger with prefix
-                return logging.getLogger(f"fastdeploy.main.{base_name}")
-            return logging.getLogger("fastdeploy.main")
+                return logging.getLogger(f"fastdeploy.{channel}.{base_name}")
+            return logging.getLogger(f"fastdeploy.{channel}")
 
         # If already in fastdeploy namespace, use directly
-        if name.startswith("fastdeploy.") or name == "fastdeploy":
+        if name.startswith("fastdeploy."):
             return logging.getLogger(name)
-        else:
-            # Add fastdeploy prefix for other cases
-            return logging.getLogger(f"fastdeploy.{name}")
+
+        return logging.getLogger(f"fastdeploy.{channel}.{name}")
 
     def get_trace_logger(self, name, file_name, without_formater=False, print_to_console=False):
         """
