@@ -81,6 +81,7 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     )
 
     model_quantization_config = model_config.quantization_config
+    quantization_config = model_quantization_config
 
     # If CLI provides a full quantization_config JSON, handle priority with config.json
     if cli_is_full_config:
@@ -93,8 +94,6 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
                     f"config.json: {model_quantization_config}, "
                     f"--quantization: {cli_quantization}"
                 )
-            # config.json takes priority, quantization_config unchanged
-            quantization_config = model_quantization_config
         else:
             # config.json has no quantization_config, use CLI's full config
             quantization_config = cli_quantization
