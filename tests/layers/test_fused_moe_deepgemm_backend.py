@@ -33,24 +33,32 @@ import pytest
 
 # ── Stub GPU-only modules ───────────────────────────────────────────────────
 
+_SENTINEL = object()
+
 
 class _GpuOpsStub(types.ModuleType):
+    """Stub for GPU-only op modules; raises on unstubbed op calls."""
+
     __path__ = []
 
     def __getattr__(self, name):
         fqn = f"{self.__name__}.{name}"
         sub = sys.modules.get(fqn)
-        return sub if sub is not None else None
+        if sub is not None:
+            return sub
+
+        def _unstubbed(*args, **kwargs):
+            raise NotImplementedError(f"GPU op {fqn!r} not stubbed — add monkeypatch.setattr in the test")
+
+        _unstubbed.__name__ = name
+        return _unstubbed
 
 
-# Build the ops.gpu stub chain — kept alive for runtime attribute access
-# (source uses ``fastdeploy.model_executor.ops.gpu.<fn>(...)``).
+# Build stub objects and wire their attributes — NO sys.modules injection yet.
 _ops = types.ModuleType("fastdeploy.model_executor.ops")
 _ops.__path__ = []
-sys.modules.setdefault("fastdeploy.model_executor.ops", _ops)
 
 _gpu = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
-sys.modules["fastdeploy.model_executor.ops.gpu"] = _gpu
 _ops.gpu = _gpu
 
 _dg = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
@@ -58,17 +66,14 @@ _dg.m_grouped_fp8_gemm_nt_contiguous = None
 _dg.m_grouped_fp8_gemm_nt_masked = None
 _dg.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous = None
 _dg.m_grouped_gemm_fp8_fp8_bf16_nt_masked = None
-sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = _dg
 _gpu.deep_gemm = _dg
 
 _triton = _GpuOpsStub("fastdeploy.model_executor.ops.triton_ops")
-sys.modules["fastdeploy.model_executor.ops.triton_ops"] = _triton
 _ops.triton_ops = _triton
 
 _tu = types.ModuleType("fastdeploy.model_executor.ops.triton_ops.triton_utils")
 _tu.enable_compat_on_triton_kernel = lambda fn: fn
 _tu.paddle_driver = None
-sys.modules["fastdeploy.model_executor.ops.triton_ops.triton_utils"] = _tu
 
 _ep = types.ModuleType("fastdeploy.model_executor.layers.moe.ep")
 
@@ -80,17 +85,51 @@ class _BufferStub:
 
 
 _ep.deep_ep = SimpleNamespace(Buffer=_BufferStub)
-sys.modules["fastdeploy.model_executor.layers.moe.ep"] = _ep
 
-# Wire ops onto the model_executor module so runtime attribute access works
-import fastdeploy.model_executor as _me  # noqa: E402
-from fastdeploy.model_executor.layers.moe import (  # noqa: E402
-    fused_moe_deepgemm_backend as dgb,
-)
+# Mapping of all stubs to inject into sys.modules during tests.
+_STUB_ENTRIES = {
+    "fastdeploy.model_executor.ops": _ops,
+    "fastdeploy.model_executor.ops.gpu": _gpu,
+    "fastdeploy.model_executor.ops.gpu.deep_gemm": _dg,
+    "fastdeploy.model_executor.ops.triton_ops": _triton,
+    "fastdeploy.model_executor.ops.triton_ops.triton_utils": _tu,
+    "fastdeploy.model_executor.layers.moe.ep": _ep,
+}
 
-_me.ops = _ops
+dgb = None  # populated by _install_stubs fixture
 
-# ── Helpers ─────────────────────────────────────────────────────────────────
+
+@pytest.fixture(autouse=True, scope="module")
+def _install_stubs():
+    """Inject GPU stubs into sys.modules for import, restore on teardown."""
+    global dgb  # noqa: PLW0603
+    saved = {}
+    for key, mod in _STUB_ENTRIES.items():
+        saved[key] = sys.modules.get(key, _SENTINEL)
+        sys.modules[key] = mod
+
+    import fastdeploy.model_executor as _me
+
+    old_ops = getattr(_me, "ops", _SENTINEL)
+    _me.ops = _ops
+
+    from fastdeploy.model_executor.layers.moe import fused_moe_deepgemm_backend as _dgb
+
+    dgb = _dgb
+
+    yield
+
+    # Teardown: restore sys.modules and module attributes
+    for key, orig in saved.items():
+        if orig is _SENTINEL:
+            sys.modules.pop(key, None)
+        else:
+            sys.modules[key] = orig
+    if old_ops is _SENTINEL:
+        if hasattr(_me, "ops"):
+            delattr(_me, "ops")
+    else:
+        _me.ops = old_ops
 
 
 class _QuantConfig:
@@ -102,7 +141,7 @@ class _QuantConfig:
 
 
 class _DummyLayer(paddle.nn.Layer):
-    def __init__(self, experts=1, hidden=4, inter=2):
+    def __init__(self, experts=1, hidden=4, inter=2, phase="prefill"):
         super().__init__()
         self.num_local_experts = self.num_experts = experts
         self.hidden_size, self.moe_intermediate_size = hidden, inter
@@ -119,7 +158,7 @@ class _DummyLayer(paddle.nn.Layer):
             model_config=SimpleNamespace(
                 num_max_dispatch_tokens_per_rank=2,
                 model="test",
-                moe_phase=SimpleNamespace(phase="prefill"),
+                moe_phase=SimpleNamespace(phase=phase),
             ),
             scheduler_config=SimpleNamespace(splitwise_role="prefill", max_num_batched_tokens=4),
             eplb_config=SimpleNamespace(redundant_experts_num=0),
@@ -446,8 +485,12 @@ class TestApplyEpPrefillAdditive:
         gate = paddle.nn.Linear(H, layer.num_experts, bias_attr=False)
         x = paddle.ones([2, H], dtype="float32")
         shared = paddle.nn.Linear(H, H, bias_attr=False)
+        shared_calls = []
+        _orig_fwd = shared.forward
+        shared.forward = lambda inp: (shared_calls.append(True), _orig_fwd(inp))[1]
         out = m.apply_ep_prefill(layer, x, gate, shared_experts=shared)
         assert out.shape[-1] == H
+        assert shared_calls, "shared_experts was never invoked"
 
 
 # ── Tests: apply_ep_decode additive paths ───────────────────────────────────
@@ -458,7 +501,7 @@ class TestApplyEpDecodeAdditive:
     """apply_ep_decode shared_experts — not covered by upstream."""
 
     def test_shared_experts_branch(self, monkeypatch):
-        layer = _DummyLayer()
+        layer = _DummyLayer(phase="decode")
         m = _init(layer)
         H = layer.hidden_size
 
@@ -495,7 +538,11 @@ class TestApplyEpDecodeAdditive:
         )
 
         shared = paddle.nn.Linear(H, H, bias_attr=False)
+        shared_calls = []
+        _orig_fwd = shared.forward
+        shared.forward = lambda inp: (shared_calls.append(True), _orig_fwd(inp))[1]
         gate = paddle.nn.Linear(H, layer.num_experts, bias_attr=False)
         x = paddle.ones([2, H], dtype="float32")
         out = m.apply_ep_decode(layer, x, gate, shared_experts=shared)
         assert out.shape[-1] == H
+        assert shared_calls, "shared_experts was never invoked"
