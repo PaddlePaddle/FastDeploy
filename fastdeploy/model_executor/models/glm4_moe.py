@@ -24,6 +24,7 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -313,8 +314,9 @@ class Glm4MoeDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
+        proxy_rmsnorm = rms_norm_func if envs.FD_ENABLE_RL == 1 else None
         hidden_states, residual = self.input_layernorm(
-            hidden_states, residual_input=residual, forward_meta=forward_meta, proxy_rmsnorm=rms_norm_func
+            hidden_states, residual_input=residual, forward_meta=forward_meta, proxy_rmsnorm=proxy_rmsnorm
         )
 
         hidden_states = self.self_attn(
@@ -323,7 +325,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         )
 
         # Fully Connected
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual, proxy_rmsnorm=rms_norm_func)
+        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual, proxy_rmsnorm=proxy_rmsnorm)
 
         hidden_states = self.mlp(hidden_states, forward_meta)
 
