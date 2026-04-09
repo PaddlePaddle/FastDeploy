@@ -22,11 +22,12 @@ import paddle
 from paddleformers.transformers.image_utils import ChannelDimension
 
 from fastdeploy.engine.request import ImagePosition
+from fastdeploy.input.encodings.base_encoding import BaseEncoding
 from fastdeploy.input.utils import IDS_TYPE_FLAG, MAX_IMAGE_DIMENSION
 from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
-class ErnieEncoding:
+class ErnieEncoding(BaseEncoding):
     """Encoding strategy for Ernie4.5-VL models.
 
     All methods access the parent MultiModalProcessor via ``self.p``.
@@ -38,16 +39,13 @@ class ErnieEncoding:
     VID_START = "<|VIDEO_START|>"
     VID_END = "<|VIDEO_END|>"
 
-    def __init__(self, processor):
-        self.p = processor
-
     def init_extra(self, processor_kwargs):
         """Ernie-specific extra initialisation (pixel params, token type mapping, etc.)."""
-        self.p.image_min_pixels = processor_kwargs.get("image_min_pixels", 4 * 28 * 28)
-        self.p.image_max_pixels = processor_kwargs.get("image_max_pixels", 6177 * 28 * 28)
-        self.p.video_min_pixels = processor_kwargs.get("video_min_pixels", 299 * 28 * 28)
-        self.p.video_max_pixels = processor_kwargs.get("video_max_pixels", 1196 * 28 * 28)
-        self.p.frames_sample = processor_kwargs.get("video_frames_sample", self.p.cfg.default_frames_sample)
+        self.image_min_pixels = processor_kwargs.get("image_min_pixels", 4 * 28 * 28)
+        self.image_max_pixels = processor_kwargs.get("image_max_pixels", 6177 * 28 * 28)
+        self.video_min_pixels = processor_kwargs.get("video_min_pixels", 299 * 28 * 28)
+        self.video_max_pixels = processor_kwargs.get("video_max_pixels", 1196 * 28 * 28)
+        self.frames_sample = processor_kwargs.get("video_frames_sample", self.p.cfg.default_frames_sample)
 
         # Build token-type mapping for ernie boundary tokens
         self.token_type_mapping = self._build_token_type_mapping()
@@ -63,8 +61,8 @@ class ErnieEncoding:
         patches_h, patches_w = self.p.image_processor.get_smarted_resize(
             img.height,
             img.width,
-            min_pixels=self.p.image_min_pixels,
-            max_pixels=self.p.image_max_pixels,
+            min_pixels=self.image_min_pixels,
+            max_pixels=self.image_max_pixels,
         )[1]
         num_tokens = (patches_h * patches_w) // (self.p.spatial_conv_size**2)
         if token_len and token_len != num_tokens:
@@ -115,12 +113,12 @@ class ErnieEncoding:
         outputs["grid_thw"].append(np.array([[1, h, w]]))
         outputs["image_type_ids"].append(0)
 
-    def add_video(self, frames, outputs, uuid, token_len=None):
+    def add_video(self, frames, outputs, uuid, token_len=None, meta=None):
         patches_h, patches_w = self.p.image_processor.get_smarted_resize(
             frames[0].height,
             frames[0].width,
-            min_pixels=self.p.video_min_pixels,
-            max_pixels=self.p.video_max_pixels,
+            min_pixels=self.video_min_pixels,
+            max_pixels=self.video_max_pixels,
         )[1]
         num_frames = len(frames)
         num_tokens = (num_frames * patches_h * patches_w) // (self.p.spatial_conv_size**2 * self.p.temporal_conv_size)
@@ -190,7 +188,7 @@ class ErnieEncoding:
             "min_frames": item.get("min_frames", self.p.min_frames),
             "max_frames": item.get("max_frames", self.p.max_frames),
             "target_frames": item.get("target_frames", self.p.target_frames),
-            "frames_sample": item.get("frames_sample", self.p.frames_sample),
+            "frames_sample": item.get("frames_sample", self.frames_sample),
         }
         video_frame_args = self.set_video_frame_args(video_frame_args, meta)
 
@@ -210,7 +208,7 @@ class ErnieEncoding:
         # Ensure even number of frames for temporal conv
         if len(frames) % 2 != 0:
             frames.append(copy.deepcopy(frames[-1]))
-        return frames
+        return frames, {}
 
     def set_video_frame_args(self, video_frame_args, video_meta):
         """Set final frame sampling args based on priorities."""
@@ -340,10 +338,10 @@ class ErnieEncoding:
                 token_len = cur_idx - st
                 if not isinstance(video, tuple):
                     if isinstance(video, dict):
-                        frames = self.load_video(video["video"], video)
+                        frames, _ = self.load_video(video["video"], video)
                     else:
-                        frames = self.load_video(video, {})
-                    self.add_video(frames, outputs, uuid, token_len)
+                        frames, _ = self.load_video(video, {})
+                    self.add_video(frames, outputs, uuid, token_len=token_len)
                 else:
                     self.add_processed_video(video, outputs, uuid, token_len)
                 video_idx += 1
@@ -396,7 +394,7 @@ class ErnieEncoding:
         return calc_one(grid_thw)
 
     def pack_position_ids(self, outputs):
-        """Ernie: position_ids is np.array (list-of-lists → ndarray)."""
+        """Ernie: position_ids is np.array (list-of-lists -> ndarray)."""
         outputs["position_ids"] = np.array(outputs["position_ids"], dtype=np.int64)
         outputs["image_patch_id"] = self.p.image_token_id
 
@@ -407,8 +405,8 @@ class ErnieEncoding:
         patches_h, patches_w = self.p.image_processor.get_smarted_resize(
             height=target_height,
             width=target_width,
-            min_pixels=self.p.image_min_pixels,
-            max_pixels=self.p.image_max_pixels,
+            min_pixels=self.image_min_pixels,
+            max_pixels=self.image_max_pixels,
         )[1]
         max_image_tokens = (patches_h * patches_w) // (self.p.spatial_conv_size**2)
         max_image_tokens = min(max_image_tokens, seq_len)
@@ -416,8 +414,8 @@ class ErnieEncoding:
         patches_h, patches_w = self.p.image_processor.get_smarted_resize(
             height=target_height,
             width=target_width,
-            min_pixels=self.p.video_min_pixels,
-            max_pixels=self.p.video_max_pixels,
+            min_pixels=self.video_min_pixels,
+            max_pixels=self.video_max_pixels,
         )[1]
         max_video_tokens = (patches_h * patches_w) // (self.p.spatial_conv_size**2 * self.p.temporal_conv_size)
         max_video_tokens = min(max_video_tokens, seq_len)
@@ -427,7 +425,7 @@ class ErnieEncoding:
         resized_height, resized_width = self.p.image_processor.get_smarted_resize(
             height=MAX_IMAGE_DIMENSION,
             width=MAX_IMAGE_DIMENSION,
-            min_pixels=self.p.image_min_pixels,
-            max_pixels=self.p.image_max_pixels,
+            min_pixels=self.image_min_pixels,
+            max_pixels=self.image_max_pixels,
         )[0]
         return (resized_height, resized_width)

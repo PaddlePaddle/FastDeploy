@@ -20,6 +20,7 @@ import paddle
 from PIL import Image
 
 from fastdeploy.engine.request import ImagePosition
+from fastdeploy.input.encodings.base_encoding import BaseEncoding
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.input.video_utils import read_video_decord
 from fastdeploy.input.video_utils import sample_frames_paddleocr as _sample_paddleocr
@@ -27,16 +28,13 @@ from fastdeploy.input.video_utils import sample_frames_qwen as _sample_qwen
 from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
-class QwenEncoding:
+class QwenEncoding(BaseEncoding):
     """Encoding strategy shared by qwen_vl, qwen3_vl, and paddleocr_vl.
 
     Internal differences are handled via ``self.p.cfg`` flags.
     """
 
     FRAME_FACTOR = 2
-
-    def __init__(self, processor):
-        self.p = processor
 
     def add_image(self, img, outputs, uuid, token_len=None):
         p = self.p
@@ -95,7 +93,7 @@ class QwenEncoding:
 
         outputs["fps"].append(0)
 
-    def add_video(self, frames, meta, outputs, uuid, token_len=None):
+    def add_video(self, frames, outputs, uuid, token_len=None, meta=None):
         p = self.p
         preprocess_kwargs = {}
         # qwen3_vl passes min/max pixels for video
@@ -105,13 +103,8 @@ class QwenEncoding:
 
         ret = p.image_processor.preprocess(images=frames, **preprocess_kwargs)
 
-        grid_thw_key = "grid_thw"
-        if p.cfg.has_vit_fields:
-            # paddleocr uses "image_grid_thw" key
-            grid_thw_key = "image_grid_thw"
-
-        num_tokens = ret[grid_thw_key].prod() // p.image_processor.merge_size**2
-        grid_thw = ret[grid_thw_key].tolist()
+        num_tokens = ret["grid_thw"].prod() // p.image_processor.merge_size**2
+        grid_thw = ret["grid_thw"].tolist()
         if token_len is not None and token_len != num_tokens:
             raise ValueError("video tokens num not match the size")
 
@@ -130,8 +123,8 @@ class QwenEncoding:
         outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].extend([1] * grid_thw[0])
 
-        fps = meta["fps"]
-        second_per_grid_t = p.temporal_conv_size / fps
+        fps = meta["fps"] if meta else 0
+        second_per_grid_t = p.temporal_conv_size / fps if fps else 0
         t, h, w = grid_thw
         pos_ids = self._compute_vision_positions(outputs["cur_position"], t, h, w, second_per_grid_t)
         outputs["position_ids"].append(pos_ids)
@@ -222,7 +215,7 @@ class QwenEncoding:
         return frames, meta
 
     def add_text_positions(self, outputs, num_tokens):
-        """Write text position IDs in qwen 3×N ndarray format."""
+        """Write text position IDs in qwen 3xN ndarray format."""
         pos_ids = self._compute_text_positions(outputs["cur_position"], num_tokens)
         outputs["position_ids"].append(pos_ids)
         outputs["cur_position"] = pos_ids.max() + 1
@@ -282,7 +275,7 @@ class QwenEncoding:
                         frames, meta = self.load_video(video["video"], video)
                     else:
                         frames, meta = self.load_video(video, {})
-                    self.add_video(frames, meta, outputs, uuid, token_len)
+                    self.add_video(frames, outputs, uuid, token_len=token_len, meta=meta)
                 else:
                     self.add_processed_video(video, outputs, uuid, token_len)
             else:
@@ -324,13 +317,13 @@ class QwenEncoding:
         self.add_text_positions(outputs, num_tokens)
 
     def _compute_text_positions(self, start_pos, num_tokens):
-        """3×N ndarray for qwen-family text positions."""
+        """3xN ndarray for qwen-family text positions."""
         text_array = np.arange(num_tokens).reshape(1, -1)
         text_index = np.broadcast_to(text_array, (3, num_tokens))
         return text_index + start_pos
 
     def _compute_vision_positions(self, start_pos, t, h, w, second_per_grid_t):
-        """3D position IDs as 3×N ndarray for qwen-family."""
+        """3D position IDs as 3xN ndarray for qwen-family."""
         p = self.p
         h //= p.spatial_conv_size
         w //= p.spatial_conv_size
@@ -365,7 +358,7 @@ class QwenEncoding:
         return calc_one(grid_thw)
 
     def pack_position_ids(self, outputs):
-        """Qwen: concatenate 3×N arrays, then transpose to N×3."""
+        """Qwen: concatenate 3xN arrays, then transpose to Nx3."""
         outputs["position_ids"] = np.concatenate(outputs["position_ids"], axis=1, dtype=np.int64)
         outputs["image_patch_id"] = self.p.image_token_id
         outputs["video_patch_id"] = self.p.video_token_id

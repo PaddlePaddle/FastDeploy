@@ -19,30 +19,36 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from fastdeploy.input.multimodal_processor import (
-    _DEFAULT_MM_LIMITS,
-    _SAMPLING_EPS,
+from fastdeploy.input.encodings import ErnieEncoding, QwenEncoding
+from fastdeploy.input.mm_model_config import (
     ERNIE4_5_VL,
+    MODEL_CONFIGS,
     PADDLEOCR_VL,
     QWEN3_VL,
     QWEN_VL,
+)
+from fastdeploy.input.multimodal_processor import (
+    _DEFAULT_MM_LIMITS,
+    _SAMPLING_EPS,
     MultiModalProcessor,
 )
-from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 
 def _make_processor(model_type, **overrides):
     """Create a MultiModalProcessor instance with __init__ bypassed.
 
     Manually sets the minimum attributes required by the methods under test.
+    Uses the real MMModelConfig from MODEL_CONFIGS so that cfg-based
+    dispatch works correctly without hardcoded model_type checks.
     """
     with patch.object(MultiModalProcessor, "__init__", return_value=None):
         proc = MultiModalProcessor.__new__(MultiModalProcessor)
     proc.model_type = model_type
+    proc.cfg = MODEL_CONFIGS[model_type]
     proc.config = MagicMock()
     proc.enable_processor_cache = False
     proc.model_name_or_path = "/mock/model"
-    proc.tokenizer_type = "ernie4_5" if model_type == ERNIE4_5_VL else "auto"
+    proc.tokenizer_type = proc.cfg.tokenizer_type
     proc.limit_mm_per_prompt = dict(_DEFAULT_MM_LIMITS)
     proc.eos_token_ids = [2]
     proc.eos_token_id_len = 1
@@ -73,24 +79,21 @@ def _make_processor(model_type, **overrides):
     tokenizer.decode.return_value = "hello"
     proc.tokenizer = tokenizer
 
-    # Mock processor (the internal DataProcessor)
-    processor = MagicMock()
-    processor.image_token_id = 151655
-    processor.video_token_id = 151656
-    processor.image_patch_id = 151655
-    processor.spatial_conv_size = 14
-    processor.mm_num_tokens = MagicMock(return_value=1)
-    processor._compute_text_positions.return_value = np.array([[3, 4], [3, 4], [3, 4]])
-    proc.processor = processor
+    # Mock encoding strategy — use spec so hasattr checks work correctly
+    if model_type == ERNIE4_5_VL:
+        proc.enc = MagicMock(spec=ErnieEncoding)
+    else:
+        proc.enc = MagicMock(spec=QwenEncoding)
 
-    # Set attributes normally set by _init_mm_config
-    if model_type in (QWEN_VL, QWEN3_VL):
-        proc.image_patch_id = processor.image_token_id
-    elif model_type == PADDLEOCR_VL:
-        proc.image_patch_id = processor.image_patch_id
-    elif model_type == ERNIE4_5_VL:
-        proc.image_patch_id = processor.image_patch_id
-        proc.spatial_conv_size = processor.spatial_conv_size
+    # Mock image processor
+    proc.image_processor = MagicMock()
+    proc.image_processor.merge_size = 2
+    proc.image_processor.temporal_patch_size = 2
+
+    # Token IDs (as set by _init_special_tokens)
+    proc.image_token_id = 151655
+    proc.video_token_id = 151656
+    proc.image_patch_id = proc.image_token_id
 
     # Apply any overrides
     for k, v in overrides.items():
@@ -104,9 +107,8 @@ def _make_processor(model_type, **overrides):
 class TestMultiModalProcessorInitValidation(unittest.TestCase):
 
     def test_unsupported_model_type_raises(self):
-        """Line 86: unsupported model_type should raise ValueError."""
+        """Unsupported model_type should raise ValueError."""
         with self.assertRaises(ValueError):
-            # Directly construct with unsupported model_type to trigger validation
             MultiModalProcessor("/mock", model_type="unsupported_type")
 
 
@@ -121,27 +123,27 @@ class TestParseProcessorKwargs(unittest.TestCase):
         self.assertEqual(proc._parse_processor_kwargs({}), {})
 
     def test_valid_qwen_kwargs(self):
-        """Lines 196, 198-204: valid kwargs for qwen model type."""
+        """Valid kwargs for qwen model type."""
         proc = _make_processor(QWEN_VL)
         kwargs = {"video_max_frames": 10, "video_min_frames": 1}
         result = proc._parse_processor_kwargs(kwargs)
         self.assertEqual(result, kwargs)
 
     def test_valid_ernie_kwargs(self):
-        """Lines 193-194: valid kwargs for ernie model type."""
+        """Valid kwargs for ernie model type."""
         proc = _make_processor(ERNIE4_5_VL)
         kwargs = {"spatial_conv_size": 2, "temporal_conv_size": 1, "video_max_frames": 32}
         result = proc._parse_processor_kwargs(kwargs)
         self.assertEqual(result, kwargs)
 
     def test_invalid_type_not_dict(self):
-        """Lines 188-189: non-dict kwargs should return empty."""
+        """Non-dict kwargs should return empty."""
         proc = _make_processor(QWEN_VL)
         result = proc._parse_processor_kwargs("invalid")
         self.assertEqual(result, {})
 
     def test_invalid_value_type(self):
-        """Lines 199-200: wrong value type should return empty."""
+        """Wrong value type should return empty."""
         proc = _make_processor(QWEN_VL)
         result = proc._parse_processor_kwargs({"video_max_frames": "ten"})
         self.assertEqual(result, {})
@@ -169,7 +171,7 @@ class TestParseLimits(unittest.TestCase):
         self.assertEqual(proc._parse_limits(None), dict(_DEFAULT_MM_LIMITS))
 
     def test_valid_limits_merged(self):
-        """Lines 219: valid limits merged with defaults."""
+        """Valid limits merged with defaults."""
         proc = _make_processor(QWEN_VL)
         result = proc._parse_limits({"image": 5, "video": 3})
         self.assertEqual(result, {"image": 5, "video": 3, "audio": 1})
@@ -180,7 +182,7 @@ class TestParseLimits(unittest.TestCase):
         self.assertEqual(result, {"image": 10, "video": 1, "audio": 1})
 
     def test_invalid_type_returns_defaults(self):
-        """Lines 216-217, 220-222: non-dict returns defaults."""
+        """Non-dict returns defaults."""
         proc = _make_processor(QWEN_VL)
         result = proc._parse_limits("invalid")
         self.assertEqual(result, dict(_DEFAULT_MM_LIMITS))
@@ -192,14 +194,12 @@ class TestParseLimits(unittest.TestCase):
 class TestCheckMMLimits(unittest.TestCase):
 
     def test_dict_input_within_limits(self):
-        """Lines 226-227: dict input within limits passes."""
         proc = _make_processor(QWEN_VL)
         proc.limit_mm_per_prompt = {"image": 2, "video": 1, "audio": 1}
         mm_data = {"image": ["img1"], "video": ["vid1"]}
         proc._check_mm_limits(mm_data)  # should not raise
 
     def test_dict_input_exceeds_limit(self):
-        """Lines 247-251: dict input exceeding limit raises ValueError."""
         proc = _make_processor(QWEN_VL)
         proc.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         mm_data = {"image": ["img1", "img2"]}
@@ -208,7 +208,7 @@ class TestCheckMMLimits(unittest.TestCase):
         self.assertIn("Too many image items", str(ctx.exception))
 
     def test_messages_input_qwen_vl_accepts_url_suffix(self):
-        """Lines 229-240: messages with image_url/video_url for qwen_vl."""
+        """Messages with image_url/video_url for qwen_vl."""
         proc = _make_processor(QWEN_VL)
         proc.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         messages = [
@@ -223,7 +223,7 @@ class TestCheckMMLimits(unittest.TestCase):
         proc._check_mm_limits(messages)  # should not raise
 
     def test_messages_input_qwen_vl_image_type(self):
-        """Lines 237: 'image' type also accepted for url_suffix models."""
+        """'image' type also accepted."""
         proc = _make_processor(QWEN_VL)
         proc.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         messages = [
@@ -232,7 +232,7 @@ class TestCheckMMLimits(unittest.TestCase):
         proc._check_mm_limits(messages)
 
     def test_messages_input_qwen_vl_video_url_type(self):
-        """Lines 239-240: video_url type for qwen_vl."""
+        """video_url type."""
         proc = _make_processor(QWEN_VL)
         proc.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         messages = [
@@ -241,7 +241,7 @@ class TestCheckMMLimits(unittest.TestCase):
         proc._check_mm_limits(messages)
 
     def test_messages_input_ernie_only_accepts_plain_types(self):
-        """Lines 241-245: ernie4_5_vl only accepts 'image'/'video' types, not *_url."""
+        """ernie4_5_vl only accepts 'image'/'video' types, not *_url."""
         proc = _make_processor(ERNIE4_5_VL)
         proc.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         # image_url should NOT be counted for ernie
@@ -251,7 +251,7 @@ class TestCheckMMLimits(unittest.TestCase):
         proc._check_mm_limits(messages)  # no exception since image_url not counted
 
     def test_messages_input_ernie_image_type(self):
-        """Lines 242-243: ernie 'image' type is counted."""
+        """ernie 'image' type is counted."""
         proc = _make_processor(ERNIE4_5_VL)
         proc.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         messages = [
@@ -267,7 +267,7 @@ class TestCheckMMLimits(unittest.TestCase):
             proc._check_mm_limits(messages)
 
     def test_messages_input_ernie_video_type(self):
-        """Lines 244-245: ernie 'video' type is counted."""
+        """ernie 'video' type is counted."""
         proc = _make_processor(ERNIE4_5_VL)
         proc.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         messages = [
@@ -276,7 +276,7 @@ class TestCheckMMLimits(unittest.TestCase):
         proc._check_mm_limits(messages)  # within limit
 
     def test_messages_exceed_video_limit(self):
-        """Lines 247-251: video exceeding limit raises ValueError."""
+        """Video exceeding limit raises ValueError."""
         proc = _make_processor(QWEN_VL)
         proc.limit_mm_per_prompt = {"image": 1, "video": 1, "audio": 1}
         messages = [
@@ -307,15 +307,15 @@ class TestCheckMMLimits(unittest.TestCase):
 # ===================================================================
 class TestGetMmMaxTokensPerItem(unittest.TestCase):
 
-    def test_ernie_returns_processor_result(self):
-        """Line 271: ernie delegates to processor."""
+    def test_ernie_returns_enc_result(self):
+        """ErnieEncoding has get_mm_max_tokens_per_item, delegates to enc."""
         proc = _make_processor(ERNIE4_5_VL)
-        proc.processor.get_mm_max_tokens_per_item.return_value = {"image": 512}
+        proc.enc.get_mm_max_tokens_per_item.return_value = {"image": 512}
         result = proc.get_mm_max_tokens_per_item(1024)
         self.assertEqual(result, {"image": 512})
 
     def test_non_ernie_returns_none(self):
-        """Line 272: non-ernie returns None."""
+        """QwenEncoding does not have get_mm_max_tokens_per_item, returns None."""
         proc = _make_processor(QWEN_VL)
         self.assertIsNone(proc.get_mm_max_tokens_per_item(1024))
 
@@ -324,70 +324,15 @@ class TestGetMmMaxTokensPerItem(unittest.TestCase):
 
 
 # ===================================================================
-# _process_stop_tokens
-# ===================================================================
-class TestProcessStopTokens(unittest.TestCase):
-
-    def test_qwen3_vl_stop_handling(self):
-        """Lines 348-353: qwen3_vl uses update_stop_seq differently."""
-        proc = _make_processor(QWEN3_VL)
-        proc.update_stop_seq = MagicMock(return_value=([[100]], [1]))
-        request = {"stop": ["<stop>"]}
-        proc._process_stop_tokens(request)
-        self.assertEqual(request["stop_token_ids"], [[100]])
-        self.assertEqual(request["stop_seqs_len"], [1])
-
-    def test_qwen3_vl_no_stop(self):
-        """Lines 348-350: qwen3_vl with empty stop list."""
-        proc = _make_processor(QWEN3_VL)
-        proc.update_stop_seq = MagicMock()
-        request = {"stop": []}
-        proc._process_stop_tokens(request)
-        proc.update_stop_seq.assert_not_called()
-
-    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
-    def test_non_qwen3_uses_process_stop_token_ids(self, mock_process):
-        """Lines 354-355: non-qwen3 uses process_stop_token_ids utility."""
-        proc = _make_processor(QWEN_VL)
-        proc.update_stop_seq = MagicMock()
-        request = {}
-        proc._process_stop_tokens(request)
-        mock_process.assert_called_once_with(request, proc.update_stop_seq)
-
-
-# ===================================================================
-# _process_bad_words
-# ===================================================================
-class TestProcessBadWords(unittest.TestCase):
-
-    def test_with_bad_words(self):
-        """Lines 359-363: bad_words are processed."""
-        proc = _make_processor(QWEN_VL)
-        proc.update_bad_words = MagicMock(return_value=[100, 200])
-        request = {"bad_words": ["bad", "word"], "bad_words_token_ids": [50]}
-        proc._process_bad_words(request)
-        proc.update_bad_words.assert_called_once_with(["bad", "word"], [50])
-        self.assertEqual(request["bad_words_token_ids"], [100, 200])
-
-    def test_without_bad_words(self):
-        """Lines 361: no bad_words means no processing."""
-        proc = _make_processor(QWEN_VL)
-        proc.update_bad_words = MagicMock()
-        request = {}
-        proc._process_bad_words(request)
-        proc.update_bad_words.assert_not_called()
-
-
-# ===================================================================
 # _tokenize_request
 # ===================================================================
 class TestTokenizeRequest(unittest.TestCase):
 
     def test_prompt_token_ids_qwen3_vl(self):
-        """Lines 369-374: prompt_token_ids path for qwen3_vl."""
+        """prompt_token_ids path for qwen3_vl delegates to enc."""
         proc = _make_processor(QWEN3_VL)
         expected = {"input_ids": [1, 2, 3]}
-        proc.processor.prompt_token_ids2outputs.return_value = expected
+        proc.enc.prompt_token_ids2outputs.return_value = expected
 
         request = {"prompt_token_ids": [1, 2, 3], "messages": [{"role": "user", "content": "hi"}]}
         result = proc._tokenize_request(request)
@@ -395,10 +340,10 @@ class TestTokenizeRequest(unittest.TestCase):
         self.assertFalse(request.get("enable_thinking", True))  # default_thinking=False for qwen3_vl
 
     def test_prompt_token_ids_ernie(self):
-        """Lines 369-374: prompt_token_ids path for ernie."""
+        """prompt_token_ids path for ernie delegates to enc."""
         proc = _make_processor(ERNIE4_5_VL)
         expected = {"input_ids": [1, 2, 3]}
-        proc.processor.prompt_token_ids2outputs.return_value = expected
+        proc.enc.prompt_token_ids2outputs.return_value = expected
 
         request = {"prompt_token_ids": [1, 2, 3]}
         result = proc._tokenize_request(request)
@@ -406,40 +351,40 @@ class TestTokenizeRequest(unittest.TestCase):
         self.assertTrue(request.get("enable_thinking"))  # default_thinking=True for ernie
 
     def test_prompt_path(self):
-        """Lines 376-384: prompt text path."""
+        """prompt text path calls proc.text2ids."""
         proc = _make_processor(QWEN_VL)
         expected = {"input_ids": [10, 20]}
-        proc.processor.text2ids.return_value = expected
+        proc.text2ids = MagicMock(return_value=expected)
 
         request = {"prompt": "hello", "multimodal_data": {"image": [], "video": []}}
         result = proc._tokenize_request(request)
-        proc.processor.text2ids.assert_called_once_with("hello", [], [])
+        proc.text2ids.assert_called_once_with("hello", [], [])
         self.assertEqual(result, expected)
 
     def test_prompt_path_ernie_sets_prompt_tokens(self):
-        """Lines 381-382: ernie sets prompt_tokens from prompt."""
+        """ernie sets prompt_tokens from prompt (cfg.sets_prompt_tokens)."""
         proc = _make_processor(ERNIE4_5_VL)
-        proc.processor.text2ids.return_value = {"input_ids": [1]}
+        proc.text2ids = MagicMock(return_value={"input_ids": [1]})
 
         request = {"prompt": "test prompt"}
         proc._tokenize_request(request)
         self.assertEqual(request["prompt_tokens"], "test prompt")
 
     def test_messages_path(self):
-        """Lines 386-398: messages path."""
+        """messages path calls proc.request2ids."""
         proc = _make_processor(QWEN_VL)
         expected = {"input_ids": [5, 6]}
-        proc.processor.request2ids.return_value = expected
+        proc.request2ids = MagicMock(return_value=expected)
 
         request = {"messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]}
         result = proc._tokenize_request(request)
-        proc.processor.request2ids.assert_called_once()
+        proc.request2ids.assert_called_once()
         self.assertEqual(result, expected)
 
     def test_messages_path_with_chat_template_kwargs(self):
-        """Lines 389-394: chat_template_kwargs are merged into request."""
+        """chat_template_kwargs are merged into request."""
         proc = _make_processor(QWEN_VL)
-        proc.processor.request2ids.return_value = {"input_ids": [1]}
+        proc.request2ids = MagicMock(return_value={"input_ids": [1]})
 
         request = {
             "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
@@ -449,9 +394,9 @@ class TestTokenizeRequest(unittest.TestCase):
         self.assertTrue(request.get("enable_thinking"))
 
     def test_messages_path_chat_template_kwargs_no_overwrite(self):
-        """Lines 393: existing request keys are not overwritten."""
+        """Existing request keys are not overwritten by chat_template_kwargs."""
         proc = _make_processor(QWEN_VL)
-        proc.processor.request2ids.return_value = {"input_ids": [1]}
+        proc.request2ids = MagicMock(return_value={"input_ids": [1]})
 
         request = {
             "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
@@ -462,7 +407,7 @@ class TestTokenizeRequest(unittest.TestCase):
         self.assertFalse(request["enable_thinking"])
 
     def test_messages_path_invalid_chat_template_kwargs(self):
-        """Lines 395-396: non-dict chat_template_kwargs raises."""
+        """Non-dict chat_template_kwargs raises."""
         proc = _make_processor(QWEN_VL)
         request = {
             "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
@@ -473,20 +418,20 @@ class TestTokenizeRequest(unittest.TestCase):
         self.assertIn("must be a dict", str(ctx.exception))
 
     def test_no_input_raises(self):
-        """Lines 400-401: no prompt/messages/prompt_token_ids raises."""
+        """No prompt/messages/prompt_token_ids raises."""
         proc = _make_processor(QWEN_VL)
         with self.assertRaises(ValueError) as ctx:
             proc._tokenize_request({"request_id": "test"})
         self.assertIn("must contain", str(ctx.exception))
 
     def test_prompt_path_no_multimodal_data(self):
-        """Lines 377: prompt with no multimodal_data passes None for images/videos."""
+        """Prompt with no multimodal_data passes None for images/videos."""
         proc = _make_processor(QWEN_VL)
-        proc.processor.text2ids.return_value = {"input_ids": [1]}
+        proc.text2ids = MagicMock(return_value={"input_ids": [1]})
 
         request = {"prompt": "hello"}
         proc._tokenize_request(request)
-        proc.processor.text2ids.assert_called_once_with("hello", None, None)
+        proc.text2ids.assert_called_once_with("hello", None, None)
 
 
 # ===================================================================
@@ -495,38 +440,42 @@ class TestTokenizeRequest(unittest.TestCase):
 class TestProcessPostTokens(unittest.TestCase):
 
     def test_paddleocr_with_metadata_generated_tokens(self):
-        """Lines 405-408: paddleocr_vl appends via _append_completion_tokens_qwen."""
+        """PaddleOCR uses completion_token_source='metadata_generated'."""
         proc = _make_processor(PADDLEOCR_VL)
-        proc._append_completion_tokens_qwen = MagicMock()
         outputs = {"input_ids": [1, 2]}
         request = {"metadata": {"generated_token_ids": [10, 11]}}
         proc._process_post_tokens(request, outputs)
-        proc._append_completion_tokens_qwen.assert_called_once_with(outputs, [10, 11])
+        proc.enc.append_completion_tokens.assert_called_once_with(outputs, [10, 11])
 
     def test_paddleocr_without_metadata(self):
-        """Lines 405-406: paddleocr_vl with no metadata does nothing."""
+        """PaddleOCR with no metadata does nothing."""
         proc = _make_processor(PADDLEOCR_VL)
-        proc._append_completion_tokens_qwen = MagicMock()
         outputs = {"input_ids": [1]}
         proc._process_post_tokens({}, outputs)
-        proc._append_completion_tokens_qwen.assert_not_called()
+        proc.enc.append_completion_tokens.assert_not_called()
+
+    def test_paddleocr_metadata_without_generated_tokens(self):
+        """PaddleOCR with metadata but no generated_token_ids does nothing."""
+        proc = _make_processor(PADDLEOCR_VL)
+        outputs = {"input_ids": [1]}
+        request = {"metadata": {"other_key": 123}}
+        proc._process_post_tokens(request, outputs)
+        proc.enc.append_completion_tokens.assert_not_called()
 
     def test_non_paddleocr_with_completion_tokens(self):
-        """Lines 410-411: non-paddleocr uses append_completion_tokens."""
+        """Non-paddleocr uses completion_token_source='completion_token_ids'."""
         proc = _make_processor(QWEN_VL)
-        proc.append_completion_tokens = MagicMock()
         outputs = {"input_ids": [1]}
         request = {"completion_token_ids": [5, 6]}
         proc._process_post_tokens(request, outputs)
-        proc.append_completion_tokens.assert_called_once_with(outputs, [5, 6])
+        proc.enc.append_completion_tokens.assert_called_once_with(outputs, [5, 6])
 
     def test_non_paddleocr_without_completion_tokens(self):
-        """Lines 410: no completion_token_ids does nothing."""
+        """No completion_token_ids does nothing."""
         proc = _make_processor(QWEN_VL)
-        proc.append_completion_tokens = MagicMock()
         outputs = {"input_ids": [1]}
         proc._process_post_tokens({}, outputs)
-        proc.append_completion_tokens.assert_not_called()
+        proc.enc.append_completion_tokens.assert_not_called()
 
 
 # ===================================================================
@@ -535,7 +484,7 @@ class TestProcessPostTokens(unittest.TestCase):
 class TestApplyReasoningParser(unittest.TestCase):
 
     def test_basic_request_id(self):
-        """Lines 415-425: basic request_id (no underscore split)."""
+        """Basic request_id (no underscore split)."""
         proc = _make_processor(QWEN_VL)
         proc.reasoning_parser = MagicMock()
         proc.reasoning_parser.get_model_status.return_value = "think_start"
@@ -548,7 +497,7 @@ class TestApplyReasoningParser(unittest.TestCase):
         self.assertTrue(request["enable_thinking"])
 
     def test_compound_request_id(self):
-        """Lines 416-422: request_id with underscore is split."""
+        """request_id with underscore is split."""
         proc = _make_processor(QWEN_VL)
         proc.reasoning_parser = MagicMock()
         proc.reasoning_parser.get_model_status.return_value = "think_end"
@@ -563,7 +512,7 @@ class TestApplyReasoningParser(unittest.TestCase):
         self.assertFalse(request["enable_thinking"])
 
     def test_compound_request_id_default_n(self):
-        """Lines 420: default n=1."""
+        """Default n=1."""
         proc = _make_processor(QWEN_VL)
         proc.reasoning_parser = MagicMock()
         proc.reasoning_parser.get_model_status.return_value = "think_start"
@@ -581,60 +530,19 @@ class TestApplyReasoningParser(unittest.TestCase):
 # ===================================================================
 class TestAppendCompletionTokens(unittest.TestCase):
 
-    def test_ernie_dispatches_to_ernie_method(self):
-        """Lines 429-430: ernie dispatches to _append_completion_tokens_ernie."""
-        proc = _make_processor(ERNIE4_5_VL)
-        proc._append_completion_tokens_ernie = MagicMock()
+    def test_delegates_to_enc(self):
+        """append_completion_tokens delegates to enc.append_completion_tokens."""
+        proc = _make_processor(QWEN_VL)
         inputs = {"input_ids": [1]}
         proc.append_completion_tokens(inputs, [2, 3])
-        proc._append_completion_tokens_ernie.assert_called_once_with(inputs, [2, 3])
+        proc.enc.append_completion_tokens.assert_called_once_with(inputs, [2, 3])
 
-    def test_non_ernie_dispatches_to_qwen_method(self):
-        """Lines 431-432: non-ernie dispatches to _append_completion_tokens_qwen."""
-        proc = _make_processor(QWEN_VL)
-        proc._append_completion_tokens_qwen = MagicMock()
+    def test_delegates_to_enc_ernie(self):
+        """Same delegation for ernie."""
+        proc = _make_processor(ERNIE4_5_VL)
         inputs = {"input_ids": [1]}
         proc.append_completion_tokens(inputs, [2, 3])
-        proc._append_completion_tokens_qwen.assert_called_once_with(inputs, [2, 3])
-
-
-class TestAppendCompletionTokensQwen(unittest.TestCase):
-
-    def test_qwen_append(self):
-        """Lines 436-442: appends tokens, token_type_ids, position_ids for qwen."""
-        proc = _make_processor(QWEN_VL)
-        multimodal_inputs = {
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [np.array([[0, 1, 2], [0, 1, 2], [0, 1, 2]])],
-            "cur_position": 3,
-        }
-        proc._append_completion_tokens_qwen(multimodal_inputs, [4, 5])
-
-        self.assertEqual(multimodal_inputs["input_ids"], [1, 2, 3, 4, 5])
-        self.assertEqual(multimodal_inputs["token_type_ids"], [0, 0, 0, 0, 0])
-        self.assertEqual(multimodal_inputs["cur_position"], 5)
-        self.assertEqual(len(multimodal_inputs["position_ids"]), 2)
-
-
-class TestAppendCompletionTokensErnie(unittest.TestCase):
-
-    def test_ernie_append(self):
-        """Lines 446-453: appends tokens with IDS_TYPE_FLAG for ernie."""
-        proc = _make_processor(ERNIE4_5_VL)
-        multimodal_inputs = {
-            "input_ids": [10, 20],
-            "token_type_ids": [IDS_TYPE_FLAG["text"], IDS_TYPE_FLAG["text"]],
-            "position_ids": [[0, 0, 0], [1, 1, 1]],
-            "cur_position": 2,
-        }
-        proc._append_completion_tokens_ernie(multimodal_inputs, [30, 40, 50])
-
-        self.assertEqual(multimodal_inputs["input_ids"], [10, 20, 30, 40, 50])
-        self.assertEqual(len(multimodal_inputs["token_type_ids"]), 5)
-        self.assertTrue(all(t == IDS_TYPE_FLAG["text"] for t in multimodal_inputs["token_type_ids"]))
-        self.assertEqual(multimodal_inputs["position_ids"], [[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4]])
-        self.assertEqual(multimodal_inputs["cur_position"], 5)
+        proc.enc.append_completion_tokens.assert_called_once_with(inputs, [2, 3])
 
 
 # ===================================================================
@@ -643,7 +551,7 @@ class TestAppendCompletionTokensErnie(unittest.TestCase):
 class TestPackOutputs(unittest.TestCase):
 
     def test_qwen_with_images(self):
-        """Lines 457-474: qwen pack_outputs with image data."""
+        """Qwen pack_outputs with image data delegates position packing to enc."""
         proc = _make_processor(QWEN_VL)
         outputs = {
             "images": [np.array([[1, 2], [3, 4]]), np.array([[5, 6], [7, 8]])],
@@ -660,12 +568,11 @@ class TestPackOutputs(unittest.TestCase):
         self.assertIsNotNone(result["grid_thw"])
         self.assertEqual(result["input_ids"].dtype, np.int64)
         self.assertEqual(result["token_type_ids"].dtype, np.int64)
-        self.assertEqual(result["position_ids"].dtype, np.int64)
-        self.assertEqual(result["image_patch_id"], proc.processor.image_token_id)
-        self.assertEqual(result["video_patch_id"], proc.processor.video_token_id)
+        self.assertEqual(result["mm_num_token_func"], proc.enc.mm_num_tokens)
+        proc.enc.pack_position_ids.assert_called_once_with(outputs)
 
     def test_qwen_without_images(self):
-        """Lines 457-460: empty images set to None."""
+        """Empty images set to None."""
         proc = _make_processor(QWEN_VL)
         outputs = {
             "images": [],
@@ -682,9 +589,8 @@ class TestPackOutputs(unittest.TestCase):
         self.assertIsNone(result["image_type_ids"])
 
     def test_ernie_pack_outputs(self):
-        """Lines 475-477: ernie uses different position_ids handling."""
+        """Ernie pack_outputs delegates position packing to enc."""
         proc = _make_processor(ERNIE4_5_VL)
-        proc.image_patch_id = 9999
         outputs = {
             "images": [],
             "grid_thw": [],
@@ -696,27 +602,9 @@ class TestPackOutputs(unittest.TestCase):
         result = proc.pack_outputs(outputs)
 
         self.assertIsNone(result["images"])
-        self.assertEqual(result["position_ids"].dtype, np.int64)
-        self.assertEqual(result["position_ids"].shape, (2, 3))
-        self.assertEqual(result["image_patch_id"], 9999)
-        self.assertNotIn("video_patch_id", result)
-
-    def test_paddleocr_with_images(self):
-        """Lines 470-474: paddleocr uses same path as qwen."""
-        proc = _make_processor(PADDLEOCR_VL)
-        outputs = {
-            "images": [np.array([[1, 2]])],
-            "grid_thw": [np.array([1, 1, 2])],
-            "image_type_ids": [0],
-            "input_ids": [1],
-            "token_type_ids": [0],
-            "position_ids": [np.array([[0], [0], [0]])],
-        }
-        result = proc.pack_outputs(outputs)
-
-        self.assertIsNotNone(result["images"])
-        self.assertEqual(result["image_patch_id"], proc.processor.image_token_id)
-        self.assertEqual(result["video_patch_id"], proc.processor.video_token_id)
+        self.assertEqual(result["input_ids"].dtype, np.int64)
+        self.assertEqual(result["token_type_ids"].dtype, np.int64)
+        proc.enc.pack_position_ids.assert_called_once_with(outputs)
 
 
 # ===================================================================
@@ -724,21 +612,26 @@ class TestPackOutputs(unittest.TestCase):
 # ===================================================================
 class TestProcessRequestDict(unittest.TestCase):
 
-    def _make_mock_outputs(self):
-        return {
+    def _make_mock_outputs(self, model_type=QWEN_VL):
+        """Return mock outputs appropriate for the model type."""
+        base = {
             "images": [],
             "grid_thw": [],
             "image_type_ids": [],
             "input_ids": [1, 2, 3, 4, 5],
             "token_type_ids": [0, 0, 0, 0, 0],
-            "position_ids": [np.array([[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]])],
         }
+        if model_type == ERNIE4_5_VL:
+            base["position_ids"] = [[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 3, 3], [4, 4, 4]]
+        else:
+            base["position_ids"] = [np.array([[0, 1, 2, 3, 4], [0, 1, 2, 3, 4], [0, 1, 2, 3, 4]])]
+        return base
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_qwen_vl_messages_flow(self, mock_stop):
-        """Lines 281-344: full flow for qwen_vl with messages."""
+        """Full flow for qwen_vl with messages."""
         proc = _make_processor(QWEN_VL)
-        proc.processor.request2ids.return_value = self._make_mock_outputs()
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
 
         request = {
             "request_id": "test1",
@@ -749,14 +642,14 @@ class TestProcessRequestDict(unittest.TestCase):
         self.assertIn("prompt_token_ids", result)
         self.assertIn("multimodal_inputs", result)
         self.assertEqual(result["prompt_token_ids_len"], len(result["prompt_token_ids"]))
-        self.assertFalse(result.get("enable_thinking"))  # qwen_vl sets False
+        self.assertFalse(result.get("enable_thinking"))  # qwen_vl force_disable_thinking
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_qwen3_vl_with_prompt_token_ids(self, mock_stop):
-        """Lines 306-307: qwen3_vl with existing prompt_token_ids preserved."""
+        """Qwen3_vl with existing prompt_token_ids preserved."""
         proc = _make_processor(QWEN3_VL)
-        outputs = self._make_mock_outputs()
-        proc.processor.prompt_token_ids2outputs.return_value = outputs
+        outputs = self._make_mock_outputs(QWEN3_VL)
+        proc.enc.prompt_token_ids2outputs.return_value = outputs
 
         request = {
             "request_id": "test2",
@@ -770,17 +663,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_ernie_flow(self, mock_stop):
-        """Lines 291-295, 316-320, 328-329, 339-341: ernie-specific branches."""
+        """Ernie-specific branches in process_request_dict."""
         proc = _make_processor(ERNIE4_5_VL)
-        outputs = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
-        }
-        proc.processor.request2ids.return_value = outputs
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(ERNIE4_5_VL))
 
         request = {
             "request_id": "test3",
@@ -795,16 +680,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_ernie_low_top_p(self, mock_stop):
-        """Lines 331-334: ernie with top_p below _SAMPLING_EPS."""
+        """Ernie with top_p below _SAMPLING_EPS is clamped."""
         proc = _make_processor(ERNIE4_5_VL)
-        proc.processor.request2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
-        }
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(ERNIE4_5_VL))
 
         request = {
             "request_id": "test4",
@@ -818,16 +696,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_paddleocr_low_top_p(self, mock_stop):
-        """Lines 331-334: paddleocr with top_p below _SAMPLING_EPS."""
+        """PaddleOCR with top_p below _SAMPLING_EPS is clamped."""
         proc = _make_processor(PADDLEOCR_VL)
-        proc.processor.request2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [np.array([[0, 1, 2], [0, 1, 2], [0, 1, 2]])],
-        }
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(PADDLEOCR_VL))
 
         request = {
             "request_id": "test5",
@@ -841,12 +712,12 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_qwen_vl_with_reasoning_parser(self, mock_stop):
-        """Lines 336-337: qwen_vl with reasoning parser (not qwen3)."""
+        """Qwen_vl with reasoning parser (not skipped)."""
         proc = _make_processor(QWEN_VL)
         mock_parser = MagicMock()
         mock_parser.get_model_status.return_value = "think_start"
         proc.reasoning_parser = mock_parser
-        proc.processor.request2ids.return_value = self._make_mock_outputs()
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
 
         request = {
             "request_id": "test6",
@@ -859,11 +730,11 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_qwen3_skips_reasoning_parser(self, mock_stop):
-        """Lines 336: qwen3_vl does NOT apply reasoning parser."""
+        """Qwen3_vl skips reasoning parser (cfg.skip_reasoning_parser=True)."""
         proc = _make_processor(QWEN3_VL)
         mock_parser = MagicMock()
         proc.reasoning_parser = mock_parser
-        proc.processor.request2ids.return_value = self._make_mock_outputs()
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(QWEN3_VL))
 
         request = {
             "request_id": "test7",
@@ -875,16 +746,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_ernie_response_max_tokens_with_thinking_disabled(self, mock_stop):
-        """Lines 339-341: ernie with response_max_tokens and enable_thinking=False."""
+        """Ernie with response_max_tokens and enable_thinking=False."""
         proc = _make_processor(ERNIE4_5_VL)
-        proc.processor.request2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
-        }
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(ERNIE4_5_VL))
 
         request = {
             "request_id": "test8",
@@ -898,10 +762,10 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_prompt_truncation(self, mock_stop):
-        """Lines 313-314: prompt exceeding max_model_len is truncated."""
+        """Prompt exceeding max_model_len is truncated."""
         proc = _make_processor(QWEN_VL)
         long_ids = list(range(200))
-        proc.processor.text2ids.return_value = {
+        outputs = {
             "images": [],
             "grid_thw": [],
             "image_type_ids": [],
@@ -909,6 +773,7 @@ class TestProcessRequestDict(unittest.TestCase):
             "token_type_ids": [0] * 200,
             "position_ids": [np.array([list(range(200))] * 3)],
         }
+        proc.text2ids = MagicMock(return_value=outputs)
 
         request = {"request_id": "test9", "prompt": "hello " * 100}
         result = proc.process_request_dict(request, max_model_len=50)
@@ -917,16 +782,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_max_tokens_default(self, mock_stop):
-        """Lines 322-324: max_tokens defaults to remaining model len."""
+        """max_tokens defaults to remaining model len."""
         proc = _make_processor(QWEN_VL)
-        proc.processor.text2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [np.array([[0, 1, 2], [0, 1, 2], [0, 1, 2]])],
-        }
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
 
         request = {"request_id": "test10", "prompt": "hello"}
         result = proc.process_request_dict(request, max_model_len=100)
@@ -936,16 +794,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_max_tokens_capped(self, mock_stop):
-        """Lines 325-326: user max_tokens capped by remaining model len."""
+        """User max_tokens capped by remaining model len."""
         proc = _make_processor(QWEN_VL)
-        proc.processor.text2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [np.array([[0, 1, 2], [0, 1, 2], [0, 1, 2]])],
-        }
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
 
         request = {"request_id": "test11", "prompt": "hello", "max_tokens": 5000}
         result = proc.process_request_dict(request, max_model_len=100)
@@ -955,17 +806,10 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_paddleocr_skips_bad_words(self, mock_stop):
-        """Lines 288-289: paddleocr skips _process_bad_words."""
+        """PaddleOCR skips bad_words processing (cfg.has_bad_words=False)."""
         proc = _make_processor(PADDLEOCR_VL)
         proc.update_bad_words = MagicMock()
-        proc.processor.text2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2],
-            "token_type_ids": [0, 0],
-            "position_ids": [np.array([[0, 1], [0, 1], [0, 1]])],
-        }
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(PADDLEOCR_VL))
 
         request = {"request_id": "test12", "prompt": "hi", "bad_words": ["test"]}
         proc.process_request_dict(request, max_model_len=100)
@@ -974,16 +818,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_eos_token_ids_not_overwritten(self, mock_stop):
-        """Lines 283-284: existing eos_token_ids preserved."""
+        """Existing eos_token_ids preserved."""
         proc = _make_processor(QWEN_VL)
-        proc.processor.text2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2],
-            "token_type_ids": [0, 0],
-            "position_ids": [np.array([[0, 1], [0, 1], [0, 1]])],
-        }
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
 
         request = {"request_id": "test13", "prompt": "hi", "eos_token_ids": [99]}
         result = proc.process_request_dict(request, max_model_len=100)
@@ -992,16 +829,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_ernie_reasoning_max_tokens_default(self, mock_stop):
-        """Lines 328-329: ernie sets default reasoning_max_tokens."""
+        """Ernie sets default reasoning_max_tokens."""
         proc = _make_processor(ERNIE4_5_VL)
-        proc.processor.request2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [[0, 0, 0], [1, 1, 1], [2, 2, 2]],
-        }
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(ERNIE4_5_VL))
 
         request = {
             "request_id": "test14",
@@ -1014,16 +844,9 @@ class TestProcessRequestDict(unittest.TestCase):
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_prompt_path_flow(self, mock_stop):
-        """Lines 297-299, 304-310: prompt path flow."""
+        """Prompt path flow."""
         proc = _make_processor(QWEN_VL)
-        proc.processor.text2ids.return_value = {
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "input_ids": [1, 2, 3],
-            "token_type_ids": [0, 0, 0],
-            "position_ids": [np.array([[0, 1, 2], [0, 1, 2], [0, 1, 2]])],
-        }
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
 
         request = {
             "request_id": "test15",
@@ -1031,43 +854,87 @@ class TestProcessRequestDict(unittest.TestCase):
         }
         result = proc.process_request_dict(request, max_model_len=100)
 
-        self.assertEqual(result["prompt_token_ids"], [1, 2, 3])
+        self.assertEqual(result["prompt_token_ids"], list(np.array([1, 2, 3, 4, 5], dtype=np.int64)))
         self.assertIn("multimodal_inputs", result)
 
-
-# ===================================================================
-# _init_mm_config (via _make_processor + direct attribute check)
-# ===================================================================
-class TestInitMmConfig(unittest.TestCase):
-
-    def test_qwen_vl_sets_image_patch_id(self):
-        """Lines 174-175: qwen_vl/qwen3_vl sets image_patch_id from image_token_id."""
-        proc = _make_processor(QWEN_VL)
-        proc.processor.image_token_id = 12345
-        proc._init_mm_config()
-        self.assertEqual(proc.image_patch_id, 12345)
-
-    def test_qwen3_vl_sets_image_patch_id(self):
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_qwen3_stop_tokens_variant(self, mock_stop):
+        """Qwen3 uses stop_tokens_variant='qwen3' with update_stop_seq."""
         proc = _make_processor(QWEN3_VL)
-        proc.processor.image_token_id = 67890
-        proc._init_mm_config()
-        self.assertEqual(proc.image_patch_id, 67890)
+        proc.request2ids = MagicMock(return_value=self._make_mock_outputs(QWEN3_VL))
+        proc.update_stop_seq = MagicMock(return_value=([[100]], [1]))
 
-    def test_paddleocr_sets_image_patch_id(self):
-        """Lines 176-177: paddleocr sets image_patch_id from processor."""
-        proc = _make_processor(PADDLEOCR_VL)
-        proc.processor.image_patch_id = 11111
-        proc._init_mm_config()
-        self.assertEqual(proc.image_patch_id, 11111)
+        request = {
+            "request_id": "test16",
+            "messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}],
+            "stop": ["<stop>"],
+        }
+        result = proc.process_request_dict(request, max_model_len=100)
 
-    def test_ernie_sets_image_patch_id_and_spatial_conv(self):
-        """Lines 178-180: ernie sets image_patch_id and spatial_conv_size."""
+        proc.update_stop_seq.assert_called_once_with(["<stop>"])
+        self.assertEqual(result["stop_token_ids"], [[100]])
+        self.assertEqual(result["stop_seqs_len"], [1])
+        # process_stop_token_ids should NOT be called for qwen3
+        mock_stop.assert_not_called()
+
+
+# ===================================================================
+# _init_special_tokens
+# ===================================================================
+class TestInitSpecialTokens(unittest.TestCase):
+
+    def test_qwen_vl_tokens(self):
+        """qwen_vl: image_token_id and video_token_id from cfg strings, image_patch_id = image_token_id."""
+        proc = _make_processor(QWEN_VL)
+        proc.tokenizer = MagicMock()
+        proc.tokenizer.convert_tokens_to_ids.side_effect = lambda s: {
+            "<|image_pad|>": 151655,
+            "<|video_pad|>": 151656,
+        }.get(s, 0)
+        proc._init_special_tokens()
+        self.assertEqual(proc.image_token_id, 151655)
+        self.assertEqual(proc.video_token_id, 151656)
+        self.assertEqual(proc.image_patch_id, proc.image_token_id)
+
+    def test_ernie_tokens(self):
+        """ernie: both image/video token IDs come from <|IMAGE_PLACEHOLDER|>."""
         proc = _make_processor(ERNIE4_5_VL)
-        proc.processor.image_patch_id = 22222
-        proc.processor.spatial_conv_size = 14
-        proc._init_mm_config()
-        self.assertEqual(proc.image_patch_id, 22222)
+        proc.tokenizer = MagicMock()
+        proc.tokenizer.convert_tokens_to_ids.side_effect = lambda s: {"<|IMAGE_PLACEHOLDER|>": 99999}.get(s, 0)
+        proc._init_special_tokens()
+        self.assertEqual(proc.image_token_id, 99999)
+        self.assertEqual(proc.video_token_id, 99999)
+        self.assertEqual(proc.image_patch_id, 99999)
+
+
+# ===================================================================
+# _init_conv_params
+# ===================================================================
+class TestInitConvParams(unittest.TestCase):
+
+    def test_qwen_conv_params_from_image_processor(self):
+        """qwen_vl: conv params from image_processor (cfg.conv_params_from_kwargs=False)."""
+        proc = _make_processor(QWEN_VL)
+        proc.image_processor = MagicMock()
+        proc.image_processor.merge_size = 14
+        proc.image_processor.temporal_patch_size = 2
+        proc._init_conv_params({})
         self.assertEqual(proc.spatial_conv_size, 14)
+        self.assertEqual(proc.temporal_conv_size, 2)
+
+    def test_ernie_conv_params_from_kwargs(self):
+        """ernie: conv params from processor_kwargs (cfg.conv_params_from_kwargs=True)."""
+        proc = _make_processor(ERNIE4_5_VL)
+        proc._init_conv_params({"spatial_conv_size": 3, "temporal_conv_size": 4})
+        self.assertEqual(proc.spatial_conv_size, 3)
+        self.assertEqual(proc.temporal_conv_size, 4)
+
+    def test_ernie_conv_params_defaults(self):
+        """ernie: default conv params when not in kwargs."""
+        proc = _make_processor(ERNIE4_5_VL)
+        proc._init_conv_params({})
+        self.assertEqual(proc.spatial_conv_size, 2)
+        self.assertEqual(proc.temporal_conv_size, 2)
 
 
 # ===================================================================
@@ -1076,7 +943,7 @@ class TestInitMmConfig(unittest.TestCase):
 class TestLoadTokenizer(unittest.TestCase):
 
     def test_auto_tokenizer_path(self):
-        """Lines 123-125: non-ernie path loads AutoTokenizer via paddleformers."""
+        """Non-ernie path loads AutoTokenizer via paddleformers."""
         proc = _make_processor(QWEN_VL)
         mock_tokenizer = MagicMock()
         mock_auto_tokenizer = MagicMock()

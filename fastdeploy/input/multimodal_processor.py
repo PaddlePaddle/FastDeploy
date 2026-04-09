@@ -29,7 +29,7 @@ import zmq
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.base_processor import BaseTextProcessor
-from fastdeploy.input.mm_ernie_encoding import ErnieEncoding
+from fastdeploy.input.encodings import ErnieEncoding, QwenEncoding
 from fastdeploy.input.mm_model_config import (
     ERNIE4_5_VL,
     MODEL_CONFIGS,
@@ -37,7 +37,6 @@ from fastdeploy.input.mm_model_config import (
     QWEN3_VL,
     QWEN_VL,
 )
-from fastdeploy.input.mm_qwen_encoding import QwenEncoding
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
 
@@ -100,8 +99,7 @@ class MultiModalProcessor(BaseTextProcessor):
 
         # Composition: create encoding strategy
         self.enc = _ENCODING_CLASSES[model_type](self)
-        if hasattr(self.enc, "init_extra"):
-            self.enc.init_extra(processor_kwargs)
+        self.enc.init_extra(processor_kwargs)
 
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
 
@@ -226,9 +224,7 @@ class MultiModalProcessor(BaseTextProcessor):
                     raise ValueError(f"Too many {modality} items in prompt, " f"got {len(data)} but limit is {limit}")
 
     def get_mm_max_tokens_per_item(self, seq_len: int) -> Optional[Mapping[str, int]]:
-        if hasattr(self.enc, "get_mm_max_tokens_per_item"):
-            return self.enc.get_mm_max_tokens_per_item(seq_len)
-        return None
+        return self.enc.get_mm_max_tokens_per_item(seq_len)
 
     def _make_outputs(self) -> dict:
         outputs = {
@@ -339,15 +335,10 @@ class MultiModalProcessor(BaseTextProcessor):
                 uuid = video_uuid[video_idx] if video_uuid else None
                 if not isinstance(item, tuple):
                     if isinstance(item, dict):
-                        result = self.enc.load_video(item["video"], item)
+                        frames, meta = self.enc.load_video(item["video"], item)
                     else:
-                        result = self.enc.load_video(item, {})
-                    # ernie load_video returns frames (list); qwen returns (frames, meta)
-                    if isinstance(result, tuple):
-                        frames, meta = result
-                        self.enc.add_video(frames, meta, outputs, uuid)
-                    else:
-                        self.enc.add_video(result, outputs, uuid)
+                        frames, meta = self.enc.load_video(item, {})
+                    self.enc.add_video(frames, outputs, uuid, meta=meta)
                 else:
                     self.enc.add_processed_video(item, outputs, uuid)
                 video_idx += 1
