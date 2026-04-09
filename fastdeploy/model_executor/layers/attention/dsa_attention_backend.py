@@ -344,8 +344,7 @@ class DSAAttentionBackend(AttentionBackend):
 
             from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
-        k_range = paddle.tensor(200.0)
-        scale = paddle.abs(compressed_kv).max() / k_range
+        scale = paddle.abs(compressed_kv).max() / 200.0
 
         slot_mapping = compute_slot_mapping(
             forward_meta.block_tables,
@@ -378,10 +377,12 @@ class DSAAttentionBackend(AttentionBackend):
         if forward_meta.max_len_tensor_cpu[2]:  # max_enc_len_this_time
 
             tile_scheduler_metadata, _ = flash_mla.get_mla_metadata()
-
+            new_cache_shape = latent_cache.shape
+            assert new_cache_shape[1] == 1
+            new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
             fmha_out_decode, _ = flash_mla.flash_mla_with_kvcache(
                 q.unsqueeze(1).contiguous(),
-                latent_cache.transpose([0, 2, 1, 3]).contiguous(),
+                latent_cache.view(new_cache_shape),
                 None,  # forward_meta.block_tables,
                 None,  # cache_seqlens
                 512,  # self.qk_nope_head_dim,
