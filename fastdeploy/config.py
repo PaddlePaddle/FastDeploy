@@ -1120,6 +1120,8 @@ class GraphOptimizationConfig:
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
+        if num_speculative_tokens != 0:
+            max_capture_size = max_capture_size * (num_speculative_tokens + 1)
         if not self.flag_cudagraph_capture_sizes_initlized and num_speculative_tokens != 0:
             self.cudagraph_capture_sizes = [
                 size * (num_speculative_tokens + 1)
@@ -1911,23 +1913,10 @@ class FDConfig:
         self.deploy_modality: DeployModality = deploy_modality
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
-        if self.speculative_config is not None and self.speculative_config.method in [
-            SpecMethod.MTP,
-            SpecMethod.SUFFIX,
-        ]:
-            max_capture_shape = self.scheduler_config.max_num_seqs * (
-                self.speculative_config.num_speculative_tokens + 1
-            )
-            assert max_capture_shape % 2 == 0, "CUDAGraph only supports capturing even token nums in MTP scenarios."
-            self.graph_opt_config.real_bsz_to_captured_size = {
-                k: 0 for k in range(1, self.scheduler_config.max_num_seqs + 1)
-            }
         if self.graph_opt_config.cudagraph_only_prefill:
             max_capture_shape = 512
         else:
-            max_capture_shape = (
-                max_capture_shape if self.speculative_config is not None else min(512, max_capture_shape)
-            )
+            max_capture_shape = min(512, max_capture_shape)
 
         max_capture_shape_prefill = graph_opt_config.max_capture_shape_prefill
 
