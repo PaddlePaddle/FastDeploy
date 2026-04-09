@@ -139,7 +139,7 @@ export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model /home/ERNIE-4.5-300B-A47B-Paddle \
+    --model /PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
     --port 8188 \
     --engine-worker-queue-port 8124 \
     --metrics-port 8125 \
@@ -183,7 +183,7 @@ export XSHMEM_MODE=1
 export XSHMEM_QP_NUM_PER_RANK=32
 export BKCL_RDMA_VERBS=1
 python -m fastdeploy.entrypoints.openai.api_server \
-    --model /home/ERNIE-4.5-300B-A47B-Paddle \
+    --model /PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
     --port 8123 \
     --engine-worker-queue-port 8124 \
     --metrics-port 8125 \
