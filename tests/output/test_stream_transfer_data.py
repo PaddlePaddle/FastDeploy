@@ -34,7 +34,7 @@ class TestStreamTransferData(unittest.TestCase):
         data.decoder_state = DecoderState.TEXT
         data.batch_id = 42
         data.tokens = tokens
-        data.speculaive_decoding = True
+        data.speculative_decoding = True
         data.logprobs = logprobs
         data.accept_tokens = accept_tokens
         data.accept_num = accept_num
@@ -43,7 +43,7 @@ class TestStreamTransferData(unittest.TestCase):
         self.assertEqual(data.decoder_state, DecoderState.TEXT)
         self.assertEqual(data.batch_id, 42)
         self.assertTrue(np.array_equal(data.tokens, tokens))
-        self.assertTrue(data.speculaive_decoding)
+        self.assertTrue(data.speculative_decoding)
         self.assertTrue(np.array_equal(data.logprobs, logprobs))
         self.assertTrue(np.array_equal(data.accept_tokens, accept_tokens))
         self.assertTrue(np.array_equal(data.accept_num, accept_num))
@@ -57,7 +57,7 @@ class TestStreamTransferData(unittest.TestCase):
         self.assertEqual(data.decoder_state, DecoderState.IMAGE)
         self.assertEqual(data.batch_id, 1)
         self.assertIsNone(getattr(data, "tokens", None))
-        self.assertFalse(getattr(data, "speculaive_decoding", False))
+        self.assertFalse(getattr(data, "speculative_decoding", False))
         self.assertIsNone(getattr(data, "logprobs", None))
         self.assertIsNone(getattr(data, "accept_tokens", None))
         self.assertIsNone(getattr(data, "accept_num", None))

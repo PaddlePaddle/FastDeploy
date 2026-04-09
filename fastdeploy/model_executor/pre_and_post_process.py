@@ -299,7 +299,7 @@ def _build_speculative_stream_transfer_data(
             decoder_state=DecoderState.TEXT,
             batch_id=bid,
             tokens=tokens_np,
-            speculaive_decoding=True,
+            speculative_decoding=True,
             accept_tokens=tokens_np,
             accept_num=np.array([accept_num_val], dtype=np.int32),
             output_type=output_type,
@@ -605,6 +605,9 @@ def save_output_specualate(
     skip_save_output: bool = False,
     enable_draft_logprob: bool = False,
 ):
+    if skip_save_output:
+        share_inputs["last_preempted_idx"][:] = 0
+        return
     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
         if save_each_rank or model_output.mp_rank == 0:
             recover_batch_index_for_sampler_output(
@@ -615,7 +618,6 @@ def save_output_specualate(
                 model_output.index_to_batch_id,
                 model_output.enable_pd_reorder,
                 [
-                    "sampled_token_ids",
                     "accept_tokens_cpu",
                     "accept_num_cpu",
                     "seq_lens_decoder_cpu",
@@ -648,63 +650,62 @@ def save_output_specualate(
 
         share_inputs["last_preempted_idx"][:] = 0
     else:
-        if not skip_save_output:
-            if sampler_output.logprobs_tensors is None:
-                recover_share_inputs = recover_batch_index_for_output(
-                    share_inputs,
-                    model_output.index_to_batch_id,
-                    model_output.enable_pd_reorder,
-                    [
-                        "accept_tokens_cpu",
-                        "accept_num_cpu",
-                        "seq_lens_decoder_cpu",
-                        "prompt_lens_cpu",
-                        "last_preempted_idx",
-                    ],
-                )
-                speculate_save_output(
-                    recover_share_inputs["accept_tokens_cpu"],
-                    recover_share_inputs["accept_num_cpu"],
-                    model_output.not_need_stop,
-                    recover_share_inputs["seq_lens_decoder_cpu"],
-                    recover_share_inputs["prompt_lens_cpu"],
-                    recover_share_inputs["last_preempted_idx"],
-                    model_output.mp_rank,
-                    save_each_rank,
-                    bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
-                )
-            else:
-                recover_batch_index_for_sampler_output(
-                    sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
-                )
-                recover_share_inputs = recover_batch_index_for_output(
-                    share_inputs,
-                    model_output.index_to_batch_id,
-                    model_output.enable_pd_reorder,
-                    [
-                        "sampled_token_ids",
-                        "accept_tokens_cpu",
-                        "accept_num_cpu",
-                        "seq_lens_decoder_cpu",
-                        "prompt_lens_cpu",
-                        "last_preempted_idx",
-                    ],
-                )
-                speculate_save_output_topk(
-                    recover_share_inputs["sampled_token_ids"],
-                    sampler_output.logprobs_tensors.logprob_token_ids,
-                    sampler_output.logprobs_tensors.logprobs,
-                    sampler_output.logprobs_tensors.selected_token_ranks,
-                    recover_share_inputs["accept_num_cpu"],
-                    sampler_output.cu_batch_token_offset,
-                    model_output.not_need_stop,
-                    recover_share_inputs["seq_lens_decoder_cpu"],
-                    recover_share_inputs["prompt_lens_cpu"],
-                    recover_share_inputs["last_preempted_idx"],
-                    3,  # mtype
-                    model_output.mp_rank,
-                    save_each_rank,
-                )
+        if sampler_output.logprobs_tensors is None:
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                [
+                    "accept_tokens_cpu",
+                    "accept_num_cpu",
+                    "seq_lens_decoder_cpu",
+                    "prompt_lens_cpu",
+                    "last_preempted_idx",
+                ],
+            )
+            speculate_save_output(
+                recover_share_inputs["accept_tokens_cpu"],
+                recover_share_inputs["accept_num_cpu"],
+                model_output.not_need_stop,
+                recover_share_inputs["seq_lens_decoder_cpu"],
+                recover_share_inputs["prompt_lens_cpu"],
+                recover_share_inputs["last_preempted_idx"],
+                model_output.mp_rank,
+                save_each_rank,
+                bool(envs.ENABLE_V1_KVCACHE_SCHEDULER),
+            )
+        else:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                [
+                    "sampled_token_ids",
+                    "accept_tokens_cpu",
+                    "accept_num_cpu",
+                    "seq_lens_decoder_cpu",
+                    "prompt_lens_cpu",
+                    "last_preempted_idx",
+                ],
+            )
+            speculate_save_output_topk(
+                recover_share_inputs["sampled_token_ids"],
+                sampler_output.logprobs_tensors.logprob_token_ids,
+                sampler_output.logprobs_tensors.logprobs,
+                sampler_output.logprobs_tensors.selected_token_ranks,
+                recover_share_inputs["accept_num_cpu"],
+                sampler_output.cu_batch_token_offset,
+                model_output.not_need_stop,
+                recover_share_inputs["seq_lens_decoder_cpu"],
+                recover_share_inputs["prompt_lens_cpu"],
+                recover_share_inputs["last_preempted_idx"],
+                3,  # mtype
+                model_output.mp_rank,
+                save_each_rank,
+            )
         share_inputs["last_preempted_idx"][:] = 0
 
 

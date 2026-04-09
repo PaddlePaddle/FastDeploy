@@ -1301,9 +1301,3 @@ def test_record_completion_metrics_updates_counters():
         assert metrics_obj.request_decode_time.value is not None
         assert metrics_obj.request_success_total.value == 1
         assert metrics_obj.request_generation_tokens.value == 4
-
-
-def test_process_sampling_results_use_zmq_rejects_speculative():
-    processor, _, _, _ = _make_processor(speculative_method="mtp")
-    with pytest.raises(NotImplementedError):
-        processor.process_sampling_results_use_zmq()

@@ -283,7 +283,7 @@ class TokenProcessor:
             task: Request = self.resource_manager.tasks_list[i]
             task_id = task.request_id
 
-            if self.speculative_decoding and getattr(stream_data, "speculaive_decoding", False):
+            if self.speculative_decoding and getattr(stream_data, "speculative_decoding", False):
                 result = self._process_speculative_output_use_zmq(stream_data, task, i, batch_result)
                 if result is not None:
                     batch_result.append(result)
@@ -591,6 +591,9 @@ class TokenProcessor:
         Returns:
             RequestOutput with draft_top_logprobs populated.
         """
+        num_tokens = max(accept_num_val, 0)
+        if num_tokens <= 0:
+            return None
         task_id = task.request_id
         result = RequestOutput(
             request_id=task_id,
@@ -605,8 +608,7 @@ class TokenProcessor:
             metrics=None,
         )
 
-        num_tokens = max(accept_num_val, 0)
-        if num_tokens > 0 and getattr(stream_data, "logprobs", None) is not None:
+        if getattr(stream_data, "logprobs", None) is not None:
             try:
                 logprobs_lists = stream_data.logprobs.tolists()
                 for idx in range(min(num_tokens, len(logprobs_lists.logprobs))):
