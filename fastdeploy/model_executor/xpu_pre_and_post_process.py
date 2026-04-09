@@ -106,7 +106,6 @@ def xpu_pre_process(
     use_cudagraph=False,
 ) -> XPUForwardMeta:
     """ """
-    max_len = input_ids.shape[1]
 
     token_num_cpu = paddle.sum(seq_lens_this_time).cpu()
     if use_speculate_method:
