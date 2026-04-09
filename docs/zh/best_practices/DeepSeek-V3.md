@@ -118,6 +118,7 @@ DeepSeek-V3.2 模型在black_wise_fp8在现量化下，在下列硬件上部署�
  **示例1：** H800上十六卡部署black_wise_fp8模型8K上下文的服务
 
 ```shell
+MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
 export FD_DISABLE_CHUNKED_PREFILL=1
 export FD_ATTENTION_BACKEND="DSA_ATTN"
 export FD_ENABLE_MULTI_API_SERVER=1

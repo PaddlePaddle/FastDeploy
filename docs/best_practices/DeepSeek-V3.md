@@ -129,6 +129,7 @@ Refer to the installation process document [FastDeploy GPU Installation](../get_
 **Example 1:** Deploying an 8K context service for the black_wise_fp8 model on a 16-GPU H800
 
 ```shell
+MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
 export FD_DISABLE_CHUNKED_PREFILL=1
 export FD_ATTENTION_BACKEND="DSA_ATTN"
 export FD_ENABLE_MULTI_API_SERVER=1
