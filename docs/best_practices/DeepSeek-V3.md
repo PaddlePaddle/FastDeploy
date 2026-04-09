@@ -59,7 +59,7 @@ export FD_ENABLE_MULTI_API_SERVER=1
 python -m fastdeploy.entrypoints.openai.multi_api_server \
     --ports "9811" \
     --num-servers 1 \
-    --args --model "$model_path" \
+    --args --model "$MODEL_PATH" \
     --ips "10.95.247.24,10.95.244.147" \
     --no-enable-prefix-caching \
     --quantization block_wise_fp8 \
@@ -90,7 +90,7 @@ export FD_ENABLE_MULTI_API_SERVER=1
 python -m fastdeploy.entrypoints.openai.multi_api_server \
     --ports "9811,9812,9813,9814,9815,9816,9817,9818" \
     --num-servers 8 \
-    --args --model "$model_path" \
+    --args --model "$MODEL_PATH" \
     --ips "10.95.246.220,10.95.230.91" \
     --no-enable-prefix-caching \
     --quantization block_wise_fp8 \
@@ -110,9 +110,9 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 
 ### 1.1 Support Requirements
 
-The minimum number of GPUs required to deploy the DeepSeek-V3.2 model on the black_wise_fp8 platform under current quantization is as follows:
+The minimum number of GPUs required to deploy the DeepSeek-V3.2 model on the block_wise_fp8 platform under current quantization is as follows:
 
-| | black_wise_fp8 |
+| | block_wise_fp8 |
 
 |-----|-----|
 
@@ -126,7 +126,7 @@ Refer to the installation process document [FastDeploy GPU Installation](../get_
 
 ### 2.1 Basics: Starting the Service
 
-**Example 1:** Deploying an 8K context service for the black_wise_fp8 model on a 16-GPU H800
+**Example 1:** Deploying an 8K context service for the block_wise_fp8 model on a 16-GPU H800
 
 ```shell
 MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
