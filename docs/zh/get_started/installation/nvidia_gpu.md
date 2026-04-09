@@ -71,7 +71,7 @@ docker build -f dockerfiles/Dockerfile.gpu -t fastdeploy:gpu .
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/)
 
 ``` shell
-python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.3.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 接着克隆源代码，编译安装
@@ -99,7 +99,7 @@ FastDeploy 提供了 GPU 算子预编译版 Wheel 包，可在无需完整源码
 首先安装 paddlepaddle-gpu，详细安装方式参考 [PaddlePaddle安装](https://www.paddlepaddle.org.cn/)
 
 ``` shell
-python -m pip install paddlepaddle-gpu==3.3.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+python -m pip install paddlepaddle-gpu==3.3.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 ```
 
 接着克隆源代码，拉取 whl 包并安装
