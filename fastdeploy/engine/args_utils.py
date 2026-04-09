@@ -857,11 +857,14 @@ class EngineArgs:
             "--quantization",
             type=parse_quantization,
             default=EngineArgs.quantization,
-            help="Quantization name for the model, currently support "
-            "'wint8', 'wint4',"
-            "default is None. The priority of this configuration "
-            "is lower than that of the config file. "
-            "More complex quantization methods need to be configured via the config file.",
+            help="Quantization config for the model. Can be a simple method name "
+            "(e.g. 'wint8', 'wint4') or a full JSON quantization_config string "
+            '(e.g. \'{"quantization": "mix_quant", "kv_cache_quant_type": "block_wise_fp8", '
+            '"dense_quant_type": "block_wise_fp8", "moe_quant_type": "block_wise_fp8"}\'). '
+            "When a JSON config is provided, it is processed the same way as "
+            "quantization_config in the model's config.json. "
+            "If both CLI and config.json specify quantization_config, "
+            "config.json takes higher priority. Default is None.",
         )
         model_group.add_argument(
             "--graph-optimization-config",
