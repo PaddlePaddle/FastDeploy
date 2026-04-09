@@ -275,6 +275,7 @@ class XPUForwardMeta(ForwardMeta):
     hidden_states: Optional[paddle.Tensor] = None
 
     is_draft: bool = False
+    is_speculative: bool = False
     # max bs
     max_num_seqs: int = 0
 

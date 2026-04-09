@@ -170,6 +170,7 @@ def xpu_pre_process(
         block_tables=share_inputs["block_tables"],
         caches=share_inputs["caches"],
         max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
+        is_speculative=use_speculate_method,
     )
 
     (
@@ -240,18 +241,7 @@ def xpu_process_output(
 ) -> paddle.Tensor:
     """ """
 
-    if isinstance(share_inputs, dict):
-        output_padding_offset = share_inputs.get("output_padding_offset", None)
-        if output_padding_offset is None:
-            # For XPU speculative decoding, force mtp gather path to keep
-            # output shape dynamic (real output token num) instead of max_bsz.
-            output_padding_offset = share_inputs.get("batch_id_per_token_output", None)
-    else:
-        output_padding_offset = getattr(share_inputs, "output_padding_offset", None)
-        if output_padding_offset is None:
-            output_padding_offset = getattr(share_inputs, "batch_id_per_token_output", None)
-
-    hidden_states = gather_next_token(
+    hiddden_states = gather_next_token(
         forward_output,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
@@ -262,7 +252,7 @@ def xpu_process_output(
         xpu_forward_meta.encoder_batch_map_cpu,
         xpu_forward_meta.decoder_batch_map_cpu,
         xpu_forward_meta.len_info_cpu,
-        output_padding_offset,  # output_padding_offset
+        xpu_forward_meta.is_speculative,
         xpu_forward_meta.max_num_seqs,
     )
     return hidden_states

@@ -421,7 +421,7 @@ std::vector<paddle::Tensor> GatherNextToken(
     const paddle::Tensor& encoder_batch_map_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& len_info_cpu,
-    const paddle::optional<paddle::Tensor>& output_padding_offset,
+    bool is_speculative,
     int max_bsz);
 
 std::vector<paddle::Tensor> GetImgBoundaries(
@@ -945,7 +945,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("encoder_batch_map_cpu"),
         py::arg("decoder_batch_map_cpu"),
         py::arg("len_info_cpu"),
-        py::arg("output_padding_offset"),
+        py::arg("is_speculative"),
         py::arg("max_bsz"),
         "Gather next token for XPU");
 
