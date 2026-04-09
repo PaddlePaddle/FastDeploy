@@ -207,67 +207,6 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     return ffn_out
 
 
-def moe_topk_select(
-    gating_output: paddle.Tensor,
-    n_group: int,
-    topk_group: int,
-    top_k: int,
-    routed_scaling_factor: float,
-    e_score_correction_bias: paddle.Tensor,
-    renormalize: bool = False,
-):
-    """
-    Topk selection using paddle PHI topk API.
-
-    Args:
-        gating_output: gate output logits, shape [seq_len, n_experts]
-        n_group: number of expert groups
-        topk_group: number of top-k groups to select
-        top_k: number of top experts per token
-        routed_scaling_factor: scaling factor for routed experts
-        e_score_correction_bias: bias for expert selection
-        renormalize: whether to renormalize topk probabilities
-
-    Returns:
-        topk_weights: normalized topk probabilities, shape [seq_len, top_k]
-        topk_ids: topk expert indices, shape [seq_len, top_k]
-    """
-    # compute gate probs via sigmoid
-    gate_probs = paddle.nn.functional.sigmoid(gating_output)
-    # probs_for_choice includes correction bias for topk selection
-    probs_for_choice = gate_probs + e_score_correction_bias if e_score_correction_bias is not None else gate_probs
-    # group-based topk selection
-    n_group = n_group if n_group > 0 else 1
-    topk_group = topk_group if topk_group > 0 else 1
-    if n_group > 1 and topk_group < n_group:
-        seq_length, n_experts = probs_for_choice.shape
-        group_scores = (
-            probs_for_choice.reshape([seq_length, n_group, -1]).topk(2, axis=-1)[0].sum(axis=-1)
-        )  # [seq_len, n_group]
-        group_idx = paddle.topk(group_scores, k=topk_group, axis=-1, sorted=True)[1]  # [seq_len, topk_group]
-        group_mask = paddle.sum(
-            paddle.nn.functional.one_hot(group_idx, num_classes=n_group).cast(group_scores.dtype),
-            axis=1,  # Sum over topk_group dimension -> [seq_len, n_group]
-        )
-        score_mask = (
-            group_mask.unsqueeze(-1).expand([seq_length, n_group, n_experts // n_group]).reshape([seq_length, -1])
-        )  # [seq_len, n_experts]
-        probs_for_choice = probs_for_choice.masked_fill(~score_mask.astype(paddle.bool), float("-inf"))
-
-    _, topk_ids = paddle.topk(probs_for_choice, top_k, axis=-1)
-    topk_weights = paddle.index_sample(gate_probs, topk_ids)
-
-    # normalize combine weights
-    if renormalize:
-        topk_weights = topk_weights / paddle.clip(topk_weights.sum(-1, keepdim=True), min=1e-12)
-
-    # apply routed scaling factor
-    if routed_scaling_factor:
-        topk_weights = topk_weights * routed_scaling_factor
-
-    return topk_weights, topk_ids
-
-
 class DeepGemmFusedMoeMethod(MoEMethodBase):
     """
     DeepGemmFusedMoeMethod is a class that implements the MoEMethodBase interface for DeepGemm backend.
@@ -403,22 +342,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         hidden_size = x.shape[1]
 
         # 1. Select topk experts and weights
-        if (
-            fastdeploy.envs.FD_USE_PHI_MOE_TOPK
-            and layer.redundant_table_manger is None
-            and layer.topk_method == "noaux_tc"
-        ):
-            topk_weights, topk_idx = moe_topk_select(
-                gate_out,
-                layer.n_group,
-                layer.topk_group,
-                layer.top_k,
-                layer.routed_scaling_factor,
-                layer.gate_correction_bias,
-                getattr(layer, "renormalize", True),
-            )
-        else:
-            topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
@@ -820,28 +744,16 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate_out.cast("float32")
 
         if layer.topk_method == "noaux_tc":
-
-            if not fastdeploy.envs.FD_USE_PHI_MOE_TOPK:
-                _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
-                    gate_out,
-                    layer.n_group,
-                    layer.topk_group,
-                    layer.top_k,
-                    layer.routed_scaling_factor,
-                    layer.gate_correction_bias,
-                    getattr(layer, "renormalize", True),
-                )
-            else:
-                topk_weights, topk_ids = moe_topk_select(
-                    gate_out,
-                    layer.n_group,
-                    layer.topk_group,
-                    layer.top_k,
-                    layer.routed_scaling_factor,
-                    layer.gate_correction_bias,
-                    getattr(layer, "renormalize", True),
-                )
-
+            _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                layer.top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
+                topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+            )
         else:
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
