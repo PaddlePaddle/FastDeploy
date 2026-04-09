@@ -11,54 +11,66 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Additive unit tests for fused_moe_deepgemm_backend.py
+
+Coverage delta over tests/layers/test_deepgemm_fused_moe.py (PR #6840):
+  - Standalone helpers: infermeta, call_prefill_permute_to_masked_gemm,
+    call_depermute_prefill_combine
+  - Weight management: create_weights, process_weights_after_loading,
+    process_loaded_weights, process_prequanted_weights
+  - apply_tp with FD_USE_PHI_FP8_QUANT=False (per_token_quant input path)
+  - apply_ep_prefill with num_worst_tokens > 0 (masked GEMM path)
+  - shared_experts branches in apply_ep_prefill and apply_ep_decode
+"""
 
 import sys
 import types
-import unittest
 from types import SimpleNamespace
-from unittest.mock import patch
 
 import paddle
+import pytest
 
 # ── Stub GPU-only modules ───────────────────────────────────────────────────
-# Temporarily install stubs so the import chain
-# (moe → triton_backend → fp8_utils → ops.gpu.deep_gemm) resolves.
-# Stubs are scoped: saved before, restored immediately after import.
-
-_STUB_KEYS = [
-    "fastdeploy.model_executor.ops.gpu",
-    "fastdeploy.model_executor.ops.gpu.deep_gemm",
-    "fastdeploy.model_executor.layers.moe.ep",
-]
-_saved_modules = {k: sys.modules.get(k) for k in _STUB_KEYS}
 
 
 class _GpuOpsStub(types.ModuleType):
-    """Catchall module: returns registered sub-modules or None for unknown attrs."""
-
-    __path__ = []  # marks as package so `import X.Y.Z` can traverse
+    __path__ = []
 
     def __getattr__(self, name):
-        # Return registered sub-modules from sys.modules so `from X import Y` works
         fqn = f"{self.__name__}.{name}"
         sub = sys.modules.get(fqn)
-        if sub is not None:
-            return sub
-        return None
+        return sub if sub is not None else None
 
 
-sys.modules["fastdeploy.model_executor.ops.gpu"] = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
-# fp8_utils.py:52 uses `import ...ops.gpu.deep_gemm as deep_gemm`
-_deep_gemm_stub = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
-# Provide dummy callables so `deep_gemm.m_grouped_*` attribute access succeeds
-_deep_gemm_stub.m_grouped_fp8_gemm_nt_contiguous = None
-_deep_gemm_stub.m_grouped_fp8_gemm_nt_masked = None
-_deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous = None
-_deep_gemm_stub.m_grouped_gemm_fp8_fp8_bf16_nt_masked = None
-sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = _deep_gemm_stub
-_gpu = sys.modules["fastdeploy.model_executor.ops.gpu"]
+# Build the ops.gpu stub chain — kept alive for runtime attribute access
+# (source uses ``fastdeploy.model_executor.ops.gpu.<fn>(...)``).
+_ops = types.ModuleType("fastdeploy.model_executor.ops")
+_ops.__path__ = []
+sys.modules.setdefault("fastdeploy.model_executor.ops", _ops)
 
-_ep_mod = types.ModuleType("fastdeploy.model_executor.layers.moe.ep")
+_gpu = _GpuOpsStub("fastdeploy.model_executor.ops.gpu")
+sys.modules["fastdeploy.model_executor.ops.gpu"] = _gpu
+_ops.gpu = _gpu
+
+_dg = types.ModuleType("fastdeploy.model_executor.ops.gpu.deep_gemm")
+_dg.m_grouped_fp8_gemm_nt_contiguous = None
+_dg.m_grouped_fp8_gemm_nt_masked = None
+_dg.m_grouped_gemm_fp8_fp8_bf16_nt_contiguous = None
+_dg.m_grouped_gemm_fp8_fp8_bf16_nt_masked = None
+sys.modules["fastdeploy.model_executor.ops.gpu.deep_gemm"] = _dg
+_gpu.deep_gemm = _dg
+
+_triton = _GpuOpsStub("fastdeploy.model_executor.ops.triton_ops")
+sys.modules["fastdeploy.model_executor.ops.triton_ops"] = _triton
+_ops.triton_ops = _triton
+
+_tu = types.ModuleType("fastdeploy.model_executor.ops.triton_ops.triton_utils")
+_tu.enable_compat_on_triton_kernel = lambda fn: fn
+_tu.paddle_driver = None
+sys.modules["fastdeploy.model_executor.ops.triton_ops.triton_utils"] = _tu
+
+_ep = types.ModuleType("fastdeploy.model_executor.layers.moe.ep")
 
 
 class _BufferStub:
@@ -67,19 +79,16 @@ class _BufferStub:
         return SimpleNamespace(current_stream_wait=lambda: None)
 
 
-_ep_mod.deep_ep = SimpleNamespace(Buffer=_BufferStub)
-sys.modules["fastdeploy.model_executor.layers.moe.ep"] = _ep_mod
+_ep.deep_ep = SimpleNamespace(Buffer=_BufferStub)
+sys.modules["fastdeploy.model_executor.layers.moe.ep"] = _ep
 
+# Wire ops onto the model_executor module so runtime attribute access works
+import fastdeploy.model_executor as _me  # noqa: E402
 from fastdeploy.model_executor.layers.moe import (  # noqa: E402
     fused_moe_deepgemm_backend as dgb,
 )
 
-# Restore original modules immediately after import to avoid global pollution.
-for _k in _STUB_KEYS:
-    if _saved_modules[_k] is None:
-        sys.modules.pop(_k, None)
-    else:
-        sys.modules[_k] = _saved_modules[_k]
+_me.ops = _ops
 
 # ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -114,7 +123,11 @@ class _DummyLayer(paddle.nn.Layer):
             ),
             scheduler_config=SimpleNamespace(splitwise_role="prefill", max_num_batched_tokens=4),
             eplb_config=SimpleNamespace(redundant_experts_num=0),
-            parallel_config=SimpleNamespace(ep_group=None, use_internode_ll_two_stage=False, tensor_parallel_size=1),
+            parallel_config=SimpleNamespace(
+                ep_group=None,
+                use_internode_ll_two_stage=False,
+                tensor_parallel_size=1,
+            ),
             load_config=SimpleNamespace(load_strategy="meta", load_choices="default_v1"),
         )
         self.weight_key_map = {
@@ -133,13 +146,6 @@ class _DummyLayer(paddle.nn.Layer):
         return sd["up"], sd["down"], sd["ids"], None
 
 
-def _ensure_dist():
-    """Mock distributed init instead of using hardcoded ports."""
-    if not paddle.distributed.is_initialized():
-        _ensure_dist._patcher = patch.object(paddle.distributed, "is_initialized", return_value=True)
-        _ensure_dist._patcher.start()
-
-
 def _init(layer, qc=None):
     m = dgb.DeepGemmFusedMoeMethod(qc or _QuantConfig())
     m.create_weights(layer, model_format="torch")
@@ -150,191 +156,217 @@ def _scale_shape(r, c, b=2):
     return [(r + b - 1) // b, (c + b - 1) // b]
 
 
-# ── Tests ───────────────────────────────────────────────────────────────────
+@pytest.fixture(autouse=True)
+def _ensure_dist(monkeypatch):
+    monkeypatch.setattr(paddle.distributed, "is_initialized", lambda: True)
 
 
-class TestFusedMoeDeepgemmBackend(unittest.TestCase):
+# ── Tests: standalone helpers (not covered by upstream) ─────────────────────
 
-    def test_create_weights(self):
-        """create_weights + infermeta + process_weights_after_loading."""
-        _ensure_dist()
-        layer = _DummyLayer()
-        m = _init(layer)
-        self.assertTrue(hasattr(layer, "up_gate_proj_weight"))
-        self.assertEqual(layer.up_gate_proj_weight.shape[0], layer.num_local_experts)
 
-        # infermeta — covers L57
-        meta = paddle.static.MetaTensor(shape=[2, 3], dtype=paddle.float16)
+class TestHelperFunctions:
+    """Standalone helpers not tested by test_deepgemm_fused_moe.py."""
+
+    def test_infermeta(self):
+        meta_in = paddle.static.MetaTensor(shape=[2, 3], dtype=paddle.float16)
+        meta_w1 = paddle.static.MetaTensor(shape=[3, 4], dtype=paddle.float16)
         out = dgb.m_grouped_fp8_gemm_nt_contiguous_custom_python_op_infermeta(
-            meta,
-            meta,
-            meta,
-            meta,
-            meta,
-            paddle.static.MetaTensor(shape=[3, 4], dtype=paddle.float16),
-            meta,
+            meta_in,
+            meta_in,
+            meta_in,
+            meta_in,
+            meta_in,
+            meta_w1,
+            meta_in,
             2,
         )
-        self.assertEqual(out.shape, [2, 4])
+        assert out.shape == [2, 4]
 
-        # call_prefill_permute_to_masked_gemm — covers L76-81
-        with patch.object(
+    def test_permute_and_depermute(self, monkeypatch):
+        monkeypatch.setattr(
             dgb,
             "prefill_permute_to_masked_gemm",
             lambda x, s, ids, ne, mt: (x, s, paddle.zeros([2, 1], "int32"), paddle.zeros([ne], "int32")),
-        ):
-            px_in = paddle.ones([2, 4], "float32")
-            ps_in = paddle.ones([2, 2], "float32")
-            ids32 = paddle.zeros([2, 1], dtype="int32")
-            px, ps, imap, tnpe = dgb.call_prefill_permute_to_masked_gemm(px_in, ps_in, ids32, 1, 4)
-            self.assertEqual(px.shape, [2, 4])
+        )
+        # int32 topk_ids triggers the int64 cast branch
+        px, ps, imap, tnpe = dgb.call_prefill_permute_to_masked_gemm(
+            x=paddle.ones([2, 4], "float32"),
+            scale=paddle.ones([2, 2], "float32"),
+            topk_ids=paddle.zeros([2, 1], dtype="int32"),
+            num_local_experts=1,
+            max_token_num=4,
+        )
+        assert px.shape == [2, 4]
 
-        # call_depermute_prefill_combine — covers L102-104
-        with patch.object(
+        monkeypatch.setattr(
             dgb,
             "depermute_prefill_combine",
             lambda x, im, tw, n: paddle.zeros([n, x.shape[-1]], "float32"),
-        ):
-            dp_out = dgb.call_depermute_prefill_combine(
-                x=paddle.ones([1, 4, 4], "float32"),
-                indice_map=paddle.zeros([2, 1], "int32"),
-                topk_weights=paddle.ones([2, 1], "float32"),
-                num_worst_tokens=2,
-            )
-            self.assertEqual(dp_out.shape[0], 2)
+        )
+        out = dgb.call_depermute_prefill_combine(
+            x=paddle.ones([1, 4, 4], "float32"),
+            indice_map=paddle.zeros([2, 1], "int32"),
+            topk_weights=paddle.ones([2, 1], "float32"),
+            num_worst_tokens=2,
+        )
+        assert out.shape[0] == 2
 
-        # process_weights_after_loading — covers L151
-        with patch.object(dgb.BlockWiseFP8MoEMethod, "process_weights_after_loading", lambda self, layer: None):
-            m.process_weights_after_loading(layer)
 
-        # process_loaded_weights — covers L157-180
-        with (
-            patch(
-                "fastdeploy.model_executor.layers.utils.per_block_cast_to_fp8",
-                lambda w, bs: (paddle.ones_like(w, dtype="float32"), paddle.ones([1, 1], "float32")),
+# ── Tests: weight management (not covered by upstream) ──────────────────────
+
+
+class TestWeightManagement:
+    """Weight creation / loading — upstream test never exercises these."""
+
+    def test_create_weights_and_post_loading(self, monkeypatch):
+        layer = _DummyLayer()
+        m = _init(layer)
+        assert hasattr(layer, "up_gate_proj_weight")
+        assert layer.up_gate_proj_weight.shape[0] == layer.num_local_experts
+
+        monkeypatch.setattr(
+            dgb.BlockWiseFP8MoEMethod,
+            "process_weights_after_loading",
+            lambda self, lay: None,
+        )
+        m.process_weights_after_loading(layer)
+
+    def test_process_loaded_weights(self, monkeypatch):
+        layer = _DummyLayer()
+        m = _init(layer)
+        H = layer.hidden_size
+        monkeypatch.setattr(
+            "fastdeploy.model_executor.layers.utils.per_block_cast_to_fp8",
+            lambda w, bs: (
+                paddle.ones_like(w, dtype="float32"),
+                paddle.ones([1, 1], "float32"),
             ),
-            patch.object(paddle.Tensor, "copy_", lambda self, src, blocking=True: None),
-            patch.object(paddle.Tensor, "set_value", lambda self, src: None),
-        ):
-            H = layer.hidden_size
-            sd = {
-                "up": [paddle.ones([H, layer.moe_intermediate_size * 2], "float32")],
-                "down": [paddle.ones([layer.moe_intermediate_size, H], "float32")],
-            }
-            m.process_loaded_weights(layer, sd)
+        )
+        monkeypatch.setattr(paddle.Tensor, "copy_", lambda self, src, blocking=True: None)
+        monkeypatch.setattr(paddle.Tensor, "set_value", lambda self, src: None)
 
-    def test_process_prequanted_weights(self):
-        """process_prequanted_weights — both ue8m0 branches."""
-        _ensure_dist()
-        with patch.object(dgb, "get_tensor", lambda t, _m: t):
-            for ue8m0 in (False, True):
-                layer = _DummyLayer()
-                m = _init(layer, _QuantConfig(ue8m0=ue8m0))
-                up_scale = paddle.ones(_scale_shape(layer.hidden_size, layer.moe_intermediate_size * 2), "float32")
-                down_scale = paddle.ones(_scale_shape(layer.moe_intermediate_size, layer.hidden_size), "float32")
-                sd = [
-                    ("up_scale_0", up_scale),
-                    ("down_scale_0", down_scale),
-                    ("up", [paddle.ones([layer.hidden_size, layer.moe_intermediate_size * 2], "int8")]),
-                    ("down", [paddle.ones([layer.moe_intermediate_size, layer.hidden_size], "int8")]),
-                    ("ids", [0]),
-                ]
-                m.process_prequanted_weights(layer, state_dict=sd, is_rearrange=False)
-                self.assertEqual(layer.up_gate_proj_weight_scale_inv.shape[0], layer.num_local_experts)
+        sd = {
+            "up": [paddle.ones([H, layer.moe_intermediate_size * 2], "float32")],
+            "down": [paddle.ones([layer.moe_intermediate_size, H], "float32")],
+        }
+        m.process_loaded_weights(layer, sd)
 
-    def test_apply_tp(self):
-        """apply_tp — noaux_tc + topk paths."""
-        _ensure_dist()
+    def test_process_prequanted_weights(self, monkeypatch):
+        monkeypatch.setattr(dgb, "get_tensor", lambda t, _m: t)
+        for ue8m0 in (False, True):
+            layer = _DummyLayer()
+            m = _init(layer, _QuantConfig(ue8m0=ue8m0))
+            up_sc = paddle.ones(
+                _scale_shape(layer.hidden_size, layer.moe_intermediate_size * 2),
+                "float32",
+            )
+            dn_sc = paddle.ones(
+                _scale_shape(layer.moe_intermediate_size, layer.hidden_size),
+                "float32",
+            )
+            sd = [
+                ("up_scale_0", up_sc),
+                ("down_scale_0", dn_sc),
+                (
+                    "up",
+                    [
+                        paddle.ones(
+                            [layer.hidden_size, layer.moe_intermediate_size * 2],
+                            "int8",
+                        )
+                    ],
+                ),
+                (
+                    "down",
+                    [paddle.ones([layer.moe_intermediate_size, layer.hidden_size], "int8")],
+                ),
+                ("ids", [0]),
+            ]
+            m.process_prequanted_weights(layer, state_dict=sd, is_rearrange=False)
+            assert layer.up_gate_proj_weight_scale_inv.shape[0] == layer.num_local_experts
+
+
+# ── Tests: apply_tp with FD_USE_PHI_FP8_QUANT=False ────────────────────────
+# Upstream test_deepgemm_fused_moe.py only runs apply_tp with the default
+# FD_USE_PHI_FP8_QUANT=True; the per_token_quant input path is never hit.
+
+
+class TestApplyTpNonPhiInput:
+    """apply_tp per_token_quant input — additive over upstream."""
+
+    def test_per_token_quant_input_path(self, monkeypatch):
         layer = _DummyLayer()
         m = _init(layer)
         H = layer.hidden_size
         gate = paddle.nn.Linear(H, layer.num_experts, bias_attr=False)
         x = paddle.ones([2, H], dtype="float32")
 
-        with (
-            patch(
-                "fastdeploy.model_executor.layers.moe.moe.get_moe_scores",
-                lambda g, ng, tg, k, s, b, r: (
-                    g,
-                    paddle.ones([g.shape[0], k], "float32"),
-                    paddle.zeros([g.shape[0], k], "int64"),
-                ),
+        monkeypatch.setattr(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False)
+        monkeypatch.setattr(dgb.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", False)
+        monkeypatch.setattr(
+            "fastdeploy.model_executor.layers.moe.moe.get_moe_scores",
+            lambda g, ng, tg, k, s, b, r, **kw: (
+                g,
+                paddle.ones([g.shape[0], k], "float32"),
+                paddle.zeros([g.shape[0], k], "int64"),
             ),
-            patch.object(
-                dgb,
-                "count_tokens_per_expert_func",
-                lambda ids, ne: (paddle.zeros([ne], "int32"), paddle.to_tensor(0, "int32")),
+        )
+        monkeypatch.setattr(
+            dgb,
+            "count_tokens_per_expert_func",
+            lambda ids, ne, *a: (
+                paddle.zeros([ne], "int32"),
+                paddle.to_tensor(0, "int32"),
             ),
-            patch.object(
-                _gpu,
-                "per_token_quant",
-                lambda x, bs, *_: (paddle.zeros([x.shape[0], H], "int8"), paddle.ones([1, 1], "float32")),
+        )
+        monkeypatch.setattr(
+            _gpu,
+            "per_token_quant",
+            lambda x, bs, *_: (
+                paddle.zeros([x.shape[0], H], "int8"),
+                paddle.ones([1, 1], "float32"),
             ),
-            patch.object(
-                _gpu,
-                "ep_moe_expert_dispatch_fp8",
-                lambda *a, **kw: (
-                    paddle.zeros([2, H], "int8"),
-                    paddle.ones([1, 1], "float32"),
-                    paddle.zeros([2], "int32"),
-                    paddle.zeros([1], "int32"),
-                    paddle.zeros([1], "int32"),
-                    paddle.ones([2, 1], "float32"),
-                    paddle.zeros([2], "int32"),
-                    paddle.zeros([1], "int32"),
-                    paddle.zeros([2], "int32"),
-                ),
+        )
+        monkeypatch.setattr(
+            _gpu,
+            "ep_moe_expert_dispatch_fp8",
+            lambda *a, **kw: (
+                paddle.zeros([2, H], "int8"),
+                paddle.ones([1, 1], "float32"),
+                paddle.zeros([2], "int32"),
+                paddle.zeros([1], "int32"),
+                paddle.zeros([1], "int32"),
+                paddle.ones([2, 1], "float32"),
+                paddle.zeros([2], "int32"),
+                paddle.zeros([1], "int32"),
+                paddle.zeros([2], "int32"),
             ),
-            patch.object(
-                dgb,
-                "m_grouped_fp8_gemm_nt_contiguous_custom_python_op",
-                lambda pi, *_a, **_kw: paddle.zeros([pi.shape[0], H], "float32"),
-            ),
-            patch.object(_gpu, "ep_moe_expert_combine", lambda ffn, *a, **kw: ffn),
-            patch.object(dgb.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", False),
-        ):
-            with patch.object(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False):
-                out = m.apply_tp(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
-                self.assertEqual(out.shape[-1], H)
+        )
+        monkeypatch.setattr(
+            dgb,
+            "m_grouped_fp8_gemm_nt_contiguous_custom_python_op",
+            lambda pi, *_a, **_kw: paddle.zeros([pi.shape[0], H], "float32"),
+        )
+        monkeypatch.setattr(_gpu, "ep_moe_expert_combine", lambda ffn, *a, **kw: ffn)
 
-                layer.topk_method = "topk"
-                with patch.object(
-                    _gpu,
-                    "moe_topk_select",
-                    lambda g, b, k, *_: (
-                        paddle.zeros([g.shape[0], k], "int64"),
-                        paddle.ones([g.shape[0], k], "float32"),
-                    ),
-                ):
-                    out2 = m.apply_tp(layer, x, gate)
-                    self.assertEqual(out2.shape[-1], H)
+        out = m.apply_tp(layer, x, gate)
+        assert out.shape[-1] == H
 
-            # PHI FP8 quant path — covers L534-540
-            layer.topk_method = "noaux_tc"
-            with (
-                patch.object(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", True),
-                patch(
-                    "paddle.incubate.nn.functional.fp8_quant_blockwise",
-                    lambda x, **kw: (
-                        paddle.zeros([x.shape[0], H], "int8"),
-                        paddle.ones([x.shape[0] + 1, 1], "float32"),
-                    ),
-                ),
-            ):
-                out3 = m.apply_tp(layer, x, gate)
-                self.assertEqual(out3.shape[-1], H)
 
-    def test_apply_ep_prefill(self):
-        """apply_ep_prefill — with tokens and empty path."""
-        _ensure_dist()
-        layer = _DummyLayer()
-        m = _init(layer)
-        H = layer.hidden_size
+# ── Tests: apply_ep_prefill additive paths ──────────────────────────────────
+# Upstream covers: zero-token, contiguous (FD_USE_PHI_FP8_QUANT=True default),
+# and prob_in_advance variants — but NOT num_worst_tokens>0 (masked GEMM)
+# and NOT shared_experts.
 
-        class _PrefillRunner:
-            def __init__(self, n, num_worst_tokens=0):
-                self._n = n
-                self.ep_engine = SimpleNamespace(async_finish=True)
+
+class TestApplyEpPrefillAdditive:
+    """apply_ep_prefill paths not covered by upstream."""
+
+    def _make_runner(self, n, H, num_worst_tokens=0, async_finish=False):
+        class Runner:
+            ep_engine = SimpleNamespace(async_finish=async_finish)
+
+            def __init__(self):
                 self.num_worst_tokens = num_worst_tokens
 
             def moe_select(self, _layer, gate_out):
@@ -344,109 +376,88 @@ class TestFusedMoeDeepgemmBackend(unittest.TestCase):
                 )
 
             def dispatch(self, x, topk_idx, topk_weights, **_kw):
-                recv_x = (paddle.zeros([self._n, H], "int8"), paddle.ones([1, 1], "float32"))
-                return recv_x, topk_idx, topk_weights, [self._n], None, _BufferStub.capture()
+                scale = _kw.get(
+                    "x_scale_tensor",
+                    paddle.ones([x.shape[0], 1], "float32"),
+                )
+                return (
+                    (paddle.zeros([n, H], "int8"), scale),
+                    topk_idx,
+                    topk_weights,
+                    [n],
+                    None,
+                    _BufferStub.capture(),
+                )
 
             def combine(self, out, _handle, _weights, event):
                 return out, event
 
+        return Runner()
+
+    def test_masked_gemm_path(self, monkeypatch):
+        """num_worst_tokens > 0 triggers masked GEMM — not in upstream."""
+        layer = _DummyLayer()
+        m = _init(layer)
+        H = layer.hidden_size
+        m.ep_prefill_runner = self._make_runner(
+            n=2,
+            H=H,
+            num_worst_tokens=2,
+            async_finish=True,
+        )
+
+        monkeypatch.setattr(dgb, "let_another_thread_run", lambda: None)
+        monkeypatch.setattr(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False)
+        monkeypatch.setattr(
+            _gpu,
+            "per_token_quant",
+            lambda x, bs, *_: (
+                paddle.zeros([x.shape[0], H], "int8"),
+                paddle.ones([1, 1], "float32"),
+            ),
+        )
+        monkeypatch.setattr(
+            dgb,
+            "call_prefill_permute_to_masked_gemm",
+            lambda x, scale, topk_ids, num_local_experts, max_token_num: (
+                x,
+                scale,
+                paddle.zeros([num_local_experts, max_token_num, 1], "int32"),
+                paddle.zeros([num_local_experts], "int32"),
+            ),
+        )
+        monkeypatch.setattr(dgb, "m_grouped_fp8_gemm_nt_masked", lambda *_a, **_kw: None)
+        monkeypatch.setattr(
+            _gpu,
+            "fused_mask_swiglu_fp8_quant",
+            lambda t, tn, bs, **kw: (
+                paddle.zeros_like(t),
+                paddle.zeros([1], "float32"),
+            ),
+        )
+        monkeypatch.setattr(
+            dgb,
+            "call_depermute_prefill_combine",
+            lambda x, indice_map, topk_weights, num_worst_tokens: paddle.zeros(
+                [num_worst_tokens, x.shape[-1]], "float32"
+            ),
+        )
+
         gate = paddle.nn.Linear(H, layer.num_experts, bias_attr=False)
         x = paddle.ones([2, H], dtype="float32")
+        shared = paddle.nn.Linear(H, H, bias_attr=False)
+        out = m.apply_ep_prefill(layer, x, gate, shared_experts=shared)
+        assert out.shape[-1] == H
 
-        with (
-            patch.object(dgb, "let_another_thread_run", lambda: None),
-            patch.object(
-                dgb,
-                "count_tokens_per_expert_func",
-                lambda ids, ne: (paddle.zeros([ne], "int32"), paddle.to_tensor(0, "int32")),
-            ),
-            patch.object(
-                _gpu,
-                "ep_moe_expert_dispatch_fp8",
-                lambda *a, **kw: (
-                    paddle.zeros([2, H], "int8"),
-                    paddle.ones([1, 1], "float32"),
-                    paddle.zeros([2], "int32"),
-                    paddle.zeros([1], "int32"),
-                    paddle.zeros([1], "int32"),
-                    paddle.ones([2, 1], "float32"),
-                    paddle.zeros([2], "int32"),
-                    paddle.zeros([1], "int32"),
-                    paddle.zeros([2], "int32"),
-                ),
-            ),
-            patch.object(dgb, "m_grouped_fp8_gemm_nt_contiguous", lambda *a, **kw: None),
-            patch(
-                "paddle.incubate.nn.functional.swiglu",
-                lambda t, *a, **kw: paddle.zeros([t.shape[0], t.shape[1] // 2], "float32"),
-            ),
-            patch.object(_gpu, "ep_moe_expert_combine", lambda ffn, *a, **kw: ffn),
-            patch.object(
-                _gpu,
-                "per_token_quant",
-                lambda x, bs, *_: (paddle.zeros([x.shape[0], H], "int8"), paddle.ones([1, 1], "float32")),
-            ),
-            patch.object(dgb.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", False),
-        ):
-            # Standard path (FP8 off)
-            with patch.object(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False):
-                m.ep_prefill_runner = _PrefillRunner(n=2)
-                out = m.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
-                self.assertEqual(out.shape[-1], H)
 
-                m.ep_prefill_runner = _PrefillRunner(n=0)
-                out_empty = m.apply_ep_prefill(layer, x, gate)
-                self.assertEqual(out_empty.shape[-1], H)
+# ── Tests: apply_ep_decode additive paths ───────────────────────────────────
+# Upstream covers the basic masked-gemm decode path but NOT shared_experts.
 
-            # PHI FP8 quant path — covers L283-289 + L374-379
-            with (
-                patch.object(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", True),
-                patch(
-                    "paddle.incubate.nn.functional.fp8_quant_blockwise",
-                    lambda x, **kw: (
-                        paddle.zeros([x.shape[0], H], "int8"),
-                        paddle.ones([x.shape[0] + 1, 1], "float32"),
-                    ),
-                ),
-            ):
-                m.ep_prefill_runner = _PrefillRunner(n=2)
-                out_phi = m.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
-                self.assertEqual(out_phi.shape[-1], H)
 
-            # num_worst_tokens > 0 branch — covers L410-482 (masked gemm path)
-            with (
-                patch.object(dgb.fastdeploy.envs, "FD_USE_PHI_FP8_QUANT", False),
-                patch.object(
-                    dgb,
-                    "call_prefill_permute_to_masked_gemm",
-                    lambda x, scale, topk_ids, num_local_experts, max_token_num: (
-                        x,
-                        scale,
-                        paddle.zeros([num_local_experts, max_token_num, 1], "int32"),
-                        paddle.zeros([num_local_experts], "int32"),
-                    ),
-                ),
-                patch.object(dgb, "m_grouped_fp8_gemm_nt_masked", lambda *_a, **_kw: None),
-                patch.object(
-                    _gpu,
-                    "fused_mask_swiglu_fp8_quant",
-                    lambda t, tn, bs, **kw: (paddle.zeros_like(t), paddle.zeros([1], "float32")),
-                ),
-                patch.object(
-                    dgb,
-                    "call_depermute_prefill_combine",
-                    lambda x, indice_map, topk_weights, num_worst_tokens: paddle.zeros(
-                        [num_worst_tokens, x.shape[-1]], "float32"
-                    ),
-                ),
-            ):
-                m.ep_prefill_runner = _PrefillRunner(n=2, num_worst_tokens=2)
-                out_worst = m.apply_ep_prefill(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
-                self.assertEqual(out_worst.shape[-1], H)
+class TestApplyEpDecodeAdditive:
+    """apply_ep_decode shared_experts — not covered by upstream."""
 
-    def test_apply_ep_decode(self):
-        """apply_ep_decode."""
-        _ensure_dist()
+    def test_shared_experts_branch(self, monkeypatch):
         layer = _DummyLayer()
         m = _init(layer)
         H = layer.hidden_size
@@ -460,7 +471,10 @@ class TestFusedMoeDeepgemmBackend(unittest.TestCase):
 
             def dispatch(self, x, _ti, _tw, **_kw):
                 return (
-                    (paddle.empty([0, H], x.dtype), paddle.empty([0, H], "float32")),
+                    (
+                        paddle.empty([0, H], x.dtype),
+                        paddle.empty([0, H], "float32"),
+                    ),
                     paddle.zeros([layer.num_local_experts], "int32"),
                     None,
                 )
@@ -470,19 +484,18 @@ class TestFusedMoeDeepgemmBackend(unittest.TestCase):
 
         m.ep_decoder_runner = _DecodeRunner()
 
-        with (
-            patch.object(dgb, "m_grouped_fp8_gemm_nt_masked", lambda *_a, **_kw: None),
-            patch.object(
-                _gpu,
-                "fused_mask_swiglu_fp8_quant",
-                lambda t, tn, bs, **kw: (paddle.zeros_like(t), paddle.zeros([1], "float32")),
+        monkeypatch.setattr(dgb, "m_grouped_fp8_gemm_nt_masked", lambda *_a, **_kw: None)
+        monkeypatch.setattr(
+            _gpu,
+            "fused_mask_swiglu_fp8_quant",
+            lambda t, tn, bs, **kw: (
+                paddle.zeros_like(t),
+                paddle.zeros([1], "float32"),
             ),
-        ):
-            gate = paddle.nn.Linear(H, layer.num_experts, bias_attr=False)
-            x = paddle.ones([2, H], dtype="float32")
-            out = m.apply_ep_decode(layer, x, gate, topk_ids_hookfunc=lambda **_: None)
-            self.assertEqual(out.shape[-1], H)
+        )
 
-
-if __name__ == "__main__":
-    unittest.main()
+        shared = paddle.nn.Linear(H, H, bias_attr=False)
+        gate = paddle.nn.Linear(H, layer.num_experts, bias_attr=False)
+        x = paddle.ones([2, H], dtype="float32")
+        out = m.apply_ep_decode(layer, x, gate, shared_experts=shared)
+        assert out.shape[-1] == H
