@@ -178,6 +178,7 @@ class DeepSeekV3MoE(nn.Layer):
             layer_idx=layer_id,
             gate_correction_bias=self.gate.e_score_correction_bias,
             weight_key_map=weight_key_map,
+            prefix=f"{prefix}.experts",
         )
 
         self.num_shared_experts = fd_config.model_config.n_shared_experts

@@ -240,7 +240,7 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
     def __init__(self, quant_config):
         super().__init__(quant_config)
         if quant_config is None:
-            self.quant_config = WeightOnlyConfig(algo="weight_only_int8", is_checkpoint_bf16=True)
+            self.quant_config = WeightOnlyConfig(algo="weight_only_int8")
         else:
             self.quant_config = quant_config
         self.moe_quant_type = self.quant_config.algo
@@ -480,21 +480,18 @@ class MetaxCutlassWeightOnlyMoEMethod(MetaxCutlassMoEMethod):
             getattr(layer, weight_name).copy_(weight.transpose([0, 2, 1]), False)
             getattr(layer, scale_name).copy_(scale, False)
 
-        if self.quant_config.is_checkpoint_bf16:
-            weight_id_map = {"gate_up": 0, "down": 1}
-            if weight_fully_copied(layer.up_gate_proj_weight):
-                weight_type = "gate_up"
-            else:
-                weight_type = "down"
-
-            if self.model_format == "torch":
-                unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
-                    "quant_weight", "weight"
-                )
-                process_weight_transpose(layer, unquantized_weight_name)
-            _process_quantize(weight_id_map[weight_type])
+        weight_id_map = {"gate_up": 0, "down": 1}
+        if weight_fully_copied(layer.up_gate_proj_weight):
+            weight_type = "gate_up"
         else:
-            return
+            weight_type = "down"
+
+        if self.model_format == "torch":
+            unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
+                "quant_weight", "weight"
+            )
+            process_weight_transpose(layer, unquantized_weight_name)
+        _process_quantize(weight_id_map[weight_type])
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """

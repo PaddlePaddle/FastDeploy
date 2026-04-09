@@ -616,8 +616,6 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
 
     def process_weights_after_loading(self, layer):
         """ """
-        if not self.quant_config.is_checkpoint_bf16:
-            return
         weight_id_map = {"gate_up": 0, "down": 1}
         if (
             hasattr(layer.up_gate_proj_weight, "tensor_track")

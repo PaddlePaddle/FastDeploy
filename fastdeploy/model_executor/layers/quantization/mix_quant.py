@@ -18,6 +18,7 @@ from typing import Optional
 
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
+from fastdeploy.model_executor.utils import get_special_quant_config
 
 from . import get_quantization_config
 from .quant_base import QuantConfigBase, QuantMethodBase
@@ -41,6 +42,7 @@ class MixQuantConfig(QuantConfigBase):
         hadamard_block_size: int = 128,
         moe_dynamic_quant: bool = False,
         is_moe_quantized: bool = False,
+        modules_to_quant: dict = {},
     ) -> None:
         super().__init__()
         self.dense_quant_type = dense_quant_type
@@ -61,6 +63,7 @@ class MixQuantConfig(QuantConfigBase):
         self.hadamard_block_size = hadamard_block_size
         self.moe_dynamic_quant = moe_dynamic_quant
         self.is_moe_quantized = is_moe_quantized
+        self.modules_to_quant = modules_to_quant
 
     def name(self) -> str:
         return "mix_quant"
@@ -79,6 +82,7 @@ class MixQuantConfig(QuantConfigBase):
             config.get("hadamard_block_size", 128),
             config.get("moe_dynamic_quant", False),
             config.get("is_moe_quantized", False),
+            config.get("modules_to_quant", {}),
         )
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
@@ -86,7 +90,7 @@ class MixQuantConfig(QuantConfigBase):
             if layer.moe_tag == "Image":
                 if self.image_moe_quant_type is not None:
                     return (
-                        get_quantization_config(self.image_moe_quant_type)
+                        get_special_quant_config(layer, self.modules_to_quant, self.image_moe_quant_type)
                         .from_config(
                             {
                                 "is_permuted": self.is_permuted,
@@ -101,7 +105,7 @@ class MixQuantConfig(QuantConfigBase):
             else:
                 if self.moe_quant_type is not None:
                     return (
-                        get_quantization_config(self.moe_quant_type)
+                        get_special_quant_config(layer, self.modules_to_quant, self.moe_quant_type)
                         .from_config(
                             {
                                 "is_permuted": self.is_permuted,

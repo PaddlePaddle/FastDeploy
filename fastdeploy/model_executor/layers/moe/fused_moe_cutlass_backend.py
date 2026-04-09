@@ -1468,7 +1468,7 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
         self.down_proj_scale_shape = [layer.num_local_experts, layer.hidden_size]
         self.model_format = extra_weight_attrs.get("model_format")
         # TODO(bukejiyu): remove v1 loader check when v0 loader is removed
-        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+        if layer.fd_config.load_config.load_choices == "default_v1":
             if self.model_format != "torch":
                 up_gate_proj_weight_shape = [
                     layer.num_local_experts,
@@ -1649,21 +1649,18 @@ class CutlassWeightOnlyMoEMethod(CutlassMoEMethod):
             getattr(layer, weight_name).copy_(weight, False)
             getattr(layer, scale_name).copy_(scale, False)
 
-        if self.quant_config.is_checkpoint_bf16:
-            weight_id_map = {"gate_up": 0, "down": 1}
-            if weight_fully_copied(layer.up_gate_proj_weight):
-                weight_type = "gate_up"
-            else:
-                weight_type = "down"
-
-            if self.model_format == "torch":
-                unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
-                    "quant_weight", "weight"
-                )
-                process_weight_transpose(layer, unquantized_weight_name)
-            _process_quantize(weight_id_map[weight_type])
+        weight_id_map = {"gate_up": 0, "down": 1}
+        if weight_fully_copied(layer.up_gate_proj_weight):
+            weight_type = "gate_up"
         else:
-            return
+            weight_type = "down"
+
+        if self.model_format == "torch":
+            unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
+                "quant_weight", "weight"
+            )
+            process_weight_transpose(layer, unquantized_weight_name)
+        _process_quantize(weight_id_map[weight_type])
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
