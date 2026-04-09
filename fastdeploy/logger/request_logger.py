@@ -68,6 +68,10 @@ def log_request(level: int, message: str, **fields):
     if not _should_log(level):
         return
 
+    if not fields:
+        _request_logger.info(message, stacklevel=2)
+        return
+
     payload = fields
     # L2 level content needs to be truncated
     if int(level) == int(RequestLogLevel.L2):
@@ -84,7 +88,7 @@ def log_request_error(message: str, **fields):
         message: Log message template, supports {field} formatting
         **fields: Message fields
     """
-    if int(envs.FD_LOG_REQUESTS) == 0:
-        return
-
-    _request_logger.error(message.format(**fields), stacklevel=2)
+    if fields:
+        _request_logger.error(message.format(**fields), stacklevel=2)
+    else:
+        _request_logger.error(message, stacklevel=2)

@@ -371,7 +371,6 @@ class GlobalScheduler:
                 rem_amount=0,
                 ttl=self.ttl,
             )
-            scheduler_logger.info(f"Scheduler has enqueued some requests: {requests}")
             log_request(
                 level=2,
                 message="Scheduler has enqueued some requests: {request_ids}",

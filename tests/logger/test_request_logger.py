@@ -20,6 +20,7 @@ from fastdeploy.logger.request_logger import (
     _should_log,
     _truncate,
     log_request,
+    log_request_error,
 )
 
 
@@ -149,6 +150,26 @@ class TestLogRequest(unittest.TestCase):
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             self.assertEqual(call_args, "content: very long data")
+
+
+class TestLogRequestError(unittest.TestCase):
+    """Test log_request_error function"""
+
+    @patch("fastdeploy.logger.request_logger._request_logger")
+    def test_error_with_fields(self, mock_logger):
+        """Error log with fields should format message"""
+        log_request_error(message="request {request_id} failed: {error}", request_id="req-123", error="timeout")
+        mock_logger.error.assert_called_once()
+        call_args = mock_logger.error.call_args[0][0]
+        self.assertEqual(call_args, "request req-123 failed: timeout")
+
+    @patch("fastdeploy.logger.request_logger._request_logger")
+    def test_error_without_fields(self, mock_logger):
+        """Error log without fields should not call format"""
+        log_request_error(message="simple error message")
+        mock_logger.error.assert_called_once()
+        call_args = mock_logger.error.call_args[0][0]
+        self.assertEqual(call_args, "simple error message")
 
 
 if __name__ == "__main__":
