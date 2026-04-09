@@ -29,6 +29,7 @@ from fastdeploy.distributed.communication import (
     capture_custom_allreduce,
     custom_ar_clear_ipc_handles,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
@@ -135,6 +136,9 @@ class CudaGraphPiecewiseBackend:
         Raises RuntimeError immediately if the actual capture order deviates from
         the order defined by cudagraph_capture_sizes (sorted descending).
         """
+        if current_platform.is_xpu():
+            return
+
         if self._decode_capture_index >= len(self._decode_expected_sequence):
             raise RuntimeError(
                 f"[CUDA GRAPH][ID:{id(self)}] Unexpected CUDA graph capture: shape={shape}. "
