@@ -44,7 +44,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4 # Check the RDMA network card names of the machine using `bash scripts/get_rdma_nics.sh xpu`
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4 # Check the RDMA network card names of the machine using `xpu-smi topo -m`
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -88,7 +88,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3"  # or "4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2  # Check the RDMA network card names of the machine using `bash scripts/get_rdma_nics.sh xpu`
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2  # Check the RDMA network card names of the machine using `xpu-smi topo -m`
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -132,7 +132,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # Check the RDMA network card names of the machine using `bash scripts/get_rdma_nics.sh xpu`
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # Check the RDMA network card names of the machine using `xpu-smi topo -m`
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
@@ -176,7 +176,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
 export BKCL_ENABLE_XDR=1
-export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # Check the RDMA network card names of the machine using `bash scripts/get_rdma_nics.sh xpu`
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # Check the RDMA network card names of the machine using `xpu-smi topo -m`
 export BKCL_TRACE_TOPO=1
 export BKCL_PCIE_RING=1
 export XSHMEM_MODE=1
