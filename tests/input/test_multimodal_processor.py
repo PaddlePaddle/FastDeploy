@@ -32,6 +32,7 @@ from fastdeploy.input.multimodal_processor import (
     _SAMPLING_EPS,
     MultiModalProcessor,
 )
+from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 
 def _make_processor(model_type, **overrides):
@@ -878,6 +879,407 @@ class TestLoadTokenizer(unittest.TestCase):
 
         mock_auto_tokenizer.from_pretrained.assert_called_once_with("/mock/model", padding_side="left", use_fast=True)
         self.assertEqual(result, mock_tokenizer)
+
+
+# ===================================================================
+# MultiModalProcessor — text2ids and _add_text tests
+# ===================================================================
+class TestText2ids(unittest.TestCase):
+    """Tests for MultiModalProcessor.text2ids and _add_text."""
+
+    def test_text_only(self):
+        """Text with no placeholders."""
+        proc = _make_processor(QWEN_VL)
+        proc.enc = MagicMock(spec=QwenEncoding)
+        outputs_dict = {
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 0,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+        }
+        proc.enc._make_outputs.return_value = outputs_dict
+
+        # _add_text will be called; let it work by using the real _add_text
+        proc.tokenizer.tokenize.return_value = ["hello", "world"]
+        proc.tokenizer.convert_tokens_to_ids.return_value = [10, 20]
+
+        proc.text2ids("hello world")
+        proc.enc._make_outputs.assert_called_once()
+        # _add_text should have been invoked (via text2ids → _add_text)
+        # Since enc is mocked, add_text_positions is called
+        proc.enc.add_text_positions.assert_called()
+
+    def test_text_with_image_placeholder(self):
+        """Text with image placeholder dispatches to enc.add_image."""
+        proc = _make_processor(QWEN_VL)
+        proc.enc = MagicMock(spec=QwenEncoding)
+        outputs_dict = {
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 0,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+        }
+        proc.enc._make_outputs.return_value = outputs_dict
+
+        mock_img = MagicMock()
+        proc.tokenizer.tokenize.return_value = ["hi"]
+        proc.tokenizer.convert_tokens_to_ids.return_value = [10]
+
+        proc.text2ids(
+            "hi<|image_pad|>",
+            images=[mock_img],
+            image_uuid=["img1"],
+        )
+        proc.enc.add_image.assert_called_once_with(mock_img, outputs_dict, "img1")
+
+    def test_text_with_video_placeholder(self):
+        """Text with video placeholder dispatches to enc.load_video + add_video."""
+        proc = _make_processor(QWEN_VL)
+        proc.enc = MagicMock(spec=QwenEncoding)
+        outputs_dict = {
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 0,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+        }
+        proc.enc._make_outputs.return_value = outputs_dict
+
+        mock_frames = MagicMock()
+        mock_meta = {"fps": 2}
+        proc.enc.load_video.return_value = (mock_frames, mock_meta)
+        proc.tokenizer.tokenize.return_value = ["hi"]
+        proc.tokenizer.convert_tokens_to_ids.return_value = [10]
+
+        proc.text2ids(
+            "hi<|video_pad|>",
+            videos=["http://video.mp4"],
+            video_uuid=["vid1"],
+        )
+        proc.enc.load_video.assert_called_once_with("http://video.mp4", {})
+        proc.enc.add_video.assert_called_once_with(mock_frames, outputs_dict, "vid1", meta=mock_meta)
+
+    def test_text_with_video_dict(self):
+        """Video item as dict with 'video' key."""
+        proc = _make_processor(QWEN_VL)
+        proc.enc = MagicMock(spec=QwenEncoding)
+        outputs_dict = {
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 0,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+        }
+        proc.enc._make_outputs.return_value = outputs_dict
+
+        mock_frames = MagicMock()
+        mock_meta = {"fps": 2}
+        proc.enc.load_video.return_value = (mock_frames, mock_meta)
+        proc.tokenizer.tokenize.return_value = []
+        proc.tokenizer.convert_tokens_to_ids.return_value = []
+
+        video_item = {"video": "http://video.mp4", "fps": 5}
+        proc.text2ids(
+            "<|video_pad|>",
+            videos=[video_item],
+        )
+        proc.enc.load_video.assert_called_once_with("http://video.mp4", video_item)
+
+    def test_text_with_processed_image(self):
+        """Processed image (tuple) dispatches to enc.add_processed_image."""
+        proc = _make_processor(QWEN_VL)
+        proc.enc = MagicMock(spec=QwenEncoding)
+        outputs_dict = {
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 0,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+        }
+        proc.enc._make_outputs.return_value = outputs_dict
+        proc.tokenizer.tokenize.return_value = []
+        proc.tokenizer.convert_tokens_to_ids.return_value = []
+
+        cached_img = (np.zeros((4,)), {"thw": (1, 2, 2)})
+        proc.text2ids(
+            "<|image_pad|>",
+            images=[cached_img],
+            image_uuid=["cached_uuid"],
+        )
+        proc.enc.add_processed_image.assert_called_once_with(cached_img, outputs_dict, "cached_uuid")
+
+    def test_text_with_processed_video(self):
+        """Processed video (tuple) dispatches to enc.add_processed_video."""
+        proc = _make_processor(QWEN_VL)
+        proc.enc = MagicMock(spec=QwenEncoding)
+        outputs_dict = {
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 0,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+        }
+        proc.enc._make_outputs.return_value = outputs_dict
+        proc.tokenizer.tokenize.return_value = []
+        proc.tokenizer.convert_tokens_to_ids.return_value = []
+
+        cached_vid = (np.zeros((8,)), {"thw": (2, 2, 2), "fps": 4})
+        proc.text2ids(
+            "<|video_pad|>",
+            videos=[cached_vid],
+            video_uuid=["cached_vid_uuid"],
+        )
+        proc.enc.add_processed_video.assert_called_once_with(cached_vid, outputs_dict, "cached_vid_uuid")
+
+
+class TestAddText(unittest.TestCase):
+    """Tests for MultiModalProcessor._add_text."""
+
+    def test_empty_string_noop(self):
+        proc = _make_processor(QWEN_VL)
+        outputs = {"input_ids": [], "token_type_ids": []}
+        proc._add_text("", outputs)
+        self.assertEqual(outputs["input_ids"], [])
+
+    def test_string_tokenization(self):
+        proc = _make_processor(QWEN_VL)
+        proc.tokenizer.tokenize.return_value = ["hello"]
+        proc.tokenizer.convert_tokens_to_ids.return_value = [42]
+        outputs = {"input_ids": [], "token_type_ids": []}
+        proc._add_text("hello", outputs)
+        self.assertEqual(outputs["input_ids"], [42])
+        self.assertEqual(outputs["token_type_ids"], [IDS_TYPE_FLAG["text"]])
+        proc.enc.add_text_positions.assert_called_once_with(outputs, 1)
+
+    def test_list_tokens(self):
+        proc = _make_processor(QWEN_VL)
+        outputs = {"input_ids": [], "token_type_ids": []}
+        proc._add_text([10, 20, 30], outputs)
+        self.assertEqual(outputs["input_ids"], [10, 20, 30])
+        self.assertEqual(outputs["token_type_ids"], [0, 0, 0])
+        proc.enc.add_text_positions.assert_called_once_with(outputs, 3)
+
+
+# ===================================================================
+# MultiModalProcessor — _extract_mm_items tests
+# ===================================================================
+class TestExtractMmItems(unittest.TestCase):
+    """Tests for MultiModalProcessor._extract_mm_items."""
+
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_image_and_video_extraction(self, mock_parse):
+        """Extract images and videos from parsed messages."""
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "data": "img_data", "uuid": "img_uuid"},
+                    {"type": "video", "data": "vid_data", "uuid": "vid_uuid"},
+                ],
+            }
+        ]
+        proc = _make_processor(QWEN_VL)
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        request = {"messages": [{"role": "user", "content": "test"}]}
+
+        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = proc._extract_mm_items(request)
+        self.assertEqual(images, ["img_data"])
+        self.assertEqual(videos, ["vid_data"])
+        self.assertEqual(image_uuid, ["img_uuid"])
+        self.assertEqual(video_uuid, ["vid_uuid"])
+        self.assertEqual(len(mm_items), 2)
+
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_missing_data_without_cache_raises(self, mock_parse):
+        """Missing data without processor cache raises ValueError."""
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "data": None, "uuid": "missing_uuid"},
+                ],
+            }
+        ]
+        proc = _make_processor(QWEN_VL)
+        proc.enable_processor_cache = False
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        request = {"messages": [{"role": "user", "content": "test"}]}
+
+        with self.assertRaises(ValueError, msg="Missing items cannot be retrieved"):
+            proc._extract_mm_items(request)
+
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_audio_type_silently_skipped(self, mock_parse):
+        """Audio type is not in ['image','video'] so it's silently skipped."""
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "audio", "data": "audio_data", "uuid": "audio_uuid"},
+                ],
+            }
+        ]
+        proc = _make_processor(QWEN_VL)
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        request = {"messages": [{"role": "user", "content": "test"}]}
+
+        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = proc._extract_mm_items(request)
+        self.assertEqual(images, [])
+        self.assertEqual(videos, [])
+        self.assertEqual(mm_items, [])
+
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_text_only_content_dict(self, mock_parse):
+        """Text-only content dicts are skipped (no image/video type)."""
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [{"type": "text", "text": "just text"}],
+            },
+        ]
+        proc = _make_processor(QWEN_VL)
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        request = {"messages": [{"role": "user", "content": "just text"}]}
+
+        images, videos, *_ = proc._extract_mm_items(request)
+        self.assertEqual(images, [])
+        self.assertEqual(videos, [])
+
+
+# ===================================================================
+# MultiModalProcessor — request2ids tests
+# ===================================================================
+class TestRequest2ids(unittest.TestCase):
+    """Tests for MultiModalProcessor.request2ids."""
+
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_request2ids_basic(self, mock_parse):
+        """Basic request2ids flow without cache."""
+        mock_parse.return_value = [
+            {"role": "user", "content": [{"type": "text", "text": "hello"}]},
+        ]
+        proc = _make_processor(QWEN_VL)
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+
+        proc.tokenizer.apply_chat_template = MagicMock(return_value="formatted prompt")
+        proc.tokenizer.tokenize.return_value = ["formatted", "prompt"]
+        proc.tokenizer.convert_tokens_to_ids.return_value = [10, 20]
+
+        outputs_dict = {
+            "input_ids": [10, 20],
+            "token_type_ids": [0, 0],
+            "position_ids": [np.array([[0, 1], [0, 1], [0, 1]])],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 2,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+        }
+        proc.enc._make_outputs.return_value = outputs_dict
+        proc.text2ids = MagicMock(return_value=outputs_dict)
+
+        request = {"messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]}
+        proc.request2ids(request)
+
+        self.assertEqual(request["prompt_tokens"], "formatted prompt")
+        proc.text2ids.assert_called_once()
+
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_request2ids_ernie_passes_request(self, mock_parse):
+        """Ernie passes full request to apply_chat_template."""
+        mock_parse.return_value = [
+            {"role": "user", "content": [{"type": "text", "text": "hi"}]},
+        ]
+        proc = _make_processor(ERNIE4_5_VL)
+        proc.role_prefixes = {"user": "", "assistant": "", "system": "", "tool": ""}
+
+        proc.tokenizer.apply_chat_template = MagicMock(return_value="ernie prompt")
+        outputs_dict = {
+            "input_ids": [10],
+            "token_type_ids": [0],
+            "position_ids": [[0, 0, 0]],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 1,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+        }
+        proc.enc._make_outputs.return_value = outputs_dict
+        proc.text2ids = MagicMock(return_value=outputs_dict)
+
+        request = {"messages": [{"role": "user", "content": [{"type": "text", "text": "hi"}]}]}
+        proc.request2ids(request)
+
+        # For ernie, the full request (not parsed messages) is passed
+        call_args = proc.tokenizer.apply_chat_template.call_args
+        self.assertIs(call_args[0][0], request)
 
 
 if __name__ == "__main__":
