@@ -124,7 +124,6 @@ def xpu_pre_process(
         share_inputs["cu_seqlens_q_output"] = cu_seqlens_q_output
         share_inputs["batch_id_per_token_output"] = batch_id_per_token_output
     else:
-        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         (
             ids_remove_padding,
             cum_offsets,
