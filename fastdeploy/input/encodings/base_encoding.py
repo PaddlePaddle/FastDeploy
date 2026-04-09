@@ -32,8 +32,46 @@ class BaseEncoding(ABC):
     default no-op implementations so subclasses only override when needed.
     """
 
-    def __init__(self, processor):
-        self.p = processor
+    def __init__(self, processor, processor_kwargs=None):
+        if processor_kwargs is None:
+            processor_kwargs = {}
+        cfg = processor.cfg
+
+        # Shared objects (created by processor, used by encoding)
+        self.cfg = cfg
+        self.image_processor = processor.image_processor
+        self.tokenizer = processor.tokenizer
+        self.enable_processor_cache = processor.enable_processor_cache
+
+        # Method callbacks into processor
+        self._extract_mm_items = processor._extract_mm_items
+        self.update_processor_cache = processor.update_processor_cache
+
+        # Conv params
+        if cfg.conv_params_from_kwargs:
+            self.spatial_conv_size = processor_kwargs.get("spatial_conv_size", 2)
+            self.temporal_conv_size = processor_kwargs.get("temporal_conv_size", 2)
+        else:
+            self.spatial_conv_size = self.image_processor.merge_size
+            self.temporal_conv_size = self.image_processor.temporal_patch_size
+
+        # Special token IDs
+        self.image_token_id = self.tokenizer.convert_tokens_to_ids(cfg.image_token_str)
+        self.video_token_id = self.tokenizer.convert_tokens_to_ids(cfg.video_token_str)
+        if cfg.has_tokens_per_second:
+            vision_config = getattr(getattr(processor, "config", None), "vision_config", None)
+            self.tokens_per_second = getattr(vision_config, "tokens_per_second", 2)
+        else:
+            self.tokens_per_second = 2
+
+        # Video params
+        self.fps = processor_kwargs.get("video_fps", cfg.default_fps)
+        self.min_frames = processor_kwargs.get("video_min_frames", cfg.default_min_frames)
+        self.max_frames = processor_kwargs.get("video_max_frames", cfg.default_max_frames)
+        self.target_frames = processor_kwargs.get("video_target_frames", cfg.default_target_frames)
+
+        # Model-specific extra init
+        self.init_extra(processor_kwargs)
 
     # ------------------------------------------------------------------
     # Image
@@ -93,11 +131,12 @@ class BaseEncoding(ABC):
         """Append completion token IDs (and their positions) to *multimodal_inputs*."""
 
     # ------------------------------------------------------------------
-    # Prompt-token-ids path
+    # Prompt-token-ids path (optional — only models with
+    # supports_prompt_token_ids=True need to implement this)
     # ------------------------------------------------------------------
-    @abstractmethod
     def prompt_token_ids2outputs(self, request: dict) -> dict:
         """Build outputs dict from pre-tokenised ``prompt_token_ids``."""
+        raise NotImplementedError(f"{type(self).__name__} does not support prompt_token_ids path")
 
     # ------------------------------------------------------------------
     # Token counting & packing
@@ -110,6 +149,30 @@ class BaseEncoding(ABC):
     @abstractmethod
     def pack_position_ids(self, outputs: dict):
         """Convert intermediate position ID lists into final packed format."""
+
+    # ------------------------------------------------------------------
+    # Outputs initialisation
+    # ------------------------------------------------------------------
+    def _make_outputs(self) -> dict:
+        """Create the mutable accumulator dict for encoding results.
+
+        Subclasses override to add model-specific fields (e.g. fps, vit fields).
+        """
+        return {
+            "input_ids": [],
+            "token_type_ids": [],
+            "position_ids": [],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 0,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+        }
 
     # ------------------------------------------------------------------
     # Optional hooks — subclasses override only when needed

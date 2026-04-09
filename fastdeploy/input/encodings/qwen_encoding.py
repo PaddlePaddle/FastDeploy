@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Qwen-family (qwen_vl / qwen3_vl / paddleocr_vl) encoding strategy."""
+"""Qwen-family (qwen_vl / qwen3_vl) encoding strategy."""
 
 
 import numpy as np
@@ -23,29 +23,29 @@ from fastdeploy.engine.request import ImagePosition
 from fastdeploy.input.encodings.base_encoding import BaseEncoding
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.input.video_utils import read_video_decord
-from fastdeploy.input.video_utils import sample_frames_paddleocr as _sample_paddleocr
 from fastdeploy.input.video_utils import sample_frames_qwen as _sample_qwen
 from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
 class QwenEncoding(BaseEncoding):
-    """Encoding strategy shared by qwen_vl, qwen3_vl, and paddleocr_vl.
-
-    Internal differences are handled via ``self.p.cfg`` flags.
-    """
+    """Encoding strategy for qwen_vl and qwen3_vl."""
 
     FRAME_FACTOR = 2
 
+    def _make_outputs(self) -> dict:
+        outputs = super()._make_outputs()
+        outputs["fps"] = []
+        return outputs
+
     def add_image(self, img, outputs, uuid, token_len=None):
-        p = self.p
-        ret = p.image_processor.preprocess(images=[img.convert("RGB")])
-        num_tokens = ret["grid_thw"].prod() // p.image_processor.merge_size**2
+        ret = self.image_processor.preprocess(images=[img.convert("RGB")])
+        num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
         if token_len is not None and token_len != num_tokens:
             raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([p.image_token_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
         outputs["num_input_image_tokens"] += int(num_tokens)
 
@@ -64,21 +64,14 @@ class QwenEncoding(BaseEncoding):
 
         outputs["fps"].append(0)
 
-        # paddleocr vit fields
-        if p.cfg.has_vit_fields:
-            numel = h * w
-            outputs["vit_seqlen"].append(numel)
-            outputs["vit_position_ids"].append(np.arange(numel) % numel)
-
     def add_processed_image(self, img_cache, outputs, uuid, token_len=None):
-        p = self.p
         img, meta = img_cache
-        num_tokens = img.shape[0] // p.image_processor.merge_size**2
+        num_tokens = img.shape[0] // self.image_processor.merge_size**2
         if token_len is not None and token_len != num_tokens:
             raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([p.image_token_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
 
         _, h, w = meta["thw"]
@@ -94,24 +87,21 @@ class QwenEncoding(BaseEncoding):
         outputs["fps"].append(0)
 
     def add_video(self, frames, outputs, uuid, token_len=None, meta=None):
-        p = self.p
         preprocess_kwargs = {}
         # qwen3_vl passes min/max pixels for video
-        if p.cfg.video_min_pixels is not None:
-            preprocess_kwargs["min_pixels"] = p.cfg.video_min_pixels
-            preprocess_kwargs["max_pixels"] = p.cfg.video_max_pixels
+        if self.cfg.video_min_pixels is not None:
+            preprocess_kwargs["min_pixels"] = self.cfg.video_min_pixels
+            preprocess_kwargs["max_pixels"] = self.cfg.video_max_pixels
 
-        ret = p.image_processor.preprocess(images=frames, **preprocess_kwargs)
+        ret = self.image_processor.preprocess(images=frames, **preprocess_kwargs)
 
-        num_tokens = ret["grid_thw"].prod() // p.image_processor.merge_size**2
+        num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
         if token_len is not None and token_len != num_tokens:
             raise ValueError("video tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        # paddleocr uses video_token_id; qwen uses image_token_id (hack)
-        fill_token = p.video_token_id if not p.cfg.video_fill_uses_image_token else p.image_token_id
-        outputs["input_ids"].extend([fill_token] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["num_input_video_tokens"] += int(num_tokens)
 
@@ -124,7 +114,7 @@ class QwenEncoding(BaseEncoding):
         outputs["image_type_ids"].extend([1] * grid_thw[0])
 
         fps = meta["fps"] if meta else 0
-        second_per_grid_t = p.temporal_conv_size / fps if fps else 0
+        second_per_grid_t = self.temporal_conv_size / fps if fps else 0
         t, h, w = grid_thw
         pos_ids = self._compute_vision_positions(outputs["cur_position"], t, h, w, second_per_grid_t)
         outputs["position_ids"].append(pos_ids)
@@ -132,16 +122,9 @@ class QwenEncoding(BaseEncoding):
 
         outputs["fps"].append(fps)
 
-        # paddleocr vit fields
-        if p.cfg.has_vit_fields:
-            numel = h * w
-            outputs["vit_seqlen"].append(numel)
-            outputs["vit_position_ids"].append(np.arange(numel) % numel)
-
     def add_processed_video(self, frames_cache, outputs, uuid, token_len=None):
-        p = self.p
         frames, meta = frames_cache
-        num_tokens = frames.shape[0] // p.image_processor.merge_size**2
+        num_tokens = frames.shape[0] // self.image_processor.merge_size**2
         if token_len is not None and token_len != num_tokens:
             raise ValueError("video tokens num not match the size")
 
@@ -151,13 +134,12 @@ class QwenEncoding(BaseEncoding):
         outputs["grid_thw"].append(np.array([[t, h, w]]))
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        fill_token = p.video_token_id if not p.cfg.video_fill_uses_image_token else p.image_token_id
-        outputs["input_ids"].extend([fill_token] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["image_type_ids"].extend([1] * t)
 
         fps = meta["fps"]
-        second_per_grid_t = p.temporal_conv_size / fps
+        second_per_grid_t = self.temporal_conv_size / fps
         pos_ids = self._compute_vision_positions(outputs["cur_position"], t, h, w, second_per_grid_t)
         outputs["position_ids"].append(pos_ids)
         outputs["cur_position"] = pos_ids.max() + 1
@@ -165,38 +147,24 @@ class QwenEncoding(BaseEncoding):
         outputs["fps"].append(fps)
 
     def load_video(self, url, item):
-        p = self.p
         reader, meta, _ = read_video_decord(url, save_to_disk=False)
 
-        fps = item.get("fps", p.fps)
-        num_frames = item.get("target_frames", p.target_frames)
+        fps = item.get("fps", self.fps)
+        num_frames = item.get("target_frames", self.target_frames)
 
         frame_indices = list(range(meta["num_of_frame"]))
         if fps > 0 or num_frames > 0:
-            min_frames = item.get("min_frames", p.min_frames)
-            max_frames = item.get("max_frames", p.max_frames)
+            min_frames = item.get("min_frames", self.min_frames)
+            max_frames = item.get("max_frames", self.max_frames)
 
-            # paddleocr uses sample_frames_paddleocr; qwen uses sample_frames_qwen
-            if p.cfg.has_vit_fields:
-                # paddleocr variant: frame_factor = temporal_conv_size
-                frame_indices = _sample_paddleocr(
-                    frame_factor=p.temporal_conv_size,
-                    min_frames=min_frames,
-                    max_frames=max_frames,
-                    metadata=meta,
-                    fps=fps,
-                    num_frames=num_frames,
-                )
-            else:
-                # qwen variant: frame_factor = FRAME_FACTOR (2)
-                frame_indices = _sample_qwen(
-                    frame_factor=self.FRAME_FACTOR,
-                    min_frames=min_frames,
-                    max_frames=max_frames,
-                    metadata=meta,
-                    fps=-1 if num_frames > 0 else fps,
-                    num_frames=num_frames,
-                )
+            frame_indices = _sample_qwen(
+                frame_factor=self.FRAME_FACTOR,
+                min_frames=min_frames,
+                max_frames=max_frames,
+                metadata=meta,
+                fps=-1 if num_frames > 0 else fps,
+                num_frames=num_frames,
+            )
 
             meta["num_of_frame"] = len(frame_indices)
             if fps is not None:
@@ -231,8 +199,7 @@ class QwenEncoding(BaseEncoding):
 
     def prompt_token_ids2outputs(self, request):
         """Build outputs from prompt_token_ids. Only qwen3_vl supports this."""
-        p = self.p
-        outputs = p._make_outputs()
+        outputs = self._make_outputs()
         prompt_token_ids = request.get("prompt_token_ids", [])
         prompt_token_ids_len = len(prompt_token_ids)
 
@@ -240,13 +207,13 @@ class QwenEncoding(BaseEncoding):
             self._add_text_tokens(prompt_token_ids, outputs)
             return outputs
 
-        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = p._extract_mm_items(request)
+        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self._extract_mm_items(request)
 
         st, mm_idx = 0, 0
         while st < prompt_token_ids_len:
-            if prompt_token_ids[st] != p.image_token_id:
+            if prompt_token_ids[st] != self.image_token_id:
                 cur_idx = st
-                while cur_idx < prompt_token_ids_len and prompt_token_ids[cur_idx] != p.image_token_id:
+                while cur_idx < prompt_token_ids_len and prompt_token_ids[cur_idx] != self.image_token_id:
                     cur_idx += 1
                 self._add_text_tokens(prompt_token_ids[st:cur_idx], outputs)
                 st = cur_idx
@@ -256,7 +223,7 @@ class QwenEncoding(BaseEncoding):
                 raise ValueError("prompt token ids has more multimodal placeholder than in messages")
 
             cur_idx = st
-            while cur_idx < prompt_token_ids_len and prompt_token_ids[cur_idx] == p.image_token_id:
+            while cur_idx < prompt_token_ids_len and prompt_token_ids[cur_idx] == self.image_token_id:
                 cur_idx += 1
 
             item = mm_items[mm_idx]
@@ -286,7 +253,7 @@ class QwenEncoding(BaseEncoding):
         if mm_idx != len(mm_items):
             raise ValueError("number of multimodal items does not match prompt token ids")
 
-        if p.enable_processor_cache:
+        if self.enable_processor_cache:
             missing_idx = set(missing_idx)
             hashes_to_cache, items_to_cache = [], []
             for idx in range(len(mm_items)):
@@ -303,7 +270,7 @@ class QwenEncoding(BaseEncoding):
                 hashes_to_cache.append(outputs["mm_hashes"][idx])
                 items_to_cache.append((outputs["images"][idx], meta))
             if hashes_to_cache:
-                p.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
+                self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
 
         return outputs
 
@@ -324,13 +291,12 @@ class QwenEncoding(BaseEncoding):
 
     def _compute_vision_positions(self, start_pos, t, h, w, second_per_grid_t):
         """3D position IDs as 3xN ndarray for qwen-family."""
-        p = self.p
-        h //= p.spatial_conv_size
-        w //= p.spatial_conv_size
+        h //= self.spatial_conv_size
+        w //= self.spatial_conv_size
 
         tn = np.arange(t).reshape(-1, 1)
         tn = np.broadcast_to(tn, (t, h * w))
-        tn = tn * int(second_per_grid_t) * p.tokens_per_second
+        tn = tn * int(second_per_grid_t) * self.tokens_per_second
         t_index = tn.flatten()
 
         hn = np.arange(h).reshape(1, -1, 1)
@@ -360,6 +326,6 @@ class QwenEncoding(BaseEncoding):
     def pack_position_ids(self, outputs):
         """Qwen: concatenate 3xN arrays, then transpose to Nx3."""
         outputs["position_ids"] = np.concatenate(outputs["position_ids"], axis=1, dtype=np.int64)
-        outputs["image_patch_id"] = self.p.image_token_id
-        outputs["video_patch_id"] = self.p.video_token_id
+        outputs["image_patch_id"] = self.image_token_id
+        outputs["video_patch_id"] = self.video_token_id
         outputs["position_ids"] = outputs["position_ids"].transpose(1, 0)

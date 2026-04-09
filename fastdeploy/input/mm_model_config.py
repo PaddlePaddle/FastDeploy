@@ -37,15 +37,12 @@ class MMModelConfig:
     default_frames_sample: str = "leading"
 
     has_bad_words: bool = True
-    has_vit_fields: bool = False  # paddleocr: vit_seqlen / vit_position_ids
     has_tool_role: bool = False  # ernie: role_prefixes includes "tool"
-    clamp_top_p: bool = False  # paddleocr, ernie: top_p < eps → clamp
     default_thinking: bool = False  # ernie: default enable_thinking=True
     force_disable_thinking: bool = False  # qwen_vl, qwen3_vl: force enable_thinking=False
     set_default_reasoning_max_tokens: bool = False  # ernie: auto-set reasoning_max_tokens
     cap_response_max_tokens: bool = False  # ernie: cap max_tokens by response_max_tokens
     has_logits_processor_think: bool = False  # ernie: _prepare_think_stop_sentence
-    skip_reasoning_parser: bool = False  # qwen3: skip reasoning_parser
 
     chat_template_pass_request: bool = False  # ernie: pass full request obj
 
@@ -55,20 +52,10 @@ class MMModelConfig:
 
     stop_tokens_variant: str = "default"  # "default" | "qwen3"
 
-    position_ids_format: str = "ndarray"  # "ndarray" (qwen) | "list" (ernie)
-
-    has_ernie_boundary_tokens: bool = False
     image_token_str: str = ""
     video_token_str: str = ""
-    vision_start_str: str = ""
-    video_fill_uses_image_token: bool = True  # qwen hack: video fills with image_token_id
-
-    completion_token_source: str = "completion_token_ids"  # "completion_token_ids" | "metadata_generated"
 
     expected_kwargs: Dict[str, type] = field(default_factory=dict)
-
-    spatial_conv_size_override: Optional[int] = None
-    temporal_conv_size_override: Optional[int] = None
 
     video_min_pixels: Optional[int] = None
     video_max_pixels: Optional[int] = None
@@ -76,6 +63,10 @@ class MMModelConfig:
     # ---- Image processor import path (dotted module + class name) ----
     image_processor_module: str = ""
     image_processor_class: str = "ImageProcessor"
+
+    # ---- Encoding strategy import path (dotted module + class name) ----
+    encoding_module: str = ""
+    encoding_class: str = ""
 
     # ---- Conv params source ----
     conv_params_from_kwargs: bool = False  # ernie: from processor_kwargs; else: from image_processor
@@ -113,9 +104,10 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         video_placeholder="<|video_pad|>",
         image_token_str="<|image_pad|>",
         video_token_str="<|video_pad|>",
-        vision_start_str="<|vision_start|>",
         force_disable_thinking=True,
         image_processor_module="fastdeploy.input.image_processors.qwen_processor",
+        encoding_module="fastdeploy.input.encodings.qwen_encoding",
+        encoding_class="QwenEncoding",
         expected_kwargs=_QWEN_KWARGS,
     ),
     QWEN3_VL: MMModelConfig(
@@ -123,15 +115,15 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         video_placeholder="<|video_pad|>",
         image_token_str="<|image_pad|>",
         video_token_str="<|video_pad|>",
-        vision_start_str="<|vision_start|>",
         force_disable_thinking=True,
         supports_prompt_token_ids=True,
         preserve_prompt_token_ids=True,
         stop_tokens_variant="qwen3",
-        skip_reasoning_parser=True,
         video_min_pixels=128 * 28 * 28,
         video_max_pixels=768 * 28 * 28,
         image_processor_module="fastdeploy.input.image_processors.qwen3_processor",
+        encoding_module="fastdeploy.input.encodings.qwen_encoding",
+        encoding_class="QwenEncoding",
         expected_kwargs=_QWEN_KWARGS,
     ),
     PADDLEOCR_VL: MMModelConfig(
@@ -139,14 +131,11 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         video_placeholder="<|video_pad|>",
         image_token_str="<|IMAGE_PLACEHOLDER|>",
         video_token_str="<|video_pad|>",
-        vision_start_str="<|IMAGE_START|>",
         has_bad_words=False,
-        has_vit_fields=True,
-        clamp_top_p=True,
         default_fps=-1.0,
-        video_fill_uses_image_token=False,
-        completion_token_source="metadata_generated",
         image_processor_module="fastdeploy.input.image_processors.paddleocr_processor",
+        encoding_module="fastdeploy.input.encodings.paddleocr_encoding",
+        encoding_class="PaddleOCREncoding",
         expected_kwargs=_QWEN_KWARGS,
     ),
     ERNIE4_5_VL: MMModelConfig(
@@ -158,7 +147,6 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         default_fps=2.0,
         default_frames_sample="leading",
         has_tool_role=True,
-        clamp_top_p=True,
         default_thinking=True,
         set_default_reasoning_max_tokens=True,
         cap_response_max_tokens=True,
@@ -166,8 +154,6 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         chat_template_pass_request=True,
         supports_prompt_token_ids=True,
         preserve_prompt_token_ids=True,
-        position_ids_format="list",
-        has_ernie_boundary_tokens=True,
         image_token_str="<|IMAGE_PLACEHOLDER|>",
         video_token_str="<|IMAGE_PLACEHOLDER|>",
         conv_params_from_kwargs=True,
@@ -175,6 +161,8 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         has_tokens_per_second=False,
         image_processor_module="fastdeploy.input.image_processors.adaptive_processor",
         image_processor_class="AdaptiveImageProcessor",
+        encoding_module="fastdeploy.input.encodings.ernie_encoding",
+        encoding_class="ErnieEncoding",
         expected_kwargs=_ERNIE_KWARGS,
     ),
 }

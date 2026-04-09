@@ -28,10 +28,7 @@ from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
 class ErnieEncoding(BaseEncoding):
-    """Encoding strategy for Ernie4.5-VL models.
-
-    All methods access the parent MultiModalProcessor via ``self.p``.
-    """
+    """Encoding strategy for Ernie4.5-VL models."""
 
     # Boundary token constants
     IMG_START = "<|IMAGE_START|>"
@@ -45,7 +42,7 @@ class ErnieEncoding(BaseEncoding):
         self.image_max_pixels = processor_kwargs.get("image_max_pixels", 6177 * 28 * 28)
         self.video_min_pixels = processor_kwargs.get("video_min_pixels", 299 * 28 * 28)
         self.video_max_pixels = processor_kwargs.get("video_max_pixels", 1196 * 28 * 28)
-        self.frames_sample = processor_kwargs.get("video_frames_sample", self.p.cfg.default_frames_sample)
+        self.frames_sample = processor_kwargs.get("video_frames_sample", self.cfg.default_frames_sample)
 
         # Build token-type mapping for ernie boundary tokens
         self.token_type_mapping = self._build_token_type_mapping()
@@ -54,22 +51,22 @@ class ErnieEncoding(BaseEncoding):
         mapping = defaultdict(lambda: IDS_TYPE_FLAG["text"])
         for token in (self.IMG_START, self.IMG_END, self.VID_START, self.VID_END):
             mapping[token] = IDS_TYPE_FLAG["image"]
-        mapping[self.p.image_token_id] = IDS_TYPE_FLAG["image"]
+        mapping[self.image_token_id] = IDS_TYPE_FLAG["image"]
         return mapping
 
     def add_image(self, img, outputs, uuid, token_len=None):
-        patches_h, patches_w = self.p.image_processor.get_smarted_resize(
+        patches_h, patches_w = self.image_processor.get_smarted_resize(
             img.height,
             img.width,
             min_pixels=self.image_min_pixels,
             max_pixels=self.image_max_pixels,
         )[1]
-        num_tokens = (patches_h * patches_w) // (self.p.spatial_conv_size**2)
+        num_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
         if token_len and token_len != num_tokens:
             raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.p.image_token_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
         outputs["num_input_image_tokens"] += num_tokens
 
@@ -77,7 +74,7 @@ class ErnieEncoding(BaseEncoding):
         outputs["position_ids"].extend(pos_ids)
         outputs["cur_position"] = np.max(pos_ids) + 1
 
-        ret = self.p.image_processor.preprocess(
+        ret = self.image_processor.preprocess(
             images=[img.convert("RGB")],
             do_normalize=False,
             do_rescale=False,
@@ -95,12 +92,12 @@ class ErnieEncoding(BaseEncoding):
 
     def add_processed_image(self, img_cache, outputs, uuid, token_len=None):
         img, meta = img_cache
-        num_tokens = img.shape[0] // (self.p.spatial_conv_size**2)
+        num_tokens = img.shape[0] // (self.spatial_conv_size**2)
         if token_len and num_tokens != token_len:
             raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.p.image_token_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
 
         _, h, w = meta["thw"]
@@ -114,19 +111,19 @@ class ErnieEncoding(BaseEncoding):
         outputs["image_type_ids"].append(0)
 
     def add_video(self, frames, outputs, uuid, token_len=None, meta=None):
-        patches_h, patches_w = self.p.image_processor.get_smarted_resize(
+        patches_h, patches_w = self.image_processor.get_smarted_resize(
             frames[0].height,
             frames[0].width,
             min_pixels=self.video_min_pixels,
             max_pixels=self.video_max_pixels,
         )[1]
         num_frames = len(frames)
-        num_tokens = (num_frames * patches_h * patches_w) // (self.p.spatial_conv_size**2 * self.p.temporal_conv_size)
+        num_tokens = (num_frames * patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
         if token_len and num_tokens != token_len:
             raise ValueError("video tokens num not match the size")
 
         pixel_stack = np.stack([np.array(f.convert("RGB")) for f in frames], axis=0)
-        ret = self.p.image_processor.preprocess(
+        ret = self.image_processor.preprocess(
             images=None,
             videos=pixel_stack,
             do_normalize=False,
@@ -144,7 +141,7 @@ class ErnieEncoding(BaseEncoding):
         outputs["image_type_ids"].extend([1] * num_frames)
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.p.image_token_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["num_input_video_tokens"] += num_tokens
 
@@ -154,7 +151,7 @@ class ErnieEncoding(BaseEncoding):
 
     def add_processed_video(self, frames_cache, outputs, uuid, token_len=None):
         frames, meta = frames_cache
-        num_tokens = frames.shape[0] // (self.p.spatial_conv_size**2 * self.p.temporal_conv_size)
+        num_tokens = frames.shape[0] // (self.spatial_conv_size**2 * self.temporal_conv_size)
         if token_len and num_tokens != token_len:
             raise ValueError("video tokens num not match the size")
 
@@ -164,7 +161,7 @@ class ErnieEncoding(BaseEncoding):
         outputs["grid_thw"].append(np.array([[t, h, w]]))
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.p.image_token_id] * num_tokens)
+        outputs["input_ids"].extend([self.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["image_type_ids"].extend([1] * t)
 
@@ -184,10 +181,10 @@ class ErnieEncoding(BaseEncoding):
         reader, meta, path = read_video_decord(url, save_to_disk=False)
 
         video_frame_args = {
-            "fps": item.get("fps", self.p.fps),
-            "min_frames": item.get("min_frames", self.p.min_frames),
-            "max_frames": item.get("max_frames", self.p.max_frames),
-            "target_frames": item.get("target_frames", self.p.target_frames),
+            "fps": item.get("fps", self.fps),
+            "min_frames": item.get("min_frames", self.min_frames),
+            "max_frames": item.get("max_frames", self.max_frames),
+            "target_frames": item.get("target_frames", self.target_frames),
             "frames_sample": item.get("frames_sample", self.frames_sample),
         }
         video_frame_args = self.set_video_frame_args(video_frame_args, meta)
@@ -262,8 +259,8 @@ class ErnieEncoding(BaseEncoding):
 
     def _compute_3d_positions(self, t, h, w, start_idx):
         """Compute 3D position IDs as list-of-lists for ernie format."""
-        t_eff = t // self.p.temporal_conv_size if t != 1 else 1
-        gh, gw = h // self.p.spatial_conv_size, w // self.p.spatial_conv_size
+        t_eff = t // self.temporal_conv_size if t != 1 else 1
+        gh, gw = h // self.spatial_conv_size, w // self.spatial_conv_size
         time_idx = np.repeat(np.arange(t_eff), gh * gw)
         h_idx = np.tile(np.repeat(np.arange(gh), gw), t_eff)
         w_idx = np.tile(np.arange(gw), t_eff * gh)
@@ -272,7 +269,7 @@ class ErnieEncoding(BaseEncoding):
         return [[start_idx + ti, start_idx + hi, start_idx + wi] for ti, hi, wi in coords]
 
     def prompt_token_ids2outputs(self, request):
-        outputs = self.p._make_outputs()
+        outputs = self._make_outputs()
         prompt_token_ids = request.get("prompt_token_ids", [])
         prompt_token_ids_len = len(prompt_token_ids)
 
@@ -284,12 +281,12 @@ class ErnieEncoding(BaseEncoding):
             outputs["cur_position"] += prompt_token_ids_len
             return outputs
 
-        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self.p._extract_mm_items(request)
+        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self._extract_mm_items(request)
 
-        image_start_id = self.p.tokenizer.convert_tokens_to_ids(self.IMG_START)
-        image_end_id = self.p.tokenizer.convert_tokens_to_ids(self.IMG_END)
-        video_start_id = self.p.tokenizer.convert_tokens_to_ids(self.VID_START)
-        video_end_id = self.p.tokenizer.convert_tokens_to_ids(self.VID_END)
+        image_start_id = self.tokenizer.convert_tokens_to_ids(self.IMG_START)
+        image_end_id = self.tokenizer.convert_tokens_to_ids(self.IMG_END)
+        video_start_id = self.tokenizer.convert_tokens_to_ids(self.VID_START)
+        video_end_id = self.tokenizer.convert_tokens_to_ids(self.VID_END)
 
         st, image_idx, video_idx = 0, 0, 0
         while st < prompt_token_ids_len:
@@ -358,7 +355,7 @@ class ErnieEncoding(BaseEncoding):
         if video_idx != len(videos):
             raise ValueError("number of videos does not match")
 
-        if self.p.enable_processor_cache:
+        if self.enable_processor_cache:
             missing_idx = set(missing_idx)
             hashes_to_cache, items_to_cache = [], []
             for idx in range(len(mm_items)):
@@ -370,7 +367,7 @@ class ErnieEncoding(BaseEncoding):
                 hashes_to_cache.append(outputs["mm_hashes"][idx])
                 items_to_cache.append((outputs["images"][idx], meta))
             if hashes_to_cache:
-                self.p.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
+                self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
 
         return outputs
 
@@ -396,33 +393,33 @@ class ErnieEncoding(BaseEncoding):
     def pack_position_ids(self, outputs):
         """Ernie: position_ids is np.array (list-of-lists -> ndarray)."""
         outputs["position_ids"] = np.array(outputs["position_ids"], dtype=np.int64)
-        outputs["image_patch_id"] = self.p.image_token_id
+        outputs["image_patch_id"] = self.image_token_id
 
     def get_mm_max_tokens_per_item(self, seq_len):
         """Per-modality max token counts for ernie."""
         target_height, target_width = self._get_image_size_with_most_features()
         # image
-        patches_h, patches_w = self.p.image_processor.get_smarted_resize(
+        patches_h, patches_w = self.image_processor.get_smarted_resize(
             height=target_height,
             width=target_width,
             min_pixels=self.image_min_pixels,
             max_pixels=self.image_max_pixels,
         )[1]
-        max_image_tokens = (patches_h * patches_w) // (self.p.spatial_conv_size**2)
+        max_image_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2)
         max_image_tokens = min(max_image_tokens, seq_len)
         # video
-        patches_h, patches_w = self.p.image_processor.get_smarted_resize(
+        patches_h, patches_w = self.image_processor.get_smarted_resize(
             height=target_height,
             width=target_width,
             min_pixels=self.video_min_pixels,
             max_pixels=self.video_max_pixels,
         )[1]
-        max_video_tokens = (patches_h * patches_w) // (self.p.spatial_conv_size**2 * self.p.temporal_conv_size)
+        max_video_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
         max_video_tokens = min(max_video_tokens, seq_len)
         return {"image": max_image_tokens, "video": max_video_tokens}
 
     def _get_image_size_with_most_features(self):
-        resized_height, resized_width = self.p.image_processor.get_smarted_resize(
+        resized_height, resized_width = self.image_processor.get_smarted_resize(
             height=MAX_IMAGE_DIMENSION,
             width=MAX_IMAGE_DIMENSION,
             min_pixels=self.image_min_pixels,

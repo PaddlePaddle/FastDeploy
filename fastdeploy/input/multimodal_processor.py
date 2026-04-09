@@ -20,6 +20,7 @@ Consolidates the four separate VL processor wrappers and four separate
 DataProcessor classes into a single class with pluggable Encoding strategies.
 """
 
+import importlib
 import pickle
 from collections.abc import Mapping
 from typing import Any, Dict, Optional
@@ -29,25 +30,9 @@ import zmq
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.base_processor import BaseTextProcessor
-from fastdeploy.input.encodings import ErnieEncoding, QwenEncoding
-from fastdeploy.input.mm_model_config import (
-    ERNIE4_5_VL,
-    MODEL_CONFIGS,
-    PADDLEOCR_VL,
-    QWEN3_VL,
-    QWEN_VL,
-)
+from fastdeploy.input.mm_model_config import MODEL_CONFIGS
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
-
-_SUPPORTED_MODEL_TYPES = {QWEN_VL, QWEN3_VL, PADDLEOCR_VL, ERNIE4_5_VL}
-
-_ENCODING_CLASSES = {
-    QWEN_VL: QwenEncoding,
-    QWEN3_VL: QwenEncoding,
-    PADDLEOCR_VL: QwenEncoding,
-    ERNIE4_5_VL: ErnieEncoding,
-}
 
 _DEFAULT_MM_LIMITS = {"image": 1, "video": 1, "audio": 1}
 
@@ -73,10 +58,8 @@ class MultiModalProcessor(BaseTextProcessor):
         tool_parser_obj=None,
         enable_processor_cache: bool = False,
     ):
-        if model_type not in _SUPPORTED_MODEL_TYPES:
-            raise ValueError(
-                f"Unsupported model_type '{model_type}'. " f"Must be one of {sorted(_SUPPORTED_MODEL_TYPES)}."
-            )
+        if model_type not in MODEL_CONFIGS:
+            raise ValueError(f"Unsupported model_type '{model_type}'. " f"Must be one of {sorted(MODEL_CONFIGS)}.")
         self.model_type = model_type
         self.config = config
         self.cfg = MODEL_CONFIGS[model_type]
@@ -93,13 +76,12 @@ class MultiModalProcessor(BaseTextProcessor):
 
         processor_kwargs = self._parse_processor_kwargs(mm_processor_kwargs)
         self._init_image_processor()
-        self._init_conv_params(processor_kwargs)
-        self._init_special_tokens()
-        self._init_video_params(processor_kwargs)
+        self._init_role_prefixes()
 
-        # Composition: create encoding strategy
-        self.enc = _ENCODING_CLASSES[model_type](self)
-        self.enc.init_extra(processor_kwargs)
+        # Composition: create encoding strategy (config-driven, like image_processor)
+        enc_module = importlib.import_module(self.cfg.encoding_module)
+        enc_cls = getattr(enc_module, self.cfg.encoding_class)
+        self.enc = enc_cls(self, processor_kwargs)
 
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
 
@@ -131,47 +113,16 @@ class MultiModalProcessor(BaseTextProcessor):
         cls = getattr(module, cfg.image_processor_class)
         self.image_processor = cls.from_pretrained(self.model_name_or_path)
 
-    def _init_conv_params(self, processor_kwargs):
-        """Set spatial/temporal conv sizes."""
-        if self.cfg.conv_params_from_kwargs:
-            self.spatial_conv_size = processor_kwargs.get("spatial_conv_size", 2)
-            self.temporal_conv_size = processor_kwargs.get("temporal_conv_size", 2)
-        else:
-            self.spatial_conv_size = self.image_processor.merge_size
-            self.temporal_conv_size = self.image_processor.temporal_patch_size
-
-    def _init_special_tokens(self):
-        """Set up special token IDs.
-
-        image_patch_id is always equal to image_token_id — it's an alias
-        kept for downstream compatibility (scheduler / model masking).
-        """
-        cfg = self.cfg
-        self.image_token_id = self.tokenizer.convert_tokens_to_ids(cfg.image_token_str)
-        self.video_token_id = self.tokenizer.convert_tokens_to_ids(cfg.video_token_str)
-        self.image_patch_id = self.image_token_id
-
-        # tokens_per_second for qwen-family position computation
-        if cfg.has_tokens_per_second:
-            self.tokens_per_second = getattr(getattr(self.config, "vision_config", None), "tokens_per_second", 2)
-
-        # role_prefixes for message parsing
+    def _init_role_prefixes(self):
+        """Set up role prefixes for message parsing."""
         self.role_prefixes = {
             "system": "",
             "user": "User: ",
             "bot": "Assistant: ",
             "assistant": "Assistant: ",
         }
-        if cfg.has_tool_role:
+        if self.cfg.has_tool_role:
             self.role_prefixes["tool"] = "Tool: "
-
-    def _init_video_params(self, processor_kwargs):
-        """Set video sampling parameters."""
-        cfg = self.cfg
-        self.min_frames = processor_kwargs.get("video_min_frames", cfg.default_min_frames)
-        self.max_frames = processor_kwargs.get("video_max_frames", cfg.default_max_frames)
-        self.target_frames = processor_kwargs.get("video_target_frames", cfg.default_target_frames)
-        self.fps = processor_kwargs.get("video_fps", cfg.default_fps)
 
     def _parse_processor_kwargs(self, kwargs: Optional[dict]) -> dict:
         if not kwargs:
@@ -226,31 +177,6 @@ class MultiModalProcessor(BaseTextProcessor):
     def get_mm_max_tokens_per_item(self, seq_len: int) -> Optional[Mapping[str, int]]:
         return self.enc.get_mm_max_tokens_per_item(seq_len)
 
-    def _make_outputs(self) -> dict:
-        outputs = {
-            "input_ids": [],
-            "token_type_ids": [],
-            "position_ids": [],
-            "images": [],
-            "grid_thw": [],
-            "image_type_ids": [],
-            "labels": [],
-            "cur_position": 0,
-            "video_cnt": 0,
-            "num_input_image_tokens": 0,
-            "num_input_video_tokens": 0,
-            "mm_positions": [],
-            "mm_hashes": [],
-        }
-        # qwen-family has fps list
-        if self.cfg.position_ids_format == "ndarray":
-            outputs["fps"] = []
-        # paddleocr has vit fields
-        if self.cfg.has_vit_fields:
-            outputs["vit_seqlen"] = []
-            outputs["vit_position_ids"] = []
-        return outputs
-
     def _extract_mm_items(self, request):
         """Extract images/videos from request messages, handling processor cache."""
         messages = parse_chat_messages(request.get("messages"))
@@ -302,7 +228,7 @@ class MultiModalProcessor(BaseTextProcessor):
 
     def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """Convert text with image/video placeholders into model inputs."""
-        outputs = self._make_outputs()
+        outputs = self.enc._make_outputs()
 
         IMAGE_PLACEHOLDER = self.cfg.image_placeholder
         VIDEO_PLACEHOLDER = self.cfg.video_placeholder
@@ -486,13 +412,12 @@ class MultiModalProcessor(BaseTextProcessor):
             request["reasoning_max_tokens"] = max(int(request["max_tokens"] * 0.8), 1)
 
         # Clamp top_p
-        if cfg.clamp_top_p:
-            if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
-                request["top_p"] = _SAMPLING_EPS
-                request["top_k"] = 1
+        if request.get("top_p") is not None and request.get("top_p") < _SAMPLING_EPS:
+            request["top_p"] = _SAMPLING_EPS
+            request["top_k"] = 1
 
         # Reasoning parser
-        if not cfg.skip_reasoning_parser and self.reasoning_parser:
+        if self.reasoning_parser:
             self._apply_reasoning_parser(request)
 
         # Ernie: cap response_max_tokens
@@ -519,8 +444,7 @@ class MultiModalProcessor(BaseTextProcessor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            if self.cfg.sets_prompt_tokens:
-                request["prompt_tokens"] = request.get("prompt")
+            request["prompt_tokens"] = request.get("prompt")
             request.setdefault("enable_thinking", default_thinking)
             return self.text2ids(request["prompt"], images, videos)
 
@@ -542,13 +466,9 @@ class MultiModalProcessor(BaseTextProcessor):
             raise ValueError(f"Request must contain 'prompt', or 'messages': {request}")
 
     def _process_post_tokens(self, request, outputs):
-        if self.cfg.completion_token_source == "metadata_generated":
-            metadata = request.get("metadata")
-            if metadata and metadata.get("generated_token_ids"):
-                self.enc.append_completion_tokens(outputs, metadata["generated_token_ids"])
-        else:
-            if request.get("completion_token_ids"):
-                self.enc.append_completion_tokens(outputs, request["completion_token_ids"])
+        completion_token_ids = request.get("completion_token_ids") or request.get("generated_token_ids")
+        if completion_token_ids:
+            self.enc.append_completion_tokens(outputs, completion_token_ids)
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
         """Append completion tokens — delegates to enc."""

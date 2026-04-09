@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from fastdeploy.input.encodings import ErnieEncoding, QwenEncoding
+from fastdeploy.input.encodings import ErnieEncoding, PaddleOCREncoding, QwenEncoding
 from fastdeploy.input.mm_model_config import (
     ERNIE4_5_VL,
     MODEL_CONFIGS,
@@ -82,6 +82,8 @@ def _make_processor(model_type, **overrides):
     # Mock encoding strategy — use spec so hasattr checks work correctly
     if model_type == ERNIE4_5_VL:
         proc.enc = MagicMock(spec=ErnieEncoding)
+    elif model_type == PADDLEOCR_VL:
+        proc.enc = MagicMock(spec=PaddleOCREncoding)
     else:
         proc.enc = MagicMock(spec=QwenEncoding)
 
@@ -89,11 +91,6 @@ def _make_processor(model_type, **overrides):
     proc.image_processor = MagicMock()
     proc.image_processor.merge_size = 2
     proc.image_processor.temporal_patch_size = 2
-
-    # Token IDs (as set by _init_special_tokens)
-    proc.image_token_id = 151655
-    proc.video_token_id = 151656
-    proc.image_patch_id = proc.image_token_id
 
     # Apply any overrides
     for k, v in overrides.items():
@@ -315,11 +312,13 @@ class TestGetMmMaxTokensPerItem(unittest.TestCase):
         self.assertEqual(result, {"image": 512})
 
     def test_non_ernie_returns_none(self):
-        """QwenEncoding does not have get_mm_max_tokens_per_item, returns None."""
+        """QwenEncoding inherits default get_mm_max_tokens_per_item returning None."""
         proc = _make_processor(QWEN_VL)
+        proc.enc.get_mm_max_tokens_per_item.return_value = None
         self.assertIsNone(proc.get_mm_max_tokens_per_item(1024))
 
         proc2 = _make_processor(QWEN3_VL)
+        proc2.enc.get_mm_max_tokens_per_item.return_value = None
         self.assertIsNone(proc2.get_mm_max_tokens_per_item(1024))
 
 
@@ -876,65 +875,6 @@ class TestProcessRequestDict(unittest.TestCase):
         self.assertEqual(result["stop_seqs_len"], [1])
         # process_stop_token_ids should NOT be called for qwen3
         mock_stop.assert_not_called()
-
-
-# ===================================================================
-# _init_special_tokens
-# ===================================================================
-class TestInitSpecialTokens(unittest.TestCase):
-
-    def test_qwen_vl_tokens(self):
-        """qwen_vl: image_token_id and video_token_id from cfg strings, image_patch_id = image_token_id."""
-        proc = _make_processor(QWEN_VL)
-        proc.tokenizer = MagicMock()
-        proc.tokenizer.convert_tokens_to_ids.side_effect = lambda s: {
-            "<|image_pad|>": 151655,
-            "<|video_pad|>": 151656,
-        }.get(s, 0)
-        proc._init_special_tokens()
-        self.assertEqual(proc.image_token_id, 151655)
-        self.assertEqual(proc.video_token_id, 151656)
-        self.assertEqual(proc.image_patch_id, proc.image_token_id)
-
-    def test_ernie_tokens(self):
-        """ernie: both image/video token IDs come from <|IMAGE_PLACEHOLDER|>."""
-        proc = _make_processor(ERNIE4_5_VL)
-        proc.tokenizer = MagicMock()
-        proc.tokenizer.convert_tokens_to_ids.side_effect = lambda s: {"<|IMAGE_PLACEHOLDER|>": 99999}.get(s, 0)
-        proc._init_special_tokens()
-        self.assertEqual(proc.image_token_id, 99999)
-        self.assertEqual(proc.video_token_id, 99999)
-        self.assertEqual(proc.image_patch_id, 99999)
-
-
-# ===================================================================
-# _init_conv_params
-# ===================================================================
-class TestInitConvParams(unittest.TestCase):
-
-    def test_qwen_conv_params_from_image_processor(self):
-        """qwen_vl: conv params from image_processor (cfg.conv_params_from_kwargs=False)."""
-        proc = _make_processor(QWEN_VL)
-        proc.image_processor = MagicMock()
-        proc.image_processor.merge_size = 14
-        proc.image_processor.temporal_patch_size = 2
-        proc._init_conv_params({})
-        self.assertEqual(proc.spatial_conv_size, 14)
-        self.assertEqual(proc.temporal_conv_size, 2)
-
-    def test_ernie_conv_params_from_kwargs(self):
-        """ernie: conv params from processor_kwargs (cfg.conv_params_from_kwargs=True)."""
-        proc = _make_processor(ERNIE4_5_VL)
-        proc._init_conv_params({"spatial_conv_size": 3, "temporal_conv_size": 4})
-        self.assertEqual(proc.spatial_conv_size, 3)
-        self.assertEqual(proc.temporal_conv_size, 4)
-
-    def test_ernie_conv_params_defaults(self):
-        """ernie: default conv params when not in kwargs."""
-        proc = _make_processor(ERNIE4_5_VL)
-        proc._init_conv_params({})
-        self.assertEqual(proc.spatial_conv_size, 2)
-        self.assertEqual(proc.temporal_conv_size, 2)
 
 
 # ===================================================================

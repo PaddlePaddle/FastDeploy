@@ -16,6 +16,7 @@
 
 from fastdeploy.input.encodings.base_encoding import BaseEncoding
 from fastdeploy.input.encodings.ernie_encoding import ErnieEncoding
+from fastdeploy.input.encodings.paddleocr_encoding import PaddleOCREncoding
 from fastdeploy.input.encodings.qwen_encoding import QwenEncoding
 
-__all__ = ["BaseEncoding", "ErnieEncoding", "QwenEncoding"]
+__all__ = ["BaseEncoding", "ErnieEncoding", "PaddleOCREncoding", "QwenEncoding"]
