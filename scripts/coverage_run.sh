@@ -42,6 +42,20 @@ classify_tests() {
         fi
     fi
 
+    # Rule 5: high-risk OOM tests (treat as multi_gpu for sequential execution)
+    if [[ "$test_file" == "tests/entrypoints/cli/test_main.py" ||
+          "$test_file" == "tests/entrypoints/cli/test_serve.py" ||
+          "$test_file" == "tests/operators/test_group_swiglu_with_masked.py" ||
+          "$test_file" == "tests/operators/test_hybrid_mtp_ngram.py" ||
+          "$test_file" == "tests/operators/test_moe_top_k_select.py" ||
+          "$test_file" == "tests/operators/test_noaux_tc.py" ||
+          "$test_file" == "tests/output/test_get_save_output_v1.py" ||
+          "$test_file" == "tests/output/test_process_batch_draft_tokens.py" ||
+          "$test_file" == "tests/output/test_process_batch_output.py" ]]; then
+        echo "multi_gpu"
+        return
+    fi
+
     # ========== Single-GPU tests (no port required, can run in parallel) ==========
     echo "single_gpu"
 }
