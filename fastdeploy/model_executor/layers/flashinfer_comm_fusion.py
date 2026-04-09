@@ -17,10 +17,10 @@ _workspace_manager = None
 
 if has_flashinfer():
     try:
-        paddle.compat.enable_torch_proxy(scope={"flashinfer"})
-        import flashinfer.comm as comm
+        with paddle.use_compat_guard(enable=True, scope={"flashinfer"}):
+            import flashinfer.comm as comm
 
-        _flashinfer_comm = comm
+            _flashinfer_comm = comm
     except ImportError:
         logger.warning("flashinfer.comm is not available, falling back to standard " "implementation")
 
