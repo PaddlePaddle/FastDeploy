@@ -126,7 +126,7 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
 
     if model_quantization_config is not None:
         quant_config_name = _get_offline_quant_config_name(
-            quantization_config, model_config.model_format == "torch", is_v1_loader
+            model_quantization_config, model_config.model_format == "torch", is_v1_loader
         )
     elif cli_quantization is not None and not cli_is_full_config:
         quantization_config = {}
