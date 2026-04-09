@@ -1113,7 +1113,7 @@ class HPUModelRunner(ModelRunnerBase):
         # Initialize forward meta
         self.forward_meta = HPUForwardMeta.init_forward_meta(self.share_inputs, self.attn_backends[0])
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
@@ -1212,7 +1212,7 @@ class HPUModelRunner(ModelRunnerBase):
                 forward_meta=self.forward_meta,
             )
 
-            hiddden_states = rebuild_padding_v3_1(
+            hidden_states = rebuild_padding_v3_1(
                 model_output,
                 self.forward_meta.batch_ids,
                 self.forward_meta.total_batch,
@@ -1220,7 +1220,7 @@ class HPUModelRunner(ModelRunnerBase):
                 self.forward_meta.is_prompt,
             )
             # 5. Execute spec decode
-            logits = self.model.compute_logits(hiddden_states)
+            logits = self.model.compute_logits(hidden_states)
 
             self._prepare_sampler_inputs(self.forward_meta.batch_ids)
             sampled_token_ids = self.sampler(
@@ -1603,7 +1603,7 @@ class HPUModelRunner(ModelRunnerBase):
         start_time = time.time()
         start_time0 = time.time()
         if self.forward_meta.total_batch_encoder > 0 and self.forward_meta.total_batch_decoder > 0:
-            hiddden_states = rebuild_padding_mixed_v3_1(
+            hidden_states = rebuild_padding_mixed_v3_1(
                 model_output,
                 self.forward_meta.batch_ids_encoder,
                 self.forward_meta.total_batch_encoder,
@@ -1612,7 +1612,7 @@ class HPUModelRunner(ModelRunnerBase):
                 self.forward_meta.seq_lens_encoder,
             )
         elif self.forward_meta.total_batch_encoder > 0:
-            hiddden_states = rebuild_padding_v3_1(
+            hidden_states = rebuild_padding_v3_1(
                 model_output,
                 self.forward_meta.batch_ids_encoder,
                 self.forward_meta.total_batch_encoder,
@@ -1620,7 +1620,7 @@ class HPUModelRunner(ModelRunnerBase):
                 True,
             )
         elif self.forward_meta.total_batch_decoder > 0:
-            hiddden_states = rebuild_padding_v3_1(
+            hidden_states = rebuild_padding_v3_1(
                 model_output,
                 self.forward_meta.batch_ids_decoder,
                 self.forward_meta.total_batch_decoder,
@@ -1632,7 +1632,7 @@ class HPUModelRunner(ModelRunnerBase):
         hpu_model_runner_profile_logger.info(f"RebuildPadding execution time(ms): {execution_time0}, BT={real_bs}")
         # # 4. Compute logits, Sample
         start_time1 = time.time()
-        logits = self.model.compute_logits(hiddden_states)
+        logits = self.model.compute_logits(hidden_states)
         end_time1 = time.time()
         execution_time1 = (end_time1 - start_time1) * 1000
         hpu_model_runner_profile_logger.info(f"ComputeLogits execution time(ms): {execution_time1}, BT={real_bs}")
@@ -1714,7 +1714,7 @@ class HPUModelRunner(ModelRunnerBase):
         # 6. Speculative decode
         if self.speculative_decoding:
             if self.speculative_method == SpecMethod.MTP:
-                self.proposer.run(full_hidden_states=hiddden_states)
+                self.proposer.run(full_hidden_states=hidden_states)
             else:
                 self.proposer.run(share_inputs=self.share_inputs)
 

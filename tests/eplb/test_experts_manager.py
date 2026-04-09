@@ -164,8 +164,8 @@ class TestRedundantExpertManager(unittest.TestCase):
     @patch("fastdeploy.eplb.experts_manager.get_logger")
     @patch("fastdeploy.eplb.experts_manager.Process")
     @patch("fastdeploy.eplb.experts_manager.threading.Thread")
-    def test_caculate_expert_rank_table(self, mock_thread, mock_process, mock_get_logger):
-        """Test caculate_expert_rank_table method"""
+    def test_calculate_expert_rank_table(self, mock_thread, mock_process, mock_get_logger):
+        """Test calculate_expert_rank_table method"""
         mock_logger = MagicMock()
         mock_get_logger.return_value = mock_logger
 
@@ -185,7 +185,7 @@ class TestRedundantExpertManager(unittest.TestCase):
                 np_array3,  # logcnt
             )
 
-            manager.caculate_expert_rank_table(is_init=True)
+            manager.calculate_expert_rank_table(is_init=True)
 
             # Verify that rebalance_experts was called with correct parameters
             mock_rebalance.assert_called_once()

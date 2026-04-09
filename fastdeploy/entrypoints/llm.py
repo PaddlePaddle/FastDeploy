@@ -139,7 +139,7 @@ class LLM:
                                 continue
                             self.req_output[request_id].add(result)
             except Exception as e:
-                llm_logger.error(f"Unexcepted error happened: {e}, {traceback.format_exc()!s}")
+                llm_logger.error(f"Unexpected error happened: {e}, {traceback.format_exc()!s}")
 
     def generate(
         self,

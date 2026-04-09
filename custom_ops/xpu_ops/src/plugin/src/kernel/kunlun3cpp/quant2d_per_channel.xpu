@@ -694,9 +694,9 @@ __global__ void quant2d_per_channel_cached(
   constexpr int PINGPONG_LM_LEN = 512;
   constexpr int LM_LEN = PINGPONG_LM_LEN * 2;
   constexpr int INPUT_BUF_LEN = 4 * 1024;
-  constexpr int OUPUT_BUF_LEN = 2 * 1024;
+  constexpr int OUTPUT_BUF_LEN = 2 * 1024;
   constexpr int INPUT_MAX_LEN = INPUT_BUF_LEN / sizeof(TX);
-  constexpr int OUTPUT_MAX_LEN = OUPUT_BUF_LEN / sizeof(TY);
+  constexpr int OUTPUT_MAX_LEN = OUTPUT_BUF_LEN / sizeof(TY);
   constexpr int INPUT_SIZE =
       INPUT_MAX_LEN < OUTPUT_MAX_LEN ? INPUT_MAX_LEN : OUTPUT_MAX_LEN;
   __simd__ __shared__ float

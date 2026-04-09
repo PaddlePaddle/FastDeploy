@@ -185,8 +185,8 @@ def tune_blockwise_fp8_gemm_fused(
             cutlass_fp8_fp8_half_block_gemm_fused(
                 A,
                 B,
-                x_sacle=a_scale,
-                y_sacle=b_scale,
+                x_scale=a_scale,
+                y_scale=b_scale,
                 bias=None,
                 transpose_x=False,
                 transpose_y=True,

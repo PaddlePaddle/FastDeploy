@@ -161,7 +161,7 @@ def test_receive_output_logs_exception(caplog):
     llm.llm_engine._get_generated_result = _get_generated_result
     with pytest.raises(SystemExit):
         llm._receive_output()
-    assert "Unexcepted error happened" in caplog.text
+    assert "Unexpected error happened" in caplog.text
 
 
 def test_generate_and_chat_branches():

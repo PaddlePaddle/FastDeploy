@@ -158,7 +158,7 @@ class HpuWorker(WorkerBase):
             )
         )
 
-        return available_kv_cache_memory  # return to caculate the block num in this device
+        return available_kv_cache_memory  # return to calculate the block num in this device
 
     def load_model(self) -> None:
         """Load model"""
@@ -209,7 +209,7 @@ class HpuWorker(WorkerBase):
         else:
             logger.info("Skipping warmup bucket, please set HPU_WARMUP_BUCKET=1 to enable it.")
 
-        # 2. Triger cuda grpah capture
+        # 2. Trigger cuda grpah capture
         self.model_runner.capture_model()
 
     def check_health(self) -> bool:
