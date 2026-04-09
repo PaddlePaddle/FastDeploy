@@ -56,7 +56,7 @@ class ErnieEncoding:
         mapping = defaultdict(lambda: IDS_TYPE_FLAG["text"])
         for token in (self.IMG_START, self.IMG_END, self.VID_START, self.VID_END):
             mapping[token] = IDS_TYPE_FLAG["image"]
-        mapping[self.p.image_patch_id] = IDS_TYPE_FLAG["image"]
+        mapping[self.p.image_token_id] = IDS_TYPE_FLAG["image"]
         return mapping
 
     def add_image(self, img, outputs, uuid, token_len=None):
@@ -71,7 +71,7 @@ class ErnieEncoding:
             raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.p.image_patch_id] * num_tokens)
+        outputs["input_ids"].extend([self.p.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
         outputs["num_input_image_tokens"] += num_tokens
 
@@ -102,7 +102,7 @@ class ErnieEncoding:
             raise ValueError("image tokens num not match the size")
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.p.image_patch_id] * num_tokens)
+        outputs["input_ids"].extend([self.p.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
 
         _, h, w = meta["thw"]
@@ -146,7 +146,7 @@ class ErnieEncoding:
         outputs["image_type_ids"].extend([1] * num_frames)
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.p.image_patch_id] * num_tokens)
+        outputs["input_ids"].extend([self.p.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["num_input_video_tokens"] += num_tokens
 
@@ -166,7 +166,7 @@ class ErnieEncoding:
         outputs["grid_thw"].append(np.array([[t, h, w]]))
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
-        outputs["input_ids"].extend([self.p.image_patch_id] * num_tokens)
+        outputs["input_ids"].extend([self.p.image_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
         outputs["image_type_ids"].extend([1] * t)
 
@@ -245,12 +245,12 @@ class ErnieEncoding:
                 video_frame_args["fps"] = -1
         return video_frame_args
 
-    def add_text_positions(self, outputs, tokens):
+    def add_text_positions(self, outputs, num_tokens):
         """Write text position IDs in ernie [pos, pos, pos] format."""
         start = outputs["cur_position"]
-        for i in range(len(tokens)):
+        for i in range(num_tokens):
             outputs["position_ids"].append([start + i] * 3)
-        outputs["cur_position"] += len(tokens)
+        outputs["cur_position"] += num_tokens
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
         num_tokens = len(completion_token_ids)
@@ -398,7 +398,7 @@ class ErnieEncoding:
     def pack_position_ids(self, outputs):
         """Ernie: position_ids is np.array (list-of-lists → ndarray)."""
         outputs["position_ids"] = np.array(outputs["position_ids"], dtype=np.int64)
-        outputs["image_patch_id"] = self.p.image_patch_id
+        outputs["image_patch_id"] = self.p.image_token_id
 
     def get_mm_max_tokens_per_item(self, seq_len):
         """Per-modality max token counts for ernie."""

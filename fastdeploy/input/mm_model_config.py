@@ -73,6 +73,19 @@ class MMModelConfig:
     video_min_pixels: Optional[int] = None
     video_max_pixels: Optional[int] = None
 
+    # ---- Image processor import path (dotted module + class name) ----
+    image_processor_module: str = ""
+    image_processor_class: str = "ImageProcessor"
+
+    # ---- Conv params source ----
+    conv_params_from_kwargs: bool = False  # ernie: from processor_kwargs; else: from image_processor
+
+    # ---- prompt_tokens field ----
+    sets_prompt_tokens: bool = False  # ernie: set request["prompt_tokens"] = prompt
+
+    # ---- tokens_per_second ----
+    has_tokens_per_second: bool = True  # qwen-family: read from config; ernie: False
+
 
 _QWEN_KWARGS = {
     "video_max_frames": int,
@@ -102,6 +115,7 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         video_token_str="<|video_pad|>",
         vision_start_str="<|vision_start|>",
         force_disable_thinking=True,
+        image_processor_module="fastdeploy.input.image_processors.qwen_processor",
         expected_kwargs=_QWEN_KWARGS,
     ),
     QWEN3_VL: MMModelConfig(
@@ -117,6 +131,7 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         skip_reasoning_parser=True,
         video_min_pixels=128 * 28 * 28,
         video_max_pixels=768 * 28 * 28,
+        image_processor_module="fastdeploy.input.image_processors.qwen3_processor",
         expected_kwargs=_QWEN_KWARGS,
     ),
     PADDLEOCR_VL: MMModelConfig(
@@ -131,6 +146,7 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         default_fps=-1.0,
         video_fill_uses_image_token=False,
         completion_token_source="metadata_generated",
+        image_processor_module="fastdeploy.input.image_processors.paddleocr_processor",
         expected_kwargs=_QWEN_KWARGS,
     ),
     ERNIE4_5_VL: MMModelConfig(
@@ -152,6 +168,13 @@ MODEL_CONFIGS: Dict[str, MMModelConfig] = {
         preserve_prompt_token_ids=True,
         position_ids_format="list",
         has_ernie_boundary_tokens=True,
+        image_token_str="<|IMAGE_PLACEHOLDER|>",
+        video_token_str="<|IMAGE_PLACEHOLDER|>",
+        conv_params_from_kwargs=True,
+        sets_prompt_tokens=True,
+        has_tokens_per_second=False,
+        image_processor_module="fastdeploy.input.image_processors.adaptive_processor",
+        image_processor_class="AdaptiveImageProcessor",
         expected_kwargs=_ERNIE_KWARGS,
     ),
 }

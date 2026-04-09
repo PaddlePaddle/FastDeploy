@@ -44,10 +44,10 @@ from fastdeploy.utils import data_processor_logger
 _SUPPORTED_MODEL_TYPES = {QWEN_VL, QWEN3_VL, PADDLEOCR_VL, ERNIE4_5_VL}
 
 _ENCODING_CLASSES = {
-    ERNIE4_5_VL: ErnieEncoding,
     QWEN_VL: QwenEncoding,
     QWEN3_VL: QwenEncoding,
     PADDLEOCR_VL: QwenEncoding,
+    ERNIE4_5_VL: ErnieEncoding,
 }
 
 _DEFAULT_MM_LIMITS = {"image": 1, "video": 1, "audio": 1}
@@ -126,34 +126,16 @@ class MultiModalProcessor(BaseTextProcessor):
 
     def _init_image_processor(self):
         """Create the appropriate image processor."""
-        if self.model_type == ERNIE4_5_VL:
-            from fastdeploy.input.ernie4_5_vl_processor.image_preprocessor.image_preprocessor_adaptive import (
-                AdaptiveImageProcessor,
-            )
+        cfg = self.cfg
+        import importlib
 
-            self.image_processor = AdaptiveImageProcessor.from_pretrained(self.model_name_or_path)
-        elif self.model_type == QWEN_VL:
-            from fastdeploy.input.qwen_vl_processor.image_processor import (
-                ImageProcessor,
-            )
-
-            self.image_processor = ImageProcessor.from_pretrained(self.model_name_or_path)
-        elif self.model_type == QWEN3_VL:
-            from fastdeploy.input.qwen3_vl_processor.image_processor import (
-                ImageProcessor,
-            )
-
-            self.image_processor = ImageProcessor.from_pretrained(self.model_name_or_path)
-        elif self.model_type == PADDLEOCR_VL:
-            from fastdeploy.input.paddleocr_vl_processor.image_processor import (
-                ImageProcessor,
-            )
-
-            self.image_processor = ImageProcessor.from_pretrained(self.model_name_or_path)
+        module = importlib.import_module(cfg.image_processor_module)
+        cls = getattr(module, cfg.image_processor_class)
+        self.image_processor = cls.from_pretrained(self.model_name_or_path)
 
     def _init_conv_params(self, processor_kwargs):
         """Set spatial/temporal conv sizes."""
-        if self.model_type == ERNIE4_5_VL:
+        if self.cfg.conv_params_from_kwargs:
             self.spatial_conv_size = processor_kwargs.get("spatial_conv_size", 2)
             self.temporal_conv_size = processor_kwargs.get("temporal_conv_size", 2)
         else:
@@ -161,19 +143,18 @@ class MultiModalProcessor(BaseTextProcessor):
             self.temporal_conv_size = self.image_processor.temporal_patch_size
 
     def _init_special_tokens(self):
-        """Set up special token IDs."""
+        """Set up special token IDs.
+
+        image_patch_id is always equal to image_token_id — it's an alias
+        kept for downstream compatibility (scheduler / model masking).
+        """
         cfg = self.cfg
-        if self.model_type == ERNIE4_5_VL:
-            self.image_patch_id = self.tokenizer.convert_tokens_to_ids("<|IMAGE_PLACEHOLDER|>")
-            self.image_token_id = self.image_patch_id
-            self.video_token_id = self.image_patch_id
-        else:
-            self.image_token_id = self.tokenizer.convert_tokens_to_ids(cfg.image_token_str)
-            self.video_token_id = self.tokenizer.convert_tokens_to_ids(cfg.video_token_str)
-            self.image_patch_id = self.image_token_id
+        self.image_token_id = self.tokenizer.convert_tokens_to_ids(cfg.image_token_str)
+        self.video_token_id = self.tokenizer.convert_tokens_to_ids(cfg.video_token_str)
+        self.image_patch_id = self.image_token_id
 
         # tokens_per_second for qwen-family position computation
-        if self.model_type != ERNIE4_5_VL:
+        if cfg.has_tokens_per_second:
             self.tokens_per_second = getattr(getattr(self.config, "vision_config", None), "tokens_per_second", 2)
 
         # role_prefixes for message parsing
@@ -547,7 +528,7 @@ class MultiModalProcessor(BaseTextProcessor):
             self._check_mm_limits(multimodal_data)
             images = multimodal_data.get("image", None)
             videos = multimodal_data.get("video", None)
-            if self.model_type == ERNIE4_5_VL:
+            if self.cfg.sets_prompt_tokens:
                 request["prompt_tokens"] = request.get("prompt")
             request.setdefault("enable_thinking", default_thinking)
             return self.text2ids(request["prompt"], images, videos)
