@@ -341,7 +341,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                     using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
                 )
             else:
-                token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
+                token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts, False)
                 (
                     permute_input,
                     permute_scale,
@@ -602,7 +602,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
         else:
-            tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts)
+            tmp = count_tokens_per_expert_func(topk_ids, layer.num_experts, False)
             (
                 permute_input,
                 permute_scale,
