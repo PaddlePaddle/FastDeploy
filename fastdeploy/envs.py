@@ -197,6 +197,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_USE_PHI_MOE_TOPK": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_TOPK", "0"))),
     # Whether to use phi MOE permute,if 1,use paddle op.
     "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
+    # Whether to use phi rms_norm,if 1,use paddle op.
+    "FD_USE_PHI_RMSNORM": lambda: bool(int(os.getenv("FD_USE_PHI_RMSNORM", "0"))),
     # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
     "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
@@ -234,8 +236,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
-    # Whether to use phi rms_norm,if 1,use paddle op.
-    "FD_USE_PHI_RMSNORM": lambda: bool(int(os.getenv("FD_USE_PHI_RMSNORM", "0"))),
 }
 
 
