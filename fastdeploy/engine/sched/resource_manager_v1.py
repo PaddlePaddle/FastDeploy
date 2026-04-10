@@ -281,7 +281,7 @@ class ResourceManagerV1(ResourceManager):
                 self.stop_flags[request.idx] = True  # 设置停止标志
                 del self.requests[request_id]
                 del self.req_dict[request_id]
-                self.to_be_aborted_req_id_set.remove(request_id)
+                self.to_be_aborted_req_id_set.discard(request_id)
         self.update_metrics()
 
     def _trigger_abort(self, request_id, scheduled_reqs):
@@ -293,7 +293,7 @@ class ResourceManagerV1(ResourceManager):
             abort_request.cached_block_num = 0
             scheduled_reqs.append(self._prepare_abort_task(abort_request))
             self.to_be_aborted_req_id_set.add(request_id)
-            self.waiting_abort_req_id_set.remove(request_id)
+            self.waiting_abort_req_id_set.discard(request_id)
 
     def _info_each_block(self):
         """
@@ -1544,6 +1544,8 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
                     if req_id in self.req_dict:
                         del self.req_dict[req_id]
+                    self.waiting_abort_req_id_set.discard(req_id)
+                    self.to_be_aborted_req_id_set.discard(req_id)
 
             # Do not block the main thread here
             # Write cache to storage if kvcache_storage_backend is enabled
