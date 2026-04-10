@@ -1587,13 +1587,14 @@ class EngineService:
                 engine_recv_first_token_time=request.metrics.engine_recv_first_token_time if request.metrics else now,
                 request_start_time=request.metrics.arrival_time if request.metrics else now,
             )
+            eos_token_ids = getattr(request, "eos_token_ids", [0])
             result = RequestOutput(
                 request_id=req_id,
                 finished=True,
                 outputs=CompletionOutput(
                     index=0,
                     send_idx=len(partial_token_ids),
-                    token_ids=[self.data_processor.eos_token_ids[0]],
+                    token_ids=[eos_token_ids[0]],
                 ),
                 metrics=abort_metrics,
                 error_code=200,
