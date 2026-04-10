@@ -49,7 +49,7 @@ from fastdeploy.model_executor.utils import (
 )
 
 
-def deep_batch_gemm(x, y, expert_idx_per_token):
+def m_grouped_bf16_gemm_nn_contiguous(x, y, expert_idx_per_token):
     out = paddle.empty([x.shape[0], y.shape[-1]], dtype=x.dtype)
     paddlefleet_ops.deep_gemm.m_grouped_bf16_gemm_nn_contiguous(x, y, out, expert_idx_per_token)
     return out
@@ -172,9 +172,13 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     )
                 )
 
-                out = deep_batch_gemm(permute_input, getattr(layer, self.added_weight_attrs[0]), expert_idx_per_token)
+                out = m_grouped_bf16_gemm_nn_contiguous(
+                    permute_input, getattr(layer, self.added_weight_attrs[0]), expert_idx_per_token
+                )
                 out = paddlefleet_ops.fused_swiglu_scale(out, dst_weights)
-                ffn_out = deep_batch_gemm(out, getattr(layer, self.added_weight_attrs[1]), expert_idx_per_token)
+                ffn_out = m_grouped_bf16_gemm_nn_contiguous(
+                    out, getattr(layer, self.added_weight_attrs[1]), expert_idx_per_token
+                )
 
                 tmp_ffn_out, _out_probs = paddle.nn.functional.moe_unpermute(
                     hidden_states_unzipped=ffn_out,
@@ -356,9 +360,13 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             if topk_ids_hookfunc is not None:
                 topk_ids_hookfunc(topk_ids=topk_idx)
 
-            out = deep_batch_gemm(permute_input, getattr(layer, self.added_weight_attrs[0]), expert_idx_per_token)
+            out = m_grouped_bf16_gemm_nn_contiguous(
+                permute_input, getattr(layer, self.added_weight_attrs[0]), expert_idx_per_token
+            )
             out = paddlefleet_ops.fused_swiglu_scale(out, dst_weights)
-            ffn_out = deep_batch_gemm(out, getattr(layer, self.added_weight_attrs[1]), expert_idx_per_token)
+            ffn_out = m_grouped_bf16_gemm_nn_contiguous(
+                out, getattr(layer, self.added_weight_attrs[1]), expert_idx_per_token
+            )
             if layer.with_bias:
                 down_proj_bias_expand = paddle.index_select(layer.down_proj_bias, expert_idx_per_token, axis=0)
                 ffn_out = paddle.add(ffn_out, down_proj_bias_expand)
