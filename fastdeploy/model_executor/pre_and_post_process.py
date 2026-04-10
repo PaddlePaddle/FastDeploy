@@ -22,6 +22,7 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
+from fastdeploy.inter_communicator import ZmqIpcClient
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import (
     InputBatch,
@@ -199,6 +200,7 @@ def _build_stream_transfer_data(
     pooler_outputs: List[PoolingSequenceGroupOutput] = None,
     logprobs: Optional[LogprobsTensors] = None,
     prompt_logprobs_list: Optional[LogprobsTensors] = None,
+    sampling_mask: Optional[List[np.ndarray]] = None,
 ):
     """Split output_tokens and output"""
 
@@ -208,6 +210,8 @@ def _build_stream_transfer_data(
         output_tokens = output_tokens.reshape([-1]).numpy()
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
+        sampling_mask_list = sampling_mask
+
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
@@ -216,6 +220,8 @@ def _build_stream_transfer_data(
                 stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
             if prompt_logprobs_list:
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
+            if sampling_mask_list is not None:
+                stream_transfer_data.sampling_mask = sampling_mask_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
@@ -349,6 +355,26 @@ def post_process_normal(
                 sampler_output.sampled_token_ids,
                 model_output.is_block_step,
             )
+    # Renormalize logprobs to match truncated sampling distribution (when enabled).
+    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
+        # logprobs_tensors.logprobs: [B, max_num_logprobs + 1]
+        logprobs = sampler_output.logprobs_tensors.logprobs
+        # logz_per_batch: [B], log(sum(probs in candidate set K)) for each request
+        logz = paddle.to_tensor(sampler_output.logz_per_batch, dtype=logprobs.dtype)
+        # Renormalize: log π_masked = log π_full - log Z_K
+        # Only normalize valid candidates; padding positions use -inf
+        valid_mask = paddle.isfinite(logprobs)
+        normalized_logprobs = paddle.where(
+            valid_mask,
+            logprobs - logz.unsqueeze(1),  # broadcast subtraction
+            paddle.full_like(logprobs, float("-inf")),
+        )
+        # Update logprobs_tensors with normalized values
+        sampler_output.logprobs_tensors = LogprobsTensors(
+            logprob_token_ids=sampler_output.logprobs_tensors.logprob_token_ids,
+            logprobs=normalized_logprobs,
+            selected_token_ranks=sampler_output.logprobs_tensors.selected_token_ranks,
+        )
 
 
 def save_output_normal(
@@ -357,6 +383,7 @@ def save_output_normal(
     share_inputs: Dict[str, paddle.Tensor],
     async_output_queue: queue.Queue = None,
     save_each_rank: bool = False,
+    sampling_mask_zmq_client: Optional[ZmqIpcClient] = None,
 ):
     # Transmit the model's output and stop generation signal via message queue.
     # In the future, we will abandon this approach.
@@ -369,6 +396,7 @@ def save_output_normal(
                 sampler_output.sampled_token_ids,
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
+                sampling_mask=sampler_output.sampling_mask,
             )
             async_output_queue.put(output)
     else:
@@ -405,6 +433,13 @@ def save_output_normal(
                 recover_share_inputs_map["last_preempted_idx"],
                 model_output.mp_rank,
             )
+        # Send sampling_mask via ZMQ side-channel when enabled.
+        if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
+            # sampling_mask is List[np.ndarray] of sparse int indices, one array per request.
+            mask_dict = {i: arr.tolist() for i, arr in enumerate(sampler_output.sampling_mask)}
+
+            sampling_mask_zmq_client.send_pyobj(mask_dict)
+
     share_inputs["last_preempted_idx"][:] = 0
 
 
@@ -419,6 +454,7 @@ def post_process_specualate(
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
     routing_replay_manager: RoutingReplayManager = None,
+    sampling_mask_zmq_client: ZmqIpcClient = None,
 ):
     if think_end_id > 0:
         speculate_limit_thinking_content_length(
@@ -488,6 +524,20 @@ def post_process_specualate(
         model_output.mask_rollback,
     )
 
+    # Renormalize logprobs to match truncated sampling distribution (when enabled).
+    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
+        logprobs = sampler_output.logprobs_tensors.logprobs
+        logz = paddle.to_tensor(sampler_output.logz_per_batch, dtype=logprobs.dtype)
+        valid_mask = paddle.isfinite(logprobs)
+        normalized_logprobs = paddle.where(
+            valid_mask, logprobs - logz.unsqueeze(1), paddle.full_like(logprobs, float("-inf"))
+        )
+        sampler_output.logprobs_tensors = LogprobsTensors(
+            logprob_token_ids=sampler_output.logprobs_tensors.logprob_token_ids,
+            logprobs=normalized_logprobs,
+            selected_token_ranks=sampler_output.logprobs_tensors.selected_token_ranks,
+        )
+
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
             recover_model_output_map = recover_batch_index_for_output(
@@ -538,6 +588,21 @@ def post_process_specualate(
                 model_output.mp_rank,
                 save_each_rank,
             )
+        # Send sampling_mask via ZMQ side-channel when enabled.
+        if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
+            # sampling_mask is List[np.ndarray] of sparse int indices, length = total_accepted_tokens.
+            # Group by request using accept_num so each entry is List[np.ndarray] (n arrays per req).
+            real_bsz = model_output.accept_num.shape[0]
+            accept_nums = model_output.accept_num[:real_bsz].flatten().tolist()
+            mask_dict = {}
+            offset = 0
+            for i, n in enumerate(accept_nums):
+                n = int(n)
+                if n > 0:
+                    # List of n sparse index arrays, one per accepted token
+                    mask_dict[i] = [arr.tolist() for arr in sampler_output.sampling_mask[offset : offset + n]]
+                offset += n
+            sampling_mask_zmq_client.send_pyobj(mask_dict)
 
     # Update pre_ids through accept tokens
 
@@ -567,6 +632,7 @@ def post_process(
     splitwise_role_is_decode: bool = False,
     enable_entropy: bool = False,
     routing_replay_manager: RoutingReplayManager = None,
+    sampling_mask_zmq_client: ZmqIpcClient = None,
 ) -> None:
     """Post-processing steps after completing a single token generation."""
 
@@ -594,6 +660,7 @@ def post_process(
                 splitwise_role_is_decode,
                 enable_entropy,
                 routing_replay_manager,
+                sampling_mask_zmq_client,
             )
         else:
             post_process_normal(

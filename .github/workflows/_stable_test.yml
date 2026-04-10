@@ -160,6 +160,7 @@ jobs:
           fi
 
           docker run --rm --net=host \
+          --shm-size=64G \
           --name ${runner_name} \
           -v $(pwd):/workspace \
           -w /workspace \

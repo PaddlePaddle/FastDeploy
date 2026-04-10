@@ -549,9 +549,16 @@ class OpenAIServingCompletion:
                         num_image_tokens[idx] += output.get("num_image_tokens")
                     reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
+
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
+
+                    if output["skipped"] and not request.return_token_ids:
+                        continue
+
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
-                        text=output["text"],
+                        text="" if output["skipped"] else (output["text"] or ""),
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=output["tool_calls"],
@@ -566,12 +573,6 @@ class OpenAIServingCompletion:
                         speculate_metrics=output_speculate_metrics,
                     )
 
-                    if output["tool_calls"] is not None:
-                        tool_called[idx] = True
-
-                    if output["skipped"]:
-                        continue
-
                     choices.append(delta_message)
 
                     if res["finished"]:
@@ -581,6 +582,8 @@ class OpenAIServingCompletion:
                             output,
                             tool_called[idx],
                         )
+                        if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
+                            choices[-1].finish_reason = "abort"
                         inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
@@ -723,6 +726,8 @@ class OpenAIServingCompletion:
                 output,
                 False,
             )
+            if final_res.get("error_msg", None) is not None and "Aborted" in final_res["error_msg"]:
+                finish_reason = "abort"
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,

@@ -16,7 +16,7 @@
 
 import gc
 import time
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import paddle
 import pynvml
@@ -192,9 +192,9 @@ class GpuWorker(WorkerBase):
         if self.fd_config.routing_replay_config.enable_routing_replay:
             self.model_runner.initialize_routing_replay_manager()
 
-    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+    def update_weights(self, version: str = None, verify_checksum: bool = False):
         """update weights in place"""
-        return self.model_runner.update_weights(version, rsync_config)
+        return self.model_runner.update_weights(version, verify_checksum)
 
     def sleep(self, **kwargs) -> None:
         """Offload memory from GPU"""

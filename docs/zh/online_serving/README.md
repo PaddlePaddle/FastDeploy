@@ -563,3 +563,4 @@ DeltaFunctionCall:
 /v1/pause - 暂停推理生成（会导致服务拒绝推理请求）。正在进行中的请求会被中止，缓存会被重置。
 /v1/resume - 恢复推理生成。
 /v1/is_paused - 检查推理生成是否已暂停。
+/v1/abort_requests - 中断推理请求，释放 GPU 显存（KV Cache blocks）和计算资源。支持传入 `req_ids`（请求 ID 列表）或 `abort_all=true`（中断所有请求）。返回已中断请求列表及其已生成的 token 数。

@@ -296,7 +296,7 @@ void GetBlockShapeAndSplitKVBlock(
   if (!phi::backends::gpu::IsCUDAGraphCapturing())
 #endif
     max_len_tensor_cpu.copy_(
-        max_len_tensor_gpu, max_len_tensor_cpu.place(), false);
+        max_len_tensor_gpu, max_len_tensor_cpu.place(), true);
 
   auto max_len_cpu_ptr = max_len_tensor_cpu.data<int>();
   int max_len_this_time = max_len_cpu_ptr[0];
@@ -379,7 +379,7 @@ void GetBlockShapeAndSplitKVBlock(
       if (!phi::backends::gpu::IsCUDAGraphCapturing())
 #endif
         decoder_num_blocks_cpu.copy_(
-            decoder_num_blocks_device, decoder_num_blocks_cpu.place(), false);
+            decoder_num_blocks_device, decoder_num_blocks_cpu.place(), true);
     }
   }
   // mla_backend not need run the following code.
@@ -410,7 +410,7 @@ void GetBlockShapeAndSplitKVBlock(
         block_size);
 
     kv_num_blocks_x_cpu.copy_(
-        kv_num_blocks_x, kv_num_blocks_x_cpu.place(), false);
+        kv_num_blocks_x, kv_num_blocks_x_cpu.place(), true);
     // Clear buffer
     const uint32_t encoder_max_tile_size_per_bs_q =
         div_up((max_enc_dec_len_this_time * group_size), encoder_block_shape_q);
@@ -434,7 +434,7 @@ void GetBlockShapeAndSplitKVBlock(
                                         encoder_block_shape_q,
                                         group_size);
     encoder_num_blocks_x_cpu.copy_(
-        encoder_num_blocks_x, encoder_num_blocks_x_cpu.place(), false);
+        encoder_num_blocks_x, encoder_num_blocks_x_cpu.place(), true);
   }
 }
 

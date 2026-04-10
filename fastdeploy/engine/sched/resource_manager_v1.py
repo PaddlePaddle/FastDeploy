@@ -204,11 +204,11 @@ class ResourceManagerV1(ResourceManager):
         self.need_block_num_map = dict()
 
         self.encoder_cache = None
-        if config.model_config.enable_mm and config.cache_config.max_encoder_cache > 0:
+        if config.enable_mm_runtime and config.cache_config.max_encoder_cache > 0:
             self.encoder_cache = EncoderCacheManager(config.cache_config.max_encoder_cache)
 
         self.processor_cache = None
-        if config.model_config.enable_mm and config.cache_config.max_processor_cache > 0:
+        if config.enable_mm_runtime and config.cache_config.max_processor_cache > 0:
             max_processor_cache_in_bytes = int(config.cache_config.max_processor_cache * 1024 * 1024 * 1024)
             self.processor_cache = ProcessorCacheManager(max_processor_cache_in_bytes)
 
@@ -279,6 +279,7 @@ class ResourceManagerV1(ResourceManager):
                 del self.requests[request_id]
                 del self.req_dict[request_id]
                 self.to_be_aborted_req_id_set.remove(request_id)
+        self.update_metrics()
 
     def _trigger_abort(self, request_id, scheduled_reqs):
         if request_id in self.requests:
@@ -366,6 +367,9 @@ class ResourceManagerV1(ResourceManager):
                     self._free_blocks(preempted_req)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
+                    if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
+                        if self.config.cache_config.kvcache_storage_backend:
+                            self.cache_manager.write_cache_to_storage(preempted_req)
                     self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
@@ -505,7 +509,7 @@ class ResourceManagerV1(ResourceManager):
             num_new_tokens = token_budget // self.config.cache_config.block_size * self.config.cache_config.block_size
         request.with_image = False
 
-        if not self.config.model_config.enable_mm:
+        if not self.config.enable_mm_runtime:
             return num_new_tokens
 
         inputs = request.multimodal_inputs
@@ -1119,6 +1123,9 @@ class ResourceManagerV1(ResourceManager):
                 request.error_code = 530
                 return None
             inputs["audio_features"] = result
+
+    def get_reqs_in_aborting(self):
+        return self.waiting_abort_req_id_set | self.to_be_aborted_req_id_set
 
     def get_available_position(self) -> int:
         position = 0

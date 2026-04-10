@@ -576,6 +576,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 response_processor=mock_response_processor,
                 max_tokens=max_tokens_list[idx],
                 speculate_metrics=None,
+                sampling_mask_list=None,
             )
 
             expected = case["expected"]

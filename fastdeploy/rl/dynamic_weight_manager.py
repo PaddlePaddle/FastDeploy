@@ -16,7 +16,6 @@
 
 import gc
 import glob
-import io
 import os
 import re
 import time
@@ -25,34 +24,11 @@ from typing import Any, Dict, List
 
 import numpy as np
 import paddle
+import yaml
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
-
-
-def sync_weights_by_rdma(config, step, rank):
-    from checkpoint_transfer.core import RDMAWeightsDownloader
-
-    downloader = RDMAWeightsDownloader(config)
-    downloader.initialize()
-    logger.info(f"Fetching weights for step:{step}, rank:{rank}...")
-    data = downloader.get_weights(step, rank)
-    if data is None:
-        logger.error("Failed to get weights!")
-        raise Exception("Failed to rsync weights through checkpoint_transfer")
-    logger.info(f"Successfully retrieved data. Type: {type(data)}")
-    if isinstance(data, np.ndarray):
-        data_bytes = data.tobytes()
-    elif isinstance(data, (bytes, bytearray)):
-        data_bytes = data
-    else:
-        data_bytes = bytes(data)
-    logger.info(f"Data size: {len(data_bytes)} bytes")
-
-    buffer = io.BytesIO(data_bytes)
-    new_state_dict = paddle.load(buffer)
-    return new_state_dict
 
 
 class DynamicWeightManager:
@@ -75,6 +51,7 @@ class DynamicWeightManager:
         else:
             self.model_list = models
         self._capture_model_state()
+        self.rdma_handle = None
         if self.load_config.load_strategy == "rsync":
             self.update_weights_by_rdma()
         else:
@@ -91,10 +68,10 @@ class DynamicWeightManager:
         """Capture and store initial model parameters state."""
         for model in self.model_list:
             for name, param in model.state_dict().items():
-                logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
+                logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}, place={param.place}")
                 self.state_dict[name] = param
 
-    def update_weights_by_rdma(self, version: str = None, rsync_config: Dict[str, Any] = None):
+    def update_weights_by_rdma(self, version: str = None, verify_checksum: bool = False):
         def valid_parameters(old_state_dict, new_state_dict):
             is_valid = True
             for key in old_state_dict:
@@ -110,30 +87,37 @@ class DynamicWeightManager:
                     )
                 elif old_state_dict[key].dtype != new_state_dict[key].dtype:
                     is_valid = False
-                    logger.error(f"Invalid parameter: {key} dtype mismatch")
+                    logger.error(
+                        f"Invalid parameter: {key} dtype mismatch, old:{old_state_dict[key].dtype}, new:{new_state_dict[key].dtype}"
+                    )
             return is_valid
 
-        if rsync_config is None:
-            rsync_config = self.fd_config.load_config.rsync_config
-        if rsync_config is None or len(rsync_config) == 0:
-            raise Exception(
-                "rsync config not set, please set it in 1) launch arguments '--rsync-config' "
-                "or 2) interface arguments 'rsync_config'"
-            )
-
-        if version is None or version == "":
+        bootstrap_load = version is None or version == ""
+        if bootstrap_load:
             version = self.read_model_version_from_file()
         if version is None or version == "":
             raise Exception(
-                "rsync model version not set, please set it in 1) {model_version}/version.txt "
+                "rsync model version not set, please set it in 1) {model_version}/version.yaml "
                 "or 2) interface arguments 'version'"
             )
 
-        logger.info(f"START update_weights_by_rdma, version:{version}, rsync_config:{rsync_config}")
-        rank = self.local_rank
+        logger.info(
+            f"START rank:{self.local_rank}/{self.nranks} update_weights_by_rdma, "
+            f"version:{version}, verify_checksum:{verify_checksum}, bootstrap_load:{bootstrap_load}"
+        )
+
+        if self.rdma_handle is None:
+            from checkpoint_transfer import CheckpointTransfer
+
+            config = self.fd_config.load_config.rsync_config
+            logger.info(f"CheckpointTransfer rsync config:{config}")
+            self.rdma_handle = CheckpointTransfer(**config, local_rank=self.local_rank, group_size=self.nranks)
+            self.rdma_handle.initialize()
 
         sync_start = time.perf_counter()
-        new_state_dict = sync_weights_by_rdma(rsync_config, version, rank)
+        new_state_dict = dict()
+        for key, param in self.rdma_handle.receive_stream(step_id=version, verify_checksum=verify_checksum):
+            new_state_dict[key] = param
         sync_cost = time.perf_counter() - sync_start
         logger.info(f"weights sync cost {sync_cost:.2f} seconds")
 
@@ -144,22 +128,27 @@ class DynamicWeightManager:
             raise ValueError(error_msg)
 
         update_start = time.perf_counter()
-        for name, param in old_state_dict.items():
-            param.set_value(new_state_dict[name])
+        for name, target_param in old_state_dict.items():
+            new_param = new_state_dict[name]
+            if bootstrap_load and not target_param._is_initialized():
+                new_param = new_param.cuda()
+                new_param._share_buffer_to(target_param)
+            else:
+                target_param.set_value(new_param)
+
         update_cost = time.perf_counter() - update_start
         logger.info(f"params set value cost {update_cost:.2f} seconds")
-
         total_cost = time.perf_counter() - sync_start
         logger.info(
             f"END update_weights_by_rdma, cost {total_cost:.2f} seconds"
-            f" version:{version}, rsync_config: {rsync_config}",
+            f" version:{version}, verify_checksum: {verify_checksum}, local_rank: {self.local_rank}",
         )
         return {
             "sync_cost": sync_cost,
             "update_cost": update_cost,
             "total_cost": total_cost,
             "version": version,
-            "rank": rank,
+            "rank": self.local_rank,
         }
 
     def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
@@ -493,13 +482,23 @@ class DynamicWeightManager:
 
     def read_model_version_from_file(self):
         model_dir = self.fd_config.model_config.model
-        version_file = os.path.join(model_dir, "version.txt")
+        version_file = os.path.join(model_dir, "version.yaml")
         try:
             with open(version_file, "r", encoding="utf-8") as f:
-                version = f.read().strip()
-            return version
-        except (FileNotFoundError, OSError, IOError) as e:
-            logger.error(f"Failed to read model version file '{version_file}': {e}")
+                version_info = yaml.safe_load(f) or {}
+
+            if not isinstance(version_info, dict):
+                logger.error(f"Failed to read model step from '{version_file}': yaml content is not a mapping")
+                return None
+
+            step = version_info.get("step")
+            if step is None:
+                logger.error(f"Failed to read model step from '{version_file}': missing 'step' field")
+                return None
+
+            return str(step)
+        except (FileNotFoundError, OSError, IOError, yaml.YAMLError) as e:
+            logger.error(f"Failed to read model step from '{version_file}': {e}")
             return None
 
     @staticmethod

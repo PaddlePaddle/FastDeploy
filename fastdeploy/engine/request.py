@@ -727,6 +727,10 @@ class CompletionOutput:
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
     enable_parser: bool = False
+    # Sparse indices of retained vocab ids:
+    #   - Non-MTP: list[int]
+    #   - MTP: list[list[int]]
+    sampling_mask: Optional[Any] = None
 
     def to_dict(self):
         """
@@ -745,6 +749,7 @@ class CompletionOutput:
             "text": self.text,
             "reasoning_content": self.reasoning_content,
             "reasoning_token_num": self.reasoning_token_num,
+            "sampling_mask": self.sampling_mask,
         }
 
     @classmethod

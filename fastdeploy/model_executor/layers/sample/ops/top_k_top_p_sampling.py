@@ -85,6 +85,11 @@ def top_k_top_p_sampling(
 
             _, ids = native_top_p_sampling(x, top_p)
         else:
+            if top_k_list and any(x > 0 for x in top_k_list):
+                from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
+
+                x = top_k_renorm_probs(x, top_k)
+
             _, ids = paddle.tensor.top_p_sampling(
                 x,
                 top_p,

@@ -459,21 +459,35 @@ async def update_weights(request: Request) -> Response:
             )
         args["version"] = request_data["version"]
 
-    # Validate and extract rsync_config parameter
-    if "rsync_config" in request_data and request_data["rsync_config"] is not None:
-        if not isinstance(request_data["rsync_config"], dict):
+    # Validate and extract verify_checksum parameter
+    if "verify_checksum" in request_data and request_data["verify_checksum"] is not None:
+        if not isinstance(request_data["verify_checksum"], bool):
             return JSONResponse(
                 status_code=400,
-                content={"error": "Invalid parameter type", "message": "rsync_config must be a dictionary"},
+                content={"error": "Invalid parameter type", "message": "verify_checksum must be a boolean"},
             )
-        if "etcd_server" not in request_data["rsync_config"]:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Invalid parameter type", "message": "rsync_config must contain etcd_server"},
-            )
-        args["rsync_config"] = request_data["rsync_config"]
+        args["verify_checksum"] = request_data["verify_checksum"]
 
     control_request = ControlRequest(request_id, "update_weights", args)
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.post("/v1/abort_requests")
+async def abort_requests(request: Request):
+    body = await request.json()
+    abort_all = body.get("abort_all", False)
+    req_ids = body.get("req_ids", None)
+
+    # 参数校验
+    if not abort_all and not req_ids:
+        return JSONResponse(status_code=400, content={"error": "must provide abort_all=true or req_ids"})
+
+    control_request = ControlRequest(
+        request_id=f"control-{uuid.uuid4()}",
+        method="abort_requests",
+        args={"abort_all": abort_all, "req_ids": req_ids or []},
+    )
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
 

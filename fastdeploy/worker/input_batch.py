@@ -90,7 +90,8 @@ class InputBatch:
         self.scheduler_config = fd_config.scheduler_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
         self.speculative_decoding = self.speculative_config.method is not None
-        self.enable_mm = self.model_config.enable_mm
+        self.is_mm_model = self.model_config.enable_mm
+        self.enable_mm = fd_config.enable_mm_runtime
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
         self.enable_pd_reorder = False
@@ -220,6 +221,9 @@ class InputBatch:
                 model_config=self.model_config,
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
+            if self.is_mm_model:
+                self.image_features = None
+                self.image_features_list = None
 
         # Set block tables
         pre_max_block_num = (
@@ -646,6 +650,9 @@ class InputBatch:
                     model_config=self.model_config,
                     partial_rotary_factor=self.model_config.partial_rotary_factor,
                 )
+                if self.is_mm_model:
+                    self.image_features = None
+                    self.image_features_list = None
 
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
@@ -658,7 +665,7 @@ class InputBatch:
 
 class ProposerInputBatch(InputBatch):
     def __init__(self, fd_config: FDConfig, target_model_input_batch: InputBatch) -> None:
-        self.enable_mm = fd_config.model_config.enable_mm
+        self.enable_mm = fd_config.enable_mm_runtime
         self.num_model_steps = fd_config.speculative_config.num_model_steps
         self.index_to_batch_id = {}
         self.target_model_input_batch = target_model_input_batch
@@ -821,6 +828,15 @@ class ProposerInputBatch(InputBatch):
                 -1,
                 dtype="int32",
             )
+            self.attn_mask_offsets = paddle.full(
+                shape=[self.scheduler_config.max_num_seqs * self.model_config.max_model_len],
+                fill_value=-1,
+                dtype="int32",
+            )
+            self.attn_mask_offsets_full = paddle.full(
+                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
+            )
+            self.attn_mask_offsets_decoder = paddle.full([self.scheduler_config.max_num_seqs, 1], -1, dtype="int32")
 
     def swap_states(self, i1, i2) -> None:
         def swap_data(tensor, idx1, idx2):

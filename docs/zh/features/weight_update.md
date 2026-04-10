@@ -50,7 +50,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 | `/v1/is_paused` | `GET` | 无 | 返回 `{"is_paused": bool}`。 |
 | `/v1/sleep` | `POST` | `?tags=weight,kv_cache` | 卸载指定 GPU 内存对象。支持 `weight` 与 `kv_cache`；不传时默认同时处理两者。 |
 | `/v1/wakeup` | `POST` | `?tags=weight,kv_cache` | 重新加载之前被卸载的权重和/或 KV Cache。成功后会自动 `resume`。 |
-| `/v1/update_weights` | `POST` | JSON `{"version":"...", "rsync_config": {...}}` | 通过 worker 控制链路原地刷新模型权重。该接口主要面向 `load_strategy=rsync` 的远端版本更新。 |
+| `/v1/update_weights` | `POST` | JSON `{"version":"...", "verify_checksum": false}` | 通过 worker 控制链路原地刷新模型权重。该接口主要面向 `load_strategy=rsync` 的远端版本更新。 |
 
 ### 兼容性说明
 
@@ -113,7 +113,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 当前支持的请求字段：
 
 - `version`：可选字符串，用于指定目标 checkpoint 版本。
-- `rsync_config`：可选字典；如果传入，必须包含 `etcd_server`。
+- `verify_checksum`：可选布尔值；默认为 `false`。设置为 `true` 时，会在权重同步过程中校验数据完整性。
 
 关键语义：
 
@@ -185,9 +185,7 @@ curl -X POST http://127.0.0.1:8000/v1/update_weights \
   -H "Content-Type: application/json" \
   -d '{
     "version": "global_step_1200",
-    "rsync_config": {
-      "etcd_server": "127.0.0.1:2379"
-    }
+    "verify_checksum": false
   }'
 ```
 
@@ -260,9 +258,7 @@ curl -X POST http://127.0.0.1:8000/v1/update_weights \
   -H "Content-Type: application/json" \
   -d '{
     "version": "global_step_1200",
-    "rsync_config": {
-      "etcd_server": "127.0.0.1:2379"
-    }
+    "verify_checksum": false
   }'
 
 # 更新完成后恢复服务

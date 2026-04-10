@@ -97,10 +97,12 @@ def setup_and_run_server():
         model_path = "baidu/ERNIE-4.5-0.3B-Paddle"
     print(f"model_path: {model_path}")
 
+    base_log_dir = os.getenv("FD_LOG_DIR", "log")
+
     # router
     print("start router...")
     env_router = os.environ.copy()
-    env_router["FD_LOG_DIR"] = "log_router"
+    env_router["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_router")
     router_log_path = "router.log"
 
     router_cmd = [
@@ -121,11 +123,11 @@ def setup_and_run_server():
         )
 
     # server0
-    print("start server0...")
+    print("start server 0...")
     env_server_0 = os.environ.copy()
     env_server_0["CUDA_VISIBLE_DEVICES"] = "0"
     env_server_0["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
-    env_server_0["FD_LOG_DIR"] = "log_server_0"
+    env_server_0["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_server_0")
     env_server_0["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT)
     log_path = "server_0.log"
     cmd = [
@@ -171,7 +173,7 @@ def setup_and_run_server():
     env_server_1["CUDA_VISIBLE_DEVICES"] = "1"
     env_server_1["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
     env_server_1["INFERENCE_MSG_QUEUE_ID"] = str(FD_API_PORT + 1)
-    env_server_1["FD_LOG_DIR"] = "log_server_1"
+    env_server_1["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_server_1")
     log_path = "server_1.log"
     cmd = [
         sys.executable,

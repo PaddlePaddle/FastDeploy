@@ -20,7 +20,7 @@ import queue
 import time
 from concurrent.futures import Future
 from threading import Thread
-from typing import Any, Dict, List, Optional, cast
+from typing import List, Optional, cast
 
 import numpy as np
 import paddle
@@ -100,7 +100,7 @@ class MetaxModelRunner(ModelRunnerBase):
     ):
         super().__init__(fd_config=fd_config, device=device)
         self.MAX_INFER_SEED = 9223372036854775806
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -2769,8 +2769,8 @@ class MetaxModelRunner(ModelRunnerBase):
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
-    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
-        return self.dynamic_weight_manager.update_weights_by_rdma(version, rsync_config)
+    def update_weights(self, version: str = None, verify_checksum: bool = False):
+        return self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum)
 
     def padding_cudagraph_inputs(self) -> None:
         """
