@@ -571,6 +571,7 @@ class PrefixCacheManager:
             event_type:       CacheStatus.SWAP2GPU or CacheStatus.SWAP2CPU
             is_sync:          bool, whether to wait for the result of the swap task
         """
+        assert is_sync, "Only support is sync for swap_task now."
         self.task_swapping_event[transfer_task_id] = Event()
         self.cache_task_queue.put_transfer_task(
             (event_type, transfer_task_id, swap_node_ids, gpu_block_ids, cpu_block_ids)
