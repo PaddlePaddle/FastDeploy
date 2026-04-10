@@ -294,6 +294,7 @@ class AsyncLLM(EngineServiceClient):
             cfg.limit_mm_per_prompt,
             cfg.mm_processor_kwargs,
             cfg.tool_parser,
+            enable_mm_runtime=cfg.enable_mm_runtime,
         )
         # Create data processor
         self.data_processor = self.input_processor.create_processor()
@@ -446,7 +447,7 @@ class AsyncLLM(EngineServiceClient):
                 )
             if envs.ZMQ_SEND_BATCH_DATA and self.connection_manager is not None:
                 request["zmq_worker_pid"] = self.connection_manager.worker_pid
-            if self.cfg.model_config.enable_mm:
+            if self.cfg.enable_mm_runtime:
                 self.request_client.send_pyobj(request)
             else:
                 self.request_client.send_json(request)

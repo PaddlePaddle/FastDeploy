@@ -42,6 +42,20 @@ classify_tests() {
         fi
     fi
 
+    # Rule 5: high-risk OOM tests (treat as multi_gpu for sequential execution)
+    if [[ "$test_file" == "tests/entrypoints/cli/test_main.py" ||
+          "$test_file" == "tests/entrypoints/cli/test_serve.py" ||
+          "$test_file" == "tests/operators/test_group_swiglu_with_masked.py" ||
+          "$test_file" == "tests/operators/test_hybrid_mtp_ngram.py" ||
+          "$test_file" == "tests/operators/test_moe_top_k_select.py" ||
+          "$test_file" == "tests/operators/test_noaux_tc.py" ||
+          "$test_file" == "tests/output/test_get_save_output_v1.py" ||
+          "$test_file" == "tests/output/test_process_batch_draft_tokens.py" ||
+          "$test_file" == "tests/output/test_process_batch_output.py" ]]; then
+        echo "multi_gpu"
+        return
+    fi
+
     # ========== Single-GPU tests (no port required, can run in parallel) ==========
     echo "single_gpu"
 }
@@ -117,22 +131,21 @@ run_test_with_logging() {
         echo "======================================================="
     fi
 
-     # if passed, remove the isolated log directory and server logs
-     if [ "$status" -eq 0 ]; then
-         rm -rf "${isolated_log_dir}" || true
-         # Clean up server logs in run_path on pass
-         for f in "${run_path}"/*.log; do
-             [[ "$(basename "$f")" != "${failed_tests_file}" ]] && rm -f "$f" || true
-         done
-     fi
-
-
     # Clean up port-related processes
     if [ -n "$FD_CACHE_QUEUE_PORT" ]; then
         ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9 || true
     fi
     if [ -n "$FD_ENGINE_QUEUE_PORT" ]; then
         ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk '{print $2}' | xargs -r kill -9 || true
+    fi
+
+    # if passed, remove the isolated log directory and server logs
+    if [ "$status" -eq 0 ]; then
+        rm -rf "${isolated_log_dir}" || true
+        # Clean up server logs in run_path on pass
+        for f in "${run_path}"/*.log; do
+            [[ "$(basename "$f")" != "${failed_tests_file}" ]] && rm -f "$f" || true
+        done
     fi
 
     # Unset FD_LOG_DIR to avoid affecting next test
@@ -330,6 +343,9 @@ if [ "$failed_count" -ne 0 ]; then
     # clean the empty directories
     if [ -d "${run_path}/unittest_logs" ]; then
         echo "Cleaning empty directories..."
+
+        # remove console_error.log files (cleanup logs from stopped processes)
+        find "${run_path}/unittest_logs" -name "console_error.log*" -delete || true
 
         # perform multi-round clean until no more empty directories are found
         while true; do

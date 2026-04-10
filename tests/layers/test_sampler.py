@@ -346,6 +346,8 @@ def test_mtp_sampler_xpu_and_compute(mock_ops, monkeypatch):
         "batch_token_num": paddle.to_tensor([[1]], dtype="int64"),
         "output_padding_offset": paddle.zeros([1, 1], dtype="int64"),
         "output_cum_offsets": paddle.zeros([1, 1], dtype="int64"),
+        "batch_id_per_token_output": paddle.to_tensor([0], dtype="int32"),
+        "cu_seqlens_q_output": paddle.to_tensor([0, 1], dtype="int32"),
     }
     monkeypatch.setattr(
         "fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling",

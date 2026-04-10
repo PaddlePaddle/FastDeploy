@@ -111,6 +111,9 @@ class MooncakeStore(KVCacheStorage):
         host_ip = get_host_ip()
         os.environ["MC_TCP_BIND_ADDRESS"] = host_ip
         logger.info(f"Set MC_TCP_BIND_ADDRESS to {host_ip}")
+        if os.environ.get("MC_MAX_MR_SIZE") is None:
+            os.environ["MC_MAX_MR_SIZE"] = "4294967296"  # 4GB
+            logger.info("MC_MAX_MR_SIZE is not set, default to 4GB.")
 
         try:
             from mooncake.store import MooncakeDistributedStore

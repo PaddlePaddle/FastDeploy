@@ -22,7 +22,7 @@ __device__ void speculate_update_repeat_times_normal(
     __global_ptr__ const int64_t *pre_ids,
     __global_ptr__ const int64_t *cur_len,
     __global_ptr__ int *repeat_times,
-    __global_ptr__ const int *output_padding_offset,
+    __global_ptr__ const int *batch_id_per_token_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -40,15 +40,17 @@ __device__ void speculate_update_repeat_times_normal(
   int n_length = (length + max_sm_len - 1) / max_sm_len;
 
   int64_t *cur_len_lm = (int64_t *)lm;
-  int output_padding_offset_now;
+  int batch_id_per_token_output_now;
   GM2LM(cur_len, cur_len_lm, bs * sizeof(int64_t));
 
   for (int nli = 0; nli < n_length; nli++) {
     int step = nli * max_sm_len;
     int cur_length = min(max_sm_len, length - step);
     for (int64_t i = clusterid; i < token_num; i += nclusters) {
-      GM2LM(output_padding_offset + i, &output_padding_offset_now, sizeof(int));
-      int64_t bi = (i + output_padding_offset_now) / max_seq_len;
+      GM2LM(batch_id_per_token_output + i,
+            &batch_id_per_token_output_now,
+            sizeof(int));
+      int64_t bi = batch_id_per_token_output_now;
       if (bi >= bs || cur_len_lm[bi] < 0) {
         continue;
       }
@@ -86,10 +88,10 @@ __device__ void speculate_update_repeat_times_normal(
 __device__ void speculate_update_repeat_times_optimized(
     char *lm,
     __shared_ptr__ char *sm,
-    __global_ptr__ const int64_t *pre_ids,            // {bs, length_id}
-    __global_ptr__ const int64_t *cur_len,            // {bs}
-    __global_ptr__ int *repeat_times,                 // {token_num, length}
-    __global_ptr__ const int *output_padding_offset,  // {token_num}
+    __global_ptr__ const int64_t *pre_ids,                // {bs, length_id}
+    __global_ptr__ const int64_t *cur_len,                // {bs}
+    __global_ptr__ int *repeat_times,                     // {token_num, length}
+    __global_ptr__ const int *batch_id_per_token_output,  // {token_num}
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -108,10 +110,10 @@ __device__ void speculate_update_repeat_times_optimized(
   int cur_len_sm_len = 640;
   __shared_ptr__ int64_t *cur_len_sm =
       (__shared_ptr__ int64_t *)(repeat_times_sm + repeat_times_sm_len);
-  __shared_ptr__ int *output_padding_offset_sm =
+  __shared_ptr__ int *batch_id_per_token_output_sm =
       (__shared_ptr__ int *)(cur_len_sm + cur_len_sm_len);
-  DoublePtr<1, SmPtr<int>> buffer_ptr_output_padding_offset(
-      (SmPtr<int>(output_padding_offset_sm)));
+  DoublePtr<1, SmPtr<int>> buffer_ptr_batch_id_per_token_output(
+      (SmPtr<int>(batch_id_per_token_output_sm)));
   int pre_ids_lm_len = 4;
   int64_t *pre_ids_lm = (int64_t *)lm;
   DoublePtr<4, LmPtr<int64_t>> buffer_ptr_pre_ids((LmPtr<int64_t>(pre_ids_lm)));
@@ -119,18 +121,18 @@ __device__ void speculate_update_repeat_times_optimized(
   int64_t i = clusterid;
   if (i < token_num && cid == 0) {
     GM2SM_ASYNC(cur_len, cur_len_sm, bs * sizeof(int64_t));
-    buffer_ptr_output_padding_offset.gm_load_async(output_padding_offset + i,
-                                                   1);
+    buffer_ptr_batch_id_per_token_output.gm_load_async(
+        batch_id_per_token_output + i, 1);
     mfence_sm();
   }
   sync_all();
   for (; i < token_num; i += nclusters) {
     if (cid == 0 && i + nclusters < token_num) {
-      buffer_ptr_output_padding_offset.next().gm_load_async(
-          output_padding_offset + i + nclusters, 1);
+      buffer_ptr_batch_id_per_token_output.next().gm_load_async(
+          batch_id_per_token_output + i + nclusters, 1);
     }
-    int64_t bi = (i + (buffer_ptr_output_padding_offset.ptr[0])) / max_seq_len;
-    buffer_ptr_output_padding_offset.toggle();
+    int64_t bi = buffer_ptr_batch_id_per_token_output.ptr[0];
+    buffer_ptr_batch_id_per_token_output.toggle();
     if (bi >= bs || cur_len_sm[bi] < 0) {
       mfence_sm();
       sync_all();
@@ -224,15 +226,16 @@ __device__ void speculate_update_repeat_times_optimized(
   }
 }
 
-__global__ void speculate_update_repeat_times(const int64_t *pre_ids,
-                                              const int64_t *cur_len,
-                                              int *repeat_times,
-                                              const int *output_padding_offset,
-                                              const int64_t bs,
-                                              const int64_t length,
-                                              const int64_t length_id,
-                                              const int64_t token_num,
-                                              const int64_t max_seq_len) {
+__global__ void speculate_update_repeat_times(
+    const int64_t *pre_ids,
+    const int64_t *cur_len,
+    int *repeat_times,
+    const int *batch_id_per_token_output,
+    const int64_t bs,
+    const int64_t length,
+    const int64_t length_id,
+    const int64_t token_num,
+    const int64_t max_seq_len) {
   char lm[6 * 1024];
   __shared__ char sm[256 * 1024];
 
@@ -242,7 +245,7 @@ __global__ void speculate_update_repeat_times(const int64_t *pre_ids,
                                             pre_ids,
                                             cur_len,
                                             repeat_times,
-                                            output_padding_offset,
+                                            batch_id_per_token_output,
                                             bs,
                                             length,
                                             length_id,
@@ -254,7 +257,7 @@ __global__ void speculate_update_repeat_times(const int64_t *pre_ids,
                                          pre_ids,
                                          cur_len,
                                          repeat_times,
-                                         output_padding_offset,
+                                         batch_id_per_token_output,
                                          bs,
                                          length,
                                          length_id,

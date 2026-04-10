@@ -187,13 +187,59 @@ function check_server_status() {
     echo -e "\n"
 }
 
-echo "============ Online: start to test ERNIE-4.5-21B-A3B-Paddle ==========="
+echo "============ Online: start to test ERNIE-4.5-21B-A3B-Paddle (wint8, tp=1, enable_cudagraph) ==========="
 clear_message
 echo "Start server..."
 python -m fastdeploy.entrypoints.openai.api_server \
        --model ${MODEL_DIR}/ERNIE-4.5-21B-A3B-Paddle \
        --port 8180 \
        --tensor-parallel-size 1 \
+       --quantization wint8 \
+       --max-model-len 32768 \
+       --max-num-seqs 8 \
+       --block-size 16 \
+       --graph-optimization-config '{"use_cudagraph": true}' > server.log 2>&1 &
+
+check_server_status
+
+echo "Start inference..."
+cp ${CI_PATH}/test.jsonl ./
+python3 -u ${CI_PATH}/bench_gsm8k.py --port 8180 --num-questions 10 --num-shots 5 --parallel 8
+
+exit_code=$?
+echo -e "\nexit_code is ${exit_code}"
+
+echo -e "\nStop server..."
+stop_processes
+echo -e "\nStop server done."
+
+if [ ${exit_code} -ne 0 ]; then
+    print_error_message
+    exit 1
+fi
+
+acc=`python3 -c "import json; [print(json.loads(line)['latency']) for line in open('result.jsonl')]"`
+latency=`python3 -c "import json; [print(json.loads(line)['latency']) for line in open('result.jsonl')]"`
+expected_lowerest_acc=0.8
+expected_largest_latency=60
+if awk -v a="$acc" -v b="$expected_lowerest_acc" 'BEGIN {exit !(a < b)}'; then
+    echo -e "\nExit with Accucary error, current accuracy $acc less than $expected_lowerest_acc "
+    exit 1
+fi
+
+# if awk -v a="$latency" -v b="$expected_largest_latency" 'BEGIN {exit !(a > b)}'; then
+#     echo -e "\nExit with Latency Error, current latency $latency greater than $expected_largest_latency "
+#     exit 1
+# fi
+echo -e "\nPASSED"
+
+echo "============ Online: start to test ERNIE-4.5-21B-A3B-Paddle (wint8, tp=2, enable_cudagraph) ==========="
+clear_message
+echo "Start server..."
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model ${MODEL_DIR}/ERNIE-4.5-21B-A3B-Paddle \
+       --port 8180 \
+       --tensor-parallel-size 2 \
        --quantization wint8 \
        --max-model-len 32768 \
        --max-num-seqs 8 \

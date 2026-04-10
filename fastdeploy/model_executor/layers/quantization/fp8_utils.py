@@ -26,6 +26,7 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import per_token_group_fp8_quant
 
+
 from ..utils import get_sm_version
 
 
@@ -65,7 +66,7 @@ def load_deep_gemm():
     """
 
     if current_platform.is_cuda():
-        if get_sm_version() == 100:
+        if get_sm_version() >= 100:
             # SM100 should use PFCC DeepGemm
             paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
             try:
@@ -245,7 +246,7 @@ def fused_stack_transpose_quant(expert_weight_list, use_ue8m0=False):
         # Blackwell (SM100) GPUs require pow2_scale quantization.
         # Guard with is_cuda() so non-CUDA environments do not call into
         # paddle.device.cuda.* and cause a crash.
-        use_pow2_scale = current_platform.is_cuda() and get_sm_version() == 100
+        use_pow2_scale = current_platform.is_cuda() and get_sm_version() >= 100
 
         w, scale = paddlefleet_ops.fuse_stack_transpose_fp8_quant(
             expert_weight_list,

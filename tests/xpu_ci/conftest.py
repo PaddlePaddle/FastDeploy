@@ -291,7 +291,6 @@ def setup_ep_env():
     """
     env_vars = {
         "BKCL_ENABLE_XDR": "1",
-        "BKCL_RDMA_NICS": "eth1,eth1,eth2,eth2",
         "BKCL_TRACE_TOPO": "1",
         "BKCL_PCIE_RING": "1",
         "XSHMEM_MODE": "1",

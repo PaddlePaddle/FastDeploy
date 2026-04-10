@@ -18,7 +18,20 @@ from typing import Any, Optional
 
 import paddle
 
-paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+from fastdeploy.model_executor.layers.quantization.quant_base import is_nvfp4_supported
+
+# Only import flashinfer on supported GPUs (B卡)
+if is_nvfp4_supported():
+    from flashinfer import (
+        scaled_fp4_grouped_quantize,
+        silu_and_mul_scaled_nvfp4_experts_quantize,
+    )
+    from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
+else:
+    # Not B卡, skip flashinfer imports
+    scaled_fp4_grouped_quantize = None
+    silu_and_mul_scaled_nvfp4_experts_quantize = None
+    grouped_gemm_nt_masked = None
 
 
 def _dtype_str(dtype) -> str:
@@ -87,11 +100,6 @@ def flashinfer_cutedsl_moe_masked(
     Returns:
         paddle.Tensor: [num_experts, m, k] bf16
     """
-    from flashinfer import (
-        scaled_fp4_grouped_quantize,
-        silu_and_mul_scaled_nvfp4_experts_quantize,
-    )
-    from flashinfer.cute_dsl.blockscaled_gemm import grouped_gemm_nt_masked
 
     # === Dtype assertions ===
     # Use string-based dtype check to be compatible with both paddle and torch proxy tensors

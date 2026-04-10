@@ -624,6 +624,8 @@ class EngineArgs:
             raise NotImplementedError(
                 f"not support model_impl: '{self.model_impl}'. " f"Must be one of: {', '.join(valid_model_impls)}"
             )
+        if envs.FD_ENABLE_RL == 1:
+            self.moe_gate_fp32 = True
 
         self.post_init_all_ports()
 

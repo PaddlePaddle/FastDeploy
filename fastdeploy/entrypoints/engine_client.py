@@ -84,7 +84,7 @@ class EngineClient:
     def __init__(self, pid: int | str, port: int | str, fd_config: FDConfig, workers: int = 1, max_logprobs: int = 20):
         self.fd_config = fd_config
         self.tensor_parallel_size = self.fd_config.parallel_config.tensor_parallel_size
-        self.enable_mm = self.fd_config.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.max_logprobs = max_logprobs
         input_processor = InputPreprocessor(
             self.fd_config.model_config,
@@ -93,6 +93,7 @@ class EngineClient:
             self.fd_config.mm_processor_kwargs,
             self.fd_config.tool_parser,
             self.enable_mm and self.fd_config.cache_config.max_processor_cache > 0,
+            enable_mm_runtime=self.enable_mm,
         )
         self.enable_logprob = self.fd_config.model_config.enable_logprob
         self.data_processor = input_processor.create_processor()
@@ -358,6 +359,7 @@ class EngineClient:
 
             task["max_tokens"] = min(self.max_model_len - input_ids_len, task.get("max_tokens"))
             min_tokens = task.get("min_tokens", 1)
+
             if "messages" in task:
                 task["messages"] = None
             api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")

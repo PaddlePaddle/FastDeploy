@@ -246,10 +246,6 @@ class Ernie45VLThinkingToolParser(ToolParser):
         if self.valid is not None and not self.valid:
             return DeltaMessage(content=delta_text)
 
-        # Skip empty chunks
-        if len(delta_text.strip()) == 0:
-            return None
-
         try:
             delta = None
             # Use buffer to accumulate delta_text content
