@@ -194,7 +194,6 @@ Versions of relevant libraries
 [pip3] onnx==1.18.0
 [pip3] onnxoptimizer==0.3.13
 [pip3] paddle2onnx==2.0.1
-[pip3] nvidia-ml-py==12.0.0
 [pip3] pyzmq==26.4.0
 [pip3] torch==2.5.1+cu118
 [pip3] torchaudio==2.5.1+cu118
@@ -232,7 +231,6 @@ Versions of relevant libraries
 [conda] nvidia-nvjitlink-cu12     12.6.85                  pypi_0    pypi
 [conda] nvidia-nvtx-cu11          11.8.86                  pypi_0    pypi
 [conda] nvidia-nvtx-cu12          12.6.77                  pypi_0    pypi
-[conda] nvidia-ml-py                    12.0.0                   pypi_0    pypi
 [conda] pyzmq                     26.4.0                   pypi_0    pypi
 [conda] torch                     2.5.1+cu118              pypi_0    pypi
 [conda] torchaudio                2.5.1+cu118              pypi_0    pypi
