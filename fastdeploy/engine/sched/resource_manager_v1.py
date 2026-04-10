@@ -32,7 +32,6 @@ from fastdeploy.cache_manager.multimodal_cache_manager import (
     EncoderCacheManager,
     ProcessorCacheManager,
 )
-from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.request import (
     ImagePosition,
     Request,
@@ -759,8 +758,9 @@ class ResourceManagerV1(ResourceManager):
 
         def get_enough_request(request, scheduled_reqs):
             return (
-                ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
-                and self._is_mm_request(request)
+                # ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
+                # and
+                self._is_mm_request(request)
                 and self.exist_mm_prefill(scheduled_reqs)
             )
 
@@ -898,7 +898,8 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         req_index += 1
                         continue
-                    if get_enough_request(request, scheduled_reqs):
+                    # if get_enough_request(request, scheduled_reqs):
+                    if False:
                         req_index += 1
                         continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
@@ -951,7 +952,8 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if get_enough_request(request, scheduled_reqs):
+                    # if get_enough_request(request, scheduled_reqs):
+                    if False:
                         break
                     if request.status == RequestStatus.WAITING:
                         result = self.waiting_async_process(request)
