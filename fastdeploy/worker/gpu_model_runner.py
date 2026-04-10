@@ -846,6 +846,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                     request.block_tables, dtype="int32"
                 )
+                # Write GDN slot ID for this request
+                if hasattr(request, "gdn_slot_id") and request.gdn_slot_id is not None:
+                    self.share_inputs["gdn_slot_ids"][idx : idx + 1] = request.gdn_slot_id
                 self.share_inputs["stop_flags"][idx : idx + 1] = False
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
                 self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length
@@ -910,6 +913,8 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(f"Handle abort request {request} at idx {idx}")
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
+                # Reset GDN slot ID to PAD
+                self.share_inputs["gdn_slot_ids"][idx : idx + 1] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
                 self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
@@ -1359,6 +1364,38 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta.is_zero_size = self.forward_meta.ids_remove_padding.shape[0] == 0
         self.forward_meta.exist_prefill = self.exist_prefill()
 
+        # Populate GDN state pool fields if available
+        if getattr(self, "gdn_state_pool", None) is not None:
+            self.forward_meta.gdn_state_pool = self.gdn_state_pool
+
+            # Build active-sequence indices: FD does NOT compact the batch when
+            # a sequence finishes — finished sequences stay in-place with
+            # seq_lens_this_time == 0.  We must filter (not truncate) to get
+            # only the active entries for GDN kernels.
+            raw_slot_ids = self.share_inputs.get("gdn_slot_ids")
+            seq_lens_flat = self.share_inputs["seq_lens_this_time"].flatten()
+            active_idx = paddle.nonzero(seq_lens_flat > 0).flatten()
+            gdn_active_bs = active_idx.shape[0]
+
+            if raw_slot_ids is not None and gdn_active_bs > 0:
+                self.forward_meta.gdn_slot_ids = raw_slot_ids.index_select(active_idx)
+
+            if gdn_active_bs > 0 and self.forward_meta.seq_lens_decoder is not None:
+                self.forward_meta.gdn_has_initial_state = (
+                    self.forward_meta.seq_lens_decoder.flatten().index_select(active_idx) > 0
+                )
+
+            if gdn_active_bs > 0 and self.forward_meta.seq_lens_this_time is not None:
+                self.forward_meta.gdn_seq_lens_cpu = (
+                    self.forward_meta.seq_lens_this_time.flatten().index_select(active_idx).numpy().tolist()
+                )
+
+            # GDN attention backend — only set when there are active sequences.
+            if gdn_active_bs > 0 and getattr(self, "gdn_attn_backend", None) is not None:
+                self.forward_meta.gdn_attn_backend = self.gdn_attn_backend
+            else:
+                self.forward_meta.gdn_attn_backend = None
+
     def initialize_kv_cache(self, profile: bool = False) -> None:
         """
         Initialize kv cache
@@ -1508,6 +1545,72 @@ class GPUModelRunner(ModelRunnerBase):
 
         paddle.device.cuda.empty_cache()
         logger.info("kv cache is initialized!")
+
+        # Initialize GDN state pool if the model has GDN layers
+        self._initialize_gdn_state_pool()
+
+    def _initialize_gdn_state_pool(self) -> None:
+        """Initialize GDN (Gated Delta Network) state pool if the model uses GDN layers."""
+        config = self.model_config
+
+        # Detect GDN layers by checking for layer_types config
+        layer_types = getattr(config, "layer_types", None)
+        if layer_types is None:
+            # Generate from full_attention_interval if not explicit
+            interval = getattr(config, "full_attention_interval", None)
+            if interval is None:
+                self.gdn_state_pool = None
+                return
+            num_layers = config.num_hidden_layers
+            layer_types = [
+                "linear_attention" if (i + 1) % interval != 0 else "full_attention" for i in range(num_layers)
+            ]
+
+        num_gdn_layers = sum(1 for lt in layer_types if lt == "linear_attention")
+        if num_gdn_layers == 0:
+            self.gdn_state_pool = None
+            return
+
+        # GDN-specific dimensions
+        head_k_dim = getattr(config, "linear_key_head_dim", 128)
+        head_v_dim = getattr(config, "linear_value_head_dim", 128)
+        num_k_heads = getattr(config, "linear_num_key_heads", 16)
+        num_v_heads = getattr(config, "linear_num_value_heads", 16)
+        conv_kernel_size = getattr(config, "linear_conv_kernel_dim", 4)
+
+        tp_size = self.parallel_config.tensor_parallel_size
+
+        key_dim = head_k_dim * num_k_heads
+        value_dim = head_v_dim * num_v_heads
+        conv_dim_local = (key_dim * 2 + value_dim) // tp_size
+        num_v_heads_local = num_v_heads // tp_size
+
+        max_num_seqs = self.scheduler_config.max_num_seqs
+
+        from fastdeploy.cache_manager.gdn_state_pool import GDNStatePool
+
+        self.gdn_state_pool = GDNStatePool(
+            max_num_seqs=max_num_seqs,
+            num_gdn_layers=num_gdn_layers,
+            conv_dim=conv_dim_local,
+            conv_kernel_size=conv_kernel_size,
+            num_v_heads=num_v_heads_local,
+            head_k_dim=head_k_dim,
+            head_v_dim=head_v_dim,
+        )
+        logger.info(
+            f"GDN state pool initialized: {num_gdn_layers} GDN layers, "
+            f"max_num_seqs={max_num_seqs}, conv_dim_local={conv_dim_local}, "
+            f"num_v_heads_local={num_v_heads_local}"
+        )
+
+        # Initialize GDN attention backend (kernel dispatcher + unified forward)
+        from fastdeploy.model_executor.layers.attention.gdn_backend import (
+            GDNAttentionBackend,
+        )
+
+        self.gdn_attn_backend = GDNAttentionBackend()
+        logger.info("GDN attention backend initialized (GDNKernelDispatcher + GDNAttentionBackend)")
 
     def _initialize_attn_backend(self) -> None:
         """

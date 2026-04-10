@@ -188,6 +188,9 @@ class Request:
         self.task_type = RequestType.PREFILL
         self.has_been_preempted_before = False
         self.idx = None
+        # GDN (Gated Delta Network) SSM state slot ID in GDNStatePool.
+        # Allocated by ResourceManagerV1 during schedule(), freed in _free_blocks().
+        self.gdn_slot_id = None
         self.need_prefill_tokens = self.prompt_token_ids_len
         self.audio_output_token_ids = []
         # extend block tables

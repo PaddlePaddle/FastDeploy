@@ -20,6 +20,7 @@ from .block_multihead_attn_backend import BlockAttentionBackend
 from .dsa_attention_backend import DSAAttentionBackend
 from .flash_attn_backend import FlashAttentionBackend
 from .flash_mask_attn_backend import FlashMaskAttentionBackend
+from .gdn_attention import GDNAttention
 from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import PlasAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
@@ -34,6 +35,7 @@ __all__ = [
     "FlashAttentionBackend",
     "BlockAttentionBackend",
     "Attention",
+    "GDNAttention",
     "PlasAttentionBackend",
     "FlashMaskAttentionBackend",
 ]
