@@ -20,7 +20,6 @@ Consolidates the four separate VL processor wrappers and four separate
 DataProcessor classes into a single class with pluggable Encoding strategies.
 """
 
-import importlib
 import pickle
 from collections.abc import Mapping
 from typing import Any, Dict, Optional
@@ -30,6 +29,8 @@ import zmq
 
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.base_processor import BaseTextProcessor
+from fastdeploy.input.encodings import EncodingRegistry
+from fastdeploy.input.image_processors import ImageProcessorRegistry
 from fastdeploy.input.mm_model_config import MODEL_CONFIGS
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
 from fastdeploy.utils import data_processor_logger
@@ -78,9 +79,8 @@ class MultiModalProcessor(BaseTextProcessor):
         self._init_image_processor()
         self._init_role_prefixes()
 
-        # Composition: create encoding strategy (config-driven, like image_processor)
-        enc_module = importlib.import_module(self.cfg.encoding_module)
-        enc_cls = getattr(enc_module, self.cfg.encoding_class)
+        # Composition: create encoding strategy via registry
+        enc_cls = EncodingRegistry.get(self.model_type)
         self.enc = enc_cls(self, processor_kwargs)
 
         self.limit_mm_per_prompt = self._parse_limits(limit_mm_per_prompt)
@@ -106,11 +106,7 @@ class MultiModalProcessor(BaseTextProcessor):
 
     def _init_image_processor(self):
         """Create the appropriate image processor."""
-        cfg = self.cfg
-        import importlib
-
-        module = importlib.import_module(cfg.image_processor_module)
-        cls = getattr(module, cfg.image_processor_class)
+        cls = ImageProcessorRegistry.get(self.model_type)
         self.image_processor = cls.from_pretrained(self.model_name_or_path)
 
     def _init_role_prefixes(self):

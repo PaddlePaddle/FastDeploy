@@ -33,6 +33,8 @@ from paddleformers.transformers.image_utils import (
 from fastdeploy.input.image_processors.common import (
     smart_resize_paddleocr as smart_resize,
 )
+from fastdeploy.input.image_processors.registry import ImageProcessorRegistry
+from fastdeploy.input.mm_model_config import PADDLEOCR_VL
 
 _OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
 _OPENAI_CLIP_STD = [0.26862954, 0.26130258, 0.27577711]
@@ -66,6 +68,7 @@ def adjust_size(size, patch_size):
     return num_patches * patch_size
 
 
+@ImageProcessorRegistry.register(PADDLEOCR_VL)
 class ImageProcessor(BaseImageProcessor):
     model_input_names = [
         "pixel_values",

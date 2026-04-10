@@ -21,12 +21,15 @@ from PIL import Image
 
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.input.encodings.base_encoding import BaseEncoding
+from fastdeploy.input.encodings.registry import EncodingRegistry
+from fastdeploy.input.mm_model_config import QWEN3_VL, QWEN_VL
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.input.utils.video import read_video_decord
 from fastdeploy.input.utils.video import sample_frames_qwen as _sample_qwen
 from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
+@EncodingRegistry.register(QWEN_VL, QWEN3_VL)
 class QwenEncoding(BaseEncoding):
     """Encoding strategy for qwen_vl and qwen3_vl."""
 

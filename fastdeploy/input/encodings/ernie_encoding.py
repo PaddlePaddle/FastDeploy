@@ -23,10 +23,13 @@ from paddleformers.transformers.image_utils import ChannelDimension
 
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.input.encodings.base_encoding import BaseEncoding
+from fastdeploy.input.encodings.registry import EncodingRegistry
+from fastdeploy.input.mm_model_config import ERNIE4_5_VL
 from fastdeploy.input.utils import IDS_TYPE_FLAG, MAX_IMAGE_DIMENSION
 from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
+@EncodingRegistry.register(ERNIE4_5_VL)
 class ErnieEncoding(BaseEncoding):
     """Encoding strategy for Ernie4.5-VL models."""
 

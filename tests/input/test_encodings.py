@@ -71,10 +71,9 @@ def _make_encoding(model_type, processor_kwargs=None):
     mock_processor._extract_mm_items = MagicMock()
     mock_processor.update_processor_cache = MagicMock()
 
-    import importlib
+    from fastdeploy.input.encodings import EncodingRegistry
 
-    mod = importlib.import_module(cfg.encoding_module)
-    cls = getattr(mod, cfg.encoding_class)
+    cls = EncodingRegistry.get(model_type)
     enc = cls(mock_processor, processor_kwargs or {})
     return enc, mock_processor
 
