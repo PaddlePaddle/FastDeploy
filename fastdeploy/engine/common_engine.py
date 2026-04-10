@@ -1632,10 +1632,19 @@ class EngineService:
           reset progress state if any, then continue monitoring
         """
         target_set = set(target_req_ids)
+        target_set = target_set & (set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys()))
         prev_remaining_count = len(target_set)
         last_progress_time = time.time()
         remaining = target_set & self.resource_manager.get_reqs_in_aborting()
         while remaining:
+            alive_reqs = set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys())
+            finished_reqs = target_set - alive_reqs
+            if finished_reqs:
+                self.llm_logger.info(f"abort targets already finished, skip: {finished_reqs}")
+                for req_id in finished_reqs:
+                    self.resource_manager.waiting_abort_req_id_set.discard(req_id)
+                    self.resource_manager.to_be_aborted_req_id_set.discard(req_id)
+                target_set -= finished_reqs
             remaining = target_set & self.resource_manager.get_reqs_in_aborting()
             if not remaining:
                 self.llm_logger.info(f"all {len(target_set)} abort reqs cleaned")
