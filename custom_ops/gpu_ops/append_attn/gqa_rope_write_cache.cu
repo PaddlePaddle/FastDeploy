@@ -1413,7 +1413,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
         // Qwen3.5 partial neox rotary style (head_dim=256,
         // partial_rotary_factor=0.25): rotary_embs.dims()[4] == rotary_dim ==
         // head_dim * partial_rotary_factor == 64
-        rotary_dim = rotary_embs.dims()[4];
+        rotary_dim = rotary_embs.dims()[4] * 2;
         PADDLE_ENFORCE_LE(rotary_dim,
                           head_dim,
                           "Qwen3.5: rotary_dim (%d) must be <= head_dim (%d)",

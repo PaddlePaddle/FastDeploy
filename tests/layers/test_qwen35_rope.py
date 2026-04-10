@@ -22,7 +22,10 @@ import unittest
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.layers.rotary_embedding import QwenRotaryEmbedding
+from fastdeploy.model_executor.layers.rotary_embedding import (
+    Qwen35RotaryEmbedding,
+    QwenRotaryEmbedding,
+)
 
 paddle.set_default_dtype("bfloat16")
 seed = 42
@@ -69,7 +72,7 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
 
     def setUp(self):
         paddle.set_device("gpu")
-        self.QwenRotaryEmbedding = QwenRotaryEmbedding
+        self.QwenRotaryEmbedding = Qwen35RotaryEmbedding
 
     # ------------------------------------------------------------------
     # partial_rotary_factor < 1 (Qwen3.5 text)
@@ -86,10 +89,11 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         self.assertEqual(emb.rotary_dim, 128)
 
     def test_output_shape_partial(self):
-        """Output shape is (2, bsz, seq_len, 1, rotary_dim) for partial rotary."""
+        """Output shape is (2, bsz, seq_len, 1, half_rotary_dim) for partial rotary."""
         rotary_dim = 256
         partial_rotary_factor = 0.25
-        expected_rot_dim = int(rotary_dim * partial_rotary_factor)  # 64
+        # rotary_emb now stores only half_rotary_dim values per position
+        expected_rot_dim = int(rotary_dim * partial_rotary_factor) // 2  # 32
         bsz, seq_len = 2, 16
         position_ids = paddle.arange(seq_len, dtype="int64").unsqueeze(0).expand([bsz, -1])
         emb = self.QwenRotaryEmbedding(
@@ -99,13 +103,13 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         self.assertEqual(list(rot_emb.shape), [2, bsz, seq_len, 1, expected_rot_dim])
 
     def test_output_shape_full(self):
-        """Output shape is (2, bsz, seq_len, 1, rotary_dim) for full rotary."""
+        """Output shape is (2, bsz, seq_len, 1, rotary_dim // 2) for full rotary."""
         rotary_dim = 128
         bsz, seq_len = 1, 32
         position_ids = paddle.arange(seq_len, dtype="int64").unsqueeze(0).expand([bsz, -1])
         emb = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=10000.0, partial_rotary_factor=1.0)
         rot_emb = emb(position_ids)
-        self.assertEqual(list(rot_emb.shape), [2, bsz, seq_len, 1, rotary_dim])
+        self.assertEqual(list(rot_emb.shape), [2, bsz, seq_len, 1, rotary_dim // 2])
 
     def test_cos_sin_values_partial(self):
         """cos/sin values match numpy reference for partial rotary case."""
@@ -117,15 +121,15 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
 
         position_ids = paddle.arange(seq_len, dtype="int64").unsqueeze(0)  # [1, S]
         emb = self.QwenRotaryEmbedding(rotary_dim=rotary_dim, base=base, partial_rotary_factor=partial_rotary_factor)
-        rot_emb = emb(position_ids)  # [2, 1, S, 1, 64]
+        rot_emb = emb(position_ids)  # [2, 1, S, 1, half_rot_dim=32]
 
-        # Reference via numpy
+        # Reference via numpy: only half_rot_dim entries per position are stored
         inv_freq = base ** (-np.arange(0, actual_rot_dim, 2, dtype="float32") / actual_rot_dim)
         positions = np.arange(seq_len, dtype="float32")
-        freqs = np.outer(positions, inv_freq)  # [S, half]
-        emb_np = np.concatenate([freqs, freqs], axis=-1)  # [S, rot_dim]
-        cos_ref = np.cos(emb_np)[np.newaxis, :, np.newaxis, :]  # [1, S, 1, rot_dim]
-        sin_ref = np.sin(emb_np)[np.newaxis, :, np.newaxis, :]
+        freqs = np.outer(positions, inv_freq)  # [S, half_rot_dim=32]
+        # rotary_emb now stores only freqs (not the duplicated [freqs, freqs])
+        cos_ref = np.cos(freqs)[np.newaxis, :, np.newaxis, :]  # [1, S, 1, 32]
+        sin_ref = np.sin(freqs)[np.newaxis, :, np.newaxis, :]
 
         np.testing.assert_allclose(
             rot_emb[0].numpy(), cos_ref, rtol=1e-5, atol=1e-5, err_msg="cos values mismatch for partial rotary"
@@ -139,12 +143,13 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_mrope_section_output_shape(self):
-        """mrope_section path outputs (2, bsz, seq_len, 1, actual_rotary_dim)."""
+        """mrope_section path outputs (2, bsz, seq_len, 1, half_rotary_dim)."""
         rotary_dim = 256
         partial_rotary_factor = 0.25
         mrope_section = [10, 11, 11]  # sum == rotary_dim // 2 == 32
         bsz, seq_len = 2, 10
-        actual_rotary_dim = int(rotary_dim * partial_rotary_factor)  # 64
+        # rotary_emb now stores only half_rotary_dim values per position
+        actual_rotary_dim = int(rotary_dim * partial_rotary_factor) // 2  # 32
 
         # position_ids shape: (3, bsz, seq_len) — one per modal dimension
         position_ids = paddle.arange(seq_len, dtype="int64").unsqueeze(0).unsqueeze(0)
@@ -165,7 +170,8 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
         partial_rotary_factor = 0.25
         mrope_section = [10, 11, 11]
         bsz, seq_len = 1, 6
-        actual_rotary_dim = int(rotary_dim * partial_rotary_factor)  # 64
+        # rotary_emb now stores only half_rotary_dim values per position
+        actual_rotary_dim = int(rotary_dim * partial_rotary_factor) // 2  # 32
 
         position_ids_2d = paddle.arange(seq_len, dtype="int64").unsqueeze(0).expand([bsz, -1])
         emb = self.QwenRotaryEmbedding(
@@ -220,16 +226,13 @@ class TestQwenRotaryEmbedding(unittest.TestCase):
 # ---------------------------------------------------------------------------
 def _build_rotary_emb(max_seq_len, head_dim=256, base=100000.0):
     if head_dim == 256:
-        partial_rotary_factor = 0.25
-        mrope_section = [10, 11, 11]
+        # Qwen3.5: partial rotary, stores only half_rotary_dim = rotary_dim // 2 per position
+        rot_emb_layer = Qwen35RotaryEmbedding(rotary_dim=head_dim, base=base, partial_rotary_factor=0.25)
     else:
-        partial_rotary_factor = 1.0
-        mrope_section = None
-    rot_emb = QwenRotaryEmbedding(
-        rotary_dim=head_dim, base=base, partial_rotary_factor=partial_rotary_factor, mrope_section=mrope_section
-    )
+        # Qwen3: full rotary, stores the full rotary_dim per position (both halves identical)
+        rot_emb_layer = QwenRotaryEmbedding(rotary_dim=head_dim, base=base, partial_rotary_factor=1.0)
     pos_ids = paddle.arange(max_seq_len, dtype="int64").unsqueeze(0)
-    return rot_emb(pos_ids)
+    return rot_emb_layer(pos_ids)
 
 
 def _build_gqa_rope_write_cache_inputs(
@@ -242,12 +245,15 @@ def _build_gqa_rope_write_cache_inputs(
     qkv_dim = (q_num_head + 2 * kv_num_head) * head_dim
     qkv = paddle.randn([token_num, qkv_dim], dtype=dtype) * 0.02
 
-    # Rotary embedding: shape (2, 1, max_seq_len, 1, rotary_dim)
-    # (matches what QwenRotaryEmbedding produces for partial rotary)
+    # Rotary embedding: shape (2, 1, max_seq_len, 1, half_rotary_dim)
+    # QwenRotaryEmbedding now stores only half_rotary_dim = rotary_dim // 2 values
+    # per position (cos and sin each), so rotary_dim must be recovered as shape[-1] * 2.
     rot_emb = _build_rotary_emb(max_seq_len, head_dim, base=500000.0)
-    # gqa_rope_write_cache expects shape (2, 1, max_seq_len, 1, rotary_dim)
-    rotary_embs = rot_emb  # already [2, 1, S, 1, rotary_dim]
-    rotary_dim = rot_emb.shape[-1]
+    # gqa_rope_write_cache expects shape (2, 1, max_seq_len, 1, half_rotary_dim)
+    rotary_embs = rot_emb  # already [2, 1, S, 1, half_rotary_dim]
+    # Qwen3.5 (head_dim=256): emb stores half_rotary_dim per position → recover full rotary_dim
+    # Qwen3   (head_dim=128): emb stores full rotary_dim directly (both halves identical)
+    rotary_dim = rot_emb.shape[-1] * 2 if head_dim == 256 else rot_emb.shape[-1]
 
     # Block tables: each batch gets one block
     num_blocks = bsz
@@ -410,9 +416,14 @@ class TestGqaRopeWriteCacheQwen35(unittest.TestCase):
         k_np = k.cast("float32").numpy()  # [token_num, q_num_head, head_dim]
 
         # Build reference cos/sin for positions 0..seq_len-1
-        rot_emb_np = inputs["rotary_embs"].numpy()  # [2, 1, max_seq_len, 1, rotary_dim]
-        cos_np = rot_emb_np[0, 0, :seq_len, :, :]  # [seq_len, rotary_dim]
-        sin_np = rot_emb_np[1, 0, :seq_len, :, :]
+        # rotary_embs now has shape [2, 1, max_seq_len, 1, half_rotary_dim];
+        # reconstruct full [seq_len, 1, rotary_dim] by tiling the two halves,
+        # matching the kernel's behaviour where both halves share the same emb.
+        rot_emb_np = inputs["rotary_embs"].numpy()  # [2, 1, max_seq_len, 1, half_rotary_dim]
+        cos_half = rot_emb_np[0, 0, :seq_len, :, :]  # [seq_len, 1, half_rotary_dim]
+        sin_half = rot_emb_np[1, 0, :seq_len, :, :]
+        cos_np = np.concatenate([cos_half, cos_half], axis=-1)  # [seq_len, 1, rotary_dim]
+        sin_np = np.concatenate([sin_half, sin_half], axis=-1)
 
         q_ref = q_orig.copy()
         k_ref = k_orig.copy()

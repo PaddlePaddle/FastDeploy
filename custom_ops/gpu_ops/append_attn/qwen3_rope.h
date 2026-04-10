@@ -149,9 +149,11 @@ __global__ void GQAVariableLengthRotarySplitKernel_Qwen3(
 // covers all 256 elements per head (256/32=8 elements per thread).
 //
 // rotary_emb layout (from QwenRotaryEmbedding):
-//   shape = (2, 1, max_seq_len, 1, rotary_dim)
-//   cos_emb = rotary_emb[0],  sin_emb starts at offset max_seq_len*rotary_dim
-//   emb_idx = ori_seq_id * rotary_dim + h_bias  (h_bias < rotary_dim)
+//   shape = (2, bsz, max_seq_len, 1, half_rotary_dim)  where
+//   half_rotary_dim = rotary_dim / 2
+//   cos_emb = rotary_emb[0], sin_emb starts at offset
+//   max_model_len * half_rotary_dim
+//   emb_idx = ori_seq_id * half_rotary_dim + h_bias  (h_bias < half_rotary_dim)
 template <typename T, int VecSize = 1, bool EnforceFmulRN = false>
 __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
     const T *qkv,
@@ -187,6 +189,7 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
   int64_t all_warp_num = gridDim.x * blockDim.y;
 
   // midpoint of the rotary range; pairs are (h, h ± half_rotary_dim)
+  // rotary_emb now stores only half_rotary_dim values per position
   const int half_rotary_dim = rotary_dim / 2;
 
   // total elements per token across all Q+K+V heads
@@ -256,7 +259,9 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
       if (h_bias < half_rotary_dim) {
         Load<T, VecSize>(&qkv[base_idx + half_rotary_dim], &src_vec_pair);
 
-        const int64_t emb_idx = ori_seq_id * rotary_dim + h_bias;
+        // rotary_emb now has shape [..., half_rotary_dim], so stride per
+        // position is half_rotary_dim and h_bias directly indexes within it
+        const int64_t emb_idx = ori_seq_id * half_rotary_dim + h_bias;
         Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
         Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
 
@@ -273,8 +278,10 @@ __global__ void GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5(
       } else if (h_bias < rotary_dim) {
         Load<T, VecSize>(&qkv[base_idx - half_rotary_dim], &src_vec_pair);
 
+        // right half maps to the same emb entry as the corresponding left half:
+        // h_bias - half_rotary_dim ∈ [0, half_rotary_dim)
         const int64_t emb_idx =
-            ori_seq_id * rotary_dim + h_bias - half_rotary_dim;
+            ori_seq_id * half_rotary_dim + h_bias - half_rotary_dim;
         Load<float, VecSize>(&cos_emb[emb_idx], &cos_emb_vec);
         Load<float, VecSize>(&sin_emb[emb_idx], &sin_emb_vec);
 
@@ -306,8 +313,8 @@ void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
     T *k,
     T *v,
     const T *qkv_input,
-    const float *rotary_emb,  // [cos: max_model_len*rotary_dim][sin:
-                              // max_model_len*rotary_dim]
+    const float *rotary_emb,  // [cos: max_model_len*half_rotary_dim][sin:
+                              // max_model_len*half_rotary_dim]
     const int *batch_id_per_token,
     const int *seq_lens_encoder,
     const int *seq_lens_decoder,
@@ -341,10 +348,11 @@ void gqa_neox_partial_rotary_qk_split_variable_qwen3_5(
   // 2D block: x=warp lanes (kWarpSize), y=warps per block.
   dim3 block_size(kWarpSize, blocksize / kWarpSize);
 
-  // sin_emb follows cos_emb; split at max_model_len*rotary_dim (not head_dim)
-  // because partial rotary only stores rotary_dim entries per position.
+  // sin_emb follows cos_emb; rotary_emb now stores only half_rotary_dim values
+  // per position, so the sin block starts at max_model_len * half_rotary_dim.
+  const int half_rotary_dim = rotary_dim / 2;
   const float *cos_emb = rotary_emb;
-  const float *sin_emb = rotary_emb + max_model_len * rotary_dim;
+  const float *sin_emb = rotary_emb + max_model_len * half_rotary_dim;
 
   launchWithPdlWhenEnabled(
       GQAVariableLengthNeoxPartialRotarySplitKernel_Qwen3_5<T,
