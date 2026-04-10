@@ -64,7 +64,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-expert-parallel \
     --enable-prefix-caching \
     --data-parallel-size 1 \
-    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
 ```
 </details>
 
@@ -108,7 +108,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-expert-parallel \
     --enable-prefix-caching \
     --data-parallel-size 1 \
-    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
 ```
 </details>
 
@@ -152,7 +152,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-expert-parallel \
     --enable-prefix-caching \
     --data-parallel-size 1 \
-    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
 ```
 </details>
 
@@ -196,7 +196,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-expert-parallel \
     --enable-prefix-caching \
     --data-parallel-size 1 \
-    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "${mtp_model_path}"}'
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
 ```
 </details>
 
