@@ -245,8 +245,11 @@ def _compute_sampling_mask(
         topk_sorted_cpu = sorted_indices[:, :max_k_topk].cpu().numpy()  # [B, max_k_topk]
         topp_window_cpu = topp_mask[:, :max_k_topk].cpu().numpy()  # [B, max_k_topk]
         # top-k indices: contiguous block in sorted order (0 .. effective_k-1).
-        sparse_indices = [topk_sorted_cpu[i, : effective_k_cpu[i]] for i in range(real_bsz)]
-        topp_in_topk_mask = [topp_window_cpu[i, : effective_k_cpu[i]] for i in range(real_bsz)]
+        sparse_indices = [None] * real_bsz
+        topp_in_topk_mask = [None] * real_bsz
+        for i in range(real_bsz):
+            sparse_indices[i] = topk_sorted_cpu[i, : effective_k_cpu[i]]
+            topp_in_topk_mask[i] = topp_window_cpu[i, : effective_k_cpu[i]]
     else:
         k_per_row = topp_mask.astype("int32").sum(axis=-1)  # [B]
         max_k = int(k_per_row.max().item())

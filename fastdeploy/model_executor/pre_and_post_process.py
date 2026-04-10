@@ -201,6 +201,7 @@ def _build_stream_transfer_data(
     logprobs: Optional[LogprobsTensors] = None,
     prompt_logprobs_list: Optional[LogprobsTensors] = None,
     sampling_mask: Optional[List[np.ndarray]] = None,
+    topp_in_topk_mask: Optional[List[np.ndarray]] = None,
 ):
     """Split output_tokens and output"""
 
@@ -211,6 +212,7 @@ def _build_stream_transfer_data(
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
         sampling_mask_list = sampling_mask
+        topp_in_topk_mask_list = topp_in_topk_mask
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
             stream_transfer_data = StreamTransferData(
@@ -222,6 +224,8 @@ def _build_stream_transfer_data(
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
             if sampling_mask_list is not None:
                 stream_transfer_data.sampling_mask = sampling_mask_list[bid]
+            if topp_in_topk_mask_list is not None:
+                stream_transfer_data.topp_in_topk_mask = topp_in_topk_mask_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
