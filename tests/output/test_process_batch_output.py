@@ -144,6 +144,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         processor.total_step_per_request = {}
         processor.accept_token_num_per_head_per_request = {}
         processor.accept_token_num_per_head = [0] * MAX_DRAFT_TOKENS
+        processor.use_sampling_mask = False
 
         # processor._recycle_resources = Mock()
 

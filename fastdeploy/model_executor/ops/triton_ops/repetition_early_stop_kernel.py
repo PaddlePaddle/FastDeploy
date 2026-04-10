@@ -17,7 +17,12 @@
 import triton
 import triton.language as tl
 
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
 
+
+@enable_compat_on_triton_kernel
 @triton.jit
 def repetition_early_stopper_kernel(
     trunc_ptr,  # float32[B, W]

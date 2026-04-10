@@ -14,7 +14,10 @@
 # limitations under the License.
 """
 
+import gc
+import glob
 import os
+import re
 import time
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Dict, List
@@ -111,20 +114,88 @@ class DynamicWeightManager:
         self._update_model_from_state(state_dict, "raw")
 
     def _update_ipc_snapshot(self):
-        """Update using IPC snapshot strategy for elastic recovery."""
-        model_path = os.path.join(
-            self.fd_config.model_config.model,
-            f"model_state.tp0{self.meta_src_id}.pdparams",
-        )
+        """Update using IPC snapshot strategy for elastic recovery.
 
-        try:
+        Loading priority:
+          1. Chunked part files  (model_state.tp{rank}.{id}.part{N}.pdparams)
+          2. Single full file    (model_state.tp{rank}.{id}.pdparams)
+          3. Legacy format       (model_state.tp0{id}.pdparams)
+          4. Shared fallback dir (/shared_ipc_meta/...)
+        """
+        model_dir = self.fd_config.model_config.model
+        base_name = f"model_state.tp{paddle.distributed.get_rank()}.{self.meta_src_id}"
+        legacy_base_name = f"model_state.tp0{self.meta_src_id}"
+
+        # --- Priority 1: load from chunked part files to avoid memory spike ---
+        part_pattern = os.path.join(model_dir, f"{base_name}.part*.pdparams")
+        all_part_files = glob.glob(part_pattern)
+
+        valid_part_files = []
+        invalid_part_files = []
+        part_regex = re.compile(r"\.part(\d+)\.")
+
+        for path in all_part_files:
+            match = part_regex.search(path)
+            if not match:
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            try:
+                part_idx = int(match.group(1))
+            except (TypeError, ValueError):
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            valid_part_files.append((part_idx, path))
+
+        if invalid_part_files:
+            logger.warning(
+                "Found snapshot part files with invalid naming pattern under %s: %s. "
+                "These files will be ignored when loading IPC snapshot parts.",
+                model_dir,
+                ", ".join(invalid_part_files),
+            )
+
+        part_files = [p for _, p in sorted(valid_part_files, key=lambda item: item[0])]
+
+        if part_files:
+            logger.info(f"Found {len(part_files)} snapshot part files for {base_name}")
+            for load_idx, part_path in enumerate(part_files):
+                match = re.search(r"\.part(\d+)\.", part_path)
+                # Use part index parsed from filename to keep logs and src_type consistent with file naming
+                part_index = int(match.group(1)) if match else load_idx
+                logger.info(f"Loading snapshot part {part_index+1}/{len(part_files)} from {part_path}")
+                ipc_state_dict = paddle.load(part_path, safetensors=True)
+                self._update_model_from_state(ipc_state_dict, f"snapshot-part{part_index}")
+                del ipc_state_dict
+                gc.collect()
+            logger.info(f"IPC snapshot update completed from {len(part_files)} part files under {model_dir}")
+            return
+
+        # --- Priority 2: single full pdparams file ---
+        model_path = os.path.join(model_dir, f"{base_name}.pdparams")
+        if os.path.exists(model_path):
             ipc_state_dict = paddle.load(model_path, safetensors=True)
-        except FileNotFoundError:
-            fallback_path = f"/shared_ipc_meta/model_state.tp0{self.meta_src_id}.pdparams"
-            ipc_state_dict = paddle.load(fallback_path)
+            self._update_model_from_state(ipc_state_dict, "snapshot")
+            logger.info(f"IPC snapshot update completed from {model_path}")
+            return
 
+        # --- Priority 3: legacy format (model_state.tp0{id}.pdparams) ---
+        legacy_path = os.path.join(model_dir, f"{legacy_base_name}.pdparams")
+        if os.path.exists(legacy_path):
+            ipc_state_dict = paddle.load(legacy_path, safetensors=True)
+            self._update_model_from_state(ipc_state_dict, "snapshot")
+            logger.info(f"IPC snapshot update completed from legacy format {legacy_path}")
+            return
+
+        # --- Priority 4: shared directory fallback ---
+        fallback_path = f"/shared_ipc_meta/{base_name}.pdparams"
+        if not os.path.exists(fallback_path):
+            raise FileNotFoundError(
+                f"No snapshot found for {base_name}: " f"checked {model_dir} (new/legacy) and {fallback_path}"
+            )
+        logger.info(f"No local snapshot in {model_dir}, fallback to {fallback_path}")
+        ipc_state_dict = paddle.load(fallback_path)
         self._update_model_from_state(ipc_state_dict, "snapshot")
-        logger.info(f"IPC snapshot update parameters completed from {model_path}")
+        logger.info(f"IPC snapshot update completed from {fallback_path}")
 
     def _update_ipc(self):
         """Update using standard IPC strategy (requires Training Worker)."""

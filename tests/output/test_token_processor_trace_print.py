@@ -23,6 +23,8 @@ from fastdeploy.output.token_processor import TokenProcessor
 class TestTokenProcessorMetrics:
     def setup_method(self):
         self.mock_cfg = MagicMock()
+        self.mock_cfg.parallel_config.local_data_parallel_id = 0
+        self.mock_cfg.parallel_config.engine_worker_queue_port = ["9700"]
         self.mock_cached_tokens = MagicMock()
         self.mock_engine_queue = MagicMock()
         self.mock_split_connector = MagicMock()

@@ -196,6 +196,7 @@ class ModelConfig:
         self.enable_logprob = False
         self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
+        self.enable_keep_sampling_mask = False
         self.redundant_experts_num = 0
         self.seed = 0
         self.quantization = None
@@ -1112,6 +1113,37 @@ class EarlyStopConfig:
             argument = self.enable_early_stop
 
 
+class DeployModality(str, Enum):
+    """Modality mode for the serving engine deployment.
+
+    Determines which input modalities the serving engine should handle:
+      - TEXT:  Text-only deployment. The engine only processes text inputs,
+               skipping multimodal preprocessing (e.g., vision encoder, audio
+               encoder). This reduces GPU memory usage and startup time when
+               multimodal capabilities are not needed.
+      - MIXED: Multimodal deployment (default). The engine handles mixed-modality
+               inputs including text, images, audio, and video. All modality-specific
+               encoders and preprocessing pipelines are initialized at startup.
+
+    Usage:
+      --deploy-modality text    # text-only, lower resource footprint
+      --deploy-modality mixed   # full multimodal support (default)
+    """
+
+    TEXT = "text"
+    MIXED = "mixed"
+
+    @classmethod
+    def from_str(cls, value: str) -> "DeployModality":
+        """Parse a string into a DeployModality enum, with validation."""
+        value = value.strip().lower()
+        try:
+            return cls(value)
+        except ValueError:
+            valid = ", ".join(f"'{m.value}'" for m in cls)
+            raise ValueError(f"Invalid deploy_modality '{value}'. Must be one of: {valid}")
+
+
 class LoadChoices(str, Enum):
     """LoadChoices"""
 
@@ -1378,9 +1410,11 @@ class CacheConfig:
                 self.prefill_kvcache_block_num = self.total_block_num
             else:
                 self.prefill_kvcache_block_num = int(self.total_block_num * self.kv_cache_ratio)
-            assert (
-                self.prefill_kvcache_block_num >= self.max_block_num_per_seq
-            ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
+            assert self.prefill_kvcache_block_num >= self.max_block_num_per_seq + self.enc_dec_block_num, (
+                f"prefill_kvcache_block_num: {self.prefill_kvcache_block_num} should be larger "
+                f"than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
+                "the max_model_len or increase num_gpu_blocks_override"
+            )
         else:
             length = num_total_tokens // number_of_tasks
             block_num = (length + self.block_size - 1 + self.dec_token_num) // self.block_size
@@ -1401,9 +1435,11 @@ class CacheConfig:
             f"Reset block num, the total_block_num:{self.total_block_num},"
             f" prefill_kvcache_block_num:{self.prefill_kvcache_block_num}"
         )
-        assert (
-            self.prefill_kvcache_block_num >= self.max_block_num_per_seq
-        ), f"current block number :{self.prefill_kvcache_block_num} should be greater than or equal to current model len needed minimum block number :{self.max_block_num_per_seq}"
+        assert self.prefill_kvcache_block_num >= self.max_block_num_per_seq + self.enc_dec_block_num, (
+            f"current device block num: {self.prefill_kvcache_block_num} "
+            f"should be larger than or equal to {self.max_block_num_per_seq + self.enc_dec_block_num}, please reduce "
+            "the max_model_len or replace the machine with larger GPU cards"
+        )
 
     def print(self):
         """
@@ -1432,6 +1468,9 @@ class RouterConfig:
 
         self.api_server_host = get_host_ip()
         self.api_server_port = args["port"]
+
+    def __str__(self):
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class CommitConfig:
@@ -1546,6 +1585,9 @@ class RoutingReplayConfig:
         """
         return json.dumps({key: value for key, value in self.__dict__.items()})
 
+    def __str__(self):
+        return self.to_json_string()
+
 
 class FDConfig:
     """
@@ -1581,6 +1623,7 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
+        deploy_modality: "DeployModality" = None,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1598,6 +1641,7 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
+        self.deploy_modality: DeployModality = deploy_modality if deploy_modality is not None else DeployModality.MIXED
 
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
@@ -1943,7 +1987,7 @@ class FDConfig:
                 num_tokens = self.scheduler_config.max_num_seqs
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
-            if mm_max_tokens_per_item is not None:
+            if mm_max_tokens_per_item is not None and self.deploy_modality != DeployModality.TEXT:
                 max_mm_tokens = max(
                     mm_max_tokens_per_item.get("image", 0),
                     mm_max_tokens_per_item.get("video", 0),

@@ -13,6 +13,8 @@ jobs:
   clone:
     name: FD-Clone-Linux
     uses: ./.github/workflows/_clone_linux.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   build:
     name: FD-Build-Linux
@@ -24,6 +26,8 @@ jobs:
       COMPILE_ARCH: "90"
       WITH_NIGHTLY_BUILD: "OFF"
       FD_VERSION: "0.0.0"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   resultshow:
     name: Use Build Output
@@ -67,6 +71,8 @@ jobs:
       PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   pre_ce_test:
     name: Extracted partial CE model tasks to run in CI.
@@ -77,6 +83,8 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   base_test:
     name: Run Base Tests
@@ -87,6 +95,8 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   stable_test:
     name: Run Stable Tests
@@ -97,3 +107,5 @@ jobs:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
       MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}

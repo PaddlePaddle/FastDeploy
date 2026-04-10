@@ -96,7 +96,7 @@ jobs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
     steps:
       - name: Clone FastDeploy
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event_name == 'pull_request'
                 && github.event.pull_request.base.ref
@@ -105,7 +105,7 @@ jobs:
           fetch-depth: 1000
 
       - name: Python Setup
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Code Info Show and Upload
@@ -114,8 +114,6 @@ jobs:
           AK: ${{ secrets.BOS_AK }}
           SK: ${{ secrets.BOS_SK }}
         run: |
-          git config --unset http.https://github.com/.extraheader
-          git submodule foreach --recursive sh -c "git config --local --unset-all 'http.https://github.com/.extraheader'"
           git submodule foreach --recursive sh -c "git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
           echo "Current HEAD Log:"
           git log --oneline -n 5
@@ -155,6 +153,8 @@ jobs:
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
       PADDLE_WHL_URL: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_whl_url }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   build_sm8090_rl:
     name: BUILD_SM8090_RL
@@ -181,6 +181,8 @@ jobs:
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
       PADDLE_WHL_URL: ${{ needs.ce_job_pre_check.outputs.compile_use_paddle_whl_url }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   ce_upload_sm8090:
     environment: CodeSync
@@ -193,7 +195,7 @@ jobs:
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       COMPILE_ARCH: "80,90"
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
@@ -243,7 +245,7 @@ jobs:
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090_rl.outputs.wheel_path_rl }}
       COMPILE_ARCH: "80,90"
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
@@ -289,7 +291,7 @@ jobs:
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8689.outputs.wheel_path }}
       COMPILE_ARCH: "86,89"
     steps:
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
       - name: Wheel Info Show and Upload

@@ -32,6 +32,7 @@ import time
 import traceback
 from datetime import datetime
 from enum import Enum
+from functools import cache
 from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
@@ -1172,3 +1173,12 @@ def fill_paddle_tensor(shared_inputs, key, value):
             shared_inputs[key].fill_(value)
     except Exception as e:
         llm_logger.warning(f"Failed to fill key {key} with value {value}: {e}")
+
+
+@cache
+def _is_package_installed(dist_name: str) -> bool:
+    try:
+        distribution(dist_name)
+        return True
+    except PackageNotFoundError:
+        return False

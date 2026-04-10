@@ -10,6 +10,10 @@ import paddle
 import triton
 import triton.language as tl
 
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
+
 __all__ = [
     "set_batch_invariant_mode",
     "is_batch_invariant_mode_enabled",
@@ -33,6 +37,7 @@ def _matmul_launch_metadata(grid: Callable[..., Any], kernel: Any, args: Dict[st
     return ret
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def _compute_pid(tile_id, num_pid_in_group, num_pid_m, GROUP_SIZE_M, NUM_SMS):
     group_id = tile_id // num_pid_in_group
@@ -43,6 +48,7 @@ def _compute_pid(tile_id, num_pid_in_group, num_pid_m, GROUP_SIZE_M, NUM_SMS):
     return pid_m, pid_n
 
 
+@enable_compat_on_triton_kernel
 @triton.jit(launch_metadata=_matmul_launch_metadata)
 def matmul_kernel_persistent(
     a_ptr,
@@ -220,6 +226,7 @@ def matmul_persistent(a: paddle.Tensor, b: paddle.Tensor, bias: paddle.Tensor | 
     return c
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def _log_softmax_kernel(
     input_ptr,
@@ -324,6 +331,7 @@ def log_softmax(input: paddle.Tensor, axis: int = -1) -> paddle.Tensor:
     return output.reshape(original_shape)
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def mean_kernel(
     input_ptr,

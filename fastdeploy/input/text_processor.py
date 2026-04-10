@@ -404,7 +404,6 @@ class DataProcessor(BaseDataProcessor):
             tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
             if tool_call_info.tools_called:
                 response_dict.outputs.tool_calls = tool_call_info.tool_calls
-                response_dict.outputs.text = tool_call_info.content
         data_processor_logger.info(f"req_id:{req_id}, token_ids: {token_ids}")
 
         return response_dict
@@ -443,7 +442,6 @@ class DataProcessor(BaseDataProcessor):
                 tool_call_info = tool_parser.extract_tool_calls(full_text, response_dict)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
-                    response_dict["outputs"]["text"] = tool_call_info.content
             data_processor_logger.info(f"req_id:{req_id}, decode_status: {self.decode_status[req_id]}")
             del self.decode_status[req_id]
         return response_dict

@@ -17,6 +17,8 @@
 import os
 import uuid
 
+import paddle
+
 # suppress warning log from paddlepaddle
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
@@ -44,7 +46,13 @@ from paddleformers.utils.log import logger as pf_logger
 
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
-from fastdeploy.utils import current_package_version, envs
+from fastdeploy.utils import _is_package_installed, current_package_version, envs
+
+# We can use enable_compat only when torch is not installed, otherwise it will
+# cause some unexpected issues in triton kernels. We use enable_compat_on_triton_kernel
+# for these cases.
+if not _is_package_installed("torch"):
+    paddle.enable_compat(scope={"triton"})
 
 if envs.FD_DEBUG != 1:
     import logging

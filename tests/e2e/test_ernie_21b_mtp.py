@@ -83,6 +83,7 @@ def setup_and_run_server():
         json.dumps(speculative_config),
         "--graph-optimization-config",
         '{"use_cudagraph":true,  "use_unique_memory_pool":true, "draft_model_use_cudagraph":true}',
+        "--enable-keep-sampling-mask",
     ]
 
     # Start subprocess in new process group
@@ -297,3 +298,176 @@ def test_non_chat_usage_non_stream(api_url):
     assert payload["max_tokens"] >= usage["completion_tokens"], "completion_tokens大于max_tokens"
     assert payload["metadata"]["min_tokens"] <= usage["completion_tokens"], "completion_tokens小于min_tokens"
     assert usage["total_tokens"] == total_tokens, "total_tokens不等于prompt_tokens + completion_tokens"
+
+
+def _assert_sampling_mask_format(sampling_mask, max_tokens):
+    """验证 sampling_mask 字段格式的公共辅助函数。
+
+    sampling_mask 是 List[List[int]]：
+    - 外层列表长度 == 生成的 token 数（completion_tokens），对应 MTP 每步可接受多个 token
+    - 内层列表为保留位置的词汇表索引（int），非空且单调递增
+    """
+    assert sampling_mask is not None, "sampling_mask 不应为 None"
+    assert isinstance(sampling_mask, list), "sampling_mask 应为 list"
+    assert len(sampling_mask) > 0, "sampling_mask 不应为空"
+    assert len(sampling_mask) <= max_tokens, "sampling_mask 长度不应超过 max_tokens"
+
+    for token_mask in sampling_mask:
+        assert isinstance(token_mask, list), f"每个 token 的 mask 应为 list，实际: {type(token_mask)}"
+        assert len(token_mask) > 0, "每个 token 的 mask 不应为空（至少保留采样到的 token）"
+        for idx in token_mask:
+            assert isinstance(idx, int), f"mask 中的每个元素应为 int，实际: {type(idx)}"
+            assert idx >= 0, f"mask 索引不应为负数，实际: {idx}"
+
+
+def test_keep_sampling_mask_stream(api_url):
+    """测试流式响应中 keep_sampling_mask 功能（MTP 模式）。
+
+    验证：
+    1. 每个非空 chunk 的 choices[0].sampling_mask 格式为 List[List[int]]
+    2. 内层列表包含词汇表保留位置的索引，非空且单调递增
+    3. 最终 sampling_mask 总长度等于 completion_tokens
+    """
+    max_tokens = 20
+    payload = {
+        "model": "default",
+        "temperature": 1.0,
+        "top_p": 0.9,
+        "seed": 42,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "请用一句话介绍Python语言。"},
+        ],
+        "max_tokens": max_tokens,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+
+    response = send_request(url=api_url, payload=payload)
+    chunks = get_stream_chunks(response)
+
+    assert len(chunks) > 1, "流式响应应包含至少两个 chunk"
+
+    all_sampling_masks = []
+    for chunk in chunks[:-1]:  # 最后一个 chunk 是 usage-only
+        choice = chunk["choices"][0]
+        # 仅当 delta 有实际内容时才应携带 sampling_mask（首个 role chunk 内容为空，不含该字段）
+        has_content = bool(choice.get("delta", {}).get("content"))
+        mask = choice.get("sampling_mask")
+        if has_content:
+            assert mask is not None, f"有内容的 chunk 缺少 sampling_mask 字段: {choice}"
+        if mask is not None:
+            assert isinstance(mask, list), f"sampling_mask 应为 list，实际: {type(mask)}"
+            for token_mask in mask:
+                assert isinstance(token_mask, list), "每个 token mask 应为 list"
+                assert len(token_mask) > 0, "每个 token mask 不应为空"
+                for idx in token_mask:
+                    assert isinstance(idx, int) and idx >= 0, f"mask 索引应为非负 int，实际: {idx}"
+            all_sampling_masks.extend(mask)
+
+    # 最后一个 chunk 携带 usage 信息
+    usage = chunks[-1].get("usage")
+    if usage:
+        completion_tokens = usage["completion_tokens"]
+        assert (
+            len(all_sampling_masks) == completion_tokens
+        ), f"sampling_mask 总长度 {len(all_sampling_masks)} 应等于 completion_tokens {completion_tokens}"
+
+
+def test_keep_sampling_mask_non_stream(api_url):
+    """测试非流式响应中 keep_sampling_mask 功能（MTP 模式）。
+
+    验证：
+    1. choices[0].sampling_mask 格式为 List[List[int]]
+    2. 长度等于 completion_tokens
+    3. 内层列表包含非负递增的词汇表索引
+    """
+    max_tokens = 20
+    payload = {
+        "model": "default",
+        "temperature": 1.0,
+        "top_p": 0.9,
+        "seed": 42,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "请用一句话介绍Python语言。"},
+        ],
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
+
+    response = send_request(url=api_url, payload=payload).json()
+    assert "choices" in response, f"响应缺少 choices 字段: {response}"
+    choice = response["choices"][0]
+    assert "sampling_mask" in choice, f"choice 缺少 sampling_mask 字段: {choice}"
+
+    sampling_mask = choice["sampling_mask"]
+    completion_tokens = response["usage"]["completion_tokens"]
+    _assert_sampling_mask_format(sampling_mask, max_tokens)
+    assert (
+        len(sampling_mask) == completion_tokens
+    ), f"sampling_mask 长度 {len(sampling_mask)} 应等于 completion_tokens {completion_tokens}"
+
+
+def test_keep_sampling_mask_top_p_1_stream(api_url):
+    """测试 top_p=1.0 时流式响应的 sampling_mask（MTP 模式）。
+
+    top_p=1.0 表示保留全部词汇，每个 token mask 应包含所有词汇表位置。
+    验证 mask 非空且每个内层列表长度 > 1（至少保留多个候选 token）。
+    """
+    max_tokens = 10
+    payload = {
+        "model": "default",
+        "temperature": 1.0,
+        "top_p": 1.0,
+        "seed": 42,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "1+1="},
+        ],
+        "max_tokens": max_tokens,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+
+    response = send_request(url=api_url, payload=payload)
+    chunks = get_stream_chunks(response)
+    assert len(chunks) > 1, "流式响应应包含至少两个 chunk"
+
+    for chunk in chunks[:-1]:
+        choice = chunk["choices"][0]
+        mask = choice.get("sampling_mask")
+        if mask is not None:
+            for token_mask in mask:
+                assert len(token_mask) > 1, "top_p=1.0 时每个 token 的候选集应大于 1"
+
+
+def test_keep_sampling_mask_consistent_with_top_p(api_url):
+    """对比 top_p=0.1 与 top_p=0.9 时 sampling_mask 的候选集大小（非流式，MTP 模式）。
+
+    top_p 越小，保留的候选 token 越少，平均 mask 长度应更短。
+    """
+    max_tokens = 15
+
+    def get_avg_mask_len(top_p):
+        payload = {
+            "model": "default",
+            "temperature": 1.0,
+            "top_p": top_p,
+            "seed": 42,
+            "messages": [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": "请列举三种编程语言。"},
+            ],
+            "max_tokens": max_tokens,
+            "stream": False,
+        }
+        resp = send_request(url=api_url, payload=payload).json()
+        mask = resp["choices"][0].get("sampling_mask")
+        if not mask:
+            return 0
+        return sum(len(m) for m in mask) / len(mask)
+
+    avg_small = get_avg_mask_len(0.1)
+    avg_large = get_avg_mask_len(0.9)
+    assert avg_small <= avg_large, f"top_p=0.1 的平均 mask 长度 ({avg_small:.1f}) 应 <= top_p=0.9 ({avg_large:.1f})"
