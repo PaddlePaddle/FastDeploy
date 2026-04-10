@@ -650,6 +650,626 @@ class TestErnieEncoding(unittest.TestCase):
         # 1 text + 1 img_start + 4 image + 1 img_end + 1 text = 8
         self.assertEqual(len(outputs["input_ids"]), 8)
 
+    # ------------------------------------------------------------------
+    # add_image (raw image path)
+    # ------------------------------------------------------------------
+    def test_add_image(self):
+        """Raw image: get_smarted_resize → preprocess → outputs populated."""
+        enc, mock_proc = self._make_enc()
+        ip = mock_proc.image_processor
+        # get_smarted_resize returns ((resized_h, resized_w), (patches_h, patches_w))
+        ip.get_smarted_resize.return_value = ((56, 56), (4, 4))
+        ip.preprocess.return_value = {
+            "pixel_values": np.zeros((4, 3, 28, 28)),
+            "image_grid_thw": np.array([[1, 4, 4]]),
+        }
+        mock_img = MagicMock()
+        mock_img.height = 100
+        mock_img.width = 100
+        mock_img.convert.return_value = mock_img
+        outputs = enc._make_outputs()
+        enc.add_image(mock_img, outputs, uuid="img_hash_1")
+
+        # 4*4 // (2**2) = 4 tokens
+        self.assertEqual(len(outputs["input_ids"]), 4)
+        self.assertTrue(all(t == enc.image_token_id for t in outputs["input_ids"]))
+        self.assertEqual(outputs["num_input_image_tokens"], 4)
+        self.assertEqual(outputs["mm_hashes"], ["img_hash_1"])
+        self.assertEqual(outputs["image_type_ids"], [0])
+        self.assertEqual(len(outputs["position_ids"]), 4)
+        self.assertEqual(len(outputs["images"]), 1)
+        self.assertEqual(len(outputs["grid_thw"]), 1)
+        # Verify preprocess was called
+        ip.preprocess.assert_called_once()
+
+    def test_add_image_without_uuid_hashes(self):
+        """When uuid is None, mm_hashes should be computed via MultimodalHasher."""
+        enc, mock_proc = self._make_enc()
+        ip = mock_proc.image_processor
+        ip.get_smarted_resize.return_value = ((56, 56), (4, 4))
+        pixel_values = np.zeros((4, 3, 28, 28))
+        ip.preprocess.return_value = {
+            "pixel_values": pixel_values,
+            "image_grid_thw": np.array([[1, 4, 4]]),
+        }
+        mock_img = MagicMock()
+        mock_img.height = 100
+        mock_img.width = 100
+        mock_img.convert.return_value = mock_img
+        outputs = enc._make_outputs()
+
+        from unittest.mock import patch
+
+        with patch("fastdeploy.input.encodings.ernie_encoding.MultimodalHasher") as mock_hasher:
+            mock_hasher.hash_features.return_value = "computed_hash"
+            enc.add_image(mock_img, outputs, uuid=None)
+
+        self.assertEqual(outputs["mm_hashes"], ["computed_hash"])
+        mock_hasher.hash_features.assert_called_once_with(pixel_values)
+
+    def test_add_image_token_len_mismatch(self):
+        """token_len mismatch raises ValueError."""
+        enc, mock_proc = self._make_enc()
+        ip = mock_proc.image_processor
+        ip.get_smarted_resize.return_value = ((56, 56), (4, 4))
+        mock_img = MagicMock()
+        mock_img.height = 100
+        mock_img.width = 100
+        outputs = enc._make_outputs()
+        with self.assertRaises(ValueError, msg="image tokens num not match"):
+            enc.add_image(mock_img, outputs, uuid="x", token_len=999)
+
+    # ------------------------------------------------------------------
+    # add_video (raw video frames path)
+    # ------------------------------------------------------------------
+    def test_add_video(self):
+        """Raw video frames: get_smarted_resize → preprocess → outputs populated."""
+        enc, mock_proc = self._make_enc()
+        ip = mock_proc.image_processor
+        ip.get_smarted_resize.return_value = ((56, 56), (4, 4))
+        ip.preprocess.return_value = {
+            "pixel_values_videos": np.zeros((8, 3, 28, 28)),
+            "video_grid_thw": np.array([[2, 4, 4]]),
+        }
+        # Create 2 mock PIL-like frames
+        frames = []
+        for _ in range(2):
+            f = MagicMock()
+            f.height = 100
+            f.width = 100
+            f.convert.return_value = MagicMock(__array__=lambda self: np.zeros((100, 100, 3)))
+            # np.array(f.convert("RGB")) needs to work
+            frames.append(f)
+
+        # Patch np.array for the frame conversion inside add_video
+        outputs = enc._make_outputs()
+
+        from unittest.mock import patch
+
+        original_np_array = np.array
+        original_np_stack = np.stack
+
+        def mock_np_array(obj, *args, **kwargs):
+            if hasattr(obj, "convert"):
+                return np.zeros((100, 100, 3), dtype=np.uint8)
+            return original_np_array(obj, *args, **kwargs)
+
+        with patch("fastdeploy.input.encodings.ernie_encoding.np.array", side_effect=mock_np_array):
+            with patch("fastdeploy.input.encodings.ernie_encoding.np.stack", side_effect=original_np_stack):
+                enc.add_video(frames, outputs, uuid="vid_hash_1")
+
+        # 2 frames * 4*4 // (2**2 * 2) = 32 // 8 = 4 tokens
+        self.assertEqual(len(outputs["input_ids"]), 4)
+        self.assertTrue(all(t == enc.image_token_id for t in outputs["input_ids"]))
+        self.assertEqual(outputs["token_type_ids"], [IDS_TYPE_FLAG["video"]] * 4)
+        self.assertEqual(outputs["num_input_video_tokens"], 4)
+        self.assertEqual(outputs["mm_hashes"], ["vid_hash_1"])
+        self.assertEqual(outputs["image_type_ids"], [1, 1])
+        self.assertEqual(len(outputs["position_ids"]), 4)
+
+    def test_add_video_without_uuid_hashes(self):
+        """When uuid is None, mm_hashes should be computed via MultimodalHasher."""
+        enc, mock_proc = self._make_enc()
+        ip = mock_proc.image_processor
+        ip.get_smarted_resize.return_value = ((56, 56), (4, 4))
+        pixel_values_videos = np.zeros((8, 3, 28, 28))
+        ip.preprocess.return_value = {
+            "pixel_values_videos": pixel_values_videos,
+            "video_grid_thw": np.array([[2, 4, 4]]),
+        }
+        frames = []
+        for _ in range(2):
+            f = MagicMock()
+            f.height = 100
+            f.width = 100
+            frames.append(f)
+
+        outputs = enc._make_outputs()
+
+        from unittest.mock import patch
+
+        original_np_array = np.array
+        original_np_stack = np.stack
+
+        def mock_np_array(obj, *args, **kwargs):
+            if hasattr(obj, "convert"):
+                return np.zeros((100, 100, 3), dtype=np.uint8)
+            return original_np_array(obj, *args, **kwargs)
+
+        with patch("fastdeploy.input.encodings.ernie_encoding.np.array", side_effect=mock_np_array):
+            with patch("fastdeploy.input.encodings.ernie_encoding.np.stack", side_effect=original_np_stack):
+                with patch("fastdeploy.input.encodings.ernie_encoding.MultimodalHasher") as mock_hasher:
+                    mock_hasher.hash_features.return_value = "computed_vid_hash"
+                    enc.add_video(frames, outputs, uuid=None)
+
+        self.assertEqual(outputs["mm_hashes"], ["computed_vid_hash"])
+        mock_hasher.hash_features.assert_called_once_with(pixel_values_videos)
+
+    def test_add_video_token_len_mismatch(self):
+        """token_len mismatch raises ValueError."""
+        enc, mock_proc = self._make_enc()
+        ip = mock_proc.image_processor
+        ip.get_smarted_resize.return_value = ((56, 56), (4, 4))
+        frame = MagicMock()
+        frame.height = 100
+        frame.width = 100
+        outputs = enc._make_outputs()
+        with self.assertRaises(ValueError, msg="video tokens num not match"):
+            enc.add_video([frame, frame], outputs, uuid="x", token_len=999)
+
+    # ------------------------------------------------------------------
+    # load_video (mocked decord imports)
+    # ------------------------------------------------------------------
+    def test_load_video(self):
+        """load_video calls decord helpers and returns (frames, {})."""
+        enc, _ = self._make_enc()
+
+        from unittest.mock import patch
+
+        mock_reader = MagicMock()
+        mock_meta = {"duration": 10, "fps": 30}
+        mock_path = "/tmp/test_video.mp4"
+
+        mock_frame1 = MagicMock()
+        mock_frame2 = MagicMock()
+        rendered_frame1 = MagicMock()
+        rendered_frame2 = MagicMock()
+
+        with (
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_video_decord",
+                return_value=(mock_reader, mock_meta, mock_path),
+            ) as mock_read_video,
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_frames_decord",
+                return_value=([mock_frame1, mock_frame2], None, [0.0, 0.5]),
+            ) as mock_read_frames,
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.utils.render_timestamp.render_frame_timestamp",
+                side_effect=[rendered_frame1, rendered_frame2],
+            ),
+        ):
+            frames, meta = enc.load_video("http://example.com/video.mp4", {})
+
+        self.assertEqual(len(frames), 2)
+        self.assertEqual(meta, {})
+        mock_read_video.assert_called_once()
+        mock_read_frames.assert_called_once()
+
+    def test_load_video_odd_frames_padded(self):
+        """When decord returns odd number of frames, load_video pads to even."""
+        enc, _ = self._make_enc()
+
+        from unittest.mock import patch
+
+        mock_reader = MagicMock()
+        mock_meta = {"duration": 10, "fps": 30}
+        mock_path = "/tmp/test_video.mp4"
+
+        mock_frame1 = MagicMock()
+        mock_frame2 = MagicMock()
+        mock_frame3 = MagicMock()
+        rendered1 = MagicMock()
+        rendered2 = MagicMock()
+        rendered3 = MagicMock()
+
+        with (
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_video_decord",
+                return_value=(mock_reader, mock_meta, mock_path),
+            ),
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_frames_decord",
+                return_value=([mock_frame1, mock_frame2, mock_frame3], None, [0.0, 0.5, 1.0]),
+            ),
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.utils.render_timestamp.render_frame_timestamp",
+                side_effect=[rendered1, rendered2, rendered3],
+            ),
+        ):
+            frames, meta = enc.load_video("http://example.com/video.mp4", {})
+
+        # 3 frames → padded to 4
+        self.assertEqual(len(frames), 4)
+        self.assertEqual(meta, {})
+
+    def test_load_video_with_item_overrides(self):
+        """load_video uses per-item fps/min_frames/max_frames overrides."""
+        enc, _ = self._make_enc()
+
+        from unittest.mock import patch
+
+        mock_reader = MagicMock()
+        mock_meta = {"duration": 10, "fps": 30}
+        mock_path = "/tmp/test_video.mp4"
+
+        with (
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_video_decord",
+                return_value=(mock_reader, mock_meta, mock_path),
+            ),
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_frames_decord",
+                return_value=([MagicMock(), MagicMock()], None, [0.0, 0.5]),
+            ) as mock_read_frames,
+            patch(
+                "fastdeploy.input.ernie4_5_vl_processor.utils.render_timestamp.render_frame_timestamp",
+                side_effect=[MagicMock(), MagicMock()],
+            ),
+        ):
+            item = {"fps": -1, "target_frames": 20, "min_frames": 5, "max_frames": 50}
+            frames, meta = enc.load_video("http://example.com/video.mp4", item)
+
+        self.assertEqual(len(frames), 2)
+        # Verify read_frames_decord got the overridden target_frames
+        call_kwargs = mock_read_frames.call_args
+        self.assertEqual(
+            call_kwargs[1].get("target_frames", call_kwargs[0][3] if len(call_kwargs[0]) > 3 else None), 20
+        )
+
+    # ------------------------------------------------------------------
+    # prompt_token_ids2outputs — video branch
+    # ------------------------------------------------------------------
+    def test_prompt_token_ids2outputs_with_processed_video(self):
+        """prompt_token_ids with video boundary tokens and processed video."""
+        enc, mock_proc = self._make_enc()
+        # video_start=202, video_end=203, image_token=102
+        # Build: [text(1), VID_START(202), placeholder(102)*4, VID_END(203), text(2)]
+        frames = np.zeros((32, 3, 28, 28))
+        meta = {"thw": (4, 4, 4)}
+        mock_proc._extract_mm_items.return_value = (
+            [],  # images
+            [(frames, meta)],  # videos (tuple = processed)
+            [],  # image_uuid
+            ["vid_uuid"],  # video_uuid
+            None,  # dealer
+            [],  # missing_idx
+            [{"type": "video", "data": (frames, meta), "uuid": "vid_uuid"}],
+        )
+        request = {
+            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        outputs = enc.prompt_token_ids2outputs(request)
+        # 1 text + 1 vid_start + 4 video + 1 vid_end + 1 text = 8
+        self.assertEqual(len(outputs["input_ids"]), 8)
+        self.assertEqual(outputs["input_ids"][0], 1)
+        self.assertEqual(outputs["input_ids"][1], 202)  # vid_start
+        self.assertEqual(outputs["input_ids"][-1], 2)
+
+    def test_prompt_token_ids2outputs_with_raw_video_url(self):
+        """prompt_token_ids with raw video (string url) — triggers load_video."""
+        enc, mock_proc = self._make_enc()
+
+        from unittest.mock import patch
+
+        mock_frames = [MagicMock() for _ in range(2)]
+
+        mock_proc._extract_mm_items.return_value = (
+            [],
+            ["http://example.com/video.mp4"],  # raw video url
+            [],
+            ["vid_uuid"],
+            None,
+            [],
+            [{"type": "video"}],
+        )
+
+        # 2 frames, 4x4 patches → 2*4*4 // (4*2) = 4 tokens
+        request = {
+            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+
+        with (
+            patch.object(enc, "load_video", return_value=(mock_frames, {})) as mock_load,
+            patch.object(enc, "add_video") as mock_add_video,
+        ):
+            enc.prompt_token_ids2outputs(request)
+
+        mock_load.assert_called_once_with("http://example.com/video.mp4", {})
+        mock_add_video.assert_called_once()
+
+    def test_prompt_token_ids2outputs_with_raw_video_dict(self):
+        """prompt_token_ids with raw video (dict form) — triggers load_video."""
+        enc, mock_proc = self._make_enc()
+
+        from unittest.mock import patch
+
+        mock_frames = [MagicMock() for _ in range(2)]
+        video_dict = {"video": "http://example.com/video.mp4", "fps": 5}
+
+        mock_proc._extract_mm_items.return_value = (
+            [],
+            [video_dict],  # raw video dict
+            [],
+            ["vid_uuid"],
+            None,
+            [],
+            [{"type": "video"}],
+        )
+
+        request = {
+            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+
+        with (
+            patch.object(enc, "load_video", return_value=(mock_frames, {})) as mock_load,
+            patch.object(enc, "add_video"),
+        ):
+            enc.prompt_token_ids2outputs(request)
+
+        mock_load.assert_called_once_with("http://example.com/video.mp4", video_dict)
+
+    # ------------------------------------------------------------------
+    # prompt_token_ids2outputs — error paths
+    # ------------------------------------------------------------------
+    def test_prompt_token_ids2outputs_image_placeholder_overflow(self):
+        """More image start tokens than images provided raises ValueError."""
+        enc, mock_proc = self._make_enc()
+        mock_proc._extract_mm_items.return_value = (
+            [],  # no images
+            [],
+            [],
+            [],
+            None,
+            [],
+            [],
+        )
+        request = {
+            "prompt_token_ids": [200, 102, 201],  # IMG_START but no images
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        with self.assertRaises(ValueError, msg="more image placeholder"):
+            enc.prompt_token_ids2outputs(request)
+
+    def test_prompt_token_ids2outputs_image_tokens_incomplete(self):
+        """Image start without matching end raises ValueError."""
+        enc, mock_proc = self._make_enc()
+        img = np.zeros((16, 3, 28, 28))
+        meta = {"thw": (1, 4, 4)}
+        mock_proc._extract_mm_items.return_value = (
+            [(img, meta)],
+            [],
+            ["uuid"],
+            [],
+            None,
+            [],
+            [{"type": "image"}],
+        )
+        # IMG_START(200) followed by placeholders but NO IMG_END(201)
+        request = {
+            "prompt_token_ids": [200, 102, 102, 102],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        with self.assertRaises(ValueError, msg="image token ids not complete"):
+            enc.prompt_token_ids2outputs(request)
+
+    def test_prompt_token_ids2outputs_video_placeholder_overflow(self):
+        """More video start tokens than videos provided raises ValueError."""
+        enc, mock_proc = self._make_enc()
+        mock_proc._extract_mm_items.return_value = (
+            [],
+            [],  # no videos
+            [],
+            [],
+            None,
+            [],
+            [],
+        )
+        request = {
+            "prompt_token_ids": [202, 102, 203],  # VID_START but no videos
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        with self.assertRaises(ValueError, msg="more video placeholder"):
+            enc.prompt_token_ids2outputs(request)
+
+    def test_prompt_token_ids2outputs_video_tokens_incomplete(self):
+        """Video start without matching end raises ValueError."""
+        enc, mock_proc = self._make_enc()
+        frames = np.zeros((32, 3, 28, 28))
+        meta = {"thw": (4, 4, 4)}
+        mock_proc._extract_mm_items.return_value = (
+            [],
+            [(frames, meta)],
+            [],
+            ["uuid"],
+            None,
+            [],
+            [{"type": "video"}],
+        )
+        # VID_START(202) followed by placeholders but NO VID_END(203)
+        request = {
+            "prompt_token_ids": [202, 102, 102, 102],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        with self.assertRaises(ValueError, msg="video token ids not complete"):
+            enc.prompt_token_ids2outputs(request)
+
+    def test_prompt_token_ids2outputs_image_count_mismatch(self):
+        """Fewer image placeholders than images raises ValueError."""
+        enc, mock_proc = self._make_enc()
+        img1 = np.zeros((16, 3, 28, 28))
+        meta1 = {"thw": (1, 4, 4)}
+        mock_proc._extract_mm_items.return_value = (
+            [(img1, meta1), (img1, meta1)],  # 2 images
+            [],
+            ["uuid1", "uuid2"],
+            [],
+            None,
+            [],
+            [{"type": "image"}, {"type": "image"}],
+        )
+        # Only 1 image placeholder in token ids
+        request = {
+            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        with self.assertRaises(ValueError, msg="number of images does not match"):
+            enc.prompt_token_ids2outputs(request)
+
+    def test_prompt_token_ids2outputs_video_count_mismatch(self):
+        """Fewer video placeholders than videos raises ValueError."""
+        enc, mock_proc = self._make_enc()
+        frames = np.zeros((32, 3, 28, 28))
+        meta = {"thw": (4, 4, 4)}
+        mock_proc._extract_mm_items.return_value = (
+            [],
+            [(frames, meta), (frames, meta)],  # 2 videos
+            [],
+            ["uuid1", "uuid2"],
+            None,
+            [],
+            [{"type": "video"}, {"type": "video"}],
+        )
+        # Only 1 video placeholder in token ids
+        request = {
+            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        with self.assertRaises(ValueError, msg="number of videos does not match"):
+            enc.prompt_token_ids2outputs(request)
+
+    # ------------------------------------------------------------------
+    # prompt_token_ids2outputs — with raw image (non-tuple)
+    # ------------------------------------------------------------------
+    def test_prompt_token_ids2outputs_with_raw_image(self):
+        """prompt_token_ids with raw image (non-tuple) triggers add_image."""
+        enc, mock_proc = self._make_enc()
+
+        from unittest.mock import patch
+
+        mock_img = MagicMock()  # raw image, not a tuple
+
+        mock_proc._extract_mm_items.return_value = (
+            [mock_img],  # raw image
+            [],
+            ["img_uuid"],
+            [],
+            None,
+            [],
+            [{"type": "image"}],
+        )
+        request = {
+            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+
+        with patch.object(enc, "add_image") as mock_add_image:
+            enc.prompt_token_ids2outputs(request)
+
+        mock_add_image.assert_called_once()
+        call_args = mock_add_image.call_args
+        self.assertIs(call_args[0][0], mock_img)
+        self.assertEqual(call_args[0][2], "img_uuid")
+        self.assertEqual(call_args[0][3], 4)  # token_len = 4 placeholders
+
+    # ------------------------------------------------------------------
+    # prompt_token_ids2outputs — processor cache branch
+    # ------------------------------------------------------------------
+    def test_prompt_token_ids2outputs_with_processor_cache(self):
+        """When enable_processor_cache=True, cache update is called."""
+        enc, mock_proc = self._make_enc()
+        enc.enable_processor_cache = True
+
+        img = np.zeros((16, 3, 28, 28))
+        meta = {"thw": (1, 4, 4)}
+        mock_dealer = MagicMock()
+
+        mock_proc._extract_mm_items.return_value = (
+            [(img, meta)],  # processed image
+            [],
+            ["img_uuid"],
+            [],
+            mock_dealer,
+            [0],  # missing_idx — index 0 is missing (skip caching)
+            [{"type": "image", "data": (img, meta), "uuid": "img_uuid"}],
+        )
+        request = {
+            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        enc.prompt_token_ids2outputs(request)
+        # missing_idx={0} means item 0 is skipped → nothing to cache
+        mock_proc.update_processor_cache.assert_not_called()
+
+    def test_prompt_token_ids2outputs_cache_stores_non_missing(self):
+        """Processor cache stores items NOT in missing_idx."""
+        enc, mock_proc = self._make_enc()
+        enc.enable_processor_cache = True
+
+        img1 = np.zeros((16, 3, 28, 28))
+        meta1 = {"thw": (1, 4, 4)}
+        img2 = np.zeros((16, 3, 28, 28))
+        meta2 = {"thw": (1, 4, 4)}
+        mock_dealer = MagicMock()
+
+        mock_proc._extract_mm_items.return_value = (
+            [(img1, meta1), (img2, meta2)],  # 2 processed images
+            [],
+            ["uuid1", "uuid2"],
+            [],
+            mock_dealer,
+            [0],  # only index 0 is missing
+            [{"type": "image"}, {"type": "image"}],
+        )
+        # 2 images: [text, IMG_START, img*4, IMG_END, IMG_START, img*4, IMG_END, text]
+        request = {
+            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 200, 102, 102, 102, 102, 201, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        enc.prompt_token_ids2outputs(request)
+
+        # Only item at index 1 (not in missing_idx) should be cached
+        mock_proc.update_processor_cache.assert_called_once()
+        call_args = mock_proc.update_processor_cache.call_args[0]
+        self.assertIs(call_args[0], mock_dealer)
+        self.assertEqual(len(call_args[1]), 1)  # 1 hash
+        self.assertEqual(call_args[1][0], "uuid2")
+        self.assertEqual(len(call_args[2]), 1)  # 1 item
+
+    def test_prompt_token_ids2outputs_video_uuid_empty(self):
+        """When video_uuid is empty list, uuid should be None."""
+        enc, mock_proc = self._make_enc()
+        frames = np.zeros((32, 3, 28, 28))
+        meta = {"thw": (4, 4, 4)}
+        mock_proc._extract_mm_items.return_value = (
+            [],
+            [(frames, meta)],
+            [],
+            [],  # empty video_uuid
+            None,
+            [],
+            [{"type": "video"}],
+        )
+        request = {
+            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
+            "messages": [{"role": "user", "content": "hi"}],
+        }
+        outputs = enc.prompt_token_ids2outputs(request)
+        self.assertEqual(len(outputs["input_ids"]), 8)
+
 
 if __name__ == "__main__":
     unittest.main()
