@@ -44,7 +44,7 @@ python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/
 再安装 fastdeploy，**注意不要通过pypi源安装**，需要通过如下方式安装(目前支持80/86/89/90四个架构GPU）
 
 **注意**: 稳定版本的FastDeploy搭配稳定版本的PaddlePaddle; 而Nightly Build的FastDeploy则对应Nightly Build的PaddlePaddle。其中 `--extra-index-url` 仅用于安装 fastdeploy-gpu 所需的依赖包，fastdeploy-gpu 本身必须从 `-i` 指定的 Paddle 源安装。
-```
+```shell
 # 安装稳定版本FastDeploy
 # CUDA 12.6
 python -m pip install fastdeploy-gpu==2.5.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
