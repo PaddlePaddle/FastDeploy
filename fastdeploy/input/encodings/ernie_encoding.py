@@ -272,7 +272,7 @@ class ErnieEncoding(BaseEncoding):
         outputs = self._make_outputs()
         prompt_token_ids_len = len(prompt_token_ids)
 
-        if not mm_items:
+        if mm_items is None:
             outputs["input_ids"].extend(prompt_token_ids)
             outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * prompt_token_ids_len)
             for i in range(prompt_token_ids_len):

@@ -606,6 +606,14 @@ class TestErnieEncoding(unittest.TestCase):
         outputs = enc.prompt_token_ids2outputs([1, 200, 102, 102, 102, 102, 201, 2], mm_items)
         # 1 text + 1 img_start + 4 image + 1 img_end + 1 text = 8
         self.assertEqual(len(outputs["input_ids"]), 8)
+        # Boundary tokens (IMG_START, IMG_END) must be typed as "image", not "text"
+        tt = outputs["token_type_ids"]
+        self.assertEqual(tt[0], IDS_TYPE_FLAG["text"])  # text
+        self.assertEqual(tt[1], IDS_TYPE_FLAG["image"])  # IMG_START
+        for i in range(2, 6):
+            self.assertEqual(tt[i], IDS_TYPE_FLAG["image"])  # image tokens
+        self.assertEqual(tt[6], IDS_TYPE_FLAG["image"])  # IMG_END
+        self.assertEqual(tt[7], IDS_TYPE_FLAG["text"])  # text
 
     # ------------------------------------------------------------------
     # add_image (raw image path)
@@ -901,6 +909,14 @@ class TestErnieEncoding(unittest.TestCase):
         self.assertEqual(outputs["input_ids"][0], 1)
         self.assertEqual(outputs["input_ids"][1], 202)  # vid_start
         self.assertEqual(outputs["input_ids"][-1], 2)
+        # Boundary tokens (VID_START, VID_END) must be typed as "image", not "text"
+        tt = outputs["token_type_ids"]
+        self.assertEqual(tt[0], IDS_TYPE_FLAG["text"])  # text
+        self.assertEqual(tt[1], IDS_TYPE_FLAG["image"])  # VID_START
+        for i in range(2, 6):
+            self.assertEqual(tt[i], IDS_TYPE_FLAG["video"])  # video tokens
+        self.assertEqual(tt[6], IDS_TYPE_FLAG["image"])  # VID_END
+        self.assertEqual(tt[7], IDS_TYPE_FLAG["text"])  # text
 
     def test_prompt_token_ids2outputs_with_raw_video_url(self):
         """prompt_token_ids with raw video (string url) — triggers load_video."""

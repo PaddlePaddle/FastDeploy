@@ -207,7 +207,7 @@ class QwenEncoding(BaseEncoding):
         outputs = self._make_outputs()
         prompt_token_ids_len = len(prompt_token_ids)
 
-        if not mm_items:
+        if mm_items is None:
             self._add_text_tokens(prompt_token_ids, outputs)
             return outputs
 
