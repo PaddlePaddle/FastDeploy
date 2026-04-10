@@ -76,6 +76,13 @@ class PaddleOCREncoding(QwenEncoding):
         outputs["vit_seqlen"].append(numel)
         outputs["vit_position_ids"].append(np.arange(numel) % numel)
 
+    def add_processed_image(self, img_cache, outputs, uuid, token_len=None):
+        super().add_processed_image(img_cache, outputs, uuid, token_len)
+        _, h, w = img_cache[1]["thw"]
+        numel = h * w
+        outputs["vit_seqlen"].append(numel)
+        outputs["vit_position_ids"].append(np.arange(numel) % numel)
+
     def add_video(self, frames, outputs, uuid, token_len=None, meta=None):
         preprocess_kwargs = {}
         if self.cfg.video_min_pixels is not None:
@@ -140,6 +147,11 @@ class PaddleOCREncoding(QwenEncoding):
         outputs["cur_position"] = pos_ids.max() + 1
 
         outputs["fps"].append(fps)
+
+        # paddleocr vit fields
+        numel = h * w
+        outputs["vit_seqlen"].append(numel)
+        outputs["vit_position_ids"].append(np.arange(numel) % numel)
 
     def load_video(self, url, item):
         reader, meta, _ = read_video_decord(url, save_to_disk=False)

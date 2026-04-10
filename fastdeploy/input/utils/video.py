@@ -301,8 +301,8 @@ def get_filename(url=None):
     pid = os.getpid()
     tid = threading.get_ident()
 
-    image_filname = f"{t.year}-{t.month:02d}-{t.day:02d}-{pid}-{tid}-{md5_hash}"
-    return image_filname
+    image_filename = f"{t.year}-{t.month:02d}-{t.day:02d}-{pid}-{tid}-{md5_hash}"
+    return image_filename
 
 
 # ---------------------------------------------------------------------------
