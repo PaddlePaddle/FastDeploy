@@ -20,7 +20,7 @@ import time
 import traceback
 import uuid
 from collections.abc import Iterable
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 
@@ -989,10 +989,10 @@ class OpenAIServingChat:
         }
 
     @staticmethod
-    def _make_mask_list(mask) -> List[List[int]]:
-        """Wrap mask into a uniform List[List[int]] format.
-
-        mask is already in sparse-index form (no bool-to-index conversion needed):
+    def _make_mask_list(mask) -> List[List[Any]]:
+        """Wrap mask into a uniform List[List[Any]] format.
+        for example:
+        sampling_mask is already in sparse-index form (no bool-to-index conversion needed):
           Non-MTP: List[int]        (indices for 1 token/step)  → [[idx, ...]]
           MTP:     List[List[int]]  (indices for N tokens/step) → [[idx, ...], ...]
         """

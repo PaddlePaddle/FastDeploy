@@ -133,8 +133,7 @@ def _compute_sampling_mask(
         - topp_in_topk_mask: List of length num_reqs; element i is a 1-D
           bool numpy array of length effective_k[i] (sorted-prob order),
           where True means the top-k candidate was also selected by top-p.
-          When top-k is disabled the array covers the full vocab (all tokens
-          are trivially "in top-k") and equals the top-p mask directly.
+          When top-k is disabled, returns None (no top-k candidates to filter).
     """
     real_bsz = probs.shape[0]
     vocab_size = probs.shape[1]

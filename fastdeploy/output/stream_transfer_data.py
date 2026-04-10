@@ -51,5 +51,5 @@ class StreamTransferData:
     # vocab-sized bool mask.
     sampling_mask: Optional[np.array] = None
     # List of length num_reqs; element i is a 1-D bool array of length
-    # effective_k[i] (in descending-probability order within the top-k window).s
+    # effective_k[i] (in descending-probability order within the top-k window).
     topp_in_topk_mask: Optional[list] = None

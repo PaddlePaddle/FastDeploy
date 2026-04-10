@@ -201,7 +201,7 @@ class SamplerOutput:
     # ones are further selected by top-p (True = in top-p nucleus, False = not).
     # List of length num_reqs; element i is a 1-D bool array of length
     # effective_k[i] (in descending-probability order within the top-k window).
-    # When top-k is disabled, length equals vocab_size (all tokens are candidates).
+    # When top-k is disabled, return None.
     topp_in_topk_mask: Optional[List[np.ndarray]] = None
 
 
