@@ -256,6 +256,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # When v1 is enabled, the legacy /clear_load_weight and /update_model_weight
     # will adopt this new communication pattern.
     "FD_ENABLE_V1_UPDATE_WEIGHTS": lambda: bool(int(os.getenv("FD_ENABLE_V1_UPDATE_WEIGHTS", "0"))),
+    # Whether to use phi rms_norm,if 1,use paddle op.
+    "FD_USE_PHI_RMSNORM": lambda: bool(int(os.getenv("FD_USE_PHI_RMSNORM", "0"))),
 }
 
 
