@@ -24,8 +24,20 @@ import numpy as np
 import paddle
 
 try:
-    from cuda import cudart
-except ImportError:
+    import cuda as _cuda_pkg
+
+    _cuda_ver = getattr(_cuda_pkg, "__version__", None)
+    if _cuda_ver is None:
+        # cuda-python >= 13.x 无顶层 __version__，通过 cuda-bindings 子包判断
+        import importlib.metadata as _meta
+
+        _cuda_ver = _meta.version("cuda-bindings")
+    _cuda_major = int(_cuda_ver.split(".")[0])
+    if _cuda_major >= 13:
+        from cuda.bindings import runtime as cudart
+    else:
+        from cuda import cudart
+except (ImportError, Exception):
     cudart = None
 
 from fastdeploy.config import EPLBConfig
