@@ -308,6 +308,8 @@ class TokenProcessor:
                             llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
                 if getattr(stream_data, "sampling_mask", None) is not None:
                     result.outputs.sampling_mask = stream_data.sampling_mask.tolist()
+                if getattr(stream_data, "topp_in_topk_mask", None) is not None:
+                    result.outputs.topp_in_topk_mask = stream_data.topp_in_topk_mask.tolist()
                 if self.tokens_counter[task_id] == 0:
                     if task.messages is not None:
                         result.prompt = task.messages
@@ -791,7 +793,8 @@ class TokenProcessor:
                 result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
             if self.use_sampling_mask and i in sampling_masks_per_request:
-                result.outputs.sampling_mask = sampling_masks_per_request[i]
+                result.outputs.sampling_mask = sampling_masks_per_request[i]["sampling_mask"]
+                result.outputs.topp_in_topk_mask = sampling_masks_per_request[i]["topp_in_topk_mask"]
 
             is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
 

@@ -399,6 +399,7 @@ def post_process_normal(
                     logprobs=sampler_output.logprobs_tensors,
                     prompt_logprobs_list=model_output.prompt_logprobs_list,
                     sampling_mask=sampler_output.sampling_mask,
+                    topp_in_topk_mask=sampler_output.topp_in_topk_mask,
                 )
                 async_output_queue.put(output)
         else:
@@ -421,7 +422,14 @@ def post_process_normal(
             # Send sampling_mask via ZMQ side-channel when enabled.
             if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
                 # sampling_mask is List[np.ndarray] of sparse int indices, one array per request.
-                mask_dict = {i: arr.tolist() for i, arr in enumerate(sampler_output.sampling_mask)}
+                mask_dict = {}
+                for i in range(len(sampler_output.sampling_mask)):
+                    mask_dict[i] = {
+                        "sampling_mask": sampler_output.sampling_mask[i].tolist(),
+                        "topp_in_topk_mask": (
+                            sampler_output.topp_in_topk_mask[i].tolist() if sampler_output.topp_in_topk_mask else None
+                        ),
+                    }
                 sampling_mask_zmq_client.send_pyobj(mask_dict)
 
 
@@ -557,7 +565,16 @@ def post_process_specualate(
                 n = int(n)
                 if n > 0:
                     # List of n sparse index arrays, one per accepted token
-                    mask_dict[i] = [arr.tolist() for arr in sampler_output.sampling_mask[offset : offset + n]]
+                    sampling_mask_tmp = [arr.tolist() for arr in sampler_output.sampling_mask[offset : offset + n]]
+                    topp_in_topk_mask_tmp = (
+                        [arr.tolist() for arr in sampler_output.topp_in_topk_mask[offset : offset + n]]
+                        if sampler_output.topp_in_topk_mask
+                        else None
+                    )
+                    mask_dict[i] = {
+                        "sampling_mask": sampling_mask_tmp,
+                        "topp_in_topk_mask": topp_in_topk_mask_tmp,
+                    }
                 offset += n
             sampling_mask_zmq_client.send_pyobj(mask_dict)
 

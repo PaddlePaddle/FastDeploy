@@ -99,7 +99,7 @@ def _compute_sampling_mask(
     top_p: paddle.Tensor,
     top_k: Optional[paddle.Tensor] = None,
     top_k_list: Optional[list] = None,
-) -> tuple[List[np.ndarray], np.ndarray]:
+) -> tuple[List[np.ndarray], np.ndarray, List[np.ndarray]]:
     """
     Compute a combined top-k + top-p (nucleus) sampling mask as sparse
     retained-token indices.
@@ -128,7 +128,13 @@ def _compute_sampling_mask(
         - sparse_indices: List of length num_reqs; element i is a 1-D int64
           numpy array of the retained vocab indices for request i.
         - logz_per_batch: 1-D numpy array of shape [num_reqs] containing
-          log(Z_K) where Z_K is the sum of probabilities in the candidate set.
+          log(Z_K) where Z_K is the sum of probabilities in the candidate set
+          (intersection of top-k and top-p).
+        - topp_in_topk_mask: List of length num_reqs; element i is a 1-D
+          bool numpy array of length effective_k[i] (sorted-prob order),
+          where True means the top-k candidate was also selected by top-p.
+          When top-k is disabled the array covers the full vocab (all tokens
+          are trivially "in top-k") and equals the top-p mask directly.
     """
     real_bsz = probs.shape[0]
     vocab_size = probs.shape[1]
@@ -189,15 +195,7 @@ def _compute_sampling_mask(
     topp_mask = topp_mask | (renorm_sorted_probs >= boundary_prob)
 
     # ------------------------------------------------------------------
-    # Stage 4: intersect on GPU, then minimal D2H.
-    # ------------------------------------------------------------------
-    final_mask = topk_mask & topp_mask if has_top_k else topp_mask  # [B, V]
-
-    k_per_row = final_mask.astype("int32").sum(axis=-1)  # [B]
-    max_k = int(k_per_row.max().item())
-
-    # ------------------------------------------------------------------
-    # Stage 5: compute logZ for renormalization
+    # Stage 4: compute logZ for renormalization
     #
     # Goal: log π_mask(k) = log π_full(k) - logZ, where π_mask is the
     # distribution actually sampled from (top-k truncated + top-p nucleus).
@@ -218,23 +216,47 @@ def _compute_sampling_mask(
     # When top_k is absent Z_topk = 1 → logZ = log Z_topp as before.
     # ------------------------------------------------------------------
     if has_top_k:
-        # Z_topp: sum of renormed probs that survive the final mask
+        # Z_topp: sum of renormed probs that survive the intersection mask
+        final_mask = topk_mask & topp_mask
         candidate_probs = paddle.where(final_mask, renorm_sorted_probs, paddle.zeros_like(renorm_sorted_probs))
         z_topp = candidate_probs.sum(axis=-1)  # [B]
         # row_sums: [B, 1] already clipped ≥ 1e-9, squeeze to [B]
         log_z_topk = paddle.log(row_sums.squeeze(-1))
         logz_per_batch = (log_z_topk + paddle.log(z_topp + 1e-10)).cpu().numpy()  # [B]
     else:
-        candidate_probs = paddle.where(final_mask, sorted_probs, paddle.zeros_like(sorted_probs))
+        candidate_probs = paddle.where(topp_mask, sorted_probs, paddle.zeros_like(sorted_probs))
         z_k = candidate_probs.sum(axis=-1)  # [B]
         logz_per_batch = paddle.log(z_k + 1e-10).cpu().numpy()  # [B]
 
-    # Transfer only the leading max_k columns — typically max_k << vocab_size.
-    indices_window_cpu = sorted_indices[:, :max_k].cpu().numpy()  # [B, max_k]
-    mask_window_cpu = final_mask[:, :max_k].cpu().numpy()  # [B, max_k]
+    # ------------------------------------------------------------------
+    # Stage 5: build sparse_indices (top-k) and topp_in_topk_mask
+    #
+    # sparse_indices: retained vocab indices from top-k only.
+    # topp_in_topk_mask: boolean mask over top-k candidates indicating
+    # which ones were further selected by top-p.
+    #
+    # Both outputs share the same D2H window (sorted_indices + topp_mask
+    # up to max_k_topk columns), so only two GPU→CPU transfers are needed.
+    # ------------------------------------------------------------------
+    if has_top_k:
+        effective_k_cpu = effective_k.cpu().numpy().flatten().astype(int)  # [B]
+        max_k_topk = int(effective_k.max().item())
+        # Single D2H transfer for both outputs.
+        topk_sorted_cpu = sorted_indices[:, :max_k_topk].cpu().numpy()  # [B, max_k_topk]
+        topp_window_cpu = topp_mask[:, :max_k_topk].cpu().numpy()  # [B, max_k_topk]
+        # top-k indices: contiguous block in sorted order (0 .. effective_k-1).
+        sparse_indices = [topk_sorted_cpu[i, : effective_k_cpu[i]] for i in range(real_bsz)]
+        topp_in_topk_mask = [topp_window_cpu[i, : effective_k_cpu[i]] for i in range(real_bsz)]
+    else:
+        k_per_row = topp_mask.astype("int32").sum(axis=-1)  # [B]
+        max_k = int(k_per_row.max().item())
+        # Transfer only the leading max_k columns — typically max_k << vocab_size.
+        indices_window_cpu = sorted_indices[:, :max_k].cpu().numpy()  # [B, max_k]
+        mask_window_cpu = topp_mask[:, :max_k].cpu().numpy()  # [B, max_k]
+        sparse_indices = [indices_window_cpu[i, mask_window_cpu[i]] for i in range(real_bsz)]
+        topp_in_topk_mask = None
 
-    sparse_indices = [indices_window_cpu[i, mask_window_cpu[i]] for i in range(real_bsz)]
-    return sparse_indices, logz_per_batch
+    return sparse_indices, logz_per_batch, topp_in_topk_mask
 
 
 class GuidedDecoding:
@@ -674,8 +696,9 @@ class Sampler(nn.Layer):
         # Binary mask [num_reqs, vocab_size]: 1 = retained by top_k/top_p, 0 = truncated.
         sampling_mask = None
         logz_per_batch = None
+        topp_in_topk_mask = None
         if sampling_metadata.keep_sampling_mask:
-            sampling_mask, logz_per_batch = _compute_sampling_mask(
+            sampling_mask, logz_per_batch, topp_in_topk_mask = _compute_sampling_mask(
                 probs,
                 sampling_metadata.top_p,
                 top_k=sampling_metadata.top_k,
@@ -707,6 +730,7 @@ class Sampler(nn.Layer):
             logits=logits,
             sampling_mask=sampling_mask,
             logz_per_batch=logz_per_batch,
+            topp_in_topk_mask=topp_in_topk_mask,
         )
 
         return sampler_output
@@ -1024,6 +1048,7 @@ class SpeculativeSampler(nn.Layer):
         # Shape: [total_accepted_tokens, vocab_size], bool (CPU).
         sampling_mask = None
         logz_per_batch = None
+        topp_in_topk_mask = None
         if keep_sampling_mask:
             # Expand top_p from [batch, 1] to [total_accepted, 1].
             accept_top_p = sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
@@ -1036,7 +1061,7 @@ class SpeculativeSampler(nn.Layer):
                 accept_top_k = (
                     sampling_metadata.top_k[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
                 )
-            sampling_mask, logz_per_batch = _compute_sampling_mask(
+            sampling_mask, logz_per_batch, topp_in_topk_mask = _compute_sampling_mask(
                 target_probs,
                 accept_top_p,
                 top_k=accept_top_k,
@@ -1051,6 +1076,7 @@ class SpeculativeSampler(nn.Layer):
             logits=logits,
             sampling_mask=sampling_mask,
             logz_per_batch=logz_per_batch,
+            topp_in_topk_mask=topp_in_topk_mask,
         )
 
         return sampler_output

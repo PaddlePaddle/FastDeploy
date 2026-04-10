@@ -197,6 +197,12 @@ class SamplerOutput:
     # Used for renormalizing logprobs to match the truncated sampling distribution.
     # Shape: [num_reqs]
     logz_per_batch: Optional[np.ndarray] = None
+    # topp_in_topk_mask: Boolean mask over top-k candidates indicating which
+    # ones are further selected by top-p (True = in top-p nucleus, False = not).
+    # List of length num_reqs; element i is a 1-D bool array of length
+    # effective_k[i] (in descending-probability order within the top-k window).
+    # When top-k is disabled, length equals vocab_size (all tokens are candidates).
+    topp_in_topk_mask: Optional[List[np.ndarray]] = None
 
 
 @dataclass
