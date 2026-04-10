@@ -2110,6 +2110,12 @@ class GPUModelRunner(ModelRunnerBase):
             self._cached_sampler_output = sampler_output
             self._cached_post_process_event = post_process_event
         else:
+            if (
+                self.fd_config.speculative_config.method == SpecMethod.MTP
+                and hasattr(self.proposer.model, "empty_input_forward")
+                and self.parallel_config.use_ep
+            ):
+                self._execute_empty_mtp_input(self.forward_meta)
             self._cached_model_output_data = None
             self._cached_sampler_output = None
             self._cached_post_process_event = None
