@@ -12,7 +12,7 @@ The following installation methods are available when your environment meets the
 
 ## 1. Pre-built Docker Installation (Recommended)
 
-**Notice**: The pre-built image supports SM 80/86/89/90 architecture GPUs (e.g. A800/H800/L20/L40/4090).
+**Notice**: The pre-built image supports SM 80/86/89/90 architecture GPUs (e.g. A800/H800/L20/L40/4090), and requires Python 3.10.
 
 ```shell
 # CUDA 12.6
@@ -26,13 +26,13 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12
 First install paddlepaddle-gpu. For detailed instructions, refer to [PaddlePaddle Installation](https://www.paddlepaddle.org.cn/en/install/quick?docurl=/documentation/docs/en/develop/install/pip/linux-pip_en.html)
 ```shell
 # Install stable release
-# CUDA 
+# CUDA 12.6
 python -m pip install paddlepaddle-gpu==3.3.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 # CUDA 12.9
 python -m pip install paddlepaddle-gpu==3.3.1 -i https://www.paddlepaddle.org.cn/packages/stable/cu129/
 
 # Install latest Nightly build
-# CUDA 
+# CUDA 12.6
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 # CUDA 12.9
 python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu129/
@@ -41,15 +41,15 @@ python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/
 Then install fastdeploy. **Do not install from PyPI**. Use the following methods instead (supports SM80/86/89/90 GPU architectures).
 
 **Note**: Stable FastDeploy release pairs with stable PaddlePaddle; Nightly Build FastDeploy pairs with Nightly Build PaddlePaddle. The `--extra-index-url` is only used for downloading fastdeploy-gpu's dependencies; fastdeploy-gpu itself must be installed from the Paddle source specified by `-i`.
-```
+```shell
 # Install stable release FastDeploy
-# CUDA 
+# CUDA 12.6
 python -m pip install fastdeploy-gpu==2.5.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 # CUDA 12.9
 python -m pip install fastdeploy-gpu==2.5.0 -i https://www.paddlepaddle.org.cn/packages/stable/cu129/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 # Install Nightly Build FastDeploy
-# CUDA 
+# CUDA 12.6
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 # CUDA 12.9
 python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu129/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
@@ -57,7 +57,7 @@ python -m pip install fastdeploy-gpu -i https://www.paddlepaddle.org.cn/packages
 
 ## 3. Build from Source Using Docker
 
-> Note: `dockerfiles/Dockerfile.gpu` currently supports CUDA 12.6 only, targeting SM 80/86/89/90 architectures. To support other architectures, modify ```bash build.sh 1 python false [80,90]``` in the Dockerfile. It's recommended to specify no more than 2 architectures.
+> Note: `dockerfiles/Dockerfile.gpu` currently supports CUDA 12.6 only, targeting SM 80/86/89/90 architectures, and requires Python 3.10. To support other architectures, modify ```bash build.sh 1 python false [80,90]``` in the Dockerfile. It's recommended to specify no more than 2 architectures.
 
 ```shell
 git clone https://github.com/PaddlePaddle/FastDeploy
@@ -86,7 +86,7 @@ The built packages will be in the ```FastDeploy/dist``` directory.
 
 ## 5. Precompiled Operator Wheel Packages
 
-FastDeploy provides precompiled GPU operator wheel packages for quick setup without building the entire source code.This method currently supports SM80/90 architecture (e.g., A100/H100) and CUDA 12.6 environments only.
+FastDeploy provides precompiled GPU operator wheel packages for quick setup without building the entire source code. This method currently supports **SM80/90 architecture (e.g., A100/H100)** **CUDA 12.6** and **Python 3.10** environments only.
 
 > By default, `build.sh` compiles all custom operators from source.To use the precompiled package, enable it with the `FD_USE_PRECOMPILED` parameter.
 > If the precompiled package cannot be downloaded or does not match the current environment, the system will automatically fall back to `4. Build Wheel from Source`.
@@ -124,7 +124,7 @@ After the build completes, the operator binaries can be found in `FastDeploy/fas
 > **Notes:**
 >
 > - This mode prioritizes downloading precompiled GPU operator wheels to reduce build time.
-> - Supports **GPU, SM80/86/89/90.
+> - Currently supports **GPU, SM80/90, CUDA 12.6, Python3.10** only.
 > - For custom architectures or modified operator logic, please use **source compilation (Section 4)**.
 > - You can check whether the precompiled wheel for a specific commit has been successfully built on the [FastDeploy CI Build Status Page](https://github.com/PaddlePaddle/FastDeploy/actions/workflows/ce_job.yml).
 
