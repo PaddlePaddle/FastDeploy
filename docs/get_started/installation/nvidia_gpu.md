@@ -12,7 +12,7 @@ The following installation methods are available when your environment meets the
 
 ## 1. Pre-built Docker Installation (Recommended)
 
-**Notice**: The pre-built image supports SM 80/86/89/90 architecture GPUs (e.g. A800/H800/L20/L40/4090), and requires Python 3.10.
+**Notice**: The pre-built image supports SM 80/86/89/90 architecture GPUs (e.g. A800/H800/L20/L40/4090).
 
 ```shell
 # CUDA 12.6
