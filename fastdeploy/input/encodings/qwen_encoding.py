@@ -22,8 +22,8 @@ from PIL import Image
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.input.encodings.base_encoding import BaseEncoding
 from fastdeploy.input.utils import IDS_TYPE_FLAG
-from fastdeploy.input.video_utils import read_video_decord
-from fastdeploy.input.video_utils import sample_frames_qwen as _sample_qwen
+from fastdeploy.input.utils.video import read_video_decord
+from fastdeploy.input.utils.video import sample_frames_qwen as _sample_qwen
 from fastdeploy.multimodal.hasher import MultimodalHasher
 
 

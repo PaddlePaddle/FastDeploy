@@ -837,15 +837,15 @@ class TestErnieEncoding(unittest.TestCase):
 
         with (
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_video_decord",
+                "fastdeploy.input.utils.video.read_video_decord",
                 return_value=(mock_reader, mock_meta, mock_path),
             ) as mock_read_video,
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_frames_decord",
+                "fastdeploy.input.utils.video.read_frames_decord",
                 return_value=([mock_frame1, mock_frame2], None, [0.0, 0.5]),
             ) as mock_read_frames,
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.utils.render_timestamp.render_frame_timestamp",
+                "fastdeploy.input.utils.render_timestamp.render_frame_timestamp",
                 side_effect=[rendered_frame1, rendered_frame2],
             ),
         ):
@@ -875,15 +875,15 @@ class TestErnieEncoding(unittest.TestCase):
 
         with (
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_video_decord",
+                "fastdeploy.input.utils.video.read_video_decord",
                 return_value=(mock_reader, mock_meta, mock_path),
             ),
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_frames_decord",
+                "fastdeploy.input.utils.video.read_frames_decord",
                 return_value=([mock_frame1, mock_frame2, mock_frame3], None, [0.0, 0.5, 1.0]),
             ),
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.utils.render_timestamp.render_frame_timestamp",
+                "fastdeploy.input.utils.render_timestamp.render_frame_timestamp",
                 side_effect=[rendered1, rendered2, rendered3],
             ),
         ):
@@ -905,15 +905,15 @@ class TestErnieEncoding(unittest.TestCase):
 
         with (
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_video_decord",
+                "fastdeploy.input.utils.video.read_video_decord",
                 return_value=(mock_reader, mock_meta, mock_path),
             ),
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.process_video.read_frames_decord",
+                "fastdeploy.input.utils.video.read_frames_decord",
                 return_value=([MagicMock(), MagicMock()], None, [0.0, 0.5]),
             ) as mock_read_frames,
             patch(
-                "fastdeploy.input.ernie4_5_vl_processor.utils.render_timestamp.render_frame_timestamp",
+                "fastdeploy.input.utils.render_timestamp.render_frame_timestamp",
                 side_effect=[MagicMock(), MagicMock()],
             ),
         ):

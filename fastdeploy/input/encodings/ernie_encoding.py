@@ -170,13 +170,8 @@ class ErnieEncoding(BaseEncoding):
         outputs["cur_position"] = np.max(pos_ids) + 1
 
     def load_video(self, url, item):
-        from fastdeploy.input.ernie4_5_vl_processor.process_video import (
-            read_frames_decord,
-            read_video_decord,
-        )
-        from fastdeploy.input.ernie4_5_vl_processor.utils.render_timestamp import (
-            render_frame_timestamp,
-        )
+        from fastdeploy.input.utils.render_timestamp import render_frame_timestamp
+        from fastdeploy.input.utils.video import read_frames_decord, read_video_decord
 
         reader, meta, path = read_video_decord(url, save_to_disk=False)
 

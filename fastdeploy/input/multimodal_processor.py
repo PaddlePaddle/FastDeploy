@@ -494,19 +494,6 @@ class MultiModalProcessor(BaseTextProcessor):
 
         return outputs
 
-    def _apply_reasoning_parser(self, request):
-        model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-        parts = request["request_id"].split("_")
-        if len(parts) > 1:
-            real_req_id = parts[0]
-            index = int(parts[1])
-            n = request.get("n", 1)
-            for idx in range(index * n, (index + 1) * n):
-                self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
-        else:
-            self.model_status_dict[request["request_id"]] = model_status
-        request["enable_thinking"] = model_status == "think_start"
-
     def get_processor_cache(self, socket, mm_hashes):
         req = pickle.dumps(mm_hashes)
         socket.send_multipart([b"", req])
