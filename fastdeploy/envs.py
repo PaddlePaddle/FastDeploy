@@ -234,6 +234,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Whether to use phi rms_norm,if 1,use paddle op.
+    "FD_USE_PHI_RMSNORM": lambda: bool(int(os.getenv("FD_USE_PHI_RMSNORM", "0"))),
 }
 
 
