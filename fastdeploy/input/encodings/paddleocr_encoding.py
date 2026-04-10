@@ -127,6 +127,7 @@ class PaddleOCREncoding(QwenEncoding):
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
         outputs["input_ids"].extend([self.video_token_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
+        outputs["num_input_video_tokens"] += num_tokens
         outputs["image_type_ids"].extend([1] * t)
 
         fps = meta["fps"]
