@@ -168,6 +168,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                         tokens_per_expert=[],
                         padding_alignment=128,
                         override_buffer_size=token_all_num,
+                        return_expert_indices=True,
                     )
                 )
 
