@@ -196,7 +196,7 @@ class QwenEncoding(BaseEncoding):
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):
         num_tokens = len(completion_token_ids)
         multimodal_inputs["input_ids"].extend(completion_token_ids)
-        multimodal_inputs["token_type_ids"].extend([0] * num_tokens)
+        multimodal_inputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
 
         pos_ids = self._compute_text_positions(multimodal_inputs["cur_position"], num_tokens)
         multimodal_inputs["position_ids"].append(pos_ids)

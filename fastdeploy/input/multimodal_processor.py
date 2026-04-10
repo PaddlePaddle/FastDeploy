@@ -179,7 +179,8 @@ class MultiModalProcessor(BaseTextProcessor):
         mm_items = []
         for msg in messages:
             role = msg.get("role")
-            assert role in self.role_prefixes, f"Unsupported role: {role}"
+            if role not in self.role_prefixes:
+                raise ValueError(f"Unsupported role: {role}")
             content = msg.get("content")
             if not isinstance(content, list):
                 content = [content]
@@ -406,12 +407,13 @@ class MultiModalProcessor(BaseTextProcessor):
             pass  # preserve existing
         else:
             request["prompt_token_ids"] = outputs["input_ids"].tolist()
-        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
         request["multimodal_inputs"] = outputs
 
         # Truncation
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+
+        request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
 
         # Ernie: update thinking prompt state
         if cfg.has_logits_processor_think:
