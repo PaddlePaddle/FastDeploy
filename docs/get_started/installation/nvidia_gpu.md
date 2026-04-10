@@ -86,7 +86,7 @@ The built packages will be in the ```FastDeploy/dist``` directory.
 
 ## 5. Precompiled Operator Wheel Packages
 
-FastDeploy provides precompiled GPU operator wheel packages for quick setup without building the entire source code.
+FastDeploy provides precompiled GPU operator wheel packages for quick setup without building the entire source code.This method currently supports SM80/90 architecture (e.g., A100/H100) and CUDA 12.6 environments only.
 
 > By default, `build.sh` compiles all custom operators from source.To use the precompiled package, enable it with the `FD_USE_PRECOMPILED` parameter.
 > If the precompiled package cannot be downloaded or does not match the current environment, the system will automatically fall back to `4. Build Wheel from Source`.
