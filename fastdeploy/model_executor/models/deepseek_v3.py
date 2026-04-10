@@ -72,6 +72,7 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         cp_gather_indexer_k_quant_cache,
         indexer_k_quant_and_cache,
+        merge_prefill_decode_output,
         radix_topk_ragged_transform,
     )
 
@@ -398,7 +399,6 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
-            fmha_out_prefill = fmha_out_prefill * forward_meta.mask_encoder_batch.cast(fmha_out_prefill.dtype)
             fmha_out = fmha_out_prefill
 
         if need_do_decode:  # max_dec_len_this_time
@@ -433,7 +433,17 @@ class DeepseekV3MLAAttention(nn.Layer):
             )
 
             if need_do_prefill:
-                fmha_out += fmha_out_decode
+                merge_prefill_decode_output(
+                    fmha_out,
+                    fmha_out_decode,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.cu_seqlens_q,
+                    self.num_attention_heads_tp,
+                    self.v_head_dim,
+                    1,
+                )
             else:
                 fmha_out = fmha_out_decode
 
