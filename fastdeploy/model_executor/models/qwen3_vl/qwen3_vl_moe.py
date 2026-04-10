@@ -242,7 +242,7 @@ class Qwen3VLMoeForConditionalGeneration(Qwen3VLForConditionalGeneration):
         # params_name model.embed_tokens.embeddings.weight
         # weight_name model.language_model.embed_tokens.weight
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
-        logger.info(f"[Qwen3Moe-VL] params_dict names: {list(params_dict.keys())} ")
+        logger.info(f"[Qwen3Moe-VL] params_dict names: {list(params_dict)} ")
         for loaded_weight_name, loaded_weight in weights_iterator:
             logger.debug(f"Loading weight: {loaded_weight_name}")
             loaded_weight_name = loaded_weight_name.replace(".language_model", "")

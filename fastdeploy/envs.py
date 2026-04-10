@@ -313,7 +313,7 @@ class _EnvsModule(ModuleType):
             raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
     def __dir__(self):
-        return list(environment_variables.keys())
+        return list(environment_variables)
 
 
 # Replace the module with our custom class

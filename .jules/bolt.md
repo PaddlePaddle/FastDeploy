@@ -1,0 +1,3 @@
+## 2026-04-10 - Minor Python Performance Optimizations
+**Learning:** Python has micro-optimizations that can reduce runtime overhead slightly, such as using generator expressions instead of list comprehensions in `sum()` (e.g., `sum(x for x in ...)` instead of `sum([x for x in ...])`) and removing redundant `.keys()` calls when iterating or checking membership in a dictionary (e.g., `if key in my_dict` instead of `if key in my_dict.keys()`).
+**Action:** Always prefer direct dictionary membership checks/iterations and generator expressions where appropriate, especially in frequently executed paths.

@@ -811,7 +811,7 @@ class Glm4MoeForCausalLMRL(Glm4MoeForCausalLM, BaseRLModel):
             self.infer_to_train_mapping.update(mtp_infer_to_train_mapping)
 
         infer_to_train_mapping_copy = copy.deepcopy(self.infer_to_train_mapping)
-        for key in infer_to_train_mapping_copy.keys():
+        for key in infer_to_train_mapping_copy:
             if "mlp.experts.gate_correction_bias" in key:
                 self.infer_to_train_mapping.pop(key)
 

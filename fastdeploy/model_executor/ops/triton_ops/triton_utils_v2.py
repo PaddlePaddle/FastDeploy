@@ -145,7 +145,7 @@ class KernelInterface:
 
             position_arguments_num = len(all_input)
             for i in range(position_arguments_num, len(self.arg_names)):
-                if self.arg_names[i] in kwargs.keys():
+                if self.arg_names[i] in kwargs:
                     all_input.append(kwargs[self.arg_names[i]])
                 else:
                     # means this input is not specified, it muse be a tl.constexpr.
@@ -265,9 +265,9 @@ class KernelInterface:
                 const_hint_dict = {}
                 codegen_commands = []
                 for config in all_tune_config:
-                    for key in const_hint_dict.keys():
+                    for key in const_hint_dict:
                         if const_hint_dict[key] is not None:
-                            if key not in config.keys():
+                            if key not in config:
                                 config[key] = const_hint_dict[key]
                             else:
                                 if config[key] == const_hint_dict[key]:
@@ -279,10 +279,10 @@ class KernelInterface:
                                     )
                                     raise ValueError(message)
                         else:
-                            assert key in config.keys(), f"you must specify {key} in your config."
-                    if "num_warps" not in config.keys():
+                            assert key in config, f"you must specify {key} in your config."
+                    if "num_warps" not in config:
                         config["num_warps"] = 4
-                    if "num_stages" not in config.keys():
+                    if "num_stages" not in config:
                         config["num_stages"] = 4
 
                     for key in config:

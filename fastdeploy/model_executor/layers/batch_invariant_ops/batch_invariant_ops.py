@@ -622,7 +622,7 @@ def bmm_persistent(a: paddle.Tensor, b: paddle.Tensor) -> paddle.Tensor:
     config = configs.get(dtype)
     if config is None:
         raise ValueError(
-            f"Unsupported dtype {dtype} for bmm_persistent. " f"Supported dtypes are: {list(configs.keys())}"
+            f"Unsupported dtype {dtype} for bmm_persistent. " f"Supported dtypes are: {list(configs)}"
         )
 
     num_tiles_per_batch = triton.cdiv(M, config["BLOCK_SIZE_M"]) * triton.cdiv(N, config["BLOCK_SIZE_N"])

@@ -37,4 +37,4 @@ ACT2FN = ClassInstantier(ACT2CLS)
 def get_activation_fn(hidden_act: str):
     if hidden_act == "gelu_pytorch_tanh":
         return ACT2FN["gelu_tanh"]
-    raise KeyError(f"function {hidden_act} not found in ACT2FN mapping {list(ACT2FN.keys())}")
+    raise KeyError(f"function {hidden_act} not found in ACT2FN mapping {list(ACT2FN)}")

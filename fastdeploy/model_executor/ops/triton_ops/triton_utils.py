@@ -642,7 +642,7 @@ class KernelInterface:
 
             position_arguments_num = len(all_input)
             for i in range(position_arguments_num, len(self.arg_names)):
-                if self.arg_names[i] in kwargs.keys():
+                if self.arg_names[i] in kwargs:
                     all_input.append(kwargs[self.arg_names[i]])
                 else:
                     # means this input is not specified, it muse be a tl.constexpr.
@@ -706,7 +706,7 @@ class KernelInterface:
             for i in range(len(lanuch_grid)):
                 ele = lanuch_grid[i]
                 if isinstance(ele, str):
-                    for key in const_hint_dict.keys():
+                    for key in const_hint_dict:
                         if key in ele:
                             ele = ele.replace(key, f"{{{key}}}")
                 else:
@@ -721,7 +721,7 @@ class KernelInterface:
             op_dict["triton_kernel_args"] = ",".join(modified_arg_exclude_constexpr)
             op_dict["key"] = ",".join(self.key_args)
             # when tuning, we need to reset the out to zero.
-            if "reset_zero_when_tune" in other_config.keys():
+            if "reset_zero_when_tune" in other_config:
                 op_dict["reset_zero_when_tune"] = other_config["reset_zero_when_tune"]
 
             paddle_custom_op_file_path = f"{generated_dir}/{op_name}.cu"
@@ -755,9 +755,9 @@ class KernelInterface:
                     const_hint_dict = {}
                 codegen_commands = []
                 for config in all_tune_config:
-                    for key in const_hint_dict.keys():
+                    for key in const_hint_dict:
                         if const_hint_dict[key] is not None:
-                            if key not in config.keys():
+                            if key not in config:
                                 config[key] = const_hint_dict[key]
                             else:
                                 if config[key] == const_hint_dict[key]:
@@ -769,10 +769,10 @@ class KernelInterface:
                                     )
                                     raise ValueError(message)
                         else:
-                            assert key in config.keys(), f"you must specify {key} in your config."
-                    if "num_warps" not in config.keys():
+                            assert key in config, f"you must specify {key} in your config."
+                    if "num_warps" not in config:
                         config["num_warps"] = 4
-                    if "num_stages" not in config.keys():
+                    if "num_stages" not in config:
                         config["num_stages"] = 4
 
                     for key in config:

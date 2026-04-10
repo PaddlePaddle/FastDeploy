@@ -531,7 +531,7 @@ def get_all_weights_file(model_path: str):
             index_file = model_path / "model.safetensors.index.json"
             with index_file.open("r") as f:
                 weight_map = json.load(f)["weight_map"]
-            keys = list(weight_map.keys())
+            keys = list(weight_map)
             is_layers_are_grouped = layers_are_grouped(keys)
             ordered_weight_map = {
                 key: str(model_path / weight_map[key]) for key in sorted(weight_map.keys(), key=natural_key)

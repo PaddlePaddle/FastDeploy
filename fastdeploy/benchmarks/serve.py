@@ -122,7 +122,7 @@ def add_cli_args(parser: argparse.ArgumentParser):
         "--backend",
         type=str,
         default="openai-chat",
-        choices=list(ASYNC_REQUEST_FUNCS.keys()),
+        choices=list(ASYNC_REQUEST_FUNCS),
     )
     parser.add_argument(
         "--base-url",

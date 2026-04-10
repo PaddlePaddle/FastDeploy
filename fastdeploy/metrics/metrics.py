@@ -764,7 +764,7 @@ class MetricsManager:
         self.cache_config_info = Gauge(
             name="fastdeploy:cache_config_info",
             documentation="Information of the engine's CacheConfig",
-            labelnames=list(metrics_info.keys()),
+            labelnames=list(metrics_info),
             multiprocess_mode="mostrecent",
         )
 

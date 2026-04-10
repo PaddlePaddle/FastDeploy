@@ -257,7 +257,7 @@ class SiglipVisionEmbeddings(nn.Layer):
                 assert batch_size == 1
                 start = 0
 
-                assert sum([np.prod(x) for x in flatten_image_grid_thw]) == embeddings.shape[1], (
+                assert sum(np.prod(x) for x in flatten_image_grid_thw) == embeddings.shape[1], (
                     flatten_image_grid_thw,
                     embeddings.shape,
                 )
@@ -466,7 +466,7 @@ class SiglipEncoder(nn.Layer):
         if use_rope is True:
             flatten_image_grid_thw = self.flatten_list(image_grid_thw)
             flatten_image_grid_thw = np.array(flatten_image_grid_thw)
-            assert sum([np.prod(x) for x in flatten_image_grid_thw]) == hidden_states.shape[1], (
+            assert sum(np.prod(x) for x in flatten_image_grid_thw) == hidden_states.shape[1], (
                 flatten_image_grid_thw,
                 hidden_states.shape,
             )
@@ -513,7 +513,7 @@ class SiglipEncoder(nn.Layer):
             if use_window_attn:
                 flatten_image_grid_thw = self.flatten_list(image_grid_thw)
                 assert (
-                    sum([np.prod(x.astype("float32").cpu().numpy()) for x in flatten_image_grid_thw])
+                    sum(np.prod(x.astype("float32").cpu().numpy()) for x in flatten_image_grid_thw)
                     == hidden_states.shape[1]
                 ), (flatten_image_grid_thw, hidden_states.shape)
 
