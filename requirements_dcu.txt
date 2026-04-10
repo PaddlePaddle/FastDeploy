@@ -7,7 +7,7 @@ zmq
 aiozmq
 openai
 tqdm
-pynvml
+nvidia-ml-py
 uvicorn>=0.38.0
 fastapi
 paddleformers==1.0.0
