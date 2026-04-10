@@ -41,11 +41,6 @@ class BaseEncoding(ABC):
         self.cfg = cfg
         self.image_processor = processor.image_processor
         self.tokenizer = processor.tokenizer
-        self.enable_processor_cache = processor.enable_processor_cache
-
-        # Method callbacks into processor
-        self._extract_mm_items = processor._extract_mm_items
-        self.update_processor_cache = processor.update_processor_cache
 
         # Conv params
         if cfg.conv_params_from_kwargs:
@@ -134,8 +129,17 @@ class BaseEncoding(ABC):
     # Prompt-token-ids path (optional — only models with
     # supports_prompt_token_ids=True need to implement this)
     # ------------------------------------------------------------------
-    def prompt_token_ids2outputs(self, request: dict) -> dict:
-        """Build outputs dict from pre-tokenised ``prompt_token_ids``."""
+    def prompt_token_ids2outputs(self, prompt_token_ids, mm_items=None) -> dict:
+        """Build outputs dict from pre-tokenised ``prompt_token_ids``.
+
+        Parameters
+        ----------
+        prompt_token_ids : list[int]
+            Pre-tokenised token IDs.
+        mm_items : list[dict] | None
+            Already-extracted multimodal items (each has 'type', 'data', 'uuid').
+            ``None`` means text-only.
+        """
         raise NotImplementedError(f"{type(self).__name__} does not support prompt_token_ids path")
 
     # ------------------------------------------------------------------

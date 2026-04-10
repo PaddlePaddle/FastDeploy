@@ -297,24 +297,49 @@ class MultiModalProcessor(BaseTextProcessor):
         outputs = self.text2ids(prompt, images, videos, image_uuid, video_uuid)
 
         if self.enable_processor_cache:
-            missing_idx_set = set(missing_idx)
-            hashes_to_cache, items_to_cache = [], []
-            for idx in range(len(mm_items)):
-                if idx in missing_idx_set:
-                    continue
-                meta = {}
-                grid_thw = np.asarray(outputs["grid_thw"][idx])
-                if grid_thw.ndim > 1:
-                    t, h, w = grid_thw[0]
-                else:
-                    t, h, w = grid_thw
-                meta["thw"] = (int(t), int(h), int(w))
-                if "fps" in outputs:
-                    meta["fps"] = outputs["fps"][idx]
-                hashes_to_cache.append(outputs["mm_hashes"][idx])
-                items_to_cache.append((outputs["images"][idx], meta))
-            if hashes_to_cache:
-                self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
+            self._update_mm_cache(dealer, missing_idx, mm_items, outputs)
+
+        return outputs
+
+    def _process_prompt_token_ids(self, request):
+        """Handle the prompt_token_ids tokenisation path.
+
+        Mirrors ``request2ids`` in structure: Processor owns extract/cache,
+        Encoding only does pure encoding.
+        """
+        prompt_token_ids = request.get("prompt_token_ids", [])
+
+        if not request.get("messages"):
+            return self.enc.prompt_token_ids2outputs(prompt_token_ids)
+
+        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self._extract_mm_items(request)
+        outputs = self.enc.prompt_token_ids2outputs(prompt_token_ids, mm_items)
+
+        if self.enable_processor_cache:
+            self._update_mm_cache(dealer, missing_idx, mm_items, outputs)
+
+        return outputs
+
+    def _update_mm_cache(self, dealer, missing_idx, mm_items, outputs):
+        """Write newly-processed multimodal items to the processor cache."""
+        missing_idx_set = set(missing_idx)
+        hashes_to_cache, items_to_cache = [], []
+        for idx in range(len(mm_items)):
+            if idx in missing_idx_set:
+                continue
+            meta = {}
+            grid_thw = np.asarray(outputs["grid_thw"][idx])
+            if grid_thw.ndim > 1:
+                t, h, w = grid_thw[0]
+            else:
+                t, h, w = grid_thw
+            meta["thw"] = (int(t), int(h), int(w))
+            if "fps" in outputs:
+                meta["fps"] = outputs["fps"][idx]
+            hashes_to_cache.append(outputs["mm_hashes"][idx])
+            items_to_cache.append((outputs["images"][idx], meta))
+        if hashes_to_cache:
+            self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
 
         return outputs
 
@@ -433,7 +458,7 @@ class MultiModalProcessor(BaseTextProcessor):
             if messages:
                 self._check_mm_limits(messages)
             request.setdefault("enable_thinking", default_thinking)
-            return self.enc.prompt_token_ids2outputs(request)
+            return self._process_prompt_token_ids(request)
 
         elif request.get("prompt"):
             multimodal_data = request.get("multimodal_data") or {}

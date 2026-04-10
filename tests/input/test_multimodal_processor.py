@@ -333,6 +333,7 @@ class TestTokenizeRequest(unittest.TestCase):
         proc = _make_processor(QWEN3_VL)
         expected = {"input_ids": [1, 2, 3]}
         proc.enc.prompt_token_ids2outputs.return_value = expected
+        proc._extract_mm_items = MagicMock(return_value=([], [], [], [], None, [], []))
 
         request = {"prompt_token_ids": [1, 2, 3], "messages": [{"role": "user", "content": "hi"}]}
         result = proc._tokenize_request(request)
@@ -650,6 +651,7 @@ class TestProcessRequestDict(unittest.TestCase):
         proc = _make_processor(QWEN3_VL)
         outputs = self._make_mock_outputs(QWEN3_VL)
         proc.enc.prompt_token_ids2outputs.return_value = outputs
+        proc._extract_mm_items = MagicMock(return_value=([], [], [], [], None, [], []))
 
         request = {
             "request_id": "test2",

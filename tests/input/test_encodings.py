@@ -68,9 +68,6 @@ def _make_encoding(model_type, processor_kwargs=None):
     mock_processor.config.vision_config = MagicMock()
     mock_processor.config.vision_config.tokens_per_second = 2
 
-    mock_processor._extract_mm_items = MagicMock()
-    mock_processor.update_processor_cache = MagicMock()
-
     from fastdeploy.input.encodings import EncodingRegistry
 
     cls = EncodingRegistry.get(model_type)
@@ -244,10 +241,9 @@ class TestQwenEncoding(unittest.TestCase):
         self.assertEqual(outputs["video_patch_id"], enc.video_token_id)
 
     def test_prompt_token_ids2outputs_text_only(self):
-        """prompt_token_ids with no messages — text-only path."""
+        """prompt_token_ids with no mm_items — text-only path."""
         enc, _ = self._make_enc(QWEN3_VL)
-        request = {"prompt_token_ids": [1, 2, 3]}
-        outputs = enc.prompt_token_ids2outputs(request)
+        outputs = enc.prompt_token_ids2outputs([1, 2, 3])
         self.assertEqual(outputs["input_ids"], [1, 2, 3])
         self.assertEqual(len(outputs["token_type_ids"]), 3)
         self.assertEqual(outputs["cur_position"], 3)
@@ -265,41 +261,16 @@ class TestQwenEncoding(unittest.TestCase):
 
         # image_token_id = 100 for qwen
         # [text, img, img, img, img, text]
-        mock_proc._extract_mm_items.return_value = (
-            [mock_img],  # images
-            [],  # videos
-            ["img_uuid"],  # image_uuid
-            [],  # video_uuid
-            None,  # dealer
-            [],  # missing_idx
-            [{"type": "image", "data": mock_img, "uuid": "img_uuid"}],  # mm_items
-        )
-        request = {
-            "prompt_token_ids": [1, 100, 100, 100, 100, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
-        outputs = enc.prompt_token_ids2outputs(request)
+        mm_items = [{"type": "image", "data": mock_img, "uuid": "img_uuid"}]
+        outputs = enc.prompt_token_ids2outputs([1, 100, 100, 100, 100, 2], mm_items)
         # 1 text + 4 image + 1 text = 6
         self.assertEqual(len(outputs["input_ids"]), 6)
 
     def test_prompt_token_ids2outputs_mm_count_mismatch(self):
         """More placeholders than mm_items raises."""
         enc, mock_proc = self._make_enc(QWEN3_VL)
-        mock_proc._extract_mm_items.return_value = (
-            [],
-            [],
-            [],
-            [],
-            None,
-            [],
-            [],  # no mm_items
-        )
-        request = {
-            "prompt_token_ids": [100, 100],  # image tokens but no images
-            "messages": [{"role": "user", "content": "hi"}],
-        }
         with self.assertRaises(ValueError):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([100, 100], [])
 
 
 # ===================================================================
@@ -615,10 +586,9 @@ class TestErnieEncoding(unittest.TestCase):
         self.assertEqual(result["fps"], -1)
 
     def test_prompt_token_ids2outputs_text_only(self):
-        """prompt_token_ids without messages — text-only path."""
+        """prompt_token_ids without mm_items — text-only path."""
         enc, _ = self._make_enc()
-        request = {"prompt_token_ids": [10, 20, 30]}
-        outputs = enc.prompt_token_ids2outputs(request)
+        outputs = enc.prompt_token_ids2outputs([10, 20, 30])
         self.assertEqual(outputs["input_ids"], [10, 20, 30])
         self.assertEqual(len(outputs["position_ids"]), 3)
         self.assertEqual(outputs["position_ids"][0], [0, 0, 0])
@@ -632,20 +602,8 @@ class TestErnieEncoding(unittest.TestCase):
         # Build: [text(1), IMG_START(200), placeholder(102,102,102,102), IMG_END(201), text(2)]
         img = np.zeros((16, 3, 28, 28))
         meta = {"thw": (1, 4, 4)}
-        mock_proc._extract_mm_items.return_value = (
-            [(img, meta)],  # images (tuple = processed)
-            [],
-            ["img_uuid"],
-            [],
-            None,
-            [],
-            [{"type": "image", "data": (img, meta), "uuid": "img_uuid"}],
-        )
-        request = {
-            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
-        outputs = enc.prompt_token_ids2outputs(request)
+        mm_items = [{"type": "image", "data": (img, meta), "uuid": "img_uuid"}]
+        outputs = enc.prompt_token_ids2outputs([1, 200, 102, 102, 102, 102, 201, 2], mm_items)
         # 1 text + 1 img_start + 4 image + 1 img_end + 1 text = 8
         self.assertEqual(len(outputs["input_ids"]), 8)
 
@@ -936,20 +894,8 @@ class TestErnieEncoding(unittest.TestCase):
         # Build: [text(1), VID_START(202), placeholder(102)*4, VID_END(203), text(2)]
         frames = np.zeros((32, 3, 28, 28))
         meta = {"thw": (4, 4, 4)}
-        mock_proc._extract_mm_items.return_value = (
-            [],  # images
-            [(frames, meta)],  # videos (tuple = processed)
-            [],  # image_uuid
-            ["vid_uuid"],  # video_uuid
-            None,  # dealer
-            [],  # missing_idx
-            [{"type": "video", "data": (frames, meta), "uuid": "vid_uuid"}],
-        )
-        request = {
-            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
-        outputs = enc.prompt_token_ids2outputs(request)
+        mm_items = [{"type": "video", "data": (frames, meta), "uuid": "vid_uuid"}]
+        outputs = enc.prompt_token_ids2outputs([1, 202, 102, 102, 102, 102, 203, 2], mm_items)
         # 1 text + 1 vid_start + 4 video + 1 vid_end + 1 text = 8
         self.assertEqual(len(outputs["input_ids"]), 8)
         self.assertEqual(outputs["input_ids"][0], 1)
@@ -964,27 +910,14 @@ class TestErnieEncoding(unittest.TestCase):
 
         mock_frames = [MagicMock() for _ in range(2)]
 
-        mock_proc._extract_mm_items.return_value = (
-            [],
-            ["http://example.com/video.mp4"],  # raw video url
-            [],
-            ["vid_uuid"],
-            None,
-            [],
-            [{"type": "video"}],
-        )
+        mm_items = [{"type": "video", "data": "http://example.com/video.mp4", "uuid": "vid_uuid"}]
 
         # 2 frames, 4x4 patches → 2*4*4 // (4*2) = 4 tokens
-        request = {
-            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
-
         with (
             patch.object(enc, "load_video", return_value=(mock_frames, {})) as mock_load,
             patch.object(enc, "add_video") as mock_add_video,
         ):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([1, 202, 102, 102, 102, 102, 203, 2], mm_items)
 
         mock_load.assert_called_once_with("http://example.com/video.mp4", {})
         mock_add_video.assert_called_once()
@@ -998,26 +931,13 @@ class TestErnieEncoding(unittest.TestCase):
         mock_frames = [MagicMock() for _ in range(2)]
         video_dict = {"video": "http://example.com/video.mp4", "fps": 5}
 
-        mock_proc._extract_mm_items.return_value = (
-            [],
-            [video_dict],  # raw video dict
-            [],
-            ["vid_uuid"],
-            None,
-            [],
-            [{"type": "video"}],
-        )
-
-        request = {
-            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
+        mm_items = [{"type": "video", "data": video_dict, "uuid": "vid_uuid"}]
 
         with (
             patch.object(enc, "load_video", return_value=(mock_frames, {})) as mock_load,
             patch.object(enc, "add_video"),
         ):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([1, 202, 102, 102, 102, 102, 203, 2], mm_items)
 
         mock_load.assert_called_once_with("http://example.com/video.mp4", video_dict)
 
@@ -1027,128 +947,62 @@ class TestErnieEncoding(unittest.TestCase):
     def test_prompt_token_ids2outputs_image_placeholder_overflow(self):
         """More image start tokens than images provided raises ValueError."""
         enc, mock_proc = self._make_enc()
-        mock_proc._extract_mm_items.return_value = (
-            [],  # no images
-            [],
-            [],
-            [],
-            None,
-            [],
-            [],
-        )
-        request = {
-            "prompt_token_ids": [200, 102, 201],  # IMG_START but no images
-            "messages": [{"role": "user", "content": "hi"}],
-        }
+        mm_items = []  # no images
         with self.assertRaises(ValueError, msg="more image placeholder"):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([200, 102, 201], mm_items)  # IMG_START but no images
 
     def test_prompt_token_ids2outputs_image_tokens_incomplete(self):
         """Image start without matching end raises ValueError."""
         enc, mock_proc = self._make_enc()
         img = np.zeros((16, 3, 28, 28))
         meta = {"thw": (1, 4, 4)}
-        mock_proc._extract_mm_items.return_value = (
-            [(img, meta)],
-            [],
-            ["uuid"],
-            [],
-            None,
-            [],
-            [{"type": "image"}],
-        )
+        mm_items = [{"type": "image", "data": (img, meta), "uuid": "uuid"}]
         # IMG_START(200) followed by placeholders but NO IMG_END(201)
-        request = {
-            "prompt_token_ids": [200, 102, 102, 102],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
         with self.assertRaises(ValueError, msg="image token ids not complete"):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([200, 102, 102, 102], mm_items)
 
     def test_prompt_token_ids2outputs_video_placeholder_overflow(self):
         """More video start tokens than videos provided raises ValueError."""
         enc, mock_proc = self._make_enc()
-        mock_proc._extract_mm_items.return_value = (
-            [],
-            [],  # no videos
-            [],
-            [],
-            None,
-            [],
-            [],
-        )
-        request = {
-            "prompt_token_ids": [202, 102, 203],  # VID_START but no videos
-            "messages": [{"role": "user", "content": "hi"}],
-        }
+        mm_items = []  # no videos
         with self.assertRaises(ValueError, msg="more video placeholder"):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([202, 102, 203], mm_items)  # VID_START but no videos
 
     def test_prompt_token_ids2outputs_video_tokens_incomplete(self):
         """Video start without matching end raises ValueError."""
         enc, mock_proc = self._make_enc()
         frames = np.zeros((32, 3, 28, 28))
         meta = {"thw": (4, 4, 4)}
-        mock_proc._extract_mm_items.return_value = (
-            [],
-            [(frames, meta)],
-            [],
-            ["uuid"],
-            None,
-            [],
-            [{"type": "video"}],
-        )
+        mm_items = [{"type": "video", "data": (frames, meta), "uuid": "uuid"}]
         # VID_START(202) followed by placeholders but NO VID_END(203)
-        request = {
-            "prompt_token_ids": [202, 102, 102, 102],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
         with self.assertRaises(ValueError, msg="video token ids not complete"):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([202, 102, 102, 102], mm_items)
 
     def test_prompt_token_ids2outputs_image_count_mismatch(self):
         """Fewer image placeholders than images raises ValueError."""
         enc, mock_proc = self._make_enc()
         img1 = np.zeros((16, 3, 28, 28))
         meta1 = {"thw": (1, 4, 4)}
-        mock_proc._extract_mm_items.return_value = (
-            [(img1, meta1), (img1, meta1)],  # 2 images
-            [],
-            ["uuid1", "uuid2"],
-            [],
-            None,
-            [],
-            [{"type": "image"}, {"type": "image"}],
-        )
+        mm_items = [
+            {"type": "image", "data": (img1, meta1), "uuid": "uuid1"},
+            {"type": "image", "data": (img1, meta1), "uuid": "uuid2"},
+        ]
         # Only 1 image placeholder in token ids
-        request = {
-            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
         with self.assertRaises(ValueError, msg="number of images does not match"):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([1, 200, 102, 102, 102, 102, 201, 2], mm_items)
 
     def test_prompt_token_ids2outputs_video_count_mismatch(self):
         """Fewer video placeholders than videos raises ValueError."""
         enc, mock_proc = self._make_enc()
         frames = np.zeros((32, 3, 28, 28))
         meta = {"thw": (4, 4, 4)}
-        mock_proc._extract_mm_items.return_value = (
-            [],
-            [(frames, meta), (frames, meta)],  # 2 videos
-            [],
-            ["uuid1", "uuid2"],
-            None,
-            [],
-            [{"type": "video"}, {"type": "video"}],
-        )
+        mm_items = [
+            {"type": "video", "data": (frames, meta), "uuid": "uuid1"},
+            {"type": "video", "data": (frames, meta), "uuid": "uuid2"},
+        ]
         # Only 1 video placeholder in token ids
-        request = {
-            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
         with self.assertRaises(ValueError, msg="number of videos does not match"):
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([1, 202, 102, 102, 102, 102, 203, 2], mm_items)
 
     # ------------------------------------------------------------------
     # prompt_token_ids2outputs — with raw image (non-tuple)
@@ -1161,22 +1015,10 @@ class TestErnieEncoding(unittest.TestCase):
 
         mock_img = MagicMock()  # raw image, not a tuple
 
-        mock_proc._extract_mm_items.return_value = (
-            [mock_img],  # raw image
-            [],
-            ["img_uuid"],
-            [],
-            None,
-            [],
-            [{"type": "image"}],
-        )
-        request = {
-            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
+        mm_items = [{"type": "image", "data": mock_img, "uuid": "img_uuid"}]
 
         with patch.object(enc, "add_image") as mock_add_image:
-            enc.prompt_token_ids2outputs(request)
+            enc.prompt_token_ids2outputs([1, 200, 102, 102, 102, 102, 201, 2], mm_items)
 
         mock_add_image.assert_called_once()
         call_args = mock_add_image.call_args
@@ -1185,88 +1027,15 @@ class TestErnieEncoding(unittest.TestCase):
         self.assertEqual(call_args[0][3], 4)  # token_len = 4 placeholders
 
     # ------------------------------------------------------------------
-    # prompt_token_ids2outputs — processor cache branch
+    # prompt_token_ids2outputs — video uuid edge case
     # ------------------------------------------------------------------
-    def test_prompt_token_ids2outputs_with_processor_cache(self):
-        """When enable_processor_cache=True, cache update is called."""
-        enc, mock_proc = self._make_enc()
-        enc.enable_processor_cache = True
-
-        img = np.zeros((16, 3, 28, 28))
-        meta = {"thw": (1, 4, 4)}
-        mock_dealer = MagicMock()
-
-        mock_proc._extract_mm_items.return_value = (
-            [(img, meta)],  # processed image
-            [],
-            ["img_uuid"],
-            [],
-            mock_dealer,
-            [0],  # missing_idx — index 0 is missing (skip caching)
-            [{"type": "image", "data": (img, meta), "uuid": "img_uuid"}],
-        )
-        request = {
-            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
-        enc.prompt_token_ids2outputs(request)
-        # missing_idx={0} means item 0 is skipped → nothing to cache
-        mock_proc.update_processor_cache.assert_not_called()
-
-    def test_prompt_token_ids2outputs_cache_stores_non_missing(self):
-        """Processor cache stores items NOT in missing_idx."""
-        enc, mock_proc = self._make_enc()
-        enc.enable_processor_cache = True
-
-        img1 = np.zeros((16, 3, 28, 28))
-        meta1 = {"thw": (1, 4, 4)}
-        img2 = np.zeros((16, 3, 28, 28))
-        meta2 = {"thw": (1, 4, 4)}
-        mock_dealer = MagicMock()
-
-        mock_proc._extract_mm_items.return_value = (
-            [(img1, meta1), (img2, meta2)],  # 2 processed images
-            [],
-            ["uuid1", "uuid2"],
-            [],
-            mock_dealer,
-            [0],  # only index 0 is missing
-            [{"type": "image"}, {"type": "image"}],
-        )
-        # 2 images: [text, IMG_START, img*4, IMG_END, IMG_START, img*4, IMG_END, text]
-        request = {
-            "prompt_token_ids": [1, 200, 102, 102, 102, 102, 201, 200, 102, 102, 102, 102, 201, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
-        enc.prompt_token_ids2outputs(request)
-
-        # Only item at index 1 (not in missing_idx) should be cached
-        mock_proc.update_processor_cache.assert_called_once()
-        call_args = mock_proc.update_processor_cache.call_args[0]
-        self.assertIs(call_args[0], mock_dealer)
-        self.assertEqual(len(call_args[1]), 1)  # 1 hash
-        self.assertEqual(call_args[1][0], "uuid2")
-        self.assertEqual(len(call_args[2]), 1)  # 1 item
-
-    def test_prompt_token_ids2outputs_video_uuid_empty(self):
-        """When video_uuid is empty list, uuid should be None."""
+    def test_prompt_token_ids2outputs_video_uuid_none(self):
+        """When video item has no uuid, uuid should be None."""
         enc, mock_proc = self._make_enc()
         frames = np.zeros((32, 3, 28, 28))
         meta = {"thw": (4, 4, 4)}
-        mock_proc._extract_mm_items.return_value = (
-            [],
-            [(frames, meta)],
-            [],
-            [],  # empty video_uuid
-            None,
-            [],
-            [{"type": "video"}],
-        )
-        request = {
-            "prompt_token_ids": [1, 202, 102, 102, 102, 102, 203, 2],
-            "messages": [{"role": "user", "content": "hi"}],
-        }
-        outputs = enc.prompt_token_ids2outputs(request)
+        mm_items = [{"type": "video", "data": (frames, meta)}]  # no "uuid" key
+        outputs = enc.prompt_token_ids2outputs([1, 202, 102, 102, 102, 102, 203, 2], mm_items)
         self.assertEqual(len(outputs["input_ids"]), 8)
 
 

@@ -202,17 +202,14 @@ class QwenEncoding(BaseEncoding):
         multimodal_inputs["position_ids"].append(pos_ids)
         multimodal_inputs["cur_position"] += num_tokens
 
-    def prompt_token_ids2outputs(self, request):
+    def prompt_token_ids2outputs(self, prompt_token_ids, mm_items=None):
         """Build outputs from prompt_token_ids. Only qwen3_vl supports this."""
         outputs = self._make_outputs()
-        prompt_token_ids = request.get("prompt_token_ids", [])
         prompt_token_ids_len = len(prompt_token_ids)
 
-        if not request.get("messages"):
+        if not mm_items:
             self._add_text_tokens(prompt_token_ids, outputs)
             return outputs
-
-        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self._extract_mm_items(request)
 
         st, mm_idx = 0, 0
         while st < prompt_token_ids_len:
@@ -257,25 +254,6 @@ class QwenEncoding(BaseEncoding):
 
         if mm_idx != len(mm_items):
             raise ValueError("number of multimodal items does not match prompt token ids")
-
-        if self.enable_processor_cache:
-            missing_idx = set(missing_idx)
-            hashes_to_cache, items_to_cache = [], []
-            for idx in range(len(mm_items)):
-                if idx in missing_idx:
-                    continue
-                meta = {}
-                grid_thw = np.asarray(outputs["grid_thw"][idx])
-                if grid_thw.ndim > 1:
-                    t, h, w = grid_thw[0]
-                else:
-                    t, h, w = grid_thw
-                meta["thw"] = (int(t), int(h), int(w))
-                meta["fps"] = outputs["fps"][idx]
-                hashes_to_cache.append(outputs["mm_hashes"][idx])
-                items_to_cache.append((outputs["images"][idx], meta))
-            if hashes_to_cache:
-                self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
 
         return outputs
 

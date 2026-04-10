@@ -268,12 +268,11 @@ class ErnieEncoding(BaseEncoding):
         coords = list(zip(time_idx, h_idx, w_idx))
         return [[start_idx + ti, start_idx + hi, start_idx + wi] for ti, hi, wi in coords]
 
-    def prompt_token_ids2outputs(self, request):
+    def prompt_token_ids2outputs(self, prompt_token_ids, mm_items=None):
         outputs = self._make_outputs()
-        prompt_token_ids = request.get("prompt_token_ids", [])
         prompt_token_ids_len = len(prompt_token_ids)
 
-        if not request.get("messages"):
+        if not mm_items:
             outputs["input_ids"].extend(prompt_token_ids)
             outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * prompt_token_ids_len)
             for i in range(prompt_token_ids_len):
@@ -281,7 +280,15 @@ class ErnieEncoding(BaseEncoding):
             outputs["cur_position"] += prompt_token_ids_len
             return outputs
 
-        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self._extract_mm_items(request)
+        images, videos = [], []
+        image_uuid, video_uuid = [], []
+        for item in mm_items:
+            if item.get("type") == "image":
+                images.append(item["data"])
+                image_uuid.append(item.get("uuid"))
+            elif item.get("type") == "video":
+                videos.append(item["data"])
+                video_uuid.append(item.get("uuid"))
 
         image_start_id = self.tokenizer.convert_tokens_to_ids(self.IMG_START)
         image_end_id = self.tokenizer.convert_tokens_to_ids(self.IMG_END)
@@ -354,20 +361,6 @@ class ErnieEncoding(BaseEncoding):
             raise ValueError("number of images does not match")
         if video_idx != len(videos):
             raise ValueError("number of videos does not match")
-
-        if self.enable_processor_cache:
-            missing_idx = set(missing_idx)
-            hashes_to_cache, items_to_cache = [], []
-            for idx in range(len(mm_items)):
-                if idx in missing_idx:
-                    continue
-                meta = {}
-                t, h, w = outputs["grid_thw"][idx][0]
-                meta["thw"] = (t, h, w)
-                hashes_to_cache.append(outputs["mm_hashes"][idx])
-                items_to_cache.append((outputs["images"][idx], meta))
-            if hashes_to_cache:
-                self.update_processor_cache(dealer, hashes_to_cache, items_to_cache)
 
         return outputs
 
