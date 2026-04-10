@@ -496,6 +496,14 @@ class EngineArgs:
         - "default": default loader.
         - "default_v1": default_v1 loader.
     """
+    model_loader_extra_config: Optional[Dict[str, Any]] = None
+    """
+    Additional configuration options for the model loader.
+    Supports:
+    - enable_multithread_load (bool): Enable multi-threaded weight loading.
+    - num_threads (int): Number of threads for loading. Defaults to 8.
+    - disable_mmap (bool): Disable memory-mapped file access.
+    """
 
     lm_head_fp32: bool = False
     """
@@ -1089,6 +1097,14 @@ class EngineArgs:
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
                  default/default_v1/dummy.",
+        )
+
+        load_group.add_argument(
+            "--model-loader-extra-config",
+            type=json.loads,
+            default=EngineArgs.model_loader_extra_config,
+            help="Additional configuration for model loader (JSON format). "
+            'e.g., \'{"enable_multithread_load": true, "num_threads": 8}\'',
         )
 
         # CacheConfig parameters group
