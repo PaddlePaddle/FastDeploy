@@ -1,31 +1,9 @@
 [简体中文](../zh/usage/kunlunxin_xpu_deployment.md)
 
 ## Supported Models
-
-| Model Name | Context Length | Quantization | XPUs Required | Applicable Version |
-|------------|---------------|--------------|---------------|-------------------|
-| ERNIE-4.5-300B-A47B | 32K | WINT8 | 8 | 2.5.0 |
-| ERNIE-4.5-300B-A47B | 32K | WINT4 | 4 | 2.5.0 |
-| ERNIE-4.5-300B-A47B | 32K | WINT4 | 8 | 2.5.0 |
-| ERNIE-4.5-300B-A47B | 128K | WINT4 | 8 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 32K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 32K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 32K | WINT4 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 128K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 128K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 128K | WINT4 | 1 | 2.5.0 |
-| ERNIE-4.5-0.3B | 32K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-0.3B | 32K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-0.3B | 128K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-0.3B | 128K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-300B-A47B-W4A8C8-TP4 | 32K | W4A8 | 4 | 2.5.0 |
-| ERNIE-4.5-VL-28B-A3B | 32K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-VL-424B-A47B | 32K | WINT8 | 8 | 2.5.0 |
-| PaddleOCR-VL-0.9B | 32K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-VL-28B-A3B-Thinking | 128K | WINT8 | 1 | 2.5.0 |
-
+Note: The following models and deployment commands are valid only for version 2.5.0.
 <details>
-<summary><b>ERNIE-4.5-300B-A47B (32K, WINT8, 8 XPUs)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT8, 8 XPUs)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -69,7 +47,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 4 XPUs)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 4 XPUs)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -113,7 +91,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 8 XPUs)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 8 XPUs)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -157,7 +135,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-300B-A47B (128K, WINT4, 8 XPUs)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-300B-A47B (128K, WINT4, 8 XPUs)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -201,7 +179,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (32K, BF16, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-21B-A3B (32K, BF16, 1 XPU)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -230,7 +208,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (32K, WINT8, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-21B-A3B (32K, WINT8, 1 XPU)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -261,7 +239,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (32K, WINT4, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-21B-A3B (32K, WINT4, 1 XPU)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -292,7 +270,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (128K, BF16, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-21B-A3B (128K, BF16, 1 XPU)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -321,7 +299,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (128K, WINT8, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-21B-A3B (128K, WINT8, 1 XPU)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -352,7 +330,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (128K, WINT4, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-21B-A3B (128K, WINT4, 1 XPU)</b> </summary>
 
 **Quick Launch:**
 ```bash
@@ -383,7 +361,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-0.3B (32K, BF16, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-0.3B (32K, BF16, 1 XPU)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
@@ -398,7 +376,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-0.3B (32K, WINT8, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-0.3B (32K, WINT8, 1 XPU)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
@@ -414,7 +392,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-0.3B (128K, BF16, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-0.3B (128K, BF16, 1 XPU)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
@@ -429,7 +407,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-0.3B (128K, WINT8, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-0.3B (128K, WINT8, 1 XPU)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
@@ -445,7 +423,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-300B-A47B-W4A8C8-TP4 (32K, W4A8, 4 XPUs)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-300B-A47B-W4A8C8-TP4 (32K, W4A8, 4 XPUs)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3"  # or "4,5,6,7"
@@ -461,7 +439,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-VL-28B-A3B (32K, WINT8, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-VL-28B-A3B (32K, WINT8, 1 XPU)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
@@ -480,7 +458,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-VL-424B-A47B (32K, WINT8, 8 XPUs)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-VL-424B-A47B (32K, WINT8, 8 XPUs)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
@@ -500,7 +478,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>PaddleOCR-VL-0.9B (32K, BF16, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>PaddleOCR-VL-0.9B (32K, BF16, 1 XPU)</b> </summary>
 
 ```bash
 export FD_ENABLE_MAX_PREFILL=1
@@ -518,7 +496,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-VL-28B-A3B-Thinking (128K, WINT8, 1 XPU)</b> - Click to view deployment commands</summary>
+<summary><b>ERNIE-4.5-VL-28B-A3B-Thinking (128K, WINT8, 1 XPU)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # Specify any card
@@ -540,7 +518,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 ## Examples
 
-### Deploy online serving based on ERNIE-4.5-300B-A47B-Paddle
+### Running ERNIE-4.5-300B-A47B-Paddle
 
 #### Start service
 
@@ -610,7 +588,7 @@ print('\n')
 
 For detailed OpenAI protocol specifications, see [OpenAI Chat Completion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [OpenAI Protocol-Compatible API Server](../online_serving/README.md).
 
-### Deploy online serving based on ERNIE-4.5-VL-28B-A3B-Paddle
+### Running ERNIE-4.5-VL-28B-A3B-Paddle
 
 #### Start service
 Deploy the ERNIE-4.5-VL-28B-A3B-Paddle model with WINT8 precision and 32K context length on 1 XPU
@@ -681,7 +659,7 @@ for chunk in response:
 print('\n')
 ```
 
-### Deploy online serving based on PaddleOCR-VL-0.9B
+### Running PaddleOCR-VL-0.9B
 
 #### Start service
 
@@ -752,7 +730,7 @@ for chunk in response:
 print('\n')
 ```
 
-### Deploy online serving based on ERNIE-4.5-VL-28B-A3B-Thinking
+### Running ERNIE-4.5-VL-28B-A3B-Thinking
 
 #### Start service
 Deploy the ERNIE-4.5-VL-28B-A3B-Thinking model with WINT8 precision and 128K context length on 1 XPU

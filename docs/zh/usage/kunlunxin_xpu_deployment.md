@@ -2,30 +2,9 @@
 
 ## 支持的模型
 
-| 模型名称 | 上下文长度 | 量化 | 所需卡数 | 适用版本 |
-|----------|-----------|------|---------|---------|
-| ERNIE-4.5-300B-A47B | 32K | WINT8 | 8 | 2.5.0 |
-| ERNIE-4.5-300B-A47B | 32K | WINT4 | 4 | 2.5.0 |
-| ERNIE-4.5-300B-A47B | 32K | WINT4 | 8 | 2.5.0 |
-| ERNIE-4.5-300B-A47B | 128K | WINT4 | 8 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 32K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 32K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 32K | WINT4 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 128K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 128K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-21B-A3B | 128K | WINT4 | 1 | 2.5.0 |
-| ERNIE-4.5-0.3B | 32K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-0.3B | 32K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-0.3B | 128K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-0.3B | 128K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-300B-A47B-W4A8C8-TP4 | 32K | W4A8 | 4 | 2.5.0 |
-| ERNIE-4.5-VL-28B-A3B | 32K | WINT8 | 1 | 2.5.0 |
-| ERNIE-4.5-VL-424B-A47B | 32K | WINT8 | 8 | 2.5.0 |
-| PaddleOCR-VL-0.9B | 32K | BF16 | 1 | 2.5.0 |
-| ERNIE-4.5-VL-28B-A3B-Thinking | 128K | WINT8 | 1 | 2.5.0 |
-
+注：以下模型支持和部署命令仅适用于 2.5.0 版本
 <details>
-<summary><b>ERNIE-4.5-300B-A47B (32K, WINT8, 8 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT8, 8 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -69,7 +48,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 4 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 4 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -113,7 +92,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 8 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 8 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -157,7 +136,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-300B-A47B (128K, WINT4, 8 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-300B-A47B (128K, WINT4, 8 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -201,7 +180,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (32K, BF16, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-21B-A3B (32K, BF16, 1 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -230,7 +209,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (32K, WINT8, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-21B-A3B (32K, WINT8, 1 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -261,7 +240,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (32K, WINT4, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-21B-A3B (32K, WINT4, 1 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -292,7 +271,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (128K, BF16, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-21B-A3B (128K, BF16, 1 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -321,7 +300,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (128K, WINT8, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-21B-A3B (128K, WINT8, 1 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -352,7 +331,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-21B-A3B (128K, WINT4, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-21B-A3B (128K, WINT4, 1 卡)</b> </summary>
 
 **快速启动：**
 ```bash
@@ -383,7 +362,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-0.3B (32K, BF16, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-0.3B (32K, BF16, 1 卡)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # 指定任意一张卡
@@ -398,7 +377,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-0.3B (32K, WINT8, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-0.3B (32K, WINT8, 1 卡)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # 指定任意一张卡
@@ -414,7 +393,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-0.3B (128K, BF16, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-0.3B (128K, BF16, 1 卡)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # 指定任意一张卡
@@ -429,7 +408,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-0.3B (128K, WINT8, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-0.3B (128K, WINT8, 1 卡)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # 指定任意一张卡
@@ -445,7 +424,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-300B-A47B-W4A8C8-TP4 (32K, W4A8, 4 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-300B-A47B-W4A8C8-TP4 (32K, W4A8, 4 卡)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3"  # 或 "4,5,6,7"
@@ -461,7 +440,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-VL-28B-A3B (32K, WINT8, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-VL-28B-A3B (32K, WINT8, 1 卡)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # 指定任意一张卡
@@ -480,7 +459,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-VL-424B-A47B (32K, WINT8, 8 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-VL-424B-A47B (32K, WINT8, 8 卡)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
@@ -500,7 +479,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>PaddleOCR-VL-0.9B (32K, BF16, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>PaddleOCR-VL-0.9B (32K, BF16, 1 卡)</b> </summary>
 
 ```bash
 export FD_ENABLE_MAX_PREFILL=1
@@ -518,7 +497,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 </details>
 
 <details>
-<summary><b>ERNIE-4.5-VL-28B-A3B-Thinking (128K, WINT8, 1 卡)</b> - 点击查看部署命令</summary>
+<summary><b>ERNIE-4.5-VL-28B-A3B-Thinking (128K, WINT8, 1 卡)</b> </summary>
 
 ```bash
 export XPU_VISIBLE_DEVICES="0"  # 指定任意一张卡
@@ -538,10 +517,9 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 </details>
 
-## 快速开始
+## 示例
 
-### 基于ERNIE-4.5-300B-A47B-Paddle模型部署在线服务
-
+### 运行ERNIE-4.5-300B-A47B-Paddle
 #### 启动服务
 
 基于 WINT4 精度和 32K 上下文部署 ERNIE-4.5-300B-A47B-Paddle 模型到 4 卡 P800 服务器
@@ -611,7 +589,7 @@ print('\n')
 
 OpenAI 协议的更多说明可参考文档 [OpenAI Chat Completion API](https://platform.openai.com/docs/api-reference/chat/create)，以及与 OpenAI 协议的区别可以参考 [兼容 OpenAI 协议的服务化部署](../online_serving/README.md)。
 
-### 基于ERNIE-4.5-VL-28B-A3B-Paddle模型部署在线服务
+### 运行ERNIE-4.5-VL-28B-A3B-Paddle
 
 #### 启动服务
 
@@ -683,7 +661,7 @@ for chunk in response:
 print('\n')
 ```
 
-### 基于PaddleOCR-VL-0.9B模型部署在线服务
+### 运行PaddleOCR-VL-0.9B
 
 #### 启动服务
 
@@ -754,7 +732,7 @@ for chunk in response:
 print('\n')
 ```
 
-### 基于ERNIE-4.5-VL-28B-A3B-Thinking模型部署在线服务
+### 运行ERNIE-4.5-VL-28B-A3B-Thinking
 
 #### 启动服务
 
