@@ -205,3 +205,10 @@ jobs:
           python -m pip install ${fd_wheel_url}
           bash scripts/run_pre_ce.sh
           '
+
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}
