@@ -317,6 +317,8 @@ class CudaGraphPiecewiseBackend:
         del self.concrete_size_entries
         paddle.device.cuda.empty_cache()
 
+        self._decode_capture_index = 0
+
         # Create new entrys
         self._create_entry_dict()
 
