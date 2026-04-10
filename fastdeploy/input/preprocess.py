@@ -94,13 +94,13 @@ class InputPreprocessor:
                     tool_parser_obj=tool_parser_obj,
                 )
             else:
-                from fastdeploy.input.multimodal_processor import (
+                from fastdeploy.input.mm_model_config import (
                     ERNIE4_5_VL,
                     PADDLEOCR_VL,
                     QWEN3_VL,
                     QWEN_VL,
-                    MultiModalProcessor,
                 )
+                from fastdeploy.input.multimodal_processor import MultiModalProcessor
 
                 if ErnieArchitectures.contains_ernie_arch(architecture):
                     model_type = ERNIE4_5_VL

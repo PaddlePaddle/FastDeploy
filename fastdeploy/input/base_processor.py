@@ -435,23 +435,27 @@ class BaseTextProcessor(ABC):
             request["top_k"] = 1
 
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            parts = request["request_id"].split("_")
-            if len(parts) > 1:
-                real_req_id = parts[0]
-                index = int(parts[1])
-                n = request.get("n", 1)
-                for idx in range(index * n, (index + 1) * n):
-                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
-            else:
-                self.model_status_dict[request["request_id"]] = model_status
-            request["enable_thinking"] = model_status == "think_start"
+            self._apply_reasoning_parser(request)
 
         if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
             request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 
         data_processor_logger.info(f"Processed request dict: {request}")
         return request
+
+    def _apply_reasoning_parser(self, request):
+        """Apply reasoning parser to determine model thinking status."""
+        model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+        parts = request["request_id"].split("_")
+        if len(parts) > 1:
+            real_req_id = parts[0]
+            index = int(parts[1])
+            n = request.get("n", 1)
+            for idx in range(index * n, (index + 1) * n):
+                self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+        else:
+            self.model_status_dict[request["request_id"]] = model_status
+        request["enable_thinking"] = model_status == "think_start"
 
     def clear_request_status(self, task_id):
         """Clear all per-request decode state and return the accumulated text."""
