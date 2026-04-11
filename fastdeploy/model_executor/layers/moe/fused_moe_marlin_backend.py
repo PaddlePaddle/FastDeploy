@@ -260,7 +260,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         if topk_method == "noaux_tc":
             from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
-            use_fused = not layer.dynamic_load_weight and current_platform.is_cuda()
+            use_fused = not layer.fd_config.load_config.dynamic_load_weight and current_platform.is_cuda()
             if not use_fused:
                 gate_out = gate_out.cast("float32")
             _, topk_weights, topk_ids = get_moe_scores(

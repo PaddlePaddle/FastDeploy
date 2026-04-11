@@ -104,7 +104,7 @@ def get_moe_scores(
     """
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
     if use_fused_cast and current_platform.is_cuda():
-        scores, scores_with_bias = fused_cast_sigmoid_bias(gating_output, e_score_correction_bias)
+        scores, scores_with_bias = fused_cast_sigmoid_bias(gating_output, e_score_correction_bias, cast_type="float32")
     else:
         scores = paddle.nn.functional.sigmoid(gating_output)
         scores_with_bias = scores + e_score_correction_bias
