@@ -20,7 +20,7 @@ try:
     from fastdeploy.model_executor.ops.gpu import (
         fused_cast_sigmoid_bias as _fused_cast_sigmoid_bias_cuda,
     )
-except:
+except ImportError:
     assert False, "fused_cast_sigmoid_bias not support!"
 
 
