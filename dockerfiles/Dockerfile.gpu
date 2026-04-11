@@ -1,6 +1,6 @@
 FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-cuda-12.6:tag-base
-ARG PADDLE_VERSION=3.3.0
-ARG FD_VERSION=2.4.0
+ARG PADDLE_VERSION=3.3.1
+ARG FD_VERSION=2.5.0
 
 ENV DEBIAN_FRONTEND=noninteractive
 
@@ -16,7 +16,7 @@ RUN python -m pip uninstall paddlepaddle-gpu fastdeploy-gpu -y
 RUN python -m pip install --no-cache-dir paddlepaddle-gpu==${PADDLE_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
 
 # build and install FastDeploy
-RUN python -m pip install --no-cache-dir  fastdeploy-gpu==${FD_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-gpu-80_90/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+RUN python -m pip install --no-cache-dir fastdeploy-gpu==${FD_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
 ENV http_proxy=""
 ENV https_proxy=""
