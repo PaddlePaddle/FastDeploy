@@ -20,6 +20,7 @@ from typing import Optional, Tuple
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.config import ModelConfig
 from fastdeploy.platforms import current_platform
 
@@ -40,9 +41,13 @@ class ErnieRotaryEmbedding:
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
-        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
-        partial_rotary_position_ids = position_ids / self.partial_rotary_factor
-        freqs = paddle.einsum("ij,k->ijk", partial_rotary_position_ids.cast("float32"), inv_freq)
+        if envs.FD_ENABLE_RL == 1:
+            inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+            partial_rotary_position_ids = position_ids / self.partial_rotary_factor
+            freqs = paddle.einsum("ij,k->ijk", partial_rotary_position_ids.cast("float32"), inv_freq)
+        else:
+            inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+            freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
         if paddle.is_compiled_with_xpu() or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
             # shape: [B, S, D]
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
@@ -87,6 +92,7 @@ class GlmRotaryEmbedding:
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
+
         idx = paddle.arange(0, self.rotary_dim, 2, dtype=paddle.int64).astype(paddle.float32)
         inv_freq = 1.0 / (self.base ** (idx / self.rotary_dim))
         freqs = paddle.outer(position_ids.astype(inv_freq.dtype), inv_freq)

@@ -387,30 +387,32 @@ void gqa_neox_partial_rotary_qk_split_variable(
 
   const float *cos_emb = rotary_emb;
   const float *sin_emb = rotary_emb + max_model_len * rotary_dim / 2;
-  launchWithPdlWhenEnabled(
-      GQAVariableLengthNeoxPartialRotarySplitKernel<T, PackSize, EnforceFmulRN>,
-      grid_size,
-      block_size,
-      0,
-      stream,
-      qkv_input,
-      cos_emb,
-      sin_emb,
-      batch_id_per_token,
-      cu_seqlens_q,
-      seq_lens_encoder,
-      seq_lens_decoder,
-      cu_seqlens_k,
-      qkv_out,
-      q,
-      k,
-      v,
-      elem_nums,
-      num_heads,
-      kv_num_heads,
-      max_model_len,
-      head_dim,
-      rotary_dim);
+  launchWithPdlWhenEnabled(GQAVariableLengthNeoxPartialRotarySplitKernel<
+                               T,
+                               PackSize,
+                               false>,  // GLM use EnforceFmulRN=false
+                           grid_size,
+                           block_size,
+                           0,
+                           stream,
+                           qkv_input,
+                           cos_emb,
+                           sin_emb,
+                           batch_id_per_token,
+                           cu_seqlens_q,
+                           seq_lens_encoder,
+                           seq_lens_decoder,
+                           cu_seqlens_k,
+                           qkv_out,
+                           q,
+                           k,
+                           v,
+                           elem_nums,
+                           num_heads,
+                           kv_num_heads,
+                           max_model_len,
+                           head_dim,
+                           rotary_dim);
 }
 
 template <typename T,
