@@ -78,11 +78,27 @@ jobs:
             if ls /workspace/* >/dev/null 2>&1; then
               echo "ERROR: Failed to clean /workspace/* after multiple attempts"
               ls -ld /workspace/*
-              exit 1
+              echo "Attempting force cleanup with find..."
+              find /workspace -mindepth 1 -maxdepth 1 -type d -exec chmod -R u+rwx {} \; -exec rm -rf {} + 2>/dev/null || true
+              if ls /workspace/* >/dev/null 2>&1; then
+                echo "ERROR: Force cleanup failed. Exiting..."
+                exit 1
+              else
+                echo "Force cleanup succeeded."
+              fi
             fi
           '
-          wget -q --no-proxy ${paddletest_archive_url}
-          tar -xf PaddleTest.tar.gz
+
+          wget -q --no-proxy ${paddletest_archive_url} || {
+            echo "ERROR: Failed to download archive from ${paddletest_archive_url}"
+            exit 1
+          }
+
+          tar --no-same-owner -xf PaddleTest.tar.gz || {
+            echo "ERROR: Failed to extract archive"
+            exit 1
+          }
+
           rm -rf PaddleTest.tar.gz
           cd PaddleTest
           git config --global user.name "FastDeployCI"
@@ -171,6 +187,7 @@ jobs:
           -v "${CACHE_DIR}/.cache:/root/.cache" \
           -v "${CACHE_DIR}/ConfigDir:/root/.config" \
           -e TZ="Asia/Shanghai" \
+          -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
           # Avoid using pip cache to ensure the wheel is updated to the latest version
           wget -q --no-proxy https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Gpu-Cuda12.6-Cudnn9.5-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
@@ -225,3 +242,10 @@ jobs:
         run: |
           echo "logprob test failed with exit code ${{ env.LOGPROB_EXIT_CODE }}"
           exit 8
+
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}
