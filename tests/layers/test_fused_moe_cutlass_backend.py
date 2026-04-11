@@ -35,8 +35,13 @@ iluvatar_stub.paged_attention = lambda *args, **kwargs: None
 iluvatar_stub.prefill_fused_paged_attention = lambda *args, **kwargs: None
 sys.modules["fastdeploy.model_executor.ops.iluvatar"] = iluvatar_stub
 
+import fastdeploy  # noqa: E402
 from fastdeploy.model_executor.layers import utils as layer_utils
 from fastdeploy.model_executor.layers.moe import fused_moe_cutlass_backend as backend
+
+
+def align(x, y):
+    return (x + y - 1) // y * y
 
 
 class DummyQuantConfig:
@@ -709,3 +714,239 @@ class TestFusedMoeCutlassBackend:
         int4_method.create_weights(
             int4_layer, num_experts=2, hidden_size=4, moe_intermediate_size=2, model_format="paddle"
         )
+
+
+# ---------------------------------------------------------------------------
+# Real-op tests for FD_USE_PHI_MOE_PERMUTE=True (w16a16, moe_permute path)
+# ---------------------------------------------------------------------------
+
+from fastdeploy.platforms import current_platform  # noqa: E402
+
+_CUDA_AVAILABLE = current_platform.is_cuda()
+requires_cuda = pytest.mark.skipif(not _CUDA_AVAILABLE, reason="CUDA required")
+
+
+class RealMoELayer(paddle.nn.Layer):
+    """Minimal bf16 MoE layer with real weights for moe_permute path testing."""
+
+    def __init__(self, num_experts=4, hidden_size=64, moe_intermediate_size=32, top_k=2):
+        super().__init__()
+        self.fd_config = DummyFDConfig()
+        self.num_experts = num_experts
+        self.num_local_experts = num_experts
+        self.hidden_size = hidden_size
+        self.moe_intermediate_size = moe_intermediate_size
+        self.top_k = top_k
+        self.topk_method = "noaux_tc"
+        self.n_group = 1
+        self.topk_group = 1
+        self.routed_scaling_factor = 1.0
+        self.with_bias = False
+        self.ep_size = 1
+        self.ep_rank = 0
+        self.layer_idx = 0
+        self.weight_dtype = "bfloat16"
+        self.is_quantized = False
+        self.activation = "swiglu"
+        self.moe_quant_config = types.SimpleNamespace(moe_dynamic_quant=False, hadamard_block_size=128)
+        self.gate_correction_bias = self.create_parameter(
+            shape=[1, num_experts],
+            dtype="float32",
+            default_initializer=paddle.nn.initializer.Constant(0),
+        )
+        paddle.seed(0)
+        self.up_gate_proj_weight = self.create_parameter(
+            shape=[num_experts, hidden_size, 2 * moe_intermediate_size],
+            dtype="bfloat16",
+        )
+        self.down_proj_weight = self.create_parameter(
+            shape=[num_experts, moe_intermediate_size, hidden_size],
+            dtype="bfloat16",
+        )
+        self.up_gate_proj_weight.set_value(
+            paddle.randn([num_experts, hidden_size, 2 * moe_intermediate_size]).cast("bfloat16") * 0.01
+        )
+        self.down_proj_weight.set_value(
+            paddle.randn([num_experts, moe_intermediate_size, hidden_size]).cast("bfloat16") * 0.01
+        )
+
+
+class SimpleLinearGate(paddle.nn.Layer):
+    def __init__(self, hidden_size, num_experts):
+        super().__init__()
+        self.weight = self.create_parameter(shape=[hidden_size, num_experts], dtype="float32")
+
+    def forward(self, x):
+        return paddle.matmul(x.cast("float32"), self.weight)
+
+
+class TestMoePermuteTrueRealOps:
+    """Real-op tests for FD_USE_PHI_MOE_PERMUTE=True on the w16a16 path."""
+
+    def _build(self, num_experts=4, hidden_size=64, moe_intermediate_size=32, top_k=2):
+        layer = RealMoELayer(
+            num_experts=num_experts,
+            hidden_size=hidden_size,
+            moe_intermediate_size=moe_intermediate_size,
+            top_k=top_k,
+        )
+        gate = SimpleLinearGate(hidden_size, num_experts)
+        method = backend.CutlassMoEMethod(None)
+        method.moe_quant_type = "w16a16"
+        return layer, gate, method
+
+    @requires_cuda
+    def test_apply_tp_moe_permute_real_ops(self, monkeypatch):
+        """FD_USE_PHI_MOE_PERMUTE=True + w16a16: real moe_permute/moe_unpermute/
+        count_tokens_per_expert_func/moe_expert_ffn all called end-to-end."""
+        monkeypatch.setattr(backend.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", True)
+
+        num_tokens, hidden_size = 8, 64
+        layer, gate, method = self._build(hidden_size=hidden_size)
+
+        paddle.seed(42)
+        x = paddle.randn([num_tokens, hidden_size], dtype="bfloat16")
+
+        # Spy: confirm moe_permute is called, moe_expert_dispatch is NOT
+        permute_called = {"v": False}
+        dispatch_called = {"v": False}
+        original_permute = paddle.nn.functional.moe_permute
+
+        def spy_permute(*args, **kwargs):
+            permute_called["v"] = True
+            return original_permute(*args, **kwargs)
+
+        monkeypatch.setattr(paddle.nn.functional, "moe_permute", spy_permute)
+        monkeypatch.setattr(
+            backend,
+            "moe_expert_dispatch",
+            lambda *a, **kw: (_ for _ in ()).throw(AssertionError("moe_expert_dispatch must not be called")),
+        )
+
+        out = method.apply_tp(layer, x, gate)
+
+        assert permute_called["v"], "moe_permute was not called"
+        assert not dispatch_called["v"], "moe_expert_dispatch must not be called"
+        assert list(out.shape) == [num_tokens, hidden_size], f"wrong output shape: {out.shape}"
+        assert not paddle.isnan(out).any(), "output contains NaN"
+        assert not paddle.isinf(out).any(), "output contains Inf"
+
+    @requires_cuda
+    def test_apply_ep_prefill_moe_permute_real_ops(self, monkeypatch):
+        """FD_USE_PHI_MOE_PERMUTE=True + w16a16: EP prefill uses real moe_permute /
+        moe_unpermute / count_tokens_per_expert_func / moe_expert_ffn end-to-end.
+        The EP dispatch/combine are stubbed (no real NCCL needed).
+        Use num_tokens=128 and num_experts=4 so each expert gets exactly 64 tokens
+        (128 * top_k=2 / 4 experts = 64), satisfying moe_expert_ffn alignment."""
+        monkeypatch.setattr(backend.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", True)
+
+        # 128 tokens, top_k=2, 4 experts → 64 tokens/expert (128-aligned after padding)
+        num_tokens, hidden_size = 128, 64
+        layer, gate, method = self._build(num_experts=4, hidden_size=hidden_size, top_k=2)
+
+        paddle.seed(42)
+        x = paddle.randn([num_tokens, hidden_size], dtype="bfloat16")
+
+        # Stub only the EP communication runner (dispatch/combine).
+        # All on-device compute (moe_permute, moe_expert_ffn, moe_unpermute) runs for real.
+        class StubEPRunner:
+            ep_engine = types.SimpleNamespace(async_finish=False)
+
+            def moe_select(self, _layer, gate_out):
+                n = gate_out.shape[0]
+                # Route token i to experts (i % E) and ((i+1) % E) so all experts
+                # get tokens and recv_num_tokens_per_expert_list is accurate.
+                E = _layer.num_local_experts
+                idx0 = paddle.arange(n, dtype="int64") % E
+                idx1 = (paddle.arange(n, dtype="int64") + 1) % E
+                topk_ids = paddle.stack([idx0, idx1], axis=1)
+                topk_weights = paddle.ones([n, _layer.top_k], dtype="float32") / _layer.top_k
+                return topk_ids, topk_weights
+
+            def dispatch(self, x, topk_idx, topk_weights, **kwargs):
+                # Pass tensors through unchanged — single-rank, no real communication.
+                # Compute accurate recv_num_tokens_per_expert_list from topk_idx.
+                E = layer.num_local_experts
+                counts = [
+                    align(int((topk_idx == e).sum().item()), kwargs.get("expert_alignment", 1)) for e in range(E)
+                ]
+                return (
+                    x,
+                    topk_idx,
+                    topk_weights,
+                    counts,
+                    object(),
+                    types.SimpleNamespace(current_stream_wait=lambda: None),
+                )
+
+            def combine(self, ffn_out, handle, recv_topk_weights):
+                return ffn_out, types.SimpleNamespace(current_stream_wait=lambda: None)
+
+        method.ep_prefill_runner = StubEPRunner()
+
+        # Spy: confirm moe_permute is called inside ep_prefill
+        permute_called = {"v": False}
+        original_permute = paddle.nn.functional.moe_permute
+
+        def spy_permute(*args, **kwargs):
+            permute_called["v"] = True
+            return original_permute(*args, **kwargs)
+
+        monkeypatch.setattr(paddle.nn.functional, "moe_permute", spy_permute)
+
+        out = method.apply_ep_prefill(layer, x, gate)
+
+        assert permute_called["v"], "moe_permute was not called in ep_prefill path"
+        assert len(out.shape) == 2, f"wrong output ndim: {out.shape}"
+        assert out.shape[1] == hidden_size, f"wrong hidden_size: {out.shape}"
+        assert not paddle.isnan(out).any(), "output contains NaN"
+        assert not paddle.isinf(out).any(), "output contains Inf"
+
+    @requires_cuda
+    def test_apply_tp_moe_permute_non_noaux_tc(self, monkeypatch):
+        """FD_USE_PHI_MOE_PERMUTE=True + w16a16 + topk_method != 'noaux_tc':
+        the else-branch calls moe_topk_select instead of get_moe_scores,
+        then proceeds through moe_permute / moe_expert_ffn / moe_unpermute."""
+        monkeypatch.setattr(backend.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", True)
+
+        num_tokens, hidden_size = 8, 64
+        layer, gate, method = self._build(hidden_size=hidden_size)
+        # Switch to non-noaux_tc to exercise the else-branch (moe_topk_select)
+        layer.topk_method = "greedy"
+
+        paddle.seed(7)
+        x = paddle.randn([num_tokens, hidden_size], dtype="bfloat16")
+
+        # Spy on which routing function is invoked
+        get_moe_scores_called = {"v": False}
+        moe_topk_select_called = {"v": False}
+        permute_called = {"v": False}
+
+        original_get_moe_scores = backend.get_moe_scores
+        original_moe_topk_select = fastdeploy.model_executor.ops.gpu.moe_topk_select
+        original_permute = paddle.nn.functional.moe_permute
+
+        def spy_get_moe_scores(*args, **kwargs):
+            get_moe_scores_called["v"] = True
+            return original_get_moe_scores(*args, **kwargs)
+
+        def spy_moe_topk_select(*args, **kwargs):
+            moe_topk_select_called["v"] = True
+            return original_moe_topk_select(*args, **kwargs)
+
+        def spy_permute(*args, **kwargs):
+            permute_called["v"] = True
+            return original_permute(*args, **kwargs)
+
+        monkeypatch.setattr(backend, "get_moe_scores", spy_get_moe_scores)
+        monkeypatch.setattr(fastdeploy.model_executor.ops.gpu, "moe_topk_select", spy_moe_topk_select)
+        monkeypatch.setattr(paddle.nn.functional, "moe_permute", spy_permute)
+
+        out = method.apply_tp(layer, x, gate)
+
+        assert not get_moe_scores_called["v"], "get_moe_scores must NOT be called for non-noaux_tc"
+        assert moe_topk_select_called["v"], "moe_topk_select must be called for non-noaux_tc"
+        assert permute_called["v"], "moe_permute must be called"
+        assert list(out.shape) == [num_tokens, hidden_size], f"wrong shape: {out.shape}"
+        assert not paddle.isnan(out).any(), "output contains NaN"
+        assert not paddle.isinf(out).any(), "output contains Inf"

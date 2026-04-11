@@ -496,6 +496,14 @@ class EngineArgs:
         - "default": default loader.
         - "default_v1": default_v1 loader.
     """
+    model_loader_extra_config: Optional[Dict[str, Any]] = None
+    """
+    Additional configuration options for the model loader.
+    Supports:
+    - enable_multithread_load (bool): Enable multi-threaded weight loading.
+    - num_threads (int): Number of threads for loading. Defaults to 8.
+    - disable_mmap (bool): Disable memory-mapped file access.
+    """
 
     lm_head_fp32: bool = False
     """
@@ -859,11 +867,14 @@ class EngineArgs:
             "--quantization",
             type=parse_quantization,
             default=EngineArgs.quantization,
-            help="Quantization name for the model, currently support "
-            "'wint8', 'wint4',"
-            "default is None. The priority of this configuration "
-            "is lower than that of the config file. "
-            "More complex quantization methods need to be configured via the config file.",
+            help="Quantization config for the model. Can be a simple method name "
+            "(e.g. 'wint8', 'wint4') or a full JSON quantization_config string "
+            '(e.g. \'{"quantization": "mix_quant", "kv_cache_quant_type": "block_wise_fp8", '
+            '"dense_quant_type": "block_wise_fp8", "moe_quant_type": "block_wise_fp8"}\'). '
+            "When a JSON config is provided, it is processed the same way as "
+            "quantization_config in the model's config.json. "
+            "If both CLI and config.json specify quantization_config, "
+            "config.json takes higher priority. Default is None.",
         )
         model_group.add_argument(
             "--graph-optimization-config",
@@ -1086,6 +1097,14 @@ class EngineArgs:
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
                  default/default_v1/dummy.",
+        )
+
+        load_group.add_argument(
+            "--model-loader-extra-config",
+            type=json.loads,
+            default=EngineArgs.model_loader_extra_config,
+            help="Additional configuration for model loader (JSON format). "
+            'e.g., \'{"enable_multithread_load": true, "num_threads": 8}\'',
         )
 
         # CacheConfig parameters group

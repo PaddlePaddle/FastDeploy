@@ -29,6 +29,7 @@ from fastdeploy.distributed.communication import (
     capture_custom_allreduce,
     custom_ar_clear_ipc_handles,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
@@ -414,7 +415,7 @@ class CudaGraphPiecewiseBackend:
         # - Static full graph mode: Dynamic for prefill/mixed, Static + CUDAGraph for decode
         # - Dynamic mode: Dynamic + CUDAGraph for decode only
         if static_cudagraph_for_prefill or static_cudagraph_for_decode:
-            return self.run_static_model(entry, **kwargs)
+            return self.run_static_model(entry, is_decode=static_cudagraph_for_decode, **kwargs)
 
         # Capture a new cuda graph
         if entry.cuda_graph is None:
@@ -519,6 +520,8 @@ class CudaGraphPiecewiseBackend:
 
         del self.concrete_size_entries
         paddle.device.cuda.empty_cache()
+
+        self._decode_capture_index = 0
 
         # Create new entrys
         self._create_entry_dict()

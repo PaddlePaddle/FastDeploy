@@ -27,7 +27,9 @@ English | [简体中文](README_CN.md)
 
 ## News
 
-[2026-01] FastDeploy v2.4 is released! Featuring PD-separated deployment for DeepSeek V3 and Qwen3-MoE, enhanced MTP speculative decoding, and comprehensive performance boosts for MoE inference and multi-modal Prefix Caching across various hardware backends. See the full v2.4 ReleaseNote for more details.
+**[2026-03] FastDeploy v2.5 is released!** It adds deployment support for Qwen3-VL and Qwen3-VL MoE models, introduces the W4AFP8 quantization method, enhances reinforcement learning training capabilities, and includes 170+ bug fixes and performance optimizations. For all the upgrade details, refer to the [v2.5 Release Note](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.5.0).
+
+**[2026-01] FastDeploy v2.4**: Featuring PD-separated deployment for DeepSeek V3 and Qwen3-MoE, enhanced MTP speculative decoding, and comprehensive performance boosts for MoE inference and multi-modal Prefix Caching across various hardware backends. For all the upgrade details, refer to the [v2.4 Release Note](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.4.0).
 
 **[2025-11] FastDeploy v2.3**: It adds deployment support for two major models, [ERNIE-4.5-VL-28B-A3B-Thinking](docs/get_started/ernie-4.5-vl-thinking.md) and [PaddleOCR-VL-0.9B](docs/best_practices/PaddleOCR-VL-0.9B.md), across multiple hardware platforms. It further optimizes comprehensive inference performance and brings more deployment features and usability enhancements. For all the upgrade details, refer to the [v2.3 Release Note](https://github.com/PaddlePaddle/FastDeploy/releases/tag/v2.3.0).
 

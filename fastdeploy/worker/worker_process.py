@@ -1029,6 +1029,14 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--model_loader_extra_config",
+        type=json.loads,
+        default=None,
+        help="Additional configuration for model loader (JSON format). "
+        'e.g., \'{"enable_multithread_load": true, "num_threads": 8}\'',
+    )
+
+    parser.add_argument(
         "--ips",
         type=str,
         default=None,
