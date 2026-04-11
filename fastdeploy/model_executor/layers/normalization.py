@@ -250,6 +250,7 @@ class RMSNorm(nn.Layer):
                 norm_out = flashinfer_allreduce_residual_rmsnorm(
                     fd_config=self.fd_config, input_tensor=x, residual=residual_input, weight=self.weight, eps=self.eps
                 )
+                assert norm_out[0] is not None, "Trtllm-all-reduce fusion failed!"
             else:
                 if is_batch_invariant_mode_enabled():
                     # M-invariant path: per-row Triton kernel, no cross-row reduction
