@@ -830,6 +830,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             topk_idx,
             topk_weights,
             use_fp8=False,
+            use_ue8m0=True,
         )
 
         # Compute FFN via CuteDSL masked grouped GEMM
