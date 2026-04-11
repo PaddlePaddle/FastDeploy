@@ -191,7 +191,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     getattr(layer, self.added_weight_attrs[0]),
                     recv_num_tokens_per_expert_list,
                 )
-                out = paddlefleet_ops.fused_swiglu_scale(out, dst_weights)
+                if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE:
+                    out = paddlefleet_ops.fused_swiglu_scale(out, dst_weights)
+                else:
+                    out = paddle.incubate.nn.functional.swiglu(out)
                 ffn_out = paddle.incubate.nn.functional.batched_gemm(
                     out,
                     getattr(layer, self.added_weight_attrs[1]),
@@ -205,7 +208,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     token_prob_unzipped=dst_weights,
                     total_zipped_tokens=recv_x.shape[0],
                     num_experts=layer.num_local_experts,
-                    using_weighted_combine=False,
+                    using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
                 )
             else:
                 # --- original ep_moe_expert_dispatch / combine path ---
