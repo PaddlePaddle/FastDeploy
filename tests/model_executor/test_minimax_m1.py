@@ -200,7 +200,8 @@ def _make_fd_config(num_layers=4, attn_type_list=None, num_local_experts=4):
         pretrained_config=SimpleNamespace(prefix_name="model"),
     )
     pc = SimpleNamespace(tensor_parallel_size=1, tensor_parallel_rank=0, tp_group=None)
-    return SimpleNamespace(model_config=mc, parallel_config=pc)
+    gc = SimpleNamespace(graph_opt_level=0, use_cudagraph=False)
+    return SimpleNamespace(model_config=mc, parallel_config=pc, graph_opt_config=gc)
 
 
 # ── Fixture ─────────────────────────────────────────────────────────────
@@ -549,3 +550,93 @@ def test_lightning_attn_multi_head_independent():
 
     output, _ = _lightning_attention_numpy_ref(q_masked, k, v, slope)
     np.testing.assert_allclose(output[:, 3, :, :], 0.0, atol=1e-12)
+
+
+# ===================================================================
+# 6. Model & CausalLM forward
+# ===================================================================
+
+
+def test_model_forward(m):
+    """MiniMaxM1Model forward: embed → decoder layers → final norm."""
+    fd = _make_fd_config()
+    model = m.MiniMaxM1Model(fd)
+    for layer in model.layers:
+        _patch_layer(layer, 256)
+    ids = paddle.to_tensor([0, 1, 2], dtype="int64")
+    out = model(ids_remove_padding=ids, forward_meta=SimpleNamespace())
+    assert out.shape == [3, 256]
+
+
+def test_model_single_token(m):
+    """Model handles single-token input (generation phase)."""
+    fd = _make_fd_config()
+    model = m.MiniMaxM1Model(fd)
+    for layer in model.layers:
+        _patch_layer(layer, 256)
+    ids = paddle.to_tensor([42], dtype="int64")
+    out = model(ids_remove_padding=ids, forward_meta=SimpleNamespace())
+    assert out.shape == [1, 256]
+
+
+def test_causallm_forward(m):
+    """CausalLM wraps model, returns hidden_states matching input batch."""
+    fd = _make_fd_config()
+    model = m.MiniMaxM1ForCausalLM(fd)
+    for layer in model.model.layers:
+        _patch_layer(layer, 256)
+    ids = paddle.to_tensor([0, 1, 2], dtype="int64")
+    hidden = model(inputs={"ids_remove_padding": ids}, forward_meta=SimpleNamespace())
+    assert hidden.shape == [3, 256]
+
+
+def test_compute_logits_float32(m):
+    """compute_logits yields float32 logits over full vocab."""
+    fd = _make_fd_config()
+    model = m.MiniMaxM1ForCausalLM(fd)
+    hidden = paddle.randn([3, 256], dtype="float16")
+    logits = model.compute_logits(hidden, forward_meta=SimpleNamespace())
+    assert logits.dtype == paddle.float32
+    assert logits.shape == [3, 1024]
+
+
+# ===================================================================
+# 7. Weight loading — HF→FD name remapping
+# ===================================================================
+
+
+def test_set_state_dict_expert_rename(m):
+    """set_state_dict: HF expert w1/w3/w2 → FD gate_proj/up_proj/down_proj."""
+    fd = _make_fd_config()
+    model = m.MiniMaxM1ForCausalLM(fd)
+    state = {
+        "model.layers.0.block_sparse_moe.experts.0.w1.weight": np.zeros([1], dtype=np.float32),
+        "model.layers.0.block_sparse_moe.experts.0.w3.weight": np.zeros([1], dtype=np.float32),
+        "model.layers.0.block_sparse_moe.experts.0.w2.weight": np.zeros([1], dtype=np.float32),
+    }
+    model.set_state_dict(state)
+
+
+def test_set_state_dict_qkv_merge(m):
+    """set_state_dict: separate q/k/v_proj → merged qkv_proj via concat."""
+    fd = _make_fd_config()
+    model = m.MiniMaxM1ForCausalLM(fd)
+    h, kv_h, d, hidden = 8, 2, 32, 256
+    state = {
+        "model.layers.3.self_attn.q_proj.weight": np.ones([h * d, hidden], dtype=np.float32),
+        "model.layers.3.self_attn.k_proj.weight": np.ones([kv_h * d, hidden], dtype=np.float32) * 2,
+        "model.layers.3.self_attn.v_proj.weight": np.ones([kv_h * d, hidden], dtype=np.float32) * 3,
+    }
+    model.set_state_dict(state)
+
+
+def test_set_state_dict_passthrough(m):
+    """Non-expert, non-qkv keys pass through without renaming."""
+    fd = _make_fd_config()
+    model = m.MiniMaxM1ForCausalLM(fd)
+    state = {
+        "model.layers.0.input_layernorm.weight": np.zeros([256], dtype=np.float32),
+        "model.norm.weight": np.zeros([256], dtype=np.float32),
+        "lm_head.weight": np.zeros([1024, 256], dtype=np.float32),
+    }
+    model.set_state_dict(state)

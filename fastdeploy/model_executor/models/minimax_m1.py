@@ -810,7 +810,7 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         """Forward pass."""
         ids_remove_padding = inputs["ids_remove_padding"]
 
-        hidden_states = self.model(ids_remove_padding, forward_meta)
+        hidden_states = self.model(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
         return hidden_states
 
 
