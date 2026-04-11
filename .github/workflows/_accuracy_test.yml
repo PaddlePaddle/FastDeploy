@@ -161,7 +161,9 @@ jobs:
           fi
 
           docker run --rm --net=host \
-          --shm-size=64G \
+          --shm-size=64g \
+          --sysctl kernel.msgmax=1048576 \
+          --sysctl kernel.msgmnb=268435456 \
           --name ${runner_name} \
           -v $(pwd):/workspace \
           -w /workspace \
