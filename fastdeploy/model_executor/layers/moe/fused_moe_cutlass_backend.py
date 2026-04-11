@@ -430,7 +430,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
                 topk_reduce_func=getattr(layer, "topk_reduce_func", None),
-                use_fused_cast=True,
+                use_fused_cast=use_fused,
             )
 
             (

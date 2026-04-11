@@ -103,7 +103,6 @@ class DummyLayer(paddle.nn.Layer):
         }
         self._up_weights = None
         self._down_weights = None
-        self.dynamic_load_weight = False
 
     def extract_moe_ffn_weights(self, state_dict):
         return self._up_weights, self._down_weights, None, None

@@ -195,7 +195,6 @@ class FusedMoE(nn.Layer):
         super().__init__()
 
         self.fd_config = fd_config
-        self.dynamic_load_weight = fd_config.load_config.dynamic_load_weight
         self.layer_idx = layer_idx
         self.reduce_results = reduce_results
         self.renormalize = renormalize

@@ -132,7 +132,6 @@ class DummyLayer(paddle.nn.Layer):
         self.topk_group = 1
         self.routed_scaling_factor = 1.0
         self.renormalize = True
-        self.dynamic_load_weight = False
         self.gate_correction_bias = paddle.zeros([E], dtype="float32")
         self.topk_method = "noaux_tc"
         self.fd_config = DummyFDConfig()

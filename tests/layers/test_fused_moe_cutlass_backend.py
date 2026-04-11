@@ -89,7 +89,6 @@ class DummyLayer(paddle.nn.Layer):
         self.routed_scaling_factor = 1.0
         self.gate_correction_bias = None
         self.is_quantized = False
-        self.dynamic_load_weight = False
         self.moe_quant_config = types.SimpleNamespace(moe_dynamic_quant=False, hadamard_block_size=128)
         self.weight_key_map = {
             "up_gate_proj_expert_weight_key": "up_gate_{}",
@@ -395,7 +394,7 @@ class TestFusedMoeCutlassBackend:
 
     def test_apply_tp_with_dispatch_and_reduce(self, monkeypatch):
         def fake_get_moe_scores(
-            gate_out, n_group, topk_group, top_k, routed_scaling_factor, bias, renormalize, **kwargs
+            gate_out, n_group, topk_group, top_k, routed_scaling_factor, bias, renormalize, topk_reduce_func=None
         ):
             return gate_out, paddle.to_tensor([[0.6, 0.4]]), paddle.to_tensor([[0, 1]])
 
