@@ -31,10 +31,6 @@ else:
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
-from .batch_invariant_ops import (
-    is_batch_invariant_mode_enabled,
-    rms_norm_batch_invariant,
-)
 from .flashinfer_comm_fusion import flashinfer_allreduce_residual_rmsnorm
 from .utils import get_tensor, modules_to_convert
 
@@ -250,6 +246,7 @@ class RMSNorm(nn.Layer):
                 norm_out = flashinfer_allreduce_residual_rmsnorm(
                     fd_config=self.fd_config, input_tensor=x, residual=residual_input, weight=self.weight, eps=self.eps
                 )
+                assert norm_out[0] is not None, "Trtllm-all-reduce fusion failed!"
             else:
                 norm_out = self.norm_func(
                     x,
