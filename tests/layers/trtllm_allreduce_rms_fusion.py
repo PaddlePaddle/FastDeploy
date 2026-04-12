@@ -282,10 +282,10 @@ class TestFlashInferWorkspaceManagerEdgeCases(unittest.TestCase):
 
     def test_initialization_warning_when_comm_none(self):
         """Test lines 50-51: warning when _flashinfer_comm is None"""
-        # Patch to ensure _flashinfer_comm is None
+        # Patch to ensure _get_flashinfer_comm returns None
         with patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm",
-            None,
+            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._get_flashinfer_comm",
+            return_value=None,
         ):
             from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
                 FlashInferWorkspaceManager,
@@ -377,8 +377,8 @@ class TestEnsureWorkspaceInitialized(unittest.TestCase):
         self.mock_has_flashinfer.return_value = True
 
         with patch(
-            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._flashinfer_comm",
-            None,
+            "fastdeploy.model_executor.layers.flashinfer_comm_fusion._get_flashinfer_comm",
+            return_value=None,
         ):
             from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
                 ensure_workspace_initialized,
