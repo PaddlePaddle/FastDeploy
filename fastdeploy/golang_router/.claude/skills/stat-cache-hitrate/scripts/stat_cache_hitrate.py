@@ -344,7 +344,7 @@ def _quartile_trend(trend, value_field):
     return f"Q1={quartiles[0]}% \u2192 Q2={quartiles[1]}% \u2192 Q3={quartiles[2]}% \u2192 Q4={quartiles[3]}% {arrow}"
 
 
-def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, scheduling, diagnosis, time_span=None):
+def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, scheduling, diagnosis, time_span=None, window_rows=None):
     """格式化完整终端报告。"""
     parts = []
 
@@ -366,6 +366,7 @@ def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, 
         dist_data = [
             {"label": d["range"] + "%", "value": d["pct"], "count": d["count"]} for d in prefix_hr["distribution"]
         ]
+        parts.append("  Unicode 柱状图（Prefix HR 分布）:")
         parts.append(render_bar(dist_data, show_count=True))
 
         parts.append(f'  冷启动率: {prefix_hr["cold_start_rate"]}%')
@@ -380,6 +381,7 @@ def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, 
                 {"bucket": t["bucket"], "value": t.get("selected_hitRatio_mean", 0)} for t in prefix_hr["trend"]
             ]
             parts.append("")
+            parts.append("  ASCII 折线图（Prefix HR 趋势）:")
             parts.append(render_sparkline(sparkline_data, title="Prefix HR Trend", y_label="%", y_range=(0, 100)))
     else:
         parts.append("  (无 cache_aware_scoring 数据)")
@@ -396,6 +398,7 @@ def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, 
 
     if session_hr["trend"]:
         parts.append("")
+        parts.append("  ASCII 折线图（Session HR 趋势）:")
         parts.append(render_sparkline(session_hr["trend"], title="Session HR Trend", y_label="%", y_range=(0, 100)))
     parts.append("")
 
@@ -433,6 +436,18 @@ def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, 
     parts.append(f'  {diagnosis["icon"]} {diagnosis["summary"]}')
     parts.append(f'  {diagnosis["detail"]}')
 
+    # 6. 每窗口明细预览
+    if window_rows:
+        parts.append("")
+        parts.append("### 6. 每5s窗口明细预览（前10行）")
+        parts.append(
+            render_table(
+                window_rows[:10],
+                columns=["Time", "Prefix HR", "Session HR", "Scoring", "Fallback", "Total Running"],
+                right_align={"Scoring", "Fallback", "Total Running"},
+            )
+        )
+
     return "\n".join(parts)
 
 
@@ -463,7 +478,77 @@ def format_tail_report(filepath, line_count, prefix_hr, session_hr, scheduling):
     return "\n".join(parts)
 
 
-def save_detailed_report(filepath, strategies, stats_recs, prefix_hr, session_hr, per_worker, scheduling, output_dir):
+def build_per_window_rows(strategies, stats_recs):
+    """构建每窗口明细行，用于终端预览和 details 导出。"""
+    time_data = defaultdict(
+        lambda: {
+            "prefix_vals": [],
+            "hits": 0,
+            "total": 0,
+            "scoring": 0,
+            "fallback": 0,
+            "running": 0,
+            "has_running": False,
+        }
+    )
+    for r in strategies:
+        ts = r.get("ts", "")
+        if r.get("strategy") == "cache_aware_scoring":
+            time_data[ts]["scoring"] += 1
+            time_data[ts]["prefix_vals"].append(r.get("selected_hitRatio", 0))
+        else:
+            time_data[ts]["fallback"] += 1
+
+    for r in stats_recs:
+        ts = r.get("ts", "")
+        time_data[ts]["hits"] += r.get("hits", 0)
+        time_data[ts]["total"] += r.get("total", 0)
+        if "total_running" in r:
+            time_data[ts]["running"] += r.get("total_running", 0)
+            time_data[ts]["has_running"] = True
+
+    rows = []
+    for ts in sorted(time_data.keys()):
+        d = time_data[ts]
+        short_ts = ts.split(" ")[-1] if " " in ts else ts
+        if d["prefix_vals"]:
+            prefix_mean = round(sum(d["prefix_vals"]) / len(d["prefix_vals"]), 1)
+            prefix_hr = f"{prefix_mean}%"
+        else:
+            prefix_hr = "-"
+
+        if d["total"] > 0:
+            session_val = round(d["hits"] / d["total"] * 100, 1)
+            session_hr = f'{session_val}% ({d["hits"]}/{d["total"]})'
+        else:
+            session_hr = "-"
+
+        running = str(d["running"]) if d["has_running"] else "-"
+        rows.append(
+            {
+                "Time": short_ts,
+                "Prefix HR": prefix_hr,
+                "Session HR": session_hr,
+                "Scoring": str(d["scoring"]),
+                "Fallback": str(d["fallback"]),
+                "Total Running": running,
+            }
+        )
+    return rows
+
+
+def save_detailed_report(
+    filepath,
+    strategies,
+    stats_recs,
+    prefix_hr,
+    session_hr,
+    per_worker,
+    scheduling,
+    diagnosis,
+    output_dir,
+    time_span=None,
+):
     """导出详细数据 Markdown 文件。
 
     主报告包含 Per-Worker 统计和 Fallback 明细。
@@ -476,10 +561,63 @@ def save_detailed_report(filepath, strategies, stats_recs, prefix_hr, session_hr
     parts.append("# Cache Hit Rate Detailed Report")
     parts.append(f'**Generated**: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}')
     parts.append(f"**Source**: {filepath}")
+    if time_span:
+        parts.append(f"**Span**: {time_span}")
     parts.append("")
 
-    # Per-Worker 完整统计
-    parts.append("## 1. Per-Worker 完整统计")
+    # 1) 主指标摘要（与终端一致，避免“只在终端可见”）
+    parts.append("## 1. Key Metrics Summary")
+    parts.append("")
+    parts.append("### Prefix Hit Ratio")
+    if prefix_hr["stats"]:
+        parts.append(f'- 累计平均: **{prefix_hr["mean"]}%** (N={prefix_hr["count"]})')
+        parts.append(f'- 冷启动率: **{prefix_hr["cold_start_rate"]}%**')
+        trend_str = _quartile_trend(prefix_hr["trend"], "selected_hitRatio_mean")
+        if trend_str:
+            parts.append(f"- 趋势: {trend_str}")
+        dist_data = [{"label": d["range"] + "%", "value": d["pct"], "count": d["count"]} for d in prefix_hr["distribution"]]
+        parts.append("")
+        parts.append("```text")
+        parts.append("Unicode 柱状图（Prefix HR 分布）")
+        parts.append(render_bar(dist_data, show_count=True))
+        if prefix_hr["trend"]:
+            sparkline_data = [{"bucket": t["bucket"], "value": t.get("selected_hitRatio_mean", 0)} for t in prefix_hr["trend"]]
+            parts.append("")
+            parts.append("ASCII 折线图（Prefix HR 趋势）")
+            parts.append(render_sparkline(sparkline_data, title="Prefix HR Trend", y_label="%", y_range=(0, 100)))
+        parts.append("```")
+    else:
+        parts.append("- (无 cache_aware_scoring 数据)")
+    parts.append("")
+
+    parts.append("### Session Hit Rate")
+    parts.append(f'- 累计: **{session_hr["rate"]}%** (hits={session_hr["hits"]}/total={session_hr["total"]})')
+    parts.append(f'- 覆盖率: **{session_hr["coverage"]}%**')
+    trend_str = _quartile_trend(session_hr["trend"], "value")
+    if trend_str:
+        parts.append(f"- 趋势: {trend_str}")
+    if session_hr["trend"]:
+        parts.append("")
+        parts.append("```text")
+        parts.append("ASCII 折线图（Session HR 趋势）")
+        parts.append(render_sparkline(session_hr["trend"], title="Session HR Trend", y_label="%", y_range=(0, 100)))
+        parts.append("```")
+    parts.append("")
+
+    parts.append("### Scheduling Strategy")
+    parts.append(
+        f'- cache_aware_scoring: **{scheduling["scoring_count"]} ({scheduling["scoring_pct"]}%)**'
+        f' | fallback: **{scheduling["fallback_count"]}**'
+    )
+    parts.append(
+        f'- 非最优命中选择: **{scheduling["suboptimal_pct"]}%**'
+        f' ({scheduling.get("suboptimal_count", 0)} 次, 负载均衡优先于命中率)'
+    )
+    parts.append(f'- Diagnosis: {diagnosis["icon"]} {diagnosis["summary"]}；{diagnosis["detail"]}')
+    parts.append("")
+
+    # 2) Per-Worker 完整统计
+    parts.append("## 2. Per-Worker 完整统计")
     parts.append("")
     if per_worker:
         parts.append(
@@ -491,49 +629,34 @@ def save_detailed_report(filepath, strategies, stats_recs, prefix_hr, session_hr
         )
     parts.append("")
 
-    # Fallback 明细
+    # 3) Fallback 明细
     if scheduling["fallback_reasons"]:
-        parts.append("## 2. Fallback 明细")
+        parts.append("## 3. Fallback 明细")
         for reason in scheduling["fallback_reasons"]:
             parts.append(f'- **{reason["value"]}**: {reason["count"]} 次 ({reason["pct"]}%)')
         parts.append("")
 
     # 每窗口明细 → 拆分到 details/
-    time_data = defaultdict(lambda: {"prefix_hr": "-", "session_hr": "-", "scoring": 0, "fallback": 0, "running": "-"})
-    for r in strategies:
-        ts = r.get("ts", "")
-        if r.get("strategy") == "cache_aware_scoring":
-            time_data[ts]["scoring"] += 1
-        else:
-            time_data[ts]["fallback"] += 1
+    window_rows = build_per_window_rows(strategies, stats_recs)
 
-    for r in stats_recs:
-        ts = r.get("ts", "")
-        h = r.get("hits", 0)
-        t = r.get("total", 0)
-        time_data[ts]["session_hr"] = f"{round(h / t * 100, 1)}% ({h}/{t})" if t else "0%"
-        time_data[ts]["running"] = str(r.get("total_running", "-"))
-
-    if time_data:
+    if window_rows:
         # 主报告中添加引用
         parts.append(
-            f"> 每窗口明细数据 ({len(time_data)} 条): [details/per_window_data.md](details/per_window_data.md)"
+            f"> 每5s窗口明细数据 ({len(window_rows)} 条): [details/per_window_data.md](details/per_window_data.md)"
         )
         parts.append("")
 
         # 写入 details 子目录
         details_dir = os.path.join(output_dir, "details")
         os.makedirs(details_dir, exist_ok=True)
-        detail_parts = ["# 每窗口明细数据", ""]
-        detail_parts.append("| Time | Prefix HR | Session HR | Scoring | Fallback | Total Running |")
-        detail_parts.append("|------|-----------|------------|---------|----------|---------------|")
-        for ts in sorted(time_data.keys()):
-            d = time_data[ts]
-            short_ts = ts.split(" ")[-1] if " " in ts else ts
-            detail_parts.append(
-                f'| {short_ts} | {d["prefix_hr"]} | {d["session_hr"]} '
-                f'| {d["scoring"]} | {d["fallback"]} | {d["running"]} |'
+        detail_parts = ["# 每5s窗口明细数据", ""]
+        detail_parts.append(
+            render_table(
+                window_rows,
+                columns=["Time", "Prefix HR", "Session HR", "Scoring", "Fallback", "Total Running"],
+                right_align={"Scoring", "Fallback", "Total Running"},
             )
+        )
         detail_parts.append("")
 
         detail_path = os.path.join(details_dir, "per_window_data.md")
@@ -569,8 +692,8 @@ def compute_time_span(strategies, stats_recs):
     duration = t_max - t_min
     hours = int(duration.total_seconds() // 3600)
     minutes = int((duration.total_seconds() % 3600) // 60)
-    start = t_min.strftime("%H:%M:%S")
-    end = t_max.strftime("%H:%M:%S")
+    start = t_min.strftime("%Y-%m-%d %H:%M:%S")
+    end = t_max.strftime("%Y-%m-%d %H:%M:%S")
     if hours > 0:
         return f"{start} ~ {end} ({hours}h{minutes}m)"
     return f"{start} ~ {end} ({minutes}m)"
@@ -647,9 +770,18 @@ def main():
         print(format_tail_report(args.log_file, line_count, prefix_hr, session_hr, scheduling))
     else:
         time_span = compute_time_span(strategy_recs, stats_recs)
+        window_rows = build_per_window_rows(strategy_recs, stats_recs)
         print(
             format_full_report(
-                args.log_file, line_count, prefix_hr, session_hr, per_worker, scheduling, diagnosis, time_span
+                args.log_file,
+                line_count,
+                prefix_hr,
+                session_hr,
+                per_worker,
+                scheduling,
+                diagnosis,
+                time_span,
+                window_rows=window_rows,
             )
         )
 
@@ -662,7 +794,16 @@ def main():
             run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             output_dir = os.path.join(golang_router_root, "skill_output", "stat-cache-hitrate", run_timestamp)
         report_path = save_detailed_report(
-            args.log_file, strategy_recs, stats_recs, prefix_hr, session_hr, per_worker, scheduling, output_dir
+            args.log_file,
+            strategy_recs,
+            stats_recs,
+            prefix_hr,
+            session_hr,
+            per_worker,
+            scheduling,
+            diagnosis,
+            output_dir,
+            time_span=time_span,
         )
         print(f"\n\U0001f4c4 详细数据见: {report_path}")
 
