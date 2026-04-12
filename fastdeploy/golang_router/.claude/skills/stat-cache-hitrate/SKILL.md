@@ -23,10 +23,9 @@ IMPORTANT: 执行前阅读 references/log_formats.md 了解日志格式和解析
 运行脚本前，Claude 必须先向用户确认以下参数：
 
 ### 1. 日志文件路径
-使用 AskUserQuestion 工具向用户询问日志文件路径。提供两个常用快捷选项 + Other 自定义输入（支持绝对路径和相对路径）：
+使用 AskUserQuestion 工具向用户询问日志文件路径。提供两个常用快捷选项（客户端会自动提供 Other 自定义输入）：
 - 选项 1: `logs/router.log`（默认）
 - 选项 2: `fd-router.log`（golang_router 根目录常用文件名）
-- 选项 3: Other（用户直接输入任意路径，例如 `logs/fd-router.log`、`/home/user/logs/router.log`）
 
 **重要规则**：
 - 如果用户已经在消息中明确指定了日志路径，直接使用该路径，跳过询问步骤
@@ -95,7 +94,7 @@ python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志�
 
 - 主报告 `cache_hitrate_report_*.md` — Per-Worker 统计 + Fallback 明细
 - `details/per_window_data.md` — 每5s窗口明细（连续空窗口自动合并为 3 行：起始/合并说明/结束）
-- `details/session_hit_details.md` — 每个 session 的命中明细（`session / req_count / first_hit / avg_hit(excl_first) / max_hit / min_hit / all_hits`），并附带 `prefill_urls`、prefill URL 切换前后 request_id（或 req_id/trace_id）以及命中率突降 request_id
+- `details/session_hit_details.md` — 每个 session 的命中明细（TSV 单行格式，便于横向滚动查看），包含 `session / req_count / first_hit / avg_hit(excl_first) / max_hit / min_hit / all_hits / prefill_urls / switch_req_pairs / sharp_drop_request_ids`
 
 ### 交叉诊断矩阵
 

@@ -48,6 +48,28 @@ def _build_path_links(path):
     file_uri = "file://" + quote(abs_path, safe="/:-._~")
     return abs_path, file_uri
 
+
+def _format_half_running(total_running):
+    """将 stats.total_running 归一化为 prefill 口径（decode+prefill 合计 / 2）。"""
+    normalized = total_running / 2
+    if float(normalized).is_integer():
+        return str(int(normalized))
+    return f"{normalized:.1f}"
+
+
+def _render_scrollable_tsv(data, columns):
+    """渲染单行 TSV 文本，适合在 Markdown 查看器里横向滚动。"""
+    if not data:
+        return "```tsv\n(no data)\n```"
+
+    def _escape(v):
+        return str(v).replace("\t", " ").replace("\n", "\\n")
+
+    lines = ["\t".join(columns)]
+    for row in data:
+        lines.append("\t".join(_escape(row.get(col, "")) for col in columns))
+    return "```tsv\n" + "\n".join(lines) + "\n```"
+
 # ════════════════════════════════════════════════════════════════
 # Phase 1: 日志读取
 # ════════════════════════════════════════════════════════════════
@@ -461,8 +483,8 @@ def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, 
         parts.append(
             render_table(
                 window_rows[:10],
-                columns=["Time", "Prefix HR", "Session HR", "Scoring", "Fallback", "Total Running"],
-                right_align={"Scoring", "Fallback", "Total Running"},
+                columns=["Time", "Prefix HR", "Session HR", "Scoring", "Fallback", "Total Running (prefill≈stats/2)"],
+                right_align={"Scoring", "Fallback", "Total Running (prefill≈stats/2)"},
             )
         )
 
@@ -542,7 +564,7 @@ def build_per_window_rows(strategies, stats_recs):
         else:
             session_hr = "-"
 
-        running = str(d["running"]) if d["has_running"] else "-"
+        running = _format_half_running(d["running"]) if d["has_running"] else "-"
         rows.append(
             {
                 "Time": short_ts,
@@ -550,7 +572,7 @@ def build_per_window_rows(strategies, stats_recs):
                 "Session HR": session_hr,
                 "Scoring": str(d["scoring"]),
                 "Fallback": str(d["fallback"]),
-                "Total Running": running,
+                "Total Running (prefill≈stats/2)": running,
             }
         )
     return rows
@@ -686,8 +708,8 @@ def save_detailed_report(
         detail_parts.append(
             render_table(
                 window_rows_merged,
-                columns=["Time", "Prefix HR", "Session HR", "Scoring", "Fallback", "Total Running"],
-                right_align={"Scoring", "Fallback", "Total Running"},
+                columns=["Time", "Prefix HR", "Session HR", "Scoring", "Fallback", "Total Running (prefill≈stats/2)"],
+                right_align={"Scoring", "Fallback", "Total Running (prefill≈stats/2)"},
             )
         )
         detail_parts.append("")
@@ -720,27 +742,22 @@ def save_detailed_report(
                 f' (N={session_summary["non_first_total"]})'
             )
             session_parts.append("")
-            session_parts.append("## 明细表")
-            session_parts.append(
-                render_table(
-                    session_rows,
-                    columns=[
-                        "session",
-                        "req_count",
-                        "first_hit",
-                        "avg_hit(excl_first)",
-                        "max_hit",
-                        "min_hit",
-                        "all_hits",
-                        "prefill_urls",
-                        "switch_req_pairs",
-                        "sharp_drop_request_ids",
-                        "sticky",
-                        "unique_workers",
-                    ],
-                    right_align={"req_count", "first_hit", "avg_hit(excl_first)", "max_hit", "min_hit", "unique_workers"},
-                )
-            )
+            session_columns = [
+                "session",
+                "req_count",
+                "first_hit",
+                "avg_hit(excl_first)",
+                "max_hit",
+                "min_hit",
+                "all_hits",
+                "prefill_urls",
+                "switch_req_pairs",
+                "sharp_drop_request_ids",
+                "sticky",
+                "unique_workers",
+            ]
+            session_parts.append("## 明细（单行 TSV，可横向滚动）")
+            session_parts.append(_render_scrollable_tsv(session_rows, session_columns))
             session_parts.append("")
 
             session_path = os.path.join(details_dir, "session_hit_details.md")
