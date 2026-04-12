@@ -194,7 +194,7 @@ scheduler:
   policy: "power_of_two" # Scheduling policy (optional): random, power_of_two, round_robin, process_tokens, request_num, cache_aware, remote_cache_aware, fd_metrics_score, fd_remote_metrics_score
   prefill-policy: "cache_aware" # Prefill scheduling policy in PD mode
   decode-policy: "request_num" # Decode scheduling policy in PD mode
-  eviction-interval-secs: 60 # Cache eviction interval for CacheAware scheduling
+  eviction-interval-secs: 60 # Counter eviction interval for CacheAware scheduling
   eviction-duration-mins: 30 # Eviction duration for cache-aware radix tree nodes (minutes); default: 30
   balance-abs-threshold: 1 # Absolute threshold for CacheAware balancing
   balance-rel-threshold: 0.2 # Relative threshold for CacheAware balancing

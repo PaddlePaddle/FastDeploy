@@ -29,6 +29,24 @@ Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
 | `empty baseURL provided` | 健康检查时传入了空的基础 URL | 健康检查无法执行 | 注册参数 |
 | `failed to create request: {error}` | 创建健康检查请求失败 | 该实例可能被判定为不健康 | 网络环境 |
 | `failed to read response body: {error}` | 读取健康检查响应体失败 | 该实例可能被判定为不健康 | 后端实例状态 |
+| `Failed to select mixed worker: {error}` | 集中式模式下选择 Mixed Worker 失败 | 当前请求返回 502 | 健康状况、调度策略 |
+| `Failed to select prefill worker: {error}` | PD 分离模式下选择 Prefill Worker 失败 | 当前请求返回 502 | 健康状况、调度策略 |
+| `Failed to read register request body: {error}` | 读取注册请求体失败 | 该注册请求返回 400 | 请求格式 |
+| `Failed to unmarshal register request JSON: {error}` | 解析注册请求 JSON 失败 | 该注册请求返回 400 | 请求格式 |
+| `Failed to create decode request for {url}: {error}` | 创建发往 Decode 实例的 HTTP 请求失败 | 当前请求失败 | 网络环境 |
+| `Failed to create prefill request for {url}: {error}` | 创建发往 Prefill 实例的 HTTP 请求失败 | 当前请求失败 | 网络环境 |
+| `Decode request failed for {url}: {error}` | 发往 Decode 实例的请求失败 | 当前请求失败 | 后端实例状态、网络连通性 |
+| `Prefill request failed for {url}: {error}` | 发往 Prefill 实例的请求失败 | 当前请求失败 | 后端实例状态、网络连通性 |
+| `Failed to read request body: {error}` | 读取推理请求体失败 | 当前请求返回 400 | 请求格式 |
+| `Failed to unmarshal request JSON: {error}` | 解析推理请求 JSON 失败 | 当前请求返回 400 | 请求格式 |
+| `Failed to select worker pair: {error}` | PD 分离模式下选择 Worker 对失败 | 当前请求返回 502 | 健康状况、调度策略 |
+| `Failed to build disaggregate_info: {error}` | 构建 PD 分离通信信息失败 | 当前请求返回 500 | 注册参数（connector_port、device_ids 等） |
+| `Failed to encode modified request: {error}` | 编码修改后的请求体失败 | 当前请求返回 500 | 请求内容 |
+| `Failed to select worker: {error}` | 集中式模式下选择 Worker 失败 | 当前请求返回 502 | 健康状况、调度策略 |
+| `Failed to connect to backend service: {error}` | 连接后端推理实例失败（已重试 3 次仍失败） | 当前请求返回 502 | 后端实例状态、网络连通性 |
+| `Request failed (attempt {n}/{max}): {error}` | 请求发送第 {n} 次尝试失败 | 若重试耗尽则请求返回 502 | 后端实例状态、网络连通性 |
+| `Failed to create backend request for {url}: {error}` | 创建发往后端的 HTTP 请求失败 | 当前请求失败 | 网络环境 |
+| `Backend request failed for {url}: {error}` | 发往后端实例的请求失败 | 当前请求失败 | 后端实例状态、网络连通性 |
 
 ### Warn 级别日志
 
@@ -37,8 +55,9 @@ Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
 | `Server {url} is not healthy` | 该 URL 对应的实例未通过健康检查 | Router 无法注册该实例，或将该实例从已注册列表中移除 | 健康状况 |
 | `Instance {url} role is unknown` | 实例角色无法识别 | 该实例不会被加入调度列表 | 注册参数 |
 | `cache-aware prefill: tokenizer failed, fallback to char tokens: {error}` | Tokenizer 服务调用失败，已自动回退至字符级分词 | cache_aware 策略仍然生效，使用字符级分词代替 Tokenizer 进行缓存匹配，不影响正常请求处理 | Tokenizer 服务状态 |
-| `cache-aware prefill: tokenize failed, fallback to process_tokens: {error}` | 分词彻底失败（如输入为空），回退至 process_tokens 策略 | Prefill 调度暂时不使用 cache_aware 策略，不影响正常请求处理 | 请求内容、Tokenizer 服务状态 |
-| `cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: {error}. ts_ms={ts}` | 分词失败（新格式），回退至 process_tokens 策略 | Prefill 调度暂时不使用 cache_aware 策略，不影响正常请求处理 | 请求内容、Tokenizer 服务状态 |
+| `GetRemoteMetrics failed for {url}, falling back to local counter: {error}` | 获取远程 metrics 失败，已回退至本地计数器 | 调度精度可能下降，不影响正常请求处理 | 后端实例 metrics 端口、网络连通性 |
+| `release worker: {url} skipped, counter already cleaned up` | 释放 Worker 计数器时发现已被清理 | 可能是 Worker 被健康检查移除后仍有在途请求完成 | 健康状况、请求时序 |
+| `release worker: {url} skipped, counter already zero (possible double-release)` | 释放 Worker 计数器时发现已归零 | 可能存在计数器重复释放 | 请求处理逻辑 |
 
 ### Info 级别日志
 
@@ -49,7 +68,6 @@ Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
 | `Successfully registered instance from index {index}` | 配置文件中的实例注册成功 | 正常启动日志 |
 | `No instances found in config file {path}` | 注册配置文件中未找到实例信息 | 请检查 register.yaml 内容是否为空 |
 | `Request completed successfully.` | 请求处理完成 | 正常运行日志 |
-| `Request failed, retrying...` | 请求失败，正在进行重试 | Router 最多重试 3 次 |
 | `select worker (prefill): {url}, tokens: {tokens}` | Prefill 调度选中 Worker，显示当前 token 处理量 | 正常运行日志 |
 | `select worker ({type}): {url}, count: {count}` | Decode/Mixed 调度选中 Worker，显示当前请求并发数 | 正常运行日志 |
 | `release worker: {url}, count: {count}` | 请求结束，释放 Worker 计数器 | 正常运行日志 |
@@ -58,7 +76,6 @@ Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
 | `removed counters for {count} unhealthy workers: {urls}` | 批量清理不健康 Worker 的计数器 | 正常运行日志 |
 | `[stats] total_running={n}, workers: [{loads}], cache_hit_rate={rate}% (hits={hits}/total={total})` | 周期性统计：总请求数、各 Worker 负载、缓存命中率 | 正常运行日志，用于监控调优 |
 | `Parsing completed; starting worker selection.` | 请求解析完成，开始选择 Worker | 正常运行日志 |
-| `Request completed with an error.` | 请求处理完成但发生错误 | 请排查后端实例状态 |
 | `[SelectWorkerPair] decode selection failed, releasing prefill counter url={url}` | PD 分离模式下 Decode 选择失败，释放 Prefill 计数器 | 异常处理日志 |
 | `[prefill] first chunk received, release counter url={url}` | Prefill 流式响应收到首个数据块，释放计数器 | 正常运行日志 |
 | `[prefill] non-stream prefill response done, release counter url={url}` | Prefill 非流式响应完成，释放计数器 | 正常运行日志 |
@@ -72,6 +89,11 @@ Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
 | `before SelectWorker prefill. ts_ms={ts}` | PD 分离模式下开始选择 Prefill Worker | 正常运行日志，用于性能追踪 |
 | `before SelectWorker decode, after prefill. ts_ms={ts}` | Prefill 选择完成后开始选择 Decode Worker | 正常运行日志，用于性能追踪 |
 | `after SelectWorker decode, before return. ts_ms={ts}` | Decode Worker 选择完成 | 正常运行日志，用于性能追踪 |
+| `cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: {error}. ts_ms={ts}` | 分词失败，回退至 process_tokens 策略 | Prefill 调度暂时不使用 cache_aware 策略，不影响正常请求处理 |
+| `unhealthy worker counter preserved (inflight requests): {url}, count: {count}` | 不健康 Worker 仍有在途请求，计数器暂时保留 | 正常运行日志，待在途请求完成后自动清理 |
+| `unhealthy worker token counter preserved (inflight requests): {url}, tokens: {tokens}` | 不健康 Worker 仍有在途 token 负载，token 计数器暂时保留 | 正常运行日志，待在途请求完成后自动清理 |
+| `cleanup unhealthy worker token counter: {url}` | 清理不健康 Worker 的 token 计数器 | 正常运行日志 |
+| `preserved counters for {count} workers with inflight requests: {urls}` | 批量保留仍有在途请求的 Worker 计数器 | 正常运行日志 |
 
 ### Debug 级别日志
 
@@ -100,6 +122,10 @@ Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
 | `{"error": "Failed to build disaggregate_info"}` | 500 | 构建 PD 分离通信信息失败 | 注册参数（connector_port、device_ids 等） |
 | `{"error": "Invalid request body"}` | 400 | 请求体读取失败 | 请求格式 |
 | `{"error": "Invalid JSON format"}` | 400 | 请求体 JSON 解析失败 | 请求格式 |
+| `{"error": "Failed to encode modified request: {error}"}` | 500 | 编码修改后的请求体失败 | 请求内容 |
+| `{"code": 500, "msg": "Internal server error"}` | 500 | 请求处理过程中发生 panic 并被恢复 | 后端实例状态、请求内容 |
+
+> **说明**：在 PD 分离（splitwise）模式下，以上错误响应会额外包含 `request_id` 字段，如 `{"error": "...", "request_id": "xxx"}`。此外，`Invalid request body` 和 `Invalid JSON format` 的实际输出会包含具体的错误详情，如 `{"error": "Invalid request body: EOF"}`。
 
 ### 注册请求错误（/register）
 
@@ -112,6 +138,7 @@ Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
 | `{"code": 400, "msg": "only MIXED instances are allowed"}` | 400 | 集中式模式下只允许注册 MIXED 实例 | 部署模式、实例角色 |
 | `{"code": 400, "msg": "invalid InstanceInfo format: {error}"}` | 400 | 实例注册信息校验失败 | 注册参数 |
 | `{"code": 200, "msg": "Register success"}` | 200 | 注册成功 | — |
+| `{"code": 400, "msg": "DefaultManager is nil"}` | 400 | Router 内部管理器未初始化 | Router 启动状态 |
 
 ### 常见注册参数校验错误
 
@@ -124,6 +151,10 @@ Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
 | `port is required` | 缺少 port 字段 | 添加 port 字段 |
 | `invalid port: {port}` | port 不是合法的端口号 | 填写 1-65535 范围内的端口号 |
 | `invalid protocol: {protocol}` | 传输协议不合法 | 使用合法的协议值：ipc / rdma |
+| `invalid connector_port: {port}` | connector_port 不是合法的端口号 | 填写 1-65535 范围内的端口号 |
+| `invalid engine_worker_queue_port: {port}` | engine_worker_queue_port 不是合法的端口号 | 填写 1-65535 范围内的端口号 |
+| `invalid metrics_port: {port}` | metrics_port 不是合法的端口号 | 填写 1-65535 范围内的端口号 |
+| `rdma_ports[{index}] invalid port: {port}` | RDMA 端口列表中第 {index} 个端口号不合法 | 填写 1-65535 范围内的端口号 |
 
 ## 常见问题排查方式
 
@@ -236,7 +267,7 @@ PD 分离模式下建议完整配置以下参数，以确保 KV Cache 传输正�
 使用 `cache_aware` 调度策略时，Router 会调用 Tokenizer 服务对请求进行分词以计算缓存命中率。当 Tokenizer 服务不可用时，Router 内置了两级退化机制：
 
 1. **回退至字符级分词**（常见情况）：日志出现 `tokenizer failed, fallback to char tokens`。此时 cache_aware 策略仍然生效，只是使用字符级分词代替 Tokenizer 进行缓存匹配，缓存命中精度会有所下降，但不影响正常请求处理。
-2. **回退至 process_tokens 策略**（极端情况）：当分词彻底失败（如请求内容为空）时，日志出现 `tokenize failed, fallback to process_tokens`。此时 cache_aware 策略暂时不生效，改为按 token 处理量进行调度，同样不影响正常请求处理。
+2. **回退至 process_tokens 策略**（极端情况）：当分词彻底失败（如请求内容为空）时，日志出现 `cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: {error}. ts_ms={ts}`（Info 级别）。此时 cache_aware 策略暂时不生效，改为按 token 处理量进行调度，同样不影响正常请求处理。
 
 如需恢复 cache_aware 策略的完整功能：
 
