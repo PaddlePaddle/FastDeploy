@@ -75,14 +75,14 @@ class DeepEPBufferManager:
         cls._engine = engine
 
     @classmethod
-    def clean_low_latency_buffer(cls):
-        if cls._engine:
-            cls._engine.clean_low_latency_buffer()
-
-    @classmethod
     def clear_buffer(cls):
         if cls._engine:
             cls._engine.clear_deep_ep_buffer()
+
+    @classmethod
+    def clean_low_latency_buffer(cls):
+        if cls._engine:
+            cls._engine.clean_low_latency_buffer()
 
     @classmethod
     def recreate_buffer(cls):
