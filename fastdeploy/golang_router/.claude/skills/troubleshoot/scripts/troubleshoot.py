@@ -128,7 +128,20 @@ def determine_status(results):
                 reasons.append(d["message"])
 
     if reasons:
-        return "DEGRADED", ", ".join(reasons)
+        # 去重并限制长度，避免状态行过长难读
+        deduped = []
+        seen = set()
+        for r in reasons:
+            if r not in seen:
+                deduped.append(r)
+                seen.add(r)
+        max_reasons = 4
+        shown = deduped[:max_reasons]
+        extra = len(deduped) - len(shown)
+        summary = "；".join(shown)
+        if extra > 0:
+            summary += f"；另有 {extra} 项诊断见各维度 detail 报告"
+        return "DEGRADED", summary
 
     if not results:
         return "HEALTHY", "无分析数据"
@@ -152,6 +165,9 @@ def format_full_report(results, status, status_reason):
 
     # 状态行
     parts.append(f"STATUS: {status} — {status_reason}")
+    parts.append(
+        "状态定义: HEALTHY=无明显异常；DEGRADED=服务可用但存在性能/稳定性问题（需关注）；CRITICAL=服务不可用或高风险故障。"
+    )
     parts.append("=" * 60)
     parts.append("")
 

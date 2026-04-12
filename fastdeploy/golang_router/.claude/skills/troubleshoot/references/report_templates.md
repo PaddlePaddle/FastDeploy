@@ -44,6 +44,7 @@
 ### 简洁版（终端输出）
 
 - 第一行：`STATUS: HEALTHY / DEGRADED / CRITICAL — 简要说明`
+- 状态定义：`HEALTHY`=无明显异常；`DEGRADED`=服务可用但性能/稳定性下降（需关注）；`CRITICAL`=服务不可用或高风险故障
 - 按三层分类（Router / FD 后端 / 客户端）
 - 每个问题一行摘要 + 关键指标
 - 末尾提示详细版文件路径

@@ -33,6 +33,7 @@ SOURCE_LAYER_RULES = [
     ("counter already zero", "Router"),
     ("tokenizer failed", "Router"),
     ("Instance {url} role is unknown", "Router"),
+    ("Failed to read YAML file config/register.yaml", "Router"),
     # 客户端
     ("Invalid request body", "客户端"),
     ("Invalid JSON format", "客户端"),
@@ -282,6 +283,14 @@ def format_errors_report(result):
             render_table(table_data, columns=["模板", "数量", "占比", "级别", "来源层"], right_align={"数量", "占比"})
         )
         sections.append("")
+        yaml_missing_count = sum(
+            e["count"] for e in result["error_top_n"] if "Failed to read YAML file config/register.yaml" in e["template"]
+        )
+        if yaml_missing_count > 0:
+            sections.append(
+                f"  ℹ `Failed to read YAML file config/register.yaml` 出现 {yaml_missing_count} 次：若未启用该配置文件，可忽略。"
+            )
+            sections.append("")
 
     # 状态码分布
     if result["status_code_dist"]:
