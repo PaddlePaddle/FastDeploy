@@ -37,7 +37,10 @@ try:
         from cuda.bindings import runtime as cudart
     else:
         from cuda import cudart
-except (ImportError, Exception):
+except Exception as _e:
+    import warnings
+
+    warnings.warn(f"cuda-python import failed, async_expert_loader will be unavailable: {_e}")
     cudart = None
 
 from fastdeploy.config import EPLBConfig
@@ -110,6 +113,7 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, epl
             raise ImportError(
                 "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
                 "  CUDA 12.x → pip install cuda-python==12.*\n"
+                "  CUDA 13.x → pip install cuda-python cuda-bindings\n"
             )
 
         # Register memory with CUDA
