@@ -17,6 +17,8 @@ import os
 import re
 import subprocess
 import sys
+from pathlib import Path
+from urllib.parse import quote
 from collections import defaultdict
 from datetime import datetime
 
@@ -36,6 +38,13 @@ from stats import compute_statistics, count_by, time_bucket
 
 def _strip_scheme(url):
     return re.sub(r"^https?://", "", url)
+
+
+def _build_path_links(path):
+    """返回绝对路径与 file URI，兼容空格/中文路径。"""
+    abs_path = str(Path(path).resolve())
+    file_uri = "file://" + quote(abs_path, safe="/:-._~")
+    return abs_path, file_uri
 
 # ════════════════════════════════════════════════════════════════
 # Phase 1: 日志读取
@@ -356,6 +365,13 @@ def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, 
         parts.append(f"**Span**: {span_str}")
     parts.append("")
 
+    # 图表说明
+    parts.append("### 图表说明（如何解读）")
+    parts.append("  - Unicode 柱状图：每行代表一个 Prefix HR 区间（如 60-80%），条越长表示该区间请求占比越高。")
+    parts.append("  - ASCII 折线图：横轴是时间窗口，纵轴是命中率（0-100%）；越靠上表示命中率越高。")
+    parts.append("  - 趋势 Q1→Q4：把时间均分为四段，比较首尾；↑ 上升，↓ 下降，→ 基本稳定。")
+    parts.append("")
+
     # 1. Prefix Hit Ratio
     parts.append("### 1. Prefix Hit Ratio (KV Cache 内容复用度)")
     if prefix_hr["stats"]:
@@ -474,6 +490,7 @@ def format_tail_report(filepath, line_count, prefix_hr, session_hr, scheduling):
             {"bucket": t["bucket"], "value": t.get("selected_hitRatio_mean", 0)} for t in prefix_hr["trend"]
         ]
         parts.append(render_sparkline(sparkline_data, title="Recent Prefix HR", y_label="%", y_range=(0, 100)))
+        parts.append("  说明: 折线越靠上表示对应时间窗口 Prefix HR 越高。")
 
     return "\n".join(parts)
 
@@ -563,6 +580,12 @@ def save_detailed_report(
     parts.append(f"**Source**: {filepath}")
     if time_span:
         parts.append(f"**Span**: {time_span}")
+    parts.append("")
+
+    parts.append("## 图表说明（Legend）")
+    parts.append("- **Unicode 柱状图**: 展示 Prefix HR 分布，`█` 越多说明该命中率区间占比越高。")
+    parts.append("- **ASCII 折线图**: 展示命中率随时间变化，横轴为时间窗口，纵轴为命中率（0-100%）。")
+    parts.append("- **Q1~Q4 趋势**: 将观察区间均分四段，反映整体走向（↑/↓/→）。")
     parts.append("")
 
     # 1) 主指标摘要（与终端一致，避免“只在终端可见”）
@@ -805,7 +828,15 @@ def main():
             output_dir,
             time_span=time_span,
         )
-        print(f"\n\U0001f4c4 详细数据见: {report_path}")
+        print("\n\U0001f4c4 详细数据见:")
+        report_abs, report_uri = _build_path_links(report_path)
+        print(f"  - 报告文件: {report_abs}")
+        print(f"    URI: {report_uri}")
+        details_path = os.path.join(os.path.dirname(report_path), "details", "per_window_data.md")
+        if os.path.exists(details_path):
+            details_abs, details_uri = _build_path_links(details_path)
+            print(f"  - 窗口明细: {details_abs}")
+            print(f"    URI: {details_uri}")
 
     if args.watch:
         print("\n\U0001f4a1 持续跟踪: /loop 30s /stat-cache-hitrate --tail")

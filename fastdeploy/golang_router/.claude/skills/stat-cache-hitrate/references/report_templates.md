@@ -62,7 +62,16 @@
 ### 5. Diagnosis
   ✅/⚠/❌ <综合诊断>
 
-📄 详细数据见: skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/cache_hitrate_report_<timestamp>.md
+### 图表说明（Legend）
+  - Unicode 柱状图：每个区间的请求占比，条越长占比越高
+  - ASCII 折线图：横轴是时间窗口，纵轴是命中率（0-100%）
+  - Q1→Q4 趋势：按时间四等分后的均值变化（↑/↓/→）
+
+📄 详细数据见:
+  - 报告文件: /abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/cache_hitrate_report_<timestamp>.md
+    URI: file:///abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/cache_hitrate_report_<timestamp>.md
+  - 窗口明细: /abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/details/per_window_data.md
+    URI: file:///abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/details/per_window_data.md
 ```
 
 ---
