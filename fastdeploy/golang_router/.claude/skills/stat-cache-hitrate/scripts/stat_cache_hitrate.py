@@ -14,6 +14,7 @@ stat_cache_hitrate — FastDeploy Go Router Cache 命中率统计工具
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from collections import defaultdict
@@ -31,6 +32,10 @@ from log_parser import (
     parse_ts,
 )
 from stats import compute_statistics, count_by, time_bucket
+
+
+def _strip_scheme(url):
+    return re.sub(r"^https?://", "", url)
 
 # ════════════════════════════════════════════════════════════════
 # Phase 1: 日志读取
@@ -235,7 +240,7 @@ def compute_per_worker_stats(strategies):
         avg_hr = round(sum(data["hit_ratios"]) / len(data["hit_ratios"]), 1) if data["hit_ratios"] else 0
         result.append(
             {
-                "Worker": worker.replace("http://", ""),
+                "Worker": _strip_scheme(worker),
                 "Selected": data["selected_count"],
                 "Select%": f"{round(data['selected_count'] / total_scoring * 100, 1)}%",
                 "AvgHitRatio": f"{avg_hr}%",

@@ -21,14 +21,19 @@ from stats import compute_statistics, time_bucket
 # Counter 异常检测正则
 # ════════════════════════════════════════════════════════════════
 
-DOUBLE_RELEASE_RE = re.compile(r"release worker:\s*(http://\S+)\s+skipped.*?double-release")
-COUNTER_CLEANED_RE = re.compile(r"release worker:\s*(http://\S+)\s+skipped.*?counter already cleaned up")
-COUNTER_PRESERVED_RE = re.compile(r"counter preserved.*?(http://\S+)")
-TOKEN_PRESERVED_RE = re.compile(r"token counter preserved.*?(http://\S+)")
+URL_RE = r"((?:https?://)?[A-Za-z0-9.-]+(?::\d+)?)"
+DOUBLE_RELEASE_RE = re.compile(rf"release worker:\s*{URL_RE}\s+skipped.*?double-release")
+COUNTER_CLEANED_RE = re.compile(rf"release worker:\s*{URL_RE}\s+skipped.*?counter already cleaned up")
+COUNTER_PRESERVED_RE = re.compile(rf"counter preserved.*?{URL_RE}")
+TOKEN_PRESERVED_RE = re.compile(rf"token counter preserved.*?{URL_RE}")
 
 # Token 事件
-SELECT_TOKENS_RE = re.compile(r"select worker \(prefill\):\s*(http://\S+),\s*tokens:\s*(\d+)")
-RELEASE_TOKENS_RE = re.compile(r"release prefill tokens:\s*(http://\S+),\s*tokens:\s*(\d+)")
+SELECT_TOKENS_RE = re.compile(rf"select worker \(prefill\):\s*{URL_RE},\s*tokens:\s*(\d+)")
+RELEASE_TOKENS_RE = re.compile(rf"release prefill tokens:\s*{URL_RE},\s*tokens:\s*(\d+)")
+
+
+def _strip_scheme(url):
+    return re.sub(r"^https?://", "", url)
 
 
 def parse_counter_anomaly(line):
@@ -89,7 +94,7 @@ def analyze_load(log_file, tail=None):
         avg = sum(vals) / len(vals) if vals else 0
         worker_load.append(
             {
-                "worker": w_url.replace("http://", ""),
+                "worker": _strip_scheme(w_url),
                 "avg_running": round(avg, 1),
                 "max_running": max(vals) if vals else 0,
                 "samples": len(vals),
@@ -121,9 +126,9 @@ def analyze_load(log_file, tail=None):
 
     # Select/Release 匹配
     sr_result = (
-        match_select_release(h3_lines)
+        match_select_release(h3_lines + h11_lines)
         if h3_lines
-        else {"matched": [], "unmatched_selects": [], "failed_selects": [], "per_worker": {}}
+        else {"matched": [], "unmatched_selects": [], "untracked_selects": [], "failed_selects": [], "per_worker": {}}
     )
 
     # Token 统计
@@ -133,7 +138,7 @@ def analyze_load(log_file, tail=None):
     pileup = _detect_pileup(stats_records)
 
     # 诊断
-    diagnoses = _diagnose(load_stats, worker_load, anomaly_summary, sr_result, pileup)
+    diagnoses = _diagnose(load_stats, worker_load, anomaly_summary, sr_result, token_stats, pileup)
 
     return {
         "load_stats": load_stats,
@@ -170,7 +175,7 @@ def _analyze_tokens(h3_lines, h11_lines):
         releases = token_release.get(w, [])
         result.append(
             {
-                "worker": w.replace("http://", ""),
+                "worker": _strip_scheme(w),
                 "alloc_count": len(allocs),
                 "alloc_avg": round(sum(allocs) / len(allocs), 0) if allocs else 0,
                 "release_count": len(releases),
@@ -195,7 +200,7 @@ def _detect_pileup(stats_records):
     return max_consecutive >= 5
 
 
-def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, pileup):
+def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, token_stats, pileup):
     """生成负载诊断。"""
     diagnoses = []
 
@@ -236,16 +241,20 @@ def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, pileup):
                 }
             )
 
-    # Select/Release 不一致
-    for w_url, pw in sr_result.get("per_worker", {}).items():
-        if pw.get("delta", 0) > 0:
-            diagnoses.append(
-                {
-                    "severity": "HIGH",
-                    "message": f'{w_url.replace("http://","")} select-release 差值 {pw["delta"]}（请求泄漏/卡住）',
-                    "source_layer": "FD 后端",
-                }
-            )
+    id_cov = sr_result.get("id_coverage", {})
+    has_correlatable_ids = (id_cov.get("with_request_id", 0) + id_cov.get("with_alt_id", 0)) > 0
+
+    # Select/Release 不一致（仅在存在可关联 ID 时启用，避免无 ID 场景误报）
+    if has_correlatable_ids:
+        for w_url, pw in sr_result.get("per_worker", {}).items():
+            if pw.get("delta", 0) > 0:
+                diagnoses.append(
+                    {
+                        "severity": "HIGH",
+                        "message": f'{_strip_scheme(w_url)} select-release 差值 {pw["delta"]}（请求泄漏/卡住）',
+                        "source_layer": "FD 后端",
+                    }
+                )
 
     # 卡住的请求
     if sr_result.get("unmatched_selects"):
@@ -256,6 +265,17 @@ def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, pileup):
                 "source_layer": "FD 后端",
             }
         )
+
+    # Token 计数器潜在泄漏
+    for t in token_stats:
+        if t.get("alloc_count", 0) > t.get("release_count", 0):
+            diagnoses.append(
+                {
+                    "severity": "MEDIUM",
+                    "message": f'{t["worker"]} token alloc/release 不平衡 ({t["alloc_count"]}/{t["release_count"]})',
+                    "source_layer": "Router",
+                }
+            )
 
     return diagnoses
 
@@ -316,8 +336,26 @@ def format_load_report(result):
         sections.append("### 计数器异常")
         sections.append("")
         for a in result["counter_anomalies"]:
-            workers_str = ", ".join(f'{w.replace("http://","")}({c})' for w, c in a["workers"].items())
+            workers_str = ", ".join(f'{_strip_scheme(w)}({c})' for w, c in a["workers"].items())
             sections.append(f'  {a["type"]}: {a["total"]} 次 [{workers_str}]')
+        sections.append("")
+
+    id_cov = result.get("select_release", {}).get("id_coverage", {})
+    if id_cov:
+        sections.append("### 请求标识覆盖（基于 select 近似请求数）")
+        sections.append("")
+        sections.append(
+            "  total={total} | with_request_id={with_rid} | without_request_id={without_rid} | "
+            "with_alt_id={with_alt} | without_any_id={without_any}".format(
+                total=id_cov.get("total_requests_estimated", 0),
+                with_rid=id_cov.get("with_request_id", 0),
+                without_rid=id_cov.get("without_request_id", 0),
+                with_alt=id_cov.get("with_alt_id", 0),
+                without_any=id_cov.get("without_any_id", 0),
+            )
+        )
+        if id_cov.get("without_any_id", 0) > 0:
+            sections.append("  ℹ 无 request/session/trace/req_id 时，不做退化匹配，仅统计为 untracked。")
         sections.append("")
 
     # Select/Release 匹配
@@ -325,14 +363,17 @@ def format_load_report(result):
     if sr.get("per_worker"):
         sections.append("### Select/Release 匹配")
         sections.append("")
+        id_cov = sr.get("id_coverage", {})
+        no_correlatable_id = (id_cov.get("with_request_id", 0) + id_cov.get("with_alt_id", 0)) == 0
         table_data = []
         for w_url, pw in sorted(sr["per_worker"].items()):
+            delta_display = "N/A" if no_correlatable_id else str(pw["delta"])
             table_data.append(
                 {
-                    "Worker": w_url.replace("http://", ""),
+                    "Worker": _strip_scheme(w_url),
                     "Select": str(pw["selects"]),
                     "Release": str(pw["releases"]),
-                    "Delta": str(pw["delta"]),
+                    "Delta": delta_display,
                 }
             )
         sections.append(
@@ -343,11 +384,20 @@ def format_load_report(result):
             )
         )
         sections.append("")
+        if no_correlatable_id:
+            sections.append("  ℹ 当前样本无可关联 ID，Delta 不用于请求泄漏结论。")
+            sections.append("")
 
     if sr.get("unmatched_selects"):
         sections.append(f'  ⚠ {len(sr["unmatched_selects"])} 个未匹配 select（疑似请求卡住）')
         for u in sr["unmatched_selects"][:5]:
-            sections.append(f'    [{u.get("select_ts","")}] {u["worker"].replace("http://","")} ({u["type"]})')
+            sections.append(f'    [{u.get("select_ts","")}] {_strip_scheme(u["worker"])} ({u["type"]})')
+        sections.append("")
+
+    if sr.get("untracked_selects"):
+        sections.append(f'  ℹ {len(sr["untracked_selects"])} 个 select 缺少可关联 ID，未参与卡住判定')
+        for u in sr["untracked_selects"][:5]:
+            sections.append(f'    [{u.get("select_ts","")}] {_strip_scheme(u["worker"])} ({u["type"]})')
         sections.append("")
 
     # Token 统计

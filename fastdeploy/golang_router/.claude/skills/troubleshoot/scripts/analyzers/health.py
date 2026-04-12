@@ -21,11 +21,16 @@ from log_parser import extract_ts, parse_http_line, parse_ts
 # 健康事件解析
 # ════════════════════════════════════════════════════════════════
 
-NOT_HEALTHY_RE = re.compile(r"(http://\S+)\s+is not healthy")
-REMOVED_RE = re.compile(r"Removed unhealthy \w+ instance:\s*(http://\S+)")
-IS_HEALTHY_RE = re.compile(r"(http://\S+)\s+is healthy")
-COUNTER_PRESERVED_RE = re.compile(r"counter preserved.*?(http://\S+)")
-CLEANUP_UNHEALTHY_RE = re.compile(r"cleanup unhealthy.*?(http://\S+)")
+WORKER_URL_RE = r"((?:https?://)?[A-Za-z0-9.-]+(?::\d+)?)"
+NOT_HEALTHY_RE = re.compile(rf"{WORKER_URL_RE}\s+is not healthy")
+REMOVED_RE = re.compile(rf"Removed unhealthy \w+ instance:\s*{WORKER_URL_RE}")
+IS_HEALTHY_RE = re.compile(rf"{WORKER_URL_RE}\s+is healthy")
+COUNTER_PRESERVED_RE = re.compile(rf"counter preserved.*?{WORKER_URL_RE}")
+CLEANUP_UNHEALTHY_RE = re.compile(rf"cleanup unhealthy.*?{WORKER_URL_RE}")
+
+
+def _strip_scheme(url):
+    return re.sub(r"^https?://", "", url)
 
 
 def parse_health_event(line):
@@ -110,7 +115,7 @@ def _build_worker_timelines(health_events, counter_events, register_events):
     # IP → worker URL 映射
     ip_to_urls = defaultdict(set)
     for url in worker_urls:
-        ip_m = re.search(r"http://(\d+\.\d+\.\d+\.\d+)", url)
+        ip_m = re.search(r"(?:https?://)?(\d+\.\d+\.\d+\.\d+)", url)
         if ip_m:
             ip_to_urls[ip_m.group(1)].add(url)
 
@@ -130,7 +135,7 @@ def _build_worker_timelines(health_events, counter_events, register_events):
     workers = {}
     for url in sorted(worker_urls):
         events = sorted(worker_events[url], key=lambda e: e["ts"] or "")
-        ip_m = re.search(r"http://(\d+\.\d+\.\d+\.\d+)", url)
+        ip_m = re.search(r"(?:https?://)?(\d+\.\d+\.\d+\.\d+)", url)
         worker_ip = ip_m.group(1) if ip_m else ""
 
         # 恢复检测：REMOVED 后有 register
@@ -237,7 +242,7 @@ def _diagnose(workers):
         )
 
     for url, w in workers.items():
-        s = url.replace("http://", "")
+        s = _strip_scheme(url)
         if w["down_count"] > 3:
             diagnoses.append(
                 {
@@ -326,7 +331,7 @@ def format_health_report(result):
             )
         table_data.append(
             {
-                "Worker": url.replace("http://", ""),
+                "Worker": _strip_scheme(url),
                 "在线率": f'{w["uptime_pct"]}%',
                 "下线次数": str(w["down_count"]),
                 "平均下线时长": avg_down or "-",
@@ -358,7 +363,7 @@ def format_health_report(result):
     for url, w in sorted(result["workers"].items()):
         if w["events"]:
             has_events = True
-            detail_parts.append(f'## {url.replace("http://", "")}')
+            detail_parts.append(f"## {_strip_scheme(url)}")
             detail_parts.append("")
             for evt in w["events"]:
                 detail_parts.append(f'  [{evt["ts"]}] {evt["type"]}')
