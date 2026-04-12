@@ -904,7 +904,7 @@ class GPUModelRunner(ModelRunnerBase):
                             self.share_inputs["draft_tokens"][idx : idx + 1, 0:2],
                             draft_tokens_to_write,
                         )
-                        async_set_value(self.share_inputs["seq_lens_this_time"][idx : idx + 1], 2)
+                        async_set_value(self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1], 2)
                     logger.debug(
                         f"insert request {request.request_id} idx: {idx} suffix tokens {request.draft_token_ids}"
                     )
