@@ -16,8 +16,8 @@ import paddle
 import zmq
 from zmq.utils import jsonapi
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda **kwargs: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda **kwargs: None
 
 from fastdeploy import envs
 from fastdeploy.inter_communicator.zmq_server import (

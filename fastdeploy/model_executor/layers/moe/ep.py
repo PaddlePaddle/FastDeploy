@@ -39,8 +39,8 @@ def load_deep_ep() -> ModuleType:
 
     try:
         if envs.FD_USE_PFCC_DEEP_EP:
-            # Enable torch proxy before importing deep_ep (required by PFCC/PaddleFleet variants)
-            paddle.compat.enable_torch_proxy(scope={"deep_ep"})
+            # Enable paddle.enable_compat before importing deep_ep (required by PFCC/PaddleFleet variants)
+            paddle.enable_compat(scope={"deep_ep"})
             try:
                 import paddlefleet.ops.deep_ep as deep_ep  # type: ignore
 
