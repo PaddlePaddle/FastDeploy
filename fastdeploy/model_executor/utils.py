@@ -131,6 +131,9 @@ def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
 
 def process_weight_transpose(layer, weight_name):
     weight = getattr(layer, weight_name)
+    if not weight._is_initialized():
+        logger.warning(f"Weight '{weight_name}' is not initialized, skipping process_weight_transpose")
+        return
     if len(weight.shape) == 2:
         weight_shape = weight.shape[::-1]
     elif len(weight.shape) == 3:
