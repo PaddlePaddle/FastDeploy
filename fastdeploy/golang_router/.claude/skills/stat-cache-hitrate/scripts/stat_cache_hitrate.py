@@ -886,25 +886,20 @@ def save_detailed_report(
             )
             session_parts.append("")
 
-            session_columns = [
-                "id",
-                "req_count",
-                "first_hit",
-                "avg-hit",
-                "max_hit",
-                "min_hit",
-                "all_hits",
-                "purl_cnt",
-                "prefill_urls",
-                "sticky",
-            ]
+            session_columns = focus_columns
             all_rows_for_table = []
             for r in all_rows_with_seq:
+                sid = r["id"]
                 all_rows_for_table.append(
                     {
-                        **r,
-                        "avg-hit": r["avg_hit(excl_first)"],
+                        "id": sid,
+                        "req_count": r["req_count"],
+                        "sticky": r["sticky"],
                         "purl_cnt": r.get("prefill_url_count", 0),
+                        "avg-hit": r["avg_hit(excl_first)"],
+                        "max_hit": r["max_hit"],
+                        "min_hit": r["min_hit"],
+                        "switch_reqids": f"[查看](#switch-{sid.lower()})" if r["switch_req_pairs"] != "-" else "-",
                     }
                 )
             session_parts.append("## 全量明细（Markdown 表格）")
