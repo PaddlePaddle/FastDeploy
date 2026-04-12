@@ -885,18 +885,26 @@ class GPUModelRunner(ModelRunnerBase):
                     # TODO: delete useless operation like this
                     async_set_value(self.share_inputs["seq_lens_encoder"][idx : idx + 1], 0)
                     self.exist_prefill_flag = False
-                    token_num_one_step = (
-                        (self.speculative_config.num_speculative_tokens + 1) if self.speculative_decoding else 1
-                    )
-                    self._cached_launch_token_num += token_num_one_step
-                    self._cached_real_bsz += 1
+                    if self._cached_launch_token_num != -1:
+                        token_num_one_step = (
+                            (self.speculative_config.num_speculative_tokens + 1) if self.speculative_decoding else 1
+                        )
+                        self._cached_launch_token_num += token_num_one_step
+                        self._cached_real_bsz += 1
                     if self.speculative_decoding:
-                        # D speculate decode, [Target first token, MTP first draft token]
-                        async_set_value(self.share_inputs["seq_lens_this_time"][idx : idx + 1], 2)
+                        # D first decode step, [Target first token, MTP first draft token]
+                        # MTP in P only generate one draft token in any num_model_step config
+                        draft_tokens_to_write = request.draft_token_ids[0:2]
+                        if len(draft_tokens_to_write) != 2:
+                            raise ValueError(
+                                "Expected at least 2 draft tokens for speculative suffix decode, "
+                                f"but got {len(draft_tokens_to_write)} for request {request.request_id}."
+                            )
                         async_set_value(
                             self.share_inputs["draft_tokens"][idx : idx + 1, 0:2],
-                            request.draft_token_ids[0 : length + 1],
+                            draft_tokens_to_write,
                         )
+                        async_set_value(self.share_inputs["seq_lens_this_time"][idx : idx + 1], 2)
                     logger.debug(
                         f"insert request {request.request_id} idx: {idx} suffix tokens {request.draft_token_ids}"
                     )
@@ -1003,7 +1011,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         self._process_mm_features(req_dicts)
 
-        if len(rope_3d_position_ids["position_ids_idx"]) > 0 and self.enable_mm_runtime:
+        if len(rope_3d_position_ids["position_ids_idx"]) > 0 and self.enable_mm:
             packed_position_ids = paddle.to_tensor(
                 np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
             )

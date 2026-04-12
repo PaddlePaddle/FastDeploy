@@ -487,7 +487,11 @@ class MTPProposer(Proposer):
                 self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs["input_ids"][
                     idx : idx + 1, 1:length
                 ]
-
+                # TODO: use token_all_ids replace with input_ids_cpu
+                if getattr(self, "hybrid_mode", False) and "input_ids_cpu" in self.model_inputs:
+                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = self.target_model_inputs[
+                        "input_ids"
+                    ][idx : idx + 1, 1:length].cpu()
                 encoder_block_num = len(request.block_tables)
                 async_set_value(self.model_inputs["encoder_block_lens"][idx : idx + 1], encoder_block_num)
                 async_set_value(self.model_inputs["block_tables"][idx : idx + 1, :], -1)
@@ -1231,6 +1235,7 @@ class MTPProposer(Proposer):
             )
 
     def _extend_draft_token_with_ngram_match(self):
+        # TODO: replace with gpu tensor
         hybrid_mtp_ngram(
             self.model_inputs["input_ids_cpu"].cuda(),
             self.model_inputs["input_ids_len"].cuda(),
