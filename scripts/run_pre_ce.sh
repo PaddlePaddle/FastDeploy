@@ -7,7 +7,11 @@ python -m pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/p
 
 python -m pip install -r requirements.txt
 python -m pip install jsonschema aistudio_sdk==0.3.5
-python -m pip install xgrammar==0.1.19 torch==2.6.0
+# Use prebuilt wheel files to install xgrammar==0.1.19 and torch==2.6.0 specifically for the CI environment
+python -m pip install  \
+  https://paddle-qa.bj.bcebos.com/FastDeploy/torch-2.6.0-cp310-cp310-manylinux1_x86_64.whl \
+  https://paddle-qa.bj.bcebos.com/FastDeploy/triton-3.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl \
+  https://paddle-qa.bj.bcebos.com/FastDeploy/xgrammar-0.1.19-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
 failed_files=()
 run_path="$DIR/../tests/ci_use/"
