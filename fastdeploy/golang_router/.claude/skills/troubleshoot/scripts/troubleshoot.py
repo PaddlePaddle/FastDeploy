@@ -190,30 +190,27 @@ def save_detailed_report(report_text, output_dir, details=None):
         output_dir: 输出目录
         details: 详情数据 dict（来自 format_full_report）
     """
-    os.makedirs(output_dir, exist_ok=True)
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"troubleshoot_report_{timestamp}.md"
-    filepath = os.path.join(output_dir, filename)
+    summary_dir = os.path.join(output_dir, "summary")
+    detail_dir = os.path.join(output_dir, "detail")
+    os.makedirs(summary_dir, exist_ok=True)
+    os.makedirs(detail_dir, exist_ok=True)
+    filepath = os.path.join(summary_dir, "troubleshoot_report.md")
 
     with open(filepath, "w", encoding="utf-8") as f:
         f.write("# Router Troubleshooting Report\n")
         f.write(f'> Generated at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}\n\n')
         f.write(report_text)
 
-    # 保存详情到 details/ 子目录
+    # 保存详情到 detail/ 子目录
     if details:
-        details_dir = os.path.join(output_dir, "details")
-
         if details.get("health_events"):
-            os.makedirs(details_dir, exist_ok=True)
-            health_path = os.path.join(details_dir, "health_events.md")
+            health_path = os.path.join(detail_dir, "health_events.md")
             with open(health_path, "w", encoding="utf-8") as f:
                 f.write(details["health_events"])
 
         for trace_id, trace_text in details.get("trace_files", {}).items():
-            os.makedirs(details_dir, exist_ok=True)
             safe_id = trace_id.replace("/", "_")
-            trace_path = os.path.join(details_dir, f"trace_{safe_id}.md")
+            trace_path = os.path.join(detail_dir, f"trace_{safe_id}.md")
             with open(trace_path, "w", encoding="utf-8") as f:
                 f.write(trace_text)
 
@@ -327,13 +324,14 @@ def main():
     print(report)
 
     # 保存详细报告
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     if args.output:
-        output_dir = args.output
+        output_base = args.output
     else:
         script_dir = os.path.dirname(os.path.abspath(__file__))
         golang_router_root = os.path.normpath(os.path.join(script_dir, "..", "..", "..", ".."))
-        run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        output_dir = os.path.join(golang_router_root, "skill_output", "troubleshoot", run_timestamp)
+        output_base = os.path.join(golang_router_root, "skill_output", "troubleshoot")
+    output_dir = os.path.join(output_base, run_timestamp)
     filepath = save_detailed_report(report, output_dir, details=details)
     print(f"\n详细报告已保存到: {filepath}", file=sys.stderr)
 

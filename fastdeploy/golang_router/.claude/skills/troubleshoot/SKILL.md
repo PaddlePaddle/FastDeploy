@@ -64,7 +64,7 @@ IMPORTANT: 执行前务必先读取 references/log_patterns.md 了解日志格�
 
 ### 4. 输出目录
 诊断报告默认保存到 `skill_output/troubleshoot/<YYYYMMDD_HHMMSS>/`（自动按运行时间创建子目录）。
-用户可通过 `--output` 指定自定义目录。
+用户可通过 `--output` 指定**基目录**，脚本会继续在其下创建 `<YYYYMMDD_HHMMSS>/summary` 与 `<YYYYMMDD_HHMMSS>/detail`，避免覆盖历史明细。
 
 ## 用法
 
@@ -107,9 +107,9 @@ python3 $SCRIPTS/troubleshoot.py <log_file> --start "16:00" --end "17:00" --erro
 ## 输出
 
 - **终端**：简洁三层汇总（Router / FD 后端 / 客户端），含状态码分布、错误 Top N、趋势图
-- **文件**：详细报告导出到 `skill_output/troubleshoot/<YYYYMMDD_HHMMSS>/troubleshoot_report_<timestamp>.md`
-  - 逐分钟事件详情拆分到 `details/health_events.md`
-  - 请求追踪事件链拆分到 `details/trace_<ID>.md`
+- **文件**：详细报告导出到 `skill_output/troubleshoot/<YYYYMMDD_HHMMSS>/summary/troubleshoot_report.md`
+  - 逐分钟事件详情拆分到 `detail/health_events.md`
+  - 请求追踪事件链拆分到 `detail/trace_<ID>.md`
 - **状态行**：`STATUS: HEALTHY / DEGRADED / CRITICAL`
 
 ## 三层诊断框架
