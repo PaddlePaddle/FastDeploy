@@ -60,10 +60,11 @@ def async_set_value(tgt, src):
         src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
     elif isinstance(src, (list, np.ndarray)):
         dtype_str = str(tgt.dtype).split(".")[1]
+        np_dtype = dtype_str if dtype_str != "bfloat16" else "float32"
         if isinstance(src, list):
-            src = np.array(src, dtype=dtype_str if dtype_str != "bfloat16" else "float32")
-            # TODO: support async_numpy_to_tensor
-            src = paddle.to_tensor(src, dtype=tgt.dtype)
+            src = np.array(src, dtype=np_dtype)
+        # TODO: support async_numpy_to_tensor
+        src = paddle.to_tensor(src, dtype=tgt.dtype)
     elif isinstance(src, paddle.Tensor):
         pass
     else:
