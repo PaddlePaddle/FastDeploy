@@ -49,6 +49,9 @@ if current_platform.is_xpu():
         share_external_data,
         update_attn_mask_offsets,
     )
+
+    # temporary solution
+    from fastdeploy.model_executor.pre_and_post_process import async_set_value
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
         xpu_pre_process,
         xpu_process_output,
