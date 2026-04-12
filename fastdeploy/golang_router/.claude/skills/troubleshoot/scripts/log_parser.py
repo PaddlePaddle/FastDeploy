@@ -14,7 +14,7 @@ import json
 import re
 import sys
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ════════════════════════════════════════════════════════════════
 # 通用解析原语
@@ -152,7 +152,7 @@ def complete_time_arg(time_str, log_file, is_end=False):
     if m:
         mo, d = m.group(1).zfill(2), m.group(2).zfill(2)
         ts = _get_log_boundary_ts(log_file, "first")
-        year = ts[:4] if ts else "2026"
+        year = ts[:4] if ts else str(datetime.now().year)
         if m.group(3):  # 有时间部分
             h, mi = m.group(3).zfill(2), m.group(4)
             s = (m.group(5) or "00").zfill(2)
@@ -166,7 +166,7 @@ def complete_time_arg(time_str, log_file, is_end=False):
         h, mi = m.group(1).zfill(2), m.group(2)
         s = (m.group(3) or "00").zfill(2)
         ts = _get_log_boundary_ts(log_file, "last")
-        date_part = ts[:10] if ts else "2026/01/01"
+        date_part = ts[:10] if ts else f"{datetime.now().year}/01/01"
         return f"{date_part} {h}:{mi}:{s}"
 
     # Fallback: 原样返回
@@ -218,6 +218,30 @@ def filter_file_by_time_range(log_file, start_str=None, end_str=None):
     return (tmp.name, True)
 
 
+def filter_file_by_recent_minutes(log_file, minutes):
+    """按日志末时间戳向前过滤最近 N 分钟日志。
+
+    Returns:
+        tuple: (file_path, is_temp) — is_temp=True 时调用方负责删除
+    """
+    if minutes is None or minutes <= 0:
+        return (log_file, False)
+
+    last_ts = _get_log_boundary_ts(log_file, "last")
+    if not last_ts:
+        return (log_file, False)
+
+    try:
+        end_dt = parse_ts(last_ts)
+    except ValueError:
+        return (log_file, False)
+
+    start_dt = end_dt - timedelta(minutes=minutes)
+    start_str = start_dt.strftime("%Y/%m/%d %H:%M:%S")
+    end_str = end_dt.strftime("%Y/%m/%d %H:%M:%S")
+    return filter_file_by_time_range(log_file, start_str=start_str, end_str=end_str)
+
+
 # Context tag：[session_id:...], [request_id:...], [trace_id:...], [req_id:...]
 TAG_RE = re.compile(r"\[(session_id|request_id|trace_id|req_id):([^\]]+)\]")
 
@@ -228,7 +252,7 @@ def extract_tags(line):
 
 
 # Log level
-LEVEL_RE = re.compile(r"\[(INFO|ERROR|WARN)\]")
+LEVEL_RE = re.compile(r"\[(INFO|ERROR|WARN|DEBUG)\]")
 
 
 def extract_level(line):
@@ -294,9 +318,10 @@ def parse_http_line(line, inference_only=False):
 # Cache-Aware 策略行解析（类别 H6）
 # ════════════════════════════════════════════════════════════════
 
+URL_RE = r"(?:https?://)?[A-Za-z0-9.-]+(?::\d+)?"
 STRATEGY_RE = re.compile(r"final strategy:\s*(\w+)")
-SELECTED_RE = re.compile(r"selected=(http://\S+?)(?:,|\s|$)")
-REASON_RE = re.compile(r"reason:\s*(.+?)(?:,\s*loads=|$)")
+SELECTED_RE = re.compile(rf"selected=({URL_RE})(?:,|\s|$)")
+REASON_RE = re.compile(r"reason:\s*(.+?)(?:,\s*loads=|\.?\s*ts_ms=|$)")
 
 
 def parse_cache_strategy_line(line):
@@ -351,7 +376,7 @@ def parse_cache_strategy_line(line):
 # ════════════════════════════════════════════════════════════════
 
 TOTAL_RUNNING_RE = re.compile(r"total_running=(\d+)")
-WORKER_RUNNING_RE = re.compile(r"(http://[^:]+:\d+): running=(\d+)")
+WORKER_RUNNING_RE = re.compile(rf"({URL_RE}): running=(\d+)")
 CACHE_HR_RE = re.compile(r"cache_hit_rate=([\d.]+)%\s*\(hits=(\d+)/total=(\d+)\)")
 
 
@@ -438,14 +463,37 @@ def parse_error_line(line):
 # Select/Release 事件匹配
 # ════════════════════════════════════════════════════════════════
 
-SELECT_RE = re.compile(r"select worker\s*(?:\((\w+)\))?:\s*(http://[^,\s]+)")
-RELEASE_RE = re.compile(r"release worker\s*(?:\((\w+)\))?:\s*(http://[^,\s]+)")
+SELECT_RE = re.compile(rf"select worker\s*(?:\((\w+)\))?:\s*({URL_RE})")
+RELEASE_RE = re.compile(rf"release worker\s*(?:\((\w+)\))?:\s*({URL_RE})")
 FAILED_SELECT_RE = re.compile(r"Failed to select")
-SELECT_TOKENS_RE = re.compile(r"select worker \(prefill\):\s*(http://[^,\s]+),\s*tokens:\s*(\d+)")
-RELEASE_TOKENS_RE = re.compile(r"release prefill tokens:\s*(http://[^,\s]+),\s*tokens:\s*(\d+)")
+SELECT_TOKENS_RE = re.compile(rf"select worker \(prefill\):\s*({URL_RE}),\s*tokens:\s*(\d+)")
+RELEASE_TOKENS_RE = re.compile(rf"release prefill tokens:\s*({URL_RE}),\s*tokens:\s*(\d+)")
 
 
-def match_select_release(lines):
+def _parse_ts_safe(ts):
+    if not ts:
+        return None
+    try:
+        return parse_ts(ts)
+    except ValueError:
+        return None
+
+
+def _select_match_key(tags):
+    """构建请求关联 key，优先 request_id，其次 req_id/trace_id/session_id。"""
+    if not tags:
+        return (None, None)
+    rid = tags.get("request_id")
+    if rid:
+        return ("request_id", f"request_id:{rid}")
+    for k in ("req_id", "trace_id", "session_id"):
+        v = tags.get(k)
+        if v:
+            return ("alt_id", f"{k}:{v}")
+    return (None, None)
+
+
+def match_select_release(lines, fallback_window_s=120):
     """匹配 select/release worker 事件对。
 
     Args:
@@ -523,31 +571,60 @@ def match_select_release(lines):
         if FAILED_SELECT_RE.search(line):
             failed_selects.append({"ts": ts, "tags": tags, "line": line_no})
 
-    # Match by request_id
+    # Match by request_id / alt_id
     matched = []
     unmatched_selects = []
     release_used = set()
 
-    release_by_reqid = defaultdict(list)
+    release_by_key = defaultdict(list)
     for i, r in enumerate(releases):
-        rid = r["tags"].get("request_id", "")
-        if rid:
-            release_by_reqid[rid].append(i)
+        _, key = _select_match_key(r.get("tags", {}))
+        if key:
+            release_by_key[key].append(i)
 
+    # 请求 ID 覆盖（按 select 事件近似请求数）
+    total_req_est = len(selects)
+    with_request_id = 0
+    with_alt_id = 0
+    without_any_id = 0
+
+    pending_selects = []
+    untracked_selects = []
     for s in selects:
-        rid = s["tags"].get("request_id", "")
+        key_type, key = _select_match_key(s.get("tags", {}))
+        if key_type == "request_id":
+            with_request_id += 1
+        elif key_type == "alt_id":
+            with_alt_id += 1
+        else:
+            without_any_id += 1
+
         found = False
-        if rid and rid in release_by_reqid:
-            for ri in release_by_reqid[rid]:
+        if not key:
+            # 没有任何可用 ID 时，不做退化匹配（只统计可观测信息）
+            untracked_selects.append(
+                {
+                    "worker": s["worker"],
+                    "select_ts": s["ts"],
+                    "type": s["type"],
+                    "tags": s["tags"],
+                    "note": "no correlatable id (request_id/req_id/trace_id/session_id)",
+                }
+            )
+            continue
+
+        if key and key in release_by_key:
+            for ri in release_by_key[key]:
                 if ri not in release_used:
                     r = releases[ri]
                     matched.append(
                         {
-                            "request_id": rid,
+                            "request_id": s["tags"].get("request_id", ""),
                             "worker": s["worker"],
                             "select_ts": s["ts"],
                             "release_ts": r["ts"],
                             "type": s["type"],
+                            "match_method": key_type or "id",
                         }
                     )
                     release_used.add(ri)
@@ -555,13 +632,50 @@ def match_select_release(lines):
                     break
 
         if not found:
+            pending_selects.append(s)
+
+    # Fallback: 有 ID 但未匹配时，按 worker + 时间邻近匹配
+    for s in pending_selects:
+        sdt = _parse_ts_safe(s["ts"])
+        best_idx = None
+        best_delta = None
+        for ri, r in enumerate(releases):
+            if ri in release_used:
+                continue
+            if r.get("worker") != s.get("worker"):
+                continue
+            rdt = _parse_ts_safe(r.get("ts"))
+            if sdt and rdt:
+                delta = (rdt - sdt).total_seconds()
+                if delta < 0 or delta > fallback_window_s:
+                    continue
+            else:
+                delta = 0
+            if best_delta is None or delta < best_delta:
+                best_delta = delta
+                best_idx = ri
+
+        if best_idx is not None:
+            r = releases[best_idx]
+            matched.append(
+                {
+                    "request_id": s["tags"].get("request_id", ""),
+                    "worker": s["worker"],
+                    "select_ts": s["ts"],
+                    "release_ts": r["ts"],
+                    "type": s["type"],
+                    "match_method": "worker_time_fallback",
+                }
+            )
+            release_used.add(best_idx)
+        else:
             unmatched_selects.append(
                 {
                     "worker": s["worker"],
                     "select_ts": s["ts"],
                     "type": s["type"],
                     "tags": s["tags"],
-                    "note": "no matching release found",
+                    "note": "no matching release found (request_id/worker-time)",
                 }
             )
 
@@ -583,8 +697,16 @@ def match_select_release(lines):
     return {
         "matched": matched,
         "unmatched_selects": unmatched_selects,
+        "untracked_selects": untracked_selects,
         "failed_selects": failed_selects,
         "per_worker": pw_result,
+        "id_coverage": {
+            "total_requests_estimated": total_req_est,
+            "with_request_id": with_request_id,
+            "without_request_id": total_req_est - with_request_id,
+            "with_alt_id": with_alt_id,
+            "without_any_id": without_any_id,
+        },
     }
 
 

@@ -44,6 +44,8 @@ SOURCE_LAYER_RULES = [
     ("No available", "FD 后端"),
     ("request failed", "FD 后端"),
     ("Removed unhealthy", "FD 后端"),
+    ("is not healthy", "FD 后端"),
+    ("is healthy", "FD 后端"),
     ("Backend request failed", "FD 后端"),
     ("Decode request failed", "FD 后端"),
     ("Prefill request failed", "FD 后端"),

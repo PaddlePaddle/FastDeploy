@@ -25,19 +25,24 @@ from log_parser import (
 # ════════════════════════════════════════════════════════════════
 
 PARSING_COMPLETE_RE = re.compile(r"Parsing completed.*worker selection")
-SELECT_WORKER_RE = re.compile(r"select worker\s*(?:\((\w+)\))?:\s*(http://\S+)")
-RELEASE_WORKER_RE = re.compile(r"release worker\s*(?:\((\w+)\))?:\s*(http://\S+)")
-RELEASE_TOKENS_RE = re.compile(r"release prefill tokens:\s*(http://\S+),\s*tokens:\s*(\d+)")
+URL_RE = r"((?:https?://)?[A-Za-z0-9.-]+(?::\d+)?)"
+SELECT_WORKER_RE = re.compile(rf"select worker\s*(?:\((\w+)\))?:\s*{URL_RE}")
+RELEASE_WORKER_RE = re.compile(rf"release worker\s*(?:\((\w+)\))?:\s*{URL_RE}")
+RELEASE_TOKENS_RE = re.compile(rf"release prefill tokens:\s*{URL_RE},\s*tokens:\s*(\d+)")
 REQUEST_COMPLETE_RE = re.compile(r"Request completed successfully")
 TS_MS_RE = re.compile(r"ts_ms=(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+)")
 
 # Prefill 事件
-PREFILL_FIRST_CHUNK_RE = re.compile(r"\[prefill\] first chunk received.*?(http://\S+)")
-PREFILL_DONE_RE = re.compile(r"\[prefill\] non-stream prefill response done.*?(http://\S+)")
-PREFILL_ERROR_RE = re.compile(r"\[prefill\] (scanner error|copy error).*?(http://\S+)")
-PREFILL_DEFER_RE = re.compile(r"\[prefill\] release in defer.*?(http://\S+)")
-PREFILL_ERR_PATH_RE = re.compile(r"\[prefill\] release in CommonCompletions defer \(error path\).*?(http://\S+)")
+PREFILL_FIRST_CHUNK_RE = re.compile(rf"\[prefill\] first chunk received.*?{URL_RE}")
+PREFILL_DONE_RE = re.compile(rf"\[prefill\] non-stream prefill response done.*?{URL_RE}")
+PREFILL_ERROR_RE = re.compile(rf"\[prefill\] (scanner error|copy error).*?{URL_RE}")
+PREFILL_DEFER_RE = re.compile(rf"\[prefill\] release in defer.*?{URL_RE}")
+PREFILL_ERR_PATH_RE = re.compile(rf"\[prefill\] release in CommonCompletions defer \(error path\).*?{URL_RE}")
 FAILED_SELECT_RE = re.compile(r"Failed to select")
+
+
+def _strip_scheme(url):
+    return re.sub(r"^https?://", "", url)
 
 
 # ════════════════════════════════════════════════════════════════
@@ -342,7 +347,7 @@ def format_trace_report(result):
             for evt in trace["events"]:
                 line = f'  [{evt.get("ts","")}] {evt["type"]}'
                 if evt.get("worker"):
-                    line += f' → {evt["worker"].replace("http://","")}'
+                    line += f' → {_strip_scheme(evt["worker"])}'
                 if evt.get("status"):
                     line += f' [{evt["status"]}]'
                 if evt.get("latency_ms"):
