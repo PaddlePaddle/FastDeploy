@@ -61,7 +61,6 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
-    IPCLock,
     IPCSignal,
     ZmqIpcServer,
     ZmqTcpServer,
@@ -219,10 +218,6 @@ class EngineService:
             )
         self._init_worker_monitor_signals()
 
-        # Pass the GPU KV cache lock to cache_manager for mutual exclusion
-        # between the CPU transfer process and the worker process.
-        self.resource_manager.cache_manager.gpu_cache_lock = self.gpu_cache_lock
-
         # Initialize RegisterManager
         self._register_manager = RegisterManager(
             cfg=self.cfg,
@@ -330,6 +325,7 @@ class EngineService:
             self.cfg.limit_mm_per_prompt,
             self.cfg.mm_processor_kwargs,
             self.cfg.tool_parser,
+            enable_mm_runtime=self.cfg.enable_mm_runtime,
         )
         self.data_processor = self.input_processor.create_processor()
         self.mm_max_tokens_per_item = self.data_processor.get_mm_max_tokens_per_item(
@@ -444,14 +440,6 @@ class EngineService:
             name="kv_cache_status",
             array=kv_cache_status,
             dtype=np.int32,
-            suffix=current_suffix,
-            create=True,
-        )
-
-        # gpu_cache_lock: file-based lock for mutual exclusion between worker
-        # and CPU transfer when accessing GPU KV cache.
-        self.gpu_cache_lock = IPCLock(
-            name="gpu_cache_lock",
             suffix=current_suffix,
             create=True,
         )
@@ -601,7 +589,7 @@ class EngineService:
                         LoggingEventName.RESCHEDULED_INFERENCE_START, task.request_id, getattr(task, "user", "")
                     )
             if not is_prefill:
-                if not self.cfg.model_config.enable_mm:
+                if not self.cfg.enable_mm_runtime:
                     self.update_requests_chunk_size(tasks)
                 else:
                     self.update_mm_requests_chunk_size(tasks)
@@ -1217,7 +1205,7 @@ class EngineService:
         while self.running:
             try:
                 block = True if len(added_requests) == 0 else False
-                if not self.cfg.model_config.enable_mm:
+                if not self.cfg.enable_mm_runtime:
                     err, data = self.recv_request_server.receive_json_once(block)
                 else:
                     err, data = self.recv_request_server.receive_pyobj_once(block)
@@ -1275,6 +1263,7 @@ class EngineService:
                     err_msg = None
                     try:
                         request = Request.from_dict(data)
+
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.requests_number.inc()
                         trace_carrier = data.get("trace_carrier")
@@ -1933,6 +1922,11 @@ class EngineService:
                 token_ids = cum_tokens[prefix_offset:read_offset]
             else:
                 token_ids = []
+
+            if is_end and delta_text == "" and len(cum_tokens) > 0:
+                read_offset = self.data_processor.decode_status[req_id][1]
+                token_ids = cum_tokens[read_offset:]
+
             if is_end:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
@@ -2377,7 +2371,7 @@ class EngineService:
             if self.cfg.scheduler_config.splitwise_role == "prefill":
                 variables["FLAGS_fmt_write_cache_completed_signal"] = 1
 
-        if self.cfg.model_config.enable_mm:
+        if self.cfg.enable_mm_runtime:
             variables["FLAGS_max_partition_size"] = 1024
 
         command_prefix = ""
@@ -2476,6 +2470,7 @@ class EngineService:
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --reasoning_parser {self.cfg.structured_outputs_config.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --model_loader_extra_config '{json.dumps(self.cfg.load_config.model_loader_extra_config)}'"
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"

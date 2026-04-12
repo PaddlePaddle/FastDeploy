@@ -635,7 +635,7 @@ struct MoeFCGemm {
     static constexpr bool compile_needed =
         platform::is_same<KernelArch, arch::Sm75>::value;
     KernelRunner<compile_needed>::run_kernel(params, shared_storage);
-#elif defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 1010)
+#elif defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 1100)
     static constexpr bool compile_needed =
         platform::is_same<KernelArch, arch::Sm80>::value;
     KernelRunner<compile_needed>::run_kernel(params, shared_storage);
@@ -1060,7 +1060,7 @@ struct Wint2xMoeFCGemm : public MoeFCGemm<Mma_,
   CUTLASS_DEVICE
   void operator()(Params const& params,
                   SharedStorage& shared_storage) {  // NOLINT
-#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 1010)
+#if defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 800) && (__CUDA_ARCH__ < 1100)
     KernelRunner<WintQuantMethod::kWeightOnlyInt2, true>::run_kernel(
         params, shared_storage);
 #else

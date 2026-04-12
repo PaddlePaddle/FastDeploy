@@ -60,7 +60,6 @@ from fastdeploy.eplb.experts_manager import RedundantExpertManager
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import (
     ExistTaskStatus,
-    IPCLock,
     IPCSignal,
     ModelWeightsStatus,
     RearrangeExpertStatus,
@@ -138,7 +137,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     architectures = fd_config.model_config.architectures
-    if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
+    if fd_config.enable_mm_runtime and ErnieArchitectures.contains_ernie_arch(architectures):
         fd_config.model_config.tensor_model_parallel_size = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
@@ -300,13 +299,6 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
-        # gpu_cache_lock: file-based lock for mutual exclusion between worker
-        # and CPU transfer when accessing GPU KV cache.
-        self.gpu_cache_lock = IPCLock(
-            name="gpu_cache_lock",
-            suffix=self.parallel_config.local_engine_worker_queue_port,
-            create=False,
-        )
 
     def update_weights_from_tensor(self, mmap_infos):
         """
@@ -450,35 +442,6 @@ class PaddleDisWorkerProc:
                 self.rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
             logger.info("redundant_expert: done")
 
-    def _acquire_kvcache_lock(self, tp_rank):
-        """Acquire the GPU KV cache lock for the worker process.
-
-        Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
-        between the worker and the CPU transfer process during model
-        execution. Only rank 0 acquires the lock to avoid deadlock among
-        tensor-parallel workers.
-
-        Args:
-            tp_rank: Tensor parallel rank of the current worker. Only rank 0
-                acquires the lock.
-        """
-        if not envs.FD_USE_KVCACHE_LOCK:
-            return
-        if tp_rank == 0:
-            self.gpu_cache_lock.acquire()
-
-    def _release_kvcache_lock(self, tp_rank):
-        """Release the GPU KV cache lock held by the worker process.
-
-        Args:
-            tp_rank: Tensor parallel rank of the current worker. Only rank 0
-                releases the lock.
-        """
-        if not envs.FD_USE_KVCACHE_LOCK:
-            return
-        if tp_rank == 0:
-            self.gpu_cache_lock.release()
-
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -506,7 +469,7 @@ class PaddleDisWorkerProc:
             if tp_rank == 0:
                 if self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
-                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                        self.fd_config.enable_mm_runtime and self.worker.exist_prefill()
                     ):
                         if self.nnode > 1:
                             self.task_queue.read_finish_flag.set(1)
@@ -665,9 +628,7 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
 
-            self._acquire_kvcache_lock(tp_rank)
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
-            self._release_kvcache_lock(tp_rank)
 
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -1026,6 +987,14 @@ def parse_args():
         type=str,
         default="default_v1",
         help="The format of the model weights to load. default/default_v1/dummy.",
+    )
+
+    parser.add_argument(
+        "--model_loader_extra_config",
+        type=json.loads,
+        default=None,
+        help="Additional configuration for model loader (JSON format). "
+        'e.g., \'{"enable_multithread_load": true, "num_threads": 8}\'',
     )
 
     parser.add_argument(

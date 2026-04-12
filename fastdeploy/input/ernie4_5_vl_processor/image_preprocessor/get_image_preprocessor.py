@@ -14,21 +14,10 @@
 # limitations under the License.
 """
 
-"""get image preprocessor"""
+# Backward compatibility: this module has been migrated to
+# fastdeploy.input.image_processors.adaptive_processor
+# This file will be removed in a future version.
 
-from fastdeploy.utils import data_processor_logger
-
-from .image_preprocessor_adaptive import AdaptiveImageProcessor
-
-
-def get_image_preprocessor(args):
-    """
-    get_image_preprocessor from args
-    """
-
-    if args.vision_model_name_or_path is None:
-        return None
-
-    data_processor_logger.info("use AdaptiveImageProcessor")
-    image_preprocess = AdaptiveImageProcessor.from_pretrained(args.vision_model_name_or_path)
-    return image_preprocess
+from fastdeploy.input.image_processors.adaptive_processor import (  # noqa: F401
+    get_image_preprocessor,
+)

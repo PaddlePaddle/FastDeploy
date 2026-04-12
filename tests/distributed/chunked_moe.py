@@ -92,6 +92,7 @@ class MockFDConfig:
     model_config = MockModelConfig()
     cache_config = MockCacheConfig()
     speculative_config = MockSpecaulativeConfig()
+    enable_mm_runtime = MockModelConfig.enable_mm
 
     def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
         return 8192
@@ -139,7 +140,7 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner.model_config = mock_model_config
         model_runner.cache_config = mock_cache_config
         model_runner.attn_backends = [MockAttentionBackend()]
-        model_runner.enable_mm = True
+        model_runner.enable_mm = mock_fd_config.enable_mm_runtime
         model_runner.cudagraph_only_prefill = False
         model_runner.use_cudagraph = False
         model_runner.speculative_decoding = False
@@ -168,6 +169,8 @@ class TestChunkedMoE(unittest.TestCase):
         fused_moe.fd_config = mock_fd_config
         fused_moe.quant_method = MockQuantMethod()
         fused_moe.enable_routing_replay = None
+
+        fused_moe.hidden_size = mock_fd_config.model_config.hidden_size
         return fused_moe
 
     def run_model_runner(self):
