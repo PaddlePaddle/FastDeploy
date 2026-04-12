@@ -25,8 +25,11 @@ def format_load_report(result):
     if result["diagnoses"]:
         sections.append("### 诊断")
         sections.append("")
-        for d in result["diagnoses"]:
+        max_diag_in_summary = 8
+        for d in result["diagnoses"][:max_diag_in_summary]:
             sections.append(f'  [{d["severity"]}] [{d["source_layer"]}] {d["message"]}')
+        if len(result["diagnoses"]) > max_diag_in_summary:
+            sections.append(f'  ... 其余 {len(result["diagnoses"]) - max_diag_in_summary} 项见 detail 报告')
         sections.append("")
         detail_sections.append("## 诊断")
         detail_sections.append("")
@@ -39,6 +42,7 @@ def format_load_report(result):
     if ls:
         sections.append("### 负载概览 (total_running)")
         sections.append("")
+        sections.append("  说明: stats 采样来自 `[stats]` 周期日志（通常每 5s 一条），用于观察当前并发与负载变化趋势。")
         sections.append(
             f'  mean={ls.get("mean",0)}  p50={ls.get("p50",0)}  p90={ls.get("p90",0)}  '
             f'p99={ls.get("p99",0)}  max={ls.get("max",0)}  stddev={ls.get("stddev",0)}'
@@ -108,6 +112,9 @@ def format_load_report(result):
             sections.append(render_table(type_rows, columns=["type", "counter(S/R)", "token(S/R)"]))
             sections.append("")
             sections.append("  说明: prefill/mixed 的 token-select 同时表示 request counter + token counter 增加；decode 仅 request counter。")
+            sections.append("  说明: token-release 由同 worker 邻近 select 推断到 prefill/mixed，不直接依赖 `release prefill tokens` 文本。")
+            if type_summary.get("unknown"):
+                sections.append("  说明: unknown 表示日志里缺少 worker type，且无法从邻近 select/release 关系推断。")
             sections.append("")
             detail_sections.append("## 按类型统计")
             detail_sections.append("")

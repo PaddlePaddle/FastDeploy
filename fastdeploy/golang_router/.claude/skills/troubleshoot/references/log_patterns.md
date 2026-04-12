@@ -233,6 +233,17 @@ PD（Prefill/Decode 分离）模式下，`completions.go` 产生的 `[prefill]` 
 
 ---
 
+## Select/Release 日志细节（与代码一致）
+
+- `select worker (prefill): <url>, tokens: <n>`
+- `select worker (decode|mixed): <url>, count: <n>`
+- `release worker: <url>, count: <n>`（request counter 释放）
+- `release prefill tokens: <url>, tokens: <n>`（token counter 释放；可能来自 prefill 或 mixed 请求路径）
+
+重点：release 只有上面这两种。`release worker` 不带 worker type，`release prefill tokens` 的文本也不能直接断定是 prefill（mixed 也可能调用）。因此按 `prefill/decode/mixed` 统计时，需要从 select 侧做归类；确实无法归类时才记为 `unknown`。
+
+---
+
 ## 使用脚本工具
 
 各 skill 的脚本位于各自的 `scripts/` 目录下，自动处理上述所有日志解析和计算。
