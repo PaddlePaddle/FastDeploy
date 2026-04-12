@@ -26,14 +26,14 @@ def build_request_payload(template_name: str, case_data: dict) -> dict:
     return final_payload
 
 
-def send_request(url, payload, timeout=600, stream=False):
+def send_request(url, payload, timeout=60, stream=False):
     """
     向指定URL发送POST请求，并返回响应结果。
 
     Args:
         url (str): 请求的目标URL。
         payload (dict): 请求的负载数据，应该是一个字典类型。
-        timeout (int, optional): 请求的超时时间，默认为600秒。
+        timeout (int, optional): 请求的超时时间，默认为60秒。
         stream (bool, optional): 是否以流的方式下载响应内容，默认为False。
 
     Returns:
