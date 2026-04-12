@@ -20,6 +20,7 @@ from typing import Any, AsyncGenerator, List, Optional
 
 from typing_extensions import override
 
+import fastdeploy.envs as envs
 from fastdeploy.engine.async_llm import AsyncLLM
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
@@ -211,9 +212,9 @@ class OpenAIServingCompletion(OpenAiServingBase):
         request: CompletionRequest = ctx.request
         stream_options = request.stream_options
         if stream_options is None:
-            include_usage = False
+            include_usage = envs.FD_RESPONSE_INCLUDE_USAGE
         else:
-            include_usage = stream_options.include_usage
+            include_usage = stream_options.include_usage or envs.FD_RESPONSE_INCLUDE_USAGE
         request_id = ctx.request_id
         output = request_output.outputs
         try:
@@ -314,12 +315,19 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 choice = self.build_completion_choice(choice_index, response, ctx)
                 choices.append(choice)
 
+            metrics = None
+            if ctx.request.collect_metrics or envs.FD_COLLECT_METRICS:
+                first_output_list = next(iter(accumula_output_map.values()), [None])
+                last_output = first_output_list[-1] if first_output_list else None
+                if last_output and last_output.metrics:
+                    metrics = last_output.metrics.to_dict()
             res = CompletionResponse(
                 id=ctx.request_id,
                 created=ctx.created_time,
                 model=ctx.request.model,
                 choices=choices,
                 usage=response_ctx.usage,
+                metrics=metrics,
             )
             api_server_logger.info(f"Completion response: {res.model_dump_json()}")
             return res
