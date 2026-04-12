@@ -93,6 +93,10 @@ def _truncate_text(v, limit=72):
     s = str(v)
     return s if len(s) <= limit else s[: limit - 1] + "…"
 
+
+def _seq_label(n):
+    return f"S{n:03d}"
+
 # ════════════════════════════════════════════════════════════════
 # Phase 1: 日志读取
 # ════════════════════════════════════════════════════════════════
@@ -257,7 +261,6 @@ def compute_session_hitrate(stats_recs, inference_count):
     total_total = sum(r.get("total", 0) for r in stats_recs)
 
     session_hr = round(total_hits / total_total * 100, 1) if total_total else 0
-    coverage = round(total_total / inference_count * 100, 1) if inference_count else 0
 
     # 趋势：每个窗口的 hits/total
     trend = time_bucket(stats_recs, "auto", [("hits", "sum"), ("total", "sum")])
@@ -270,7 +273,6 @@ def compute_session_hitrate(stats_recs, inference_count):
         "rate": session_hr,
         "hits": total_hits,
         "total": total_total,
-        "coverage": coverage,
         "inference_count": inference_count,
         "trend": trend,
     }
@@ -453,8 +455,6 @@ def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, 
     # 2. Session Hit Rate
     parts.append("### 2. Session Hit Rate (请求级路由粘性)")
     parts.append(f'  累计: {session_hr["rate"]}% (hits={session_hr["hits"]} / total={session_hr["total"]})')
-    parts.append(f'  覆盖率: {session_hr["coverage"]}% 的推理请求带 session_id')
-
     trend_str = _quartile_trend(session_hr["trend"], "value")
     if trend_str:
         parts.append(f"  趋势: {trend_str}")
@@ -521,10 +521,7 @@ def format_tail_report(filepath, line_count, prefix_hr, session_hr, scheduling):
     parts.append(f"**File**: {filepath} | **tail {line_count} lines**")
     parts.append("")
     parts.append(f'  Prefix Hit Ratio:  {prefix_hr["mean"]}% (avg) | Cold start: {prefix_hr["cold_start_rate"]}%')
-    parts.append(
-        f'  Session Hit Rate:  {session_hr["rate"]}% (hits={session_hr["hits"]}/total={session_hr["total"]})'
-        f' | Coverage: {session_hr["coverage"]}%'
-    )
+    parts.append(f'  Session Hit Rate:  {session_hr["rate"]}% (hits={session_hr["hits"]}/total={session_hr["total"]})')
     parts.append(
         f'  Strategy: scoring {scheduling["scoring_count"]} ({scheduling["scoring_pct"]}%)'
         f' | fallback {scheduling["fallback_count"]}'
@@ -665,7 +662,6 @@ def save_detailed_report(
 
     parts.append("### Session Hit Rate")
     parts.append(f'- 累计: **{session_hr["rate"]}%** (hits={session_hr["hits"]}/total={session_hr["total"]})')
-    parts.append(f'- 覆盖率: **{session_hr["coverage"]}%**')
     trend_str = _quartile_trend(session_hr["trend"], "value")
     if trend_str:
         parts.append(f"- 趋势: {trend_str}")
@@ -765,14 +761,15 @@ def save_detailed_report(
             )
             session_parts.append("")
             focus_columns = [
-                "session",
+                "id",
                 "req_count",
+                "id_type",
                 "sticky",
                 "unique_workers",
                 "avg_hit(excl_first)",
+                "max_hit",
                 "min_hit",
-                "switch_req_pairs",
-                "sharp_drop_request_ids",
+                "switch_reqids",
             ]
             session_parts.append("## 优先排查 Session（Top 20）")
             prioritized_rows = sorted(
@@ -784,45 +781,75 @@ def save_detailed_report(
                 ),
             )[:20]
             compact_rows = []
+            all_rows_with_seq = []
+            for i, r in enumerate(session_rows, start=1):
+                all_rows_with_seq.append({**r, "id": _seq_label(i)})
+
+            seq_map = {r["session"]: r["id"] for r in all_rows_with_seq}
+
             for r in prioritized_rows:
+                sid = seq_map.get(r["session"], "-")
                 compact_rows.append(
                     {
-                        "session": r["session"],
+                        "id": sid,
                         "req_count": r["req_count"],
+                        "id_type": r.get("id_type", "session_id"),
                         "sticky": r["sticky"],
                         "unique_workers": r["unique_workers"],
                         "avg_hit(excl_first)": r["avg_hit(excl_first)"],
+                        "max_hit": r["max_hit"],
                         "min_hit": r["min_hit"],
-                        "switch_req_pairs": _truncate_text(r["switch_req_pairs"]),
-                        "sharp_drop_request_ids": _truncate_text(r["sharp_drop_request_ids"]),
+                        "switch_reqids": f"[查看](#switch-{sid.lower()})" if r["switch_req_pairs"] != "-" else "-",
                     }
                 )
-            session_parts.append(_render_markdown_table(compact_rows, focus_columns, align_right={"req_count", "unique_workers"}))
+            session_parts.append(
+                _render_markdown_table(compact_rows, focus_columns, align_right={"req_count", "unique_workers"})
+            )
             session_parts.append("")
 
             session_columns = [
-                "session",
+                "id",
                 "req_count",
+                "id_type",
                 "first_hit",
                 "avg_hit(excl_first)",
                 "max_hit",
                 "min_hit",
                 "all_hits",
                 "prefill_urls",
-                "switch_req_pairs",
-                "sharp_drop_request_ids",
                 "sticky",
                 "unique_workers",
             ]
             session_parts.append("## 全量明细（Markdown 表格）")
             session_parts.append(
                 _render_markdown_table(
-                    session_rows,
+                    all_rows_with_seq,
                     session_columns,
                     align_right={"req_count", "unique_workers"},
                 )
             )
             session_parts.append("")
+
+            session_parts.append("## 序号与会话ID映射")
+            map_rows = [
+                {
+                    "id": r["id"],
+                    "id_type": r.get("id_type", "session_id"),
+                    "session_or_trace_id": r["session"],
+                }
+                for r in all_rows_with_seq
+            ]
+            session_parts.append(_render_markdown_table(map_rows, ["id", "id_type", "session_or_trace_id"]))
+            session_parts.append("")
+
+            session_parts.append("## 切换 reqid 明细（可跳转）")
+            for r in all_rows_with_seq:
+                session_parts.append(f'### switch-{r["id"].lower()}')
+                session_parts.append(f'- ID: **{r["id"]}**')
+                session_parts.append(f'- 会话标识: `{r["session"]}` ({r.get("id_type", "session_id")})')
+                session_parts.append(f'- switch_req_pairs: {r["switch_req_pairs"]}')
+                session_parts.append(f'- sharp_drop_request_ids: {r["sharp_drop_request_ids"]}')
+                session_parts.append("")
 
             session_path = os.path.join(details_dir, "session_hit_details.md")
             with open(session_path, "w") as f:

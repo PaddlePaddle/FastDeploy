@@ -7,7 +7,7 @@ from collections import defaultdict
 
 
 def compute_session_details(strategies, strip_scheme):
-    """按 session 统计命中详情。"""
+    """按 session_id（优先）或 trace_id（兜底）统计命中详情。"""
 
     def _req_id_from_tags(tags, fallback):
         return tags.get("request_id") or tags.get("req_id") or tags.get("trace_id") or fallback
@@ -18,12 +18,14 @@ def compute_session_details(strategies, strip_scheme):
             continue
         tags = rec.get("tags", {}) or {}
         session_id = tags.get("session_id")
-        if not session_id:
+        trace_id = tags.get("trace_id")
+        identity = session_id or trace_id
+        if not identity:
             continue
-        session_records[session_id].append((idx, rec))
+        session_records[identity].append((idx, rec))
 
     rows = []
-    for session_id, items in session_records.items():
+    for identity, items in session_records.items():
         items.sort(key=lambda x: (x[1].get("ts_ms", ""), x[1].get("ts", ""), x[0]))
         recs = [r for _, r in items]
         hits = [int(r.get("selected_hitRatio", 0)) for r in recs]
@@ -62,7 +64,8 @@ def compute_session_details(strategies, strip_scheme):
 
         rows.append(
             {
-                "session": session_id,
+                "session": identity,
+                "id_type": "session_id" if recs[0].get("tags", {}).get("session_id") else "trace_id",
                 "req_count": len(hits),
                 "first_hit": f"{hits[0]}%",
                 "avg_hit(excl_first)": f"{avg_excl_first}%" if avg_excl_first != "-" else "-",

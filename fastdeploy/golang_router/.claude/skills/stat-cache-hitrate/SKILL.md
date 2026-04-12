@@ -94,7 +94,7 @@ python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志�
 
 - `summary/cache_hitrate_report.md` — Per-Worker 统计 + Fallback 明细 + 详情链接
 - `detail/per_window_data.md` — 每5s窗口明细（连续空窗口自动合并为 3 行：起始/合并说明/结束）
-- `detail/session_hit_details.md` — 每个 session 的命中明细（Markdown 表格），包含 `session / req_count / first_hit / avg_hit(excl_first) / max_hit / min_hit / all_hits / prefill_urls / switch_req_pairs / sharp_drop_request_ids`
+- `detail/session_hit_details.md` — 每个 session（无 session_id 时回退 trace_id）的命中明细（Markdown 表格），包含 `id序号 / req_count / first_hit / avg_hit(excl_first) / max_hit / min_hit / all_hits / prefill_urls`，并附「序号与会话ID映射」「切换 reqid 明细（可跳转）」。
 
 ### 交叉诊断矩阵
 
