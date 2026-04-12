@@ -213,12 +213,12 @@ def _fwd_kv_parallel(
             K_trans_block_ptr - left_shift * d,
             mask=kv_index[None, :] >= left_bound,
             other=0.0,
-        )
+        ).to(tl.float32)
         v = tl.load(
             V_block_ptr - left_shift * e,
             mask=kv_index[:, None] >= left_bound,
             other=0.0,
-        )
+        ).to(tl.float32)
 
         # Load decay factor and compute weighted key-value outer product
         k_decay = tl.load(k_decay_ptr)
