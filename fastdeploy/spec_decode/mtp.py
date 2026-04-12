@@ -51,8 +51,8 @@ if current_platform.is_xpu():
     )
 
     # temporary solution
-    from fastdeploy.model_executor.pre_and_post_process import async_set_value
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
+        async_set_value,
         xpu_pre_process,
         xpu_process_output,
     )
