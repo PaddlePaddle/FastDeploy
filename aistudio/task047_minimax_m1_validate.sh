@@ -202,17 +202,17 @@ print("=== Registration ===")
 from fastdeploy.model_executor.models.model_base import ModelRegistry
 
 for arch_name in ["MiniMaxM1ForCausalLM", "MiniMaxText01ForCausalLM"]:
-    cls = ModelRegistry.resolve(arch_name)
-    assert cls is not None, f"{arch_name} not registered!"
+    assert arch_name in ModelRegistry._arch_to_model_cls, f"{arch_name} not registered!"
+    cls = ModelRegistry._arch_to_model_cls[arch_name]
     print(f"  {arch_name} → {cls.__name__} ✅")
 
 # Verify the resolved class is actually our model
 from fastdeploy.model_executor.models.minimax_m1 import MiniMaxM1ForCausalLM
-resolved = ModelRegistry.resolve("MiniMaxM1ForCausalLM")
+resolved = ModelRegistry._arch_to_model_cls["MiniMaxM1ForCausalLM"]
 assert resolved is MiniMaxM1ForCausalLM, (
     f"Registry points to {resolved}, expected MiniMaxM1ForCausalLM"
 )
-print(f"  Identity check: resolve('MiniMaxM1ForCausalLM') is MiniMaxM1ForCausalLM ✅")
+print(f"  Identity check: _arch_to_model_cls['MiniMaxM1ForCausalLM'] is MiniMaxM1ForCausalLM ✅")
 print()
 
 # ── Architecture summary (from model source + HF config) ──
@@ -266,7 +266,7 @@ echo "║  Tier 0: A800 SM80 + Triton verified                         ║"
 echo "║  Tier 1: 5 Triton Lightning Attention kernels — compiled      ║"
 echo "║          prefill + decode + multi-head scaling on real GPU    ║"
 echo "║  Tier 2: 43/43 unit tests passed on GPU platform             ║"
-echo "║  Tier 3: ModelRegistry resolution + 7 class identity checks  ║"
+echo "║  Tier 3: ModelRegistry lookup + 7 class identity checks       ║"
 echo "║                                                               ║"
 echo "║  NOTE: Full inference needs 8–12× A800 (456B params).        ║"
 echo "║  Baidu CI has multi-GPU infra for end-to-end validation.     ║"
