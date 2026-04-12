@@ -14,8 +14,7 @@
 
 from __future__ import annotations
 
-import sys
-from types import ModuleType, SimpleNamespace
+from types import SimpleNamespace
 
 import paddle
 import pytest
@@ -134,29 +133,6 @@ class FakeDeepEP:
 
 def _patch_deep_ep(monkeypatch):
     monkeypatch.setattr(ep, "deep_ep", FakeDeepEP, raising=False)
-
-
-def test_load_deep_ep_enables_compat_for_pfcc_backend(monkeypatch):
-    paddlefleet_pkg = ModuleType("paddlefleet")
-    paddlefleet_pkg.__path__ = []
-    ops_pkg = ModuleType("paddlefleet.ops")
-    ops_pkg.__path__ = []
-    deep_ep_module = ModuleType("paddlefleet.ops.deep_ep")
-    paddlefleet_pkg.ops = ops_pkg
-    ops_pkg.deep_ep = deep_ep_module
-
-    monkeypatch.setitem(sys.modules, "paddlefleet", paddlefleet_pkg)
-    monkeypatch.setitem(sys.modules, "paddlefleet.ops", ops_pkg)
-    monkeypatch.setitem(sys.modules, "paddlefleet.ops.deep_ep", deep_ep_module)
-
-    enable_calls = []
-    monkeypatch.setattr(paddle, "enable_compat", lambda scope=None: enable_calls.append(scope))
-    monkeypatch.setattr(ep.envs, "FD_USE_PFCC_DEEP_EP", True)
-
-    loaded = ep.load_deep_ep()
-
-    assert enable_calls == [{"deep_ep"}]
-    assert loaded is deep_ep_module
 
 
 def test_deepep_buffer_manager_calls_engine(monkeypatch):

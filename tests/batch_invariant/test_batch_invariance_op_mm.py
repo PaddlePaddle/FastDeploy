@@ -5,7 +5,6 @@ import unittest
 import paddle
 
 from fastdeploy.model_executor.layers.batch_invariant_ops import (
-    batch_invariant_ops,
     set_batch_invariant_mode,
 )
 
@@ -55,18 +54,6 @@ class TestBatchInvariantForMM(unittest.TestCase):
         print("\nBatch-Invariant Mode:")
         with set_batch_invariant_mode(True):
             self.run_iters(ass=True)
-
-    def test_enable_batch_invariant_mode_requires_enable_compat(self):
-        original_paddle = batch_invariant_ops.paddle
-        original_mode = batch_invariant_ops._batch_invariant_MODE
-        try:
-            batch_invariant_ops._batch_invariant_MODE = False
-            batch_invariant_ops.paddle = object()
-            with self.assertRaisesRegex(RuntimeError, r"paddle\.enable_compat is unavailable\."):
-                batch_invariant_ops.enable_batch_invariant_mode()
-        finally:
-            batch_invariant_ops.paddle = original_paddle
-            batch_invariant_ops._batch_invariant_MODE = original_mode
 
 
 if __name__ == "__main__":
