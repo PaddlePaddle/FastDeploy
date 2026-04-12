@@ -66,6 +66,8 @@ def compute_session_details(strategies, strip_scheme):
             {
                 "session": identity,
                 "id_type": "session_id" if recs[0].get("tags", {}).get("session_id") else "trace_id",
+                "first_ts": recs[0].get("ts", "-"),
+                "last_ts": recs[-1].get("ts", "-"),
                 "req_count": len(hits),
                 "first_hit": f"{hits[0]}%",
                 "avg_hit(excl_first)": f"{avg_excl_first}%" if avg_excl_first != "-" else "-",
@@ -74,6 +76,7 @@ def compute_session_details(strategies, strip_scheme):
                 "all_hits": ", ".join(f"{h}%" for h in hits),
                 "sticky": "yes" if len(workers) <= 1 else "no",
                 "unique_workers": len(workers),
+                "prefill_url_count": len(prefill_urls),
                 "prefill_urls": " | ".join(strip_scheme(u) for u in prefill_urls),
                 "switch_req_pairs": " ; ".join(switch_events) if switch_events else "-",
                 "sharp_drop_request_ids": " ; ".join(sharp_drop_req_ids) if sharp_drop_req_ids else "-",

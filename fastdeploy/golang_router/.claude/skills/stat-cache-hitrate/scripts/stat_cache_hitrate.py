@@ -134,20 +134,25 @@ def _summarize_id_type_ranges(rows_with_seq):
     current_type = rows_with_seq[0].get("id_type", "session_id")
     start_id = rows_with_seq[0]["id"]
     end_id = start_id
+    start_ts = rows_with_seq[0].get("first_ts", "-")
+    end_ts = rows_with_seq[0].get("last_ts", "-")
 
     for row in rows_with_seq[1:]:
         row_type = row.get("id_type", "session_id")
         row_id = row["id"]
         if row_type == current_type and _extract_seq_num(row_id) == _extract_seq_num(end_id) + 1:
             end_id = row_id
+            end_ts = row.get("last_ts", end_ts)
             continue
 
-        ranges.append((start_id, end_id, current_type))
+        ranges.append((start_id, end_id, current_type, start_ts, end_ts))
         current_type = row_type
         start_id = row_id
         end_id = row_id
+        start_ts = row.get("first_ts", "-")
+        end_ts = row.get("last_ts", "-")
 
-    ranges.append((start_id, end_id, current_type))
+    ranges.append((start_id, end_id, current_type, start_ts, end_ts))
     return ranges
 
 # ════════════════════════════════════════════════════════════════
@@ -800,23 +805,31 @@ def save_detailed_report(
                 all_rows_with_seq.append({**r, "id": _seq_label(i)})
             id_type_ranges = _summarize_id_type_ranges(all_rows_with_seq)
             seq_map = {r["session"]: r["id"] for r in all_rows_with_seq}
+            ts_starts = [r.get("first_ts", "-") for r in all_rows_with_seq if r.get("first_ts", "-") != "-"]
+            ts_ends = [r.get("last_ts", "-") for r in all_rows_with_seq if r.get("last_ts", "-") != "-"]
 
             session_parts = ["# Session 命中详情", ""]
+            overall_start_ts = min(ts_starts) if ts_starts else "-"
+            overall_end_ts = max(ts_ends) if ts_ends else "-"
+            session_parts.append("## 时间范围")
+            session_parts.append(f"- 分析覆盖时间段: `{overall_start_ts} ~ {overall_end_ts}`")
+            session_parts.append("")
             session_parts.append("## id_type 摘要")
             if len(id_type_ranges) == 1:
-                start_id, end_id, id_type = id_type_ranges[0]
+                start_id, end_id, id_type, range_start_ts, range_end_ts = id_type_ranges[0]
                 if start_id == end_id:
-                    session_parts.append(f"- `{start_id}`: `{id_type}`")
+                    session_parts.append(f"- `{start_id}`: `{id_type}` (`{range_start_ts} ~ {range_end_ts}`)")
                 else:
-                    session_parts.append(f"- `{start_id}~{end_id}`: `{id_type}`")
+                    session_parts.append(f"- `{start_id}~{end_id}`: `{id_type}` (`{range_start_ts} ~ {range_end_ts}`)")
             else:
-                for start_id, end_id, id_type in id_type_ranges:
+                for start_id, end_id, id_type, range_start_ts, range_end_ts in id_type_ranges:
                     if start_id == end_id:
-                        session_parts.append(f"- `{start_id}`: `{id_type}`")
+                        session_parts.append(f"- `{start_id}`: `{id_type}` (`{range_start_ts} ~ {range_end_ts}`)")
                     else:
-                        session_parts.append(f"- `{start_id}~{end_id}`: `{id_type}`")
+                        session_parts.append(f"- `{start_id}~{end_id}`: `{id_type}` (`{range_start_ts} ~ {range_end_ts}`)")
             session_parts.append("")
             session_parts.append("## 概览")
+            session_parts.append("- 字段说明：`avg-hit` = `avg_hit(excl_first)`（去除首请求后的平均命中率）")
             session_parts.append(f'- Total sessions: **{session_summary["total_sessions"]}**')
             session_parts.append(
                 f'- Sessions with >1 request: **{session_summary["multi_req"]}**'
@@ -836,10 +849,9 @@ def save_detailed_report(
             focus_columns = [
                 "id",
                 "req_count",
-                "id_type",
                 "sticky",
-                "unique_workers",
-                "avg_hit(excl_first)",
+                "purl_cnt",
+                "avg-hit",
                 "max_hit",
                 "min_hit",
                 "switch_reqids",
@@ -861,39 +873,46 @@ def save_detailed_report(
                     {
                         "id": sid,
                         "req_count": r["req_count"],
-                        "id_type": r.get("id_type", "session_id"),
                         "sticky": r["sticky"],
-                        "unique_workers": r["unique_workers"],
-                        "avg_hit(excl_first)": r["avg_hit(excl_first)"],
+                        "purl_cnt": r.get("prefill_url_count", 0),
+                        "avg-hit": r["avg_hit(excl_first)"],
                         "max_hit": r["max_hit"],
                         "min_hit": r["min_hit"],
                         "switch_reqids": f"[查看](#switch-{sid.lower()})" if r["switch_req_pairs"] != "-" else "-",
                     }
                 )
             session_parts.append(
-                _render_markdown_table(compact_rows, focus_columns, align_right={"req_count", "unique_workers"})
+                _render_markdown_table(compact_rows, focus_columns, align_right={"req_count", "purl_cnt"})
             )
             session_parts.append("")
 
             session_columns = [
                 "id",
                 "req_count",
-                "id_type",
                 "first_hit",
-                "avg_hit(excl_first)",
+                "avg-hit",
                 "max_hit",
                 "min_hit",
                 "all_hits",
+                "purl_cnt",
                 "prefill_urls",
                 "sticky",
-                "unique_workers",
             ]
+            all_rows_for_table = []
+            for r in all_rows_with_seq:
+                all_rows_for_table.append(
+                    {
+                        **r,
+                        "avg-hit": r["avg_hit(excl_first)"],
+                        "purl_cnt": r.get("prefill_url_count", 0),
+                    }
+                )
             session_parts.append("## 全量明细（Markdown 表格）")
             session_parts.append(
                 _render_markdown_table(
-                    all_rows_with_seq,
+                    all_rows_for_table,
                     session_columns,
-                    align_right={"req_count", "unique_workers"},
+                    align_right={"req_count", "purl_cnt"},
                 )
             )
             session_parts.append("")
@@ -902,12 +921,11 @@ def save_detailed_report(
             map_rows = [
                 {
                     "id": r["id"],
-                    "id_type": r.get("id_type", "session_id"),
                     "session_or_trace_id": r["session"],
                 }
                 for r in all_rows_with_seq
             ]
-            session_parts.append(_render_markdown_table(map_rows, ["id", "id_type", "session_or_trace_id"]))
+            session_parts.append(_render_markdown_table(map_rows, ["id", "session_or_trace_id"]))
             session_parts.append("")
 
             session_parts.append("## 切换 reqid 明细（可跳转）")
@@ -915,6 +933,7 @@ def save_detailed_report(
                 session_parts.append(f'### switch-{r["id"].lower()}')
                 session_parts.append(f'- ID: **{r["id"]}**')
                 session_parts.append(f'- 会话标识: `{r["session"]}` ({r.get("id_type", "session_id")})')
+                session_parts.append(f'- 时间段: `{r.get("first_ts", "-")} ~ {r.get("last_ts", "-")}`')
                 session_parts.append(f'- switch_req_pairs: {r["switch_req_pairs"]}')
                 session_parts.append(f'- sharp_drop_request_ids: {r["sharp_drop_request_ids"]}')
                 session_parts.append("")

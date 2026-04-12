@@ -4,7 +4,7 @@ description: >
   统计 FastDeploy Go Router 日志中的三层 cache 命中率指标，生成可视化报告。
   三层指标：Prefix Hit Ratio（KV Cache 内容复用度）、Session Hit Rate（请求级路由粘性）、
   Per-Worker Cache Stats（各 prefill worker 的缓存利用排名）。支持全量统计、tail 快速查看、
-  持续监控模式。
+  持续监控模式、指定时间段统计（--start/--end）。
 
   当用户提到以下内容时触发此 skill：统计/查看 cache 命中率、查看 cache-aware 调度效果、
   查看缓存预热情况、统计 hitRatio、查看 prefix 命中率、session hit rate。
@@ -35,12 +35,15 @@ IMPORTANT: 执行前阅读 references/log_formats.md 了解日志格式和解析
 如果用户直接确认或未指定路径，使用默认值 `logs/router.log`。
 
 ### 2. 分析模式
-向用户询问分析模式：
-> "请选择分析模式：
-> 1. **全量统计**（默认）— 扫描完整日志
-> 2. **快速查看尾部** — 只看最近的数据（可指定行数如 2000 或时间如 30m）
-> 3. **持续监控** — 全量分析后提示监控命令
-> 4. **指定时间段** — 分析特定时间范围（如 `--start "16:00" --end "17:00"`）"
+必须使用 **AskUserQuestion 的离散选项**（不要只发纯文本编号，避免客户端偶发不显示第 4 项）：
+- 选项 1: `全量统计（默认）` — 扫描完整日志
+- 选项 2: `快速查看尾部` — 只看最近的数据（可指定行数如 2000 或时间如 30m）
+- 选项 3: `持续监控` — 全量分析后提示监控命令
+- 选项 4: `指定时间段` — 分析特定时间范围（如 `--start "16:00" --end "17:00"`）
+
+若用户选择“指定时间段”，直接让用户填写：  
+- 从 `xxx` 开始，到 `xxx` 结束（`start/end` 可只填一个）；  
+- 然后映射为 `--start/--end` 参数执行。
 
 如果用户未选择，默认使用全量统计。
 
@@ -94,7 +97,7 @@ python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志�
 
 - `summary/cache_hitrate_report.md` — Per-Worker 统计 + Fallback 明细 + 详情链接
 - `detail/per_window_data.md` — 每5s窗口明细（连续空窗口自动合并为 3 行：起始/合并说明/结束）
-- `detail/session_hit_details.md` — 每个 session（无 session_id 时回退 trace_id）的命中明细（Markdown 表格），包含 `id序号 / req_count / first_hit / avg_hit(excl_first) / max_hit / min_hit / all_hits / prefill_urls`，并附「序号与会话ID映射」「切换 reqid 明细（可跳转）」。
+- `detail/session_hit_details.md` — 每个 session（无 session_id 时回退 trace_id）的命中明细（Markdown 表格），包含 `id序号 / req_count / first_hit / avg-hit(=去首请求平均命中率) / max_hit / min_hit / all_hits / purl_cnt / prefill_urls`，并附「序号与会话ID映射」「切换 reqid 明细（含 session 时间段，可跳转）」。
 
 ### 交叉诊断矩阵
 
