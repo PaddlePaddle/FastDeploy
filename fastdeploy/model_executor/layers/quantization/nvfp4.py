@@ -668,6 +668,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
+        logger.info("prefill")
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
@@ -819,6 +820,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
 
+        logger.info("decode")
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
@@ -830,7 +832,6 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             topk_idx,
             topk_weights,
             use_fp8=False,
-            use_ue8m0=True,
         )
 
         # Compute FFN via CuteDSL masked grouped GEMM
