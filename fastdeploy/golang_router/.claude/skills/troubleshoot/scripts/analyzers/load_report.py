@@ -160,30 +160,29 @@ def format_load_report(result):
                     "ReqRelease": str(pw["releases"]),
                     "ReqDelta": delta_display,
                     "TokenSelect": str(pw.get("token_selects", 0)),
-                    "TokenSelInf": str(pw.get("token_selects_inferred", 0)),
                     "TokenRelease": str(pw.get("token_releases", 0)),
                 }
             )
         sections.append(
             render_table(
                 table_data,
-                columns=["Worker", "ReqSelect", "ReqRelease", "ReqDelta", "TokenSelect", "TokenSelInf", "TokenRelease"],
-                right_align={"ReqSelect", "ReqRelease", "ReqDelta", "TokenSelect", "TokenSelInf", "TokenRelease"},
+                columns=["Worker", "ReqSelect", "ReqRelease", "ReqDelta", "TokenSelect", "TokenRelease"],
+                right_align={"ReqSelect", "ReqRelease", "ReqDelta", "TokenSelect", "TokenRelease"},
             )
         )
         sections.append("")
         if no_correlatable_id:
             sections.append("  ℹ 当前样本无可关联 ID，Delta 不用于请求泄漏结论。")
             sections.append("")
-        sections.append("  说明: prefill/mixed 在运行时都会同时增加 request 与 token 计数器；其中 mixed 的 TokenSelect 可能来自推断（TokenSelInf）。")
+        sections.append("  说明: TokenSelect 按 worker type 统计（prefill + mixed 的 select 都计入），不依赖日志里是否出现 tokens 字段。")
         sections.append("")
         detail_sections.append("## Select/Release Per-Worker")
         detail_sections.append("")
         detail_sections.append(
             render_table(
                 table_data,
-                columns=["Worker", "ReqSelect", "ReqRelease", "ReqDelta", "TokenSelect", "TokenSelInf", "TokenRelease"],
-                right_align={"ReqSelect", "ReqRelease", "ReqDelta", "TokenSelect", "TokenSelInf", "TokenRelease"},
+                columns=["Worker", "ReqSelect", "ReqRelease", "ReqDelta", "TokenSelect", "TokenRelease"],
+                right_align={"ReqSelect", "ReqRelease", "ReqDelta", "TokenSelect", "TokenRelease"},
             )
         )
         detail_sections.append("")

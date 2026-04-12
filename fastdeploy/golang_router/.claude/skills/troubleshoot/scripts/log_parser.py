@@ -692,21 +692,14 @@ def match_select_release(lines, fallback_window_s=120):
                 }
             )
 
-    # Per-worker summary
-    # 对照 golang_router SelectWorker 语义：
-    # - prefill: request counter + token counter 同时增加（日志通常带 tokens）
-    # - mixed:   request counter + token counter 同时增加（日志通常不带 tokens，需要推断）
-    per_worker = defaultdict(
-        lambda: {"selects": 0, "releases": 0, "token_selects": 0, "token_selects_inferred": 0, "token_releases": 0}
-    )
+    # Per-worker summary（按 worker type 统计，不依赖日志中的 tokens 字段）
+    # 规则：prefill/mixed 的 select 均计入 token_selects。
+    per_worker = defaultdict(lambda: {"selects": 0, "releases": 0, "token_selects": 0, "token_releases": 0})
     for s in selects:
         s_type = _normalize_worker_type(s.get("type"))
         per_worker[s["worker"]]["selects"] += 1
-        if s.get("tokens") is not None:
+        if s_type in ("prefill", "mixed"):
             per_worker[s["worker"]]["token_selects"] += 1
-        elif s_type == "mixed":
-            per_worker[s["worker"]]["token_selects"] += 1
-            per_worker[s["worker"]]["token_selects_inferred"] += 1
     for r in releases:
         if str(r.get("type", "")).endswith("_tokens"):
             per_worker[r["worker"]]["token_releases"] += 1
@@ -720,7 +713,6 @@ def match_select_release(lines, fallback_window_s=120):
             "releases": counts["releases"],
             "delta": counts["selects"] - counts["releases"],
             "token_selects": counts["token_selects"],
-            "token_selects_inferred": counts["token_selects_inferred"],
             "token_releases": counts["token_releases"],
         }
 
@@ -736,7 +728,7 @@ def match_select_release(lines, fallback_window_s=120):
     for s in selects:
         s_type = _normalize_worker_type(s.get("type"))
         type_summary[s_type]["counter_selects"] += 1
-        if s.get("tokens") is not None or s_type == "mixed":
+        if s_type in ("prefill", "mixed"):
             type_summary[s_type]["token_selects"] += 1
     for r in releases:
         r_type = _normalize_worker_type(str(r.get("type", "")).replace("_tokens", ""))
