@@ -57,9 +57,9 @@ def merge_blank_window_rows(rows, min_merge_len=5):
         )
         merged.append(
             {
-                "Time": f"... {start_t} ~ {end_t} merged ({seg_len} windows) ...",
+                "Time": "|",
                 "Prefix HR": "-",
-                "Session HR": "-",
+                "Session HR": f"merged {seg_len} windows",
                 "Scoring": "0",
                 "Fallback": "0",
                 "Total Running": "-",

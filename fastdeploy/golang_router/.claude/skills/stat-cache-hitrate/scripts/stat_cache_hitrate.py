@@ -898,6 +898,11 @@ def main():
             details_abs, details_uri = _build_path_links(details_path)
             print(f"  - 窗口明细: {details_abs}")
             print(f"    URI: {details_uri}")
+        session_detail_path = os.path.join(os.path.dirname(report_path), "details", "session_hit_details.md")
+        if os.path.exists(session_detail_path):
+            session_abs, session_uri = _build_path_links(session_detail_path)
+            print(f"  - Session 明细: {session_abs}")
+            print(f"    URI: {session_uri}")
 
     if args.watch:
         print("\n\U0001f4a1 持续跟踪: /loop 30s /stat-cache-hitrate --tail")
