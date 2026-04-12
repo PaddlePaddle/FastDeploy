@@ -72,6 +72,9 @@
     URI: file:///abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/cache_hitrate_report_<timestamp>.md
   - 窗口明细: /abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/details/per_window_data.md
     URI: file:///abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/details/per_window_data.md
+  - Session 命中详情: /abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/details/session_hit_details.md
+    URI: file:///abs/path/to/skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/details/session_hit_details.md
+    (含 prefill_urls、worker 切换前后 request_id，以及命中率突降 request_id)
 ```
 
 ---
