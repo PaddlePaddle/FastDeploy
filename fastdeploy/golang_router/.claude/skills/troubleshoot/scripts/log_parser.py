@@ -466,8 +466,8 @@ def parse_error_line(line):
 SELECT_RE = re.compile(rf"select worker\s*(?:\((\w+)\))?:\s*({URL_RE})")
 RELEASE_RE = re.compile(rf"release worker\s*(?:\((\w+)\))?:\s*({URL_RE})")
 FAILED_SELECT_RE = re.compile(r"Failed to select")
-SELECT_TOKENS_RE = re.compile(rf"select worker \(prefill\):\s*({URL_RE}),\s*tokens:\s*(\d+)")
-RELEASE_TOKENS_RE = re.compile(rf"release prefill tokens:\s*({URL_RE}),\s*tokens:\s*(\d+)")
+SELECT_TOKENS_RE = re.compile(rf"select worker \((\w+)\):\s*({URL_RE}),\s*tokens:\s*(\d+)")
+RELEASE_TOKENS_RE = re.compile(rf"release (?:([a-zA-Z_]+)\s+)?tokens:\s*({URL_RE}),\s*tokens:\s*(\d+)")
 
 
 def _parse_ts_safe(ts):
@@ -493,6 +493,14 @@ def _select_match_key(tags):
     return (None, None)
 
 
+def _normalize_worker_type(worker_type):
+    """归一化 worker type。"""
+    t = (worker_type or "unknown").lower()
+    if t in ("prefill", "decode", "mixed"):
+        return t
+    return "unknown"
+
+
 def match_select_release(lines, fallback_window_s=120):
     """匹配 select/release worker 事件对。
 
@@ -516,10 +524,10 @@ def match_select_release(lines, fallback_window_s=120):
             selects.append(
                 {
                     "ts": ts,
-                    "worker": tm.group(1),
-                    "type": "prefill",
+                    "worker": tm.group(2),
+                    "type": _normalize_worker_type(tm.group(1)),
                     "tags": tags,
-                    "tokens": int(tm.group(2)),
+                    "tokens": int(tm.group(3)),
                     "line": line_no,
                 }
             )
@@ -528,13 +536,14 @@ def match_select_release(lines, fallback_window_s=120):
         # Token-bearing release
         trm = RELEASE_TOKENS_RE.search(line)
         if trm:
+            token_type = trm.group(1) or "prefill"
             releases.append(
                 {
                     "ts": ts,
-                    "worker": trm.group(1),
-                    "type": "prefill_tokens",
+                    "worker": trm.group(2),
+                    "type": f'{_normalize_worker_type(token_type)}_tokens',
                     "tags": tags,
-                    "tokens": int(trm.group(2)),
+                    "tokens": int(trm.group(3)),
                     "line": line_no,
                 }
             )
@@ -546,7 +555,7 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": sm.group(2),
-                    "type": sm.group(1) or "unknown",
+                    "type": _normalize_worker_type(sm.group(1)),
                     "tags": tags,
                     "tokens": None,
                     "line": line_no,
@@ -560,7 +569,7 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": rm.group(2),
-                    "type": rm.group(1) or "unknown",
+                    "type": _normalize_worker_type(rm.group(1)),
                     "tags": tags,
                     "tokens": None,
                     "line": line_no,
@@ -576,8 +585,11 @@ def match_select_release(lines, fallback_window_s=120):
     unmatched_selects = []
     release_used = set()
 
+    # 请求生命周期匹配只使用 request counter release（排除 token release）
+    counter_release_indexes = [i for i, r in enumerate(releases) if not str(r.get("type", "")).endswith("_tokens")]
     release_by_key = defaultdict(list)
-    for i, r in enumerate(releases):
+    for i in counter_release_indexes:
+        r = releases[i]
         _, key = _select_match_key(r.get("tags", {}))
         if key:
             release_by_key[key].append(i)
@@ -639,7 +651,8 @@ def match_select_release(lines, fallback_window_s=120):
         sdt = _parse_ts_safe(s["ts"])
         best_idx = None
         best_delta = None
-        for ri, r in enumerate(releases):
+        for ri in counter_release_indexes:
+            r = releases[ri]
             if ri in release_used:
                 continue
             if r.get("worker") != s.get("worker"):
@@ -679,12 +692,19 @@ def match_select_release(lines, fallback_window_s=120):
                 }
             )
 
-    # Per-worker summary
-    per_worker = defaultdict(lambda: {"selects": 0, "releases": 0})
+    # Per-worker summary（按 worker type 统计，不依赖日志中的 tokens 字段）
+    # 规则：prefill/mixed 的 select 均计入 token_selects。
+    per_worker = defaultdict(lambda: {"selects": 0, "releases": 0, "token_selects": 0, "token_releases": 0})
     for s in selects:
+        s_type = _normalize_worker_type(s.get("type"))
         per_worker[s["worker"]]["selects"] += 1
+        if s_type in ("prefill", "mixed"):
+            per_worker[s["worker"]]["token_selects"] += 1
     for r in releases:
-        per_worker[r["worker"]]["releases"] += 1
+        if str(r.get("type", "")).endswith("_tokens"):
+            per_worker[r["worker"]]["token_releases"] += 1
+        else:
+            per_worker[r["worker"]]["releases"] += 1
 
     pw_result = {}
     for w, counts in per_worker.items():
@@ -692,7 +712,30 @@ def match_select_release(lines, fallback_window_s=120):
             "selects": counts["selects"],
             "releases": counts["releases"],
             "delta": counts["selects"] - counts["releases"],
+            "token_selects": counts["token_selects"],
+            "token_releases": counts["token_releases"],
         }
+
+    # 按 worker type 分类统计（prefill/decode/mixed）
+    type_summary = defaultdict(
+        lambda: {
+            "counter_selects": 0,
+            "counter_releases": 0,
+            "token_selects": 0,
+            "token_releases": 0,
+        }
+    )
+    for s in selects:
+        s_type = _normalize_worker_type(s.get("type"))
+        type_summary[s_type]["counter_selects"] += 1
+        if s_type in ("prefill", "mixed"):
+            type_summary[s_type]["token_selects"] += 1
+    for r in releases:
+        r_type = _normalize_worker_type(str(r.get("type", "")).replace("_tokens", ""))
+        if str(r.get("type", "")).endswith("_tokens"):
+            type_summary[r_type]["token_releases"] += 1
+        else:
+            type_summary[r_type]["counter_releases"] += 1
 
     return {
         "matched": matched,
@@ -707,6 +750,7 @@ def match_select_release(lines, fallback_window_s=120):
             "with_alt_id": with_alt_id,
             "without_any_id": without_any_id,
         },
+        "type_summary": dict(type_summary),
     }
 
 
