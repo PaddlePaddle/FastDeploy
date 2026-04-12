@@ -70,6 +70,29 @@ def _render_scrollable_tsv(data, columns):
         lines.append("\t".join(_escape(row.get(col, "")) for col in columns))
     return "```tsv\n" + "\n".join(lines) + "\n```"
 
+
+def _render_markdown_table(data, columns, align_right=None):
+    """渲染 Markdown 表格，便于在终端/文档中直接阅读。"""
+    if not data:
+        return "_(no data)_"
+
+    align_right = align_right or set()
+
+    def _escape_md(v):
+        return str(v).replace("\n", "<br>").replace("|", "\\|")
+
+    header = "| " + " | ".join(columns) + " |"
+    align = "| " + " | ".join("---:" if c in align_right else "---" for c in columns) + " |"
+    rows = []
+    for row in data:
+        rows.append("| " + " | ".join(_escape_md(row.get(c, "")) for c in columns) + " |")
+    return "\n".join([header, align] + rows)
+
+
+def _truncate_text(v, limit=72):
+    s = str(v)
+    return s if len(s) <= limit else s[: limit - 1] + "…"
+
 # ════════════════════════════════════════════════════════════════
 # Phase 1: 日志读取
 # ════════════════════════════════════════════════════════════════
@@ -595,8 +618,11 @@ def save_detailed_report(
     主报告包含 Per-Worker 统计和 Fallback 明细。
     每窗口明细数据拆分到 details/per_window_data.md。
     """
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    output_path = os.path.join(output_dir, f"cache_hitrate_report_{timestamp}.md")
+    summary_dir = os.path.join(output_dir, "summary")
+    details_dir = os.path.join(output_dir, "detail")
+    os.makedirs(summary_dir, exist_ok=True)
+    os.makedirs(details_dir, exist_ok=True)
+    output_path = os.path.join(summary_dir, "cache_hitrate_report.md")
 
     parts = []
     parts.append("# Cache Hit Rate Detailed Report")
@@ -693,13 +719,11 @@ def save_detailed_report(
         # 主报告中添加引用
         parts.append(
             f"> 每5s窗口明细数据（原始 {len(window_rows)} 条，合并后 {len(window_rows_merged)} 条）:"
-            " [details/per_window_data.md](details/per_window_data.md)"
+            " [../detail/per_window_data.md](../detail/per_window_data.md)"
         )
         parts.append("")
 
         # 写入 details 子目录
-        details_dir = os.path.join(output_dir, "details")
-        os.makedirs(details_dir, exist_ok=True)
         detail_parts = ["# 每5s窗口明细数据", ""]
         detail_parts.append(
             "> 注：连续空窗口（Prefix/Session 都为空、且 Scoring/Fallback=0）已按 3 行格式合并展示（起始/合并说明/结束）。"
@@ -719,9 +743,7 @@ def save_detailed_report(
             f.write("\n".join(detail_parts))
 
         if session_rows:
-            parts.append(
-                f"> Session 命中详情 ({len(session_rows)} sessions): [details/session_hit_details.md](details/session_hit_details.md)"
-            )
+            parts.append(f"> Session 命中详情 ({len(session_rows)} sessions): [../detail/session_hit_details.md](../detail/session_hit_details.md)")
             parts.append("")
 
             session_parts = ["# Session 命中详情", ""]
@@ -742,6 +764,42 @@ def save_detailed_report(
                 f' (N={session_summary["non_first_total"]})'
             )
             session_parts.append("")
+            focus_columns = [
+                "session",
+                "req_count",
+                "sticky",
+                "unique_workers",
+                "avg_hit(excl_first)",
+                "min_hit",
+                "switch_req_pairs",
+                "sharp_drop_request_ids",
+            ]
+            session_parts.append("## 优先排查 Session（Top 20）")
+            prioritized_rows = sorted(
+                session_rows,
+                key=lambda r: (
+                    0 if r.get("sticky") == "no" else 1,
+                    int(str(r.get("min_hit", "0")).rstrip("%") or 0),
+                    -int(r.get("req_count", 0)),
+                ),
+            )[:20]
+            compact_rows = []
+            for r in prioritized_rows:
+                compact_rows.append(
+                    {
+                        "session": r["session"],
+                        "req_count": r["req_count"],
+                        "sticky": r["sticky"],
+                        "unique_workers": r["unique_workers"],
+                        "avg_hit(excl_first)": r["avg_hit(excl_first)"],
+                        "min_hit": r["min_hit"],
+                        "switch_req_pairs": _truncate_text(r["switch_req_pairs"]),
+                        "sharp_drop_request_ids": _truncate_text(r["sharp_drop_request_ids"]),
+                    }
+                )
+            session_parts.append(_render_markdown_table(compact_rows, focus_columns, align_right={"req_count", "unique_workers"}))
+            session_parts.append("")
+
             session_columns = [
                 "session",
                 "req_count",
@@ -756,15 +814,20 @@ def save_detailed_report(
                 "sticky",
                 "unique_workers",
             ]
-            session_parts.append("## 明细（单行 TSV，可横向滚动）")
-            session_parts.append(_render_scrollable_tsv(session_rows, session_columns))
+            session_parts.append("## 全量明细（Markdown 表格）")
+            session_parts.append(
+                _render_markdown_table(
+                    session_rows,
+                    session_columns,
+                    align_right={"req_count", "unique_workers"},
+                )
+            )
             session_parts.append("")
 
             session_path = os.path.join(details_dir, "session_hit_details.md")
             with open(session_path, "w") as f:
                 f.write("\n".join(session_parts))
 
-    os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w") as f:
         f.write("\n".join(parts))
 
@@ -887,13 +950,14 @@ def main():
         )
 
         # 导出详细报告
+        run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         if args.output:
-            output_dir = args.output
+            output_base = args.output
         else:
             script_dir = os.path.dirname(os.path.abspath(__file__))
             golang_router_root = os.path.normpath(os.path.join(script_dir, "..", "..", "..", ".."))
-            run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            output_dir = os.path.join(golang_router_root, "skill_output", "stat-cache-hitrate", run_timestamp)
+            output_base = os.path.join(golang_router_root, "skill_output", "stat-cache-hitrate")
+        output_dir = os.path.join(output_base, run_timestamp)
         report_path = save_detailed_report(
             args.log_file,
             strategy_recs,
@@ -910,12 +974,12 @@ def main():
         report_abs, report_uri = _build_path_links(report_path)
         print(f"  - 报告文件: {report_abs}")
         print(f"    URI: {report_uri}")
-        details_path = os.path.join(os.path.dirname(report_path), "details", "per_window_data.md")
+        details_path = os.path.join(output_dir, "detail", "per_window_data.md")
         if os.path.exists(details_path):
             details_abs, details_uri = _build_path_links(details_path)
             print(f"  - 窗口明细: {details_abs}")
             print(f"    URI: {details_uri}")
-        session_detail_path = os.path.join(os.path.dirname(report_path), "details", "session_hit_details.md")
+        session_detail_path = os.path.join(output_dir, "detail", "session_hit_details.md")
         if os.path.exists(session_detail_path):
             session_abs, session_uri = _build_path_links(session_detail_path)
             print(f"  - Session 明细: {session_abs}")
