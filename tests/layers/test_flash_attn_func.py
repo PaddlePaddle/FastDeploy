@@ -14,10 +14,14 @@
 
 from __future__ import annotations
 
+import sys
 import unittest
+from types import ModuleType
+from unittest import mock
 
 import paddle
 
+from fastdeploy.model_executor.layers.attention import flash_attn_backend
 from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
     flash_attn_func,
 )
@@ -203,6 +207,36 @@ class TestFlashAttnFunc(unittest.TestCase):
             head_dim=head_dim,
             version=4,
         )
+
+    def test_init_flash_attn_version_enables_cutlass_compat(self):
+        fake_flashmask_attention = object()
+        flash_mask_pkg = ModuleType("flash_mask")
+        flash_mask_pkg.__path__ = []
+        cute_pkg = ModuleType("flash_mask.cute")
+        cute_pkg.__path__ = []
+        interface_module = ModuleType("flash_mask.cute.interface")
+        interface_module.flashmask_attention = fake_flashmask_attention
+        flash_mask_pkg.cute = cute_pkg
+        cute_pkg.interface = interface_module
+
+        enable_calls = []
+        with mock.patch.dict(
+            sys.modules,
+            {
+                "flash_mask": flash_mask_pkg,
+                "flash_mask.cute": cute_pkg,
+                "flash_mask.cute.interface": interface_module,
+            },
+        ):
+            with mock.patch.object(paddle, "enable_compat", side_effect=lambda scope=None: enable_calls.append(scope)):
+                with mock.patch.object(flash_attn_backend.current_platform, "is_cuda", return_value=True):
+                    with mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100):
+                        with mock.patch.object(flash_attn_backend, "FLASH_ATTN_VERSION", None):
+                            with mock.patch.object(flash_attn_backend, "flashmask_attention_v4", None):
+                                flash_attn_backend.init_flash_attn_version()
+                                self.assertEqual(enable_calls, [{"cutlass"}])
+                                self.assertEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
+                                self.assertIs(flash_attn_backend.flashmask_attention_v4, fake_flashmask_attention)
 
 
 if __name__ == "__main__":

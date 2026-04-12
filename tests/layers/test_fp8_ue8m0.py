@@ -61,6 +61,34 @@ class DummyFusedMoELayer(paddle.nn.Layer):
         self.down_proj_weight = paddle.randn([num_local_experts, moe_intermediate_size, hidden_size], dtype="bfloat16")
 
 
+class TestLoadDeepGemm(unittest.TestCase):
+    def test_load_deep_gemm_enables_compat_on_sm100(self):
+        paddlefleet_pkg = types.ModuleType("paddlefleet")
+        paddlefleet_pkg.__path__ = []
+        ops_pkg = types.ModuleType("paddlefleet.ops")
+        ops_pkg.__path__ = []
+        deep_gemm_module = types.ModuleType("paddlefleet.ops.deep_gemm")
+        paddlefleet_pkg.ops = ops_pkg
+        ops_pkg.deep_gemm = deep_gemm_module
+
+        enable_calls = []
+        with mock.patch.dict(
+            sys.modules,
+            {
+                "paddlefleet": paddlefleet_pkg,
+                "paddlefleet.ops": ops_pkg,
+                "paddlefleet.ops.deep_gemm": deep_gemm_module,
+            },
+        ):
+            with mock.patch.object(paddle, "enable_compat", side_effect=lambda scope=None: enable_calls.append(scope)):
+                with mock.patch.object(fp8_utils_module.current_platform, "is_cuda", return_value=True):
+                    with mock.patch.object(fp8_utils_module, "get_sm_version", return_value=100):
+                        loaded = fp8_utils_module.load_deep_gemm()
+
+        self.assertEqual(enable_calls, [{"deep_gemm"}])
+        self.assertIs(loaded, deep_gemm_module)
+
+
 class TestFP8LinearWithUe8m0Scale(unittest.TestCase):
     def setUp(self):
         self.quant_config = BlockWiseFP8Config(weight_block_size=[128, 128], is_checkpoint_bf16=True)
