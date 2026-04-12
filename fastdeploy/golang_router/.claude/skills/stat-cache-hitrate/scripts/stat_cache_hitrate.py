@@ -33,7 +33,9 @@ from log_parser import (
     parse_stats_line,
     parse_ts,
 )
+from session_analysis import compute_session_details, summarize_session_details
 from stats import compute_statistics, count_by, time_bucket
+from window_utils import merge_blank_window_rows
 
 
 def _strip_scheme(url):
@@ -661,11 +663,15 @@ def save_detailed_report(
 
     # 每窗口明细 → 拆分到 details/
     window_rows = build_per_window_rows(strategies, stats_recs)
+    window_rows_merged = merge_blank_window_rows(window_rows)
+    session_rows = compute_session_details(strategies, _strip_scheme)
+    session_summary = summarize_session_details(session_rows)
 
     if window_rows:
         # 主报告中添加引用
         parts.append(
-            f"> 每5s窗口明细数据 ({len(window_rows)} 条): [details/per_window_data.md](details/per_window_data.md)"
+            f"> 每5s窗口明细数据（原始 {len(window_rows)} 条，合并后 {len(window_rows_merged)} 条）:"
+            " [details/per_window_data.md](details/per_window_data.md)"
         )
         parts.append("")
 
@@ -674,8 +680,12 @@ def save_detailed_report(
         os.makedirs(details_dir, exist_ok=True)
         detail_parts = ["# 每5s窗口明细数据", ""]
         detail_parts.append(
+            "> 注：连续空窗口（Prefix/Session 都为空、且 Scoring/Fallback=0）已按 3 行格式合并展示（起始/合并说明/结束）。"
+        )
+        detail_parts.append("")
+        detail_parts.append(
             render_table(
-                window_rows,
+                window_rows_merged,
                 columns=["Time", "Prefix HR", "Session HR", "Scoring", "Fallback", "Total Running"],
                 right_align={"Scoring", "Fallback", "Total Running"},
             )
@@ -685,6 +695,57 @@ def save_detailed_report(
         detail_path = os.path.join(details_dir, "per_window_data.md")
         with open(detail_path, "w") as f:
             f.write("\n".join(detail_parts))
+
+        if session_rows:
+            parts.append(
+                f"> Session 命中详情 ({len(session_rows)} sessions): [details/session_hit_details.md](details/session_hit_details.md)"
+            )
+            parts.append("")
+
+            session_parts = ["# Session 命中详情", ""]
+            session_parts.append("## 概览")
+            session_parts.append(f'- Total sessions: **{session_summary["total_sessions"]}**')
+            session_parts.append(
+                f'- Sessions with >1 request: **{session_summary["multi_req"]}**'
+                f' | single request: **{session_summary["single_req"]}**'
+            )
+            if session_summary["multi_req"] > 0:
+                sticky_pct = round(session_summary["sticky_multi"] / session_summary["multi_req"] * 100, 1)
+                session_parts.append(
+                    f'- Sticky (multi-request): **{session_summary["sticky_multi"]} ({sticky_pct}%)**'
+                    f' | non-sticky: **{session_summary["non_sticky_multi"]}**'
+                )
+            session_parts.append(
+                f'- Non-first request avg hit: **{session_summary["non_first_avg"]}%**'
+                f' (N={session_summary["non_first_total"]})'
+            )
+            session_parts.append("")
+            session_parts.append("## 明细表")
+            session_parts.append(
+                render_table(
+                    session_rows,
+                    columns=[
+                        "session",
+                        "req_count",
+                        "first_hit",
+                        "avg_hit(excl_first)",
+                        "max_hit",
+                        "min_hit",
+                        "all_hits",
+                        "prefill_urls",
+                        "switch_req_pairs",
+                        "sharp_drop_request_ids",
+                        "sticky",
+                        "unique_workers",
+                    ],
+                    right_align={"req_count", "first_hit", "avg_hit(excl_first)", "max_hit", "min_hit", "unique_workers"},
+                )
+            )
+            session_parts.append("")
+
+            session_path = os.path.join(details_dir, "session_hit_details.md")
+            with open(session_path, "w") as f:
+                f.write("\n".join(session_parts))
 
     os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
     with open(output_path, "w") as f:
@@ -837,6 +898,11 @@ def main():
             details_abs, details_uri = _build_path_links(details_path)
             print(f"  - 窗口明细: {details_abs}")
             print(f"    URI: {details_uri}")
+        session_detail_path = os.path.join(os.path.dirname(report_path), "details", "session_hit_details.md")
+        if os.path.exists(session_detail_path):
+            session_abs, session_uri = _build_path_links(session_detail_path)
+            print(f"  - Session 明细: {session_abs}")
+            print(f"    URI: {session_uri}")
 
     if args.watch:
         print("\n\U0001f4a1 持续跟踪: /loop 30s /stat-cache-hitrate --tail")
