@@ -144,10 +144,11 @@ def format_full_report(results, status, status_reason):
             report_text: 主报告文本（总结 + 可视化）
             details: dict 包含需要拆分到独立文件的详情数据
                 - 'health_events': str 或 None
+                - 'load_select_release': str 或 None
                 - 'trace_files': {trace_id: text} 或 {}
     """
     parts = []
-    details = {"health_events": None, "trace_files": {}}
+    details = {"health_events": None, "load_select_release": None, "trace_files": {}}
 
     # 状态行
     parts.append(f"STATUS: {status} — {status_reason}")
@@ -168,7 +169,10 @@ def format_full_report(results, status, status_reason):
             details["health_events"] = detail
 
     if "load" in results:
-        parts.append(format_load_report(results["load"]))
+        summary, detail = format_load_report(results["load"])
+        parts.append(summary)
+        if detail:
+            details["load_select_release"] = detail
 
     if "cache" in results:
         parts.append(format_cache_report(results["cache"]))
@@ -207,6 +211,11 @@ def save_detailed_report(report_text, output_dir, details=None):
             health_path = os.path.join(detail_dir, "health_events.md")
             with open(health_path, "w", encoding="utf-8") as f:
                 f.write(details["health_events"])
+
+        if details.get("load_select_release"):
+            load_path = os.path.join(detail_dir, "load_select_release.md")
+            with open(load_path, "w", encoding="utf-8") as f:
+                f.write(details["load_select_release"])
 
         for trace_id, trace_text in details.get("trace_files", {}).items():
             safe_id = trace_id.replace("/", "_")

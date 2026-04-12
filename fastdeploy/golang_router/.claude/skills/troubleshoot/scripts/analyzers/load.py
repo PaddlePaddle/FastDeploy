@@ -13,9 +13,9 @@ from collections import defaultdict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from chart import render_bar, render_sparkline, render_table
 from log_parser import extract_ts, match_select_release, parse_stats_line
 from stats import compute_statistics, time_bucket
+from analyzers.load_report import format_load_report
 
 # ════════════════════════════════════════════════════════════════
 # Counter 异常检测正则
@@ -28,12 +28,19 @@ COUNTER_PRESERVED_RE = re.compile(rf"counter preserved.*?{URL_RE}")
 TOKEN_PRESERVED_RE = re.compile(rf"token counter preserved.*?{URL_RE}")
 
 # Token 事件
-SELECT_TOKENS_RE = re.compile(rf"select worker \(prefill\):\s*{URL_RE},\s*tokens:\s*(\d+)")
-RELEASE_TOKENS_RE = re.compile(rf"release prefill tokens:\s*{URL_RE},\s*tokens:\s*(\d+)")
+SELECT_TOKENS_RE = re.compile(rf"select worker \((\w+)\):\s*{URL_RE},\s*tokens:\s*(\d+)")
+RELEASE_TOKENS_RE = re.compile(rf"release (?:([a-zA-Z_]+)\s+)?tokens:\s*{URL_RE},\s*tokens:\s*(\d+)")
 
 
 def _strip_scheme(url):
     return re.sub(r"^https?://", "", url)
+
+
+def _normalize_worker_type(worker_type):
+    t = (worker_type or "unknown").lower()
+    if t in ("prefill", "decode", "mixed"):
+        return t
+    return "unknown"
 
 
 def parse_counter_anomaly(line):
@@ -73,7 +80,7 @@ def analyze_load(log_file, tail=None):
         r"counter preserved|cleanup unhealthy|removed counters|counter already|double-release|preserved counters",
         tail,
     )
-    h11_lines = _grep_lines(log_file, r"release prefill tokens", tail)
+    h11_lines = _grep_lines(log_file, r"release (?:[a-zA-Z_]+\s+)?tokens", tail)
 
     # 解析 stats 行
     stats_records = [r for line in h7_lines for r in [parse_stats_line(line)] if r]
@@ -161,12 +168,12 @@ def _analyze_tokens(h3_lines, h11_lines):
     for line in h3_lines:
         m = SELECT_TOKENS_RE.search(line)
         if m:
-            token_alloc[m.group(1)].append(int(m.group(2)))
+            token_alloc[m.group(2)].append(int(m.group(3)))
 
     for line in h11_lines:
         m = RELEASE_TOKENS_RE.search(line)
         if m:
-            token_release[m.group(1)].append(int(m.group(2)))
+            token_release[m.group(2)].append(int(m.group(3)))
 
     result = []
     all_workers = set(token_alloc.keys()) | set(token_release.keys())
@@ -285,135 +292,6 @@ def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, token_stats, 
 # ════════════════════════════════════════════════════════════════
 
 
-def format_load_report(result):
-    """将分析结果格式化为终端报告。"""
-    sections = ["## 负载与计数器分析", ""]
-    sections.append(f'  {result["summary"]}')
-    sections.append("")
-
-    if result["diagnoses"]:
-        sections.append("### 诊断")
-        sections.append("")
-        for d in result["diagnoses"]:
-            sections.append(f'  [{d["severity"]}] [{d["source_layer"]}] {d["message"]}')
-        sections.append("")
-
-    # 负载概览
-    ls = result.get("load_stats", {})
-    if ls:
-        sections.append("### 负载概览 (total_running)")
-        sections.append("")
-        sections.append(
-            f'  mean={ls.get("mean",0)}  p50={ls.get("p50",0)}  p90={ls.get("p90",0)}  '
-            f'p99={ls.get("p99",0)}  max={ls.get("max",0)}  stddev={ls.get("stddev",0)}'
-        )
-        sections.append("")
-
-    # Per-Worker 负载
-    if result["worker_load"]:
-        sections.append("### Per-Worker 负载")
-        sections.append("")
-        bar_data = [
-            {"label": w["worker"][:25], "value": min(100, w["avg_running"] * 5), "count": w["avg_running"]}
-            for w in result["worker_load"]
-        ]
-        sections.append(render_bar(bar_data, show_count=True))
-        sections.append("")
-
-    # 负载趋势
-    if result["load_trend"] and len(result["load_trend"]) > 1:
-        sections.append("### 负载趋势")
-        sections.append("")
-        sections.append(
-            render_sparkline(
-                result["load_trend"], value_field="total_running_mean", title="Total Running", y_label="req"
-            )
-        )
-        sections.append("")
-
-    # Counter 异常
-    if result["counter_anomalies"]:
-        sections.append("### 计数器异常")
-        sections.append("")
-        for a in result["counter_anomalies"]:
-            workers_str = ", ".join(f'{_strip_scheme(w)}({c})' for w, c in a["workers"].items())
-            sections.append(f'  {a["type"]}: {a["total"]} 次 [{workers_str}]')
-        sections.append("")
-
-    id_cov = result.get("select_release", {}).get("id_coverage", {})
-    if id_cov:
-        sections.append("### 请求标识覆盖（基于 select 近似请求数）")
-        sections.append("")
-        sections.append(
-            "  total={total} | with_request_id={with_rid} | without_request_id={without_rid} | "
-            "with_alt_id={with_alt} | without_any_id={without_any}".format(
-                total=id_cov.get("total_requests_estimated", 0),
-                with_rid=id_cov.get("with_request_id", 0),
-                without_rid=id_cov.get("without_request_id", 0),
-                with_alt=id_cov.get("with_alt_id", 0),
-                without_any=id_cov.get("without_any_id", 0),
-            )
-        )
-        if id_cov.get("without_any_id", 0) > 0:
-            sections.append("  ℹ 无 request/session/trace/req_id 时，不做退化匹配，仅统计为 untracked。")
-        sections.append("")
-
-    # Select/Release 匹配
-    sr = result.get("select_release", {})
-    if sr.get("per_worker"):
-        sections.append("### Select/Release 匹配")
-        sections.append("")
-        id_cov = sr.get("id_coverage", {})
-        no_correlatable_id = (id_cov.get("with_request_id", 0) + id_cov.get("with_alt_id", 0)) == 0
-        table_data = []
-        for w_url, pw in sorted(sr["per_worker"].items()):
-            delta_display = "N/A" if no_correlatable_id else str(pw["delta"])
-            table_data.append(
-                {
-                    "Worker": _strip_scheme(w_url),
-                    "Select": str(pw["selects"]),
-                    "Release": str(pw["releases"]),
-                    "Delta": delta_display,
-                }
-            )
-        sections.append(
-            render_table(
-                table_data,
-                columns=["Worker", "Select", "Release", "Delta"],
-                right_align={"Select", "Release", "Delta"},
-            )
-        )
-        sections.append("")
-        if no_correlatable_id:
-            sections.append("  ℹ 当前样本无可关联 ID，Delta 不用于请求泄漏结论。")
-            sections.append("")
-
-    if sr.get("unmatched_selects"):
-        sections.append(f'  ⚠ {len(sr["unmatched_selects"])} 个未匹配 select（疑似请求卡住）')
-        for u in sr["unmatched_selects"][:5]:
-            sections.append(f'    [{u.get("select_ts","")}] {_strip_scheme(u["worker"])} ({u["type"]})')
-        sections.append("")
-
-    if sr.get("untracked_selects"):
-        sections.append(f'  ℹ {len(sr["untracked_selects"])} 个 select 缺少可关联 ID，未参与卡住判定')
-        for u in sr["untracked_selects"][:5]:
-            sections.append(f'    [{u.get("select_ts","")}] {_strip_scheme(u["worker"])} ({u["type"]})')
-        sections.append("")
-
-    # Token 统计
-    if result.get("token_stats"):
-        sections.append("### Token 计数器")
-        sections.append("")
-        sections.append(
-            render_table(
-                result["token_stats"],
-                columns=["worker", "alloc_count", "alloc_avg", "release_count"],
-                right_align={"alloc_count", "alloc_avg", "release_count"},
-            )
-        )
-        sections.append("")
-
-    return "\n".join(sections)
 
 
 # ════════════════════════════════════════════════════════════════
