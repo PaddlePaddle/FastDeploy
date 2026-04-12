@@ -3,6 +3,8 @@
 窗口明细压缩工具：合并连续空窗口，降低 per_window_data.md 噪声。
 """
 
+RUNNING_COL = "Total Running (prefill≈stats/2)"
+
 
 def _is_blank_window_row(row):
     """判断是否为空窗口（无 Prefix/Session 明细值）。"""
@@ -52,7 +54,7 @@ def merge_blank_window_rows(rows, min_merge_len=5):
                 "Session HR": "-",
                 "Scoring": "0",
                 "Fallback": "0",
-                "Total Running": rows[i].get("Total Running", "-"),
+                RUNNING_COL: rows[i].get(RUNNING_COL, "-"),
             }
         )
         merged.append(
@@ -62,7 +64,7 @@ def merge_blank_window_rows(rows, min_merge_len=5):
                 "Session HR": f"merged {seg_len} windows",
                 "Scoring": "0",
                 "Fallback": "0",
-                "Total Running": "-",
+                RUNNING_COL: "-",
             }
         )
         merged.append(
@@ -72,7 +74,7 @@ def merge_blank_window_rows(rows, min_merge_len=5):
                 "Session HR": "-",
                 "Scoring": "0",
                 "Fallback": "0",
-                "Total Running": rows[j - 1].get("Total Running", "-"),
+                RUNNING_COL: rows[j - 1].get(RUNNING_COL, "-"),
             }
         )
         i = j
