@@ -251,12 +251,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
-    # Whether to enable KV cache lock, enforcing mutual exclusion between
-    # PrefixCacheManager and Worker when accessing GPU KV cache.
-    # Under certain DP+EP configurations, concurrent access (even read-only)
-    # has been observed to cause NaN computation errors.
-    # Set to 1 to enable the lock; defaults to 0 (disabled).
-    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
     # Whether to probe MoE routing probabilities and use Fleet's fused SwiGLU kernel.
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use batch send data in zmq
