@@ -125,7 +125,7 @@ def complete_time_arg(time_str, log_file, is_end=False):
     if m:
         mo, d = m.group(1).zfill(2), m.group(2).zfill(2)
         ts = _get_log_boundary_ts(log_file, "first")
-        year = ts[:4] if ts else "2026"
+        year = ts[:4] if ts else str(datetime.now().year)
         if m.group(3):  # 有时间部分
             h, mi = m.group(3).zfill(2), m.group(4)
             s = (m.group(5) or "00").zfill(2)
@@ -139,7 +139,7 @@ def complete_time_arg(time_str, log_file, is_end=False):
         h, mi = m.group(1).zfill(2), m.group(2)
         s = (m.group(3) or "00").zfill(2)
         ts = _get_log_boundary_ts(log_file, "last")
-        date_part = ts[:10] if ts else "2026/01/01"
+        date_part = ts[:10] if ts else f"{datetime.now().year}/01/01"
         return f"{date_part} {h}:{mi}:{s}"
 
     # Fallback: 原样返回
@@ -204,9 +204,10 @@ def extract_tags(line):
 # Cache-Aware 策略行解析（类别 A）
 # ════════════════════════════════════════════════════════════════
 
+URL_RE = r"(?:https?://)?[A-Za-z0-9.-]+(?::\d+)?"
 STRATEGY_RE = re.compile(r"final strategy:\s*(\w+)")
-SELECTED_RE = re.compile(r"selected=(http://\S+?)(?:,|\s|$)")
-REASON_RE = re.compile(r"reason:\s*(.+?)(?:,\s*loads=|$)")
+SELECTED_RE = re.compile(rf"selected=({URL_RE})(?:,|\s|$)")
+REASON_RE = re.compile(r"reason:\s*(.+?)(?:,\s*loads=|\.?\s*ts_ms=|$)")
 
 
 def parse_cache_strategy_line(line):
@@ -271,7 +272,7 @@ def parse_cache_strategy_line(line):
 # ════════════════════════════════════════════════════════════════
 
 TOTAL_RUNNING_RE = re.compile(r"total_running=(\d+)")
-WORKER_RUNNING_RE = re.compile(r"(http://[^:]+:\d+): running=(\d+)")
+WORKER_RUNNING_RE = re.compile(rf"({URL_RE}): running=(\d+)")
 CACHE_HR_RE = re.compile(r"cache_hit_rate=([\d.]+)%\s*\(hits=(\d+)/total=(\d+)\)")
 
 

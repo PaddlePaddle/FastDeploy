@@ -26,6 +26,10 @@ from stats import compute_statistics, count_by
 TOKENIZER_WARN_RE = re.compile(r"tokenizer failed, fallback to char tokens")
 
 
+def _strip_scheme(url):
+    return re.sub(r"^https?://", "", url)
+
+
 def classify_fallback(record, tokenizer_degraded_ts=None):
     """对 process_tokens 策略行分类 fallback 原因。
 
@@ -210,9 +214,9 @@ def _analyze_suboptimal(records, hr_weight, lb_weight):
         suboptimal.append(
             {
                 "ts": r.get("ts", ""),
-                "selected": selected.replace("http://", ""),
+                "selected": _strip_scheme(selected),
                 "selected_hr": sel_hr,
-                "best_hr_worker": best_by_hr.replace("http://", ""),
+                "best_hr_worker": _strip_scheme(best_by_hr),
                 "best_hr": max_hr,
                 "reason": reason,
             }

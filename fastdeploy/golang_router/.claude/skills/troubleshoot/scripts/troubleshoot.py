@@ -34,7 +34,7 @@ from analyzers.health import analyze_health, format_health_report
 from analyzers.latency import analyze_latency, format_latency_report
 from analyzers.load import analyze_load, format_load_report
 from analyzers.trace import analyze_trace, format_trace_report
-from log_parser import complete_time_arg, filter_file_by_time_range
+from log_parser import complete_time_arg, filter_file_by_recent_minutes, filter_file_by_time_range
 
 
 def determine_log_file(user_path=None):
@@ -71,10 +71,8 @@ def parse_tail_arg(tail_str):
     if tail_str is None:
         return None
     if tail_str.endswith("m"):
-        # 分钟模式：转换为大致行数（假设 ~20 行/秒）
-        minutes = int(tail_str[:-1])
-        return minutes * 60 * 20
-    return int(tail_str)
+        return {"type": "minutes", "value": int(tail_str[:-1])}
+    return {"type": "lines", "value": int(tail_str)}
 
 
 def determine_status(results):
@@ -265,6 +263,18 @@ def main():
         log_file = filtered_path
         print(f'时间范围过滤: {start_ts or "..."} ~ {end_ts or "..."}', file=sys.stderr)
 
+    tail_arg = parse_tail_arg(args.tail)
+    tail = None
+    # --tail Nm 采用真实时间窗口过滤，再全量分析过滤后的临时文件
+    if tail_arg and tail_arg["type"] == "minutes":
+        filtered_path, is_temp = filter_file_by_recent_minutes(log_file, tail_arg["value"])
+        if is_temp:
+            atexit.register(lambda p=filtered_path: os.unlink(p) if os.path.exists(p) else None)
+        log_file = filtered_path
+        print(f"--tail {tail_arg['value']}m: 使用日志时间戳过滤最近窗口", file=sys.stderr)
+    elif tail_arg and tail_arg["type"] == "lines":
+        tail = tail_arg["value"]
+
     # 确定分析模式
     any_mode = args.errors or args.latency or args.health or args.cache or args.load or args.trace
     run_errors = args.errors or (not any_mode)
@@ -273,8 +283,6 @@ def main():
     run_load = args.load or (not any_mode)
     run_cache = args.cache or (not any_mode)
     run_trace = bool(args.trace)  # trace 需要指定 ID，全量扫描不自动调用
-
-    tail = parse_tail_arg(args.tail)
 
     results = {}
     step = 0
