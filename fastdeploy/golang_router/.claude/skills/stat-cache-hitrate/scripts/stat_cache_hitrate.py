@@ -81,11 +81,34 @@ def _render_markdown_table(data, columns, align_right=None):
     def _escape_md(v):
         return str(v).replace("\n", "<br>").replace("|", "\\|")
 
-    header = "| " + " | ".join(columns) + " |"
-    align = "| " + " | ".join("---:" if c in align_right else "---" for c in columns) + " |"
-    rows = []
+    matrix = []
     for row in data:
-        rows.append("| " + " | ".join(_escape_md(row.get(c, "")) for c in columns) + " |")
+        matrix.append([_escape_md(row.get(c, "")) for c in columns])
+
+    widths = []
+    for i, col in enumerate(columns):
+        max_cell = max((len(r[i]) for r in matrix), default=0)
+        widths.append(max(len(col), max_cell))
+
+    def _format_cell(text, width, right=False):
+        return text.rjust(width) if right else text.ljust(width)
+
+    header_cells = [_format_cell(c, widths[i]) for i, c in enumerate(columns)]
+    header = "| " + " | ".join(header_cells) + " |"
+
+    align_cells = []
+    for i, c in enumerate(columns):
+        w = max(widths[i], 3)
+        if c in align_right:
+            align_cells.append("-" * (w - 1) + ":")
+        else:
+            align_cells.append(":" + "-" * (w - 1))
+    align = "| " + " | ".join(align_cells) + " |"
+
+    rows = []
+    for row_cells in matrix:
+        padded = [_format_cell(cell, widths[i], right=(columns[i] in align_right)) for i, cell in enumerate(row_cells)]
+        rows.append("| " + " | ".join(padded) + " |")
     return "\n".join([header, align] + rows)
 
 
@@ -96,6 +119,36 @@ def _truncate_text(v, limit=72):
 
 def _seq_label(n):
     return f"S{n:03d}"
+
+
+def _extract_seq_num(seq_id):
+    return int(str(seq_id).lstrip("S") or 0)
+
+
+def _summarize_id_type_ranges(rows_with_seq):
+    """基于序号连续区间汇总 id_type，便于在报告开头快速识别口径。"""
+    if not rows_with_seq:
+        return []
+
+    ranges = []
+    current_type = rows_with_seq[0].get("id_type", "session_id")
+    start_id = rows_with_seq[0]["id"]
+    end_id = start_id
+
+    for row in rows_with_seq[1:]:
+        row_type = row.get("id_type", "session_id")
+        row_id = row["id"]
+        if row_type == current_type and _extract_seq_num(row_id) == _extract_seq_num(end_id) + 1:
+            end_id = row_id
+            continue
+
+        ranges.append((start_id, end_id, current_type))
+        current_type = row_type
+        start_id = row_id
+        end_id = row_id
+
+    ranges.append((start_id, end_id, current_type))
+    return ranges
 
 # ════════════════════════════════════════════════════════════════
 # Phase 1: 日志读取
@@ -742,7 +795,27 @@ def save_detailed_report(
             parts.append(f"> Session 命中详情 ({len(session_rows)} sessions): [../detail/session_hit_details.md](../detail/session_hit_details.md)")
             parts.append("")
 
+            all_rows_with_seq = []
+            for i, r in enumerate(session_rows, start=1):
+                all_rows_with_seq.append({**r, "id": _seq_label(i)})
+            id_type_ranges = _summarize_id_type_ranges(all_rows_with_seq)
+            seq_map = {r["session"]: r["id"] for r in all_rows_with_seq}
+
             session_parts = ["# Session 命中详情", ""]
+            session_parts.append("## id_type 摘要")
+            if len(id_type_ranges) == 1:
+                start_id, end_id, id_type = id_type_ranges[0]
+                if start_id == end_id:
+                    session_parts.append(f"- `{start_id}`: `{id_type}`")
+                else:
+                    session_parts.append(f"- `{start_id}~{end_id}`: `{id_type}`")
+            else:
+                for start_id, end_id, id_type in id_type_ranges:
+                    if start_id == end_id:
+                        session_parts.append(f"- `{start_id}`: `{id_type}`")
+                    else:
+                        session_parts.append(f"- `{start_id}~{end_id}`: `{id_type}`")
+            session_parts.append("")
             session_parts.append("## 概览")
             session_parts.append(f'- Total sessions: **{session_summary["total_sessions"]}**')
             session_parts.append(
@@ -781,11 +854,6 @@ def save_detailed_report(
                 ),
             )[:20]
             compact_rows = []
-            all_rows_with_seq = []
-            for i, r in enumerate(session_rows, start=1):
-                all_rows_with_seq.append({**r, "id": _seq_label(i)})
-
-            seq_map = {r["session"]: r["id"] for r in all_rows_with_seq}
 
             for r in prioritized_rows:
                 sid = seq_map.get(r["session"], "-")
