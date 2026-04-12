@@ -20,6 +20,7 @@ from typing import Any, AsyncGenerator, List, Optional
 
 from typing_extensions import override
 
+import fastdeploy.envs as envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.async_llm import AsyncLLM
 from fastdeploy.engine.request import RequestOutput
@@ -201,10 +202,10 @@ class OpenAIServingChat(OpenAiServingBase):
         request: ChatCompletionRequest = ctx.request
         stream_options = request.stream_options
         if stream_options is None:
-            include_usage = False
+            include_usage = envs.FD_RESPONSE_INCLUDE_USAGE
             include_continuous_usage = False
         else:
-            include_usage = stream_options.include_usage
+            include_usage = stream_options.include_usage or envs.FD_RESPONSE_INCLUDE_USAGE
             include_continuous_usage = stream_options.continuous_usage_stats
         request_id = ctx.request_id
         output = request_output.outputs
@@ -306,7 +307,7 @@ class OpenAIServingChat(OpenAiServingBase):
 
         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
         if request_output.finished and response_ctx.remain_choices == 0:
-            if getattr(request, "stream_options", None) and include_usage:
+            if include_usage:
                 chunk = ChatCompletionStreamResponse(
                     id=request_id,
                     created=ctx.created_time,
@@ -336,8 +337,19 @@ class OpenAIServingChat(OpenAiServingBase):
             choices.append(choice)
 
         choices = sorted(choices, key=lambda x: x.index)
+        metrics = None
+        if request.collect_metrics or envs.FD_COLLECT_METRICS:
+            first_output = next(iter(accumula_output_map.values()), [None])
+            last_output = first_output[-1] if first_output else None
+            if last_output and last_output.metrics:
+                metrics = last_output.metrics.to_dict()
         res = ChatCompletionResponse(
-            id=ctx.request_id, model=request.model, choices=choices, created=ctx.created_time, usage=response_ctx.usage
+            id=ctx.request_id,
+            model=request.model,
+            choices=choices,
+            created=ctx.created_time,
+            usage=response_ctx.usage,
+            metrics=metrics,
         )
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res
