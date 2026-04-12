@@ -6,7 +6,6 @@ import os
 import tempfile
 import threading
 import time
-import types
 import unittest
 from collections import defaultdict
 from unittest import mock

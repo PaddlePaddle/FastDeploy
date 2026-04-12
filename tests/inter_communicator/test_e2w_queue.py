@@ -16,7 +16,6 @@
 
 import threading
 import time
-import types
 import unittest
 
 import numpy as np
