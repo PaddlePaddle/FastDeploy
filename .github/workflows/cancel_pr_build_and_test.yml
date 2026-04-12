@@ -1,0 +1,19 @@
+name: PR Build and Test
+on:
+  pull_request:
+    types: [closed]
+    branches: [develop, release/**]
+permissions: read-all
+
+concurrency:
+  group: ${{ github.event.pull_request.number }}-${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  cancel:
+    name: Cancel PR Build and Test for ${{ github.event.pull_request.number }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel PR Build and Test
+        run: |
+          exit 0
