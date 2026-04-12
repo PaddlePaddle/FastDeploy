@@ -50,7 +50,7 @@ IMPORTANT: 执行前阅读 references/log_formats.md 了解日志格式和解析
 
 ### 3. 输出目录
 分析结果默认保存到 `skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/`（自动按运行时间创建子目录）。
-用户可通过 `--output` 指定自定义目录。
+用户可通过 `--output` 指定**基目录**，脚本会继续在其下创建 `<YYYYMMDD_HHMMSS>/summary` 与 `<YYYYMMDD_HHMMSS>/detail`，避免覆盖历史明细。
 
 ## 使用方式
 
@@ -92,9 +92,9 @@ python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志�
 
 详细报告和图表输出到 `skill_output/stat-cache-hitrate/<YYYYMMDD_HHMMSS>/` 目录，每次运行自动创建带时间戳的子目录。
 
-- 主报告 `cache_hitrate_report_*.md` — Per-Worker 统计 + Fallback 明细
-- `details/per_window_data.md` — 每5s窗口明细（连续空窗口自动合并为 3 行：起始/合并说明/结束）
-- `details/session_hit_details.md` — 每个 session 的命中明细（TSV 单行格式，便于横向滚动查看），包含 `session / req_count / first_hit / avg_hit(excl_first) / max_hit / min_hit / all_hits / prefill_urls / switch_req_pairs / sharp_drop_request_ids`
+- `summary/cache_hitrate_report.md` — Per-Worker 统计 + Fallback 明细 + 详情链接
+- `detail/per_window_data.md` — 每5s窗口明细（连续空窗口自动合并为 3 行：起始/合并说明/结束）
+- `detail/session_hit_details.md` — 每个 session 的命中明细（Markdown 表格），包含 `session / req_count / first_hit / avg_hit(excl_first) / max_hit / min_hit / all_hits / prefill_urls / switch_req_pairs / sharp_drop_request_ids`
 
 ### 交叉诊断矩阵
 
