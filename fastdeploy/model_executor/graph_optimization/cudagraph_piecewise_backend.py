@@ -29,6 +29,7 @@ from fastdeploy.distributed.communication import (
     capture_custom_allreduce,
     custom_ar_clear_ipc_handles,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
@@ -123,9 +124,46 @@ class CudaGraphPiecewiseBackend:
         self.max_num_seqs = fd_config.scheduler_config.max_num_seqs
         self.real_bsz_to_captured_size = fd_config.graph_opt_config.real_bsz_to_captured_size
 
-    def run_static_model(self, entry: ConcreteSizeEntry, **kwargs):
+        # Expected decode capture sequence (descending), consistent with capture_model() iteration order.
+        # Used to validate that captures happen in the correct order.
+        self._decode_expected_sequence: list[int] = sorted(self.cudagraph_capture_sizes, reverse=True)
+        # Points to the next expected position in _decode_expected_sequence.
+        self._decode_capture_index: int = 0
+
+    def _validate_decode_capture_order(self, shape: int) -> None:
+        """Validate that decode CUDA graph captures happen in expected descending order.
+
+        Raises RuntimeError immediately if the actual capture order deviates from
+        the order defined by cudagraph_capture_sizes (sorted descending).
+        """
+        if current_platform.is_xpu():
+            return
+
+        if self._decode_capture_index >= len(self._decode_expected_sequence):
+            raise RuntimeError(
+                f"[CUDA GRAPH][ID:{id(self)}] Unexpected CUDA graph capture: shape={shape}. "
+                f"All {len(self._decode_expected_sequence)} expected captures have already completed. "
+                f"Expected sequence: {self._decode_expected_sequence}"
+            )
+        expected = self._decode_expected_sequence[self._decode_capture_index]
+        if shape != expected:
+            raise RuntimeError(
+                f"[CUDA GRAPH][ID:{id(self)}] CUDA graph capture order mismatch at index "
+                f"{self._decode_capture_index}: expected shape={expected}, got shape={shape}. "
+                f"Full expected sequence: {self._decode_expected_sequence}"
+            )
+        logger.debug(
+            f"[CUDA GRAPH][ID:{id(self)}] Capture order validated: shape={shape} matches "
+            f"expected sequence at index {self._decode_capture_index} "
+            f"(sequence: {self._decode_expected_sequence})"
+        )
+        self._decode_capture_index += 1
+
+    def run_static_model(self, entry: ConcreteSizeEntry, is_decode: bool = False, **kwargs):
 
         if not entry.captured:
+            if is_decode:
+                self._validate_decode_capture_order(entry.real_shape)
             # Warmup the model
             for n in range(entry.num_finished_warmup, self.warm_up_size):
                 entry.num_finished_warmup += 1
@@ -194,13 +232,14 @@ class CudaGraphPiecewiseBackend:
         # - Static full graph mode: Dynamic for prefill/mixed, Static + CUDAGraph for decode
         # - Dynamic mode: Dynamic + CUDAGraph for decode only
         if static_cudagraph_for_prefill or static_cudagraph_for_decode:
-            return self.run_static_model(entry, **kwargs)
+            return self.run_static_model(entry, is_decode=static_cudagraph_for_decode, **kwargs)
 
         # Capture a new cuda graph
         if entry.cuda_graph is None:
             assert (
                 real_shape == padding_real_shape
             ), f"real_shape:{real_shape} is not equal to padding_real_shape:{padding_real_shape} when capture new graph."
+            self._validate_decode_capture_order(padding_real_shape)
             # Warmup the model
             for n in range(entry.num_finished_warmup, self.warm_up_size):
                 entry.num_finished_warmup += 1
@@ -277,6 +316,8 @@ class CudaGraphPiecewiseBackend:
 
         del self.concrete_size_entries
         paddle.device.cuda.empty_cache()
+
+        self._decode_capture_index = 0
 
         # Create new entrys
         self._create_entry_dict()
