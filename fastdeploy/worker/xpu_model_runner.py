@@ -97,7 +97,23 @@ class XPUModelRunner(ModelRunnerBase):
         local_rank: int,
     ):
         super().__init__(fd_config=fd_config, device=device)
-        self.enable_mm = self.fd_config.enable_mm_runtime
+        # self.enable_mm = self.fd_config.enable_mm_runtime
+        self.enable_mm = self.model_config.enable_mm
+        self.enable_vision_gen = getattr(self.model_config, "enable_vision_gen", False)
+        self.max_num_slots = self.scheduler_config.max_num_seqs
+
+        if self.enable_vision_gen:
+            # self.vision_processor = None
+            # self.vision_generate_status_ratio = 0
+            # self.vision_generate_status_threshold = float(os.getenv("FD_VISION_GEN_STATUS_THRESHOLD", "0.6"))
+            # self.current_token_num = 0
+            # # two stage in vision generation
+            # self.max_num_slots = 2 * self.scheduler_config.max_num_seqs
+            raise NotImplementedError("vision gen not implemented yet")
+
+        self.block_step_audio_batch_ids = paddle.zeros([0], dtype="int32")
+        self.block_step_audio_codes = paddle.zeros([0, self.fd_config.model_config.audio_code_depth], dtype="int64")
+
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -110,40 +126,40 @@ class XPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            self._init_image_preprocess()
+            if "Ernie4_5" in self.model_config.architectures[0]:
+                self._init_image_preprocess()
 
-            self.amp_black = [
-                "reduce_sum",
-                "c_softmax_with_cross_entropy",
-                "elementwise_div",
-                "sin",
-                "cos",
-                "sort",
-                "multinomial",
-            ]
-            self.amp_white = [
-                "lookup_table",
-                "lookup_table_v2",
-                "flash_attn",
-                "matmul",
-                "matmul_v2",
-                "fused_gemm_epilogue",
-            ]
-            if self.cache_config.max_encoder_cache > 0:
-                self.encoder_cache: dict[str, paddle.Tensor] = {}
-            else:
-                self.encoder_cache = None
-
-        self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.method
-        self.speculative_decoding = self.speculative_method is not None
+                self.amp_black = [
+                    "reduce_sum",
+                    "c_softmax_with_cross_entropy",
+                    "elementwise_div",
+                    "sin",
+                    "cos",
+                    "sort",
+                    "multinomial",
+                ]
+                self.amp_white = [
+                    "lookup_table",
+                    "lookup_table_v2",
+                    "flash_attn",
+                    "matmul",
+                    "matmul_v2",
+                    "fused_gemm_epilogue",
+                ]
+                if self.cache_config.max_encoder_cache > 0:
+                    self.encoder_cache: dict[str, paddle.Tensor] = {}
+                else:
+                    self.encoder_cache = None
 
         # used by SamplingMetadata
         self.enable_logprob = fd_config.model_config.enable_logprob  # fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
+        # use spec
+        self.spec_method = self.fd_config.speculative_config.method
+        self.speculative_decoding = self.spec_method is not None
+
         #  Sampler
-        #  TODU(lilujia): sync with GPU
         if not self.speculative_decoding:
             self.sampler = Sampler(fd_config)
         else:
@@ -262,7 +278,7 @@ class XPUModelRunner(ModelRunnerBase):
 
             offset = self.share_inputs["cu_seqlens_q"][request.idx]
             prompt_hidden_states = hidden_states[offset : offset + num_logits]
-            logits = self.model.compute_logits(prompt_hidden_states)
+            logits = self.model.compute_logits(prompt_hidden_states, self.forward_meta)
             prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]
             prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
             if logprobs_mode == "raw_logprobs":
@@ -689,6 +705,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = request.get(
                 "top_p_normalized_logprobs", False
             )
+            self.share_inputs["generated_modality"][idx : idx + 1] = request.get("generated_modality", 0)
 
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
@@ -728,7 +745,7 @@ class XPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
@@ -877,7 +894,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
                 request, "temp_scaled_logprobs", False
             )
@@ -972,6 +989,8 @@ class XPUModelRunner(ModelRunnerBase):
             0,
             dtype="int64",
         )
+        self.share_inputs["generated_modality"] = paddle.full([max_num_seqs], -1, dtype="int32")
+
         self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -1390,6 +1409,7 @@ class XPUModelRunner(ModelRunnerBase):
             idx = i
             input_length = input_length_list[idx]
             max_dec_len = max_dec_len_list[idx]
+            self.share_inputs["generated_modality"][idx : idx + 1] = 0
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
@@ -1437,7 +1457,7 @@ class XPUModelRunner(ModelRunnerBase):
             block_num=block_num,
         )
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -1454,11 +1474,11 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == SpecMethod.NGRAM:
+        if self.spec_method == SpecMethod.NGRAM:
             # xpu not support ngram proposer now
             self.proposer = None
-        elif self.speculative_method == SpecMethod.MTP:
-            self.proposer = self.speculative_method.create_proposer(
+        elif self.spec_method == SpecMethod.MTP:
+            self.proposer = self.spec_method.create_proposer(
                 self.fd_config,
                 main_model=self.get_model(),
                 local_rank=self.local_rank,
@@ -1570,8 +1590,10 @@ class XPUModelRunner(ModelRunnerBase):
 
             model_inputs = {}
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
+            model_inputs["generated_modality"] = self.share_inputs["generated_modality"]
             if self.enable_mm:
                 model_inputs["image_features"] = self.share_inputs["image_features"]
+            
             # 3. Execute model
             model_output = self.model(
                 model_inputs,
@@ -1581,7 +1603,7 @@ class XPUModelRunner(ModelRunnerBase):
                 model_output = model_output[: self.real_token_num]
             hidden_states = xpu_process_output(model_output, self.forward_meta, self.share_inputs)
             # 4. Compute logits, Sample
-            logits = self.model.compute_logits(hidden_states)
+            logits = self.model.compute_logits(hidden_states, self.forward_meta)
             sampler_output = None
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
@@ -1683,7 +1705,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
             # 6. Draft model propose
-            if self.speculative_method == SpecMethod.MTP:
+            if self.spec_method == SpecMethod.MTP:
                 self.proposer.run(full_hidden_states=model_output)
 
             # 7. Updata 'infer_seed' and step_paddle()
@@ -1736,7 +1758,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
         self.initialize_kv_cache(profile=True)
 
@@ -1758,7 +1780,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
 
@@ -2004,3 +2026,4 @@ class XPUModelRunner(ModelRunnerBase):
             cumsum_seqlens=cumsum_seqlens,
         )
         return rope_emb_lst
+    
