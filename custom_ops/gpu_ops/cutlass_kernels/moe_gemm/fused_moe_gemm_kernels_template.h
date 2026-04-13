@@ -709,7 +709,7 @@ void MoeGemmRunner<T, WeightQuantTraits>::dispatch_to_arch<EpilogueTag>(
     dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm70);
   } else if (sm_ >= 75 && sm_ < 80) {
     dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm75);
-  } else if (sm_ >= 80 && sm_ < 101) {
+  } else if (sm_ >= 80 && sm_ < 104) {
     dispatch_moe_gemm_to_cutlass_macro(cutlass::arch::Sm80);
   } else {
     throw std::runtime_error(

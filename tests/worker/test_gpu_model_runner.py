@@ -14,12 +14,13 @@
 
 import unittest
 from dataclasses import dataclass
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import paddle
 
 from fastdeploy.engine.request import ImagePosition
+from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
 from fastdeploy.worker.input_batch import InputBatch
 
@@ -474,6 +475,120 @@ class TestProcessMMFeatures(unittest.TestCase):
         self.assertTrue(
             any(isinstance(t, paddle.Tensor) for t in self.runner.share_inputs["image_features_list"]),
         )
+
+
+class TestSleepWakeupBehavior(unittest.TestCase):
+    def _make_runner(self):
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.is_weight_sleeping = False
+        runner.is_kvcache_sleeping = False
+        runner.use_cudagraph = False
+        runner.spec_method = None
+        runner.local_rank = 0
+        runner.device_id = 1
+        runner.num_gpu_blocks = 8
+        runner.model = Mock(clear_grpah_opt_backend=Mock())
+        runner.clear_cache = Mock()
+        runner.initialize_kv_cache = Mock()
+        runner.capture_model = Mock()
+        runner.share_inputs = Mock(reset_share_inputs=Mock())
+        runner.dynamic_weight_manager = Mock(
+            clear_deepep_buffer=Mock(),
+            clear_model_weight=Mock(),
+            clear_communication_group=Mock(),
+            restart_communication_group=Mock(),
+            recreate_deepep_buffer=Mock(),
+            reload_model_weights=Mock(),
+        )
+        runner.fd_config = Mock()
+        runner.fd_config.parallel_config = Mock(
+            enable_expert_parallel=False,
+            shutdown_comm_group_if_worker_idle=False,
+        )
+        runner.proposer = Mock(
+            clear_mtp_cache=Mock(),
+            initialize_kv_cache=Mock(),
+            model_inputs=Mock(reset_model_inputs=Mock()),
+        )
+        return runner
+
+    @patch("fastdeploy.worker.gpu_model_runner.print_gpu_memory_use")
+    @patch("paddle.device.cuda.empty_cache")
+    def test_sleep_offloads_weight_and_cache(self, mock_empty_cache, mock_print_memory):
+        runner = self._make_runner()
+        runner.use_cudagraph = True
+        runner.spec_method = SpecMethod.MTP
+        runner.fd_config.parallel_config.enable_expert_parallel = True
+        runner.fd_config.parallel_config.shutdown_comm_group_if_worker_idle = True
+
+        runner.sleep("weight,kv_cache")
+
+        runner.model.clear_grpah_opt_backend.assert_called_once()
+        runner.dynamic_weight_manager.clear_deepep_buffer.assert_called_once()
+        runner.dynamic_weight_manager.clear_model_weight.assert_called_once()
+        runner.dynamic_weight_manager.clear_communication_group.assert_called_once()
+        runner.proposer.clear_mtp_cache.assert_called_once()
+        runner.clear_cache.assert_called_once()
+        self.assertTrue(runner.is_weight_sleeping)
+        self.assertTrue(runner.is_kvcache_sleeping)
+        mock_empty_cache.assert_called_once()
+        mock_print_memory.assert_called_once()
+
+    @patch("fastdeploy.worker.gpu_model_runner.print_gpu_memory_use")
+    @patch("paddle.device.cuda.empty_cache")
+    def test_sleep_weight_is_idempotent(self, mock_empty_cache, mock_print_memory):
+        runner = self._make_runner()
+        runner.is_weight_sleeping = True
+
+        runner.sleep("weight")
+
+        runner.dynamic_weight_manager.clear_model_weight.assert_not_called()
+        runner.clear_cache.assert_not_called()
+        mock_empty_cache.assert_not_called()
+        mock_print_memory.assert_not_called()
+
+    def test_wakeup_rejects_weight_only_when_cudagraph_requires_kvcache(self):
+        runner = self._make_runner()
+        runner.use_cudagraph = True
+        runner.is_kvcache_sleeping = True
+
+        with self.assertRaises(RuntimeError):
+            runner.wakeup("weight")
+
+    @patch("fastdeploy.worker.gpu_model_runner.print_gpu_memory_use")
+    def test_wakeup_restores_weight_and_cache(self, mock_print_memory):
+        runner = self._make_runner()
+        runner.use_cudagraph = True
+        runner.spec_method = SpecMethod.MTP
+        runner.is_weight_sleeping = True
+        runner.is_kvcache_sleeping = True
+        runner.fd_config.parallel_config.enable_expert_parallel = True
+        runner.fd_config.parallel_config.shutdown_comm_group_if_worker_idle = True
+
+        runner.wakeup("weight,kv_cache")
+
+        runner.proposer.model_inputs.reset_model_inputs.assert_called_once()
+        runner.share_inputs.reset_share_inputs.assert_called_once()
+        runner.proposer.initialize_kv_cache.assert_called_once_with(main_model_num_blocks=runner.num_gpu_blocks)
+        runner.initialize_kv_cache.assert_called_once()
+        runner.dynamic_weight_manager.restart_communication_group.assert_called_once()
+        runner.dynamic_weight_manager.recreate_deepep_buffer.assert_called_once()
+        runner.dynamic_weight_manager.reload_model_weights.assert_called_once()
+        runner.capture_model.assert_called_once()
+        self.assertFalse(runner.is_weight_sleeping)
+        self.assertFalse(runner.is_kvcache_sleeping)
+        mock_print_memory.assert_called_once()
+
+    @patch("fastdeploy.worker.gpu_model_runner.print_gpu_memory_use")
+    def test_wakeup_kvcache_is_idempotent(self, mock_print_memory):
+        runner = self._make_runner()
+        runner.is_kvcache_sleeping = False
+
+        runner.wakeup("kv_cache")
+
+        runner.initialize_kv_cache.assert_not_called()
+        runner.dynamic_weight_manager.reload_model_weights.assert_not_called()
+        mock_print_memory.assert_not_called()
 
 
 if __name__ == "__main__":

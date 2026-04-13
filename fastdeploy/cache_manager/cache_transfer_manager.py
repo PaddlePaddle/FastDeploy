@@ -1098,6 +1098,14 @@ class CacheTransferManager:
             logger.info("✅ Successfully resumed transfer")
         return True
 
+    def _handle_update_weights(self):
+        if self.storage_backend_type is not None:
+            self._update_key_prefix()
+            logger.info("✅ Successfully updated cache key prefix after weight update")
+        else:
+            logger.info("💡 Cache storage backend is disabled, skip updating cache key prefix")
+        return True
+
     def _handle_sleep(self):
         if self.is_sleeping:
             logger.info("💡 Cache transfer manager is already sleeping, no need to sleep again!")
@@ -1128,6 +1136,7 @@ class CacheTransferManager:
         handlers = {
             "pause": self._handle_pause,
             "resume": self._handle_resume,
+            "update_weights": self._handle_update_weights,
             "sleep": self._handle_sleep,
             "wakeup": self._handle_wakeup,
         }

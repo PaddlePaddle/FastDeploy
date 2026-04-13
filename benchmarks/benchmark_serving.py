@@ -39,7 +39,13 @@ from backend_request_func import (
     RequestFuncInput,
     RequestFuncOutput,
 )
-from benchmark_dataset import EBChatDataset, EBDataset, RandomTextDataset, SampleRequest
+from benchmark_dataset import (
+    EBChatDataset,
+    EBDataset,
+    RandomTextDataset,
+    RandomTokenDataset,
+    SampleRequest,
+)
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
 from tqdm.asyncio import tqdm
 
@@ -1156,6 +1162,12 @@ def main(args: argparse.Namespace):
             random_output_len=args.random_output_len,
             random_range_ratio=args.random_range_ratio,
         ),
+        "random_token_ids": lambda: RandomTokenDataset().sample(
+            num_requests=args.num_prompts,
+            random_input_len=args.random_input_len,
+            random_output_len=args.random_output_len,
+            random_range_ratio=args.random_range_ratio,
+        ),
     }
 
     try:
@@ -1338,6 +1350,7 @@ if __name__ == "__main__":
             "EB",
             "EBChat",
             "random",
+            "random_token_ids",
         ],
         help="Name of the dataset to benchmark on.",
     )

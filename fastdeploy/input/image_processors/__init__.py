@@ -11,3 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+from fastdeploy.input.image_processors.adaptive_processor import (  # noqa: F401
+    AdaptiveImageProcessor,
+    get_image_preprocessor,
+)
+from fastdeploy.input.image_processors.paddleocr_processor import (  # noqa: F401
+    ImageProcessor as PaddleOCRImageProcessor,
+)
+from fastdeploy.input.image_processors.qwen3_processor import (  # noqa: F401
+    ImageProcessor as Qwen3ImageProcessor,
+)
+from fastdeploy.input.image_processors.qwen_processor import (  # noqa: F401
+    ImageProcessor as QwenImageProcessor,
+)

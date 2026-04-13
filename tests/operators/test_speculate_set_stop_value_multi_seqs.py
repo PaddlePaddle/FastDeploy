@@ -175,19 +175,17 @@ def reference_spec_set_stop_value_multi_seqs(inputs: Dict[str, Any]) -> Dict[str
             accept_idx = 0
             is_end = False
             while accept_idx <= an - 1 and not is_end:
-                if step_idx_now - an + accept_idx + 1 < stop_seq_len:
+                if step_idx_now + accept_idx + 1 < stop_seq_len:
                     accept_idx += 1
                     continue
 
                 # Check one stop_seq match
                 for i in range(stop_seq_len - 1, -1, -1):
                     cur_token_idx = -1
-                    # 注意:新版本kernel改成了 <=,并且去掉了 -1
-                    if stop_seq_len - 1 - i <= accept_idx:
-                        cur_token_idx = accept_tokens_now[accept_idx - (stop_seq_len - 1 - i)]
+                    if stop_seq_len - 1 - i < accept_idx:
+                        cur_token_idx = accept_tokens_now[accept_idx - (stop_seq_len - 1 - i) - 1]
                     else:
-                        # 新版本:step_idx已经包含accept_num,所以要减去
-                        pre_ids_idx = step_idx_now - an + accept_idx - (stop_seq_len - 1 - i)
+                        pre_ids_idx = step_idx_now + accept_idx - (stop_seq_len - 1 - i)
                         if pre_ids_idx <= 0:
                             break
                         cur_token_idx = pre_ids_now[pre_ids_idx]
@@ -292,12 +290,12 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["prompt_lens"][:] = 0
         inputs["step_idx"][:] = 6
         inputs["accept_num"][:] = 3
-        # stop_seq spans pre_ids and accept_tokens
-        # For accept_idx=1: step_idx_now - accept_num + 1 + 1 = 6-3+1+1 = 5 >= stop_seq_len=3, so we check
-        # i=2: stop_seq_len-1-i=0 <= accept_idx(1) -> accept_tokens[1-0] = accept_tokens[1] = 22
-        # i=1: stop_seq_len-1-i=1 <= accept_idx(1) -> accept_tokens[1-1] = accept_tokens[0] = 11
-        # i=0: stop_seq_len-1-i=2 > accept_idx(1) -> pre_ids_idx = 6-3+1-(3-1-0) = 4-2 = 2 -> pre_ids[2] = 99
-        inputs["token_ids_all"][0, 2] = 99
+        # Kernel matching at accept_idx=2 (3rd token, 0-indexed):
+        #   i=2(last): stop_seq_len-1-i=0 < accept_idx(2) -> accept_tokens[2-0-1]=accept_tokens[1]
+        #   i=1:       stop_seq_len-1-i=1 < accept_idx(2) -> accept_tokens[2-1-1]=accept_tokens[0]
+        #   i=0:       stop_seq_len-1-i=2 >= accept_idx(2) -> pre_ids[step_idx+2-(3-1-0)]=pre_ids[6]
+        # So stop_seq should be [pre_ids[6], accept_tokens[0], accept_tokens[1]]
+        inputs["token_ids_all"][0, 6] = 99
         inputs["accept_tokens"][0, :3] = [11, 22, 33]
         inputs["stop_seqs"][0, 0, :3] = [99, 11, 22]
         inputs["stop_seqs_len"][0, 0] = 3
@@ -305,9 +303,9 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["min_tokens"][:] = 0
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
-        # Match at accept_idx=1, loop increments to 2
-        self.assertEqual(outputs["accept_num"][0], 2)
-        self.assertEqual(outputs["accept_tokens"][0, 1], inputs["end_ids"][0])
+        # Match at accept_idx=2, loop increments to 3
+        self.assertEqual(outputs["accept_num"][0], 3)
+        self.assertEqual(outputs["accept_tokens"][0, 2], -1)
 
     def test_match_in_pre_ids_only(self):
         """Stop seq found entirely within token_ids_all (pre_ids), matching at accept_idx=0."""
@@ -316,29 +314,29 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             accept_tokens_len=5,
             max_model_len=32,
             stop_seqs_bs=1,
-            stop_seqs_max_len=4,  # 需要4个元素
+            stop_seqs_max_len=3,
             seed=30,
         )
         inputs["prompt_lens"][:] = 0
         inputs["step_idx"][:] = 8
         inputs["accept_num"][:] = 3
-        # stop_seq partially in pre_ids, partially in accept_tokens
-        # For accept_idx=1: step_idx_now - accept_num + 1 + 1 = 8-3+1+1 = 7 >= stop_seq_len=4, so we check
-        # i=3: stop_seq_len-1-i=0 <= accept_idx(1) -> accept_tokens[1-0] = accept_tokens[1] = 22
-        # i=2: stop_seq_len-1-i=1 <= accept_idx(1) -> accept_tokens[1-1] = accept_tokens[0] = 11
-        # i=1: stop_seq_len-1-i=2 > accept_idx(1) -> pre_ids_idx = 8-3+1-(4-1-1) = 6-2 = 4 -> pre_ids[4] = 60
-        # i=0: stop_seq_len-1-i=3 > accept_idx(1) -> pre_ids_idx = 8-3+1-(4-1-0) = 6-3 = 3 -> pre_ids[3] = 50
-        inputs["token_ids_all"][0, 3] = 50
-        inputs["token_ids_all"][0, 4] = 60
-        inputs["accept_tokens"][0, :3] = [11, 22, 3]
-        inputs["stop_seqs"][0, 0, :4] = [50, 60, 11, 22]
-        inputs["stop_seqs_len"][0, 0] = 4
+        # pre_ids at step_idx positions: token_ids_all[0, 6]=50, [0,7]=60, [0,8]=70
+        # stop_seq = [50, 60, 70], all 3 tokens are in pre_ids
+        # For accept_idx=0: step_idx_now + 0 + 1 = 9 >= stop_seq_len=3, so we check
+        # i=2: pre_ids_idx = 8+0-(3-1-2) = 8 -> pre_ids_now[8] = 70
+        # i=1: pre_ids_idx = 8+0-(3-1-1) = 7 -> pre_ids_now[7] = 60
+        # i=0: pre_ids_idx = 8+0-(3-1-0) = 6 -> pre_ids_now[6] = 50
+        inputs["token_ids_all"][0, 6] = 50
+        inputs["token_ids_all"][0, 7] = 60
+        inputs["token_ids_all"][0, 8] = 70
+        inputs["accept_tokens"][0, :3] = [1, 2, 3]
+        inputs["stop_seqs"][0, 0, :3] = [50, 60, 70]
+        inputs["stop_seqs_len"][0, 0] = 3
         inputs["stop_flags"][:] = False
         inputs["min_tokens"][:] = 0
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
-        # Match at accept_idx=1, loop increments to 2
-        self.assertEqual(outputs["accept_num"][0], 2)
+        self.assertEqual(outputs["accept_num"][0], 1)
 
     def test_already_stopped(self):
         """Kernel skips sequences with stop_flags=True."""

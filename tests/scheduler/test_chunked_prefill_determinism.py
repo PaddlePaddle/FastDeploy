@@ -78,6 +78,7 @@ class StubConfig:
         self.cache_config = CacheConfig()
         self.parallel_config = ParallelConfig()
         self.speculative_config = SpeculativeConfig()
+        self.enable_mm_runtime = self.model_config.enable_mm
 
 
 # ---------------------------------------------------------------------------
@@ -168,6 +169,7 @@ class TestChunkedPrefillDeterminism(unittest.TestCase):
     def _create_mm_resource_manager(self):
         config = StubConfig()
         config.model_config.enable_mm = True
+        config.enable_mm_runtime = config.model_config.enable_mm
         return self._create_resource_manager(config)
 
     # ==================== 1. Deterministic disabled ====================

@@ -109,6 +109,8 @@ class FlashMaskAttentionBackend(AttentionBackend):
         self.speculative_method = fd_config.speculative_config.method
         self.use_speculate = self.speculative_method is not None
         self.speculate_max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
+        if not self.use_speculate:
+            self.speculate_max_draft_token_num = 0
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method == SpecMethod.MTP)
 
@@ -121,9 +123,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False) or getattr(
-            fd_config.model_config, "use_3d_rope", False
-        )
+        self.rope_3d: bool = fd_config.enable_rope_3d_runtime
         if fd_config.speculative_config.model_type != "main":
             self.rope_3d = False
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", "32768"))
@@ -309,7 +309,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
                     q,
                     k,
                     v,
-                    forward_meta.cu_seqlens_q,
+                    forward_meta.cu_seqlens_q[: forward_meta.attn_cu_seqlens_k.shape[0]],
                     forward_meta.attn_cu_seqlens_k,
                     forward_meta.seq_lens_encoder,
                     res_encoder,

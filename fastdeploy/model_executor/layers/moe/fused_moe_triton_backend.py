@@ -20,6 +20,7 @@ import paddle
 from paddle import nn
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -1672,6 +1673,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                         weight[expert_id].copy_(w_q, False)
                         scale_list.append(s_ue8m0)
                     scale = paddle.to_tensor(scale_list)
+                scale = scale.transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
 
             free_tensor(getattr(layer, unquantized_weight_name))
             free_tensor(getattr(layer, weight_name))
@@ -1700,7 +1702,23 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             else:
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
-                scale_param.data = scale.transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
+                scale_param.data = scale
+            if bool(envs.FD_USE_BLACKWELL_GEMM):
+                import blackwell_ops
+
+                scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
+                scale_bw_name = scale_name + "_bw"
+                setattr(
+                    layer,
+                    scale_bw_name,
+                    scale_bw,
+                )
+                if layer.fd_config.scheduler_config.splitwise_role != "mixed":
+                    setattr(
+                        layer,
+                        scale_name,
+                        None,
+                    )
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize

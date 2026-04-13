@@ -340,9 +340,7 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         # Create a scaled image (values between 0-1)
         img_array = np.random.rand(224, 224, 3).astype(np.float32) * 0.5
         # Use patch to capture warning
-        with patch(
-            "fastdeploy.input.ernie4_5_vl_processor.image_preprocessor.image_preprocessor_adaptive.data_processor_logger"
-        ) as mock_logger:
+        with patch("fastdeploy.input.image_processors.adaptive_processor.data_processor_logger") as mock_logger:
             # Directly call _preprocess, pass scaled image
             self.processor._preprocess(
                 [img_array],  # Pass scaled numpy array
@@ -356,9 +354,7 @@ class TestImagePreprocessorAdaptive(unittest.TestCase):
         """Test invalid image check in preprocess (line 464)"""
         # Test invalid image type - need to ensure valid_images returns False
         # Use patch to make valid_images return False, but make_batched_images succeeds
-        with patch(
-            "fastdeploy.input.ernie4_5_vl_processor.image_preprocessor.image_preprocessor_adaptive.valid_images"
-        ) as mock_valid:
+        with patch("fastdeploy.input.image_processors.adaptive_processor.valid_images") as mock_valid:
             mock_valid.return_value = False
             valid_images_list = [Image.new("RGB", (224, 224))]  # Valid image, but valid_images returns False
             with self.assertRaises(ValueError) as context:

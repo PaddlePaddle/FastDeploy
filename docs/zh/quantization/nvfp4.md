@@ -18,6 +18,8 @@ NVFP4 是 NVIDIA 引入的创新 4 位浮点格式，详细介绍请参考[Intro
 FastDeploy 需以 NVIDIA GPU 模式安装，具体安装方式请参考官方文档：[Fastdeploy NVIDIA GPU 环境安装指南](https://paddlepaddle.github.io/FastDeploy/zh/get_started/installation/nvidia_gpu/)。
 
 ### 运行推理服务
+
+flashinfer-cutlass后端:
 ```bash
 python -m fastdeploy.entrypoints.openai.api_server \
     --model nv-community/Qwen3-30B-A3B-FP4 \
@@ -30,11 +32,76 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 128
 ```
 
+### flashinfer-cutedsl后端:
+
+#### PaddlePaddle 兼容性补丁
+
+由于 FlashInfer 与 PaddlePaddle 之间存在兼容性问题，需要在 `miniconda/envs/<your_env>/lib/python3.10/site-packages/` 中应用以下补丁：
+
+1. **nvidia_cutlass_dsl/python_packages/cutlass/torch.py**
+
+   将 `torch.device` 替换为 `"torch.device"`（作为字符串以避免冲突）。
+
+2. **flashinfer/utils.py**
+
+  修改 `get_compute_capability` 函数：
+  ```bash
+  @functools.cache
+  def get_compute_capability(device: torch.device) -> Tuple[int, int]:
+      return torch.cuda.get_device_capability(device)
+      if device.type != "cuda":
+          raise ValueError("device must be a cuda device")
+      return torch.cuda.get_device_capability(device.index)
+  ```
+
+3. **flashinfer/cute_dsl/blockscaled_gemm.py**
+
+   将 `cutlass_torch.current_stream()` 替换为：
+   ```bash
+   cuda.CUstream(torch.cuda.current_stream().stream_base.raw_stream)
+   ```
+
+### 运行推理服务
+
+```bash
+export FD_MOE_BACKEND="flashinfer-cutedsl"
+export FD_USE_PFCC_DEEP_EP=1
+export CUDA_VISIBLE_DEVICES=4,5,6,7
+
+
+
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+       --ports "9811,9812,9813,9814" \
+       --num-servers 4 \
+       --model ERNIE-4.5-21B-A3B-FP4 \
+       --disable-custom-all-reduce \
+       --tensor-parallel-size 1 \
+       --data-parallel-size 4 \
+       --no-enable-prefix-caching \
+       --max-model-len 65536 \
+       --enable-expert-parallel \
+       --num-gpu-blocks-override 8192 \
+       --max-num-seqs 4 \
+       --gpu-memory-utilization 0.9 \
+       --max-num-batched-tokens 512 \
+       --ep-prefill-use-worst-num-tokens \
+       --graph-optimization-config '{"use_cudagraph":false}'
+```
+
 ### 接口访问
 通过如下命令发起服务请求
 
 ```shell
 curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "把李白的静夜思改写为现代诗"}
+  ]
+}'
+```
+```shell
+curl -X POST "http://0.0.0.0:9811/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
   "messages": [
