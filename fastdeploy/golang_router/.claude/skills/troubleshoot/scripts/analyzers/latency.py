@@ -335,7 +335,7 @@ def format_latency_report(result):
     # 诊断（仅在 detail 输出）
     if result["diagnoses"]:
         sections.append("### 诊断")
-        sections.append("  诊断见详情: [detail/latency_diagnoses.md](detail/latency_diagnoses.md)")
+        sections.append("  诊断见详情: [detail/latency_diagnoses.md](../detail/latency_diagnoses.md)")
         sections.append("")
 
     return "\n".join(sections)

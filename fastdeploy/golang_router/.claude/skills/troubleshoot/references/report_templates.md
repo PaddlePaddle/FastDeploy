@@ -55,6 +55,7 @@
 - 主报告包含各维度总结 + 可视化图表（sparkline/柱状图/时间线等）
 - 详情拆分到 `details/` 子目录：
   - `detail/health_events.md` — Worker 逐分钟健康事件 + 健康诊断
+  - `detail/errors_topn.md` — ERROR/WARN 模板明细（数量/级别/来源层/影响 + URLs）
   - `detail/load_select_release.md` — 负载诊断 + select/release 明细
   - `detail/load_diagnoses.md` — load 诊断列表
   - `detail/load_counter_state.md` — request/token counter 末状态

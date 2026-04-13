@@ -399,7 +399,7 @@ def format_cache_report(result):
     if result["diagnoses"]:
         sections.append("### 诊断")
         sections.append("")
-        sections.append("  诊断见详情: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
+        sections.append("  诊断见详情: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
         sections.append("")
         detail_sections.append("## 诊断")
         detail_sections.append("")
@@ -452,7 +452,7 @@ def format_cache_report(result):
     if stickiness:
         sections.append("### Session 粘性")
         sections.append("")
-        sections.append("  Session 粘性详情见: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
+        sections.append("  Session 粘性详情见: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
         sections.append("")
         table_data = [
             {
@@ -479,7 +479,7 @@ def format_cache_report(result):
         subs = result["suboptimal_selections"]
         sections.append(f"### 非最优选择 ({len(subs)} 次)")
         sections.append("")
-        sections.append("  详情见: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
+        sections.append("  详情见: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
         sections.append("")
         reason_counts = defaultdict(int)
         for s in subs:
@@ -501,7 +501,7 @@ def format_cache_report(result):
         evicted = [e for e in evictions if e["evicted"]]
         sections.append(f"### 驱逐影响 ({len(evictions)} 次超时, {len(evicted)} 次缓存失效)")
         sections.append("")
-        sections.append("  详情见: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
+        sections.append("  详情见: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
         sections.append("")
         detail_sections.append("## 驱逐影响")
         detail_sections.append("")
@@ -523,7 +523,7 @@ def format_cache_report(result):
     if result.get("cross_diagnosis"):
         sections.append("### 交叉诊断")
         sections.append("")
-        sections.append("  详情见: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
+        sections.append("  详情见: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
         sections.append("")
         detail_sections.append("## 交叉诊断")
         detail_sections.append("")
@@ -546,12 +546,12 @@ def format_cache_report(result):
         ]
     ):
         sections.append(
-            "> 详细诊断: [detail/cache_diagnosis.md](detail/cache_diagnosis.md) | "
-            "[detail/cache_session_stickiness.md](detail/cache_session_stickiness.md) | "
-            "[detail/cache_suboptimal.md](detail/cache_suboptimal.md) | "
-            "[detail/cache_eviction.md](detail/cache_eviction.md) | "
-            "[detail/cache_fallback.md](detail/cache_fallback.md) | "
-            "[detail/cache_cross.md](detail/cache_cross.md)"
+            "> 详细诊断: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md) | "
+            "[detail/cache_session_stickiness.md](../detail/cache_session_stickiness.md) | "
+            "[detail/cache_suboptimal.md](../detail/cache_suboptimal.md) | "
+            "[detail/cache_eviction.md](../detail/cache_eviction.md) | "
+            "[detail/cache_fallback.md](../detail/cache_fallback.md) | "
+            "[detail/cache_cross.md](../detail/cache_cross.md)"
         )
         sections.append("")
 

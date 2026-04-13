@@ -612,8 +612,8 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": trm.group(2),
-                    # 不直接信任日志里的 token type 文本（"release prefill tokens" 也可能来自 mixed）
-                    "type": "unknown_tokens",
+                    # 文本默认按 prefill 记，再结合同 worker 邻近 select 做纠偏（mixed 场景）
+                    "type": f'{_normalize_worker_type(token_type or "prefill")}_tokens',
                     "raw_token_type": token_type or "",
                     "tags": tags,
                     "tokens": int(trm.group(3)),
@@ -789,15 +789,24 @@ def match_select_release(lines, fallback_window_s=120):
             "token_releases": counts["token_releases"],
         }
 
+    # 基于 select 构建 worker URL -> dominant type 映射
+    per_worker_type_counts = defaultdict(lambda: defaultdict(int))
+    for s in selects:
+        per_worker_type_counts[s["worker"]][_normalize_worker_type(s.get("type"))] += 1
+    worker_dominant_type = {}
+    for w, counts in per_worker_type_counts.items():
+        worker_dominant_type[w] = sorted(counts.items(), key=lambda kv: -kv[1])[0][0] if counts else "unknown"
+
     # 为未显式标注 type 的 release 推断 worker type（避免大量 unknown）
     inferred_release_types = {}
     for i, r in enumerate(releases):
         r_type_raw = str(r.get("type", ""))
         if r_type_raw.endswith("_tokens"):
             base_t = _normalize_worker_type(r_type_raw.replace("_tokens", ""))
-            if base_t == "unknown":
-                # token release 的 worker type 由同 worker 邻近 select 推断（prefill/mixed）
-                base_t = _infer_token_release_worker_type(r, selects, fallback_window_s=fallback_window_s)
+            # token release 按 worker URL 对应的 select 类型映射，不做邻近时间纠偏
+            mapped_t = worker_dominant_type.get(r.get("worker", ""), "unknown")
+            if mapped_t in ("prefill", "decode", "mixed"):
+                base_t = mapped_t
             inferred_release_types[i] = f"{base_t}_tokens"
             continue
         base_t = _normalize_worker_type(r_type_raw)
@@ -827,6 +836,20 @@ def match_select_release(lines, fallback_window_s=120):
             type_summary[r_type]["token_releases"] += 1
         else:
             type_summary[r_type]["counter_releases"] += 1
+
+    # 每个 worker URL 的类型画像（基于 select）
+    worker_type_profile = {}
+    for w, counts in per_worker_type_counts.items():
+        dominant = "unknown"
+        if counts:
+            dominant = sorted(counts.items(), key=lambda kv: -kv[1])[0][0]
+        worker_type_profile[w] = {
+            "dominant_type": dominant,
+            "prefill": counts.get("prefill", 0),
+            "decode": counts.get("decode", 0),
+            "mixed": counts.get("mixed", 0),
+            "unknown": counts.get("unknown", 0),
+        }
 
     unmatched_releases = []
     for i, r in enumerate(releases):
@@ -868,6 +891,7 @@ def match_select_release(lines, fallback_window_s=120):
             "without_any_id": without_any_id,
         },
         "type_summary": dict(type_summary),
+        "worker_type_profile": worker_type_profile,
     }
 
 

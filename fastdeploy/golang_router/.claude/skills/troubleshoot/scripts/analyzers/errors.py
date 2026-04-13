@@ -298,27 +298,7 @@ def format_errors_report(result):
         sections.append(render_bar(bar_data, show_count=True))
         sections.append("")
 
-        # 来源层表格
-        table_data = []
-        for e in result["error_top_n"][:10]:
-            table_data.append(
-                {
-                    "模板": e["template"][:60],
-                    "数量": e["count"],
-                    "占比": f'{e["pct"]}%',
-                    "级别": e["level"],
-                    "来源层": e["source_layer"],
-                    "影响": e.get("impact", "-"),
-                    "URLs": ",".join(e.get("urls", [])[:2]) if e.get("urls") else "-",
-                }
-            )
-        sections.append(
-            render_table(
-                table_data,
-                columns=["模板", "数量", "占比", "级别", "来源层", "影响", "URLs"],
-                right_align={"数量", "占比"},
-            )
-        )
+        sections.append("  具体模板表见: [../detail/errors_topn.md](../detail/errors_topn.md)")
         sections.append("")
         yaml_missing_count = sum(
             e["count"] for e in result["error_top_n"] if "Failed to read YAML file config/register.yaml" in e["template"]

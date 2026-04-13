@@ -335,7 +335,7 @@ def format_health_report(result):
     if result["diagnoses"]:
         sections.append("### 诊断")
         sections.append("")
-        sections.append("  诊断见详情: [detail/health_events.md](detail/health_events.md)")
+        sections.append("  诊断见详情: [detail/health_events.md](../detail/health_events.md)")
         sections.append("")
 
     # Worker 可用性表格
@@ -401,7 +401,7 @@ def format_health_report(result):
 
     # 主报告中添加引用
     if has_events:
-        sections.append("> 完整事件详情: [detail/health_events.md](detail/health_events.md)")
+        sections.append("> 完整事件详情: [detail/health_events.md](../detail/health_events.md)")
         sections.append("")
 
     return "\n".join(sections), detail_text

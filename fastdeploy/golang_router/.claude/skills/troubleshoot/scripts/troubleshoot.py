@@ -128,20 +128,14 @@ def determine_status(results):
                 reasons.append(d["message"])
 
     if reasons:
-        # 去重并限制长度，避免状态行过长难读
+        # 去重但保留完整信息
         deduped = []
         seen = set()
         for r in reasons:
             if r not in seen:
                 deduped.append(r)
                 seen.add(r)
-        max_reasons = 4
-        shown = deduped[:max_reasons]
-        extra = len(deduped) - len(shown)
-        summary = "；".join(shown)
-        if extra > 0:
-            summary += f"；另有 {extra} 项诊断见各维度 detail 报告"
-        return "DEGRADED", summary
+        return "DEGRADED", "；".join(deduped)
 
     if not results:
         return "HEALTHY", "无分析数据"
@@ -173,6 +167,7 @@ def format_full_report(results, status, status_reason):
         "cache_eviction": None,
         "cache_fallback": None,
         "cache_cross": None,
+        "errors_topn": None,
         "trace_files": {},
     }
 
@@ -187,6 +182,29 @@ def format_full_report(results, status, status_reason):
     # 各维度报告
     if "errors" in results:
         parts.append(format_errors_report(results["errors"]))
+        if results["errors"].get("error_top_n"):
+            lines = [
+                "# Errors TopN 详情",
+                "",
+                "| 模板 | 数量 | 级别 | 来源层 | 影响 |",
+                "|:--|--:|:--|:--|:--|",
+            ]
+            for e in results["errors"]["error_top_n"]:
+                lines.append(
+                    f'| {e.get("template","")} | {e.get("count",0)} | {e.get("level","")} | {e.get("source_layer","")} | {e.get("impact","-")} |'
+                )
+            lines.append("")
+            lines.append("## 涉及 URLs")
+            lines.append("")
+            for e in results["errors"]["error_top_n"]:
+                urls = e.get("urls") or []
+                if not urls:
+                    continue
+                lines.append(f'- 模板: {e.get("template","")}')
+                for u in urls:
+                    lines.append(f'  - {u}')
+            lines.append("")
+            details["errors_topn"] = "\n".join(lines)
 
     if "latency" in results:
         parts.append(format_latency_report(results["latency"]))
@@ -331,6 +349,9 @@ def save_detailed_report(report_text, output_dir, details=None):
         if details.get("cache_cross"):
             with open(os.path.join(detail_dir, "cache_cross.md"), "w", encoding="utf-8") as f:
                 f.write(details["cache_cross"])
+        if details.get("errors_topn"):
+            with open(os.path.join(detail_dir, "errors_topn.md"), "w", encoding="utf-8") as f:
+                f.write(details["errors_topn"])
 
         for trace_id, trace_text in details.get("trace_files", {}).items():
             safe_id = trace_id.replace("/", "_")

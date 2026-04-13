@@ -146,6 +146,7 @@ def analyze_load(log_file, tail=None):
             "per_worker": {},
             "id_coverage": {},
             "type_summary": {},
+            "worker_type_profile": {},
         }
     )
 
