@@ -129,27 +129,27 @@ class XPUModelRunner(ModelRunnerBase):
             if "Ernie4_5" in self.model_config.architectures[0]:
                 self._init_image_preprocess()
 
-                self.amp_black = [
-                    "reduce_sum",
-                    "c_softmax_with_cross_entropy",
-                    "elementwise_div",
-                    "sin",
-                    "cos",
-                    "sort",
-                    "multinomial",
-                ]
-                self.amp_white = [
-                    "lookup_table",
-                    "lookup_table_v2",
-                    "flash_attn",
-                    "matmul",
-                    "matmul_v2",
-                    "fused_gemm_epilogue",
-                ]
-                if self.cache_config.max_encoder_cache > 0:
-                    self.encoder_cache: dict[str, paddle.Tensor] = {}
-                else:
-                    self.encoder_cache = None
+            self.amp_black = [
+                "reduce_sum",
+                "c_softmax_with_cross_entropy",
+                "elementwise_div",
+                "sin",
+                "cos",
+                "sort",
+                "multinomial",
+            ]
+            self.amp_white = [
+                "lookup_table",
+                "lookup_table_v2",
+                "flash_attn",
+                "matmul",
+                "matmul_v2",
+                "fused_gemm_epilogue",
+            ]
+            if self.cache_config.max_encoder_cache > 0:
+                self.encoder_cache: dict[str, paddle.Tensor] = {}
+            else:
+                self.encoder_cache = None
 
         # used by SamplingMetadata
         self.enable_logprob = fd_config.model_config.enable_logprob  # fd_config.model_config.enable_logprob
@@ -367,12 +367,6 @@ class XPUModelRunner(ModelRunnerBase):
             "encoder_cache_info": [],
             "feature_position_list": [],
         }
-        rope_3d_position_ids = {
-            "position_ids_idx": [],
-            "position_ids_lst": [],
-            "position_ids_offset": [0],
-            "max_tokens_lst": [],
-        }
 
         for request in request_list:
             if request.task_type.value != RequestType.PREFILL.value:
@@ -383,19 +377,6 @@ class XPUModelRunner(ModelRunnerBase):
                 if evict_mm_hashes:
                     for mm_hash in evict_mm_hashes:
                         self.encoder_cache.pop(mm_hash, None)
-
-            position_ids = request.multimodal_inputs["position_ids"]
-            rope_3d_position_ids["position_ids_idx"].append(request.idx)
-            rope_3d_position_ids["position_ids_lst"].append(position_ids)
-            rope_3d_position_ids["position_ids_offset"].append(
-                position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
-            )
-
-            # TODO xpu currently do not support pooling model
-            # if self.is_pooling_model:
-            #     rope_3d_position_ids["max_tokens_lst"].append(0)
-            # else:
-            rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
             if request.with_image:
                 inputs = request.multimodal_inputs
@@ -536,18 +517,6 @@ class XPUModelRunner(ModelRunnerBase):
                 thw_idx += 1
             self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
 
-        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
-            packed_position_ids = paddle.to_tensor(
-                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
-            )
-            rope_3d_lst = self.prepare_rope3d(
-                packed_position_ids,
-                rope_3d_position_ids["max_tokens_lst"],
-                rope_3d_position_ids["position_ids_offset"],
-            )
-            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
-                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
-
     def _get_feature_positions(
         self, mm_positions: List[ImagePosition], prefill_start_index: int, prefill_end_index: int
     ):
@@ -602,12 +571,33 @@ class XPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        rope_3d_position_ids = {
+            "position_ids_idx": [],
+            "position_ids_lst": [],
+            "position_ids_offset": [0],
+            "max_tokens_lst": [],
+        }
 
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
+                # rope 3d
+                if self.enable_mm:
+                    position_ids = request.multimodal_inputs["position_ids"]
+                    rope_3d_position_ids["position_ids_idx"].append(idx)
+                    rope_3d_position_ids["position_ids_lst"].append(position_ids)
+                    rope_3d_position_ids["position_ids_offset"].append(
+                        len(position_ids) + rope_3d_position_ids["position_ids_offset"][-1]
+                    )
+
+                    # TODO xpu currently do not support pooling model
+                    # if self.is_pooling_model:
+                    #     rope_3d_position_ids["max_tokens_lst"].append(0)
+                    # else:
+                    rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
@@ -742,6 +732,17 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
         self._process_mm_features(req_dicts)
+        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
+            packed_position_ids = paddle.to_tensor(
+                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
+            )
+            rope_3d_lst = self.prepare_rope3d(
+                packed_position_ids,
+                rope_3d_position_ids["max_tokens_lst"],
+                rope_3d_position_ids["position_ids_offset"],
+            )
+            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
+                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
