@@ -76,6 +76,63 @@ _DATE_ONLY_RE = re.compile(r"^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$")
 _SHORT_DATE_RE = re.compile(r"^(\d{1,2})[/-](\d{1,2})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$")
 _TIME_ONLY_RE = re.compile(r"^(\d{1,2}):(\d{2})(?::(\d{2}))?$")
 
+# 相对时间正则：支持 30m、30分钟、2h、2小时、1d、1天、last 30m、最后30分钟
+_RELATIVE_TIME_RE = re.compile(r"^(?:last|最后)?\s*(\d+)\s*(m|分钟|mins?|h|小时|hours?|d|天|days?)$", re.IGNORECASE)
+
+
+def _parse_relative_time(time_str):
+    """解析相对时间字符串，返回 timedelta。
+
+    支持格式：30m、30分钟、2h、2小时、1d、1天、last 30m、最后30分钟
+    """
+    m = _RELATIVE_TIME_RE.match(time_str.strip())
+    if not m:
+        return None
+
+    value = int(m.group(1))
+    unit = m.group(2).lower()
+
+    if unit.startswith("m") and "in" not in unit:  # m, min, mins
+        from datetime import timedelta
+
+        return timedelta(minutes=value)
+    elif unit.startswith("h"):  # h, hour, hours
+        from datetime import timedelta
+
+        return timedelta(hours=value)
+    else:  # d, day, days
+        from datetime import timedelta
+
+        return timedelta(days=value)
+
+
+def _relative_to_absolute(time_str, log_file, is_end=False):
+    """将相对时间转换为绝对时间，基于日志文件的时间边界。
+
+    - start: 从日志末行时间往前推
+    - end: 直接使用日志末行时间（或当前时间）
+    """
+    relative_delta = _parse_relative_time(time_str)
+    if not relative_delta:
+        return None
+
+    # 获取日志文件末行时间作为基准
+    boundary_ts = _get_log_boundary_ts(log_file, "last")
+    if not boundary_ts:
+        return None
+
+    # 解析为 datetime
+    dt = datetime.strptime(boundary_ts, "%Y/%m/%d %H:%M:%S")
+
+    if is_end:
+        # end 时间：直接使用日志末行时间
+        return boundary_ts
+    else:
+        # start 时间：末行时间减去 duration
+
+        abs_time = dt - relative_delta
+        return abs_time.strftime("%Y/%m/%d %H:%M:%S")
+
 
 def _get_log_boundary_ts(log_file, which="first"):
     """从日志文件首行或末行提取时间戳。"""
@@ -93,17 +150,25 @@ def complete_time_arg(time_str, log_file, is_end=False):
     支持格式：
         'YYYY/MM/DD HH:MM:SS', 'YYYY-MM-DD HH:MM:SS', 'YYYY/MM/DD',
         'MM/DD', 'MM/DD HH:MM', 'HH:MM:SS', 'HH:MM'
+        相对时间：30m、2h、1d、最后30分钟 等（从日志末行时间算起）
 
     补全规则：
         - 缺年份：从日志首行取
         - 缺日期：从日志末行取
         - 缺时间：start→00:00:00, end→23:59:59
+        - 相对时间：start 从日志末行往前推，end 直接用日志末行时间
 
     Returns: 'YYYY/MM/DD HH:MM:SS' 格式字符串
     """
     if time_str is None:
         return None
     time_str = time_str.strip()
+
+    # Case 0: 相对时间处理（如 "30m"、"最后30分钟"、"2h"）
+    # 从日志文件末行时间开始算起
+    relative_result = _relative_to_absolute(time_str, log_file, is_end)
+    if relative_result:
+        return relative_result
 
     # Case 1: 完整日期时间
     m = _FULL_DT_RE.match(time_str)

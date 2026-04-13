@@ -17,10 +17,10 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
-from urllib.parse import quote
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
+from urllib.parse import quote
 
 # 同目录模块导入
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -153,6 +153,7 @@ def _summarize_id_type_ranges(rows_with_seq):
 
     ranges.append((start_id, end_id, current_type, start_ts, end_ts))
     return ranges
+
 
 # ════════════════════════════════════════════════════════════════
 # Phase 1: 日志读取
@@ -424,7 +425,9 @@ def _quartile_trend(trend, value_field):
     return f"Q1={quartiles[0]}% \u2192 Q2={quartiles[1]}% \u2192 Q3={quartiles[2]}% \u2192 Q4={quartiles[3]}% {arrow}"
 
 
-def format_full_report(filepath, line_count, prefix_hr, session_hr, per_worker, scheduling, diagnosis, time_span=None, window_rows=None):
+def format_full_report(
+    filepath, line_count, prefix_hr, session_hr, per_worker, scheduling, diagnosis, time_span=None, window_rows=None
+):
     """格式化完整终端报告。"""
     parts = []
 
@@ -667,13 +670,17 @@ def save_detailed_report(
         trend_str = _quartile_trend(prefix_hr["trend"], "selected_hitRatio_mean")
         if trend_str:
             parts.append(f"- 趋势: {trend_str}")
-        dist_data = [{"label": d["range"] + "%", "value": d["pct"], "count": d["count"]} for d in prefix_hr["distribution"]]
+        dist_data = [
+            {"label": d["range"] + "%", "value": d["pct"], "count": d["count"]} for d in prefix_hr["distribution"]
+        ]
         parts.append("")
         parts.append("```text")
         parts.append("Unicode 柱状图（Prefix HR 分布）")
         parts.append(render_bar(dist_data, show_count=True))
         if prefix_hr["trend"]:
-            sparkline_data = [{"bucket": t["bucket"], "value": t.get("selected_hitRatio_mean", 0)} for t in prefix_hr["trend"]]
+            sparkline_data = [
+                {"bucket": t["bucket"], "value": t.get("selected_hitRatio_mean", 0)} for t in prefix_hr["trend"]
+            ]
             parts.append("")
             parts.append("ASCII 折线图（Prefix HR 趋势）")
             parts.append(render_sparkline(sparkline_data, title="Prefix HR Trend", y_label="%", y_range=(0, 100)))
@@ -761,7 +768,9 @@ def save_detailed_report(
             f.write("\n".join(detail_parts))
 
         if session_rows:
-            parts.append(f"> Session 命中详情 ({len(session_rows)} sessions): [../detail/session_hit_details.md](../detail/session_hit_details.md)")
+            parts.append(
+                f"> Session 命中详情 ({len(session_rows)} sessions): [../detail/session_hit_details.md](../detail/session_hit_details.md)"
+            )
             parts.append("")
 
             all_rows_with_seq = []
@@ -790,7 +799,9 @@ def save_detailed_report(
                     if start_id == end_id:
                         session_parts.append(f"- `{start_id}`: `{id_type}` (`{range_start_ts} ~ {range_end_ts}`)")
                     else:
-                        session_parts.append(f"- `{start_id}~{end_id}`: `{id_type}` (`{range_start_ts} ~ {range_end_ts}`)")
+                        session_parts.append(
+                            f"- `{start_id}~{end_id}`: `{id_type}` (`{range_start_ts} ~ {range_end_ts}`)"
+                        )
             session_parts.append("")
             session_parts.append("## 概览")
             session_parts.append("- 字段说明：`avg-hit` = `avg_hit(excl_first)`（去除首请求后的平均命中率）")
@@ -1038,11 +1049,24 @@ def main():
     diagnosis = cross_diagnose(prefix_hr, session_hr)
 
     # Phase 4: 输出
+    # 无论 tail 还是全量模式，都生成详细报告
+    run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    if args.output:
+        output_base = args.output
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        golang_router_root = os.path.normpath(os.path.join(script_dir, "..", "..", "..", ".."))
+        output_base = os.path.join(golang_router_root, "skill_output", "stat-cache-hitrate")
+    output_dir = os.path.join(output_base, run_timestamp)
+
+    time_span = compute_time_span(strategy_recs, stats_recs)
+    window_rows = build_per_window_rows(strategy_recs, stats_recs)
+
     if tail is not None:
+        # tail 精简模式：打印摘要 + 生成详细报告
         print(format_tail_report(args.log_file, line_count, prefix_hr, session_hr, scheduling))
     else:
-        time_span = compute_time_span(strategy_recs, stats_recs)
-        window_rows = build_per_window_rows(strategy_recs, stats_recs)
+        # 全量模式：打印完整报告
         print(
             format_full_report(
                 args.log_file,
@@ -1057,41 +1081,31 @@ def main():
             )
         )
 
-        # 导出详细报告
-        run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        if args.output:
-            output_base = args.output
-        else:
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            golang_router_root = os.path.normpath(os.path.join(script_dir, "..", "..", "..", ".."))
-            output_base = os.path.join(golang_router_root, "skill_output", "stat-cache-hitrate")
-        output_dir = os.path.join(output_base, run_timestamp)
-        report_path = save_detailed_report(
-            args.log_file,
-            strategy_recs,
-            stats_recs,
-            prefix_hr,
-            session_hr,
-            per_worker,
-            scheduling,
-            diagnosis,
-            output_dir,
-            time_span=time_span,
-        )
-        print("\n\U0001f4c4 详细数据见:")
-        report_abs, report_uri = _build_path_links(report_path)
-        print(f"  - 报告文件: {report_abs}")
-        print(f"    URI: {report_uri}")
-        details_path = os.path.join(output_dir, "detail", "per_window_data.md")
-        if os.path.exists(details_path):
-            details_abs, details_uri = _build_path_links(details_path)
-            print(f"  - 窗口明细: {details_abs}")
-            print(f"    URI: {details_uri}")
-        session_detail_path = os.path.join(output_dir, "detail", "session_hit_details.md")
-        if os.path.exists(session_detail_path):
-            session_abs, session_uri = _build_path_links(session_detail_path)
-            print(f"  - Session 明细: {session_abs}")
-            print(f"    URI: {session_uri}")
+    # 导出详细报告（tail 和全量都生成）
+    report_path = save_detailed_report(
+        args.log_file,
+        strategy_recs,
+        stats_recs,
+        prefix_hr,
+        session_hr,
+        per_worker,
+        scheduling,
+        diagnosis,
+        output_dir,
+        time_span=time_span,
+    )
+    print("\n\U0001f4c4 详细数据见:")
+    report_abs, report_uri = _build_path_links(report_path)
+    print(f"  - 报告文件: [{report_abs}]({report_uri})")
+    details_path = os.path.join(output_dir, "detail", "per_window_data.md")
+    if os.path.exists(details_path):
+        details_abs, details_uri = _build_path_links(details_path)
+        print(f"  - 窗口明细: [{details_abs}]({details_uri})")
+    session_detail_path = os.path.join(output_dir, "detail", "session_hit_details.md")
+    if os.path.exists(session_detail_path):
+        session_abs, session_uri = _build_path_links(session_detail_path)
+        print(f"  - Session 明细: [{session_abs}]({session_uri})")
+
 
 if __name__ == "__main__":
     main()
