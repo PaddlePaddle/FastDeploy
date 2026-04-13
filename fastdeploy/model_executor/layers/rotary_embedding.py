@@ -453,7 +453,7 @@ class ErnieVlRotaryEmbedding3D:
 
         # Build position_ids_3d: [bsz, max_position, 3]
         position_ids_3d = paddle.tile(
-            paddle.arange(self.max_position, dtype="int64").unsqueeze(0).unsqueeze(-1),
+            paddle.arange(self.max_position, dtype="float32").unsqueeze(0).unsqueeze(-1),
             [bsz, 1, 3],
         )
         for i in range(bsz):
@@ -525,7 +525,7 @@ class QwenVlRotaryEmbedding3D:
         bsz = len(cumsum_seqlens) - 1
         # position_ids_3d: [bsz, seq_len, 3]
         position_ids_3d = paddle.tile(
-            paddle.arange(self.max_position, dtype="int64").unsqueeze(0).unsqueeze(-1),
+            paddle.arange(self.max_position, dtype="float32").unsqueeze(0).unsqueeze(-1),
             [bsz, 1, 3],
         )
         for i in range(bsz):
