@@ -331,7 +331,8 @@ __device__ __forceinline__ void produce_v_blockwise_c8(
   if constexpr (NUM_WARP_Q == 4) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     if (block_id < 0) block_id = 0;
-    CacheT* cache_v_now = cache_v + block_id * kv_n_stride + const_v_offset;
+    CacheT* cache_v_now =
+        cache_v + (int64_t)block_id * kv_n_stride + const_v_offset;
 #pragma unroll
     for (uint32_t i = 0; i < num_frags_y * 2 / num_warps;
          ++i) {  // m (num_frags_y * 16 / (num_warps * 8))
@@ -355,7 +356,8 @@ __device__ __forceinline__ void produce_v_blockwise_c8(
     for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
       int block_id = __ldg(&block_table_now[kv_idx / block_size]);
       if (block_id < 0) block_id = 0;
-      CacheT* cache_v_now = cache_v + block_id * kv_n_stride + const_v_offset;
+      CacheT* cache_v_now =
+          cache_v + (int64_t)block_id * kv_n_stride + const_v_offset;
 
 #pragma unroll
       for (uint32_t i = 0; i < num_frags_y * 2 / num_warps;
@@ -403,9 +405,9 @@ __device__ __forceinline__ void produce_kv_dynamic_scale_gmem2smem_async(
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     if (block_id < 0) block_id = 0;
     if (tid < block_size / 8) {
-      const T* cache_k_scale_now = cache_kv_scale +
-                                   block_id * kv_num_heads * block_size +
-                                   kv_head_idx * block_size + tid * 8;
+      const T* cache_k_scale_now =
+          cache_kv_scale + (int64_t)block_id * kv_num_heads * block_size +
+          kv_head_idx * block_size + tid * 8;
       const int kv_idx_this_thread = kv_idx + tid * 8;
       kv_scale_smem.load_128b_async<fill_mode>(
           tid, cache_k_scale_now, kv_idx_this_thread < chunk_end);
@@ -417,9 +419,9 @@ __device__ __forceinline__ void produce_kv_dynamic_scale_gmem2smem_async(
       int block_id = __ldg(&block_table_now[kv_idx_now / block_size]);
       if (block_id < 0) block_id = 0;
       const int kv_idx_this_thread = kv_idx + tid * 8;
-      const T* cache_k_scale_now = cache_kv_scale +
-                                   block_id * kv_num_heads * block_size +
-                                   kv_head_idx * block_size + tid % 8 * 8;
+      const T* cache_k_scale_now =
+          cache_kv_scale + (int64_t)block_id * kv_num_heads * block_size +
+          kv_head_idx * block_size + tid % 8 * 8;
       kv_scale_smem.load_128b_async<fill_mode>(
           tid, cache_k_scale_now, kv_idx_this_thread < chunk_end);
     }
@@ -511,7 +513,8 @@ __device__ __forceinline__ void produce_k_blockwise_c8(
   if constexpr (NUM_WARP_Q == 4) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     if (block_id < 0) block_id = 0;
-    CacheT* cache_k_now = cache_k + block_id * kv_n_stride + const_k_offset;
+    CacheT* cache_k_now =
+        cache_k + (int64_t)block_id * kv_n_stride + const_k_offset;
 #pragma unroll
     for (uint32_t i = 0; i < num_frags_z * 4 / num_warps;
          ++i) {  // m num_frags_z * 16 / (num_warps * 4)
@@ -539,7 +542,8 @@ __device__ __forceinline__ void produce_k_blockwise_c8(
     for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV / 2; ++kv_i) {
       int block_id = __ldg(&block_table_now[kv_idx / block_size]);
       if (block_id < 0) block_id = 0;
-      CacheT* cache_k_now = cache_k + block_id * kv_n_stride + const_k_offset;
+      CacheT* cache_k_now =
+          cache_k + (int64_t)block_id * kv_n_stride + const_k_offset;
 #pragma unroll
       for (uint32_t i = 0; i < 2 * num_frags_z * 4 / num_warps;
            ++i) {  // m num_frags_z * 16 / (num_warps * 4)
@@ -593,7 +597,8 @@ __device__ __forceinline__ void produce_v_blockwise_c4(
   for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV; ++kv_i) {
     int block_id = __ldg(&block_table_now[(kv_idx) / block_size]);
     if (block_id < 0) block_id = 0;
-    CacheT* cache_v_now = cache_v + block_id * kv_n_stride + const_v_offset;
+    CacheT* cache_v_now =
+        cache_v + (int64_t)block_id * kv_n_stride + const_v_offset;
 #pragma unroll
     for (uint32_t i = 0; i < num_frags_y / num_warps; ++i) {  // m
 #pragma unroll
@@ -647,7 +652,8 @@ __device__ __forceinline__ void produce_k_blockwise_c4(
   for (uint32_t kv_i = 0; kv_i < NUM_WARP_KV; ++kv_i) {
     int block_id = __ldg(&block_table_now[kv_idx / block_size]);
     if (block_id < 0) block_id = 0;
-    CacheT* cache_k_now = cache_k + block_id * kv_n_stride + const_k_offset;
+    CacheT* cache_k_now =
+        cache_k + (int64_t)block_id * kv_n_stride + const_k_offset;
 
 #pragma unroll
     for (uint32_t i = 0; i < num_frags_z * 2 / num_warps;
@@ -700,7 +706,8 @@ __device__ __forceinline__ void block_produce_kv(
           kv_idx_base + (i * 4 * num_warps + ty * 4 + tx / 8);
       const uint32_t kv_n_idx = row_now / block_size;
       const uint32_t kv_bid = row_now % block_size;
-      T* gptr = gptr_base + __ldg(&block_table[kv_n_idx]) * kv_n_stride +
+      T* gptr = gptr_base +
+                (int64_t)__ldg(&block_table[kv_n_idx]) * kv_n_stride +
                 kv_head_idx * kv_h_stride + kv_bid * kv_b_stride +
                 tx % 8 * num_elems_per_128b<T>();
 #pragma unroll
@@ -727,7 +734,8 @@ __device__ __forceinline__ void block_produce_kv(
         const uint32_t row_now = kv_idx_base + (i * 16 + j * 4 + row_id_per_tx);
         const uint32_t kv_n_idx = row_now / block_size;
         const uint32_t kv_bid = row_now % block_size;
-        T* gptr = gptr_base + __ldg(&block_table[kv_n_idx]) * kv_n_stride +
+        T* gptr = gptr_base +
+                  (int64_t)__ldg(&block_table[kv_n_idx]) * kv_n_stride +
                   kv_head_idx * kv_h_stride + kv_bid * kv_b_stride +
                   col_id_per_tx * num_elems_per_128b<T>();
 #pragma unroll

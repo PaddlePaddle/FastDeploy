@@ -131,8 +131,10 @@ __device__ __forceinline__ void produce_kv(CacheT* smem,
   }
   const uint32_t block_offset = seq_offset_gmem % BLOCK_SIZE;
   // 8/16 T/int8 each time
-  const uint32_t k_offset_base =
-      ((block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE + block_offset) *
+  // Use int64_t to prevent uint32_t overflow when block_id is large.
+  const int64_t k_offset_base =
+      (((int64_t)block_id * kv_num_heads + kv_head_idx) * BLOCK_SIZE +
+       block_offset) *
       HEAD_DIM_QK;
   const uint32_t smem_offset_base = seq_offset_smem * HEAD_DIM_QK;
   for (uint32_t vid = tidx; vid < NUM_VEC_PER_HEAD; vid += bdx) {

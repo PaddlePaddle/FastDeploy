@@ -210,8 +210,10 @@ __global__ void multi_query_append_attention_kernel(
   const uint32_t const_offset = kv_head_idx * kv_h_stride +
                                 (wid * 4 + tid / 8) * kv_b_stride +
                                 tid % 8 * num_elems_per_128b<T>();
-  const T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-  const T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+  const T *cache_k_now =
+      cache_k + (int64_t)block_id * kv_n_stride + const_offset;
+  const T *cache_v_now =
+      cache_v + (int64_t)block_id * kv_n_stride + const_offset;
 
   produce_kv_blockwise<SharedMemFillMode::kNoFill,
                        NUM_WARPS,
@@ -283,7 +285,7 @@ __global__ void multi_query_append_attention_kernel(
     if (block_id < 0) {
       block_id = 0;
     }
-    cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
+    cache_k_now = cache_k + (int64_t)block_id * kv_n_stride + const_offset;
     produce_kv_blockwise<SharedMemFillMode::kNoFill,
                          NUM_WARPS,
                          BLOCK_SIZE,
@@ -307,7 +309,7 @@ __global__ void multi_query_append_attention_kernel(
         &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag);
 
     __syncthreads();
-    cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+    cache_v_now = cache_v + (int64_t)block_id * kv_n_stride + const_offset;
     produce_kv_blockwise<SharedMemFillMode::kFillZero,
                          NUM_WARPS,
                          BLOCK_SIZE,
@@ -592,8 +594,8 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   const uint32_t const_offset = kv_head_idx * kv_h_stride +
                                 (wid * 4 + tid / 8) * kv_b_stride +
                                 tid % 8 * num_elems_per_128b<T>();
-  T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-  T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+  T *cache_k_now = cache_k + (int64_t)block_id * kv_n_stride + const_offset;
+  T *cache_v_now = cache_v + (int64_t)block_id * kv_n_stride + const_offset;
 
   produce_kv_blockwise<SharedMemFillMode::kNoFill,
                        NUM_WARPS,
@@ -669,7 +671,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     if (block_id < 0) {
       block_id = 0;
     }
-    cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
+    cache_k_now = cache_k + (int64_t)block_id * kv_n_stride + const_offset;
     produce_kv_blockwise<SharedMemFillMode::kNoFill,
                          NUM_WARPS,
                          BLOCK_SIZE,
@@ -693,7 +695,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag);
     __syncthreads();
 
-    cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
+    cache_v_now = cache_v + (int64_t)block_id * kv_n_stride + const_offset;
     produce_kv_blockwise<SharedMemFillMode::kFillZero,
                          NUM_WARPS,
                          BLOCK_SIZE,
