@@ -112,7 +112,12 @@ from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
-from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
+from fastdeploy.worker.output import (
+    LogprobsLists,
+    LogprobsTensors,
+    ModelOutputData,
+    SamplerOutput,
+)
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -225,12 +230,25 @@ def _build_stream_transfer_data(
         output_tokens = output_tokens.numpy().reshape([-1])
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
+        # Pre-convert logprobs tensors to numpy once, then build LogprobsLists
+        # per sample — avoids creating paddle.Tensor objects via slice_rows()
+        # which are expensive to pickle over ZMQ.
+        _lp_token_ids_np = _lp_scores_np = _lp_ranks_np = None
+        if logprobs:
+            _lp_token_ids_np = logprobs.logprob_token_ids.cpu().numpy()
+            _lp_scores_np = logprobs.logprobs.cpu().numpy()
+            _lp_ranks_np = logprobs.selected_token_ranks.cpu().numpy()
+
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
             stream_transfer_data = StreamTransferData(
                 decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
             )
             if logprobs:
-                stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
+                stream_transfer_data.logprobs = LogprobsLists(
+                    _lp_token_ids_np[bid : bid + 1].tolist(),
+                    _lp_scores_np[bid : bid + 1].tolist(),
+                    _lp_ranks_np[bid : bid + 1].tolist(),
+                )
             if prompt_logprobs_list:
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
@@ -311,6 +329,14 @@ def _build_speculative_stream_transfer_data(
     prompt_logprobs_len = len(prompt_logprobs_list) if has_prompt_logprobs else 0
     has_logprobs = logprobs is not None
 
+    # Pre-convert logprobs tensors to numpy once — avoids creating per-request
+    # paddle.Tensor objects via slice_rows().  Pickle-serialising paddle.Tensor
+    # carries heavy framework metadata; numpy → list is much cheaper.
+    if has_logprobs:
+        _lp_token_ids_np = logprobs.logprob_token_ids.cpu().numpy()  # [T, K+1]
+        _lp_scores_np = logprobs.logprobs.cpu().numpy()  # [T, K+1]
+        _lp_ranks_np = logprobs.selected_token_ranks.cpu().numpy()  # [T]
+
     stream_transfer_datas = [None] * batch_size
     for bid in range(batch_size):
         nt = num_tokens_arr[bid]
@@ -319,16 +345,22 @@ def _build_speculative_stream_transfer_data(
         stream_data = StreamTransferData(
             decoder_state=DecoderState.TEXT,
             batch_id=bid,
-            tokens=tokens_np,
+            tokens=None,
             speculative_decoding=True,
             accept_tokens=tokens_np,
             accept_num=accept_num_2d[bid : bid + 1].reshape(-1),
             output_type=output_type,
         )
 
-        # Slice logprobs for this request's accepted tokens
+        # Build LogprobsLists directly from numpy slices — avoids the
+        # paddle.Tensor overhead of LogprobsTensors.slice_rows().
         if has_logprobs and nt > 0:
-            stream_data.logprobs = logprobs.slice_rows(int(logprobs_starts[bid]), int(logprobs_ends[bid]))
+            s, e = int(logprobs_starts[bid]), int(logprobs_ends[bid])
+            stream_data.logprobs = LogprobsLists(
+                _lp_token_ids_np[s:e].tolist(),
+                _lp_scores_np[s:e].tolist(),
+                _lp_ranks_np[s:e].tolist(),
+            )
 
         if has_prompt_logprobs and bid < prompt_logprobs_len:
             stream_data.prompt_logprobs = prompt_logprobs_list[bid]
@@ -651,17 +683,17 @@ def save_output_specualate(
             async_output_queue.put(output)
 
             # draft tokens (mtype=4): when enable_draft_logprob and logprobs available
-            # Reuse the numpy arrays already computed in the target build to avoid
-            # a second numpy conversion + batch loop. Only output_type differs.
+            # Only carry logprobs and a scalar accept_num — avoid serializing
+            # accept_tokens (numpy array) which draft path never uses.
             if sampler_output.logprobs_tensors is not None and enable_draft_logprob:
                 draft_output = []
                 for sd in output:
                     draft_sd = StreamTransferData(
                         decoder_state=sd.decoder_state,
                         batch_id=sd.batch_id,
-                        tokens=sd.tokens,
+                        tokens=None,
                         speculative_decoding=True,
-                        accept_tokens=sd.accept_tokens,
+                        accept_tokens=None,
                         accept_num=sd.accept_num,
                         output_type=4,
                     )

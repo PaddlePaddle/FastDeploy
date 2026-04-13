@@ -304,7 +304,7 @@ def test_process_batch_output_use_zmq_finishes_on_eos():
     tokens = np.array([5, 6], dtype=np.int64)
     stream = types.SimpleNamespace(batch_id=0, tokens=tokens, pooler_output=None)
     with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
-        results = processor._process_batch_output_use_zmq([stream])
+        results, _ = processor._process_batch_output_use_zmq([stream])
 
     assert results[0].finished is True
     assert task.output_token_ids == [5, 6]
@@ -353,7 +353,7 @@ def test_process_batch_output_use_zmq_parses_logprobs():
         prompt_logprobs={"0": -0.1},
     )
     with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
-        results = processor._process_batch_output_use_zmq([stream])
+        results, _ = processor._process_batch_output_use_zmq([stream])
 
     assert results[0].outputs.logprob == 0.1
     assert results[0].outputs.top_logprobs is logprob_list
@@ -1051,7 +1051,7 @@ def test_process_batch_output_use_zmq_reschedules_negative_token():
 
     stream = types.SimpleNamespace(batch_id=0, tokens=np.array([-9], dtype=np.int64), pooler_output=None)
     with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", True):
-        results = processor._process_batch_output_use_zmq([stream])
+        results, _ = processor._process_batch_output_use_zmq([stream])
 
     assert results == []
     assert rm.recycled[-1] == f"reschedule-{task.request_id}"
