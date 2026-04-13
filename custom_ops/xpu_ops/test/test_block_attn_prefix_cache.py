@@ -56,7 +56,7 @@ block_tables = block_tables.reshape((block_batch, max_block_per_seq))
     slot_mapping_enc,
     slot_mapping_dec,
 ) = get_infer_param(
-    seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64
+    seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64, 0
 )  # block_size
 
 qkv = paddle.uniform(
@@ -66,7 +66,6 @@ qkv = paddle.uniform(
     max=1.0,
 )
 
-cum_offsets = paddle.zeros(shape=[block_batch], dtype="bfloat16")
 rotary_embs = paddle.uniform(shape=[2, 1, 8192, 1, head_dim], dtype="float32", min=-1.0, max=1.0)
 key_cache = paddle.zeros(
     shape=[block_batch * max_block_per_seq, kv_head_num, block_size, head_dim],
@@ -100,7 +99,6 @@ attn_out = block_attn_fused(
     qkv,
     key_cache,
     value_cache,
-    cum_offsets,
     rotary_embs,
     block_tables,
     prefix_block_tables,
@@ -142,7 +140,6 @@ attn_out_C8 = block_attn_fused(
     qkv,
     key_cache_int8,
     value_cache_int8,
-    cum_offsets,
     rotary_embs,
     block_tables,
     prefix_block_tables,
@@ -184,7 +181,6 @@ attn_out_C8_zp = block_attn_fused(
     qkv,
     key_cache_int8,
     value_cache_int8,
-    cum_offsets,
     rotary_embs,
     block_tables,
     prefix_block_tables,
@@ -254,7 +250,7 @@ seq_lens_decoder = paddle.to_tensor([hit_prefix_len, 0, 0, 0, 0], dtype="int32")
     slot_mapping_enc,
     slot_mapping_dec,
 ) = get_infer_param(
-    seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64
+    seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64, 0
 )  # block_size
 qkv_prefix = qkv[hit_prefix_len:]
 
@@ -262,7 +258,6 @@ attn_out_prefix_cache = block_attn_fused(
     qkv_prefix,
     key_cache,
     value_cache,
-    cum_offsets,
     rotary_embs,
     block_tables,
     prefix_block_tables,
@@ -305,7 +300,6 @@ attn_out_C8_prefix_cache = block_attn_fused(
     qkv_prefix,
     key_cache_int8,
     value_cache_int8,
-    cum_offsets,
     rotary_embs,
     block_tables,
     prefix_block_tables,
@@ -348,7 +342,6 @@ attn_out_C8_zp_prefix_cache = block_attn_fused(
     qkv_prefix,
     key_cache_int8,
     value_cache_int8,
-    cum_offsets,
     rotary_embs,
     block_tables,
     prefix_block_tables,

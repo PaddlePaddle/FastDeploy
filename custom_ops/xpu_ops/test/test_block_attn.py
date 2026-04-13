@@ -48,7 +48,6 @@ def run_prefix_cache_block_attn(
     hit_prefix_len,
     key_cache,
     value_cache,
-    cum_offsets,
     rotary_embs,
     block_tables,
     attn_out,
@@ -66,6 +65,7 @@ def run_prefix_cache_block_attn(
     cachekv_signal_thread_cpu,
     use_neox_rotary_style,
     rope_3d,
+    num_speculative_tokens,
 ):
     if key_cache.dtype == paddle.int8:
         rtol = 1e-1
@@ -102,14 +102,13 @@ def run_prefix_cache_block_attn(
         slot_mapping_enc,
         slot_mapping_dec,
     ) = get_infer_param(
-        seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64
+        seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64, num_speculative_tokens
     )  # block_size
     qkv_prefix = qkv[hit_prefix_len:]
     attn_out_prefix_cache = block_attn_func(
         qkv_prefix,
         key_cache,
         value_cache,
-        cum_offsets,
         rotary_embs,
         block_tables,
         prefix_block_tables,
@@ -179,6 +178,7 @@ def run_block_attn(
     has_zp,
     use_neox_rotary_style,
     rotary_embs_shape,
+    num_speculative_tokens,
 ):
     assert mode == 0 or mode == 1, "mixed mode not supported yet!"
     if mode == 0:
@@ -219,12 +219,13 @@ def run_block_attn(
         len_info_cpu,
         slot_mapping_enc,
         slot_mapping_dec,
-    ) = get_infer_param(seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64)
+    ) = get_infer_param(
+        seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64, num_speculative_tokens
+    )
     qkv = paddle.uniform(
         shape=[seq_len, (head_num + 2 * kv_head_num) * head_dim], dtype="bfloat16", min=-1.0, max=1.0, seed=seed
     )
 
-    cum_offsets = paddle.zeros(shape=[block_batch], dtype="bfloat16")
     rotary_embs = paddle.uniform(shape=rotary_embs_shape, dtype="float32", min=-1.0, max=1.0, seed=seed)
     key_cache = paddle.zeros(
         shape=[block_batch * max_block_per_seq, kv_head_num, block_size, head_dim],
@@ -277,7 +278,6 @@ def run_block_attn(
         qkv,
         key_cache,
         value_cache,
-        cum_offsets,
         rotary_embs,
         block_tables,
         prefix_block_tables,
@@ -332,7 +332,6 @@ def run_block_attn(
             hit_prefix_len,
             key_cache,
             value_cache,
-            cum_offsets,
             rotary_embs,
             block_tables,
             attn_out,
@@ -350,6 +349,7 @@ def run_block_attn(
             cachekv_signal_thread_cpu,
             use_neox_rotary_style,
             rope_3d,
+            num_speculative_tokens,
         )
         result["prefix_cache_block_attn_out"] = attn_out_prefix_cache
     return result
@@ -370,6 +370,7 @@ def run_compare_block_attn(
     has_zp=False,
     use_neox_rotary_style=False,
     only_run_spliced=False,
+    num_speculative_tokens=0,
 ):
     rtol = 1e-3
     atol = 1e-2
@@ -414,6 +415,7 @@ def run_compare_block_attn(
                     has_zp,
                     use_neox_rotary_style,
                     rotary_embs_shape,
+                    num_speculative_tokens,
                 )
             spliced_result = run_block_attn(
                 seed,
@@ -431,6 +433,7 @@ def run_compare_block_attn(
                 has_zp,
                 use_neox_rotary_style,
                 rotary_embs_shape,
+                num_speculative_tokens,
             )
             if "fused_result" in locals() and "spliced_result" in locals():
                 for k in fused_result.keys():
