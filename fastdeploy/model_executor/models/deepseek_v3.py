@@ -661,17 +661,12 @@ class Indexer(nn.Layer):
         weights = weights.unsqueeze(-1) * q_scale * self.softmax_scale * self.index_n_heads**-0.5
         weights = weights.squeeze(-1)
 
-        slot_mapping = compute_slot_mapping(
-            forward_meta.block_tables,
-            forward_meta.position_ids,
-            forward_meta.batch_id_per_token,
-            64,
-        )
-
         indexer_top_k = paddle.full([q_fp8.shape[0], self.index_topk], -1, dtype="int32")
 
         # indexer write_cache
-        indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
+        indexer_k_quant_and_cache(
+            k, self.indexer_cache, forward_meta.slot_mapping, self.quant_block_size, self.scale_fmt
+        )
 
         import deep_gemm
 
@@ -1152,6 +1147,9 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         self.mask_encoder_batch_buffer = paddle.empty(
             [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
         )
+        self.slot_mapping_buffer = paddle.empty(
+            [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int64
+        )
 
     @classmethod
     def name(cls):
@@ -1248,7 +1246,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         logits[:, self.ori_vocab_size :] = -float("inf")
         return logits
 
-    def pre_process(self, forward_meta):
+    def pre_process(self, forward_meta) -> None:
         """ """
         seq_lens_encoder = forward_meta.seq_lens_encoder
         seq_lens_decoder = forward_meta.seq_lens_decoder
@@ -1265,7 +1263,19 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             position_ids,
             mask_encoder_batch,
         )
-        return position_ids, mask_encoder_batch
+
+        block_size = self.fd_config.cache_config.block_size
+        block_idx = position_ids // block_size  # [num_tokens]
+        block_ids = forward_meta.block_tables[forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
+        block_offset = position_ids % block_size  # [num_tokens]
+        slot_mapping = (block_ids * block_size + block_offset).cast(paddle.int64)
+
+        forward_meta.position_ids = position_ids
+        paddle.assign(
+            slot_mapping,
+            self.slot_mapping_buffer[:current_total_tokens],
+        )
+        forward_meta.slot_mapping = self.slot_mapping_buffer[:current_total_tokens]
 
     def empty_input_forward(self, forward_meta):
         """
@@ -1287,7 +1297,7 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
-        forward_meta.position_ids, forward_meta.mask_encoder_batch = self.pre_process(forward_meta)
+        self.pre_process(forward_meta)
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
