@@ -529,14 +529,14 @@ int verify_draft_tokens(
   WRAPPER_CHECK_PTR(ctx, float, real_bsz, topp);
   WRAPPER_CHECK_PTR(ctx, bool, real_bsz, stop_flags);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_encoder);
-  WRAPPER_CHECK_PTR(ctx, float, real_bsz, seq_lens_this_time);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_this_time);
   WRAPPER_CHECK_PTR(ctx, int64_t, end_length, end_tokens);
 
   WRAPPER_CHECK_PTR(ctx, bool, real_bsz, is_block_step);
-  WRAPPER_CHECK_PTR(ctx, bool, real_bsz, cu_seqlens_q_output);
-  WRAPPER_CHECK_PTR(ctx, bool, real_bsz, reasoning_status);
-  WRAPPER_CHECK_PTR(ctx, bool, real_bsz, max_dec_len);
-  WRAPPER_CHECK_PTR(ctx, bool, real_bsz, step_idx);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, cu_seqlens_q_output);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, reasoning_status);
+  WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz, max_dec_len);
+  WRAPPER_CHECK_PTR(ctx, int64_t, real_bsz, step_idx);
   // param check sm size limit
   WRAPPER_ASSERT_GT(ctx, real_bsz, 0);
   WRAPPER_ASSERT_LE(ctx, real_bsz, 1024);
