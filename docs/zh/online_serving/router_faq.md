@@ -5,7 +5,6 @@
 本文档基于 [Golang Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router) 的代码实现，汇总了 Router 在使用过程中常见的日志信息、返回输出及问题排查方法，帮助用户快速定位和解决问题。
 
 Router 的基本使用方式请参考 [负载均衡调度 Router](router.md)。
-如需按“日志定位 + troubleshoot skill”流程化排查，请参考 [Router 问题排查实战手册](router_troubleshoot_playbook.md)。
 
 ## 常见日志分析
 
