@@ -44,6 +44,7 @@
 ### 简洁版（终端输出）
 
 - 第一行：`STATUS: HEALTHY / DEGRADED / CRITICAL — 简要说明`
+- 状态定义：`HEALTHY`=无明显异常；`DEGRADED`=服务可用但性能/稳定性下降（需关注）；`CRITICAL`=服务不可用或高风险故障
 - 按三层分类（Router / FD 后端 / 客户端）
 - 每个问题一行摘要 + 关键指标
 - 末尾提示详细版文件路径
@@ -53,8 +54,15 @@
 - 路径：`skill_output/troubleshoot/<YYYYMMDD_HHMMSS>/troubleshoot_report_<timestamp>.md`
 - 主报告包含各维度总结 + 可视化图表（sparkline/柱状图/时间线等）
 - 详情拆分到 `details/` 子目录：
-  - `details/health_events.md` — Worker 逐分钟健康事件
-  - `details/trace_<ID>.md` — 请求追踪事件链
+  - `detail/health_events.md` — Worker 逐分钟健康事件 + 健康诊断
+  - `detail/errors_topn.md` — ERROR/WARN 模板明细（数量/级别/来源层/影响 + URLs）
+  - `detail/load_select_release.md` — 负载诊断 + select/release 明细
+  - `detail/load_diagnoses.md` — load 诊断列表
+  - `detail/load_counter_state.md` — request/token counter 末状态
+  - `detail/latency_diagnoses.md` — 延迟诊断详情
+  - `detail/cache_diagnosis.md` — cache 六维诊断详情（session 粘性/非最优/驱逐/Fallback/冷启动/交叉诊断）
+  - `detail/cache_session_stickiness.md` / `detail/cache_suboptimal.md` / `detail/cache_eviction.md` / `detail/cache_fallback.md` / `detail/cache_cross.md` — cache 分职责拆分明细
+  - `detail/trace_<ID>.md` — 请求追踪事件链
 
 ---
 

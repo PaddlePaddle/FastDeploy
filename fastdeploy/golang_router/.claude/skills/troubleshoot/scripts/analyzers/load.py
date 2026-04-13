@@ -30,6 +30,8 @@ TOKEN_PRESERVED_RE = re.compile(rf"token counter preserved.*?{URL_RE}")
 # Token 事件
 SELECT_TOKENS_RE = re.compile(rf"select worker \((\w+)\):\s*{URL_RE},\s*tokens:\s*(\d+)")
 RELEASE_TOKENS_RE = re.compile(rf"release (?:([a-zA-Z_]+)\s+)?tokens:\s*{URL_RE},\s*tokens:\s*(\d+)")
+SELECT_REQ_COUNT_RE = re.compile(rf"select worker \((\w+)\):\s*{URL_RE},\s*count:\s*(\d+)")
+RELEASE_REQ_COUNT_RE = re.compile(rf"release worker:\s*{URL_RE},\s*count:\s*(\d+)")
 
 
 def _strip_scheme(url):
@@ -135,11 +137,22 @@ def analyze_load(log_file, tail=None):
     sr_result = (
         match_select_release(h3_lines + h11_lines)
         if h3_lines
-        else {"matched": [], "unmatched_selects": [], "untracked_selects": [], "failed_selects": [], "per_worker": {}}
+        else {
+            "matched": [],
+            "unmatched_selects": [],
+            "unmatched_releases": [],
+            "untracked_selects": [],
+            "failed_selects": [],
+            "per_worker": {},
+            "id_coverage": {},
+            "type_summary": {},
+            "worker_type_profile": {},
+        }
     )
 
     # Token 统计
     token_stats = _analyze_tokens(h3_lines, h11_lines)
+    counter_last_state = _analyze_counter_last_state(h3_lines + h11_lines)
 
     # 请求堆积检测
     pileup = _detect_pileup(stats_records)
@@ -154,6 +167,7 @@ def analyze_load(log_file, tail=None):
         "counter_anomalies": anomaly_summary,
         "select_release": sr_result,
         "token_stats": token_stats,
+        "counter_last_state": counter_last_state,
         "pileup_detected": pileup,
         "diagnoses": diagnoses,
         "summary": f"{len(stats_records)} stats 采样, {len(worker_running)} Worker(s)",
@@ -188,6 +202,55 @@ def _analyze_tokens(h3_lines, h11_lines):
                 "release_count": len(releases),
             }
         )
+    return result
+
+
+def _analyze_counter_last_state(lines):
+    """统计每个 worker 的 request/token counter 最后一条计数日志值与动作类型。"""
+    state = defaultdict(
+        lambda: {
+            "req_last_action": "-",
+            "req_last_value": "-",
+            "token_last_action": "-",
+            "token_last_value": "-",
+            "last_ts": "",
+        }
+    )
+    for line in lines:
+        ts = extract_ts(line) or ""
+        m = SELECT_REQ_COUNT_RE.search(line)
+        if m:
+            w = m.group(2)
+            state[w]["req_last_action"] = "select"
+            state[w]["req_last_value"] = m.group(3)
+            state[w]["last_ts"] = ts
+            continue
+        m = RELEASE_REQ_COUNT_RE.search(line)
+        if m:
+            w = m.group(1)
+            state[w]["req_last_action"] = "release"
+            state[w]["req_last_value"] = m.group(2)
+            state[w]["last_ts"] = ts
+            continue
+        m = SELECT_TOKENS_RE.search(line)
+        if m:
+            w = m.group(2)
+            state[w]["token_last_action"] = "select"
+            state[w]["token_last_value"] = m.group(3)
+            state[w]["last_ts"] = ts
+            continue
+        m = RELEASE_TOKENS_RE.search(line)
+        if m:
+            w = m.group(2)
+            state[w]["token_last_action"] = "release"
+            state[w]["token_last_value"] = m.group(3)
+            state[w]["last_ts"] = ts
+            continue
+
+    result = []
+    for w in sorted(state.keys()):
+        s = state[w]
+        result.append({"worker": _strip_scheme(w), **s})
     return result
 
 
@@ -269,6 +332,16 @@ def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, token_stats, 
             {
                 "severity": "HIGH",
                 "message": f'{len(sr_result["unmatched_selects"])} 个 select 无对应 release（疑似卡住）',
+                "source_layer": "FD 后端",
+            }
+        )
+
+    id_mismatch_count = sr_result.get("id_consistency", {}).get("both_present_but_mismatch", 0)
+    if id_mismatch_count > 0:
+        diagnoses.append(
+            {
+                "severity": "MEDIUM",
+                "message": f"{id_mismatch_count} 个 select/release 在 FIFO 命中后 ID 不一致（疑似串流或日志错配）",
                 "source_layer": "FD 后端",
             }
         )

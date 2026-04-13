@@ -227,9 +227,10 @@ def render_table(data, columns=None, right_align=None):
         w = col_widths[col]
         if col in right_align:
             header_parts.append(f" {col:>{w}} ")
+            sep_parts.append("-" * (w + 1) + ":")
         else:
             header_parts.append(f" {col:<{w}} ")
-        sep_parts.append("-" * (w + 2))
+            sep_parts.append(":" + "-" * (w + 1))
 
     lines = []
     lines.append("|" + "|".join(header_parts) + "|")

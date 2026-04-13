@@ -61,6 +61,7 @@
 | `Failed to select worker pair: {err}` | HIGH | FD 后端 | 请求返回 502 |
 | `Failed to build disaggregate_info: {err}` | HIGH | Router | 请求返回 500 |
 | `Failed to encode modified request: {err}` | HIGH | Router | 请求返回 500 |
+| `Failed to read YAML file config/register.yaml: {err}` | LOW | Router | 启动时未找到可选配置文件（若未使用 register.yaml 可忽略） |
 | `Failed to select worker: {err}` | HIGH | FD 后端 | 请求返回 502 |
 | `Failed to connect to backend service: {err}` | HIGH | FD 后端 | 请求返回 502 |
 | `Request failed (attempt {n}/{max}): {err}` | MEDIUM | FD 后端 | 重试中 |
