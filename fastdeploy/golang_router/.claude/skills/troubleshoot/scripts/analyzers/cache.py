@@ -456,7 +456,7 @@ def format_cache_report(result):
         sections.append("")
         table_data = [
             {
-                "Session": sid[:16],
+                "Session": sid,
                 "请求数": str(s["total_requests"]),
                 "粘性率": f'{s["stickiness_pct"]}%',
                 "切换次数": str(s["switches"]),
@@ -530,28 +530,35 @@ def format_cache_report(result):
         detail_sections.append(
             render_table(
                 result["cross_diagnosis"],
-                columns=["avg_stickiness_pct", "mean_hitRatio_pct", "fallback_pct", "evicted_after_timeout", "diagnosis", "action"],
+                columns=[
+                    "avg_stickiness_pct",
+                    "mean_hitRatio_pct",
+                    "fallback_pct",
+                    "evicted_after_timeout",
+                    "diagnosis",
+                    "action",
+                ],
                 right_align={"avg_stickiness_pct", "mean_hitRatio_pct", "fallback_pct", "evicted_after_timeout"},
             )
         )
         detail_sections.append("")
 
-    if any(
-        [
-            result.get("session_stickiness"),
-            result.get("suboptimal_selections"),
-            result.get("eviction_impact"),
-            result.get("cross_diagnosis"),
-            result.get("diagnoses"),
-        ]
-    ):
+    # 只显示实际生成了文件的链接
+    detail_links = []
+    if result.get("session_stickiness"):
+        detail_links.append("[detail/cache_session_stickiness.md](../detail/cache_session_stickiness.md)")
+    if result.get("suboptimal_selections"):
+        detail_links.append("[detail/cache_suboptimal.md](../detail/cache_suboptimal.md)")
+    if result.get("eviction_impact"):
+        detail_links.append("[detail/cache_eviction.md](../detail/cache_eviction.md)")
+    if result.get("fallback_reasons"):
+        detail_links.append("[detail/cache_fallback.md](../detail/cache_fallback.md)")
+    if result.get("cross_diagnosis"):
+        detail_links.append("[detail/cache_cross.md](../detail/cache_cross.md)")
+
+    if detail_links:
         sections.append(
-            "> 详细诊断: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md) | "
-            "[detail/cache_session_stickiness.md](../detail/cache_session_stickiness.md) | "
-            "[detail/cache_suboptimal.md](../detail/cache_suboptimal.md) | "
-            "[detail/cache_eviction.md](../detail/cache_eviction.md) | "
-            "[detail/cache_fallback.md](../detail/cache_fallback.md) | "
-            "[detail/cache_cross.md](../detail/cache_cross.md)"
+            "> 详细诊断: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md) | " + " | ".join(detail_links)
         )
         sections.append("")
 

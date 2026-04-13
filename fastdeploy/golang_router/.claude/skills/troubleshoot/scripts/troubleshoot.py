@@ -33,9 +33,14 @@ from analyzers.cache import analyze_cache, format_cache_report
 from analyzers.errors import analyze_errors, format_errors_report
 from analyzers.health import analyze_health, format_health_report
 from analyzers.latency import analyze_latency, format_latency_report
-from analyzers.load import analyze_load, format_load_report
+from analyzers.load import analyze_load
+from analyzers.load_report import format_load_report
 from analyzers.trace import analyze_trace, format_trace_report
-from log_parser import complete_time_arg, filter_file_by_recent_minutes, filter_file_by_time_range
+from log_parser import (
+    complete_time_arg,
+    filter_file_by_recent_minutes,
+    filter_file_by_time_range,
+)
 
 
 def determine_log_file(user_path=None):
@@ -236,7 +241,7 @@ def format_full_report(results, status, status_reason):
                     continue
                 lines.append(f'- 模板: {e.get("template","")}')
                 for u in urls:
-                    lines.append(f'  - {u}')
+                    lines.append(f"  - {u}")
             lines.append("")
             details["errors_topn"] = "\n".join(lines)
 
@@ -268,7 +273,12 @@ def format_full_report(results, status, status_reason):
             details["load_diagnoses"] = "\n".join(lines)
         if results["load"].get("counter_last_state"):
             rows = results["load"]["counter_last_state"]
-            lines = ["# Load Counter 末状态", "", "| worker | req_last_action | req_last_value | token_last_action | token_last_value | last_ts |", "|:--|:--|--:|:--|--:|:--|"]
+            lines = [
+                "# Load Counter 末状态",
+                "",
+                "| worker | req_last_action | req_last_value | token_last_action | token_last_value | last_ts |",
+                "|:--|:--|--:|:--|--:|:--|",
+            ]
             for r in rows:
                 lines.append(
                     f'| {r.get("worker","")} | {r.get("req_last_action","-")} | {r.get("req_last_value","-")} | {r.get("token_last_action","-")} | {r.get("token_last_value","-")} | {r.get("last_ts","")} |'
@@ -285,19 +295,25 @@ def format_full_report(results, status, status_reason):
         if c.get("session_stickiness"):
             lines = ["# Cache Session 粘性详情", ""]
             for sid, s in c["session_stickiness"].items():
-                lines.append(f'- {sid}: req={s.get("total_requests",0)}, stickiness={s.get("stickiness_pct",0)}%, switches={s.get("switches",0)}')
+                lines.append(
+                    f'- {sid}: req={s.get("total_requests",0)}, stickiness={s.get("stickiness_pct",0)}%, switches={s.get("switches",0)}'
+                )
             lines.append("")
             details["cache_session_stickiness"] = "\n".join(lines)
         if c.get("suboptimal_selections"):
             lines = ["# Cache 非最优选择详情", ""]
             for x in c["suboptimal_selections"][:200]:
-                lines.append(f'- [{x.get("ts","")}] selected={x.get("selected","")} best={x.get("best_hr_worker","")} reason={x.get("reason","")}')
+                lines.append(
+                    f'- [{x.get("ts","")}] selected={x.get("selected","")} best={x.get("best_hr_worker","")} reason={x.get("reason","")}'
+                )
             lines.append("")
             details["cache_suboptimal"] = "\n".join(lines)
         if c.get("eviction_impact"):
             lines = ["# Cache 驱逐影响详情", ""]
             for x in c["eviction_impact"][:200]:
-                lines.append(f'- session={x.get("session_id","")} interval={x.get("interval_mins",0)}m hitRatio_after={x.get("hitRatio_after",0)} evicted={x.get("evicted",False)}')
+                lines.append(
+                    f'- session={x.get("session_id","")} interval={x.get("interval_mins",0)}m hitRatio_after={x.get("hitRatio_after",0)} evicted={x.get("evicted",False)}'
+                )
             lines.append("")
             details["cache_eviction"] = "\n".join(lines)
         if c.get("fallback_reasons"):
@@ -309,7 +325,9 @@ def format_full_report(results, status, status_reason):
         if c.get("cross_diagnosis"):
             lines = ["# Cache 交叉诊断详情", ""]
             for x in c["cross_diagnosis"]:
-                lines.append(f'- diagnosis={x.get("diagnosis","")}, action={x.get("action","")}, avg_stickiness={x.get("avg_stickiness_pct",0)}%')
+                lines.append(
+                    f'- diagnosis={x.get("diagnosis","")}, action={x.get("action","")}, avg_stickiness={x.get("avg_stickiness_pct",0)}%'
+                )
             lines.append("")
             details["cache_cross"] = "\n".join(lines)
 
