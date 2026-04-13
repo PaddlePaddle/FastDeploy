@@ -146,10 +146,10 @@ void append_decode_cache_rope(const QKV_TYPE* qkv,
           rope_3d);
     } else {
       if (rotary_dim < dim_head) {
-        auto* kernelFn =
-            append_decode_cache_T_neox_partial_rope_kernel<T,
-                                                           PackSize,
-                                                           EnforceFmulRN>;
+        auto* kernelFn = append_decode_cache_T_neox_partial_rope_kernel<
+            T,
+            PackSize,
+            false>;  // GLM use EnforceFmulRN=false
         launchWithPdlWhenEnabled(kernelFn,
                                  grid_size,
                                  blocksize,

@@ -112,6 +112,7 @@ jobs:
             git config --global user.name "FastDeployCI"
             git config --global user.email "fastdeploy_ci@example.com"
             git log -n 3 --oneline
+
       - name: FastDeploy Build
         shell: bash
         env:
@@ -143,7 +144,8 @@ jobs:
             PARENT_DIR=$(dirname "$WORKSPACE")
             echo "PARENT_DIR:$PARENT_DIR"
             docker run --rm --net=host \
-            --cap-add=SYS_PTRACE --privileged --shm-size=64G \
+            --cap-add=SYS_PTRACE --shm-size=64G \
+            --name ${runner_name} \
             -v $(pwd):/workspace -w /workspace \
             -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
             -v "${CACHE_DIR}/.cache:/root/.cache" \
@@ -158,6 +160,7 @@ jobs:
             -e "PADDLE_WHL_URL=${PADDLE_WHL_URL}" \
             -e "BRANCH_REF=${BRANCH_REF}" \
             -e "CCACHE_MAXSIZE=50G" \
+            -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
             --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
             if [[ -n "${FD_VERSION}" ]]; then
               export FASTDEPLOY_VERSION=${FD_VERSION}
@@ -237,3 +240,10 @@ jobs:
             target_path_stripped="${target_path#paddle-github-action/}"
             WHEEL_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
             echo "wheel_path_cu129=${WHEEL_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}

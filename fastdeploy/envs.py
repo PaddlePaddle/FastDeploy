@@ -190,17 +190,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
-    # Whether to use phi FP8 quantization,if 1,use paddle default.
-    "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
-    # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,
-    # intended for training alignment. Defaults to 0 (disabled).
-    "FD_USE_PHI_MOE_TOPK": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_TOPK", "0"))),
-    # Whether to use phi MOE permute,if 1,use paddle op.
-    "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
-    # Whether to use phi rms_norm,if 1,use paddle op.
-    "FD_USE_PHI_RMSNORM": lambda: bool(int(os.getenv("FD_USE_PHI_RMSNORM", "0"))),
-    # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
-    "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
     "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")
@@ -217,12 +206,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FILE_BACKEND_STORAGE_DIR": lambda: str(os.getenv("FILE_BACKEND_STORAGE_DIR", "/tmp/fastdeploy")),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
-    # Whether to enable KV cache lock, enforcing mutual exclusion between
-    # PrefixCacheManager and Worker when accessing GPU KV cache.
-    # Under certain DP+EP configurations, concurrent access (even read-only)
-    # has been observed to cause NaN computation errors.
-    # Set to 1 to enable the lock; defaults to 0 (disabled).
-    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
     # Whether to probe MoE routing probabilities and use Fleet's fused SwiGLU kernel.
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Suspend rollouting routing replay
@@ -236,6 +219,22 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # train-infer consistency, used in RL
+    # Whether to use phi FP8 quantization,if 1,use paddle default.
+    "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
+    # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,
+    # intended for training alignment. Defaults to 0 (disabled).
+    "FD_USE_PHI_MOE_TOPK": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_TOPK", "0"))),
+    # Whether to use phi MOE permute,if 1,use paddle op.
+    "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
+    # Whether to use phi rms_norm,if 1,use paddle op.
+    "FD_USE_PHI_RMSNORM": lambda: bool(int(os.getenv("FD_USE_PHI_RMSNORM", "0"))),
+    # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
+    "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
+    # Whether to enable FP8 quantization with pow2scale.
+    "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
+    # Whether to align RoPE and moe gate precision with training
+    "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),
 }
 
 

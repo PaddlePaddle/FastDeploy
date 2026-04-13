@@ -128,7 +128,7 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
         else:
             ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 ffn_out,
-                using_pow2_scale=not disable_ue8m0_cast,
+                using_pow2_scale=not disable_ue8m0_cast or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                 using_ue8m0_scale=not disable_ue8m0_cast,
             )
             ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
@@ -281,7 +281,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         else:
             x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 x,
-                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
+                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0 or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                 output_scale_transpose=self.quant_config.deepgemm_scale_ue8m0,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )
@@ -403,7 +403,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 else:
                     ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                         ffn_out,
-                        using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
+                        using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0
+                        or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                         using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
                     )
                     ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
@@ -570,7 +571,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         else:
             recv_x, recv_x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 x,
-                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
+                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0 or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                 output_scale_transpose=self.quant_config.deepgemm_scale_ue8m0,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )

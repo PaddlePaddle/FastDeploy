@@ -1,31 +1,524 @@
 [简体中文](../zh/usage/kunlunxin_xpu_deployment.md)
 
 ## Supported Models
-|Model Name|Context Length|Quantization|XPUs Required|Deployment Commands|Applicable Version|
-|-|-|-|-|-|-|
-|ERNIE-4.5-300B-A47B|32K|WINT8|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 8 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 64 \ <br>    --quantization "wint8" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-300B-A47B|32K|WINT4|4 (Recommended)|export XPU_VISIBLE_DEVICES="0,1,2,3" or "4,5,6,7"<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 4 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 64 \ <br>    --quantization "wint4" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-300B-A47B|32K|WINT4|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 8 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 64 \ <br>    --quantization "wint4" \ <br>    --gpu-memory-utilization 0.95|2.4.0|
-|ERNIE-4.5-300B-A47B|128K|WINT4|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 8 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 64 \ <br>    --quantization "wint4" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-21B-A3B|32K|BF16|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 128 \ <br>    --gpu-memory-utilization 0.9 |2.4.0|
-|ERNIE-4.5-21B-A3B|32K|WINT8|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint8" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-21B-A3B|32K|WINT4|1 (Recommended)|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint4" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-21B-A3B|128K|BF16|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 128 \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-21B-A3B|128K|WINT8|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint8" \ <br>    --gpu-memory-utilization 0.9 |2.4.0|
-|ERNIE-4.5-21B-A3B|128K|WINT4|1 (Recommended)|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint4" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-0.3B|32K|BF16|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 128 \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-0.3B|32K|WINT8|1 (Recommended)|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint8" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-0.3B|128K|BF16|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 128 \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-0.3B|128K|WINT8|1 (Recommended)|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 1 \ <br>    --max-model-len 131072 \ <br>    --max-num-seqs 128 \ <br>    --quantization "wint8" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-300B-A47B-W4A8C8-TP4|32K|W4A8|4|export XPU_VISIBLE_DEVICES="0,1,2,3" or "4,5,6,7"<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \ <br>    --port 8188 \ <br>    --tensor-parallel-size 4 \ <br>    --max-model-len 32768 \ <br>    --max-num-seqs 64 \ <br>    --quantization "W4A8" \ <br>    --gpu-memory-utilization 0.9|2.4.0|
-|ERNIE-4.5-VL-28B-A3B|32K|WINT8|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \ <br>    --port 8188  \ <br> --tensor-parallel-size 1 \ <br> --quantization "wint8" \ <br>  --max-model-len 32768 \ <br> --max-num-seqs 10 \ <br>     --enable-mm \ <br>   --mm-processor-kwargs '{"video_max_frames": 30}' \ <br>     --limit-mm-per-prompt '{"image": 10, "video": 3}' \ <br>     --reasoning-parser ernie-45-vl|2.4.0|
-|ERNIE-4.5-VL-424B-A47B|32K|WINT8|8|export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7" <br>python -m fastdeploy.entrypoints.openai.api_server \ <br>    --model PaddlePaddle/ERNIE-4.5-VL-424B-A47B-Paddle \ <br>    --port 8188 \ <br> --tensor-parallel-size 8 \ <br> --quantization "wint8" \ <br>  --max-model-len 32768 \ <br> --max-num-seqs 8 \ <br>     --enable-mm \ <br>   --mm-processor-kwargs '{"video_max_frames": 30}' \ <br>     --limit-mm-per-prompt '{"image": 10, "video": 3}' \ <br>     --reasoning-parser ernie-45-vl \ <br> --gpu-memory-utilization 0.7|2.4.0|
-|PaddleOCR-VL-0.9B|32K|BF16|1|export FD_ENABLE_MAX_PREFILL=1 <br>export XPU_VISIBLE_DEVICES="0" # Specify any card <br>python -m fastdeploy.entrypoints.openai.api_server \ <br>   --model PaddlePaddle/PaddleOCR-VL \ <br>  --port 8188 \ <br> --metrics-port 8181 \ <br> --engine-worker-queue-port 8182 \ <br> --max-model-len 16384 \ <br> --max-num-batched-tokens 16384 \ <br> --gpu-memory-utilization 0.8 \ <br> --max-num-seqs 256|2.4.0|
-|ERNIE-4.5-VL-28B-A3B-Thinking|128K|WINT8|1|export XPU_VISIBLE_DEVICES="0" # Specify any card<br>python -m fastdeploy.entrypoints.openai.api_server \ <br> --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \ <br> --port 8188 \ <br> --tensor-parallel-size 1 \ <br> --quantization "wint8" \ <br> --max-model-len 131072 \ <br> --max-num-seqs 32 \ <br> --engine-worker-queue-port 8189 \ <br> --metrics-port 8190 \ <br> --cache-queue-port 8191 \ <br> --reasoning-parser ernie-45-vl-thinking \ <br> --tool-call-parser ernie-45-vl-thinking \ <br> --mm-processor-kwargs '{"image_max_pixels": 12845056 }'|2.4.0|
+Note: The following models and deployment commands are valid only for version 2.5.0.
+<details>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT8, 8 XPUs)</b> </summary>
 
-## Quick start
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 8 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9
+```
 
-### Deploy online serving based on ERNIE-4.5-300B-A47B-Paddle
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4 # Check the RDMA network card names of the machine using `xpu-smi topo -m`
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --engine-worker-queue-port 8124 \
+    --metrics-port 8125 \
+    --cache-queue-port 55996 \
+    --tensor-parallel-size 8 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9 \
+    --enable-expert-parallel \
+    --enable-prefix-caching \
+    --data-parallel-size 1 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 4 XPUs)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3"  # or "4,5,6,7"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 4 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3"  # or "4,5,6,7"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2  # Check the RDMA network card names of the machine using `xpu-smi topo -m`
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --engine-worker-queue-port 8124 \
+    --metrics-port 8125 \
+    --cache-queue-port 55996 \
+    --tensor-parallel-size 4 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization wint4 \
+    --gpu-memory-utilization 0.9 \
+    --enable-expert-parallel \
+    --enable-prefix-caching \
+    --data-parallel-size 1 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-300B-A47B (32K, WINT4, 8 XPUs)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 8 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.95
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # Check the RDMA network card names of the machine using `xpu-smi topo -m`
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model /PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --engine-worker-queue-port 8124 \
+    --metrics-port 8125 \
+    --cache-queue-port 55996 \
+    --tensor-parallel-size 8 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization wint4 \
+    --gpu-memory-utilization 0.95 \
+    --enable-expert-parallel \
+    --enable-prefix-caching \
+    --data-parallel-size 1 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-300B-A47B (128K, WINT4, 8 XPUs)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 8 \
+    --max-model-len 131072 \
+    --max-num-seqs 64 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+export BKCL_ENABLE_XDR=1
+export BKCL_RDMA_NICS=mlx5_1,mlx5_1,mlx5_2,mlx5_2,mlx5_3,mlx5_3,mlx5_4,mlx5_4  # Check the RDMA network card names of the machine using `xpu-smi topo -m`
+export BKCL_TRACE_TOPO=1
+export BKCL_PCIE_RING=1
+export XSHMEM_MODE=1
+export XSHMEM_QP_NUM_PER_RANK=32
+export BKCL_RDMA_VERBS=1
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model /PaddlePaddle/ERNIE-4.5-300B-A47B-Paddle \
+    --port 8123 \
+    --engine-worker-queue-port 8124 \
+    --metrics-port 8125 \
+    --cache-queue-port 55996 \
+    --tensor-parallel-size 8 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization wint4 \
+    --gpu-memory-utilization 0.9 \
+    --enable-expert-parallel \
+    --enable-prefix-caching \
+    --data-parallel-size 1 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-21B-A3B (32K, BF16, 1 XPU)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-21B-A3B (32K, WINT8, 1 XPU)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-21B-A3B (32K, WINT4, 1 XPU)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-21B-A3B (128K, BF16, 1 XPU)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-21B-A3B (128K, WINT8, 1 XPU)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-21B-A3B (128K, WINT4, 1 XPU)</b> </summary>
+
+**Quick Launch:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9
+```
+
+**Optimal Performance:**
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-21B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --quantization "wint4" \
+    --gpu-memory-utilization 0.9 \
+    --speculative-config '{"method": "mtp", "num_speculative_tokens": 1, "model": "'${mtp_model_path}'"}'
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-0.3B (32K, BF16, 1 XPU)</b> </summary>
+
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-0.3B (32K, WINT8, 1 XPU)</b> </summary>
+
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 32768 \
+    --max-num-seqs 128 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-0.3B (128K, BF16, 1 XPU)</b> </summary>
+
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --gpu-memory-utilization 0.9
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-0.3B (128K, WINT8, 1 XPU)</b> </summary>
+
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-0.3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --max-model-len 131072 \
+    --max-num-seqs 128 \
+    --quantization "wint8" \
+    --gpu-memory-utilization 0.9
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-300B-A47B-W4A8C8-TP4 (32K, W4A8, 4 XPUs)</b> </summary>
+
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3"  # or "4,5,6,7"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-300B-A47B-W4A8C8-TP4-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 4 \
+    --max-model-len 32768 \
+    --max-num-seqs 64 \
+    --quantization "W4A8" \
+    --gpu-memory-utilization 0.9
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-VL-28B-A3B (32K, WINT8, 1 XPU)</b> </summary>
+
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --quantization "wint8" \
+    --max-model-len 32768 \
+    --max-num-seqs 10 \
+    --enable-mm \
+    --mm-processor-kwargs '{"video_max_frames": 30}' \
+    --limit-mm-per-prompt '{"image": 10, "video": 3}' \
+    --reasoning-parser ernie-45-vl
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-VL-424B-A47B (32K, WINT8, 8 XPUs)</b> </summary>
+
+```bash
+export XPU_VISIBLE_DEVICES="0,1,2,3,4,5,6,7"
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-VL-424B-A47B-Paddle \
+    --port 8188 \
+    --tensor-parallel-size 8 \
+    --quantization "wint8" \
+    --max-model-len 32768 \
+    --max-num-seqs 8 \
+    --enable-mm \
+    --mm-processor-kwargs '{"video_max_frames": 30}' \
+    --limit-mm-per-prompt '{"image": 10, "video": 3}' \
+    --reasoning-parser ernie-45-vl \
+    --gpu-memory-utilization 0.7
+```
+</details>
+
+<details>
+<summary><b>PaddleOCR-VL-0.9B (32K, BF16, 1 XPU)</b> </summary>
+
+```bash
+export FD_ENABLE_MAX_PREFILL=1
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/PaddleOCR-VL \
+    --port 8188 \
+    --metrics-port 8181 \
+    --engine-worker-queue-port 8182 \
+    --max-model-len 16384 \
+    --max-num-batched-tokens 16384 \
+    --gpu-memory-utilization 0.8 \
+    --max-num-seqs 256
+```
+</details>
+
+<details>
+<summary><b>ERNIE-4.5-VL-28B-A3B-Thinking (128K, WINT8, 1 XPU)</b> </summary>
+
+```bash
+export XPU_VISIBLE_DEVICES="0"  # Specify any card
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model PaddlePaddle/ERNIE-4.5-VL-28B-A3B-Thinking \
+    --port 8188 \
+    --tensor-parallel-size 1 \
+    --quantization "wint8" \
+    --max-model-len 131072 \
+    --max-num-seqs 32 \
+    --engine-worker-queue-port 8189 \
+    --metrics-port 8190 \
+    --cache-queue-port 8191 \
+    --reasoning-parser ernie-45-vl-thinking \
+    --tool-call-parser ernie-45-vl-thinking \
+    --mm-processor-kwargs '{"image_max_pixels": 12845056}'
+```
+</details>
+
+## Examples
+
+### Running ERNIE-4.5-300B-A47B-Paddle
 
 #### Start service
 
@@ -40,8 +533,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-model-len 32768 \
     --max-num-seqs 64 \
     --quantization "wint4" \
-    --gpu-memory-utilization 0.9 \
-    --load-choices "default"
+    --gpu-memory-utilization 0.9
 ```
 
 **Note:** When deploying on 4 XPUs, only two configurations are supported which constrained by hardware limitations such as interconnect capabilities.
@@ -96,7 +588,7 @@ print('\n')
 
 For detailed OpenAI protocol specifications, see [OpenAI Chat Completion API](https://platform.openai.com/docs/api-reference/chat/create). Differences from the standard OpenAI protocol are documented in [OpenAI Protocol-Compatible API Server](../online_serving/README.md).
 
-### Deploy online serving based on ERNIE-4.5-VL-28B-A3B-Paddle
+### Running ERNIE-4.5-VL-28B-A3B-Paddle
 
 #### Start service
 Deploy the ERNIE-4.5-VL-28B-A3B-Paddle model with WINT8 precision and 32K context length on 1 XPU
@@ -113,8 +605,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --enable-mm \
     --mm-processor-kwargs '{"video_max_frames": 30}' \
     --limit-mm-per-prompt '{"image": 10, "video": 3}' \
-    --reasoning-parser ernie-45-vl \
-    --load-choices "default"
+    --reasoning-parser ernie-45-vl
 ```
 
 #### Send requests
@@ -168,7 +659,7 @@ for chunk in response:
 print('\n')
 ```
 
-### Deploy online serving based on PaddleOCR-VL-0.9B
+### Running PaddleOCR-VL-0.9B
 
 #### Start service
 
@@ -239,7 +730,7 @@ for chunk in response:
 print('\n')
 ```
 
-### Deploy online serving based on ERNIE-4.5-VL-28B-A3B-Thinking
+### Running ERNIE-4.5-VL-28B-A3B-Thinking
 
 #### Start service
 Deploy the ERNIE-4.5-VL-28B-A3B-Thinking model with WINT8 precision and 128K context length on 1 XPU
@@ -258,8 +749,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --cache-queue-port 8191 \
     --reasoning-parser ernie-45-vl-thinking \
     --tool-call-parser ernie-45-vl-thinking \
-    --mm-processor-kwargs '{"image_max_pixels": 12845056 }' \
-    --load-choices "default_v1"
+    --mm-processor-kwargs '{"image_max_pixels": 12845056 }'
 ```
 
 #### Send requests

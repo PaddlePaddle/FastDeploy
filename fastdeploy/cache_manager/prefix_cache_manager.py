@@ -552,24 +552,6 @@ class PrefixCacheManager:
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
 
-    def _acquire_kvcache_lock(self):
-        """Acquire the GPU KV cache lock for the transfer process.
-
-        Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
-        between the worker and the CPU transfer process. This prevents
-        concurrent GPU KV cache access which may cause NaN errors under
-        certain DP+EP configurations.
-        """
-        if not envs.FD_USE_KVCACHE_LOCK:
-            return
-        self.gpu_cache_lock.acquire()
-
-    def _release_kvcache_lock(self):
-        """Release the GPU KV cache lock held by the transfer process."""
-        if not envs.FD_USE_KVCACHE_LOCK:
-            return
-        self.gpu_cache_lock.release()
-
     def issue_swap_task(
         self,
         transfer_task_id,
@@ -590,14 +572,12 @@ class PrefixCacheManager:
             is_sync:          bool, whether to wait for the result of the swap task
         """
         assert is_sync, "Only support is sync for swap_task now."
-        self._acquire_kvcache_lock()
         self.task_swapping_event[transfer_task_id] = Event()
         self.cache_task_queue.put_transfer_task(
             (event_type, transfer_task_id, swap_node_ids, gpu_block_ids, cpu_block_ids)
         )
         if is_sync:
             self.sync_swap_task(transfer_task_id)
-        self._release_kvcache_lock()
 
     def sync_swap_task(self, transfer_task_id):
         """
@@ -1143,20 +1123,17 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return
 
-        assert is_sync, "Only support is_sync=True for now."
-        self._acquire_kvcache_lock()
-        try:
-            if len(task.keys) != len(task.gpu_block_ids):
-                err_msg = f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
-                logger.error(err_msg)
-                raise ValueError(err_msg)
+        if len(task.keys) != len(task.gpu_block_ids):
+            err_msg = (
+                f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
+            )
+            logger.error(err_msg)
+            raise ValueError(err_msg)
 
-            self.task_write_back_event[task.task_id] = Event()
-            self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
-            if is_sync:
-                self.wait_write_storage_task(task.task_id)
-        finally:
-            self._release_kvcache_lock()
+        self.task_write_back_event[task.task_id] = Event()
+        self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
+        if is_sync:
+            self.wait_write_storage_task(task.task_id)
 
     def wait_write_storage_task(self, req_id):
         """
@@ -1173,18 +1150,13 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return []
 
-        assert is_sync, "Only support is_sync=True for now."
-        self._acquire_kvcache_lock()
+        storage_block_ids = []
+        self.task_prefetch_event[task.task_id] = Event()
+        # issue task to cache_transfer_manager
+        self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task))
+        if is_sync:
+            storage_block_ids = self.wait_prefetch_storage_task(task.task_id)
 
-        try:
-            storage_block_ids = []
-            self.task_prefetch_event[task.task_id] = Event()
-            # issue task to cache_transfer_manager
-            self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task))
-            if is_sync:
-                storage_block_ids = self.wait_prefetch_storage_task(task.task_id)
-        finally:
-            self._release_kvcache_lock()
         return storage_block_ids
 
     def wait_prefetch_storage_task(self, req_id):

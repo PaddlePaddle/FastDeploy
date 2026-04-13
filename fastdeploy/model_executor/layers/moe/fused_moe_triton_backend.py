@@ -1237,7 +1237,7 @@ def python_op_fused_moe_kernel_paddle(
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0])
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            x, using_pow2_scale=False, output_scale_transpose=False
+            x, using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE, output_scale_transpose=False
         )
         x_scale = x_scale[: x.shape[0]]
 
@@ -1295,7 +1295,9 @@ def python_op_fused_moe_kernel_paddle(
         )
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            intermediate_cache2, using_pow2_scale=False, output_scale_transpose=False
+            intermediate_cache2,
+            using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
+            output_scale_transpose=False,
         )
         x_scale = x_scale[: x_q.shape[0]]
 
