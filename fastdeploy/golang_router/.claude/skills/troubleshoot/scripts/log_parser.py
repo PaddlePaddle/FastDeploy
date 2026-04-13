@@ -501,6 +501,77 @@ def _normalize_worker_type(worker_type):
     return "unknown"
 
 
+def _infer_release_worker_type(release, selects, fallback_window_s=120):
+    """为未显式标注 type 的 release 近似推断 worker type。
+
+    优先级：
+      1) 同 worker、时间上最近且不晚于 release 的 select type
+      2) 若无可解析时间戳，则使用同 worker 的最后一个 select type
+      3) 推断失败返回 unknown
+    """
+    worker = release.get("worker")
+    if not worker:
+        return "unknown"
+
+    r_ts = _parse_ts_safe(release.get("ts"))
+    candidates = [s for s in selects if s.get("worker") == worker]
+    if not candidates:
+        return "unknown"
+
+    if r_ts:
+        best = None
+        best_delta = None
+        for s in candidates:
+            s_ts = _parse_ts_safe(s.get("ts"))
+            if not s_ts:
+                continue
+            delta = (r_ts - s_ts).total_seconds()
+            if delta < 0 or delta > fallback_window_s:
+                continue
+            if best_delta is None or delta < best_delta:
+                best = s
+                best_delta = delta
+        if best is not None:
+            return _normalize_worker_type(best.get("type"))
+
+    # 回退：按出现顺序取同 worker 的最近 select
+    return _normalize_worker_type(candidates[-1].get("type"))
+
+
+def _infer_token_release_worker_type(release, selects, fallback_window_s=120):
+    """为 token release 推断 worker type（prefill/mixed）。
+
+    注意：日志文本通常固定为 `release prefill tokens`，即使 mixed 也可能走这条日志。
+    因此 token release 的类型优先依据同 worker 的邻近 select 推断。
+    """
+    worker = release.get("worker")
+    if not worker:
+        return "unknown"
+
+    r_ts = _parse_ts_safe(release.get("ts"))
+    candidates = [s for s in selects if s.get("worker") == worker and _normalize_worker_type(s.get("type")) in ("prefill", "mixed")]
+    if not candidates:
+        return "unknown"
+
+    if r_ts:
+        best = None
+        best_delta = None
+        for s in candidates:
+            s_ts = _parse_ts_safe(s.get("ts"))
+            if not s_ts:
+                continue
+            delta = (r_ts - s_ts).total_seconds()
+            if delta < 0 or delta > fallback_window_s:
+                continue
+            if best_delta is None or delta < best_delta:
+                best = s
+                best_delta = delta
+        if best is not None:
+            return _normalize_worker_type(best.get("type"))
+
+    return _normalize_worker_type(candidates[-1].get("type"))
+
+
 def match_select_release(lines, fallback_window_s=120):
     """匹配 select/release worker 事件对。
 
@@ -536,12 +607,14 @@ def match_select_release(lines, fallback_window_s=120):
         # Token-bearing release
         trm = RELEASE_TOKENS_RE.search(line)
         if trm:
-            token_type = trm.group(1) or "prefill"
+            token_type = trm.group(1)
             releases.append(
                 {
                     "ts": ts,
                     "worker": trm.group(2),
-                    "type": f'{_normalize_worker_type(token_type)}_tokens',
+                    # 文本默认按 prefill 记，再结合同 worker 邻近 select 做纠偏（mixed 场景）
+                    "type": f'{_normalize_worker_type(token_type or "prefill")}_tokens',
+                    "raw_token_type": token_type or "",
                     "tags": tags,
                     "tokens": int(trm.group(3)),
                     "line": line_no,
@@ -716,7 +789,33 @@ def match_select_release(lines, fallback_window_s=120):
             "token_releases": counts["token_releases"],
         }
 
-    # 按 worker type 分类统计（prefill/decode/mixed）
+    # 基于 select 构建 worker URL -> dominant type 映射
+    per_worker_type_counts = defaultdict(lambda: defaultdict(int))
+    for s in selects:
+        per_worker_type_counts[s["worker"]][_normalize_worker_type(s.get("type"))] += 1
+    worker_dominant_type = {}
+    for w, counts in per_worker_type_counts.items():
+        worker_dominant_type[w] = sorted(counts.items(), key=lambda kv: -kv[1])[0][0] if counts else "unknown"
+
+    # 为未显式标注 type 的 release 推断 worker type（避免大量 unknown）
+    inferred_release_types = {}
+    for i, r in enumerate(releases):
+        r_type_raw = str(r.get("type", ""))
+        if r_type_raw.endswith("_tokens"):
+            base_t = _normalize_worker_type(r_type_raw.replace("_tokens", ""))
+            # token release 按 worker URL 对应的 select 类型映射，不做邻近时间纠偏
+            mapped_t = worker_dominant_type.get(r.get("worker", ""), "unknown")
+            if mapped_t in ("prefill", "decode", "mixed"):
+                base_t = mapped_t
+            inferred_release_types[i] = f"{base_t}_tokens"
+            continue
+        base_t = _normalize_worker_type(r_type_raw)
+        if base_t != "unknown":
+            inferred_release_types[i] = base_t
+            continue
+        inferred_release_types[i] = _infer_release_worker_type(r, selects, fallback_window_s=fallback_window_s)
+
+    # 按 worker type 分类统计（prefill/decode/mixed，必要时保留 unknown）
     type_summary = defaultdict(
         lambda: {
             "counter_selects": 0,
@@ -730,16 +829,57 @@ def match_select_release(lines, fallback_window_s=120):
         type_summary[s_type]["counter_selects"] += 1
         if s_type in ("prefill", "mixed"):
             type_summary[s_type]["token_selects"] += 1
-    for r in releases:
-        r_type = _normalize_worker_type(str(r.get("type", "")).replace("_tokens", ""))
-        if str(r.get("type", "")).endswith("_tokens"):
+    for i, r in enumerate(releases):
+        inferred = inferred_release_types.get(i, _normalize_worker_type(str(r.get("type", ""))))
+        r_type = _normalize_worker_type(str(inferred).replace("_tokens", ""))
+        if str(inferred).endswith("_tokens"):
             type_summary[r_type]["token_releases"] += 1
         else:
             type_summary[r_type]["counter_releases"] += 1
 
+    # 每个 worker URL 的类型画像（基于 select）
+    worker_type_profile = {}
+    for w, counts in per_worker_type_counts.items():
+        dominant = "unknown"
+        if counts:
+            dominant = sorted(counts.items(), key=lambda kv: -kv[1])[0][0]
+        worker_type_profile[w] = {
+            "dominant_type": dominant,
+            "prefill": counts.get("prefill", 0),
+            "decode": counts.get("decode", 0),
+            "mixed": counts.get("mixed", 0),
+            "unknown": counts.get("unknown", 0),
+        }
+
+    unmatched_releases = []
+    for i, r in enumerate(releases):
+        if str(r.get("type", "")).endswith("_tokens"):
+            # token release: 近邻存在 prefill/mixed select 则视为可解释，不计入 unmatched
+            inferred_token_type = _normalize_worker_type(str(inferred_release_types.get(i, "unknown_tokens")).replace("_tokens", ""))
+            if inferred_token_type == "unknown":
+                unmatched_releases.append(
+                    {
+                        "worker": r.get("worker", ""),
+                        "release_ts": r.get("ts", ""),
+                        "type": inferred_token_type,
+                        "release_kind": "token_release",
+                    }
+                )
+            continue
+        if i not in release_used:
+            unmatched_releases.append(
+                {
+                    "worker": r.get("worker", ""),
+                    "release_ts": r.get("ts", ""),
+                    "type": _normalize_worker_type(inferred_release_types.get(i, "unknown")),
+                    "release_kind": "request_release",
+                }
+            )
+
     return {
         "matched": matched,
         "unmatched_selects": unmatched_selects,
+        "unmatched_releases": unmatched_releases,
         "untracked_selects": untracked_selects,
         "failed_selects": failed_selects,
         "per_worker": pw_result,
@@ -751,6 +891,7 @@ def match_select_release(lines, fallback_window_s=120):
             "without_any_id": without_any_id,
         },
         "type_summary": dict(type_summary),
+        "worker_type_profile": worker_type_profile,
     }
 
 
@@ -948,6 +1089,16 @@ def _cli_self_test(args):
         normalize_message("dial tcp 10.0.0.1:9965: connection refused"),
         "dial tcp {ip:port}: connection refused",
     )
+
+    print("\n=== Testing match_select_release (token release type inference) ===")
+    sample_lines = [
+        "[INFO] 2026/04/12 10:00:00 logger.go:1: [request_id:r1] select worker (mixed): http://10.0.0.1:9965, count: 1",
+        "[INFO] 2026/04/12 10:00:01 logger.go:1: [request_id:r1] release prefill tokens: http://10.0.0.1:9965, tokens: 10",
+        "[INFO] 2026/04/12 10:00:02 logger.go:1: [request_id:r1] release worker: http://10.0.0.1:9965, count: 0",
+    ]
+    msr = match_select_release(sample_lines)
+    check("mixed token_releases inferred", msr["type_summary"].get("mixed", {}).get("token_releases", 0), 1)
+    check("prefill token_releases remains 0", msr["type_summary"].get("prefill", {}).get("token_releases", 0), 0)
 
     print(f'\n{"=" * 40}')
     print(f"Results: {passed} passed, {failed} failed")

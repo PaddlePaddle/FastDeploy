@@ -25,8 +25,10 @@ def format_load_report(result):
     if result["diagnoses"]:
         sections.append("### 诊断")
         sections.append("")
-        for d in result["diagnoses"]:
-            sections.append(f'  [{d["severity"]}] [{d["source_layer"]}] {d["message"]}')
+        sections.append(
+            f'  共 {len(result["diagnoses"])} 条诊断，见详情: [detail/load_diagnoses.md](../detail/load_diagnoses.md)；'
+            '匹配明细见 [detail/load_select_release.md](../detail/load_select_release.md)'
+        )
         sections.append("")
         detail_sections.append("## 诊断")
         detail_sections.append("")
@@ -39,6 +41,7 @@ def format_load_report(result):
     if ls:
         sections.append("### 负载概览 (total_running)")
         sections.append("")
+        sections.append("  说明: stats 采样来自 `[stats]` 周期日志（通常每 5s 一条），用于观察当前并发与负载变化趋势。")
         sections.append(
             f'  mean={ls.get("mean",0)}  p50={ls.get("p50",0)}  p90={ls.get("p90",0)}  '
             f'p99={ls.get("p99",0)}  max={ls.get("max",0)}  stddev={ls.get("stddev",0)}'
@@ -108,6 +111,9 @@ def format_load_report(result):
             sections.append(render_table(type_rows, columns=["type", "counter(S/R)", "token(S/R)"]))
             sections.append("")
             sections.append("  说明: prefill/mixed 的 token-select 同时表示 request counter + token counter 增加；decode 仅 request counter。")
+            sections.append("  说明: `release prefill tokens` 会被识别为 token-release；worker type 按该 worker URL 在 select 中的类型映射（prefill/decode/mixed）。")
+            if type_summary.get("unknown"):
+                sections.append("  说明: unknown 表示日志里缺少 worker type，且无法从邻近 select/release 关系推断。")
             sections.append("")
             detail_sections.append("## 按类型统计")
             detail_sections.append("")
@@ -178,6 +184,29 @@ def format_load_report(result):
         sections.append("")
         detail_sections.append("## Select/Release Per-Worker")
         detail_sections.append("")
+
+    if sr.get("worker_type_profile"):
+        sections.append("### Worker URL 类型画像（基于 select）")
+        sections.append("")
+        rows = []
+        for w, p in sorted(sr["worker_type_profile"].items()):
+            rows.append(
+                {
+                    "Worker": _strip_scheme(w),
+                    "Dominant": p.get("dominant_type", "unknown"),
+                    "Prefill": p.get("prefill", 0),
+                    "Decode": p.get("decode", 0),
+                    "Mixed": p.get("mixed", 0),
+                }
+            )
+        sections.append(
+            render_table(
+                rows,
+                columns=["Worker", "Dominant", "Prefill", "Decode", "Mixed"],
+                right_align={"Prefill", "Decode", "Mixed"},
+            )
+        )
+        sections.append("")
         detail_sections.append(
             render_table(
                 table_data,
@@ -192,7 +221,7 @@ def format_load_report(result):
         sections.append("  解释: 出现 request select，但在 request release 口径下找不到匹配。可能是请求卡住、日志缺失、或窗口外释放。")
         for u in sr["unmatched_selects"][:3]:
             sections.append(f'    [{u.get("select_ts","")}] {_strip_scheme(u["worker"])} ({u["type"]})')
-        sections.append("  > 完整列表见: [details/load_select_release.md](details/load_select_release.md)")
+        sections.append("  > 完整列表见: [detail/load_select_release.md](../detail/load_select_release.md)")
         sections.append("")
         detail_sections.append("## 未匹配 select（完整）")
         detail_sections.append("")
@@ -202,11 +231,23 @@ def format_load_report(result):
             )
         detail_sections.append("")
 
+    if sr.get("unmatched_releases"):
+        sections.append(f'  ⚠ {len(sr["unmatched_releases"])} 个未匹配 release（已区分 req/token）')
+        sections.append("  > 完整列表见: [detail/load_select_release.md](../detail/load_select_release.md)")
+        sections.append("")
+        detail_sections.append("## 未匹配 release（按 release_kind 分类）")
+        detail_sections.append("")
+        for r in sr["unmatched_releases"]:
+            detail_sections.append(
+                f'- [{r.get("release_ts","")}] worker={_strip_scheme(r["worker"])} release_kind={r.get("release_kind","")} type={r.get("type","")}'
+            )
+        detail_sections.append("")
+
     if sr.get("untracked_selects"):
         sections.append(f'  ℹ {len(sr["untracked_selects"])} 个 select 缺少可关联 ID，未参与卡住判定')
         for u in sr["untracked_selects"][:3]:
             sections.append(f'    [{u.get("select_ts","")}] {_strip_scheme(u["worker"])} ({u["type"]})')
-        sections.append("  > 完整列表见: [details/load_select_release.md](details/load_select_release.md)")
+        sections.append("  > 完整列表见: [detail/load_select_release.md](../detail/load_select_release.md)")
         sections.append("")
         detail_sections.append("## Untracked selects（缺少可关联 ID）")
         detail_sections.append("")
@@ -238,5 +279,21 @@ def format_load_report(result):
             )
         )
         sections.append("")
+
+    if result.get("counter_last_state"):
+        sections.append("### 计数器末状态")
+        sections.append("")
+        sections.append("  末状态详情见: [detail/load_counter_state.md](../detail/load_counter_state.md)")
+        sections.append("")
+        detail_sections.append("## Counter / Token Counter 末状态（最后一条计数日志）")
+        detail_sections.append("")
+        detail_sections.append(
+            render_table(
+                result["counter_last_state"],
+                columns=["worker", "req_last_action", "req_last_value", "token_last_action", "token_last_value", "last_ts"],
+                right_align={"req_last_value", "token_last_value"},
+            )
+        )
+        detail_sections.append("")
 
     return "\n".join(sections), "\n".join(detail_sections)

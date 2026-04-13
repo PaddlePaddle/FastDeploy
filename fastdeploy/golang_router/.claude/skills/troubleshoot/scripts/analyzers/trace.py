@@ -16,6 +16,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from log_parser import (
     extract_tags,
     extract_ts,
+    match_select_release,
     parse_cache_strategy_line,
     parse_http_line,
 )
@@ -108,12 +109,14 @@ def analyze_trace(log_file, trace_ids, tail=None):
         # 解析事件链
         events = _parse_event_chain(all_lines)
         lifecycle_complete = _check_lifecycle_complete(events)
-        diagnoses = _diagnose_trace(events, lifecycle_complete)
+        sr_check = match_select_release(all_lines)
+        diagnoses = _diagnose_trace(events, lifecycle_complete, sr_check)
 
         traces[tid] = {
             "events": events,
             "lifecycle_complete": lifecycle_complete,
             "diagnoses": diagnoses,
+            "sr_check": sr_check,
             "matched_tag": "session_id" if is_session else "request_id/trace_id",
             "related_ids": {
                 "request_ids": sorted(related_request_ids) if is_session else [],
@@ -271,7 +274,7 @@ def _check_lifecycle_complete(events):
     return has_entry and has_exit and (not has_select or has_release)
 
 
-def _diagnose_trace(events, lifecycle_complete):
+def _diagnose_trace(events, lifecycle_complete, sr_check=None):
     """生成追踪诊断。"""
     diagnoses = []
     types = [e["type"] for e in events]
@@ -293,6 +296,22 @@ def _diagnose_trace(events, lifecycle_complete):
 
     if "FAILED_SELECT" in types:
         diagnoses.append({"severity": "HIGH", "message": "Failed to select worker — 无可用 Worker"})
+
+    if sr_check:
+        if sr_check.get("unmatched_selects"):
+            diagnoses.append(
+                {
+                    "severity": "HIGH",
+                    "message": f'match-select-release 检测到 {len(sr_check["unmatched_selects"])} 个 unmatched select',
+                }
+            )
+        if sr_check.get("unmatched_releases"):
+            diagnoses.append(
+                {
+                    "severity": "MEDIUM",
+                    "message": f'match-select-release 检测到 {len(sr_check["unmatched_releases"])} 个 unmatched release',
+                }
+            )
 
     return diagnoses
 
@@ -367,7 +386,7 @@ def format_trace_report(result):
             # 主报告中添加引用和摘要
             safe_tid = tid.replace("/", "_")
             sections.append(f'  事件数: {len(trace["events"])}')
-            sections.append(f"  > 完整事件链: [details/trace_{safe_tid}.md](details/trace_{safe_tid}.md)")
+            sections.append(f"  > 完整事件链: [detail/trace_{safe_tid}.md](../detail/trace_{safe_tid}.md)")
             sections.append("")
 
     return "\n".join(sections), detail_dict

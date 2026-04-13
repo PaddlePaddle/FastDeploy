@@ -128,7 +128,14 @@ def determine_status(results):
                 reasons.append(d["message"])
 
     if reasons:
-        return "DEGRADED", ", ".join(reasons)
+        # 去重但保留完整信息
+        deduped = []
+        seen = set()
+        for r in reasons:
+            if r not in seen:
+                deduped.append(r)
+                seen.add(r)
+        return "DEGRADED", "；".join(deduped)
 
     if not results:
         return "HEALTHY", "无分析数据"
@@ -148,19 +155,65 @@ def format_full_report(results, status, status_reason):
                 - 'trace_files': {trace_id: text} 或 {}
     """
     parts = []
-    details = {"health_events": None, "load_select_release": None, "trace_files": {}}
+    details = {
+        "health_events": None,
+        "load_select_release": None,
+        "latency_diagnoses": None,
+        "cache_diagnosis": None,
+        "load_diagnoses": None,
+        "load_counter_state": None,
+        "cache_session_stickiness": None,
+        "cache_suboptimal": None,
+        "cache_eviction": None,
+        "cache_fallback": None,
+        "cache_cross": None,
+        "errors_topn": None,
+        "trace_files": {},
+    }
 
     # 状态行
     parts.append(f"STATUS: {status} — {status_reason}")
+    parts.append(
+        "状态定义: HEALTHY=无明显异常；DEGRADED=服务可用但存在性能/稳定性问题（需关注）；CRITICAL=服务不可用或高风险故障。"
+    )
     parts.append("=" * 60)
     parts.append("")
 
     # 各维度报告
     if "errors" in results:
         parts.append(format_errors_report(results["errors"]))
+        if results["errors"].get("error_top_n"):
+            lines = [
+                "# Errors TopN 详情",
+                "",
+                "| 模板 | 数量 | 级别 | 来源层 | 影响 |",
+                "|:--|--:|:--|:--|:--|",
+            ]
+            for e in results["errors"]["error_top_n"]:
+                lines.append(
+                    f'| {e.get("template","")} | {e.get("count",0)} | {e.get("level","")} | {e.get("source_layer","")} | {e.get("impact","-")} |'
+                )
+            lines.append("")
+            lines.append("## 涉及 URLs")
+            lines.append("")
+            for e in results["errors"]["error_top_n"]:
+                urls = e.get("urls") or []
+                if not urls:
+                    continue
+                lines.append(f'- 模板: {e.get("template","")}')
+                for u in urls:
+                    lines.append(f'  - {u}')
+            lines.append("")
+            details["errors_topn"] = "\n".join(lines)
 
     if "latency" in results:
         parts.append(format_latency_report(results["latency"]))
+        if results["latency"].get("diagnoses"):
+            lines = ["# 延迟诊断详情", ""]
+            for d in results["latency"]["diagnoses"]:
+                lines.append(f'[{d.get("severity","")}] {d.get("message","")}')
+            lines.append("")
+            details["latency_diagnoses"] = "\n".join(lines)
 
     if "health" in results:
         summary, detail = format_health_report(results["health"])
@@ -173,9 +226,58 @@ def format_full_report(results, status, status_reason):
         parts.append(summary)
         if detail:
             details["load_select_release"] = detail
+        if results["load"].get("diagnoses"):
+            lines = ["# Load 诊断详情", ""]
+            for d in results["load"]["diagnoses"]:
+                lines.append(f'[{d.get("severity","")}] [{d.get("source_layer","")}] {d.get("message","")}')
+            lines.append("")
+            details["load_diagnoses"] = "\n".join(lines)
+        if results["load"].get("counter_last_state"):
+            rows = results["load"]["counter_last_state"]
+            lines = ["# Load Counter 末状态", "", "| worker | req_last_action | req_last_value | token_last_action | token_last_value | last_ts |", "|:--|:--|--:|:--|--:|:--|"]
+            for r in rows:
+                lines.append(
+                    f'| {r.get("worker","")} | {r.get("req_last_action","-")} | {r.get("req_last_value","-")} | {r.get("token_last_action","-")} | {r.get("token_last_value","-")} | {r.get("last_ts","")} |'
+                )
+            lines.append("")
+            details["load_counter_state"] = "\n".join(lines)
 
     if "cache" in results:
-        parts.append(format_cache_report(results["cache"]))
+        summary, detail = format_cache_report(results["cache"])
+        parts.append(summary)
+        if detail:
+            details["cache_diagnosis"] = detail
+        c = results["cache"]
+        if c.get("session_stickiness"):
+            lines = ["# Cache Session 粘性详情", ""]
+            for sid, s in c["session_stickiness"].items():
+                lines.append(f'- {sid}: req={s.get("total_requests",0)}, stickiness={s.get("stickiness_pct",0)}%, switches={s.get("switches",0)}')
+            lines.append("")
+            details["cache_session_stickiness"] = "\n".join(lines)
+        if c.get("suboptimal_selections"):
+            lines = ["# Cache 非最优选择详情", ""]
+            for x in c["suboptimal_selections"][:200]:
+                lines.append(f'- [{x.get("ts","")}] selected={x.get("selected","")} best={x.get("best_hr_worker","")} reason={x.get("reason","")}')
+            lines.append("")
+            details["cache_suboptimal"] = "\n".join(lines)
+        if c.get("eviction_impact"):
+            lines = ["# Cache 驱逐影响详情", ""]
+            for x in c["eviction_impact"][:200]:
+                lines.append(f'- session={x.get("session_id","")} interval={x.get("interval_mins",0)}m hitRatio_after={x.get("hitRatio_after",0)} evicted={x.get("evicted",False)}')
+            lines.append("")
+            details["cache_eviction"] = "\n".join(lines)
+        if c.get("fallback_reasons"):
+            lines = ["# Cache Fallback 原因详情", ""]
+            for x in c["fallback_reasons"]:
+                lines.append(f'- {x.get("value","")}: {x.get("count",0)} ({x.get("pct",0)}%)')
+            lines.append("")
+            details["cache_fallback"] = "\n".join(lines)
+        if c.get("cross_diagnosis"):
+            lines = ["# Cache 交叉诊断详情", ""]
+            for x in c["cross_diagnosis"]:
+                lines.append(f'- diagnosis={x.get("diagnosis","")}, action={x.get("action","")}, avg_stickiness={x.get("avg_stickiness_pct",0)}%')
+            lines.append("")
+            details["cache_cross"] = "\n".join(lines)
 
     if "trace" in results:
         summary, detail_dict = format_trace_report(results["trace"])
@@ -216,6 +318,40 @@ def save_detailed_report(report_text, output_dir, details=None):
             load_path = os.path.join(detail_dir, "load_select_release.md")
             with open(load_path, "w", encoding="utf-8") as f:
                 f.write(details["load_select_release"])
+
+        if details.get("latency_diagnoses"):
+            latency_path = os.path.join(detail_dir, "latency_diagnoses.md")
+            with open(latency_path, "w", encoding="utf-8") as f:
+                f.write(details["latency_diagnoses"])
+
+        if details.get("cache_diagnosis"):
+            cache_path = os.path.join(detail_dir, "cache_diagnosis.md")
+            with open(cache_path, "w", encoding="utf-8") as f:
+                f.write(details["cache_diagnosis"])
+        if details.get("load_diagnoses"):
+            with open(os.path.join(detail_dir, "load_diagnoses.md"), "w", encoding="utf-8") as f:
+                f.write(details["load_diagnoses"])
+        if details.get("load_counter_state"):
+            with open(os.path.join(detail_dir, "load_counter_state.md"), "w", encoding="utf-8") as f:
+                f.write(details["load_counter_state"])
+        if details.get("cache_session_stickiness"):
+            with open(os.path.join(detail_dir, "cache_session_stickiness.md"), "w", encoding="utf-8") as f:
+                f.write(details["cache_session_stickiness"])
+        if details.get("cache_suboptimal"):
+            with open(os.path.join(detail_dir, "cache_suboptimal.md"), "w", encoding="utf-8") as f:
+                f.write(details["cache_suboptimal"])
+        if details.get("cache_eviction"):
+            with open(os.path.join(detail_dir, "cache_eviction.md"), "w", encoding="utf-8") as f:
+                f.write(details["cache_eviction"])
+        if details.get("cache_fallback"):
+            with open(os.path.join(detail_dir, "cache_fallback.md"), "w", encoding="utf-8") as f:
+                f.write(details["cache_fallback"])
+        if details.get("cache_cross"):
+            with open(os.path.join(detail_dir, "cache_cross.md"), "w", encoding="utf-8") as f:
+                f.write(details["cache_cross"])
+        if details.get("errors_topn"):
+            with open(os.path.join(detail_dir, "errors_topn.md"), "w", encoding="utf-8") as f:
+                f.write(details["errors_topn"])
 
         for trace_id, trace_text in details.get("trace_files", {}).items():
             safe_id = trace_id.replace("/", "_")
