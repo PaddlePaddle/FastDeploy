@@ -11,7 +11,7 @@ Options:
     --health            仅分析 Worker 健康
     --cache             仅分析 Cache 调度
     --load              仅分析负载与计数器
-    --trace ID          追踪指定请求（支持逗号分隔多 ID）
+    --trace ID          追踪指定请求（支持逗号分隔多 ID；传 all 可全量追踪）
     --tail N            仅分析尾部 N 行（支持 N 或 Nm 格式如 30m）
     --start TIME        起始时间（如 "16:00:00"、"03/31 16:00"）
     --end TIME          结束时间（如 "17:00:00"、"2026/03/31 17:00:00"）
@@ -292,44 +292,58 @@ def format_full_report(results, status, status_reason):
         if detail:
             details["cache_diagnosis"] = detail
         c = results["cache"]
+        lines = ["# Cache Session 粘性详情", ""]
         if c.get("session_stickiness"):
-            lines = ["# Cache Session 粘性详情", ""]
             for sid, s in c["session_stickiness"].items():
                 lines.append(
                     f'- {sid}: req={s.get("total_requests",0)}, stickiness={s.get("stickiness_pct",0)}%, switches={s.get("switches",0)}'
                 )
-            lines.append("")
-            details["cache_session_stickiness"] = "\n".join(lines)
+        else:
+            lines.append("- 无可用样本（需要同一 session 至少 2 次请求）。")
+        lines.append("")
+        details["cache_session_stickiness"] = "\n".join(lines)
+
+        lines = ["# Cache 非最优选择详情", ""]
         if c.get("suboptimal_selections"):
-            lines = ["# Cache 非最优选择详情", ""]
             for x in c["suboptimal_selections"][:200]:
                 lines.append(
                     f'- [{x.get("ts","")}] selected={x.get("selected","")} best={x.get("best_hr_worker","")} reason={x.get("reason","")}'
                 )
-            lines.append("")
-            details["cache_suboptimal"] = "\n".join(lines)
+        else:
+            lines.append("- 未发现非最优选择。")
+        lines.append("")
+        details["cache_suboptimal"] = "\n".join(lines)
+
+        lines = ["# Cache 驱逐影响详情", ""]
         if c.get("eviction_impact"):
-            lines = ["# Cache 驱逐影响详情", ""]
             for x in c["eviction_impact"][:200]:
                 lines.append(
                     f'- session={x.get("session_id","")} interval={x.get("interval_mins",0)}m hitRatio_after={x.get("hitRatio_after",0)} evicted={x.get("evicted",False)}'
                 )
-            lines.append("")
-            details["cache_eviction"] = "\n".join(lines)
+        else:
+            lines.append("- 未检测到超时驱逐样本。")
+        lines.append("")
+        details["cache_eviction"] = "\n".join(lines)
+
+        lines = ["# Cache Fallback 原因详情", ""]
         if c.get("fallback_reasons"):
-            lines = ["# Cache Fallback 原因详情", ""]
             for x in c["fallback_reasons"]:
                 lines.append(f'- {x.get("value","")}: {x.get("count",0)} ({x.get("pct",0)}%)')
-            lines.append("")
-            details["cache_fallback"] = "\n".join(lines)
+        else:
+            lines.append("- 未出现 fallback 记录。")
+        lines.append("")
+        details["cache_fallback"] = "\n".join(lines)
+
+        lines = ["# Cache 交叉诊断详情", ""]
         if c.get("cross_diagnosis"):
-            lines = ["# Cache 交叉诊断详情", ""]
             for x in c["cross_diagnosis"]:
                 lines.append(
                     f'- diagnosis={x.get("diagnosis","")}, action={x.get("action","")}, avg_stickiness={x.get("avg_stickiness_pct",0)}%'
                 )
-            lines.append("")
-            details["cache_cross"] = "\n".join(lines)
+        else:
+            lines.append("- 样本不足，未生成交叉诊断。")
+        lines.append("")
+        details["cache_cross"] = "\n".join(lines)
 
     if "trace" in results:
         summary, detail_dict = format_trace_report(results["trace"])
@@ -386,19 +400,19 @@ def save_detailed_report(report_text, output_dir, details=None):
         if details.get("load_counter_state"):
             with open(os.path.join(detail_dir, "load_counter_state.md"), "w", encoding="utf-8") as f:
                 f.write(details["load_counter_state"])
-        if details.get("cache_session_stickiness"):
+        if details.get("cache_session_stickiness") is not None:
             with open(os.path.join(detail_dir, "cache_session_stickiness.md"), "w", encoding="utf-8") as f:
                 f.write(details["cache_session_stickiness"])
-        if details.get("cache_suboptimal"):
+        if details.get("cache_suboptimal") is not None:
             with open(os.path.join(detail_dir, "cache_suboptimal.md"), "w", encoding="utf-8") as f:
                 f.write(details["cache_suboptimal"])
-        if details.get("cache_eviction"):
+        if details.get("cache_eviction") is not None:
             with open(os.path.join(detail_dir, "cache_eviction.md"), "w", encoding="utf-8") as f:
                 f.write(details["cache_eviction"])
-        if details.get("cache_fallback"):
+        if details.get("cache_fallback") is not None:
             with open(os.path.join(detail_dir, "cache_fallback.md"), "w", encoding="utf-8") as f:
                 f.write(details["cache_fallback"])
-        if details.get("cache_cross"):
+        if details.get("cache_cross") is not None:
             with open(os.path.join(detail_dir, "cache_cross.md"), "w", encoding="utf-8") as f:
                 f.write(details["cache_cross"])
         if details.get("errors_topn"):
@@ -426,7 +440,7 @@ def main():
     parser.add_argument("--health", action="store_true", help="仅分析 Worker 健康")
     parser.add_argument("--cache", action="store_true", help="仅分析 Cache 调度")
     parser.add_argument("--load", action="store_true", help="仅分析负载与计数器")
-    parser.add_argument("--trace", metavar="ID", help="追踪指定请求（逗号分隔多 ID）")
+    parser.add_argument("--trace", metavar="ID", help="追踪指定请求（逗号分隔多 ID；传 all 可全量追踪）")
     parser.add_argument("--tail", help="尾部行数或分钟数 (如 5000 或 30m)")
     parser.add_argument(
         "--start", default=None, help='起始时间（如 "16:00:00"、"03/31 16:00"、"2026/03/31 16:00:00"）'
@@ -478,7 +492,7 @@ def main():
     run_health = args.health or (not any_mode)
     run_load = args.load or (not any_mode)
     run_cache = args.cache or (not any_mode)
-    run_trace = bool(args.trace)  # trace 需要指定 ID，全量扫描不自动调用
+    run_trace = bool(args.trace)  # trace 需要指定 ID（支持 all），全量扫描不自动调用
 
     results = {}
     step = 0
