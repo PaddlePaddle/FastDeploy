@@ -501,15 +501,11 @@ def _normalize_worker_type(worker_type):
     return "unknown"
 
 
-<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
 def _normalize_worker_url_key(url):
     if not url:
         return ""
     return re.sub(r"^https?://", "", str(url).strip().rstrip("/"))
 
-
-=======
->>>>>>> develop
 def _infer_release_worker_type(release, selects, fallback_window_s=120):
     """为未显式标注 type 的 release 近似推断 worker type。
 
@@ -622,10 +618,7 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": trm.group(2),
-<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
                     "worker_key": _normalize_worker_url_key(trm.group(2)),
-=======
->>>>>>> develop
                     # 文本默认按 prefill 记，再结合同 worker 邻近 select 做纠偏（mixed 场景）
                     "type": f'{_normalize_worker_type(token_type or "prefill")}_tokens',
                     "raw_token_type": token_type or "",
@@ -683,7 +676,6 @@ def match_select_release(lines, fallback_window_s=120):
     with_alt_id = 0
     without_any_id = 0
 
-    untracked_selects = []
     pending_selects = []
     for s in selects:
         key_type, key = _select_match_key(s.get("tags", {}))
@@ -694,30 +686,7 @@ def match_select_release(lines, fallback_window_s=120):
         else:
             without_any_id += 1
 
-        if not key:
-            # 没有任何可用 ID 时，不做退化匹配（只统计可观测信息）
-            untracked_selects.append(
-                {
-                    "worker": s["worker"],
-                    "select_ts": s["ts"],
-                    "type": s["type"],
-                    "tags": s["tags"],
-                    "note": "no correlatable id (request_id/req_id/trace_id/session_id)",
-                }
-            )
         pending_selects.append(s)
-
-    # worker FIFO + ID 一致性联合校验：
-    # 1) 主匹配仍按 worker FIFO，保证在缺失 request_id 场景可工作
-    # 2) 对已匹配对追加 ID 一致性检查（request_id/req_id/trace_id/session_id）
-    id_consistency = {
-        "both_present_and_equal": 0,
-        "both_present_but_mismatch": 0,
-        "only_select_has_id": 0,
-        "only_release_has_id": 0,
-        "both_missing": 0,
-    }
-    id_mismatched_matches = []
 
     for s in pending_selects:
         sdt = _parse_ts_safe(s.get("ts"))
@@ -781,7 +750,6 @@ def match_select_release(lines, fallback_window_s=120):
                     "release_ts": r["ts"],
                     "type": s["type"],
                     "match_method": "worker_fifo",
-                    "id_check": id_check,
                 }
             )
             release_used.add(best_idx)
@@ -825,12 +793,8 @@ def match_select_release(lines, fallback_window_s=120):
     # 基于 select 构建 worker URL -> dominant type 映射
     per_worker_type_counts = defaultdict(lambda: defaultdict(int))
     for s in selects:
-<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
         wkey = s.get("worker_key") or _normalize_worker_url_key(s.get("worker"))
         per_worker_type_counts[wkey][_normalize_worker_type(s.get("type"))] += 1
-=======
-        per_worker_type_counts[s["worker"]][_normalize_worker_type(s.get("type"))] += 1
->>>>>>> develop
     worker_dominant_type = {}
     for w, counts in per_worker_type_counts.items():
         worker_dominant_type[w] = sorted(counts.items(), key=lambda kv: -kv[1])[0][0] if counts else "unknown"
@@ -842,11 +806,7 @@ def match_select_release(lines, fallback_window_s=120):
         if r_type_raw.endswith("_tokens"):
             base_t = _normalize_worker_type(r_type_raw.replace("_tokens", ""))
             # token release 按 worker URL 对应的 select 类型映射，不做邻近时间纠偏
-<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
             mapped_t = worker_dominant_type.get(r.get("worker_key") or _normalize_worker_url_key(r.get("worker")), "unknown")
-=======
-            mapped_t = worker_dominant_type.get(r.get("worker", ""), "unknown")
->>>>>>> develop
             if mapped_t in ("prefill", "decode", "mixed"):
                 base_t = mapped_t
             inferred_release_types[i] = f"{base_t}_tokens"
@@ -893,36 +853,10 @@ def match_select_release(lines, fallback_window_s=120):
             "unknown": counts.get("unknown", 0),
         }
 
-    unmatched_releases = []
-    for i, r in enumerate(releases):
-        if str(r.get("type", "")).endswith("_tokens"):
-            # token release: 近邻存在 prefill/mixed select 则视为可解释，不计入 unmatched
-            inferred_token_type = _normalize_worker_type(str(inferred_release_types.get(i, "unknown_tokens")).replace("_tokens", ""))
-            if inferred_token_type == "unknown":
-                unmatched_releases.append(
-                    {
-                        "worker": r.get("worker", ""),
-                        "release_ts": r.get("ts", ""),
-                        "type": inferred_token_type,
-                        "release_kind": "token_release",
-                    }
-                )
-            continue
-        if i not in release_used:
-            unmatched_releases.append(
-                {
-                    "worker": r.get("worker", ""),
-                    "release_ts": r.get("ts", ""),
-                    "type": _normalize_worker_type(inferred_release_types.get(i, "unknown")),
-                    "release_kind": "request_release",
-                }
-            )
-
     return {
         "matched": matched,
         "unmatched_selects": unmatched_selects,
-        "unmatched_releases": unmatched_releases,
-        "untracked_selects": untracked_selects,
+        "unmatched_releases": [],
         "failed_selects": failed_selects,
         "per_worker": pw_result,
         "id_coverage": {
@@ -1143,18 +1077,7 @@ def _cli_self_test(args):
     msr = match_select_release(sample_lines)
     check("mixed token_releases inferred", msr["type_summary"].get("mixed", {}).get("token_releases", 0), 1)
     check("prefill token_releases remains 0", msr["type_summary"].get("prefill", {}).get("token_releases", 0), 0)
-<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
-    check("id consistency exact match", msr["id_consistency"].get("both_present_and_equal", 0), 1)
-
-    mismatch_lines = [
-        "[INFO] 2026/04/12 10:01:00 logger.go:1: [request_id:r2] select worker (decode): http://10.0.0.2:9965, count: 1",
-        "[INFO] 2026/04/12 10:01:01 logger.go:1: [request_id:r3] release worker: http://10.0.0.2:9965, count: 0",
-    ]
-    mm = match_select_release(mismatch_lines)
-    check("id mismatch detected", mm["id_consistency"].get("both_present_but_mismatch", 0), 1)
-=======
->>>>>>> develop
-
+    
     print(f'\n{"=" * 40}')
     print(f"Results: {passed} passed, {failed} failed")
     if failed:

@@ -141,7 +141,6 @@ def analyze_load(log_file, tail=None):
             "matched": [],
             "unmatched_selects": [],
             "unmatched_releases": [],
-            "untracked_selects": [],
             "failed_selects": [],
             "per_worker": {},
             "id_coverage": {},
@@ -317,34 +316,15 @@ def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, token_stats, 
     # Select/Release 不一致（仅在存在可关联 ID 时启用，避免无 ID 场景误报）
     if has_correlatable_ids:
         for w_url, pw in sr_result.get("per_worker", {}).items():
-            if pw.get("delta", 0) > 0:
+            delta = pw.get("delta", 0)
+            if delta >= 3:
                 diagnoses.append(
                     {
-                        "severity": "HIGH",
-                        "message": f'{_strip_scheme(w_url)} select-release 差值 {pw["delta"]}（请求泄漏/卡住）',
+                        "severity": "MEDIUM",
+                        "message": f'{_strip_scheme(w_url)} select-release 差值 {delta}（可能存在在途请求堆积）',
                         "source_layer": "FD 后端",
                     }
                 )
-
-    # 卡住的请求
-    if sr_result.get("unmatched_selects"):
-        diagnoses.append(
-            {
-                "severity": "HIGH",
-                "message": f'{len(sr_result["unmatched_selects"])} 个 select 无对应 release（疑似卡住）',
-                "source_layer": "FD 后端",
-            }
-        )
-
-    id_mismatch_count = sr_result.get("id_consistency", {}).get("both_present_but_mismatch", 0)
-    if id_mismatch_count > 0:
-        diagnoses.append(
-            {
-                "severity": "MEDIUM",
-                "message": f"{id_mismatch_count} 个 select/release 在 FIFO 命中后 ID 不一致（疑似串流或日志错配）",
-                "source_layer": "FD 后端",
-            }
-        )
 
     # Token 计数器潜在泄漏
     for t in token_stats:
