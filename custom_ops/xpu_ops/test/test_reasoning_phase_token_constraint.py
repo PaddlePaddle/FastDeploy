@@ -406,7 +406,7 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         all tokens are batch-first tokens
         """
 
-        paddle.set_device("gpu")
+        paddle.set_device("xpu")
 
         # ------------------------
         # config

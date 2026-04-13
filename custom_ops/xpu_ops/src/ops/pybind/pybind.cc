@@ -537,9 +537,12 @@ void GetOutputEPDynamic(const paddle::Tensor& x,
                         bool wait_flag,
                         int msg_queue_id);
 
-std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
-                                             const paddle::Tensor& seq_len,
-                                             const int64_t cpu_token_num);
+std::vector<paddle::Tensor> GetPaddingOffset(
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::optional<paddle::Tensor>& draft_tokens,
+    const paddle::optional<paddle::Tensor>& seq_lens_encoder,
+    const int64_t cpu_token_num);
 
 void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& stop_flags,
@@ -1157,6 +1160,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &GetPaddingOffset,
         py::arg("input_ids"),
         py::arg("seq_len"),
+        py::arg("draft_tokens"),
+        py::arg("seq_lens_encoder"),
         py::arg("cpu_token_num"),
         "get padding offset function");
 
