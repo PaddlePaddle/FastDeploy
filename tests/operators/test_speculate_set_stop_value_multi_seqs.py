@@ -42,7 +42,7 @@ def to_paddle_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
     return paddle_inputs
 
 
-def run_kernel(paddle_inputs, inputs):
+def run_kernel(paddle_inputs):
     """Call the CUDA kernel."""
     speculate_set_stop_value_multi_seqs(
         paddle_inputs["accept_tokens"],
@@ -137,7 +137,18 @@ def gen_inputs(
 
 
 def reference_spec_set_stop_value_multi_seqs(inputs: Dict[str, Any]) -> Dict[str, Any]:
-    """Python reference — must match CUDA kernel logic exactly."""
+    """Python reference — must match CUDA kernel logic exactly.
+
+    token_ids_all 布局 (新 step_idx 语义):
+      pre_ids_now[k] = 第 k 个 output token (k >= 0, 0-indexed)
+      最后一个 output token 在 pre_ids_now[step_idx - 1]
+      step_idx = 历史已生成的 token 数量
+
+    核心设计:
+      1. accept_idx 从 -1 开始，-1 表示检查 pre_ids 末尾（上一轮延迟的情况）
+      2. 主循环检查 accept_idx <= accept_num - 2
+      3. 匹配成功时: 保留 stop_seq 所有 token，在其后追加 eos
+    """
     accept_tokens = inputs["accept_tokens"].copy()
     accept_num = inputs["accept_num"].copy()
     stop_flags = inputs["stop_flags"].copy()
@@ -166,27 +177,36 @@ def reference_spec_set_stop_value_multi_seqs(inputs: Dict[str, Any]) -> Dict[str
             step_idx_now = int(step_idx[bid])
             min_token_limit = int(min_tokens[bid])
 
-            can_stop = step_idx_now >= min_token_limit
+            can_stop = step_idx_now + an >= min_token_limit
             if not can_stop:
                 continue
             if stop_flags[bid]:
                 continue
 
-            accept_idx = 0
+            # CUDA kernel: accept_idx 从 -1 开始，检查 pre_ids 末尾
+            accept_idx = -1
             is_end = False
-            while accept_idx <= an - 1 and not is_end:
+
+            # loop_end = accept_num > 0 ? accept_num - 2 : -1
+            loop_end = an - 2 if an > 0 else -1
+            while accept_idx <= loop_end and not is_end:
                 if step_idx_now + accept_idx + 1 < stop_seq_len:
                     accept_idx += 1
                     continue
 
-                # Check one stop_seq match
+                # 从后向前匹配 stop_seq 的每个 token
                 for i in range(stop_seq_len - 1, -1, -1):
+                    offset = stop_seq_len - 1 - i
+                    accept_tokens_idx = accept_idx - offset
                     cur_token_idx = -1
-                    if stop_seq_len - 1 - i < accept_idx:
-                        cur_token_idx = accept_tokens_now[accept_idx - (stop_seq_len - 1 - i) - 1]
+
+                    if accept_tokens_idx >= 0:
+                        cur_token_idx = accept_tokens_now[accept_tokens_idx]
                     else:
-                        pre_ids_idx = step_idx_now + accept_idx - (stop_seq_len - 1 - i)
-                        if pre_ids_idx <= 0:
+                        # 新语义: pre_ids_idx = step_idx_now + accept_tokens_idx
+                        # pre_ids_now[0] 是第 1 个 output token
+                        pre_ids_idx = step_idx_now + accept_tokens_idx
+                        if pre_ids_idx < 0:
                             break
                         cur_token_idx = pre_ids_now[pre_ids_idx]
 
@@ -199,9 +219,10 @@ def reference_spec_set_stop_value_multi_seqs(inputs: Dict[str, Any]) -> Dict[str
                 accept_idx += 1
 
             if is_end:
-                accept_num[bid] = accept_idx
-                accept_tokens[bid, accept_idx - 1] = end_ids[0]
-                # stop_flags[bid] = True  # kernel no longer sets stop_flags
+                # accept_idx 已递增，指向 stop_seq 最后 token 的下一个位置
+                # 保留 stop_seq 所有 token，在其后追加 eos
+                accept_num[bid] = accept_idx + 1
+                accept_tokens[bid, accept_idx] = end_ids[0]
 
     return {
         "accept_tokens": accept_tokens,
@@ -239,7 +260,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
 
     def _run_and_get(self, inputs):
         paddle_inputs = to_paddle_inputs(inputs)
-        run_kernel(paddle_inputs, inputs)
+        run_kernel(paddle_inputs)
         return get_outputs(paddle_inputs)
 
     def _check_all_outputs(self, inputs, outputs):
@@ -264,7 +285,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
                 self._run_full_test(test_cfg)
 
     def test_match_in_accept_tokens_only(self):
-        """Stop seq found entirely within accept_tokens."""
+        """Stop seq found entirely within accept_tokens. Eos appended after stop_seq last token."""
         inputs = gen_inputs(real_bsz=1, accept_tokens_len=5, stop_seqs_bs=1, stop_seqs_max_len=3, seed=10)
         # Place stop seq [A, B, C] at accept_tokens positions [0,1,2]
         inputs["accept_num"][:] = 4
@@ -276,9 +297,13 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["min_tokens"][:] = 0
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
+        # stop_seq [10, 20, 30] matches at accept_idx=2 (window ends at accept_tokens[2]=30)
+        # After loop increment, accept_idx=3, accept_num=4, eos appended at accept_tokens[3]
+        self.assertEqual(outputs["accept_num"][0], 4)
+        self.assertEqual(outputs["accept_tokens"][0, 3], -1)  # eos appended after stop_seq
 
     def test_match_spanning_pre_ids_and_accept(self):
-        """Stop seq spans token_ids_all (pre_ids) and accept_tokens."""
+        """Stop seq spans token_ids_all (pre_ids) and accept_tokens. Eos appended after stop_seq last token."""
         inputs = gen_inputs(
             real_bsz=1,
             accept_tokens_len=5,
@@ -290,12 +315,15 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["prompt_lens"][:] = 0
         inputs["step_idx"][:] = 6
         inputs["accept_num"][:] = 3
-        # Kernel matching at accept_idx=2 (3rd token, 0-indexed):
-        #   i=2(last): stop_seq_len-1-i=0 < accept_idx(2) -> accept_tokens[2-0-1]=accept_tokens[1]
-        #   i=1:       stop_seq_len-1-i=1 < accept_idx(2) -> accept_tokens[2-1-1]=accept_tokens[0]
-        #   i=0:       stop_seq_len-1-i=2 >= accept_idx(2) -> pre_ids[step_idx+2-(3-1-0)]=pre_ids[6]
-        # So stop_seq should be [pre_ids[6], accept_tokens[0], accept_tokens[1]]
-        inputs["token_ids_all"][0, 6] = 99
+        # stop_seq = [99, 11, 22] (len=3)
+        # 新索引公式: pre_ids_idx = step_idx_now + accept_tokens_idx
+        # pre_ids_now[k] = 第 k 个 output token (k >= 0)
+        # step_idx = 6 表示有 6 个历史 output token，在 pre_ids_now[0..5]
+        # At accept_idx=1 (window ends at accept_tokens[1]=22):
+        #   i=2: offset=0, accept_tokens_idx=1 -> accept_tokens[1]=22 vs stop_seq[2]=22 ✓
+        #   i=1: offset=1, accept_tokens_idx=0 -> accept_tokens[0]=11 vs stop_seq[1]=11 ✓
+        #   i=0: offset=2, accept_tokens_idx=-1 -> pre_ids_idx=6+(-1)=5 -> pre_ids[5]=99 vs stop_seq[0]=99 ✓
+        inputs["token_ids_all"][0, 5] = 99  # pre_ids_now[5] = 第 6 个 output token (0-indexed)
         inputs["accept_tokens"][0, :3] = [11, 22, 33]
         inputs["stop_seqs"][0, 0, :3] = [99, 11, 22]
         inputs["stop_seqs_len"][0, 0] = 3
@@ -303,12 +331,14 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["min_tokens"][:] = 0
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
-        # Match at accept_idx=2, loop increments to 3
+        # Match at accept_idx=1, loop increments to 2 -> accept_num=3, eos at accept_tokens[2]
         self.assertEqual(outputs["accept_num"][0], 3)
-        self.assertEqual(outputs["accept_tokens"][0, 2], -1)
+        self.assertEqual(outputs["accept_tokens"][0, 2], -1)  # eos appended after stop_seq
 
-    def test_match_in_pre_ids_only(self):
-        """Stop seq found entirely within token_ids_all (pre_ids), matching at accept_idx=0."""
+    def test_match_in_pre_ids_only_not_detected(self):
+        """Stop seq ending purely in pre_ids history but NOT at the end position.
+        The kernel only detects stop_seq at the very end of pre_ids via accept_idx=-1 check.
+        Stop seq placed earlier in pre_ids should not be detected."""
         inputs = gen_inputs(
             real_bsz=1,
             accept_tokens_len=5,
@@ -320,15 +350,13 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["prompt_lens"][:] = 0
         inputs["step_idx"][:] = 8
         inputs["accept_num"][:] = 3
-        # pre_ids at step_idx positions: token_ids_all[0, 6]=50, [0,7]=60, [0,8]=70
-        # stop_seq = [50, 60, 70], all 3 tokens are in pre_ids
-        # For accept_idx=0: step_idx_now + 0 + 1 = 9 >= stop_seq_len=3, so we check
-        # i=2: pre_ids_idx = 8+0-(3-1-2) = 8 -> pre_ids_now[8] = 70
-        # i=1: pre_ids_idx = 8+0-(3-1-1) = 7 -> pre_ids_now[7] = 60
-        # i=0: pre_ids_idx = 8+0-(3-1-0) = 6 -> pre_ids_now[6] = 50
-        inputs["token_ids_all"][0, 6] = 50
-        inputs["token_ids_all"][0, 7] = 60
-        inputs["token_ids_all"][0, 8] = 70
+        # 新语义: pre_ids_now[k] = 第 k 个 output token (k >= 0)
+        # step_idx = 8 表示有 8 个历史 output token，在 pre_ids_now[0..7]
+        # accept_idx=-1 会检查 pre_ids_now[7] 开始的 stop_seq
+        # 把 stop_seq 放在 pre_ids_now[2,3,4] - 不会被检测到
+        inputs["token_ids_all"][0, 2] = 50
+        inputs["token_ids_all"][0, 3] = 60
+        inputs["token_ids_all"][0, 4] = 70
         inputs["accept_tokens"][0, :3] = [1, 2, 3]
         inputs["stop_seqs"][0, 0, :3] = [50, 60, 70]
         inputs["stop_seqs_len"][0, 0] = 3
@@ -336,7 +364,8 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["min_tokens"][:] = 0
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
-        self.assertEqual(outputs["accept_num"][0], 1)
+        # No match: stop_seq is in pre_ids but not at the end, accept_num unchanged
+        self.assertEqual(outputs["accept_num"][0], 3)
 
     def test_already_stopped(self):
         """Kernel skips sequences with stop_flags=True."""
@@ -351,7 +380,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         np.testing.assert_array_equal(outputs["accept_num"], inputs["accept_num"])
 
     def test_min_tokens_blocks_stop(self):
-        """Kernel skips stop check when step_idx < min_tokens."""
+        """Kernel skips stop check when step_idx + accept_num < min_tokens."""
         inputs = gen_inputs(
             real_bsz=1,
             accept_tokens_len=5,
@@ -363,20 +392,24 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["prompt_lens"][:] = 0
         inputs["step_idx"][:] = 8
         inputs["accept_num"][:] = 3
-        # Same setup that would match (like test_match_in_pre_ids_only)
-        inputs["token_ids_all"][0, 6] = 50
-        inputs["token_ids_all"][0, 7] = 60
-        inputs["token_ids_all"][0, 8] = 70
+        # Place stop_seq in pre_ids at end position (would be detected by accept_idx=-1)
+        # pre_ids_now[0..7] = 8 个历史 output token
+        # accept_idx=-1 检查 pre_ids_now[5,6,7] 对应 stop_seq[0,1,2]
+        inputs["token_ids_all"][0, 5] = 50
+        inputs["token_ids_all"][0, 6] = 60
+        inputs["token_ids_all"][0, 7] = 70
         inputs["accept_tokens"][0, :3] = [1, 2, 3]
         inputs["stop_seqs"][0, 0, :3] = [50, 60, 70]
         inputs["stop_seqs_len"][0, 0] = 3
         inputs["stop_flags"][:] = False
-        inputs["min_tokens"][:] = 100  # step_idx=8 < 100, should NOT stop
+        inputs["min_tokens"][:] = 100  # step_idx+accept_num=11 < 100, should NOT stop
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
+        # min_tokens prevents stop, accept_num unchanged
+        self.assertEqual(outputs["accept_num"][0], 3)
 
     def test_min_tokens_allows_stop(self):
-        """Kernel allows stop when step_idx >= min_tokens."""
+        """Kernel allows stop when step_idx + accept_num >= min_tokens."""
         inputs = gen_inputs(
             real_bsz=1,
             accept_tokens_len=5,
@@ -388,15 +421,17 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["prompt_lens"][:] = 0
         inputs["step_idx"][:] = 8
         inputs["accept_num"][:] = 3
-        # Put stop_seq entirely in pre_ids (same pattern as test_match_in_pre_ids_only)
-        inputs["token_ids_all"][0, 6] = 50
-        inputs["token_ids_all"][0, 7] = 60
-        inputs["token_ids_all"][0, 8] = 70
-        inputs["accept_tokens"][0, :3] = [1, 2, 3]
-        inputs["stop_seqs"][0, 0, :3] = [50, 60, 70]
-        inputs["stop_seqs_len"][0, 0] = 3
+        # stop_seq [X, 50] spans pre_ids and accept_tokens[0].
+        # 新索引公式: pre_ids_idx = step_idx_now + accept_tokens_idx
+        # At accept_idx=0 (window ends at accept_tokens[0]=50):
+        #   i=1: offset=0, accept_tokens_idx=0 -> accept_tokens[0]=50 vs stop_seq[1]=50 ✓
+        #   i=0: offset=1, accept_tokens_idx=-1 -> pre_ids_idx=8+(-1)=7 -> pre_ids[7]
+        pre_val = int(inputs["token_ids_all"][0, 7])  # pre_ids_now[7]
+        inputs["accept_tokens"][0, :3] = [50, 60, 70]
+        inputs["stop_seqs"][0, 0, :2] = [pre_val, 50]
+        inputs["stop_seqs_len"][0, 0] = 2
         inputs["stop_flags"][:] = False
-        inputs["min_tokens"][:] = 5  # step_idx=8 >= 5, should stop
+        inputs["min_tokens"][:] = 5  # step_idx+accept_num=11 >= 5, should stop
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
 
@@ -413,20 +448,24 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["prompt_lens"][:] = 0
         inputs["step_idx"][:] = 8
         inputs["accept_num"][:] = 3
-        # accept_tokens: stop_seq[20,30] matches at accept_idx=2:
-        #   i=1: accept_tokens[2-0-1]=accept_tokens[1]=30 vs stop_seq[1]=30 OK
-        #   i=0: accept_tokens[2-1-1]=accept_tokens[0]=20 vs stop_seq[0]=20 OK
+        # accept_tokens: [20, 30, 40]
+        # Second stop seq [20, 30] matches at accept_idx=1 (window ends at accept_tokens[1]=30):
+        #   i=1: offset=0, accept_tokens_idx=1 -> accept_tokens[1]=30 vs stop_seq[1]=30 ✓
+        #   i=0: offset=1, accept_tokens_idx=0 -> accept_tokens[0]=20 vs stop_seq[0]=20 ✓
         inputs["accept_tokens"][0, :3] = [20, 30, 40]
         # First stop seq doesn't match
         inputs["stop_seqs"][0, 0, :3] = [99, 98, 97]
         inputs["stop_seqs_len"][0, 0] = 3
-        # Second stop seq matches
+        # Second stop seq [20, 30] matches
         inputs["stop_seqs"][0, 1, :2] = [20, 30]
         inputs["stop_seqs_len"][0, 1] = 2
         inputs["stop_flags"][:] = False
         inputs["min_tokens"][:] = 0
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
+        # Match at accept_idx=1 -> accept_num=3, eos at accept_tokens[2]
+        self.assertEqual(outputs["accept_num"][0], 3)
+        self.assertEqual(outputs["accept_tokens"][0, 2], -1)  # eos appended after stop_seq
 
     def test_nonzero_prompt_lens(self):
         """Verify prompt_lens offset is applied correctly."""
@@ -444,19 +483,104 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         inputs["accept_num"][:] = 2
         inputs["accept_tokens"][0, :2] = [55, 66]
         # pre_ids_now starts at token_ids_all[0, prompt_len:]
-        # stop_seq = [X, 55] where X = token_ids_all[0, prompt_len + step_idx]
-        # For accept_idx=0: pre_ids_idx = step_idx + 0 - (2-1-0) = 5-1 = 4
-        #   -> pre_ids_now[4] = token_ids_all[0, prompt_len + 4]
-        # For accept_idx=1 (second token is accept_tokens[0,0]=55):
-        #   i=1: accept_tokens_now[1-(2-1-1)-1] = accept_tokens_now[0] = 55
-        #   i=0: pre_ids_idx = step_idx + 1 - (2-1-0) = 5+1-1 = 5 -> pre_ids_now[5]
-        target_val = int(inputs["token_ids_all"][0, prompt_len + 5])
+        # pre_ids_now[k] = 第 k 个 output token (k >= 0)
+        # 新索引公式: pre_ids_idx = step_idx_now + accept_tokens_idx
+        # stop_seq = [X, 55] where X = pre_ids_now[5 + (-1)] = pre_ids_now[4]
+        # At accept_idx=0 (window ends at accept_tokens[0]=55):
+        #   i=1: offset=0, accept_tokens_idx=0 -> accept_tokens[0]=55 vs stop_seq[1]=55 ✓
+        #   i=0: offset=1, accept_tokens_idx=-1 -> pre_ids_idx=5+(-1)=4 -> pre_ids[4]=token_ids_all[0, prompt_len+4]
+        target_val = int(inputs["token_ids_all"][0, prompt_len + 4])
         inputs["stop_seqs"][0, 0, :2] = [target_val, 55]
         inputs["stop_seqs_len"][0, 0] = 2
         inputs["stop_flags"][:] = False
         inputs["min_tokens"][:] = 0
         outputs = self._run_and_get(inputs)
         self._check_all_outputs(inputs, outputs)
+        # Match at accept_idx=0 -> accept_num=2, eos at accept_tokens[1]
+        self.assertEqual(outputs["accept_num"][0], 2)
+        self.assertEqual(outputs["accept_tokens"][0, 1], -1)  # eos appended after stop_seq
+
+    def test_single_token_stop_seq_preserved(self):
+        """Single token stop_seq (like <|im_end|>) with eos appended after it."""
+        inputs = gen_inputs(
+            real_bsz=1,
+            accept_tokens_len=5,
+            max_model_len=32,
+            stop_seqs_bs=1,
+            stop_seqs_max_len=1,
+            seed=90,
+        )
+        inputs["prompt_lens"][:] = 0
+        inputs["step_idx"][:] = 10
+        inputs["accept_num"][:] = 4
+        # accept_tokens: [a, b, <|im_end|>, d] where <|im_end|> has token id 999
+        inputs["accept_tokens"][0, :4] = [100, 200, 999, 300]
+        # stop_seq = [<|im_end|>] (single token)
+        inputs["stop_seqs"][0, 0, 0] = 999
+        inputs["stop_seqs_len"][0, 0] = 1
+        inputs["stop_flags"][:] = False
+        inputs["min_tokens"][:] = 0
+        outputs = self._run_and_get(inputs)
+        self._check_all_outputs(inputs, outputs)
+        # Match at accept_idx=2 (window ends at accept_tokens[2]=999)
+        # After loop increment, accept_idx=3, accept_num=4, eos at accept_tokens[3]
+        self.assertEqual(outputs["accept_num"][0], 4)
+        self.assertEqual(outputs["accept_tokens"][0, 3], -1)  # eos appended after stop_seq
+
+    def test_stop_seq_at_last_position_not_detected(self):
+        """Stop seq at the last position of accept_tokens is NOT detected (deferred to next round)."""
+        inputs = gen_inputs(
+            real_bsz=1,
+            accept_tokens_len=5,
+            max_model_len=32,
+            stop_seqs_bs=1,
+            stop_seqs_max_len=1,
+            seed=100,
+        )
+        inputs["prompt_lens"][:] = 0
+        inputs["step_idx"][:] = 10
+        inputs["accept_num"][:] = 4
+        # stop_seq [999] is at accept_tokens[3] (last valid position)
+        # Since we only check up to accept_num - 2 = 2, this won't be detected
+        inputs["accept_tokens"][0, :4] = [100, 200, 300, 999]
+        inputs["stop_seqs"][0, 0, 0] = 999
+        inputs["stop_seqs_len"][0, 0] = 1
+        inputs["stop_flags"][:] = False
+        inputs["min_tokens"][:] = 0
+        outputs = self._run_and_get(inputs)
+        self._check_all_outputs(inputs, outputs)
+        # No match because accept_idx only goes up to 2, and 999 is at position 3
+        # accept_num unchanged
+        self.assertEqual(outputs["accept_num"][0], 4)
+
+    def test_stop_seq_detected_from_previous_round(self):
+        """Stop seq at the end of pre_ids (from previous round) is detected via accept_idx=-1."""
+        inputs = gen_inputs(
+            real_bsz=1,
+            accept_tokens_len=5,
+            max_model_len=32,
+            stop_seqs_bs=1,
+            stop_seqs_max_len=1,
+            seed=110,
+        )
+        inputs["prompt_lens"][:] = 0
+        # 新语义: pre_ids_now[k] = 第 k 个 output token (k >= 0)
+        # step_idx = 10 表示有 10 个历史 output token，在 pre_ids_now[0..9]
+        # accept_idx=-1 检查 pre_ids_now[9] (最后一个历史 token)
+        inputs["step_idx"][:] = 10
+        inputs["token_ids_all"][0, 9] = 999  # pre_ids_now[9] = 第 10 个 output token (0-indexed)
+        inputs["accept_num"][:] = 3
+        inputs["accept_tokens"][0, :3] = [100, 200, 300]
+        inputs["stop_seqs"][0, 0, 0] = 999
+        inputs["stop_seqs_len"][0, 0] = 1
+        inputs["stop_flags"][:] = False
+        inputs["min_tokens"][:] = 0
+        outputs = self._run_and_get(inputs)
+        self._check_all_outputs(inputs, outputs)
+        # stop_seq [999] was in pre_ids at end, accept_idx=-1 matches
+        # After loop increment, accept_idx=0, accept_num=1, eos at accept_tokens[0]
+        self.assertEqual(outputs["accept_num"][0], 1)
+        self.assertEqual(outputs["accept_tokens"][0, 0], -1)  # replaced with eos
 
 
 if __name__ == "__main__":
