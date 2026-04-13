@@ -116,6 +116,14 @@ class TestErnieX1ToolParser(unittest.TestCase):
         self.assertTrue(result.tools_called)
         self.assertEqual(result.tool_calls[0].function.arguments, "{}")
 
+    def test_extract_tool_calls_empty_arguments(self):
+        """Cover: tool call with explicit empty arguments {}"""
+        output = '<tool_call>{"name": "fn", "arguments": {}}</tool_call>'
+        result = self.parser.extract_tool_calls(output, self.dummy_request)
+        self.assertTrue(result.tools_called)
+        self.assertEqual(result.tool_calls[0].function.name, "fn")
+        self.assertEqual(result.tool_calls[0].function.arguments, "{}")
+
     def test_extract_tool_calls_nested_arguments(self):
         """Cover regex with nested braces in arguments"""
         output = '<tool_call>{"name": "query", "arguments": {"filter": {"age": {"$gt": 18}}}}</tool_call>'
@@ -385,6 +393,96 @@ class TestErnieX1ToolParser(unittest.TestCase):
         # diff is None (no arguments), so falls through to partial_json_parser
         self.assertTrue(result is None or isinstance(result, DeltaMessage))
 
+    def test_streaming_close_with_empty_dict_arguments(self):
+        """Regression: close branch must handle arguments={} (empty dict).
+
+        Before fix, `if diff:` was False for empty dict {}, so the close
+        logic was skipped. After fix, `if diff is not None:` correctly
+        enters the branch.
+        """
+        parser = self._new_parser()
+        parser.current_tool_id = 0
+        parser.current_tool_name_sent = True
+        parser.streamed_args_for_tool = ["{}"]
+        parser.prev_tool_call_arr = [{"name": "fn", "arguments": {}}]
+        result = parser.extract_tool_calls_streaming(
+            '<tool_call>{"name":"fn","arguments":{}}',
+            '<tool_call>{"name":"fn","arguments":{}}</tool_call>',
+            "}</tool_call>",
+            [1, 10],
+            [1, 10, 2],
+            [2],
+            self.dummy_request,
+        )
+        # diff={} is not None -> enters close handler
+        # '}' in "}" but diff="" after rindex -> returns None
+        self.assertIsNone(result)
+
+    def test_streaming_close_with_number_ending_arguments(self):
+        """Regression: close branch must flush remaining args ending with number.
+
+        Before fix, '"}' not in '123}}' was True, causing return None.
+        After fix, rindex('}') correctly extracts '123}' as remaining diff.
+        """
+        parser = self._new_parser()
+        parser.current_tool_id = 0
+        parser.current_tool_name_sent = True
+        parser.streamed_args_for_tool = ['{"count": ']
+        parser.prev_tool_call_arr = [{"name": "fn", "arguments": {"count": 123}}]
+        result = parser.extract_tool_calls_streaming(
+            '<tool_call>{"name":"fn","arguments":{"count": ',
+            '<tool_call>{"name":"fn","arguments":{"count": 123}}</tool_call>',
+            "123}}</tool_call>",
+            [1, 10],
+            [1, 10, 2],
+            [2],
+            self.dummy_request,
+        )
+        # delta after stripping </tool_call> = "123}}"
+        # rindex('}')=last '}', diff="123}" -> streams remaining
+        self.assertIsNotNone(result)
+        self.assertIsNotNone(result.tool_calls)
+        self.assertEqual(result.tool_calls[0].function.arguments, "123}")
+
+    def test_streaming_close_with_boolean_ending_arguments(self):
+        """Regression: close branch must flush remaining args ending with boolean."""
+        parser = self._new_parser()
+        parser.current_tool_id = 0
+        parser.current_tool_name_sent = True
+        parser.streamed_args_for_tool = ['{"flag": ']
+        parser.prev_tool_call_arr = [{"name": "fn", "arguments": {"flag": True}}]
+        result = parser.extract_tool_calls_streaming(
+            '<tool_call>{"name":"fn","arguments":{"flag": ',
+            '<tool_call>{"name":"fn","arguments":{"flag": true}}</tool_call>',
+            "true}}</tool_call>",
+            [1, 10],
+            [1, 10, 2],
+            [2],
+            self.dummy_request,
+        )
+        self.assertIsNotNone(result)
+        self.assertEqual(result.tool_calls[0].function.arguments, "true}")
+
+    def test_streaming_close_with_nested_object_ending(self):
+        """Regression: close branch must flush remaining args ending with nested '}'."""
+        parser = self._new_parser()
+        parser.current_tool_id = 0
+        parser.current_tool_name_sent = True
+        parser.streamed_args_for_tool = ['{"nested": {"a": ']
+        parser.prev_tool_call_arr = [{"name": "fn", "arguments": {"nested": {"a": 1}}}]
+        result = parser.extract_tool_calls_streaming(
+            '<tool_call>{"name":"fn","arguments":{"nested": {"a": ',
+            '<tool_call>{"name":"fn","arguments":{"nested": {"a": 1}}}</tool_call>',
+            "1}}}</tool_call>",
+            [1, 10],
+            [1, 10, 2],
+            [2],
+            self.dummy_request,
+        )
+        # delta after strip = "1}}}", rindex('}')=last, diff="1}}"
+        self.assertIsNotNone(result)
+        self.assertEqual(result.tool_calls[0].function.arguments, "1}}")
+
     # --- Lines 202-206: else branch (cur_start < cur_end, edge case) ---
 
     def test_streaming_else_branch(self):
@@ -572,6 +670,69 @@ class TestErnieX1ToolParser(unittest.TestCase):
         # prev_arguments=None, cur_arguments=None -> delta=None
         # then prev_tool_call_arr updated and returns delta (which is None)
         self.assertIsNone(result)
+
+    def test_streaming_empty_dict_arguments_not_skipped(self):
+        """Regression: arguments={} (empty dict) must not be treated as no arguments.
+
+        Empty dict is falsy in Python (`not {} == True`). Before the fix,
+        this caused empty arguments to enter the no-arguments branch,
+        silently dropping them during streaming.
+        """
+        parser = self._new_parser()
+        parser.current_tool_id = 0
+        parser.current_tool_name_sent = True
+        parser.streamed_args_for_tool = [""]
+        parser.prev_tool_call_arr = [{}]  # prev has no "arguments" key -> prev_arguments=None
+
+        with patch(
+            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.partial_json_parser.loads",
+            return_value={"name": "fn", "arguments": {}},
+        ):
+            result = parser.extract_tool_calls_streaming(
+                "<tool_call>",
+                '<tool_call>{"name": "fn", "arguments": {}}',
+                "{}",
+                [1],
+                [1, 10],
+                [10],
+                self.dummy_request,
+            )
+            # With fix: cur_arguments={} is not None -> enters first-arguments branch
+            # -> regex extracts "{}" -> delta "{}" found in "{}" -> streams arguments
+            # Without fix: not {} is True -> no-arguments branch -> delta=None
+            self.assertIsNotNone(result)
+            self.assertIsNotNone(result.tool_calls)
+            self.assertEqual(len(result.tool_calls), 1)
+
+    def test_streaming_empty_dict_prev_arguments_not_reset(self):
+        """Regression: prev_arguments={} must not be treated as no arguments.
+
+        When prev has {} and cur has a non-empty dict, the code should enter
+        the both-have-arguments branch, not the first-arguments branch.
+        """
+        parser = self._new_parser()
+        parser.current_tool_id = 0
+        parser.current_tool_name_sent = True
+        parser.streamed_args_for_tool = ["{}"]
+        parser.prev_tool_call_arr = [{"name": "fn", "arguments": {}}]
+
+        with patch(
+            "fastdeploy.entrypoints.openai.tool_parsers.ernie_x1_tool_parser.partial_json_parser.loads",
+            return_value={"name": "fn", "arguments": {"k": "v"}},
+        ):
+            result = parser.extract_tool_calls_streaming(
+                '<tool_call>{"name": "fn", "arguments": {}',
+                '<tool_call>{"name": "fn", "arguments": {"k": "v"',
+                '"k": "v"',
+                [1, 10],
+                [1, 10, 20],
+                [20],
+                self.dummy_request,
+            )
+            # With fix: both not None -> enters both-have-arguments branch
+            # Without fix: not {} is True for prev -> enters first-arguments branch
+            self.assertIsNotNone(result)
+            self.assertIsNotNone(result.tool_calls)
 
     # --- Lines 253-255: cur_arguments reset (impossible branch) ---
 
@@ -806,6 +967,75 @@ class TestErnieX1ToolParser(unittest.TestCase):
         )
         self.assertIsNotNone(r)
         self.assertEqual(r.tool_calls[0].function.arguments, " data")
+
+    def test_streaming_empty_arguments_full_flow(self):
+        """Integration: streaming tool call with arguments={} must not lose arguments.
+
+        Simulates a complete streaming flow where the tool call has empty
+        arguments. Verifies the name is sent and arguments are streamed.
+        """
+        parser = self._new_parser()
+        req = self.dummy_request
+
+        # Step 1: tool_call start
+        r = parser.extract_tool_calls_streaming("", "<tool_call>", "<tool_call>", [], [1], [1], req)
+        self.assertIsNone(r)
+
+        # Step 2: name appears
+        r = parser.extract_tool_calls_streaming(
+            "<tool_call>",
+            '<tool_call>{"name": "fn"',
+            '{"name": "fn"',
+            [1],
+            [1, 10],
+            [10],
+            req,
+        )
+        self.assertIsNotNone(r)
+        self.assertEqual(r.tool_calls[0].function.name, "fn")
+
+        # Step 3: empty arguments {} appear
+        r = parser.extract_tool_calls_streaming(
+            '<tool_call>{"name": "fn"',
+            '<tool_call>{"name": "fn", "arguments": {}',
+            ', "arguments": {}',
+            [1, 10],
+            [1, 10, 20],
+            [20],
+            req,
+        )
+        # delta ', "arguments": {}' is not a direct substring of regex-extracted '{}',
+        # so this step returns None. This is expected behavior for this token split.
+        # The key point is no crash and state is handled correctly.
+
+        # Step 4: closing brace completes the JSON
+        r = parser.extract_tool_calls_streaming(
+            '<tool_call>{"name": "fn", "arguments": {}',
+            '<tool_call>{"name": "fn", "arguments": {}}',
+            "}",
+            [1, 10, 20],
+            [1, 10, 20, 30],
+            [30],
+            req,
+        )
+        # With fix: cur_arguments={} is not None, enters first-arguments branch
+        # regex extracts "{}}" from complete JSON, delta "}" found in "{}}"
+        # Without fix: enters no-arguments branch, silently drops arguments
+        self.assertIsNotNone(r)
+        self.assertIsNotNone(r.tool_calls)
+
+        # Step 5: end token
+        r = parser.extract_tool_calls_streaming(
+            '<tool_call>{"name": "fn", "arguments": {}}',
+            '<tool_call>{"name": "fn", "arguments": {}}</tool_call>',
+            "</tool_call>",
+            [1, 10, 20, 30],
+            [1, 10, 20, 30, 2],
+            [2],
+            req,
+        )
+        # Close branch handles the end token
+        self.assertTrue(r is None or isinstance(r, DeltaMessage))
 
     def test_streaming_multiple_tool_calls(self):
         """Integration test: two tool calls in one response"""
