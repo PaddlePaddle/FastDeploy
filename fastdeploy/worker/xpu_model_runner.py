@@ -97,23 +97,7 @@ class XPUModelRunner(ModelRunnerBase):
         local_rank: int,
     ):
         super().__init__(fd_config=fd_config, device=device)
-        # self.enable_mm = self.fd_config.enable_mm_runtime
         self.enable_mm = self.model_config.enable_mm
-        self.enable_vision_gen = getattr(self.model_config, "enable_vision_gen", False)
-        self.max_num_slots = self.scheduler_config.max_num_seqs
-
-        if self.enable_vision_gen:
-            # self.vision_processor = None
-            # self.vision_generate_status_ratio = 0
-            # self.vision_generate_status_threshold = float(os.getenv("FD_VISION_GEN_STATUS_THRESHOLD", "0.6"))
-            # self.current_token_num = 0
-            # # two stage in vision generation
-            # self.max_num_slots = 2 * self.scheduler_config.max_num_seqs
-            raise NotImplementedError("vision gen not implemented yet")
-
-        self.block_step_audio_batch_ids = paddle.zeros([0], dtype="int32")
-        self.block_step_audio_codes = paddle.zeros([0, self.fd_config.model_config.audio_code_depth], dtype="int64")
-
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
