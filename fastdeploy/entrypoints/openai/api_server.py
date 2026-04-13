@@ -80,6 +80,7 @@ from fastdeploy.utils import (
     StatefulSemaphore,
     api_server_logger,
     console_logger,
+    get_host_ip,
     get_version_info,
     is_port_available,
     retrive_model_from_server,
@@ -964,6 +965,11 @@ def launch_worker_monitor():
 
 def main():
     """main函数"""
+
+    if args.ips and get_host_ip() not in args.ips:
+        api_server_logger.error(f"Worker IP {get_host_ip()} not in the list of allowed IPs {args.ips}.")
+        return
+
     if args.local_data_parallel_id == 0:
         if not load_engine():
             return
