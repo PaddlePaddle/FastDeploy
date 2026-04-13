@@ -277,7 +277,7 @@ class MLAAttentionBackend(AttentionBackend):
             self.padding_num_heads = 64 - self.num_heads
             self.heads_need_padding = True
             logger.warning(
-                f"MLA num attention heads is less than 64， force to use 64 num heads. "
+                f"MLA num attention heads is less than 64, force to use 64 num heads. "
                 f"current num_heads={self.num_heads}, tp_size={fd_config.parallel_config.tensor_parallel_size}"
             )
         self.head_dim: int = fd_config.model_config.head_dim
