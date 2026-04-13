@@ -15,7 +15,7 @@
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.xpu import block_attn, get_infer_param
+from fastdeploy.model_executor.ops.xpu import block_attn_fused, get_infer_param
 
 head_num = 64
 kv_head_num = 8
@@ -53,6 +53,8 @@ block_tables = block_tables.reshape((block_batch, max_block_per_seq))
     decoder_context_len_cpu,
     decoder_context_len_cache_cpu,
     len_info_cpu,
+    slot_mapping_enc,
+    slot_mapping_dec,
 ) = get_infer_param(
     seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64
 )  # block_size
@@ -94,7 +96,7 @@ v_dequant_scale_zp = 1 / v_quant_scale  # for C8 per channel zp means max
 
 k_zp = paddle.zeros(shape=[kv_head_num * head_dim], dtype="bfloat16")
 v_zp = paddle.zeros(shape=[kv_head_num * head_dim], dtype="bfloat16")
-attn_out = block_attn(
+attn_out = block_attn_fused(
     qkv,
     key_cache,
     value_cache,
@@ -111,6 +113,16 @@ attn_out = block_attn(
     decoder_context_len_cache_cpu,
     decoder_batch_map_cpu,
     prefix_len_cpu,
+    encoder_seq_lod,
+    decoder_seq_lod,
+    encoder_kv_lod,
+    encoder_batch_map,
+    decoder_context_len,
+    decoder_context_len_cache,
+    decoder_batch_map,
+    prefix_len,
+    slot_mapping_enc,
+    slot_mapping_dec,
     None,
     None,
     None,
@@ -121,8 +133,12 @@ attn_out = block_attn(
     None,
     None,
     None,
+    None,
+    None,
+    False,
+    False,
 )
-attn_out_C8 = block_attn(
+attn_out_C8 = block_attn_fused(
     qkv,
     key_cache_int8,
     value_cache_int8,
@@ -139,6 +155,16 @@ attn_out_C8 = block_attn(
     decoder_context_len_cache_cpu,
     decoder_batch_map_cpu,
     prefix_len_cpu,
+    encoder_seq_lod,
+    decoder_seq_lod,
+    encoder_kv_lod,
+    encoder_batch_map,
+    decoder_context_len,
+    decoder_context_len_cache,
+    decoder_batch_map,
+    prefix_len,
+    slot_mapping_enc,
+    slot_mapping_dec,
     k_quant_scale,
     v_quant_scale,
     k_dequant_scale,
@@ -149,8 +175,12 @@ attn_out_C8 = block_attn(
     None,
     None,
     None,
+    None,
+    None,
+    False,
+    False,
 )
-attn_out_C8_zp = block_attn(
+attn_out_C8_zp = block_attn_fused(
     qkv,
     key_cache_int8,
     value_cache_int8,
@@ -167,6 +197,16 @@ attn_out_C8_zp = block_attn(
     decoder_context_len_cache_cpu,
     decoder_batch_map_cpu,
     prefix_len_cpu,
+    encoder_seq_lod,
+    decoder_seq_lod,
+    encoder_kv_lod,
+    encoder_batch_map,
+    decoder_context_len,
+    decoder_context_len_cache,
+    decoder_batch_map,
+    prefix_len,
+    slot_mapping_enc,
+    slot_mapping_dec,
     k_quant_scale,
     v_quant_scale,
     k_dequant_scale_zp,
@@ -177,6 +217,10 @@ attn_out_C8_zp = block_attn(
     None,
     None,
     None,
+    None,
+    None,
+    False,
+    False,
 )
 
 # prefix cache : hit 71 tokens
@@ -207,12 +251,14 @@ seq_lens_decoder = paddle.to_tensor([hit_prefix_len, 0, 0, 0, 0], dtype="int32")
     decoder_context_len_cpu,
     decoder_context_len_cache_cpu,
     len_info_cpu,
+    slot_mapping_enc,
+    slot_mapping_dec,
 ) = get_infer_param(
     seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_tables, 64
 )  # block_size
 qkv_prefix = qkv[hit_prefix_len:]
 
-attn_out_prefix_cache = block_attn(
+attn_out_prefix_cache = block_attn_fused(
     qkv_prefix,
     key_cache,
     value_cache,
@@ -229,6 +275,16 @@ attn_out_prefix_cache = block_attn(
     decoder_context_len_cache_cpu,
     decoder_batch_map_cpu,
     prefix_len_cpu,
+    encoder_seq_lod,
+    decoder_seq_lod,
+    encoder_kv_lod,
+    encoder_batch_map,
+    decoder_context_len,
+    decoder_context_len_cache,
+    decoder_batch_map,
+    prefix_len,
+    slot_mapping_enc,
+    slot_mapping_dec,
     None,
     None,
     None,
@@ -239,9 +295,13 @@ attn_out_prefix_cache = block_attn(
     None,
     None,
     None,
+    None,
+    None,
+    False,
+    False,
 )
 
-attn_out_C8_prefix_cache = block_attn(
+attn_out_C8_prefix_cache = block_attn_fused(
     qkv_prefix,
     key_cache_int8,
     value_cache_int8,
@@ -258,6 +318,16 @@ attn_out_C8_prefix_cache = block_attn(
     decoder_context_len_cache_cpu,
     decoder_batch_map_cpu,
     prefix_len_cpu,
+    encoder_seq_lod,
+    decoder_seq_lod,
+    encoder_kv_lod,
+    encoder_batch_map,
+    decoder_context_len,
+    decoder_context_len_cache,
+    decoder_batch_map,
+    prefix_len,
+    slot_mapping_enc,
+    slot_mapping_dec,
     k_quant_scale,
     v_quant_scale,
     k_dequant_scale,
@@ -268,9 +338,13 @@ attn_out_C8_prefix_cache = block_attn(
     None,
     None,
     None,
+    None,
+    None,
+    False,
+    False,
 )
 
-attn_out_C8_zp_prefix_cache = block_attn(
+attn_out_C8_zp_prefix_cache = block_attn_fused(
     qkv_prefix,
     key_cache_int8,
     value_cache_int8,
@@ -287,6 +361,16 @@ attn_out_C8_zp_prefix_cache = block_attn(
     decoder_context_len_cache_cpu,
     decoder_batch_map_cpu,
     prefix_len_cpu,
+    encoder_seq_lod,
+    decoder_seq_lod,
+    encoder_kv_lod,
+    encoder_batch_map,
+    decoder_context_len,
+    decoder_context_len_cache,
+    decoder_batch_map,
+    prefix_len,
+    slot_mapping_enc,
+    slot_mapping_dec,
     k_quant_scale,
     v_quant_scale,
     k_dequant_scale_zp,
@@ -297,6 +381,10 @@ attn_out_C8_zp_prefix_cache = block_attn(
     None,
     None,
     None,
+    None,
+    None,
+    False,
+    False,
 )
 print("-- C16 prefix cache test --")
 print("attn_out[hit_prefix_len:]'s mean:", attn_out[hit_prefix_len:].mean().item())

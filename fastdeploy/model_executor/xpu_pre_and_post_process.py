@@ -104,6 +104,7 @@ def xpu_pre_process(
     is_profiling: bool = False,
     forward_meta=None,
     use_cudagraph=False,
+    num_speculative_tokens=0,
 ) -> XPUForwardMeta:
     """ """
     max_len = input_ids.shape[1]
@@ -175,8 +176,15 @@ def xpu_pre_process(
         xpu_forward_meta.decoder_context_len_cpu,
         xpu_forward_meta.decoder_context_len_cache_cpu,
         xpu_forward_meta.len_info_cpu,
+        xpu_forward_meta.slot_mapping_enc,
+        xpu_forward_meta.slot_mapping_dec,
     ) = get_infer_param(
-        seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, xpu_forward_meta.block_tables, block_size
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_this_time,
+        xpu_forward_meta.block_tables,
+        block_size,
+        num_speculative_tokens,
     )
     xpu_forward_meta.enc_batch = xpu_forward_meta.len_info_cpu[0]
     xpu_forward_meta.dec_batch = xpu_forward_meta.len_info_cpu[1]
