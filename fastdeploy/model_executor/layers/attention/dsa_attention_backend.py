@@ -346,18 +346,18 @@ class DSAAttentionBackend(AttentionBackend):
 
         scale = paddle.abs(compressed_kv).max() / 200.0
 
-        slot_mapping = compute_slot_mapping(
-            forward_meta.block_tables,
-            forward_meta.position_ids,
-            forward_meta.batch_id_per_token,
-            self.block_size,
-        )
+        # slot_mapping = compute_slot_mapping(
+        #     forward_meta.block_tables,
+        #     forward_meta.position_ids,
+        #     forward_meta.batch_id_per_token,
+        #     self.block_size,
+        # )
 
         dsk_attn_write_cache(
             compressed_kv,
             k_pe,
             latent_cache,
-            slot_mapping,
+            forward_meta.slot_mapping,
             scale.cast(paddle.float32),
             "fp8_ds_mla",
         )

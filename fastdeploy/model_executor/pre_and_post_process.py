@@ -21,7 +21,7 @@ import numpy as np
 import paddle
 
 from fastdeploy import envs
-from fastdeploy.config import SpeculativeConfig
+from fastdeploy.config import FDConfig, SpeculativeConfig
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import (
     InputBatch,
@@ -100,6 +100,7 @@ else:
         limit_thinking_content_length,
         speculate_limit_thinking_content_length,
         custom_numpy_to_tensor,
+        get_position_ids_and_mask_encoder_batch,
     )
 
 from fastdeploy.model_executor.entropy_utils import (
@@ -985,3 +986,35 @@ def post_process_pooling(
         if save_each_rank or model_output.mp_rank == 0:
             output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
             async_output_queue.put(output)
+
+
+def precompute_slot_mapping(fd_config: FDConfig, share_inputs: InputBatch, num_running_requests: int) -> None:
+    # NOTE(zhushengguang): Hoist slot_mapping out of per-layer forward (MLA/DSA) to avoid redundant
+    # computation and fix CUDAGraph compatibility — write into a pre-allocated buffer so the GPU
+    # address stays stable across graph replays (slot = block_id * block_size + offset_in_block).
+    seq_lens_encoder = share_inputs["seq_lens_encoder"][:num_running_requests]
+    seq_lens_decoder = share_inputs["seq_lens_decoder"][:num_running_requests]
+    seq_lens_this_time = share_inputs["seq_lens_this_time"]
+
+    current_total_tokens = share_inputs["ids_remove_padding"].shape[0]
+    print(
+        f"[DEBUG] ids_remove_padding shape: {share_inputs['ids_remove_padding'].shape}, batch_id_per_token shape: {share_inputs['batch_id_per_token'].shape}"
+    )
+    position_ids_buffer = share_inputs["position_ids_buffer"][:current_total_tokens]
+    mask_encoder_batch_buffer = share_inputs["mask_encoder_batch_buffer"][:current_total_tokens]
+    get_position_ids_and_mask_encoder_batch(
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_this_time,
+        position_ids_buffer,
+        mask_encoder_batch_buffer,
+    )
+
+    block_size = fd_config.cache_config.block_size
+    block_idx = position_ids_buffer // block_size
+    block_tables = share_inputs["block_tables"][:num_running_requests]
+    block_ids = block_tables[share_inputs["batch_id_per_token"], block_idx]
+    paddle.assign(
+        (block_ids * block_size + position_ids_buffer % block_size).cast(paddle.int64),
+        share_inputs["slot_mapping_buffer"][:current_total_tokens],
+    )

@@ -96,6 +96,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     async_set_value,
     post_process,
     pre_process,
+    precompute_slot_mapping,
     rebuild_padding,
     save_output_normal,
     save_output_specualate,
@@ -1285,6 +1286,7 @@ class GPUModelRunner(ModelRunnerBase):
             routing_replay_table = self.routing_replay_manager.get_routing_table()
 
         num_running_requests = self.share_inputs["seq_lens_this_time"].shape[0]
+        precompute_slot_mapping(self.fd_config, self.share_inputs, num_running_requests)
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1312,6 +1314,9 @@ class GPUModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
+            position_ids=self.share_inputs["position_ids_buffer"],
+            mask_encoder_batch=self.share_inputs["mask_encoder_batch_buffer"],
+            slot_mapping=self.share_inputs["slot_mapping_buffer"],
         )
 
         dist_status = self.collect_distributed_status()

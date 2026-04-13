@@ -211,6 +211,18 @@ class InputBatch:
             [-1, 1]
         )
 
+        # Initialize position_ids and slotmapping buffers
+        # TODO(zhushengguang): mask_encoder_batch_buffer may be unnecessary
+        self.position_ids_buffer = paddle.empty(
+            [self.fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
+        )
+        self.mask_encoder_batch_buffer = paddle.empty(
+            [self.fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
+        )
+        self.slot_mapping_buffer = paddle.empty(
+            [self.fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int64
+        )
+
         # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
         # It is a hard code to cover up model's performance
         # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
