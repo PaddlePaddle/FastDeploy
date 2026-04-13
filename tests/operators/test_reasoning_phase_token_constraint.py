@@ -37,22 +37,24 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
         # token_ids_all
         #
         # batch 0:
-        #   ... \n <think_end> \n \n   → status 1 -> 2
+        #   step_idx=4, pre_ids_now[0..3]
+        #   pattern: \n <think_end> \n \n  → status 1 -> 2
+        #   t3=pre_ids_now[0]=\n, t2=pre_ids_now[1]=<think_end>, t1=pre_ids_now[2]=\n, t0=pre_ids_now[3]=\n
         #
         # batch 1:
-        #   contains think_end, but pattern not complete → status 0 -> 1
+        #   contains think_end at pre_ids_now[2], but pattern not complete → status 0 -> 1
         # ------------------------
         token_ids_all = np.zeros((self.bs, self.max_seq_len), dtype=np.int64)
         self.prompt_lens = paddle.zeros([self.bs, 1], dtype="int64")
 
-        # batch 0
-        token_ids_all[0, 1] = self.line_break_id
-        token_ids_all[0, 2] = self.think_end_id
+        # batch 0: pattern \n <think_end> \n \n at pre_ids_now[0..3]
+        token_ids_all[0, 0] = self.line_break_id
+        token_ids_all[0, 1] = self.think_end_id
+        token_ids_all[0, 2] = self.line_break_id
         token_ids_all[0, 3] = self.line_break_id
-        token_ids_all[0, 4] = self.line_break_id
 
-        # batch 1
-        token_ids_all[1, 3] = self.think_end_id
+        # batch 1: think_end at pre_ids_now[2]
+        token_ids_all[1, 2] = self.think_end_id
 
         self.token_ids_all = paddle.to_tensor(token_ids_all, dtype="int64")
         self.prompt_lens = paddle.zeros([self.bs, 1], dtype="int64")
@@ -167,11 +169,13 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         # ------------------------
         # setup: only think_end appears
+        # step_idx=4, pre_ids_now[0..3]
+        # think_end at pre_ids_now[2] (cur_step - 2 = 4 - 2 = 2)
         # ------------------------
         token_ids_all = np.zeros((self.bs, self.max_seq_len), dtype=np.int64)
 
-        # batch 0: think_end at cur_step - 1
-        token_ids_all[0, 3] = self.think_end_id
+        # batch 0: think_end at pre_ids_now[2]
+        token_ids_all[0, 2] = self.think_end_id
 
         # batch 1: no think_end
         token_ids_all[1, :] = 0
@@ -424,13 +428,15 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
 
         # ------------------------
         # token_ids_all: force 1 -> 2 pattern
+        # step_idx=4, pre_ids_now[0..3]
+        # pattern: t3=pre_ids_now[0]=\n, t2=pre_ids_now[1]=<think_end>, t1=pre_ids_now[2]=\n, t0=pre_ids_now[3]=\n
         # ------------------------
         token_ids_all = np.zeros((bs, max_seq_len), dtype=np.int64)
         for i in range(bs):
-            token_ids_all[i, 1] = line_break_id
-            token_ids_all[i, 2] = think_end_id
+            token_ids_all[i, 0] = line_break_id
+            token_ids_all[i, 1] = think_end_id
+            token_ids_all[i, 2] = line_break_id
             token_ids_all[i, 3] = line_break_id
-            token_ids_all[i, 4] = line_break_id
 
         token_ids_all = paddle.to_tensor(token_ids_all, dtype="int64")
 
