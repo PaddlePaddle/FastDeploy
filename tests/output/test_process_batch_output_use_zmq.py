@@ -107,7 +107,7 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         """Test failed logprobs parsing"""
         stream_data = MagicMock()
         stream_data.logprobs = MagicMock()
-        # stream_data.logprobs.tolists.side_effect = Exception("Test error")
+        stream_data.logprobs.tolists.side_effect = Exception("Test error")
         stream_data.tokens = np.array([1])
         stream_data.batch_id = 0
 

@@ -290,7 +290,10 @@ class TokenProcessor:
 
             if self.speculative_decoding and getattr(stream_data, "speculative_decoding", False):
                 # Collect accept_num during iteration to avoid second traversal
-                if getattr(stream_data, "accept_num", None) is not None:
+                if (
+                    getattr(stream_data, "accept_num", None) is not None
+                    and getattr(stream_data, "output_type", 3) == 3
+                ):
                     val = int(stream_data.accept_num[0])
                     if val > 0:
                         accept_nums.append(val)
