@@ -813,7 +813,9 @@ def enable_batch_invariant_mode():
         # (ex: Could not import module 'PretrainedTokenizer' or No module named 'paddle.distributed.tensor')
         # Other side effects have not been observed yet, but they should be watched out for in the future.
     else:
-        raise RuntimeError("Unable to enable batch-invariant mode: paddle.enable_compat is unavailable.")
+        raise RuntimeError(
+            "Unable to enable batch-invariant mode: Paddle version is too old. " "Please upgrade PaddlePaddle."
+        )
 
     _original_ops["mm"] = paddle._C_ops.matmul
     _original_ops["addmm"] = paddle._C_ops.addmm
