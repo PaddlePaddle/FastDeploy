@@ -181,10 +181,10 @@ void VerifyDraftTokens(
       verify_strategy,
       reject_all,
       accept_all);
-  PD_CHECK(ret == 0, "verify_draft_tokens failed.");
   if (step_output_ids.is_cpu()) {
     delete ctx;
   }
+  PD_CHECK(ret == 0, "verify_draft_tokens failed.");
 }
 
 PD_BUILD_STATIC_OP(verify_draft_tokens)
