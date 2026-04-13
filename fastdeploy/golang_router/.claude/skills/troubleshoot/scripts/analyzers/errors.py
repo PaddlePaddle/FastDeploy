@@ -56,6 +56,15 @@ SOURCE_LAYER_RULES = [
     ("GetRemoteMetrics failed", "FD 后端"),
 ]
 
+IMPACT_RULES = [
+    ("Failed to select", "请求可能返回 502/503"),
+    ("Failed to connect to backend", "后端不可达，请求失败"),
+    ("Panic recovered", "Router 代码异常，可能影响稳定性"),
+    ("scanner error", "流式响应中断"),
+    ("copy error", "非流式响应中断"),
+    ("Failed to read YAML file config/register.yaml", "可选配置未加载（若未启用可忽略）"),
+]
+
 # scanner error / copy error 特殊处理：context canceled → 客户端，其他 → FD 后端
 SCANNER_COPY_PATTERNS = ("scanner error", "copy error")
 
@@ -74,6 +83,13 @@ def classify_source_layer(template, original=""):
             return layer
 
     return "未知"
+
+
+def classify_impact(template):
+    for pattern, impact in IMPACT_RULES:
+        if pattern in template:
+            return impact
+    return "-"
 
 
 # ════════════════════════════════════════════════════════════════
@@ -183,7 +199,9 @@ def _compute_error_top_n(records, top_n):
                 "count": g["count"],
                 "pct": round(g["count"] / total * 100, 1) if total else 0,
                 "source_layer": source_layer,
+                "impact": classify_impact(g["template"]),
                 "level": g["level"],
+                "urls": _extract_urls(g["originals"]),
                 "sample_originals": g["originals"],
             }
         )
@@ -191,6 +209,16 @@ def _compute_error_top_n(records, top_n):
             break
 
     return result
+
+
+def _extract_urls(originals):
+    import re
+
+    urls = set()
+    for line in originals:
+        for m in re.findall(r"https?://[A-Za-z0-9_.:-]+", line):
+            urls.add(m)
+    return sorted(urls)
 
 
 def _grep_lines(log_file, pattern, tail=None):
@@ -241,6 +269,9 @@ def format_errors_report(result):
         f'请求总数: {result["total_requests"]}  |  '
         f'错误率: {result["error_rate"]}%'
     )
+    sections.append("  指标口径: ERROR/WARN=日志级别计数；请求总数=HTTP 请求行数；错误率=非200请求数/请求总数×100%。")
+    if result["error_rate"] == 0 and (result["total_errors"] > 0 or result["total_warns"] > 0):
+        sections.append("  ℹ 错误率为 0.0% 仅表示 HTTP 状态码均为 200；并不代表没有 ERROR/WARN 日志。")
     sections.append("")
 
     # Panic
@@ -277,10 +308,16 @@ def format_errors_report(result):
                     "占比": f'{e["pct"]}%',
                     "级别": e["level"],
                     "来源层": e["source_layer"],
+                    "影响": e.get("impact", "-"),
+                    "URLs": ",".join(e.get("urls", [])[:2]) if e.get("urls") else "-",
                 }
             )
         sections.append(
-            render_table(table_data, columns=["模板", "数量", "占比", "级别", "来源层"], right_align={"数量", "占比"})
+            render_table(
+                table_data,
+                columns=["模板", "数量", "占比", "级别", "来源层", "影响", "URLs"],
+                right_align={"数量", "占比"},
+            )
         )
         sections.append("")
         yaml_missing_count = sum(

@@ -150,12 +150,15 @@ def _build_worker_timelines(health_events, counter_events, register_events):
                         break
 
         all_events = [{"ts": e["ts"], "type": e["event_type"]} for e in events]
+        for reg in register_by_ip.get(worker_ip, []):
+            all_events.append({"ts": reg["ts"], "type": "REGISTERED"})
         all_events.extend(recovery_events)
         all_events.sort(key=lambda e: e["ts"] or "")
 
         down_periods = _compute_down_periods(all_events)
         down_count = len(down_periods)
         avg_down_s = (sum(p["duration_s"] for p in down_periods) / len(down_periods)) if down_periods else 0.0
+        detect_latency = _compute_detect_latency(all_events)
 
         workers[url] = {
             "events": all_events,
@@ -165,6 +168,7 @@ def _build_worker_timelines(health_events, counter_events, register_events):
             "recovered": recovered,
             "inflight_preserved": counter_counts.get(url, 0),
             "down_periods": down_periods,
+            "avg_detect_latency_s": detect_latency,
         }
 
     return workers
@@ -189,6 +193,24 @@ def _compute_down_periods(events):
     if down_start is not None:
         down_periods.append({"start": down_start, "end": None, "duration_s": 0})
     return down_periods
+
+
+def _compute_detect_latency(events):
+    """计算 NOT_HEALTHY -> REMOVED 平均检测延迟（秒）。"""
+    last_unhealthy = None
+    latencies = []
+    for evt in events:
+        if evt["type"] == "NOT_HEALTHY" and evt.get("ts"):
+            last_unhealthy = evt["ts"]
+        elif evt["type"] == "REMOVED" and last_unhealthy and evt.get("ts"):
+            try:
+                latencies.append((parse_ts(evt["ts"]) - parse_ts(last_unhealthy)).total_seconds())
+            except ValueError:
+                pass
+            last_unhealthy = None
+    if not latencies:
+        return "-"
+    return round(sum(latencies) / len(latencies), 1)
 
 
 def _compute_uptime_pct(events):
@@ -313,8 +335,7 @@ def format_health_report(result):
     if result["diagnoses"]:
         sections.append("### 诊断")
         sections.append("")
-        for d in result["diagnoses"]:
-            sections.append(f'  [{d["severity"]}] [{d["source_layer"]}] {d["message"]}')
+        sections.append("  诊断见详情: [detail/health_events.md](detail/health_events.md)")
         sections.append("")
 
     # Worker 可用性表格
@@ -335,6 +356,7 @@ def format_health_report(result):
                 "在线率": f'{w["uptime_pct"]}%',
                 "下线次数": str(w["down_count"]),
                 "平均下线时长": avg_down or "-",
+                "检测延迟": (f'{w["avg_detect_latency_s"]}s' if w["avg_detect_latency_s"] != "-" else "-"),
                 "恢复": "是" if w["recovered"] else ("否" if w["down_count"] > 0 else "-"),
                 "inflight保留": str(w["inflight_preserved"]) if w["inflight_preserved"] > 0 else "-",
             }
@@ -342,8 +364,8 @@ def format_health_report(result):
     sections.append(
         render_table(
             table_data,
-            columns=["Worker", "在线率", "下线次数", "平均下线时长", "恢复", "inflight保留"],
-            right_align={"在线率", "下线次数", "平均下线时长", "inflight保留"},
+            columns=["Worker", "在线率", "下线次数", "平均下线时长", "检测延迟", "恢复", "inflight保留"],
+            right_align={"在线率", "下线次数", "平均下线时长", "检测延迟", "inflight保留"},
         )
     )
     sections.append("")
@@ -360,6 +382,12 @@ def format_health_report(result):
     # 事件详情 → 拆分到 detail_text
     detail_parts = ["# Worker 健康事件详情", ""]
     has_events = False
+    if result.get("diagnoses"):
+        detail_parts.append("## 诊断")
+        detail_parts.append("")
+        for d in result["diagnoses"]:
+            detail_parts.append(f'[{d["severity"]}] [{d["source_layer"]}] {d["message"]}')
+        detail_parts.append("")
     for url, w in sorted(result["workers"].items()):
         if w["events"]:
             has_events = True
@@ -373,7 +401,7 @@ def format_health_report(result):
 
     # 主报告中添加引用
     if has_events:
-        sections.append("> 完整事件详情: [details/health_events.md](details/health_events.md)")
+        sections.append("> 完整事件详情: [detail/health_events.md](detail/health_events.md)")
         sections.append("")
 
     return "\n".join(sections), detail_text

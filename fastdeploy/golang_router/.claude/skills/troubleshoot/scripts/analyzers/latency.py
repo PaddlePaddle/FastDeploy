@@ -255,6 +255,7 @@ def format_latency_report(result):
         f'p95={_fmt_ms(stats["p95"])}  p99={_fmt_ms(stats["p99"])}  '
         f'max={_fmt_ms(stats["max"])}'
     )
+    sections.append("  指标口径: pXX=延迟分位数；吞吐量=每个时间桶内请求数(count)；调度耗时=同 request_id 的 ts_ms(max-min)。")
     sections.append("")
 
     # 延迟分布
@@ -331,13 +332,10 @@ def format_latency_report(result):
         )
         sections.append("")
 
-    # 诊断
+    # 诊断（仅在 detail 输出）
     if result["diagnoses"]:
         sections.append("### 诊断")
-        for d in result["diagnoses"]:
-            severity_mark = {"CRITICAL": "!!", "HIGH": "!", "MEDIUM": "~", "LOW": "-", "INFO": " "}
-            mark = severity_mark.get(d["severity"], " ")
-            sections.append(f'  [{mark}] {d["message"]}')
+        sections.append("  诊断见详情: [detail/latency_diagnoses.md](detail/latency_diagnoses.md)")
         sections.append("")
 
     return "\n".join(sections)

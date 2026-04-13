@@ -136,6 +136,12 @@ def analyze_cache(log_file, tail=None, eviction_duration_mins=30, hit_ratio_weig
         "cold_starts": cold_starts,
         "hitratio_stats": hitratio_stats,
         "tokenizer_degraded_count": tokenizer_degraded_count,
+        "cross_diagnosis": _analyze_cross_diagnosis(
+            session_stickiness=session_stickiness,
+            hitratio_stats=hitratio_stats,
+            strategy_dist=strategy_dist,
+            eviction_impact=eviction_impact,
+        ),
         "diagnoses": diagnoses,
         "summary": f"{total} 策略决策, cache_aware {cache_aware_count}, fallback {fallback_count}, "
         f"冷启动 {cold_starts}",
@@ -339,6 +345,45 @@ def _diagnose(
     return diagnoses
 
 
+def _analyze_cross_diagnosis(session_stickiness, hitratio_stats, strategy_dist, eviction_impact):
+    """交叉诊断：基于粘性/命中率/fallback/驱逐给出简表。"""
+    if not session_stickiness:
+        return []
+    avg_stickiness = sum(v["stickiness_pct"] for v in session_stickiness.values()) / max(len(session_stickiness), 1)
+    mean_hr = hitratio_stats.get("mean", 0)
+    fallback_pct = 0
+    for s in strategy_dist:
+        if s.get("value") == "process_tokens":
+            fallback_pct = s.get("pct", 0)
+            break
+    evicted_cnt = sum(1 for e in eviction_impact if e.get("evicted"))
+
+    diagnosis = "运行良好"
+    action = "-"
+    if avg_stickiness >= 70 and mean_hr >= 40 and fallback_pct < 10:
+        diagnosis = "运行良好"
+    elif avg_stickiness >= 70 and mean_hr < 20 and evicted_cnt > 0:
+        diagnosis = "疑似驱逐导致命中率低"
+        action = "考虑增大 eviction-duration-mins"
+    elif avg_stickiness < 40 and fallback_pct >= 20:
+        diagnosis = "低粘性 + 高 fallback"
+        action = "检查负载阈值与 cache-aware 参数"
+    elif avg_stickiness < 40 and mean_hr < 20:
+        diagnosis = "低粘性 + 低命中"
+        action = "检查缓存预热与 prompt 稳定性"
+
+    return [
+        {
+            "avg_stickiness_pct": round(avg_stickiness, 1),
+            "mean_hitRatio_pct": round(mean_hr, 1),
+            "fallback_pct": round(fallback_pct, 1),
+            "evicted_after_timeout": evicted_cnt,
+            "diagnosis": diagnosis,
+            "action": action,
+        }
+    ]
+
+
 # ════════════════════════════════════════════════════════════════
 # 报告格式化
 # ════════════════════════════════════════════════════════════════
@@ -349,13 +394,18 @@ def format_cache_report(result):
     sections = ["## Cache 调度诊断", ""]
     sections.append(f'  {result["summary"]}')
     sections.append("")
+    detail_sections = ["# Cache 调度详情", "", f'总结: {result["summary"]}', ""]
 
     if result["diagnoses"]:
         sections.append("### 诊断")
         sections.append("")
-        for d in result["diagnoses"]:
-            sections.append(f'  [{d["severity"]}] [{d["source_layer"]}] {d["message"]}')
+        sections.append("  诊断见详情: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
         sections.append("")
+        detail_sections.append("## 诊断")
+        detail_sections.append("")
+        for d in result["diagnoses"]:
+            detail_sections.append(f'[{d["severity"]}] [{d["source_layer"]}] {d["message"]}')
+        detail_sections.append("")
 
     # 策略分布
     if result["strategy_dist"]:
@@ -364,6 +414,10 @@ def format_cache_report(result):
         bar_data = [{"label": s["value"], "value": s["pct"], "count": s["count"]} for s in result["strategy_dist"]]
         sections.append(render_bar(bar_data, show_count=True))
         sections.append("")
+        detail_sections.append("## 策略分布")
+        detail_sections.append("")
+        detail_sections.append(render_bar(bar_data, show_count=True))
+        detail_sections.append("")
 
     # hitRatio 统计
     hs = result.get("hitratio_stats", {})
@@ -383,6 +437,10 @@ def format_cache_report(result):
         bar_data = [{"label": f["value"], "value": f["pct"], "count": f["count"]} for f in result["fallback_reasons"]]
         sections.append(render_bar(bar_data, show_count=True))
         sections.append("")
+        detail_sections.append("## Fallback 原因分布")
+        detail_sections.append("")
+        detail_sections.append(render_bar(bar_data, show_count=True))
+        detail_sections.append("")
 
     # Tokenizer 退化
     if result.get("tokenizer_degraded_count", 0) > 0:
@@ -394,6 +452,8 @@ def format_cache_report(result):
     if stickiness:
         sections.append("### Session 粘性")
         sections.append("")
+        sections.append("  Session 粘性详情见: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
+        sections.append("")
         table_data = [
             {
                 "Session": sid[:16],
@@ -403,19 +463,23 @@ def format_cache_report(result):
             }
             for sid, s in sorted(stickiness.items(), key=lambda x: x[1]["stickiness_pct"])
         ]
-        sections.append(
+        detail_sections.append("## Session 粘性")
+        detail_sections.append("")
+        detail_sections.append(
             render_table(
-                table_data[:10],
+                table_data,
                 columns=["Session", "请求数", "粘性率", "切换次数"],
                 right_align={"请求数", "粘性率", "切换次数"},
             )
         )
-        sections.append("")
+        detail_sections.append("")
 
     # 非最优选择
     if result.get("suboptimal_selections"):
         subs = result["suboptimal_selections"]
         sections.append(f"### 非最优选择 ({len(subs)} 次)")
+        sections.append("")
+        sections.append("  详情见: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
         sections.append("")
         reason_counts = defaultdict(int)
         for s in subs:
@@ -423,6 +487,13 @@ def format_cache_report(result):
         for reason, count in sorted(reason_counts.items(), key=lambda x: -x[1]):
             sections.append(f"  {reason}: {count} 次")
         sections.append("")
+        detail_sections.append("## 非最优选择（Top 20）")
+        detail_sections.append("")
+        for s in subs[:20]:
+            detail_sections.append(
+                f'- [{s.get("ts","")}] selected={s.get("selected","")}({s.get("selected_hr",0)}), best={s.get("best_hr_worker","")}({s.get("best_hr",0)}), reason={s.get("reason","")}'
+            )
+        detail_sections.append("")
 
     # 驱逐影响
     if result.get("eviction_impact"):
@@ -430,13 +501,61 @@ def format_cache_report(result):
         evicted = [e for e in evictions if e["evicted"]]
         sections.append(f"### 驱逐影响 ({len(evictions)} 次超时, {len(evicted)} 次缓存失效)")
         sections.append("")
+        sections.append("  详情见: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
+        sections.append("")
+        detail_sections.append("## 驱逐影响")
+        detail_sections.append("")
+        for e in evictions[:50]:
+            detail_sections.append(
+                f'- session={e.get("session_id","")[:24]} interval={e.get("interval_mins",0)}m hitRatio_after={e.get("hitRatio_after",0)} evicted={e.get("evicted",False)}'
+            )
+        detail_sections.append("")
 
     # 冷启动
     if result.get("cold_starts", 0) > 0:
         sections.append(f'  冷启动: {result["cold_starts"]} 次（hitRatios=map[]）')
         sections.append("")
+        detail_sections.append("## 冷启动识别")
+        detail_sections.append("")
+        detail_sections.append(f'- 冷启动次数: {result["cold_starts"]}')
+        detail_sections.append("")
 
-    return "\n".join(sections)
+    if result.get("cross_diagnosis"):
+        sections.append("### 交叉诊断")
+        sections.append("")
+        sections.append("  详情见: [detail/cache_diagnosis.md](detail/cache_diagnosis.md)")
+        sections.append("")
+        detail_sections.append("## 交叉诊断")
+        detail_sections.append("")
+        detail_sections.append(
+            render_table(
+                result["cross_diagnosis"],
+                columns=["avg_stickiness_pct", "mean_hitRatio_pct", "fallback_pct", "evicted_after_timeout", "diagnosis", "action"],
+                right_align={"avg_stickiness_pct", "mean_hitRatio_pct", "fallback_pct", "evicted_after_timeout"},
+            )
+        )
+        detail_sections.append("")
+
+    if any(
+        [
+            result.get("session_stickiness"),
+            result.get("suboptimal_selections"),
+            result.get("eviction_impact"),
+            result.get("cross_diagnosis"),
+            result.get("diagnoses"),
+        ]
+    ):
+        sections.append(
+            "> 详细诊断: [detail/cache_diagnosis.md](detail/cache_diagnosis.md) | "
+            "[detail/cache_session_stickiness.md](detail/cache_session_stickiness.md) | "
+            "[detail/cache_suboptimal.md](detail/cache_suboptimal.md) | "
+            "[detail/cache_eviction.md](detail/cache_eviction.md) | "
+            "[detail/cache_fallback.md](detail/cache_fallback.md) | "
+            "[detail/cache_cross.md](detail/cache_cross.md)"
+        )
+        sections.append("")
+
+    return "\n".join(sections), "\n".join(detail_sections)
 
 
 # ════════════════════════════════════════════════════════════════

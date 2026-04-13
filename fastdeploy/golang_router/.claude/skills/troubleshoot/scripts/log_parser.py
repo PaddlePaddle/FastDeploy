@@ -828,9 +828,35 @@ def match_select_release(lines, fallback_window_s=120):
         else:
             type_summary[r_type]["counter_releases"] += 1
 
+    unmatched_releases = []
+    for i, r in enumerate(releases):
+        if str(r.get("type", "")).endswith("_tokens"):
+            # token release: 近邻存在 prefill/mixed select 则视为可解释，不计入 unmatched
+            inferred_token_type = _normalize_worker_type(str(inferred_release_types.get(i, "unknown_tokens")).replace("_tokens", ""))
+            if inferred_token_type == "unknown":
+                unmatched_releases.append(
+                    {
+                        "worker": r.get("worker", ""),
+                        "release_ts": r.get("ts", ""),
+                        "type": inferred_token_type,
+                        "release_kind": "token_release",
+                    }
+                )
+            continue
+        if i not in release_used:
+            unmatched_releases.append(
+                {
+                    "worker": r.get("worker", ""),
+                    "release_ts": r.get("ts", ""),
+                    "type": _normalize_worker_type(inferred_release_types.get(i, "unknown")),
+                    "release_kind": "request_release",
+                }
+            )
+
     return {
         "matched": matched,
         "unmatched_selects": unmatched_selects,
+        "unmatched_releases": unmatched_releases,
         "untracked_selects": untracked_selects,
         "failed_selects": failed_selects,
         "per_worker": pw_result,
