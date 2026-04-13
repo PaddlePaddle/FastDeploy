@@ -26,7 +26,7 @@ import time
 
 import pytest
 import requests
-from utils.serving_utils import (
+from e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
     FD_ENGINE_QUEUE_PORT,
@@ -90,7 +90,7 @@ def setup_and_run_server():
 
     # get rdma nics
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    shell_path = os.path.join(current_dir, "utils/get_rdma_nics.sh")
+    shell_path = os.path.join(current_dir, "../utils/get_rdma_nics.sh")
     output = subprocess.check_output(["bash", shell_path, "gpu"], text=True)
     _, rdma_nics = output.split("=")
     print(f"shell_path: {shell_path}, rdma_nics: {rdma_nics}")
@@ -171,7 +171,7 @@ def setup_and_run_server():
     # decode实例
     print("start decode...")
     env_decode = os.environ.copy()
-    env_decode["CUDA_VISIBLE_DEVICES"] = "1"
+    env_decode["CUDA_VISIBLE_DEVICES"] = "2"
     env_decode["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_decode")
     # env_decode["KVCACHE_RDMA_NICS"] = rdma_nics
 
