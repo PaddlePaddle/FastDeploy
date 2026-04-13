@@ -112,15 +112,21 @@ def analyze_trace(log_file, trace_ids, tail=None):
         sr_check = match_select_release(all_lines)
         diagnoses = _diagnose_trace(events, lifecycle_complete, sr_check)
 
+        tag_coverage = _build_id_coverage_stats(all_lines)
+        tag_combos = _build_id_combo_stats(all_lines)
+        matched_tags = _detect_matched_tags(all_lines, tid)
         traces[tid] = {
             "events": events,
             "lifecycle_complete": lifecycle_complete,
             "diagnoses": diagnoses,
             "sr_check": sr_check,
-            "matched_tag": "session_id" if is_session else "request_id/trace_id",
+            "matched_tag": _format_matched_tag(matched_tags),
+            "matched_tags": matched_tags,
             "related_ids": {
                 "request_ids": sorted(related_request_ids) if is_session else [],
             },
+            "id_coverage": tag_coverage,
+            "id_combos": tag_combos,
         }
 
     total_traced = len(traces)
@@ -152,13 +158,14 @@ def _parse_event_chain(lines):
                     "path": http["path"],
                     "status": http["status"],
                     "latency_ms": http["latency_ms"],
+                    "raw": line.strip(),
                 }
             )
             continue
 
         # Parsing completed
         if PARSING_COMPLETE_RE.search(line):
-            events.append({"ts": ts, "type": "PARSING_COMPLETE", "tags": tags})
+            events.append({"ts": ts, "type": "PARSING_COMPLETE", "tags": tags, "raw": line.strip()})
             continue
 
         # Cache-aware strategy
@@ -172,6 +179,7 @@ def _parse_event_chain(lines):
                     "strategy": strategy.get("strategy"),
                     "selected": strategy.get("selected", ""),
                     "selected_hitRatio": strategy.get("selected_hitRatio", 0),
+                    "raw": line.strip(),
                 }
             )
             continue
@@ -186,6 +194,7 @@ def _parse_event_chain(lines):
                     "tags": tags,
                     "worker_type": m.group(1) or "unknown",
                     "worker": m.group(2),
+                    "raw": line.strip(),
                 }
             )
             continue
@@ -200,6 +209,7 @@ def _parse_event_chain(lines):
                     "tags": tags,
                     "worker_type": m.group(1) or "unknown",
                     "worker": m.group(2),
+                    "raw": line.strip(),
                 }
             )
             continue
@@ -214,6 +224,7 @@ def _parse_event_chain(lines):
                     "tags": tags,
                     "worker": m.group(1),
                     "tokens": int(m.group(2)),
+                    "raw": line.strip(),
                 }
             )
             continue
@@ -221,39 +232,45 @@ def _parse_event_chain(lines):
         # Prefill events
         m = PREFILL_FIRST_CHUNK_RE.search(line)
         if m:
-            events.append({"ts": ts, "type": "PREFILL_FIRST_CHUNK", "tags": tags, "worker": m.group(1)})
+            events.append({"ts": ts, "type": "PREFILL_FIRST_CHUNK", "tags": tags, "worker": m.group(1), "raw": line.strip()})
             continue
         m = PREFILL_DONE_RE.search(line)
         if m:
-            events.append({"ts": ts, "type": "PREFILL_DONE", "tags": tags, "worker": m.group(1)})
+            events.append({"ts": ts, "type": "PREFILL_DONE", "tags": tags, "worker": m.group(1), "raw": line.strip()})
             continue
         m = PREFILL_ERROR_RE.search(line)
         if m:
-            events.append({"ts": ts, "type": "PREFILL_ERROR", "tags": tags, "error": m.group(1), "worker": m.group(2)})
+            events.append(
+                {"ts": ts, "type": "PREFILL_ERROR", "tags": tags, "error": m.group(1), "worker": m.group(2), "raw": line.strip()}
+            )
             continue
         m = PREFILL_DEFER_RE.search(line)
         if m:
-            events.append({"ts": ts, "type": "PREFILL_DEFER_RELEASE", "tags": tags, "worker": m.group(1)})
+            events.append(
+                {"ts": ts, "type": "PREFILL_DEFER_RELEASE", "tags": tags, "worker": m.group(1), "raw": line.strip()}
+            )
             continue
         m = PREFILL_ERR_PATH_RE.search(line)
         if m:
-            events.append({"ts": ts, "type": "PREFILL_ERROR_PATH_RELEASE", "tags": tags, "worker": m.group(1)})
+            events.append(
+                {"ts": ts, "type": "PREFILL_ERROR_PATH_RELEASE", "tags": tags, "worker": m.group(1), "raw": line.strip()}
+            )
             continue
 
         # Request completed
         if REQUEST_COMPLETE_RE.search(line):
-            events.append({"ts": ts, "type": "REQUEST_COMPLETE", "tags": tags})
+            events.append({"ts": ts, "type": "REQUEST_COMPLETE", "tags": tags, "raw": line.strip()})
             continue
 
         # ts_ms
         m = TS_MS_RE.search(line)
         if m:
-            events.append({"ts": ts, "type": "TS_MS", "tags": tags, "ts_ms": m.group(1)})
+            events.append({"ts": ts, "type": "TS_MS", "tags": tags, "ts_ms": m.group(1), "raw": line.strip()})
             continue
 
         # Failed to select
         if FAILED_SELECT_RE.search(line):
-            events.append({"ts": ts, "type": "FAILED_SELECT", "tags": tags})
+            events.append({"ts": ts, "type": "FAILED_SELECT", "tags": tags, "raw": line.strip()})
             continue
 
     # 按时间排序
@@ -339,6 +356,12 @@ def format_trace_report(result):
         sections.append(f"### ID: {tid}")
         if trace.get("matched_tag"):
             sections.append(f'  匹配类型: {trace["matched_tag"]}')
+        if trace.get("id_coverage"):
+            c = trace["id_coverage"]
+            sections.append(
+                "  ID统计: "
+                f'request_only={c["request_only"]}, session_only={c["session_only"]}, trace_only={c["trace_only"]}'
+            )
         if trace.get("related_ids", {}).get("request_ids"):
             sections.append(f'  关联 request_ids: {", ".join(trace["related_ids"]["request_ids"])}')
 
@@ -357,6 +380,19 @@ def format_trace_report(result):
             detail_lines = [f"# 请求追踪事件链: {tid}", ""]
             if trace.get("matched_tag"):
                 detail_lines.append(f'匹配类型: {trace["matched_tag"]}')
+            if trace.get("id_coverage"):
+                c = trace["id_coverage"]
+                detail_lines.append("ID覆盖统计:")
+                detail_lines.append(
+                    f'- only_request_id: {c["request_only"]} | only_session_id: {c["session_only"]} | only_trace_id: {c["trace_only"]}'
+                )
+            if trace.get("id_combos"):
+                detail_lines.append("")
+                detail_lines.append("标签组合明细（按唯一ID计数）:")
+                for item in trace["id_combos"]:
+                    detail_lines.append(
+                        f'- combo={item["combo"]} | count={item["count"]} | ids={", ".join(item["ids"])}'
+                    )
             if trace.get("related_ids", {}).get("request_ids"):
                 detail_lines.append(f'关联 request_ids: {", ".join(trace["related_ids"]["request_ids"])}')
             detail_lines.append(f"生命周期: {status}")
@@ -379,7 +415,11 @@ def format_trace_report(result):
                     line += f' tokens={evt["tokens"]}'
                 if evt.get("error"):
                     line += f' error={evt["error"]}'
+                if evt.get("ts_ms"):
+                    line += f' ts_ms={evt["ts_ms"]}'
                 detail_lines.append(line)
+                if evt.get("raw"):
+                    detail_lines.append(f'    RAW: {evt["raw"]}')
             detail_lines.append("")
             detail_dict[tid] = "\n".join(detail_lines)
 
@@ -413,3 +453,84 @@ def _grep_lines(log_file, pattern, tail=None):
 
 def _shell_quote(s):
     return "'" + s.replace("'", "'\\''") + "'"
+
+
+def _detect_matched_tags(lines, target_id):
+    matched = set()
+    for line in lines:
+        tags = extract_tags(line)
+        for key in ("request_id", "trace_id", "session_id", "req_id"):
+            if tags.get(key) == target_id:
+                matched.add(key)
+    return sorted(matched)
+
+
+def _format_matched_tag(matched_tags):
+    if not matched_tags:
+        return "unknown"
+    if len(matched_tags) == 1:
+        return matched_tags[0]
+    return "+".join(matched_tags)
+
+
+def _build_id_coverage_stats(lines):
+    request_only_ids = set()
+    session_only_ids = set()
+    trace_only_ids = set()
+
+    for line in lines:
+        tags = extract_tags(line)
+        req_val = tags.get("request_id") or tags.get("req_id")
+        session_val = tags.get("session_id")
+        trace_val = tags.get("trace_id")
+        has_request = bool(req_val)
+        has_session = bool(session_val)
+        has_trace = bool(trace_val)
+
+        if has_request and not has_session and not has_trace:
+            request_only_ids.add(req_val)
+        if has_session and not has_request and not has_trace:
+            session_only_ids.add(session_val)
+        if has_trace and not has_request and not has_session:
+            trace_only_ids.add(trace_val)
+
+    return {
+        "request_only": len(request_only_ids),
+        "session_only": len(session_only_ids),
+        "trace_only": len(trace_only_ids),
+    }
+
+
+def _build_id_combo_stats(lines):
+    combo_to_ids = {}
+    for line in lines:
+        tags = extract_tags(line)
+        keys = []
+        if tags.get("request_id"):
+            keys.append("request_id")
+        if tags.get("req_id"):
+            keys.append("req_id")
+        if tags.get("session_id"):
+            keys.append("session_id")
+        if tags.get("trace_id"):
+            keys.append("trace_id")
+        combo = "+".join(keys) if keys else "no_id_tag"
+
+        ids = []
+        if tags.get("request_id"):
+            ids.append(tags["request_id"])
+        if tags.get("req_id"):
+            ids.append(tags["req_id"])
+        if tags.get("session_id"):
+            ids.append(tags["session_id"])
+        if tags.get("trace_id"):
+            ids.append(tags["trace_id"])
+        id_key = "|".join(ids) if ids else "<none>"
+
+        combo_to_ids.setdefault(combo, set()).add(id_key)
+
+    rows = []
+    for combo, ids in combo_to_ids.items():
+        rows.append({"combo": combo, "count": len(ids), "ids": sorted(ids)})
+    rows.sort(key=lambda x: x["count"], reverse=True)
+    return rows
