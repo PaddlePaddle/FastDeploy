@@ -26,11 +26,11 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
     AttentionMetadata,
 )
-from fastdeploy.model_executor.layers.backends.metax.attention.triton_attn_kernels import (
-    unified_attention,
+from fastdeploy.model_executor.ops.gpu import (
+    flash_attn_varlen_forward, 
+    rotary_position_embedding, 
+    write_cache_kv
 )
-from fastdeploy.model_executor.ops.gpu import rotary_position_embedding, write_cache_kv
-
 
 @dataclass
 class TritonAttentionMetadata(AttentionMetadata):
@@ -40,9 +40,9 @@ class TritonAttentionMetadata(AttentionMetadata):
 
     num_requests: int = 0
     num_actual_tokens: int = 0
-    max_query_len: int = 0
     seq_lens: paddle.Tensor = None
     query_start_loc: paddle.Tensor = None
+    kv_start_loc: paddle.Tensor = None
     block_tables: paddle.Tensor = None
 
 
@@ -140,13 +140,17 @@ class MetaxTritonAttentionBackend(AttentionBackend):
             [paddle.zeros([1], dtype=paddle.int32), request_seq_lens_this_time.cumsum(axis=0, dtype=paddle.int32)],
             axis=0,
         )
+        request_kv_start_loc = paddle.concat(
+            [paddle.zeros([1], dtype=paddle.int32), request_seq_lens.cumsum(axis=0, dtype=paddle.int32)],
+            axis=0,
+        )
         request_block_tables = block_tables[request_batch_ids]
 
         metadata.num_requests = num_requests
         metadata.num_actual_tokens = num_actual_tokens
-        metadata.max_query_len = request_seq_lens_this_time.max().item()
         metadata.seq_lens = request_seq_lens
         metadata.query_start_loc = request_query_start_loc
+        metadata.kv_start_loc = request_kv_start_loc
         metadata.block_tables = request_block_tables
 
         self.attention_metadata: AttentionMetadata = metadata
@@ -202,17 +206,23 @@ class MetaxTritonAttentionBackend(AttentionBackend):
 
         output = paddle.empty_like(query)
 
-        unified_attention(
+        flash_attn_varlen_forward(
             q=query,
             k=key_cache,
             v=value_cache,
             out=output,
             cu_seqlens_q=metadata.query_start_loc,
-            max_seqlen_q=metadata.max_query_len,
-            seqused_k=metadata.seq_lens,
+            cu_seqlens_k=metadata.kv_start_loc,
+            block_tables=metadata.block_tables,
+            alibi_slopes=None,
+            max_seqlen_q=self.max_seq_len,
+            max_seqlen_k=self.max_seq_len,
+            dropout_p=0.0,
             softmax_scale=self.softmax_scale,
             causal=self.causal,
-            block_table=metadata.block_tables,
+            window_size_left=-1,
+            window_size_right=-1,
+            softcap=0.0,
         )
 
         output = output.view([-1, self.num_heads * self.head_dim])
