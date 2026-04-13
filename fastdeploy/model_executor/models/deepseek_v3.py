@@ -451,33 +451,6 @@ class DeepseekV3MLAAttention(nn.Layer):
         return output
 
 
-def compute_slot_mapping(
-    block_tables: paddle.Tensor,  # [num_reqs, max_blocks_per_req]
-    positions: paddle.Tensor,  # [num_tokens] 每个token的位置
-    batch_id_per_token: paddle.Tensor,  # [num_tokens] 每个token属于哪个请求
-    block_size: int,
-) -> paddle.Tensor:
-    """
-    计算 slot_mapping
-
-    公式: slot = block_id * block_size + offset_in_block
-    """
-    # 1. 计算每个 token 对应的 block 索引
-    block_idx = positions // block_size  # [num_tokens]
-
-    # 2. 从 block_tables 中查表获取 block_id
-    # block_tables[batch_id_per_token, block_idx]
-    block_ids = block_tables[batch_id_per_token, block_idx]  # [num_tokens]
-
-    # 3. 计算在 block 内的偏移
-    block_offset = positions % block_size  # [num_tokens]
-
-    # 4. 计算 slot_mapping
-    slot_mapping = block_ids * block_size + block_offset
-
-    return slot_mapping.cast(paddle.int64)
-
-
 import triton
 import triton.language as tl
 
