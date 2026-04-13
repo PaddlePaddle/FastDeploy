@@ -317,7 +317,8 @@ class DeepseekV3MLAAttention(nn.Layer):
             )
         else:
             # Default rope without scaling
-            max_position_embeddings = getattr(fd_config.model_config, "max_position_embeddings", 8192)
+            # The current `max_model_len` can cover the maximum context length.
+            max_position_embeddings = getattr(fd_config.model_config, "max_model_len", 8192)
             self.rotary_emb = DeepseekScalingRotaryEmbedding(
                 self.qk_rope_head_dim,
                 max_position_embeddings=max_position_embeddings,
@@ -887,7 +888,8 @@ class DeepseekV32DSAAttention(nn.Layer):
             )
         else:
             # Default rope without scaling
-            max_position_embeddings = getattr(fd_config.model_config, "max_position_embeddings", 8192)
+            # The current `max_model_len` can cover the maximum context length.
+            max_position_embeddings = getattr(fd_config.model_config, "max_model_len", 8192)
             self.rotary_emb = DeepseekScalingRotaryEmbedding(
                 self.qk_rope_head_dim,
                 max_position_embeddings=max_position_embeddings,
