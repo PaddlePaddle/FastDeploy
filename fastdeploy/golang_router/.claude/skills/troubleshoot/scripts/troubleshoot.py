@@ -24,6 +24,7 @@ import argparse
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 
 # 确保能 import 同级模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -46,23 +47,56 @@ def determine_log_file(user_path=None):
     3. fd-router.log（golang_router 根目录）
     """
     if user_path:
-        if os.path.isfile(user_path):
-            return user_path
+        p = Path(user_path).expanduser()
+        if p.is_file():
+            return str(p)
         print(f"ERROR: 文件不存在: {user_path}", file=sys.stderr)
+        print(
+            "提示: 若路径含空格/括号，请使用引号，例如: "
+            "python3 scripts/troubleshoot.py 'fastdeploy/golang_router/logs/fd-router (2).log' --load",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
-    # 尝试不同 CWD 下的候选路径
-    candidates = [
-        "logs/router.log",  # CWD = golang_router/
-        "fd-router.log",  # CWD = golang_router/
-        "fastdeploy/golang_router/logs/router.log",  # CWD = 项目根
-        "fastdeploy/golang_router/fd-router.log",  # CWD = 项目根
+    # 统一基于脚本位置与当前工作目录搜索，避免 CWD 差异导致找不到日志。
+    script_dir = Path(__file__).resolve().parent
+    golang_router_dir = script_dir.parents[2]  # .../fastdeploy/golang_router
+    cwd = Path.cwd()
+
+    # 精确候选（优先常见命名）
+    exact_candidates = [
+        golang_router_dir / "logs" / "router.log",
+        golang_router_dir / "fd-router.log",
+        cwd / "logs" / "router.log",
+        cwd / "fd-router.log",
+        cwd / "fastdeploy" / "golang_router" / "logs" / "router.log",
+        cwd / "fastdeploy" / "golang_router" / "fd-router.log",
     ]
-    for path in candidates:
-        if os.path.isfile(path):
-            return path
+    for p in exact_candidates:
+        if p.is_file():
+            return str(p)
+
+    # 模糊候选：支持 fd-router (2).log 等命名
+    pattern_roots = [
+        golang_router_dir / "logs",
+        golang_router_dir,
+        cwd / "logs",
+        cwd,
+        cwd / "fastdeploy" / "golang_router" / "logs",
+        cwd / "fastdeploy" / "golang_router",
+    ]
+    dynamic_candidates = []
+    for root in pattern_roots:
+        if not root.is_dir():
+            continue
+        dynamic_candidates.extend(sorted(root.glob("fd-router*.log")))
+        dynamic_candidates.extend(sorted(root.glob("router*.log")))
+
+    if dynamic_candidates:
+        return str(dynamic_candidates[0])
 
     print("ERROR: 未找到日志文件。请指定路径或检查 logs/ 目录。", file=sys.stderr)
+    print("已搜索: logs/router.log, fd-router.log, fd-router*.log, router*.log", file=sys.stderr)
     sys.exit(1)
 
 

@@ -501,6 +501,15 @@ def _normalize_worker_type(worker_type):
     return "unknown"
 
 
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
+def _normalize_worker_url_key(url):
+    if not url:
+        return ""
+    return re.sub(r"^https?://", "", str(url).strip().rstrip("/"))
+
+
+=======
+>>>>>>> develop
 def _infer_release_worker_type(release, selects, fallback_window_s=120):
     """为未显式标注 type 的 release 近似推断 worker type。
 
@@ -596,6 +605,7 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": tm.group(2),
+                    "worker_key": _normalize_worker_url_key(tm.group(2)),
                     "type": _normalize_worker_type(tm.group(1)),
                     "tags": tags,
                     "tokens": int(tm.group(3)),
@@ -612,6 +622,10 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": trm.group(2),
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
+                    "worker_key": _normalize_worker_url_key(trm.group(2)),
+=======
+>>>>>>> develop
                     # 文本默认按 prefill 记，再结合同 worker 邻近 select 做纠偏（mixed 场景）
                     "type": f'{_normalize_worker_type(token_type or "prefill")}_tokens',
                     "raw_token_type": token_type or "",
@@ -628,6 +642,7 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": sm.group(2),
+                    "worker_key": _normalize_worker_url_key(sm.group(2)),
                     "type": _normalize_worker_type(sm.group(1)),
                     "tags": tags,
                     "tokens": None,
@@ -642,6 +657,7 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": rm.group(2),
+                    "worker_key": _normalize_worker_url_key(rm.group(2)),
                     "type": _normalize_worker_type(rm.group(1)),
                     "tags": tags,
                     "tokens": None,
@@ -653,28 +669,22 @@ def match_select_release(lines, fallback_window_s=120):
         if FAILED_SELECT_RE.search(line):
             failed_selects.append({"ts": ts, "tags": tags, "line": line_no})
 
-    # Match by request_id / alt_id
+    # Match by worker FIFO（select -> 同 worker 下一条 release）
     matched = []
     unmatched_selects = []
     release_used = set()
 
     # 请求生命周期匹配只使用 request counter release（排除 token release）
+    # 说明：request_id 只用于覆盖率观测，不参与 select/release 配对条件。
     counter_release_indexes = [i for i, r in enumerate(releases) if not str(r.get("type", "")).endswith("_tokens")]
-    release_by_key = defaultdict(list)
-    for i in counter_release_indexes:
-        r = releases[i]
-        _, key = _select_match_key(r.get("tags", {}))
-        if key:
-            release_by_key[key].append(i)
-
     # 请求 ID 覆盖（按 select 事件近似请求数）
     total_req_est = len(selects)
     with_request_id = 0
     with_alt_id = 0
     without_any_id = 0
 
-    pending_selects = []
     untracked_selects = []
+    pending_selects = []
     for s in selects:
         key_type, key = _select_match_key(s.get("tags", {}))
         if key_type == "request_id":
@@ -684,7 +694,6 @@ def match_select_release(lines, fallback_window_s=120):
         else:
             without_any_id += 1
 
-        found = False
         if not key:
             # 没有任何可用 ID 时，不做退化匹配（只统计可观测信息）
             untracked_selects.append(
@@ -696,53 +705,74 @@ def match_select_release(lines, fallback_window_s=120):
                     "note": "no correlatable id (request_id/req_id/trace_id/session_id)",
                 }
             )
-            continue
+        pending_selects.append(s)
 
-        if key and key in release_by_key:
-            for ri in release_by_key[key]:
-                if ri not in release_used:
-                    r = releases[ri]
-                    matched.append(
-                        {
-                            "request_id": s["tags"].get("request_id", ""),
-                            "worker": s["worker"],
-                            "select_ts": s["ts"],
-                            "release_ts": r["ts"],
-                            "type": s["type"],
-                            "match_method": key_type or "id",
-                        }
-                    )
-                    release_used.add(ri)
-                    found = True
-                    break
+    # worker FIFO + ID 一致性联合校验：
+    # 1) 主匹配仍按 worker FIFO，保证在缺失 request_id 场景可工作
+    # 2) 对已匹配对追加 ID 一致性检查（request_id/req_id/trace_id/session_id）
+    id_consistency = {
+        "both_present_and_equal": 0,
+        "both_present_but_mismatch": 0,
+        "only_select_has_id": 0,
+        "only_release_has_id": 0,
+        "both_missing": 0,
+    }
+    id_mismatched_matches = []
 
-        if not found:
-            pending_selects.append(s)
-
-    # Fallback: 有 ID 但未匹配时，按 worker + 时间邻近匹配
     for s in pending_selects:
-        sdt = _parse_ts_safe(s["ts"])
+        sdt = _parse_ts_safe(s.get("ts"))
         best_idx = None
-        best_delta = None
+        best_ts = None
         for ri in counter_release_indexes:
-            r = releases[ri]
             if ri in release_used:
                 continue
-            if r.get("worker") != s.get("worker"):
+            r = releases[ri]
+            if r.get("worker_key") != s.get("worker_key"):
                 continue
             rdt = _parse_ts_safe(r.get("ts"))
-            if sdt and rdt:
-                delta = (rdt - sdt).total_seconds()
-                if delta < 0 or delta > fallback_window_s:
-                    continue
-            else:
-                delta = 0
-            if best_delta is None or delta < best_delta:
-                best_delta = delta
+            # 优先选择时间不早于 select 的最早 release；解析失败则按出现顺序
+            if sdt and rdt and rdt < sdt:
+                continue
+            if best_idx is None:
                 best_idx = ri
+                best_ts = rdt
+            elif rdt and best_ts and rdt < best_ts:
+                best_idx = ri
+                best_ts = rdt
 
         if best_idx is not None:
             r = releases[best_idx]
+            s_key_type, s_key = _select_match_key(s.get("tags", {}))
+            r_key_type, r_key = _select_match_key(r.get("tags", {}))
+            if s_key and r_key:
+                if s_key == r_key:
+                    id_check = "match"
+                    id_consistency["both_present_and_equal"] += 1
+                else:
+                    id_check = "mismatch"
+                    id_consistency["both_present_but_mismatch"] += 1
+                    id_mismatched_matches.append(
+                        {
+                            "worker": s["worker"],
+                            "select_ts": s["ts"],
+                            "release_ts": r["ts"],
+                            "select_id_key": s_key_type,
+                            "select_id": s_key,
+                            "release_id_key": r_key_type,
+                            "release_id": r_key,
+                            "note": "worker FIFO matched, but ID mismatched",
+                        }
+                    )
+            elif s_key and not r_key:
+                id_check = "select_only"
+                id_consistency["only_select_has_id"] += 1
+            elif (not s_key) and r_key:
+                id_check = "release_only"
+                id_consistency["only_release_has_id"] += 1
+            else:
+                id_check = "both_missing"
+                id_consistency["both_missing"] += 1
+
             matched.append(
                 {
                     "request_id": s["tags"].get("request_id", ""),
@@ -750,7 +780,8 @@ def match_select_release(lines, fallback_window_s=120):
                     "select_ts": s["ts"],
                     "release_ts": r["ts"],
                     "type": s["type"],
-                    "match_method": "worker_time_fallback",
+                    "match_method": "worker_fifo",
+                    "id_check": id_check,
                 }
             )
             release_used.add(best_idx)
@@ -761,7 +792,7 @@ def match_select_release(lines, fallback_window_s=120):
                     "select_ts": s["ts"],
                     "type": s["type"],
                     "tags": s["tags"],
-                    "note": "no matching release found (request_id/worker-time)",
+                    "note": "no matching release found (worker FIFO)",
                 }
             )
 
@@ -770,14 +801,16 @@ def match_select_release(lines, fallback_window_s=120):
     per_worker = defaultdict(lambda: {"selects": 0, "releases": 0, "token_selects": 0, "token_releases": 0})
     for s in selects:
         s_type = _normalize_worker_type(s.get("type"))
-        per_worker[s["worker"]]["selects"] += 1
+        wkey = s.get("worker_key") or _normalize_worker_url_key(s.get("worker"))
+        per_worker[wkey]["selects"] += 1
         if s_type in ("prefill", "mixed"):
-            per_worker[s["worker"]]["token_selects"] += 1
+            per_worker[wkey]["token_selects"] += 1
     for r in releases:
+        wkey = r.get("worker_key") or _normalize_worker_url_key(r.get("worker"))
         if str(r.get("type", "")).endswith("_tokens"):
-            per_worker[r["worker"]]["token_releases"] += 1
+            per_worker[wkey]["token_releases"] += 1
         else:
-            per_worker[r["worker"]]["releases"] += 1
+            per_worker[wkey]["releases"] += 1
 
     pw_result = {}
     for w, counts in per_worker.items():
@@ -792,7 +825,12 @@ def match_select_release(lines, fallback_window_s=120):
     # 基于 select 构建 worker URL -> dominant type 映射
     per_worker_type_counts = defaultdict(lambda: defaultdict(int))
     for s in selects:
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
+        wkey = s.get("worker_key") or _normalize_worker_url_key(s.get("worker"))
+        per_worker_type_counts[wkey][_normalize_worker_type(s.get("type"))] += 1
+=======
         per_worker_type_counts[s["worker"]][_normalize_worker_type(s.get("type"))] += 1
+>>>>>>> develop
     worker_dominant_type = {}
     for w, counts in per_worker_type_counts.items():
         worker_dominant_type[w] = sorted(counts.items(), key=lambda kv: -kv[1])[0][0] if counts else "unknown"
@@ -804,7 +842,11 @@ def match_select_release(lines, fallback_window_s=120):
         if r_type_raw.endswith("_tokens"):
             base_t = _normalize_worker_type(r_type_raw.replace("_tokens", ""))
             # token release 按 worker URL 对应的 select 类型映射，不做邻近时间纠偏
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
+            mapped_t = worker_dominant_type.get(r.get("worker_key") or _normalize_worker_url_key(r.get("worker")), "unknown")
+=======
             mapped_t = worker_dominant_type.get(r.get("worker", ""), "unknown")
+>>>>>>> develop
             if mapped_t in ("prefill", "decode", "mixed"):
                 base_t = mapped_t
             inferred_release_types[i] = f"{base_t}_tokens"
@@ -890,6 +932,8 @@ def match_select_release(lines, fallback_window_s=120):
             "with_alt_id": with_alt_id,
             "without_any_id": without_any_id,
         },
+        "id_consistency": id_consistency,
+        "id_mismatched_matches": id_mismatched_matches,
         "type_summary": dict(type_summary),
         "worker_type_profile": worker_type_profile,
     }
@@ -1099,6 +1143,17 @@ def _cli_self_test(args):
     msr = match_select_release(sample_lines)
     check("mixed token_releases inferred", msr["type_summary"].get("mixed", {}).get("token_releases", 0), 1)
     check("prefill token_releases remains 0", msr["type_summary"].get("prefill", {}).get("token_releases", 0), 0)
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
+    check("id consistency exact match", msr["id_consistency"].get("both_present_and_equal", 0), 1)
+
+    mismatch_lines = [
+        "[INFO] 2026/04/12 10:01:00 logger.go:1: [request_id:r2] select worker (decode): http://10.0.0.2:9965, count: 1",
+        "[INFO] 2026/04/12 10:01:01 logger.go:1: [request_id:r3] release worker: http://10.0.0.2:9965, count: 0",
+    ]
+    mm = match_select_release(mismatch_lines)
+    check("id mismatch detected", mm["id_consistency"].get("both_present_but_mismatch", 0), 1)
+=======
+>>>>>>> develop
 
     print(f'\n{"=" * 40}')
     print(f"Results: {passed} passed, {failed} failed")

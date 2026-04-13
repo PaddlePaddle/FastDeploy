@@ -336,6 +336,16 @@ def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, token_stats, 
             }
         )
 
+    id_mismatch_count = sr_result.get("id_consistency", {}).get("both_present_but_mismatch", 0)
+    if id_mismatch_count > 0:
+        diagnoses.append(
+            {
+                "severity": "MEDIUM",
+                "message": f"{id_mismatch_count} 个 select/release 在 FIFO 命中后 ID 不一致（疑似串流或日志错配）",
+                "source_layer": "FD 后端",
+            }
+        )
+
     # Token 计数器潜在泄漏
     for t in token_stats:
         if t.get("alloc_count", 0) > t.get("release_count", 0):

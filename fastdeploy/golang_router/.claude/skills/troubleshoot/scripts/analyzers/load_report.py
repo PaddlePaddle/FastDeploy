@@ -25,10 +25,14 @@ def format_load_report(result):
     if result["diagnoses"]:
         sections.append("### 诊断")
         sections.append("")
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
+        sections.append(f'  共 {len(result["diagnoses"])} 条诊断，见详情: [detail/load_diagnoses.md](../detail/load_diagnoses.md)')
+=======
         sections.append(
             f'  共 {len(result["diagnoses"])} 条诊断，见详情: [detail/load_diagnoses.md](../detail/load_diagnoses.md)；'
             '匹配明细见 [detail/load_select_release.md](../detail/load_select_release.md)'
         )
+>>>>>>> develop
         sections.append("")
         detail_sections.append("## 诊断")
         detail_sections.append("")
@@ -185,6 +189,36 @@ def format_load_report(result):
         detail_sections.append("## Select/Release Per-Worker")
         detail_sections.append("")
 
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
+    id_consistency = sr.get("id_consistency", {})
+    if id_consistency:
+        sections.append("### FIFO × ID 一致性校验")
+        sections.append("")
+        sections.append(
+            "  matched={ok}, mismatch={mismatch}, select_only={so}, release_only={ro}, both_missing={bm}".format(
+                ok=id_consistency.get("both_present_and_equal", 0),
+                mismatch=id_consistency.get("both_present_but_mismatch", 0),
+                so=id_consistency.get("only_select_has_id", 0),
+                ro=id_consistency.get("only_release_has_id", 0),
+                bm=id_consistency.get("both_missing", 0),
+            )
+        )
+        sections.append("")
+        sections.append("  说明: 主匹配按 worker FIFO，随后检查 matched 对中的 ID 是否一致。")
+        sections.append("")
+        detail_sections.append("## FIFO × ID 一致性")
+        detail_sections.append("")
+        detail_sections.append(
+            "- both_present_and_equal: select/release 都有可关联 ID 且相等\n"
+            "- both_present_but_mismatch: select/release 都有 ID 但不一致（需要重点排查）\n"
+            "- only_select_has_id: 仅 select 有 ID\n"
+            "- only_release_has_id: 仅 release 有 ID\n"
+            "- both_missing: 两边都没有可关联 ID"
+        )
+        detail_sections.append("")
+
+=======
+>>>>>>> develop
     if sr.get("worker_type_profile"):
         sections.append("### Worker URL 类型画像（基于 select）")
         sections.append("")
@@ -250,6 +284,19 @@ def format_load_report(result):
         sections.append("  > 完整列表见: [detail/load_select_release.md](../detail/load_select_release.md)")
         sections.append("")
         detail_sections.append("## Untracked selects（缺少可关联 ID）")
+        detail_sections.append("")
+
+    if sr.get("id_mismatched_matches"):
+        sections.append(f'  ⚠ {len(sr["id_mismatched_matches"])} 个 FIFO 匹配对存在 ID 不一致')
+        sections.append("  > 完整列表见: [detail/load_select_release.md](../detail/load_select_release.md)")
+        sections.append("")
+        detail_sections.append("## FIFO 匹配但 ID 不一致（完整）")
+        detail_sections.append("")
+        for m in sr["id_mismatched_matches"]:
+            detail_sections.append(
+                f'- [{m.get("select_ts","")}] worker={_strip_scheme(m.get("worker",""))} '
+                f'select_id={m.get("select_id","")} release_id={m.get("release_id","")} note={m.get("note","")}'
+            )
         detail_sections.append("")
         for u in sr["untracked_selects"]:
             detail_sections.append(
