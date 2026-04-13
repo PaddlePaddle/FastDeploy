@@ -632,12 +632,19 @@ class BaseTextProcessor(ABC):
                 return padded_insts, seq_len
             return padded_insts
         max_len = max(map(len, insts))
-        if pad_style == "left":
-            padded_insts = [[pad_id] * (max_len - len(inst)) + list(inst) for inst in insts]
-        else:
-            padded_insts = [list(inst) + [pad_id] * (max_len - len(inst)) for inst in insts]
         if return_array:
-            padded_insts = np.array(padded_insts, dtype=np.int64).reshape([-1, max_len])
+            padded_insts = np.full((len(insts), max_len), pad_id, dtype=np.int64)
+            for i, inst in enumerate(insts):
+                l = len(inst)
+                if pad_style == "left":
+                    padded_insts[i, max_len - l :] = inst
+                else:
+                    padded_insts[i, :l] = inst
+        else:
+            if pad_style == "left":
+                padded_insts = [[pad_id] * (max_len - len(inst)) + list(inst) for inst in insts]
+            else:
+                padded_insts = [list(inst) + [pad_id] * (max_len - len(inst)) for inst in insts]
         if return_seq_len:
             seq_len = [len(inst) for inst in insts]
             if return_array:

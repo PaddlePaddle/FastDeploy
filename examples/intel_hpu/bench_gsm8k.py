@@ -205,7 +205,7 @@ def main(args):
             fout.write("-----------answer--------------\n")
             fout.write(f"answer= {states[i]}\n")
             fout.write("-----------accuracy--------------\n")
-            fout.write(f"Correct={answer==labels[i]}, pred={answer}, label={labels[i]} \n")
+            fout.write(f"Correct={answer == labels[i]}, pred={answer}, label={labels[i]} \n")
 
     # Compute accuracy
     acc = np.mean(np.array(preds) == np.array(labels))
