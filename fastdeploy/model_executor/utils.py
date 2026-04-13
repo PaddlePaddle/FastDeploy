@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import importlib
+import importlib.util
 import os
 import re
 from collections.abc import Mapping
@@ -551,6 +553,10 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
+
+
+def has_flashinfer():
+    return importlib.util.find_spec("flashinfer") is not None
 
 
 @cache
