@@ -45,13 +45,13 @@ const SessionIDKey contextKey = "session_id"
 const gracePeriod = 5 * time.Minute
 
 // rotatingWriter implements io.Writer with day-level rotation and dual-file writes.
-// Current day's log is always "router.log"; on day change it is renamed to
-// "router-YYYY-MM-DD.log" and a new "router.log" is created. During a short
-// grace period after rotation, log lines whose timestamp belongs to the previous
-// day are written to the archived file.
+// Current day's log is written to "router-YYYY-MM-DD.log" and "router.log" is a
+// symlink pointing to the current day's file. On day change a new date file is
+// created and the symlink is updated. During a short grace period after rotation,
+// log lines whose timestamp belongs to the previous day are written to the old file.
 type rotatingWriter struct {
 	mu          sync.Mutex
-	currentFile *os.File  // today's router.log
+	currentFile *os.File  // today's router-<date>.log
 	prevFile    *os.File  // previous day's router-<date>.log during grace period (may be nil)
 	currentDate string    // "2006-01-02"
 	prevDate    string    // previous date during grace period
@@ -61,10 +61,24 @@ type rotatingWriter struct {
 
 func newRotatingWriter(logDir string) (*rotatingWriter, error) {
 	today := nowFunc().Format("2006-01-02")
-	f, err := os.OpenFile(filepath.Join(logDir, "router.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	datePath := filepath.Join(logDir, "router-"+today+".log")
+	symlinkPath := filepath.Join(logDir, "router.log")
+
+	// Migration: if router.log is a regular file (legacy), rename it to the date file.
+	if info, err := os.Lstat(symlinkPath); err == nil && info.Mode().IsRegular() {
+		os.Rename(symlinkPath, datePath)
+	}
+
+	// Open the date file (append mode).
+	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	if err != nil {
 		return nil, err
 	}
+
+	// Create/update symlink: router.log -> router-<today>.log
+	os.Remove(symlinkPath)
+	os.Symlink("router-"+today+".log", symlinkPath)
+
 	return &rotatingWriter{
 		currentFile: f,
 		currentDate: today,
@@ -122,28 +136,20 @@ func (w *rotatingWriter) rotateLocked(newDate string) {
 		w.prevFile = nil
 	}
 
-	// Close current router.log so we can rename it.
-	if w.currentFile != nil {
-		w.currentFile.Close()
-	}
-
-	// Rename router.log -> router-<currentDate>.log
-	oldPath := filepath.Join(w.logDir, "router.log")
-	archivePath := filepath.Join(w.logDir, "router-"+w.currentDate+".log")
-	if err := os.Rename(oldPath, archivePath); err != nil {
-		// Rename failed; try to reopen router.log and continue without rotation.
-		w.currentFile, _ = os.OpenFile(oldPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-		return
-	}
-
-	// Open the archived file for dual-write grace period.
-	w.prevFile, _ = os.OpenFile(archivePath, os.O_WRONLY|os.O_APPEND, 0666)
+	// Keep the old date file open for grace period writes.
+	w.prevFile = w.currentFile
 	w.prevDate = w.currentDate
 	w.graceUntil = nowFunc().Add(gracePeriod)
 
-	// Create new router.log for the new day.
-	w.currentFile, _ = os.OpenFile(oldPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	// Open new date file for the new day.
+	datePath := filepath.Join(w.logDir, "router-"+newDate+".log")
+	w.currentFile, _ = os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 	w.currentDate = newDate
+
+	// Update symlink: router.log -> router-<newDate>.log
+	symlinkPath := filepath.Join(w.logDir, "router.log")
+	os.Remove(symlinkPath)
+	os.Symlink("router-"+newDate+".log", symlinkPath)
 }
 
 // parseLogDate extracts the date from a log line produced by log.LstdFlags.
@@ -244,22 +250,17 @@ func cleanupLogs(logDir string, maxAgeDays, maxTotalSizeMB int) {
 	}
 
 	now := nowFunc()
+	today := now.Format("2006-01-02")
 	var archives []logFileInfo
-	var routerLogSize int64
 
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		name := entry.Name()
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
 
-		// Count router.log size but never delete it.
+		// router.log is now a symlink; skip it.
 		if name == "router.log" {
-			routerLogSize = info.Size()
 			continue
 		}
 
@@ -270,6 +271,14 @@ func cleanupLogs(logDir string, maxAgeDays, maxTotalSizeMB int) {
 		dateStr := strings.TrimPrefix(name, "router-")
 		dateStr = strings.TrimSuffix(dateStr, ".log")
 		fileDate, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			continue
+		}
+		// Never delete today's active date file.
+		if dateStr == today {
+			continue
+		}
+		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
@@ -303,7 +312,7 @@ func cleanupLogs(logDir string, maxAgeDays, maxTotalSizeMB int) {
 	// Phase 2: Size-based cleanup.
 	if maxTotalSizeMB > 0 {
 		maxBytes := int64(maxTotalSizeMB) * 1024 * 1024
-		var totalSize int64 = routerLogSize
+		var totalSize int64
 		for _, f := range archives {
 			totalSize += f.size
 		}
