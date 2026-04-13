@@ -73,6 +73,7 @@ else:
     )
     from fastdeploy.model_executor.pre_and_post_process import async_set_value, pre_process
 
+from fastdeploy.envs import get_unique_name
 from fastdeploy.worker.input_batch import (
     ProposerInputBatch,
     recover_batch_index_for_output,
@@ -268,8 +269,8 @@ class MTPProposer(Proposer):
                     f"..attaching kv cache for mtp layer {i}: key:{key_cache_shape}, value:{value_cache_shape}"
                 )
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
-                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                key_cache_name = get_unique_name(f"key_caches_{i}_rank{local_rank}.device{self.device_id}")
+                val_cache_name = get_unique_name(f"value_caches_{i}_rank{local_rank}.device{self.device_id}")
                 key_cache = self._share_external_data(key_cache, key_cache_name, key_cache_shape)
                 self.cache_kvs_map[key_cache_name] = key_cache
                 cache_kvs_list.append(key_cache)
@@ -279,8 +280,12 @@ class MTPProposer(Proposer):
                 cache_kvs_list.append(value_cache)
 
                 if kv_cache_quant_type == "block_wise_fp8":
-                    scale_key_cache_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
-                    scale_val_cache_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    scale_key_cache_name = get_unique_name(
+                        f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    )
+                    scale_val_cache_name = get_unique_name(
+                        f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    )
                     key_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
                     key_scale_cache = self._share_external_data(
                         key_scale_cache, scale_key_cache_name, kv_cache_scale_shape
@@ -307,7 +312,7 @@ class MTPProposer(Proposer):
                     fill_value=0,
                     dtype=cache_type,
                 )
-                key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
+                key_cache_name = get_unique_name(f"key_caches_{i}_rank{local_rank}.device{self.device_id}")
                 set_data_ipc(key_cache, key_cache_name)
                 self.cache_kvs_map[key_cache_name] = key_cache
                 cache_kvs_list.append(key_cache)
@@ -317,7 +322,7 @@ class MTPProposer(Proposer):
                     fill_value=0,
                     dtype=cache_type,
                 )
-                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
+                val_cache_name = get_unique_name(f"value_caches_{i}_rank{local_rank}.device{self.device_id}")
                 set_data_ipc(val_cache, val_cache_name)
                 self.cache_kvs_map[val_cache_name] = val_cache
                 cache_kvs_list.append(val_cache)
@@ -328,7 +333,9 @@ class MTPProposer(Proposer):
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
-                    key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    key_cache_scales_name = get_unique_name(
+                        f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    )
                     set_data_ipc(key_cache_scales, key_cache_scales_name)
                     self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
                     cache_kvs_list.append(key_cache_scales)
@@ -338,7 +345,9 @@ class MTPProposer(Proposer):
                         fill_value=0,
                         dtype=paddle.get_default_dtype(),
                     )
-                    val_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    val_cache_scales_name = get_unique_name(
+                        f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                    )
                     set_data_ipc(val_cache_scales, val_cache_scales_name)
                     self.cache_kvs_map[val_cache_scales_name] = val_cache_scales
                     cache_kvs_list.append(val_cache_scales)

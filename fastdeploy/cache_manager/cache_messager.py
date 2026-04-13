@@ -34,6 +34,7 @@ from fastdeploy.cache_manager.ops import (
 )
 from fastdeploy.cache_manager.transfer_factory import IPCCommManager, RDMACommManager
 from fastdeploy.config import SpeculativeConfig
+from fastdeploy.envs import get_unique_name
 from fastdeploy.inter_communicator import (
     EngineWorkerQueue,
     IPCSignal,
@@ -968,9 +969,10 @@ def main():
             dtype=cache_type,
         )
         gpu_cache_k_tensors.append(gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"])
+        key_cache_name = get_unique_name(f"key_caches_{i}_rank{rank}.device{device}")
         set_data_ipc(
             gpu_cache_kvs[f"key_caches_{i}_rank{rank}_device{device}"],
-            f"key_caches_{i}_rank{rank}.device{device}",
+            key_cache_name,
         )
         if args.cache_dtype == "block_wise_fp8":
             gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
@@ -990,9 +992,10 @@ def main():
             )
             gpu_cache_v_tensors.append(gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"])
 
+            val_cache_name = get_unique_name(f"value_caches_{i}_rank{rank}.device{device}")
             set_data_ipc(
                 gpu_cache_kvs[f"value_caches_{i}_rank{rank}_device{device}"],
-                f"value_caches_{i}_rank{rank}.device{device}",
+                val_cache_name,
             )
             if args.cache_dtype == "block_wise_fp8":
                 gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(

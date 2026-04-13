@@ -269,7 +269,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
 }
 
 
-def get_unique_name(self, name):
+def get_unique_name(name):
     """
     Get unique name for config
     """

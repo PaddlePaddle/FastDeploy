@@ -84,6 +84,7 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.tasks import PoolingTask
+from fastdeploy.envs import get_unique_name
 from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.logger.deterministic_logger import DeterministicLogger
@@ -1423,13 +1424,15 @@ class GPUModelRunner(ModelRunnerBase):
 
         for i in range(self.model_config.num_hidden_layers):
             # init key cache
-            key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
-            key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+            key_cache_name = get_unique_name(f"key_caches_{i}_rank{local_rank}.device{self.device_id}")
+            key_cache_scales_name = get_unique_name(f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}")
             if value_cache_shape:
-                val_cache_name = f"value_caches_{i}_rank{local_rank}.device{self.device_id}"
-                value_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                val_cache_name = get_unique_name(f"value_caches_{i}_rank{local_rank}.device{self.device_id}")
+                value_cache_scales_name = get_unique_name(
+                    f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
+                )
             elif indexer_cache_shape:
-                indexer_cache_name = f"indexer_caches_{i}_rank{local_rank}.device{self.device_id}"
+                indexer_cache_name = get_unique_name(f"indexer_caches_{i}_rank{local_rank}.device{self.device_id}")
             if create_cache_tensor:
                 logger.info(
                     f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"

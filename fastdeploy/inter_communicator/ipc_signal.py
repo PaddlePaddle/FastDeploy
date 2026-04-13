@@ -20,6 +20,7 @@ from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
 
+from fastdeploy.envs import get_unique_name
 from fastdeploy.utils import llm_logger
 
 
@@ -138,7 +139,7 @@ class IPCLock:
             name = f"{name}.{suffix}"
 
         lock_dir = "/dev/shm" if os.path.isdir("/dev/shm") else "/tmp"
-        self._lock_path = os.path.join(lock_dir, f"fd_lock_{name}")
+        self._lock_path = get_unique_name(os.path.join(lock_dir, f"fd_lock_{name}"))
 
         if create:
             llm_logger.debug(f"creating ipc lock: {self._lock_path}")
