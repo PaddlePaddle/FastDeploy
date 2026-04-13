@@ -62,7 +62,7 @@
   - `detail/latency_diagnoses.md` — 延迟诊断详情
   - `detail/cache_diagnosis.md` — cache 六维诊断详情（session 粘性/非最优/驱逐/Fallback/冷启动/交叉诊断）
   - `detail/cache_session_stickiness.md` / `detail/cache_suboptimal.md` / `detail/cache_eviction.md` / `detail/cache_fallback.md` / `detail/cache_cross.md` — cache 分职责拆分明细
-  - `detail/trace_<ID>.md` — 请求追踪事件链
+  - `detail/trace/trace_<ID>.md` — 请求追踪事件链
 
 ---
 

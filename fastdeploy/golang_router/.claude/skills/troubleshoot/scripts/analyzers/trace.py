@@ -485,7 +485,9 @@ def format_trace_report(result):
             # 主报告中添加引用和摘要
             safe_tid = tid.replace("/", "_")
             sections.append(f'  事件数: {len(trace["events"])}')
-            sections.append(f"  > 完整事件链: [detail/trace_{safe_tid}.md](../detail/trace_{safe_tid}.md)")
+            sections.append(
+                f"  > 完整事件链: [detail/trace/trace_{safe_tid}.md](../detail/trace/trace_{safe_tid}.md)"
+            )
             sections.append("")
 
     return "\n".join(sections), detail_dict

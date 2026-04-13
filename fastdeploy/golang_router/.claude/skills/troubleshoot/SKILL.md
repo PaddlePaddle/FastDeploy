@@ -124,7 +124,7 @@ python3 $SCRIPTS/troubleshoot.py <log_file> --start "16:00" --end "17:00" --erro
 - **终端**：简洁三层汇总（Router / FD 后端 / 客户端），含状态码分布、错误 Top N、趋势图
 - **文件**：详细报告导出到 `skill_output/troubleshoot/<YYYYMMDD_HHMMSS>/summary/troubleshoot_report.md`
   - 逐分钟事件详情拆分到 `detail/health_events.md`
-  - 请求追踪事件链拆分到 `detail/trace_<ID>.md`
+  - 请求追踪事件链拆分到 `detail/trace/trace_<ID>.md`
 - **Cache 明细要求**：`cache_session_stickiness.md` / `cache_suboptimal.md` / `cache_eviction.md` / `cache_fallback.md` / `cache_cross.md`
   必须始终生成（即使无异常也写“未发现/样本不足”总结，避免链接缺失）
 - **状态行**：`STATUS: HEALTHY / DEGRADED / CRITICAL`

@@ -191,7 +191,7 @@ def format_full_report(results, status, status_reason):
             details: dict 包含需要拆分到独立文件的详情数据
                 - 'health_events': str 或 None
                 - 'load_select_release': str 或 None
-                - 'trace_files': {trace_id: text} 或 {}
+                - 'trace_files': {trace_id: text} 或 {}（写入 detail/trace/）
     """
     parts = []
     details = {
@@ -419,9 +419,12 @@ def save_detailed_report(report_text, output_dir, details=None):
             with open(os.path.join(detail_dir, "errors_topn.md"), "w", encoding="utf-8") as f:
                 f.write(details["errors_topn"])
 
+        trace_detail_dir = os.path.join(detail_dir, "trace")
+        if details.get("trace_files"):
+            os.makedirs(trace_detail_dir, exist_ok=True)
         for trace_id, trace_text in details.get("trace_files", {}).items():
             safe_id = trace_id.replace("/", "_")
-            trace_path = os.path.join(detail_dir, f"trace_{safe_id}.md")
+            trace_path = os.path.join(trace_detail_dir, f"trace_{safe_id}.md")
             with open(trace_path, "w", encoding="utf-8") as f:
                 f.write(trace_text)
 
