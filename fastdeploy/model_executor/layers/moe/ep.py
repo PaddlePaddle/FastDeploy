@@ -146,6 +146,7 @@ class DeepEPBuffer:
                     self.ep_size,
                     self.num_experts,
                 )
+                deep_ep.Buffer.set_num_sms(14)  # TODO: tune in future
             else:
                 num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint_two_stage(
                     self.num_max_dispatch_tokens_per_rank, self.hidden_size, self.ep_size, self.num_experts, self.top_k
@@ -178,7 +179,6 @@ class DeepEPBuffer:
                 low_latency_mode=True,
                 num_qps_per_rank=num_qps_per_rank,
             )
-            self.deepep_buffer.set_num_sms(14)  # TODO: tune in future
         else:
             if self.moe_phase.phase == "decode":
                 self._create_low_latency_buffer()
