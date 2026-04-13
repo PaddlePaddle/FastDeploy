@@ -23,8 +23,8 @@ import numpy as np
 import paddle
 import pytest
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda *args, **kwargs: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda *args, **kwargs: None
 
 iluvatar_stub = types.ModuleType("fastdeploy.model_executor.ops.iluvatar")
 iluvatar_stub.moe_expert_ffn = lambda *args, **kwargs: None
