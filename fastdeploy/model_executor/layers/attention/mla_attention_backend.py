@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import paddle
 
-paddle.enable_compat(scope={"flash_mla"})  # Enable torch proxy before importing flash_mla
+paddle.enable_compat(scope={"flash_mla"})  # Enable paddle.enable_compat before importing flash_mla
 import math
 import os
 from dataclasses import dataclass, field

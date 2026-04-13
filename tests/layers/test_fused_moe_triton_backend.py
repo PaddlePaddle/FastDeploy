@@ -23,8 +23,8 @@ import types
 import paddle
 import pytest
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda scope=None: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda scope=None: None
 if not hasattr(paddle.nn.functional, "swiglu"):
     paddle.nn.functional.swiglu = lambda x: x
 
