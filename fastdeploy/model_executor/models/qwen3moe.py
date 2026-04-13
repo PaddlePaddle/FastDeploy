@@ -63,6 +63,7 @@ class Qwen3MoeBlock(nn.Layer):
         }
         self.experts = FusedMoE(
             fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.num_experts,
             top_k=fd_config.model_config.num_experts_per_tok,

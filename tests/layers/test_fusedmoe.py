@@ -509,6 +509,7 @@ class FuseMoEWrapper(paddle.nn.Layer):
 
         self.fused_moe = FusedMoE(
             fd_config=self.fd_config,
+            hidden_size=self.fd_config.model_config.hidden_size,
             moe_intermediate_size=self.fd_config.model_config.moe_intermediate_size,
             num_experts=self.fd_config.model_config.moe_num_experts,
             top_k=self.fd_config.model_config.moe_k,

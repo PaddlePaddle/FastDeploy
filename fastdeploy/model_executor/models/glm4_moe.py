@@ -169,6 +169,7 @@ class Glm4Moe(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             reduce_results=not self.merge_ffn_tp,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
