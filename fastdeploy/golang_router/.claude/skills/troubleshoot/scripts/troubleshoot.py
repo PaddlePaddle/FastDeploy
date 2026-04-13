@@ -12,7 +12,7 @@ Options:
     --cache             仅分析 Cache 调度
     --load              仅分析负载与计数器
     --trace ID          追踪指定请求（支持逗号分隔多 ID；传 all 可全量追踪）
-    --tail N            仅分析尾部 N 行（支持 N 或 Nm 格式如 30m）
+    --tail N            仅分析尾部 N 行（支持 5000/1k/1w 等行数写法）
     --start TIME        起始时间（如 "16:00:00"、"03/31 16:00"）
     --end TIME          结束时间（如 "17:00:00"、"2026/03/31 17:00:00"）
     --output DIR        详细报告导出目录（默认: skill_output/troubleshoot/<timestamp>/）
@@ -21,6 +21,7 @@ Options:
 """
 
 import argparse
+import re
 import os
 import sys
 from datetime import datetime
@@ -38,7 +39,6 @@ from analyzers.load_report import format_load_report
 from analyzers.trace import analyze_trace, format_trace_report
 from log_parser import (
     complete_time_arg,
-    filter_file_by_recent_minutes,
     filter_file_by_time_range,
 )
 
@@ -106,12 +106,22 @@ def determine_log_file(user_path=None):
 
 
 def parse_tail_arg(tail_str):
-    """解析 --tail 参数：支持纯数字(行数)或 Nm(分钟)格式。"""
+    """解析 --tail 参数：支持数字及 k/w 缩写。"""
     if tail_str is None:
         return None
-    if tail_str.endswith("m"):
-        return {"type": "minutes", "value": int(tail_str[:-1])}
-    return {"type": "lines", "value": int(tail_str)}
+    s = str(tail_str).strip().lower()
+    m = re.fullmatch(r"(\d+)([kw])?", s)
+    if not m:
+        raise ValueError("--tail 仅支持行数（如 5000、1k、1w）。按时间请改用 --start/--end")
+    value = int(m.group(1))
+    unit = m.group(2)
+    if unit == "k":
+        value *= 1000
+    elif unit == "w":
+        value *= 10000
+    if value <= 0:
+        raise ValueError("--tail 行数必须 > 0")
+    return {"type": "lines", "value": value}
 
 
 def determine_status(results):
@@ -444,7 +454,7 @@ def main():
     parser.add_argument("--cache", action="store_true", help="仅分析 Cache 调度")
     parser.add_argument("--load", action="store_true", help="仅分析负载与计数器")
     parser.add_argument("--trace", metavar="ID", help="追踪指定请求（逗号分隔多 ID；传 all 可全量追踪）")
-    parser.add_argument("--tail", help="尾部行数或分钟数 (如 5000 或 30m)")
+    parser.add_argument("--tail", help="尾部行数（如 5000、1k、1w）。按时间请使用 --start/--end")
     parser.add_argument(
         "--start", default=None, help='起始时间（如 "16:00:00"、"03/31 16:00"、"2026/03/31 16:00:00"）'
     )
@@ -478,14 +488,7 @@ def main():
 
     tail_arg = parse_tail_arg(args.tail)
     tail = None
-    # --tail Nm 采用真实时间窗口过滤，再全量分析过滤后的临时文件
-    if tail_arg and tail_arg["type"] == "minutes":
-        filtered_path, is_temp = filter_file_by_recent_minutes(log_file, tail_arg["value"])
-        if is_temp:
-            atexit.register(lambda p=filtered_path: os.unlink(p) if os.path.exists(p) else None)
-        log_file = filtered_path
-        print(f"--tail {tail_arg['value']}m: 使用日志时间戳过滤最近窗口", file=sys.stderr)
-    elif tail_arg and tail_arg["type"] == "lines":
+    if tail_arg and tail_arg["type"] == "lines":
         tail = tail_arg["value"]
 
     # 确定分析模式

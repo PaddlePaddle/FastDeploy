@@ -8,12 +8,11 @@ stat_cache_hitrate — FastDeploy Go Router Cache 命中率统计工具
   3. Per-Worker Stats   — 各 worker 缓存利用排名
 
 用法：
-  python3 stat_cache_hitrate.py <log_file> [--tail N|2k|30m|2h|1d] [--output DIR]
+  python3 stat_cache_hitrate.py <log_file> [--tail N|Nk|Nw] [--output DIR]
 """
 
 import argparse
 import json
-import math
 import os
 import re
 import subprocess
@@ -28,7 +27,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from chart import render_bar, render_sparkline, render_table
 from log_parser import (
     complete_time_arg,
-    extract_ts,
     filter_file_by_time_range,
     parse_cache_strategy_line,
     parse_stats_line,
@@ -172,51 +170,16 @@ def count_lines(filepath):
 def read_lines(filepath, tail=None):
     """读取日志文件，支持 tail 模式。"""
     if tail is not None:
-        if isinstance(tail, str) and tail.endswith("m"):
-            # 按时间 tail：读取全部行，过滤最近 N 分钟
-            minutes = int(tail[:-1])
-            all_lines = _read_file_lines(filepath)
-            return _filter_by_time(all_lines, minutes)
-        else:
-            # 按行数 tail
-            n = int(tail)
-            result = subprocess.run(["tail", "-n", str(n), filepath], capture_output=True, text=True)
-            return result.stdout.splitlines() if result.returncode == 0 else []
+        # 按行数 tail
+        n = int(tail)
+        result = subprocess.run(["tail", "-n", str(n), filepath], capture_output=True, text=True)
+        return result.stdout.splitlines() if result.returncode == 0 else []
     return _read_file_lines(filepath)
 
 
 def _read_file_lines(filepath):
     with open(filepath, "r", errors="replace") as f:
         return f.readlines()
-
-
-def _filter_by_time(lines, minutes):
-    """过滤最近 N 分钟的日志行。"""
-    # 找最后一行的时间戳作为基准
-    last_ts = None
-    for line in reversed(lines):
-        ts = extract_ts(line)
-        if ts:
-            last_ts = parse_ts(ts)
-            break
-    if not last_ts:
-        return lines
-
-    from datetime import timedelta
-
-    cutoff = last_ts - timedelta(minutes=minutes)
-    result = []
-    for line in lines:
-        ts = extract_ts(line)
-        if ts:
-            try:
-                if parse_ts(ts) >= cutoff:
-                    result.append(line)
-            except ValueError:
-                result.append(line)
-        else:
-            result.append(line)
-    return result
 
 
 # ════════════════════════════════════════════════════════════════
@@ -237,7 +200,7 @@ def grep_and_parse(filepath, grep_pattern, parse_cmd, tail=None):
     """大文件模式：grep 过滤 + log_parser.py CLI 管道解析。"""
     parser_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "log_parser.py")
 
-    if tail and not (isinstance(tail, str) and tail.endswith("m")):
+    if tail:
         grep_cmd = f"tail -n {tail} {_shell_quote(filepath)} | grep -F {_shell_quote(grep_pattern)} | python3 {_shell_quote(parser_path)} {parse_cmd}"
     else:
         grep_cmd = f"grep -F {_shell_quote(grep_pattern)} {_shell_quote(filepath)} | python3 {_shell_quote(parser_path)} {parse_cmd}"
@@ -255,7 +218,7 @@ def grep_and_parse(filepath, grep_pattern, parse_cmd, tail=None):
 
 def grep_count(filepath, grep_pattern, tail=None):
     """大文件模式：grep 计数。"""
-    if tail and not (isinstance(tail, str) and tail.endswith("m")):
+    if tail:
         cmd = f"tail -n {tail} {_shell_quote(filepath)} | grep -cE {_shell_quote(grep_pattern)}"
     else:
         cmd = f"grep -cE {_shell_quote(grep_pattern)} {_shell_quote(filepath)}"
@@ -283,7 +246,7 @@ def extract_data(filepath, tail=None):
         strategy_recs = grep_and_parse(filepath, STRATEGY_PATTERN, "parse-cache-strategy", tail)
         stats_recs = grep_and_parse(filepath, STATS_PATTERN, "parse-stats", tail)
         inference_count = grep_count(filepath, r"\] \[POST\] /v1/chat/completions |\] \[POST\] /v1/completions ", tail)
-        line_count = int(tail) if tail is not None and not (isinstance(tail, str) and tail.endswith("m")) else total
+        line_count = int(tail) if tail is not None else total
         return strategy_recs, stats_recs, inference_count, line_count
 
 
@@ -989,7 +952,7 @@ def parse_args():
         "--tail",
         nargs="?",
         const="2000",
-        help="只分析尾部数据（支持 2000/2k 行，或 30m/2h/1d 时间窗口）",
+        help="只分析尾部数据（支持 2000、1k、1w 等行数写法）。按时间请使用 --start/--end",
     )
     parser.add_argument(
         "--output", default=None, help="详细报告输出目录（默认：skill_output/stat-cache-hitrate/<timestamp>/）"
@@ -1002,7 +965,7 @@ def parse_args():
 
 
 def parse_tail_arg(tail_str):
-    """解析 --tail 参数，返回 int(行数) 或 '<minutes>m'(时间窗口)。"""
+    """解析 --tail 参数，返回行数 int。支持数字及 k/w 缩写。"""
     if tail_str is None:
         return None
 
@@ -1010,34 +973,20 @@ def parse_tail_arg(tail_str):
     if not s:
         raise ValueError("--tail 不能为空")
 
-    # 行数: 2000
-    if re.fullmatch(r"\d+", s):
-        value = int(s)
-        if value <= 0:
-            raise ValueError("--tail 行数必须 > 0")
-        return value
+    m = re.fullmatch(r"(\d+)([kw])?", s)
+    if not m:
+        raise ValueError("不支持的 --tail 格式：请使用 2000、1k、1w 等行数写法。按时间请改用 --start/--end")
 
-    # 行数缩写: 2k => 2000
-    m = re.fullmatch(r"(\d+)k", s)
-    if m:
-        value = int(m.group(1)) * 1000
-        if value <= 0:
-            raise ValueError("--tail 行数必须 > 0")
-        return value
+    value = int(m.group(1))
+    unit = m.group(2)
+    if unit == "k":
+        value *= 1000
+    elif unit == "w":
+        value *= 10000
 
-    # 时间窗口: 30m/2h/1d（最终统一成分钟）
-    m = re.fullmatch(r"(\d+)(m|h|d)", s)
-    if m:
-        num = int(m.group(1))
-        unit = m.group(2)
-        if num <= 0:
-            raise ValueError("--tail 时间窗口必须 > 0")
-        factor = {"m": 1, "h": 60, "d": 1440}[unit]
-        minutes = num * factor
-        minutes = max(1, math.ceil(minutes))
-        return f"{minutes}m"
-
-    raise ValueError("不支持的 --tail 格式：请使用 2000/2k 或 30m/2h/1d")
+    if value <= 0:
+        raise ValueError("--tail 行数必须 > 0")
+    return value
 
 
 def main():
