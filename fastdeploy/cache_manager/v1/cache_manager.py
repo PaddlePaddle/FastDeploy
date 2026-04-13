@@ -426,7 +426,7 @@ class CacheManager(KVCacheBase):
         with PrefixCacheManager.gpu_free_block_list.
         """
         # Return list representation of available blocks
-        return list(range(self._device_pool.available_blocks()))
+        return list(self._device_pool.available_blocks())
 
     @property
     def available_gpu_resource(self) -> float:
