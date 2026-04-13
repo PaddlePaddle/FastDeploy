@@ -62,7 +62,7 @@
   - `detail/latency_diagnoses.md` — 延迟诊断详情
   - `detail/cache_diagnosis.md` — cache 六维诊断详情（session 粘性/非最优/驱逐/Fallback/冷启动/交叉诊断）
   - `detail/cache_session_stickiness.md` / `detail/cache_suboptimal.md` / `detail/cache_eviction.md` / `detail/cache_fallback.md` / `detail/cache_cross.md` — cache 分职责拆分明细
-  - `detail/trace_<ID>.md` — 请求追踪事件链
+  - `detail/trace/trace_<ID>.md` — 请求追踪事件链
 
 ---
 
@@ -102,14 +102,17 @@ Worker 可用性时间线
 可用性统计
 ```
 
-### Cache（调度诊断）— 待实现
+### Cache（调度诊断）
 
 ```
 调度策略分布
 Session 粘性分析
 非最优选择分析
 Fallback 原因分类
+驱逐影响与交叉诊断
 ```
+
+要求：即使某项计数为 0（例如“非最优选择”），也要输出该小节并给出“未发现/样本不足”总结，保证 detail 链接稳定存在。
 
 ### Load（负载分析）— 待实现
 

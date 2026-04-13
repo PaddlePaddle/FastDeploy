@@ -62,8 +62,13 @@ def analyze_trace(log_file, trace_ids, tail=None):
     Returns:
         dict: {traces: {id: {events, lifecycle_complete, diagnoses}}, summary}
     """
+    auto_discovery_summary = ""
     if isinstance(trace_ids, str):
-        trace_ids = [tid.strip() for tid in trace_ids.split(",") if tid.strip()]
+        normalized = trace_ids.strip().lower()
+        if normalized in ("all", "full", "all_ids", "全部", "全量"):
+            trace_ids, auto_discovery_summary = _discover_full_trace_targets(log_file, tail=tail)
+        else:
+            trace_ids = [tid.strip() for tid in trace_ids.split(",") if tid.strip()]
 
     if not trace_ids:
         return {"traces": {}, "summary": "未指定追踪 ID"}
@@ -132,10 +137,64 @@ def analyze_trace(log_file, trace_ids, tail=None):
     total_traced = len(traces)
     complete = sum(1 for t in traces.values() if t["lifecycle_complete"])
 
-    return {
-        "traces": traces,
-        "summary": f"{total_traced} ID(s) 追踪, {complete} 生命周期完整",
-    }
+    summary = f"{total_traced} ID(s) 追踪, {complete} 生命周期完整"
+    if auto_discovery_summary:
+        summary += f" | {auto_discovery_summary}"
+
+    return {"traces": traces, "summary": summary}
+
+
+def _discover_full_trace_targets(log_file, tail=None):
+    """全量追踪目标发现。
+
+    规则：
+    1) 有 session_id 的优先按 session_id 追踪
+    2) 无 session 但有 trace_id 的按 trace_id 追踪
+    3) 剩余“孤立”的 request_id/req_id 单独追踪
+    """
+    lines = _grep_lines(log_file, r"session_id:|trace_id:|request_id:|req_id:", tail=tail)
+    if not lines:
+        return [], "全量追踪未发现任何可用 ID"
+
+    session_ids = set()
+    trace_ids = set()
+    all_request_ids = set()
+    request_ids_with_session_or_trace = set()
+
+    for line in lines:
+        tags = extract_tags(line)
+        sid = tags.get("session_id")
+        tid = tags.get("trace_id")
+        rid = tags.get("request_id") or tags.get("req_id")
+        has_session = bool(sid)
+        has_trace = bool(tid)
+        has_request = bool(rid)
+
+        if has_session:
+            session_ids.add(sid)
+        if has_trace:
+            trace_ids.add(tid)
+        if has_request:
+            all_request_ids.add(rid)
+            if has_session or has_trace:
+                request_ids_with_session_or_trace.add(rid)
+
+    standalone_request_ids = all_request_ids - request_ids_with_session_or_trace
+
+    targets = []
+    chosen = set()
+    for bucket in (sorted(session_ids), sorted(trace_ids), sorted(standalone_request_ids)):
+        for _id in bucket:
+            if _id and _id not in chosen:
+                chosen.add(_id)
+                targets.append(_id)
+
+    summary = (
+        "全量ID发现: "
+        f"session={len(session_ids)}, trace={len(trace_ids)}, "
+        f"standalone_request={len(standalone_request_ids)}, total_targets={len(targets)}"
+    )
+    return targets, summary
 
 
 def _parse_event_chain(lines):
@@ -426,7 +485,9 @@ def format_trace_report(result):
             # 主报告中添加引用和摘要
             safe_tid = tid.replace("/", "_")
             sections.append(f'  事件数: {len(trace["events"])}')
-            sections.append(f"  > 完整事件链: [detail/trace_{safe_tid}.md](../detail/trace_{safe_tid}.md)")
+            sections.append(
+                f"  > 完整事件链: [detail/trace/trace_{safe_tid}.md](../detail/trace/trace_{safe_tid}.md)"
+            )
             sections.append("")
 
     return "\n".join(sections), detail_dict

@@ -11,13 +11,13 @@ description: >
   关键词：troubleshoot、排查、router 问题、全量扫描、综合分析、error、502、latency、
   health、load、cache、trace、/troubleshoot。
 
-IMPORTANT: 执行前务必先读取 references/log_patterns.md 了解日志格式和提取规则。
-错误分类时参考 references/error_catalog.md。涉及后端问题时参考 references/fastdeploy_cross_reference.md。
 ---
 
 # Router Troubleshooting
 
 综合排查 FastDeploy Go Router 问题，输出完整诊断报告。
+
+> IMPORTANT: 执行前务必先读取 `references/log_patterns.md` 了解日志格式和提取规则。错误分类时参考 `references/error_catalog.md`。涉及后端问题时参考 `references/fastdeploy_cross_reference.md`。
 
 ## 执行前交互
 
@@ -51,6 +51,16 @@ IMPORTANT: 执行前务必先读取 references/log_patterns.md 了解日志格�
 缺失部分自动从日志首末行推断（缺年份取首行，缺日期取末行）。
 `--start/--end` 与 `--tail` 互斥。
 
+当用户选择“指定时间段”时，必须再发起一次 **AskUserQuestion**（离散选项）引导时间输入：
+- 选项 1: `当天（00:00:00 到当前）`（推荐）
+- 选项 2: `最近半小时`（自动换算为 `--start now-30m --end now` 语义）
+
+用户若通过客户端默认 `Other` 输入时间，则将该输入直接作为时间范围参数解析。
+可补充一条简短示例引导：
+- 示例 1：`16:00-16:30`
+- 示例 2：`03/31 16:00 ~ 03/31 18:00`
+- 示例 3：`2026/03/31 16:00:00`（仅起始）
+
 ### 3. 分析模式
 必须使用 **AskUserQuestion 的离散选项**（不要只发纯文本编号）：
 - 选项 1: `完整分析（默认）` — 运行所有维度（errors + latency + health + cache + load）
@@ -59,8 +69,12 @@ IMPORTANT: 执行前务必先读取 references/log_patterns.md 了解日志格�
 
 如果用户未选择，默认使用完整分析。
 
-当用户选择“请求追踪”选项时，AskUserQuestion 的选项文案应直接提示可输入：
-- `trace_id/request_id/session_id`（逗号分隔多 ID）
+当用户选择“请求追踪”后，**不要再发 AskUserQuestion** 收集 trace ID。
+直接发一条提示并等待用户输入完成后再继续执行即可。
+
+提示文案建议：
+- `请输入要追踪的 ID（支持 trace_id / request_id / session_id，多个用逗号分隔；输入 all 可全量追踪）`
+- 示例：`a1b2c3d4` / `trace-001,trace-002` / `session-abc-123` / `all`
 
 ### 4. 输出目录
 诊断报告默认保存到 `skill_output/troubleshoot/<YYYYMMDD_HHMMSS>/`（自动按运行时间创建子目录）。
@@ -86,6 +100,7 @@ python3 $SCRIPTS/troubleshoot.py <log_file> --load
 # 请求追踪（需指定 ID，支持逗号分隔多 ID）
 python3 $SCRIPTS/troubleshoot.py <log_file> --trace <ID>
 python3 $SCRIPTS/troubleshoot.py <log_file> --trace "id1,id2"
+python3 $SCRIPTS/troubleshoot.py <log_file> --trace all
 
 # 尾部分析
 python3 $SCRIPTS/troubleshoot.py <log_file> --tail 5000
@@ -109,7 +124,9 @@ python3 $SCRIPTS/troubleshoot.py <log_file> --start "16:00" --end "17:00" --erro
 - **终端**：简洁三层汇总（Router / FD 后端 / 客户端），含状态码分布、错误 Top N、趋势图
 - **文件**：详细报告导出到 `skill_output/troubleshoot/<YYYYMMDD_HHMMSS>/summary/troubleshoot_report.md`
   - 逐分钟事件详情拆分到 `detail/health_events.md`
-  - 请求追踪事件链拆分到 `detail/trace_<ID>.md`
+  - 请求追踪事件链拆分到 `detail/trace/trace_<ID>.md`
+- **Cache 明细要求**：`cache_session_stickiness.md` / `cache_suboptimal.md` / `cache_eviction.md` / `cache_fallback.md` / `cache_cross.md`
+  必须始终生成（即使无异常也写“未发现/样本不足”总结，避免链接缺失）
 - **状态行**：`STATUS: HEALTHY / DEGRADED / CRITICAL`
 
 ## 三层诊断框架

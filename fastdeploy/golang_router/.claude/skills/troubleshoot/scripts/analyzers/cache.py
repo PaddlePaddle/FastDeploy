@@ -449,11 +449,11 @@ def format_cache_report(result):
 
     # Session 粘性
     stickiness = result.get("session_stickiness", {})
+    sections.append("### Session 粘性")
+    sections.append("")
+    sections.append("  Session 粘性详情见: [detail/cache_session_stickiness.md](../detail/cache_session_stickiness.md)")
+    sections.append("")
     if stickiness:
-        sections.append("### Session 粘性")
-        sections.append("")
-        sections.append("  Session 粘性详情见: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
-        sections.append("")
         table_data = [
             {
                 "Session": sid,
@@ -473,14 +473,21 @@ def format_cache_report(result):
             )
         )
         detail_sections.append("")
+    else:
+        sections.append("  未检测到可计算粘性的多请求 Session。")
+        sections.append("")
+        detail_sections.append("## Session 粘性")
+        detail_sections.append("")
+        detail_sections.append("- 无可用样本（需要同一 session 至少 2 次请求）。")
+        detail_sections.append("")
 
     # 非最优选择
-    if result.get("suboptimal_selections"):
-        subs = result["suboptimal_selections"]
-        sections.append(f"### 非最优选择 ({len(subs)} 次)")
-        sections.append("")
-        sections.append("  详情见: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
-        sections.append("")
+    subs = result.get("suboptimal_selections") or []
+    sections.append(f"### 非最优选择 ({len(subs)} 次)")
+    sections.append("")
+    sections.append("  详情见: [detail/cache_suboptimal.md](../detail/cache_suboptimal.md)")
+    sections.append("")
+    if subs:
         reason_counts = defaultdict(int)
         for s in subs:
             reason_counts[s["reason"]] += 1
@@ -494,21 +501,35 @@ def format_cache_report(result):
                 f'- [{s.get("ts","")}] selected={s.get("selected","")}({s.get("selected_hr",0)}), best={s.get("best_hr_worker","")}({s.get("best_hr",0)}), reason={s.get("reason","")}'
             )
         detail_sections.append("")
+    else:
+        sections.append("  未发现非最优选择（selected_hitRatio 始终为当次最高）。")
+        sections.append("")
+        detail_sections.append("## 非最优选择")
+        detail_sections.append("")
+        detail_sections.append("- 未发现非最优选择。")
+        detail_sections.append("")
 
     # 驱逐影响
-    if result.get("eviction_impact"):
-        evictions = result["eviction_impact"]
-        evicted = [e for e in evictions if e["evicted"]]
-        sections.append(f"### 驱逐影响 ({len(evictions)} 次超时, {len(evicted)} 次缓存失效)")
-        sections.append("")
-        sections.append("  详情见: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
-        sections.append("")
+    evictions = result.get("eviction_impact") or []
+    evicted = [e for e in evictions if e["evicted"]]
+    sections.append(f"### 驱逐影响 ({len(evictions)} 次超时, {len(evicted)} 次缓存失效)")
+    sections.append("")
+    sections.append("  详情见: [detail/cache_eviction.md](../detail/cache_eviction.md)")
+    sections.append("")
+    if evictions:
         detail_sections.append("## 驱逐影响")
         detail_sections.append("")
         for e in evictions[:50]:
             detail_sections.append(
                 f'- session={e.get("session_id","")[:24]} interval={e.get("interval_mins",0)}m hitRatio_after={e.get("hitRatio_after",0)} evicted={e.get("evicted",False)}'
             )
+        detail_sections.append("")
+    else:
+        sections.append("  未检测到超时导致的潜在驱逐影响。")
+        sections.append("")
+        detail_sections.append("## 驱逐影响")
+        detail_sections.append("")
+        detail_sections.append("- 未检测到超时驱逐样本。")
         detail_sections.append("")
 
     # 冷启动
@@ -520,11 +541,11 @@ def format_cache_report(result):
         detail_sections.append(f'- 冷启动次数: {result["cold_starts"]}')
         detail_sections.append("")
 
+    sections.append("### 交叉诊断")
+    sections.append("")
+    sections.append("  详情见: [detail/cache_cross.md](../detail/cache_cross.md)")
+    sections.append("")
     if result.get("cross_diagnosis"):
-        sections.append("### 交叉诊断")
-        sections.append("")
-        sections.append("  详情见: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md)")
-        sections.append("")
         detail_sections.append("## 交叉诊断")
         detail_sections.append("")
         detail_sections.append(
@@ -542,25 +563,23 @@ def format_cache_report(result):
             )
         )
         detail_sections.append("")
-
-    # 只显示实际生成了文件的链接
-    detail_links = []
-    if result.get("session_stickiness"):
-        detail_links.append("[detail/cache_session_stickiness.md](../detail/cache_session_stickiness.md)")
-    if result.get("suboptimal_selections"):
-        detail_links.append("[detail/cache_suboptimal.md](../detail/cache_suboptimal.md)")
-    if result.get("eviction_impact"):
-        detail_links.append("[detail/cache_eviction.md](../detail/cache_eviction.md)")
-    if result.get("fallback_reasons"):
-        detail_links.append("[detail/cache_fallback.md](../detail/cache_fallback.md)")
-    if result.get("cross_diagnosis"):
-        detail_links.append("[detail/cache_cross.md](../detail/cache_cross.md)")
-
-    if detail_links:
-        sections.append(
-            "> 详细诊断: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md) | " + " | ".join(detail_links)
-        )
+    else:
+        sections.append("  样本不足，未生成交叉诊断。")
         sections.append("")
+        detail_sections.append("## 交叉诊断")
+        detail_sections.append("")
+        detail_sections.append("- 样本不足，未生成交叉诊断。")
+        detail_sections.append("")
+
+    sections.append(
+        "> 详细诊断: [detail/cache_diagnosis.md](../detail/cache_diagnosis.md) | "
+        "[detail/cache_session_stickiness.md](../detail/cache_session_stickiness.md) | "
+        "[detail/cache_suboptimal.md](../detail/cache_suboptimal.md) | "
+        "[detail/cache_eviction.md](../detail/cache_eviction.md) | "
+        "[detail/cache_fallback.md](../detail/cache_fallback.md) | "
+        "[detail/cache_cross.md](../detail/cache_cross.md)"
+    )
+    sections.append("")
 
     return "\n".join(sections), "\n".join(detail_sections)
 
