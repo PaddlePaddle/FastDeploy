@@ -38,7 +38,7 @@ description: >
 ### 2. 分析范围
 必须使用 **AskUserQuestion 的离散选项**（不要只发纯文本编号）：
 - 选项 1: `全量分析（默认）` — 分析整个日志文件
-- 选项 2: `尾部分析` — 只分析最近数据（可指定行数或时间如 `--tail 5000` 或 `--tail 30m`）
+- 选项 2: `尾部分析` — 只分析最近数据（仅支持行数，如 `--tail 5000`）
 - 选项 3: `指定时间段` — 分析特定时间范围内的日志
 
 如果用户未选择，默认使用全量分析。
@@ -50,10 +50,11 @@ description: >
 时间格式灵活：支持 `YYYY/MM/DD HH:MM:SS`、`HH:MM:SS`、`HH:MM`、`MM/DD`、`MM/DD HH:MM`。
 缺失部分自动从日志首末行推断（缺年份取首行，缺日期取末行）。
 `--start/--end` 与 `--tail` 互斥。
+`--tail` 仅支持“行数”语义（如 `5000`，也兼容 `1k/1w` 自动换算），不再支持 `30m` 这类时间写法；凡是按时间筛选都使用 `--start/--end`。
 
 当用户选择“指定时间段”时，必须再发起一次 **AskUserQuestion**（离散选项）引导时间输入：
 - 选项 1: `当天（00:00:00 到当前）`（推荐）
-- 选项 2: `最近半小时`（自动换算为 `--start now-30m --end now` 语义）
+- 选项 2: `自定义时间段`（由用户直接输入起止时间）
 
 用户若通过客户端默认 `Other` 输入时间，则将该输入直接作为时间范围参数解析。
 可补充一条简短示例引导：
@@ -104,9 +105,7 @@ python3 $SCRIPTS/troubleshoot.py <log_file> --trace all
 
 # 尾部分析
 python3 $SCRIPTS/troubleshoot.py <log_file> --tail 5000
-python3 $SCRIPTS/troubleshoot.py <log_file> --tail 30m
-
-# 指定时间段（--start 和 --end 可单独或同时使用）
+# 指定时间段（需要按时间筛选时使用；--start 和 --end 可单独或同时使用）
 python3 $SCRIPTS/troubleshoot.py <log_file> --start "16:00:00" --end "17:00:00"
 python3 $SCRIPTS/troubleshoot.py <log_file> --start "2026/03/31 16:00:00"
 python3 $SCRIPTS/troubleshoot.py <log_file> --start "03/31" --end "03/31 18:00"

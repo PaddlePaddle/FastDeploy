@@ -37,7 +37,7 @@ IMPORTANT: 执行前阅读 references/log_formats.md 了解日志格式和解析
 ### 2. 分析模式
 必须使用 **AskUserQuestion 的离散选项**（不要只发纯文本编号，避免客户端偶发不显示第 4 项）：
 - 选项 1: `全量统计（默认）` — 扫描完整日志
-- 选项 2: `快速查看尾部` — 只看最近的数据（可指定 `2000/2k` 行，或 `30m/2h/1d` 时间窗口）
+- 选项 2: `快速查看尾部` — 只看最近的数据（支持 `2000`、`1k`、`1w` 等行数写法）
 - 选项 3: `指定时间段` — 分析特定时间范围（如 `--start "16:00" --end "17:00"`）
 
 若用户选择“指定时间段”，直接让用户填写：  
@@ -47,6 +47,7 @@ IMPORTANT: 执行前阅读 references/log_formats.md 了解日志格式和解析
 如果用户未选择，默认使用全量统计。
 
 `--start/--end` 与 `--tail` 互斥。`--start` 和 `--end` 可单独或同时指定。
+`--tail` 仅支持“行数”语义（如 `2000`，也兼容 `1k/1w` 自动换算），不再支持 `30m/2h/1d` 这类时间窗口；按时间请使用 `--start/--end`。
 时间格式灵活：支持 `YYYY/MM/DD HH:MM:SS`、`HH:MM:SS`、`HH:MM`、`MM/DD`、`MM/DD HH:MM`。
 缺失部分自动从日志首末行推断。
 
@@ -65,12 +66,8 @@ python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志�
 # 快速查看尾部数据
 python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail       # 默认最后 2000 行
 python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 5000   # 指定行数
-python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 2k     # 行数缩写
-python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 30m    # 分钟窗口
-python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 2h     # 小时窗口
-python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 1d     # 天窗口
-
-# 指定时间段（--start 和 --end 可单独或同时使用）
+python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 1k     # 行数缩写（自动换算）
+# 指定时间段（需要按时间筛选时使用；--start 和 --end 可单独或同时使用）
 python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --start "16:00:00" --end "17:00:00"
 python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --start "2026/03/31 16:00:00"
 python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --start "03/31" --end "03/31 18:00"
