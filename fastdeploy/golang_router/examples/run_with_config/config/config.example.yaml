@@ -29,3 +29,6 @@ manager:
 log:
   level: "info"  # debug, info, warn, error
   output: "file" # stdout, file
+  max-age-days: 7              # max days to keep log files; default: 7
+  max-total-size-mb: 500       # max total log size in MB; default: 500
+  cleanup-interval-secs: 3600  # cleanup check interval in seconds; default: 3600

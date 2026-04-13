@@ -1,11 +1,25 @@
 package logger
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
-	"context"
+	"time"
 )
+
+// Config holds logger configuration.
+type Config struct {
+	Level               string
+	Output              string
+	MaxAgeDays          int
+	MaxTotalSizeMB      int
+	CleanupIntervalSecs float64
+}
 
 var (
 	infoLogger  *log.Logger
@@ -14,37 +28,166 @@ var (
 	debugLogger *log.Logger
 	level       string
 	once        sync.Once
-	logFile     *os.File
+	writer      *rotatingWriter // nil when output is stdout
 )
 
+// nowFunc is overridable in tests for time-dependent logic.
+var nowFunc = time.Now
+
 type contextKey string
+
 const TraceIDKey contextKey = "trace_id"
 const ReqIDKey contextKey = "req_id"
 const RequestIDKey contextKey = "request_id"
 const SessionIDKey contextKey = "session_id"
 
-// Init initialize logger
-func Init(logLevel, output string) {
-	once.Do(func() {
-		level = logLevel
+// gracePeriod is how long we keep the previous day's file open after rotation.
+const gracePeriod = 5 * time.Minute
 
+// rotatingWriter implements io.Writer with day-level rotation and dual-file writes.
+// Current day's log is always "router.log"; on day change it is renamed to
+// "router-YYYY-MM-DD.log" and a new "router.log" is created. During a short
+// grace period after rotation, log lines whose timestamp belongs to the previous
+// day are written to the archived file.
+type rotatingWriter struct {
+	mu          sync.Mutex
+	currentFile *os.File  // today's router.log
+	prevFile    *os.File  // previous day's router-<date>.log during grace period (may be nil)
+	currentDate string    // "2006-01-02"
+	prevDate    string    // previous date during grace period
+	graceUntil  time.Time // when to close prevFile
+	logDir      string
+}
+
+func newRotatingWriter(logDir string) (*rotatingWriter, error) {
+	today := nowFunc().Format("2006-01-02")
+	f, err := os.OpenFile(filepath.Join(logDir, "router.log"), os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		return nil, err
+	}
+	return &rotatingWriter{
+		currentFile: f,
+		currentDate: today,
+		logDir:      logDir,
+	}, nil
+}
+
+func (w *rotatingWriter) Write(p []byte) (n int, err error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	today := nowFunc().Format("2006-01-02")
+
+	// Detect day change and rotate.
+	if today != w.currentDate {
+		w.rotateLocked(today)
+	}
+
+	// Close previous file if grace period expired.
+	if w.prevFile != nil && nowFunc().After(w.graceUntil) {
+		w.prevFile.Close()
+		w.prevFile = nil
+		w.prevDate = ""
+	}
+
+	// During grace period, route log lines to the correct file based on timestamp.
+	target := w.currentFile
+	if w.prevFile != nil {
+		if logDate := parseLogDate(p); logDate == w.prevDate {
+			target = w.prevFile
+		}
+	}
+
+	return target.Write(p)
+}
+
+func (w *rotatingWriter) Close() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	if w.prevFile != nil {
+		w.prevFile.Close()
+		w.prevFile = nil
+	}
+	if w.currentFile != nil {
+		return w.currentFile.Close()
+	}
+	return nil
+}
+
+// rotateLocked performs the actual file rotation. Must be called with w.mu held.
+func (w *rotatingWriter) rotateLocked(newDate string) {
+	// Close any lingering previous file.
+	if w.prevFile != nil {
+		w.prevFile.Close()
+		w.prevFile = nil
+	}
+
+	// Close current router.log so we can rename it.
+	if w.currentFile != nil {
+		w.currentFile.Close()
+	}
+
+	// Rename router.log -> router-<currentDate>.log
+	oldPath := filepath.Join(w.logDir, "router.log")
+	archivePath := filepath.Join(w.logDir, "router-"+w.currentDate+".log")
+	if err := os.Rename(oldPath, archivePath); err != nil {
+		// Rename failed; try to reopen router.log and continue without rotation.
+		w.currentFile, _ = os.OpenFile(oldPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		return
+	}
+
+	// Open the archived file for dual-write grace period.
+	w.prevFile, _ = os.OpenFile(archivePath, os.O_WRONLY|os.O_APPEND, 0666)
+	w.prevDate = w.currentDate
+	w.graceUntil = nowFunc().Add(gracePeriod)
+
+	// Create new router.log for the new day.
+	w.currentFile, _ = os.OpenFile(oldPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	w.currentDate = newDate
+}
+
+// parseLogDate extracts the date from a log line produced by log.LstdFlags.
+// Format: "[LEVEL] 2006/01/02 15:04:05 ..."
+// Returns "2006-01-02" or empty string on parse failure.
+func parseLogDate(p []byte) string {
+	// Find the date pattern "YYYY/MM/DD" in the log prefix.
+	// log.LstdFlags produces: "2006/01/02 15:04:05" after the logger prefix.
+	// The prefix is like "[INFO] " (7 chars), so the date starts around index 7.
+	s := string(p)
+	for i := 0; i+10 <= len(s); i++ {
+		c := s[i]
+		if c >= '1' && c <= '9' && i+10 <= len(s) && s[i+4] == '/' && s[i+7] == '/' {
+			// Found a candidate "YYYY/MM/DD"
+			year := s[i : i+4]
+			month := s[i+5 : i+7]
+			day := s[i+8 : i+10]
+			return year + "-" + month + "-" + day
+		}
+	}
+	return ""
+}
+
+// Init initializes the logger.
+func Init(cfg Config) {
+	once.Do(func() {
+		level = cfg.Level
 		flags := log.LstdFlags | log.Lshortfile
 
-		if output == "file" {
-			// Check if logs directory exists
+		if cfg.Output == "file" {
 			if _, err := os.Stat("logs"); os.IsNotExist(err) {
 				if err := os.MkdirAll("logs", 0755); err != nil {
 					log.Fatalln("Failed to create logs directory:", err)
 				}
 			}
-			logFile, err := os.OpenFile("logs/router.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+			var err error
+			writer, err = newRotatingWriter("logs")
 			if err != nil {
-				log.Fatalln("Failed to open log file:", err)
+				log.Fatalln("Failed to create rotating log writer:", err)
 			}
-			infoLogger = log.New(logFile, "[INFO] ", flags)
-			errorLogger = log.New(logFile, "[ERROR] ", flags)
-			warnLogger = log.New(logFile, "[WARN] ", flags)
-			debugLogger = log.New(logFile, "[DEBUG] ", flags)
+			infoLogger = log.New(writer, "[INFO] ", flags)
+			errorLogger = log.New(writer, "[ERROR] ", flags)
+			warnLogger = log.New(writer, "[WARN] ", flags)
+			debugLogger = log.New(writer, "[DEBUG] ", flags)
 		} else {
 			infoLogger = log.New(os.Stdout, "[INFO] ", flags)
 			errorLogger = log.New(os.Stderr, "[ERROR] ", flags)
@@ -54,9 +197,122 @@ func Init(logLevel, output string) {
 	})
 }
 
+// CloseLogFile closes the log file if in file output mode.
 func CloseLogFile() {
-	if logFile != nil {
-		logFile.Close()
+	if writer != nil {
+		writer.Close()
+	}
+}
+
+// StartLogCleanup runs periodic log cleanup in a background goroutine.
+// It deletes archived log files older than MaxAgeDays and trims total log size
+// to stay under MaxTotalSizeMB.
+func StartLogCleanup(ctx context.Context, cfg Config) {
+	if cfg.Output != "file" {
+		return
+	}
+	if cfg.CleanupIntervalSecs <= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(time.Duration(cfg.CleanupIntervalSecs * float64(time.Second)))
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			cleanupLogs("logs", cfg.MaxAgeDays, cfg.MaxTotalSizeMB)
+		}
+	}
+}
+
+type logFileInfo struct {
+	name string
+	path string
+	date time.Time
+	size int64
+}
+
+// cleanupLogs removes archived log files based on age and total size limits.
+func cleanupLogs(logDir string, maxAgeDays, maxTotalSizeMB int) {
+	entries, err := os.ReadDir(logDir)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] Failed to read log directory for cleanup: %v\n", err)
+		return
+	}
+
+	now := nowFunc()
+	var archives []logFileInfo
+	var routerLogSize int64
+
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+
+		// Count router.log size but never delete it.
+		if name == "router.log" {
+			routerLogSize = info.Size()
+			continue
+		}
+
+		// Match archived files: router-YYYY-MM-DD.log
+		if !strings.HasPrefix(name, "router-") || !strings.HasSuffix(name, ".log") {
+			continue
+		}
+		dateStr := strings.TrimPrefix(name, "router-")
+		dateStr = strings.TrimSuffix(dateStr, ".log")
+		fileDate, err := time.Parse("2006-01-02", dateStr)
+		if err != nil {
+			continue
+		}
+		archives = append(archives, logFileInfo{
+			name: name,
+			path: filepath.Join(logDir, name),
+			date: fileDate,
+			size: info.Size(),
+		})
+	}
+
+	// Sort by date ascending (oldest first).
+	sort.Slice(archives, func(i, j int) bool {
+		return archives[i].date.Before(archives[j].date)
+	})
+
+	// Phase 1: Age-based cleanup.
+	if maxAgeDays > 0 {
+		cutoff := now.AddDate(0, 0, -maxAgeDays)
+		remaining := archives[:0]
+		for _, f := range archives {
+			if f.date.Before(cutoff) {
+				os.Remove(f.path)
+			} else {
+				remaining = append(remaining, f)
+			}
+		}
+		archives = remaining
+	}
+
+	// Phase 2: Size-based cleanup.
+	if maxTotalSizeMB > 0 {
+		maxBytes := int64(maxTotalSizeMB) * 1024 * 1024
+		var totalSize int64 = routerLogSize
+		for _, f := range archives {
+			totalSize += f.size
+		}
+		for len(archives) > 0 && totalSize > maxBytes {
+			oldest := archives[0]
+			os.Remove(oldest.path)
+			totalSize -= oldest.size
+			archives = archives[1:]
+		}
 	}
 }
 

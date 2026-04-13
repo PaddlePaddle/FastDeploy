@@ -506,6 +506,7 @@ def _normalize_worker_url_key(url):
         return ""
     return re.sub(r"^https?://", "", str(url).strip().rstrip("/"))
 
+
 def _infer_release_worker_type(release, selects, fallback_window_s=120):
     """为未显式标注 type 的 release 近似推断 worker type。
 
@@ -554,7 +555,11 @@ def _infer_token_release_worker_type(release, selects, fallback_window_s=120):
         return "unknown"
 
     r_ts = _parse_ts_safe(release.get("ts"))
-    candidates = [s for s in selects if s.get("worker") == worker and _normalize_worker_type(s.get("type")) in ("prefill", "mixed")]
+    candidates = [
+        s
+        for s in selects
+        if s.get("worker") == worker and _normalize_worker_type(s.get("type")) in ("prefill", "mixed")
+    ]
     if not candidates:
         return "unknown"
 
@@ -716,31 +721,14 @@ def match_select_release(lines, fallback_window_s=120):
             if s_key and r_key:
                 if s_key == r_key:
                     id_check = "match"
-                    id_consistency["both_present_and_equal"] += 1
                 else:
                     id_check = "mismatch"
-                    id_consistency["both_present_but_mismatch"] += 1
-                    id_mismatched_matches.append(
-                        {
-                            "worker": s["worker"],
-                            "select_ts": s["ts"],
-                            "release_ts": r["ts"],
-                            "select_id_key": s_key_type,
-                            "select_id": s_key,
-                            "release_id_key": r_key_type,
-                            "release_id": r_key,
-                            "note": "worker FIFO matched, but ID mismatched",
-                        }
-                    )
             elif s_key and not r_key:
                 id_check = "select_only"
-                id_consistency["only_select_has_id"] += 1
             elif (not s_key) and r_key:
                 id_check = "release_only"
-                id_consistency["only_release_has_id"] += 1
             else:
                 id_check = "both_missing"
-                id_consistency["both_missing"] += 1
 
             matched.append(
                 {
@@ -750,6 +738,7 @@ def match_select_release(lines, fallback_window_s=120):
                     "release_ts": r["ts"],
                     "type": s["type"],
                     "match_method": "worker_fifo",
+                    "id_check": id_check,
                 }
             )
             release_used.add(best_idx)
@@ -806,7 +795,9 @@ def match_select_release(lines, fallback_window_s=120):
         if r_type_raw.endswith("_tokens"):
             base_t = _normalize_worker_type(r_type_raw.replace("_tokens", ""))
             # token release 按 worker URL 对应的 select 类型映射，不做邻近时间纠偏
-            mapped_t = worker_dominant_type.get(r.get("worker_key") or _normalize_worker_url_key(r.get("worker")), "unknown")
+            mapped_t = worker_dominant_type.get(
+                r.get("worker_key") or _normalize_worker_url_key(r.get("worker")), "unknown"
+            )
             if mapped_t in ("prefill", "decode", "mixed"):
                 base_t = mapped_t
             inferred_release_types[i] = f"{base_t}_tokens"
@@ -866,8 +857,6 @@ def match_select_release(lines, fallback_window_s=120):
             "with_alt_id": with_alt_id,
             "without_any_id": without_any_id,
         },
-        "id_consistency": id_consistency,
-        "id_mismatched_matches": id_mismatched_matches,
         "type_summary": dict(type_summary),
         "worker_type_profile": worker_type_profile,
     }
@@ -1077,7 +1066,7 @@ def _cli_self_test(args):
     msr = match_select_release(sample_lines)
     check("mixed token_releases inferred", msr["type_summary"].get("mixed", {}).get("token_releases", 0), 1)
     check("prefill token_releases remains 0", msr["type_summary"].get("prefill", {}).get("token_releases", 0), 0)
-    
+
     print(f'\n{"=" * 40}')
     print(f"Results: {passed} passed, {failed} failed")
     if failed:

@@ -15,7 +15,7 @@ import (
 
 func init() {
 	// Initialize logger for all tests
-	logger.Init("info", "stdout")
+	logger.Init(logger.Config{Level: "info", Output: "stdout"})
 }
 
 func TestCheckServiceHealth(t *testing.T) {

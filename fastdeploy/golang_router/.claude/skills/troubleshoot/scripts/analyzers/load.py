@@ -15,7 +15,6 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from log_parser import extract_ts, match_select_release, parse_stats_line
 from stats import compute_statistics, time_bucket
-from analyzers.load_report import format_load_report
 
 # ════════════════════════════════════════════════════════════════
 # Counter 异常检测正则
@@ -82,7 +81,7 @@ def analyze_load(log_file, tail=None):
         r"counter preserved|cleanup unhealthy|removed counters|counter already|double-release|preserved counters",
         tail,
     )
-    h11_lines = _grep_lines(log_file, r"release (?:[a-zA-Z_]+\s+)?tokens", tail)
+    h11_lines = _grep_lines(log_file, r"release [a-zA-Z_]+ tokens:", tail)
 
     # 解析 stats 行
     stats_records = [r for line in h7_lines for r in [parse_stats_line(line)] if r]
@@ -321,7 +320,7 @@ def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, token_stats, 
                 diagnoses.append(
                     {
                         "severity": "MEDIUM",
-                        "message": f'{_strip_scheme(w_url)} select-release 差值 {delta}（可能存在在途请求堆积）',
+                        "message": f"{_strip_scheme(w_url)} select-release 差值 {delta}（可能存在在途请求堆积）",
                         "source_layer": "FD 后端",
                     }
                 )
@@ -343,8 +342,6 @@ def _diagnose(load_stats, worker_load, anomaly_summary, sr_result, token_stats, 
 # ════════════════════════════════════════════════════════════════
 # 报告格式化
 # ════════════════════════════════════════════════════════════════
-
-
 
 
 # ════════════════════════════════════════════════════════════════

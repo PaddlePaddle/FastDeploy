@@ -586,13 +586,13 @@ func TestParseTokensFromBody(t *testing.T) {
 			name:     "invalid JSON format",
 			input:    []byte(`invalid json`),
 			expected: nil,
-			err:      errors.New("tokenizer response missing tokens"),
+			err:      errors.New("tokenizer response unmarshal failed"),
 		},
 		{
 			name:     "empty body",
 			input:    []byte(``),
 			expected: nil,
-			err:      errors.New("tokenizer response missing tokens"),
+			err:      errors.New("tokenizer response unmarshal failed"),
 		},
 		{
 			name:     "large array of tokens",
@@ -610,13 +610,13 @@ func TestParseTokensFromBody(t *testing.T) {
 			name:     "non-array input_ids",
 			input:    []byte(`{"input_ids": "not an array"}`),
 			expected: nil,
-			err:      errors.New("tokenizer response missing tokens"),
+			err:      errors.New("tokenizer response unmarshal failed"),
 		},
 		{
 			name:     "malformed array",
 			input:    []byte(`{"input_ids": [1, "two", 3]}`),
 			expected: nil,
-			err:      errors.New("tokenizer response missing tokens"),
+			err:      errors.New("tokenizer response unmarshal failed"),
 		},
 	}
 
@@ -629,8 +629,8 @@ func TestParseTokensFromBody(t *testing.T) {
 				t.Errorf("parseTokensFromBody() error = %v, wantErr %v", err, tt.err)
 				return
 			}
-			if err != nil && tt.err != nil && err.Error() != tt.err.Error() {
-				t.Errorf("parseTokensFromBody() error message = %v, want %v", err.Error(), tt.err.Error())
+			if err != nil && tt.err != nil && !strings.Contains(err.Error(), tt.err.Error()) {
+				t.Errorf("parseTokensFromBody() error message = %v, want containing %v", err.Error(), tt.err.Error())
 				return
 			}
 

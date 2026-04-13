@@ -10,7 +10,7 @@ import (
 
 func TestLoggerInit(t *testing.T) {
 	t.Run("stdout output", func(t *testing.T) {
-		Init("debug", "stdout")
+		Init(Config{Level: "debug", Output: "stdout"})
 
 		if infoLogger == nil || errorLogger == nil || warnLogger == nil || debugLogger == nil {
 			t.Error("Loggers should be initialized")
@@ -117,7 +117,7 @@ func TestLogLevels(t *testing.T) {
 
 func TestLogFunctions(t *testing.T) {
 	var buf bytes.Buffer
-	Init("debug", "stdout")
+	Init(Config{Level: "debug", Output: "stdout"})
 	level = "debug"
 
 	// Redirect output
@@ -132,7 +132,7 @@ func TestLogFunctions(t *testing.T) {
 }
 
 func TestContextPrefix(t *testing.T) {
-	Init("debug", "stdout")
+	Init(Config{Level: "debug", Output: "stdout"})
 	level = "debug"
 
 	t.Run("nil context produces no prefix", func(t *testing.T) {
@@ -151,7 +151,7 @@ func TestContextPrefix(t *testing.T) {
 		}
 	})
 
-	t.Run("context without request_id produces [request_id:null]", func(t *testing.T) {
+	t.Run("context without request_id produces no request_id prefix", func(t *testing.T) {
 		var buf bytes.Buffer
 		oldOutput := infoLogger.Writer()
 		defer func() { infoLogger.SetOutput(oldOutput) }()
@@ -160,8 +160,11 @@ func TestContextPrefix(t *testing.T) {
 		ctx := context.Background()
 		Info(ctx, "mixed mode log")
 		output := buf.String()
-		if !strings.Contains(output, "[request_id:null]") {
-			t.Errorf("context without request_id should produce [request_id:null], got: %s", output)
+		if strings.Contains(output, "[request_id:") {
+			t.Errorf("context without request_id should not produce request_id prefix, got: %s", output)
+		}
+		if !strings.Contains(output, "mixed mode log") {
+			t.Errorf("message should be present, got: %s", output)
 		}
 	})
 

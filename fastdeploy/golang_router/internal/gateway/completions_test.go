@@ -20,7 +20,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	logger.Init("info", "stdout")
+	logger.Init(logger.Config{Level: "info", Output: "stdout"})
 	gin.SetMode(gin.TestMode)
 	os.Exit(m.Run())
 }
