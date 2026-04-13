@@ -26,6 +26,10 @@
 
 namespace api = baidu::xpu::api;
 
+// Persistent seed/offset — mirrors GPU curand state lifecycle.
+static uint64_t g_seed = 0;
+static uint64_t g_offset = 0;
+
 void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
                      const paddle::Tensor &accept_tokens,
                      const paddle::Tensor &accept_num,
@@ -82,13 +86,15 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
       prefill_one_step_stop = true;
     }
   }
-  // random
-  int random_seed = 0;
-  std::vector<int64_t> infer_seed(bsz, random_seed);
+  // random — use persistent seed/offset so each call and batch element
+  // produce distinct random numbers (mirrors GPU curand lifecycle).
+  uint64_t cur_seed = g_seed++;
+  uint64_t cur_offset = g_offset++;
   std::uniform_real_distribution<float> dist(0.0, 1.0);
   std::vector<float> dev_curand_states_cpu;
   for (int i = 0; i < bsz; i++) {
-    std::mt19937_64 engine(infer_seed[i]);
+    std::mt19937_64 engine(cur_seed + i);
+    engine.discard(cur_offset);
     dev_curand_states_cpu.push_back(dist(engine));
   }
   float *dev_curand_states_xpu;

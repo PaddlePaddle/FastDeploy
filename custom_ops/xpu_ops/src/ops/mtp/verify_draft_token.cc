@@ -32,6 +32,10 @@
 
 namespace api = baidu::xpu::api;
 
+// Persistent seed/offset — mirrors GPU curand state lifecycle.
+static uint64_t g_seed = 0;
+static uint64_t g_offset = 0;
+
 // ============================================================
 // Host function
 // ============================================================
@@ -82,12 +86,15 @@ void VerifyDraftTokens(
   int max_candidate_len = candidate_ids ? candidate_ids->shape()[1] : 1;
 
   // curand state: only needed for TOPP(0) strategy (stochastic sampling)
-  int random_seed = 0;
-  std::vector<int64_t> infer_seed(bsz, random_seed);
+  // Use persistent seed/offset (mirrors GPU curand lifecycle) so that
+  // each call and each batch element produce distinct random numbers.
+  uint64_t cur_seed = g_seed++;
+  uint64_t cur_offset = g_offset++;
   std::uniform_real_distribution<float> dist(0.0, 1.0);
   std::vector<float> dev_curand_states_cpu;
   for (int i = 0; i < bsz; i++) {
-    std::mt19937_64 engine(infer_seed[i]);
+    std::mt19937_64 engine(cur_seed + i);
+    engine.discard(cur_offset);
     dev_curand_states_cpu.push_back(dist(engine));
   }
   float *dev_curand_states = dev_curand_states_cpu.data();
