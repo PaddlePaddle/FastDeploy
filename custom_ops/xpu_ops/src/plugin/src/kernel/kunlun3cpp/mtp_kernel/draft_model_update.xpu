@@ -22,7 +22,7 @@ __global__ void draft_model_update(const int64_t* inter_next_tokens,
                                    int* seq_lens_encoder,
                                    int* seq_lens_decoder,
                                    int64_t* step_idx,
-                                   const int* output_cum_offsets,
+                                   const int* cu_seqlens_q_output,
                                    bool* stop_flags,
                                    bool* not_need_stop,
                                    const int64_t* max_dec_len,
@@ -45,8 +45,7 @@ __global__ void draft_model_update(const int64_t* inter_next_tokens,
     auto* pre_ids_now = pre_ids + tid * pre_id_length;
     auto* base_model_draft_tokens_now =
         base_model_draft_tokens + tid * max_base_model_draft_token;
-    const int next_tokens_start_id =
-        tid * max_seq_len - output_cum_offsets[tid];
+    const int next_tokens_start_id = cu_seqlens_q_output[tid];
     auto* next_tokens_start = inter_next_tokens + next_tokens_start_id;
     auto seq_len_this_time = seq_lens_this_time[tid];
     auto seq_len_encoder = seq_lens_encoder[tid];
@@ -72,8 +71,7 @@ __global__ void draft_model_update(const int64_t* inter_next_tokens,
         base_model_draft_tokens_now[substep + 1] = token_this_time;
       }
       // multi_end
-      if (is_in_end(token_this_time, end_ids, end_ids_len) ||
-          prefill_one_step_stop) {
+      if (is_in_end(token_this_time, end_ids, end_ids_len)) {
         stop_flags[tid] = true;
         stop_flag_now_int_sm[cid] += 1;
         // max_dec_len

@@ -99,5 +99,6 @@ def test_offline_model(
             quantization,
             "default_v1",
             prompts,
+            {"enable_multithread_load": True, "num_threads": 2},
         ),
     )

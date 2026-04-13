@@ -25,8 +25,8 @@ __attribute__((global)) void speculate_min_length_logits_process(
     const int64_t* cur_len,
     const int64_t* min_len,
     const int64_t* eos_token_id,
-    const int* output_padding_offset,
-    const int* output_cum_offsets,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -37,7 +37,7 @@ __attribute__((global)) void speculate_update_repeat_times(
     const int64_t* pre_ids,
     const int64_t* cur_len,
     int* repeat_times,
-    const int* output_padding_offset,
+    const int* batch_id_per_token_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -146,7 +146,7 @@ static int cpu_wrapper(api::Context* ctx,
                        const int64_t* eos_token_id,
                        const int64_t* bad_words,
                        const int* output_padding_offset,
-                       const int* output_cum_offsets,
+                       const int* batch_id_per_token_output,
                        const int64_t bs,
                        const int64_t length,
                        const int64_t length_id,
@@ -172,7 +172,7 @@ static int cpu_wrapper(api::Context* ctx,
   WRAPPER_ASSERT_SUCCESS(ctx, ret);
   for (int64_t i = 0; i < token_num; i++) {
     int64_t bi = (i + output_padding_offset[i]) / max_seq_len;
-    int64_t query_start_token_idx = bi * max_seq_len - output_cum_offsets[bi];
+    int64_t query_start_token_idx = batch_id_per_token_output[bi];
     if (bi < bs && cur_len[bi] >= 0 &&
         (cur_len[bi] + (i - query_start_token_idx) < min_len[bi])) {
       for (int64_t j = 0; j < end_length; j++) {
@@ -236,8 +236,8 @@ static int xpu3_wrapper(api::Context* ctx,
                         const int64_t* min_len,
                         const int64_t* eos_token_id,
                         const int64_t* bad_words,
-                        const int* output_padding_offset,
-                        const int* output_cum_offsets,
+                        const int* batch_id_per_token_output,
+                        const int* cu_seqlens_q_output,
                         const int64_t bs,
                         const int64_t length,
                         const int64_t length_id,
@@ -268,7 +268,7 @@ static int xpu3_wrapper(api::Context* ctx,
           reinterpret_cast<const XPU_INT64*>(pre_ids),
           reinterpret_cast<const XPU_INT64*>(cur_len),
           repeat_times,
-          output_padding_offset,
+          batch_id_per_token_output,
           bs,
           length,
           length_id,
@@ -282,8 +282,8 @@ static int xpu3_wrapper(api::Context* ctx,
       reinterpret_cast<const XPU_INT64*>(cur_len),
       reinterpret_cast<const XPU_INT64*>(min_len),
       reinterpret_cast<const XPU_INT64*>(eos_token_id),
-      output_padding_offset,
-      output_cum_offsets,
+      batch_id_per_token_output,
+      cu_seqlens_q_output,
       bs,
       length,
       length_id,
@@ -300,7 +300,7 @@ static int xpu3_wrapper(api::Context* ctx,
       presence_scores,
       temperatures,
       logits,
-      output_padding_offset,
+      batch_id_per_token_output,
       bs,
       length,
       token_num,
@@ -311,7 +311,7 @@ static int xpu3_wrapper(api::Context* ctx,
     ret_xre = ban_bad_words_kernel<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
         logits,
         reinterpret_cast<const XPU_INT64*>(bad_words),
-        output_padding_offset,
+        batch_id_per_token_output,
         bs,
         length,
         length_bad_words,
@@ -334,8 +334,8 @@ int speculate_token_penalty_multi_scores(api::Context* ctx,
                                          const int64_t* min_len,
                                          const int64_t* eos_token_id,
                                          const int64_t* bad_words,
-                                         const int* output_padding_offset,
-                                         const int* output_cum_offsets,
+                                         const int* batch_id_per_token_output,
+                                         const int* cu_seqlens_q_output,
                                          const int64_t bs,
                                          const int64_t length,
                                          const int64_t length_id,
@@ -357,8 +357,8 @@ int speculate_token_penalty_multi_scores(api::Context* ctx,
                       min_len,
                       eos_token_id,
                       bad_words,
-                      output_padding_offset,
-                      output_cum_offsets);
+                      cu_seqlens_q_output,
+                      batch_id_per_token_output);
   WRAPPER_DUMP_PARAM4(ctx, bs, length, length_id, end_length);
   WRAPPER_DUMP_PARAM3(ctx, length_bad_words, token_num, max_seq_len);
   WRAPPER_DUMP(ctx);
@@ -373,8 +373,8 @@ int speculate_token_penalty_multi_scores(api::Context* ctx,
   int64_t min_len_len = -1;
   int64_t eos_token_id_len = -1;
   int64_t bad_words_len = -1;
-  int64_t output_padding_offset_len = -1;
-  int64_t output_cum_offsets_len = -1;
+  // int64_t output_padding_offset_len = -1;
+  // int64_t output_cum_offsets_len = -1;
   WRAPPER_ASSERT_LE(ctx, bs, 640);
   WRAPPER_CHECK_SHAPE(ctx, &pre_ids_len, {bs, length_id});
   WRAPPER_CHECK_SHAPE(ctx, &logits_len, {token_num, length});
@@ -386,8 +386,8 @@ int speculate_token_penalty_multi_scores(api::Context* ctx,
   WRAPPER_CHECK_SHAPE(ctx, &min_len_len, {bs});
   WRAPPER_CHECK_SHAPE(ctx, &eos_token_id_len, {end_length});
   WRAPPER_CHECK_SHAPE(ctx, &bad_words_len, {length_bad_words});
-  WRAPPER_CHECK_SHAPE(ctx, &output_padding_offset_len, {token_num});
-  WRAPPER_CHECK_SHAPE(ctx, &output_cum_offsets_len, {bs});
+  // WRAPPER_CHECK_SHAPE(ctx, &output_padding_offset_len, {token_num});
+  // WRAPPER_CHECK_SHAPE(ctx, &output_cum_offsets_len, {bs});
   WRAPPER_CHECK_PTR(ctx, int64_t, pre_ids_len, pre_ids);
   WRAPPER_CHECK_PTR(ctx, T, logits_len, logits);
   WRAPPER_CHECK_PTR(ctx, T, penalty_scores_len, penalty_scores);
@@ -398,8 +398,9 @@ int speculate_token_penalty_multi_scores(api::Context* ctx,
   WRAPPER_CHECK_PTR(ctx, int64_t, min_len_len, min_len);
   WRAPPER_CHECK_PTR(ctx, int64_t, eos_token_id_len, eos_token_id);
   WRAPPER_CHECK_PTR(ctx, int64_t, bad_words_len, bad_words);
-  WRAPPER_CHECK_PTR(ctx, int, output_padding_offset_len, output_padding_offset);
-  WRAPPER_CHECK_PTR(ctx, int, output_cum_offsets_len, output_cum_offsets);
+  // WRAPPER_CHECK_PTR(ctx, int, output_padding_offset_len,
+  // output_padding_offset); WRAPPER_CHECK_PTR(ctx, int, output_cum_offsets_len,
+  // output_cum_offsets);
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper<T>(ctx,
                           pre_ids,
@@ -412,8 +413,8 @@ int speculate_token_penalty_multi_scores(api::Context* ctx,
                           min_len,
                           eos_token_id,
                           bad_words,
-                          output_padding_offset,
-                          output_cum_offsets,
+                          batch_id_per_token_output,
+                          cu_seqlens_q_output,
                           bs,
                           length,
                           length_id,
@@ -434,8 +435,8 @@ int speculate_token_penalty_multi_scores(api::Context* ctx,
                            min_len,
                            eos_token_id,
                            bad_words,
-                           output_padding_offset,
-                           output_cum_offsets,
+                           batch_id_per_token_output,
+                           cu_seqlens_q_output,
                            bs,
                            length,
                            length_id,
@@ -459,8 +460,8 @@ template int speculate_token_penalty_multi_scores<float>(
     const int64_t* min_len,
     const int64_t* eos_token_id,
     const int64_t* bad_words,
-    const int* output_padding_offset,
-    const int* output_cum_offsets,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -480,8 +481,8 @@ template int speculate_token_penalty_multi_scores<float16>(
     const int64_t* min_len,
     const int64_t* eos_token_id,
     const int64_t* bad_words,
-    const int* output_padding_offset,
-    const int* output_cum_offsets,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -501,8 +502,8 @@ template int speculate_token_penalty_multi_scores<bfloat16>(
     const int64_t* min_len,
     const int64_t* eos_token_id,
     const int64_t* bad_words,
-    const int* output_padding_offset,
-    const int* output_cum_offsets,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,

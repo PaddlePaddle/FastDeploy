@@ -11,8 +11,8 @@ __global__ void speculate_min_length_logits_process(
     const int64_t* cur_len,
     const int64_t* min_len,
     const int64_t* eos_token_id,
-    const int* output_padding_offset,
-    const int* output_cum_offsets,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
     const int64_t bs,
     const int64_t length,
     const int64_t length_id,
@@ -29,26 +29,26 @@ __global__ void speculate_min_length_logits_process(
   int64_t eos_token_id_now;
   int64_t bi;
   int64_t end_num;
-  int output_padding_offset_now;
-  int output_cum_offsets_now;
+  int batch_id_per_token_output_now;
+  int cu_seqlens_q_output_now;
   __simd__ float float32logits_now[32];
 
   for (int64_t i = tid; i < token_num * end_length; i += nthreads) {
     int64_t token_idx = i / end_length;
-    GM2LM(output_padding_offset + token_idx,
-          &output_padding_offset_now,
+    GM2LM(batch_id_per_token_output + token_idx,
+          &batch_id_per_token_output_now,
           sizeof(int));
-    bi = (token_idx + output_padding_offset_now) / max_seq_len;
+    bi = batch_id_per_token_output[token_idx];
     if (bi >= bs) {
       continue;
     }
     end_num = i % end_length;
     GM2LM_ASYNC(
-        output_cum_offsets + bi, (void*)&output_cum_offsets_now, sizeof(int));
+        cu_seqlens_q_output + bi, (void*)&cu_seqlens_q_output_now, sizeof(int));
     GM2LM_ASYNC(cur_len + bi, (void*)&(cur_len_now), sizeof(int64_t));
     GM2LM_ASYNC(min_len + bi, (void*)&(min_len_now), sizeof(int64_t));
     mfence();
-    int query_start_token_idx = bi * max_seq_len - output_cum_offsets_now;
+    int query_start_token_idx = cu_seqlens_q_output_now;
     if (cur_len_now >= 0 &&
         (cur_len_now + (token_idx - query_start_token_idx) < min_len_now)) {
       GM2LM(
@@ -74,8 +74,8 @@ __global__ void speculate_min_length_logits_process(
       const int64_t* cur_len,                                              \
       const int64_t* min_len,                                              \
       const int64_t* eos_token_id,                                         \
-      const int* output_padding_offset,                                    \
-      const int* output_cum_offsets,                                       \
+      const int* batch_id_per_token_output,                                \
+      const int* cu_seqlens_q_output,                                      \
       const int64_t bs,                                                    \
       const int64_t length,                                                \
       const int64_t length_id,                                             \

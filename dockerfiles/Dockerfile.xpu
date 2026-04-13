@@ -26,7 +26,7 @@ RUN if [ "$PADDLE_VERSION" = "nightly" ]; then \
 # install fastdeploy-xpu
 ARG INSTALL_REQUIREMENTS=true
 ARG INSTALL_FASTDEPLOY=true
-ARG FASTDEPLOY_VERSION=2.4.0
+ARG FASTDEPLOY_VERSION=2.5.0
 
 RUN if [ "$INSTALL_FASTDEPLOY" = "true" ]; then \
         python -m pip install --no-cache-dir fastdeploy-xpu==${FASTDEPLOY_VERSION} -i https://www.paddlepaddle.org.cn/packages/stable/fastdeploy-xpu-p800/ --extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple; \

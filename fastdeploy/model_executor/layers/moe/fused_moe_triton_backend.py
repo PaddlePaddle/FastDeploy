@@ -20,6 +20,7 @@ import paddle
 from paddle import nn
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -1247,7 +1248,7 @@ def python_op_fused_moe_kernel_paddle(
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0], False)
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            x, using_pow2_scale=False, output_scale_transpose=False
+            x, using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE, output_scale_transpose=False
         )
         x_scale = x_scale[: x.shape[0]]
 
@@ -1305,7 +1306,9 @@ def python_op_fused_moe_kernel_paddle(
         )
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            intermediate_cache2, using_pow2_scale=False, output_scale_transpose=False
+            intermediate_cache2,
+            using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
+            output_scale_transpose=False,
         )
         x_scale = x_scale[: x_q.shape[0]]
 
@@ -1672,6 +1675,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                         weight[expert_id].copy_(w_q, False)
                         scale_list.append(s_ue8m0)
                     scale = paddle.to_tensor(scale_list)
+                scale = scale.transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
 
             free_tensor(getattr(layer, unquantized_weight_name))
             free_tensor(getattr(layer, weight_name))
@@ -1700,7 +1704,23 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             else:
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
-                scale_param.data = scale.transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
+                scale_param.data = scale
+            if bool(envs.FD_USE_BLACKWELL_GEMM):
+                import blackwell_ops
+
+                scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
+                scale_bw_name = scale_name + "_bw"
+                setattr(
+                    layer,
+                    scale_bw_name,
+                    scale_bw,
+                )
+                if layer.fd_config.scheduler_config.splitwise_role != "mixed":
+                    setattr(
+                        layer,
+                        scale_name,
+                        None,
+                    )
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize

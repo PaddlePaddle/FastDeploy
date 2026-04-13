@@ -25,5 +25,9 @@ class MultimodalHasher:
     @classmethod
     def hash_features(cls, obj: object) -> str:
         if isinstance(obj, np.ndarray):
-            return hashlib.sha256((obj.tobytes())).hexdigest()
+            # Encode shape and dtype into the hash to avoid collisions between
+            # arrays that share the same raw bytes but differ in layout, e.g.
+            # a (6,4) vs (4,6) array, or float32 vs uint8 reinterpretation.
+            header = f"{obj.shape}|{obj.dtype}|".encode()
+            return hashlib.sha256(header + obj.tobytes()).hexdigest()
         return hashlib.sha256((pickle.dumps(obj))).hexdigest()

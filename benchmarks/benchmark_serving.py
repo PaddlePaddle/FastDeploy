@@ -39,7 +39,13 @@ from backend_request_func import (
     RequestFuncInput,
     RequestFuncOutput,
 )
-from benchmark_dataset import EBChatDataset, EBDataset, RandomTextDataset, SampleRequest
+from benchmark_dataset import (
+    EBChatDataset,
+    EBDataset,
+    RandomTextDataset,
+    RandomTokenDataset,
+    SampleRequest,
+)
 from benchmark_utils import convert_to_pytorch_benchmark_format, write_to_json
 from tqdm.asyncio import tqdm
 
@@ -1117,8 +1123,10 @@ def save_to_pytorch_benchmark_format(args: argparse.Namespace, results: dict[str
 def main(args: argparse.Namespace):
     """Main entry point"""
     print(args)
-    random.seed(args.seed)
-    np.random.seed(args.seed)
+    if args.seed is not None:
+        print(f"Using random seed: {args.seed}")
+        random.seed(args.seed)
+        np.random.seed(args.seed)
 
     backend = args.backend
     # 支持多轮对话方式请求，仅支持chat接口
@@ -1151,6 +1159,12 @@ def main(args: argparse.Namespace):
             output_len=args.sharegpt_output_len,
         ),
         "random": lambda: RandomTextDataset().sample(
+            num_requests=args.num_prompts,
+            random_input_len=args.random_input_len,
+            random_output_len=args.random_output_len,
+            random_range_ratio=args.random_range_ratio,
+        ),
+        "random_token_ids": lambda: RandomTokenDataset().sample(
             num_requests=args.num_prompts,
             random_input_len=args.random_input_len,
             random_output_len=args.random_output_len,
@@ -1338,6 +1352,7 @@ if __name__ == "__main__":
             "EB",
             "EBChat",
             "random",
+            "random_token_ids",
         ],
         help="Name of the dataset to benchmark on.",
     )
@@ -1418,7 +1433,7 @@ if __name__ == "__main__":
         "bursty requests. A higher burstiness value (burstiness > 1) "
         "results in a more uniform arrival of requests.",
     )
-    parser.add_argument("--seed", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=None)
     parser.add_argument(
         "--shuffle",
         action="store_true",
