@@ -291,7 +291,9 @@ def _parse_event_chain(lines):
         # Prefill events
         m = PREFILL_FIRST_CHUNK_RE.search(line)
         if m:
-            events.append({"ts": ts, "type": "PREFILL_FIRST_CHUNK", "tags": tags, "worker": m.group(1), "raw": line.strip()})
+            events.append(
+                {"ts": ts, "type": "PREFILL_FIRST_CHUNK", "tags": tags, "worker": m.group(1), "raw": line.strip()}
+            )
             continue
         m = PREFILL_DONE_RE.search(line)
         if m:
@@ -300,7 +302,14 @@ def _parse_event_chain(lines):
         m = PREFILL_ERROR_RE.search(line)
         if m:
             events.append(
-                {"ts": ts, "type": "PREFILL_ERROR", "tags": tags, "error": m.group(1), "worker": m.group(2), "raw": line.strip()}
+                {
+                    "ts": ts,
+                    "type": "PREFILL_ERROR",
+                    "tags": tags,
+                    "error": m.group(1),
+                    "worker": m.group(2),
+                    "raw": line.strip(),
+                }
             )
             continue
         m = PREFILL_DEFER_RE.search(line)
@@ -312,7 +321,13 @@ def _parse_event_chain(lines):
         m = PREFILL_ERR_PATH_RE.search(line)
         if m:
             events.append(
-                {"ts": ts, "type": "PREFILL_ERROR_PATH_RELEASE", "tags": tags, "worker": m.group(1), "raw": line.strip()}
+                {
+                    "ts": ts,
+                    "type": "PREFILL_ERROR_PATH_RELEASE",
+                    "tags": tags,
+                    "worker": m.group(1),
+                    "raw": line.strip(),
+                }
             )
             continue
 
@@ -456,7 +471,7 @@ def format_trace_report(result):
                 detail_lines.append(f'关联 request_ids: {", ".join(trace["related_ids"]["request_ids"])}')
             detail_lines.append(f"生命周期: {status}")
             detail_lines.append("")
-            detail_lines.append("## 事件链")
+            detail_lines.append("## 事件链（整理）")
             detail_lines.append("")
             for evt in trace["events"]:
                 line = f'  [{evt.get("ts","")}] {evt["type"]}'
@@ -477,8 +492,12 @@ def format_trace_report(result):
                 if evt.get("ts_ms"):
                     line += f' ts_ms={evt["ts_ms"]}'
                 detail_lines.append(line)
+            detail_lines.append("")
+            detail_lines.append("## 原始日志 RAW")
+            detail_lines.append("")
+            for evt in trace["events"]:
                 if evt.get("raw"):
-                    detail_lines.append(f'    RAW: {evt["raw"]}')
+                    detail_lines.append(evt["raw"])
             detail_lines.append("")
             detail_dict[tid] = "\n".join(detail_lines)
 
