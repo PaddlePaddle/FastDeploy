@@ -430,6 +430,8 @@ def main():
     # 时间范围预过滤（--start 和 --end 可单独或同时指定）
     import atexit
 
+    start_ts = None
+    end_ts = None
     if args.start or args.end:
         start_ts = complete_time_arg(args.start, log_file, is_end=False) if args.start else None
         end_ts = complete_time_arg(args.end, log_file, is_end=True) if args.end else None

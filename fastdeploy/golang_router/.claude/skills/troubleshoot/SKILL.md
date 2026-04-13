@@ -55,9 +55,12 @@ IMPORTANT: 执行前务必先读取 references/log_patterns.md 了解日志格�
 必须使用 **AskUserQuestion 的离散选项**（不要只发纯文本编号）：
 - 选项 1: `完整分析（默认）` — 运行所有维度（errors + latency + health + cache + load）
 - 选项 2: `单维度/多维度分析` — 选择特定维度（errors / latency / health / cache / load），可选多个
-- 选项 3: `请求追踪` — 追踪特定请求 ID（需提供 ID）
+- 选项 3: `请求追踪` — 追踪特定请求 ID
 
 如果用户未选择，默认使用完整分析。
+
+当用户选择“请求追踪”选项时，AskUserQuestion 的选项文案应直接提示可输入：
+- `trace_id/request_id/session_id`（逗号分隔多 ID）
 
 ### 4. 输出目录
 诊断报告默认保存到 `skill_output/troubleshoot/<YYYYMMDD_HHMMSS>/`（自动按运行时间创建子目录）。
