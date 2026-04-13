@@ -526,35 +526,6 @@ class TestFlashInferAllReduceResidualRMSNormFallbacks(unittest.TestCase):
             mock_comm.trtllm_allreduce_fusion.assert_not_called()
 
 
-class TestFakeFlashInferFunction(unittest.TestCase):
-    """Test fake_flashinfer_allreduce_residual_rmsnorm function"""
-
-    def test_fake_function_basic(self):
-        """Test lines 204-206: fake function basic functionality"""
-        from fastdeploy.model_executor.layers.flashinfer_comm_fusion import (
-            fake_flashinfer_allreduce_residual_rmsnorm,
-        )
-
-        input_tensor = paddle.randn([128, 768])
-        residual = paddle.randn([128, 768])
-        weight = paddle.randn([768])
-
-        norm_out, residual_out = fake_flashinfer_allreduce_residual_rmsnorm(
-            input_tensor=input_tensor,
-            residual=residual,
-            weight=weight,
-            eps=1e-6,
-            max_token_num=16384,
-            use_oneshot=None,
-            trigger_completion_at_end=False,
-            fp32_acc=False,
-        )
-
-        # Should return empty-like tensors
-        self.assertEqual(norm_out.shape, input_tensor.shape)
-        self.assertEqual(residual_out.shape, residual.shape)
-
-
 class TestCleanupFlashInferWorkspace(unittest.TestCase):
     """Test cleanup_flashinfer_workspace function"""
 

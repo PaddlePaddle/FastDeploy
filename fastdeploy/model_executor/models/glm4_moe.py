@@ -224,10 +224,11 @@ class Glm4MoeAttention(nn.Layer):
 
         self.o_proj = RowParallelLinear(
             fd_config,
-            prefix=f"{prefix}.enable_all_reduce.o_proj",
+            prefix=f"{prefix}.o_proj",
             input_size=fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim,
             output_size=fd_config.model_config.hidden_size,
             layer_id=layer_id,
+            enable_all_reduce_fusion=fd_config.parallel_config.enable_flashinfer_allreduce_fusion,
         )
 
         self.attn = Attention(
@@ -307,7 +308,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{prefix}.enable_all_reduce_fusion.input_layernorm",
+            prefix=f"{prefix}.input_layernorm",
             layer_id=layer_id,
         )
 
@@ -315,7 +316,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
             fd_config,
             hidden_size=fd_config.model_config.hidden_size,
             eps=fd_config.model_config.rms_norm_eps,
-            prefix=f"{prefix}.enable_all_reduce_fusion.post_attention_layernorm",
+            prefix=f"{prefix}.post_attention_layernorm",
             layer_id=layer_id,
         )
 

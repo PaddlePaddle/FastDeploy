@@ -1,3 +1,19 @@
+"""
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+"""
+
 from typing import Optional, Tuple
 
 import paddle
@@ -184,21 +200,6 @@ def flashinfer_allreduce_residual_rmsnorm(
         layout_code=None,
     )
 
-    return norm_out, residual_out
-
-
-def fake_flashinfer_allreduce_residual_rmsnorm(
-    input_tensor: paddle.Tensor,
-    residual: paddle.Tensor,
-    weight: paddle.Tensor,
-    eps: float = 1e-6,
-    max_token_num: int = 16384,
-    use_oneshot: Optional[bool] = None,
-    trigger_completion_at_end: bool = False,
-    fp32_acc: bool = False,
-) -> Tuple[paddle.Tensor, paddle.Tensor]:
-    residual_out = paddle.empty_like(residual)
-    norm_out = paddle.empty_like(input_tensor)
     return norm_out, residual_out
 
 
