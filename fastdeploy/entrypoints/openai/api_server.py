@@ -966,7 +966,7 @@ def launch_worker_monitor():
 def main():
     """main函数"""
 
-    if get_host_ip() not in args.ips:
+    if args.ips and get_host_ip() not in args.ips:
         api_server_logger.error(f"Worker IP {get_host_ip()} not in the list of allowed IPs {args.ips}.")
         return
 
