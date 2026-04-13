@@ -14,6 +14,10 @@
 # limitations under the License.
 """
 
+import importlib
+import sys
+from unittest import mock
+
 import paddle
 import paddle.nn.functional as F
 
@@ -359,6 +363,39 @@ def test_performance():
     print("  Performance benchmark complete.\n")
 
 
+def test_import_error():
+    """Test that ImportError is raised when GPU ops are not available."""
+    print("=" * 60)
+    print("Test 5: Import error handling")
+    print("=" * 60)
+
+    module_name = "fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias"
+    gpu_ops_module = "fastdeploy.model_executor.ops.gpu"
+
+    # Save original module references
+    original_module = sys.modules.pop(module_name, None)
+    original_gpu_ops = sys.modules.get(gpu_ops_module)
+
+    try:
+        # Mock the GPU ops module to raise ImportError
+        with mock.patch.dict(sys.modules, {gpu_ops_module: None}):
+            try:
+                importlib.import_module(module_name)
+                raise AssertionError("Expected ImportError was not raised")
+            except ImportError as e:
+                assert "fused_cast_sigmoid_bias is not available" in str(e), f"Unexpected error message: {e}"
+                print(f"  [PASS] ImportError raised with correct message: {e}")
+    finally:
+        # Restore original modules
+        sys.modules.pop(module_name, None)
+        if original_module is not None:
+            sys.modules[module_name] = original_module
+        if original_gpu_ops is not None:
+            sys.modules[gpu_ops_module] = original_gpu_ops
+
+    print("  Import error handling test passed.\n")
+
+
 if __name__ == "__main__":
     paddle.set_device("gpu")
     print("Running fused_cast_sigmoid_bias tests...\n")
@@ -369,6 +406,7 @@ if __name__ == "__main__":
     test_accuracy_cast_types()
     test_accuracy_extreme_values()
     test_accuracy_extreme_values_cast_types()
+    test_import_error()
     test_performance()
 
     print("=" * 60)

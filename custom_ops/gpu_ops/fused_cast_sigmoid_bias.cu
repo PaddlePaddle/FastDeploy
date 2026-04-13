@@ -25,6 +25,24 @@
 //         bias  [num_experts] or [1, num_experts] fp32
 // Output: scores [num_tokens, num_experts] cast_type (fp32/fp16/bf16)
 //         scores_with_bias [num_tokens, num_experts] cast_type (fp32/fp16/bf16)
+//
+// Precision guarantee:
+//   All intermediate computations (cast, sigmoid, bias addition) are performed
+//   in float32, regardless of input/output types. The cast to OutT only happens
+//   at the final store. This matches the reference implementation:
+//     gate_fp32 = gate_out.cast("float32")
+//     scores_fp32 = sigmoid(gate_fp32)
+//     scores_with_bias_fp32 = scores_fp32 + bias  // bias is always float32
+//     scores = scores_fp32.cast(cast_type)
+//     scores_with_bias = scores_with_bias_fp32.cast(cast_type)
+//
+//   When cast_type is "float32", the fused kernel is numerically identical to
+//   the reference. For fp16/bf16 output, the only precision loss comes from
+//   the final static_cast<OutT>, equivalent to .cast() in the reference path.
+//
+//   Note: bias is intentionally kept as float32 (not converted to OutT) to
+//   ensure the addition s + bias[j] is always computed in full float32
+//   precision before the final downcast.
 
 template <typename InT, typename OutT>
 __global__ void fused_cast_sigmoid_bias_kernel(
@@ -37,9 +55,10 @@ __global__ void fused_cast_sigmoid_bias_kernel(
   const int64_t offset = token_idx * num_experts;
 
   for (int j = threadIdx.x; j < num_experts; j += blockDim.x) {
+    // All intermediate computation in float32 for precision
     float val = static_cast<float>(input[offset + j]);
-    // sigmoid: 1 / (1 + exp(-x))
     float s = 1.0f / (1.0f + expf(-val));
+    // s (float32) + bias[j] (float32) -> float32 addition, then downcast
     scores[offset + j] = static_cast<OutT>(s);
     scores_with_bias[offset + j] = static_cast<OutT>(s + bias[j]);
   }
@@ -49,7 +68,7 @@ __global__ void fused_cast_sigmoid_bias_kernel(
 template <typename InT, typename OutT, int kVecSize>
 __global__ void fused_cast_sigmoid_bias_vec_kernel(
     const InT* __restrict__ input,
-    const float* __restrict__ bias,
+    const float* __restrict__ bias,  // kept as float32 for full-precision add
     OutT* __restrict__ scores,
     OutT* __restrict__ scores_with_bias,
     const int num_experts) {
@@ -58,7 +77,7 @@ __global__ void fused_cast_sigmoid_bias_vec_kernel(
 
   using in_vec_t = AlignedVector<InT, kVecSize>;
   using out_vec_t = AlignedVector<OutT, kVecSize>;
-  using bias_vec_t = AlignedVector<float, kVecSize>;
+  using bias_vec_t = AlignedVector<float, kVecSize>;  // float32 bias vectors
 
   const int vec_count = num_experts / kVecSize;
   for (int idx = threadIdx.x; idx < vec_count; idx += blockDim.x) {
@@ -71,8 +90,10 @@ __global__ void fused_cast_sigmoid_bias_vec_kernel(
     out_vec_t s_vec, sb_vec;
 #pragma unroll
     for (int i = 0; i < kVecSize; ++i) {
+      // All intermediate computation in float32 for precision
       float val = static_cast<float>(in_vec[i]);
       float s = 1.0f / (1.0f + expf(-val));
+      // s (float32) + bias_vec[i] (float32) -> float32 addition, then downcast
       s_vec[i] = static_cast<OutT>(s);
       sb_vec[i] = static_cast<OutT>(s + bias_vec[i]);
     }
@@ -81,7 +102,7 @@ __global__ void fused_cast_sigmoid_bias_vec_kernel(
     Store(sb_vec, scores_with_bias + offset + base);
   }
 
-  // Handle remaining elements
+  // Handle remaining elements (same float32 precision guarantee)
   const int remaining_start = vec_count * kVecSize;
   for (int j = remaining_start + threadIdx.x; j < num_experts;
        j += blockDim.x) {

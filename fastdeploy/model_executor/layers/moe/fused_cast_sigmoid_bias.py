@@ -20,8 +20,10 @@ try:
     from fastdeploy.model_executor.ops.gpu import (
         fused_cast_sigmoid_bias as _fused_cast_sigmoid_bias_cuda,
     )
-except ImportError:
-    assert False, "fused_cast_sigmoid_bias not support!"
+except ImportError as e:
+    raise ImportError(
+        "fused_cast_sigmoid_bias is not available. " "Please ensure the GPU custom ops are compiled."
+    ) from e
 
 
 def fused_cast_sigmoid_bias(
@@ -45,5 +47,15 @@ def fused_cast_sigmoid_bias(
     Returns:
         scores: [num_tokens, num_experts]，cast_type类型 - sigmoid(gate_out)的结果
         scores_with_bias: [num_tokens, num_experts]，cast_type类型 - 加上偏置后的分数
+
+    Precision:
+        所有中间计算（cast、sigmoid、bias加法）均在float32精度下进行，
+        仅在最终存储时转换为cast_type。当cast_type为"float32"时，结果与
+        以下参考实现完全一致：
+            gate_fp32 = gate_out.cast("float32")
+            scores = sigmoid(gate_fp32)
+            scores_with_bias = scores + bias
+        当cast_type为"float16"/"bfloat16"时，精度损失仅来自最终的类型转换，
+        等价于在float32计算后调用.cast(cast_type)。
     """
     return _fused_cast_sigmoid_bias_cuda(gate_out, e_score_correction_bias, cast_type)
