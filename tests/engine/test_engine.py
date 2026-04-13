@@ -45,7 +45,13 @@ def _make_cfg(**ov):
     cc.enable_prefix_caching = cc.enable_chunked_prefill = False
     cc.kv_cache_ratio, cc.kvcache_storage_backend, cc.num_cpu_blocks, cc.max_encoder_cache = 1.0, None, 0, 0
     cc.cache_transfer_protocol, cc.total_block_num = "tcp", 100
-    lc = ns(load_strategy="auto", rsync_config={}, dynamic_load_weight=False, load_choices="auto")
+    lc = ns(
+        load_strategy="auto",
+        rsync_config={},
+        dynamic_load_weight=False,
+        load_choices="auto",
+        model_loader_extra_config={},
+    )
     soc = ns(guided_decoding_backend=None, logits_processors=None, reasoning_parser="none")
     soc.disable_any_whitespace = False
     cfg = ns(model_config=mc, parallel_config=pc, scheduler_config=sc, cache_config=cc, load_config=lc)

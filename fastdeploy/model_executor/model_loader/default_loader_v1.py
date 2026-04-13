@@ -57,7 +57,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
     @measure_time()
     def load_weights(self, model, fd_config: FDConfig, enable_cache: bool = False) -> None:
         model_path = get_model_path(fd_config)
-        weights_iterator = get_weight_iterator(model_path)
+        weights_iterator = get_weight_iterator(model_path, fd_config.load_config)
         if enable_cache:
             load_weights_from_cache(model, weights_iterator)
         else:

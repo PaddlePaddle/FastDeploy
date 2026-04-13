@@ -788,7 +788,7 @@ class FusedMoE(nn.Layer):
         chunk_size = self.fd_config.parallel_config.chunked_moe_size
         token_num = x.shape[0]
         fake_x = paddle.empty(
-            shape=[0, self.fd_config.model_config.hidden_size],
+            shape=[0, self.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
         # input size that are less than a chunk, less than the max size data or empty input

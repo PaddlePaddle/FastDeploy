@@ -22,6 +22,9 @@ from unittest import mock
 
 import paddle
 
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda *args, **kwargs: None
+
 import fastdeploy.model_executor.layers.quantization.nvfp4 as nvfp4_module
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear
 from fastdeploy.model_executor.layers.moe import FusedMoE
@@ -163,7 +166,7 @@ class TestModelOptNvFp4ModuleInit(unittest.TestCase):
                 return_value=True,
             ),
             mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer, "flashinfer.fused_moe": mock_fused_moe}),
-            mock.patch("paddle.compat.enable_torch_proxy"),
+            mock.patch("paddle.enable_compat"),
         ):
             importlib.reload(nvfp4_module)
 

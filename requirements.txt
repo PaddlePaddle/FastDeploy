@@ -47,5 +47,5 @@ aistudio_sdk
 p2pstore
 py-cpuinfo
 flashinfer-python-paddle
-flash_mask @ https://paddle-qa.bj.bcebos.com/ernie/flash_mask-4.0.post20260128-py3-none-any.whl
+# flash_mask @ https://paddle-qa.bj.bcebos.com/ernie/flash_mask-4.0.post20260128-py3-none-any.whl
 transformers>=4.55.1,<5.0.0
