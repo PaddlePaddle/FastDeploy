@@ -198,14 +198,4 @@ output = f"{bar}  {percentage}%   (N={count})"
       +---+---+---+---+---→
        -5m  -4m  -3m  -2m  -1m
 
-💡 持续跟踪: /loop 30s /analyze-cache-hitrate --tail
-```
-
-## --watch 持续监控模板
-
-`--watch` 模式先输出完整报告（同终端概览报告模板），末尾额外提示：
-
-```
-💡 全量分析完成。持续跟踪后续变化:
-   /loop 30s /analyze-cache-hitrate --tail
 ```

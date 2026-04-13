@@ -8,11 +8,12 @@ stat_cache_hitrate — FastDeploy Go Router Cache 命中率统计工具
   3. Per-Worker Stats   — 各 worker 缓存利用排名
 
 用法：
-  python3 stat_cache_hitrate.py <log_file> [--tail N|Nm] [--watch] [--output DIR]
+  python3 stat_cache_hitrate.py <log_file> [--tail N|2k|30m|2h|1d] [--output DIR]
 """
 
 import argparse
 import json
+import math
 import os
 import re
 import subprocess
@@ -170,7 +171,7 @@ def count_lines(filepath):
 
 def read_lines(filepath, tail=None):
     """读取日志文件，支持 tail 模式。"""
-    if tail:
+    if tail is not None:
         if isinstance(tail, str) and tail.endswith("m"):
             # 按时间 tail：读取全部行，过滤最近 N 分钟
             minutes = int(tail[:-1])
@@ -282,7 +283,7 @@ def extract_data(filepath, tail=None):
         strategy_recs = grep_and_parse(filepath, STRATEGY_PATTERN, "parse-cache-strategy", tail)
         stats_recs = grep_and_parse(filepath, STATS_PATTERN, "parse-stats", tail)
         inference_count = grep_count(filepath, r"\] \[POST\] /v1/chat/completions |\] \[POST\] /v1/completions ", tail)
-        line_count = int(tail) if tail and not (isinstance(tail, str) and tail.endswith("m")) else total
+        line_count = int(tail) if tail is not None and not (isinstance(tail, str) and tail.endswith("m")) else total
         return strategy_recs, stats_recs, inference_count, line_count
 
 
@@ -984,8 +985,12 @@ def parse_args():
         epilog=__doc__,
     )
     parser.add_argument("log_file", help="日志文件路径")
-    parser.add_argument("--tail", nargs="?", const="2000", help="只分析尾部数据（行数如 2000，或时间如 30m）")
-    parser.add_argument("--watch", action="store_true", help="全量分析后提示持续监控命令")
+    parser.add_argument(
+        "--tail",
+        nargs="?",
+        const="2000",
+        help="只分析尾部数据（支持 2000/2k 行，或 30m/2h/1d 时间窗口）",
+    )
     parser.add_argument(
         "--output", default=None, help="详细报告输出目录（默认：skill_output/stat-cache-hitrate/<timestamp>/）"
     )
@@ -994,6 +999,45 @@ def parse_args():
     )
     parser.add_argument("--end", default=None, help='结束时间（如 "17:00:00"、"03/31 17:00"、"2026/03/31 17:00:00"）')
     return parser.parse_args()
+
+
+def parse_tail_arg(tail_str):
+    """解析 --tail 参数，返回 int(行数) 或 '<minutes>m'(时间窗口)。"""
+    if tail_str is None:
+        return None
+
+    s = str(tail_str).strip().lower()
+    if not s:
+        raise ValueError("--tail 不能为空")
+
+    # 行数: 2000
+    if re.fullmatch(r"\d+", s):
+        value = int(s)
+        if value <= 0:
+            raise ValueError("--tail 行数必须 > 0")
+        return value
+
+    # 行数缩写: 2k => 2000
+    m = re.fullmatch(r"(\d+)k", s)
+    if m:
+        value = int(m.group(1)) * 1000
+        if value <= 0:
+            raise ValueError("--tail 行数必须 > 0")
+        return value
+
+    # 时间窗口: 30m/2h/1d（最终统一成分钟）
+    m = re.fullmatch(r"(\d+)(m|h|d)", s)
+    if m:
+        num = int(m.group(1))
+        unit = m.group(2)
+        if num <= 0:
+            raise ValueError("--tail 时间窗口必须 > 0")
+        factor = {"m": 1, "h": 60, "d": 1440}[unit]
+        minutes = num * factor
+        minutes = max(1, math.ceil(minutes))
+        return f"{minutes}m"
+
+    raise ValueError("不支持的 --tail 格式：请使用 2000/2k 或 30m/2h/1d")
 
 
 def main():
@@ -1007,6 +1051,12 @@ def main():
     # --tail 与 --start/--end 不能混用（两者是不同的范围选择方式）
     if args.tail and (args.start or args.end):
         print("Error: --tail 与 --start/--end 不能同时使用，请选择其一", file=sys.stderr)
+        sys.exit(1)
+
+    try:
+        tail = parse_tail_arg(args.tail)
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
 
     # 时间范围预过滤（--start 和 --end 可单独或同时指定）
@@ -1023,7 +1073,7 @@ def main():
         print(f'时间范围过滤: {start_ts or "..."} ~ {end_ts or "..."}', file=sys.stderr)
 
     # Phase 2: 提取 + 解析
-    strategy_recs, stats_recs, inference_count, line_count = extract_data(log_file, args.tail)
+    strategy_recs, stats_recs, inference_count, line_count = extract_data(log_file, tail)
 
     if not strategy_recs and not stats_recs:
         print(
@@ -1039,7 +1089,7 @@ def main():
     diagnosis = cross_diagnose(prefix_hr, session_hr)
 
     # Phase 4: 输出
-    if args.tail:
+    if tail is not None:
         print(format_tail_report(args.log_file, line_count, prefix_hr, session_hr, scheduling))
     else:
         time_span = compute_time_span(strategy_recs, stats_recs)
@@ -1093,10 +1143,6 @@ def main():
             session_abs, session_uri = _build_path_links(session_detail_path)
             print(f"  - Session 明细: {session_abs}")
             print(f"    URI: {session_uri}")
-
-    if args.watch:
-        print("\n\U0001f4a1 持续跟踪: /loop 30s /stat-cache-hitrate --tail")
-
 
 if __name__ == "__main__":
     main()
