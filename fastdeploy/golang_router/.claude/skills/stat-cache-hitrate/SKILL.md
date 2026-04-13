@@ -4,7 +4,7 @@ description: >
   统计 FastDeploy Go Router 日志中的三层 cache 命中率指标，生成可视化报告。
   三层指标：Prefix Hit Ratio（KV Cache 内容复用度）、Session Hit Rate（请求级路由粘性）、
   Per-Worker Cache Stats（各 prefill worker 的缓存利用排名）。支持全量统计、tail 快速查看、
-  持续监控模式、指定时间段统计（--start/--end）。
+  指定时间段统计（--start/--end）。
 
   当用户提到以下内容时触发此 skill：统计/查看 cache 命中率、查看 cache-aware 调度效果、
   查看缓存预热情况、统计 hitRatio、查看 prefix 命中率、session hit rate。
@@ -37,9 +37,8 @@ IMPORTANT: 执行前阅读 references/log_formats.md 了解日志格式和解析
 ### 2. 分析模式
 必须使用 **AskUserQuestion 的离散选项**（不要只发纯文本编号，避免客户端偶发不显示第 4 项）：
 - 选项 1: `全量统计（默认）` — 扫描完整日志
-- 选项 2: `快速查看尾部` — 只看最近的数据（可指定行数如 2000 或时间如 30m）
-- 选项 3: `持续监控` — 全量分析后提示监控命令
-- 选项 4: `指定时间段` — 分析特定时间范围（如 `--start "16:00" --end "17:00"`）
+- 选项 2: `快速查看尾部` — 只看最近的数据（可指定 `2000/2k` 行，或 `30m/2h/1d` 时间窗口）
+- 选项 3: `指定时间段` — 分析特定时间范围（如 `--start "16:00" --end "17:00"`）
 
 若用户选择“指定时间段”，直接让用户填写：  
 - 从 `xxx` 开始，到 `xxx` 结束（`start/end` 可只填一个）；  
@@ -66,10 +65,10 @@ python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志�
 # 快速查看尾部数据
 python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail       # 默认最后 2000 行
 python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 5000   # 指定行数
-python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 30m    # 指定时间
-
-# 持续监控
-python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --watch
+python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 2k     # 行数缩写
+python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 30m    # 分钟窗口
+python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 2h     # 小时窗口
+python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --tail 1d     # 天窗口
 
 # 指定时间段（--start 和 --end 可单独或同时使用）
 python3 .claude/skills/stat-cache-hitrate/scripts/stat_cache_hitrate.py <日志文件> --start "16:00:00" --end "17:00:00"
