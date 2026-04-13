@@ -32,7 +32,7 @@ from fastdeploy.model_executor.ops.xpu import verify_draft_tokens
 from fastdeploy.spec_decode import VerifyStrategy
 
 CPU_PLACE = paddle.CPUPlace()
-CUDA_PLACE = paddle.XPUPlace(0) if paddle.is_compiled_with_xpu() else paddle.CPUPlace()
+DEVICE_PLACE = paddle.XPUPlace(0) if paddle.is_compiled_with_xpu() else paddle.CPUPlace()
 
 
 # ============================================================
@@ -47,7 +47,7 @@ def to_paddle_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
         if isinstance(v, (int, bool, float, str)):
             paddle_inputs[k] = v
         elif v is not None:
-            paddle_inputs[k] = paddle.to_tensor(v, place=CUDA_PLACE)
+            paddle_inputs[k] = paddle.to_tensor(v, place=DEVICE_PLACE)
         else:
             paddle_inputs[k] = None
     return paddle_inputs
