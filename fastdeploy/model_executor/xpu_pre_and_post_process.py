@@ -106,7 +106,6 @@ def xpu_pre_process(
     use_cudagraph=False,
 ) -> XPUForwardMeta:
     """ """
-    max_len = input_ids.shape[1]
 
     token_num_cpu = paddle.sum(seq_lens_this_time).cpu()
     if use_speculate_method:
@@ -124,14 +123,13 @@ def xpu_pre_process(
         share_inputs["cu_seqlens_q_output"] = cu_seqlens_q_output
         share_inputs["batch_id_per_token_output"] = batch_id_per_token_output
     else:
-        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         (
             ids_remove_padding,
             cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num_cpu, seq_lens_this_time)
+        ) = get_padding_offset(input_ids, seq_lens_this_time, token_num_cpu)
 
     share_inputs["batch_id_per_token"] = batch_id_per_token
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
