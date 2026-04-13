@@ -6,9 +6,7 @@ on:
       - opened
       - synchronize
     branches:
-      - develop
-      - release/**
-
+      - never-trigger-this
 permissions:
   contents: read
 

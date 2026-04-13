@@ -181,7 +181,7 @@ def test_lm_head_fp32(api_url, headers, consistent_payload):
     # 校验返回内容与概率信息
     assert (
         resp_json["choices"][0]["message"]["content"]
-        == "\n<think>这个问题是关于牛顿的三大运动定律的。牛顿的三大运动定律是经典"
+        == "\n<think>我需要回答牛顿的三大运动定律是什么。牛顿的三大运动定律是经典"
     ), f"The response content is not as expected {resp_json['choices'][0]['message']['content']}."
 
 

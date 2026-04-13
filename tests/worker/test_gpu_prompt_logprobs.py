@@ -63,6 +63,7 @@ class MockConfig:
     scheduler_config = SchedulerConfig()
     cache_config = CacheConfig()
     parallel_config = ParallelConfig()
+    enable_mm_runtime = model_config.enable_mm
 
 
 class MockTask:

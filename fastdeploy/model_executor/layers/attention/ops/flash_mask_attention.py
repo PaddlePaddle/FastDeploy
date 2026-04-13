@@ -33,9 +33,6 @@ def flash_mask_attention(
     num_heads: int = 0,
     kv_num_heads: int = 0,
     head_dim: int = 128,
-    max_seq_len: int = 0,
-    q_token_num: int = 0,
-    kv_token_num: int = 0,
 ):
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import flash_mask_attention
@@ -52,9 +49,6 @@ def flash_mask_attention(
             num_heads,
             kv_num_heads,
             head_dim,
-            max_seq_len,
-            q_token_num,
-            kv_token_num,
         )
     else:
         raise NotImplementedError

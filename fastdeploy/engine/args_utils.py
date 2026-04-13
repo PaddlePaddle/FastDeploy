@@ -459,6 +459,14 @@ class EngineArgs:
     Must be explicitly enabled via the `--enable-logprob` startup parameter to output logprob values.
     """
 
+    enable_keep_sampling_mask: bool = False
+    """
+    When enabled, the server returns a sparse index list for each generated token, indicating
+    which vocabulary positions were retained after top_p/top_k sampling, and streams it to
+    the client. In MTP (multi-token prediction) scenarios this field is a List[List[int]],
+    where each inner list contains the retained vocabulary indices for a predicted token.
+    """
+
     max_logprobs: int = 20
     """
     Maximum number of log probabilities to return when `enable_logprob` is True. The default value comes the default for the
@@ -871,6 +879,18 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_logprob,
             help="Enable output of token-level log probabilities.",
+        )
+        model_group.add_argument(
+            "--enable-keep-sampling-mask",
+            action="store_true",
+            default=EngineArgs.enable_keep_sampling_mask,
+            help=(
+                "Enable output of sampling mask as a sparse index list over the vocabulary. "
+                "For non-MTP decoding, this is a list[int] per token step indicating which "
+                "vocabulary indices were kept after top_p/top_k sampling. "
+                "For MTP decoding, this is a list[list[int]] per token step, where each inner "
+                "list corresponds to one MTP group."
+            ),
         )
         model_group.add_argument(
             "--max-logprobs",

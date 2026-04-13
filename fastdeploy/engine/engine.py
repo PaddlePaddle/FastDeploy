@@ -621,6 +621,7 @@ class LLMEngine:
             "shutdown_comm_group_if_worker_idle": self.cfg.parallel_config.shutdown_comm_group_if_worker_idle,
             "enable_entropy": self.cfg.model_config.enable_entropy,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
+            "enable_keep_sampling_mask": self.cfg.model_config.enable_keep_sampling_mask,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:

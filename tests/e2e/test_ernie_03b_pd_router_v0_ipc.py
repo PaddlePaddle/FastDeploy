@@ -81,10 +81,12 @@ def setup_and_run_server():
         model_path = "baidu/ERNIE-4.5-0.3B-Paddle"
     print(f"model_path: {model_path}")
 
+    base_log_dir = os.getenv("FD_LOG_DIR", "log")
+
     # router
     print("start router...")
     env_router = os.environ.copy()
-    env_router["FD_LOG_DIR"] = "log_router"
+    env_router["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_router")
     router_log_path = "router.log"
 
     router_cmd = [
@@ -110,7 +112,7 @@ def setup_and_run_server():
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
     env_prefill["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
-    env_prefill["FD_LOG_DIR"] = "log_prefill"
+    env_prefill["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_prefill")
     prefill_log_path = "server_prefill.log"
     prefill_cmd = [
         sys.executable,
@@ -160,7 +162,7 @@ def setup_and_run_server():
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
     env_decode["ENABLE_V1_KVCACHE_SCHEDULER"] = "0"
-    env_decode["FD_LOG_DIR"] = "log_decode"
+    env_decode["FD_LOG_DIR"] = os.path.join(base_log_dir, "log_decode")
     decode_log_path = "server_decode.log"
     decode_cmd = [
         sys.executable,

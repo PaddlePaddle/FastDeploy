@@ -31,6 +31,7 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
         self.cfg.model_config.enable_logprob = True
         self.cfg.speculative_config.method = None
         self.cfg.parallel_config.local_data_parallel_id = 0
+        self.cfg.parallel_config.engine_worker_queue_port = ["9700"]
         self.cached_generated_tokens = MagicMock()
         self.engine_worker_queue = MagicMock()
         self.split_connector = MagicMock()

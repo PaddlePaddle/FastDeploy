@@ -268,6 +268,8 @@ class ChatCompletionResponseChoice(BaseModel):
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
+    # Per-token retained vocab indices from top_p/top_k sampling: List[List[int]], one list of vocab indices per token
+    sampling_mask: Optional[List[List[int]]] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop", "abort"]]
     speculate_metrics: Optional[SpeculateMetrics] = None
 
@@ -333,6 +335,9 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
+    # Per-token index list of retained positions after top_p sampling.
+    # Non-MTP: [[idx, ...]] (1 token/step). MTP: [[idx, ...], ...] (N accepted tokens/step).
+    sampling_mask: Optional[List[List[int]]] = None
     finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop", "abort"]] = None
     arrival_time: Optional[float] = None
     speculate_metrics: Optional[SpeculateMetrics] = None

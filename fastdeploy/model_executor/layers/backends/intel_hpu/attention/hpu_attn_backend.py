@@ -219,7 +219,7 @@ class HPUAttentionBackend(AttentionBackend_HPU):
         self.block_size = llm_config.cache_config.block_size
         self.max_seq_len = llm_config.model_config.max_model_len
         self.rope_theta = 10000.0 if llm_config.model_config.rope_theta is None else llm_config.model_config.rope_theta
-        self.rope_3d = getattr(llm_config.model_config, "rope_3d", False)
+        self.rope_3d = llm_config.enable_rope_3d_runtime
         self.causal = getattr(llm_config.model_config, "causal", True)
         self.speculative_method: str = llm_config.speculative_config.method
         self.use_speculate: bool = self.speculative_method is not None
