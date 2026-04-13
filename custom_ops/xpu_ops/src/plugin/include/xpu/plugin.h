@@ -820,6 +820,29 @@ DLL_EXPORT int verify_draft_tokens(
     const int verify_strategy,  // 0=TOPP, 1=GREEDY, 2=TARGET_MATCH
     const bool reject_all,
     const bool accept_all);
+template <typename T>
+DLL_EXPORT int reasoning_phase_token_constraint(
+    api::Context* ctx,
+    const T* logits_src,
+    T* logits_dst,
+    const int64_t* token_ids_all,
+    const int64_t* prompt_lens,
+    const bool* stop_flags,
+    const int* seq_lens_encoder,
+    const int64_t* step_idx,
+    const int64_t* allowed_tokens,
+    int* reasoning_status,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
+    const bool* enable_thinking,
+    int64_t think_end_id,
+    int64_t line_break_id,
+    int bs,
+    int token_num,
+    int vocab_size,
+    int max_seq_len,
+    int allowed_tokens_len);
+
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 

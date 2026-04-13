@@ -390,6 +390,22 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                                     const paddle::Tensor& seq_lens_decoder,
                                     const paddle::Tensor& step_idx);
 
+void ReasoningPhaseTokenConstraint(
+    const paddle::Tensor& logits,
+    const paddle::Tensor& token_ids_all,
+    const paddle::Tensor& prompt_lens,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& allowed_tokens,
+    const paddle::Tensor& reasoning_status,
+    const paddle::Tensor& batch_id_per_token_output,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& enable_thinking,
+    int64_t think_end_id,
+    int64_t line_break_id);
+
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& accept_num,
                                       const paddle::Tensor& not_need_stop,
@@ -1504,6 +1520,24 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_decoder"),
         py::arg("step_idx"),
         "Set values based on flags and indices in speculative decoding");
+
+  m.def("reasoning_phase_token_constraint",
+        &ReasoningPhaseTokenConstraint,
+        py::arg("logits"),
+        py::arg("token_ids_all"),
+        py::arg("prompt_lens"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        py::arg("step_idx"),
+        py::arg("allowed_tokens"),
+        py::arg("reasoning_status"),
+        py::arg("batch_id_per_token_output"),
+        py::arg("cu_seqlens_q_output"),
+        py::arg("enable_thinking"),
+        py::arg("think_end_id"),
+        py::arg("line_break_id"),
+        "Apply reasoning phase token constraint for generation");
 
   m.def("speculate_get_output_padding_offset",
         &SpeculateGetOutputPaddingOffset,
