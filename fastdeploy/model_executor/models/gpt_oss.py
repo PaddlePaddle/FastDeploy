@@ -114,6 +114,7 @@ class GptOssMoe(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config=fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             moe_intermediate_size=fd_config.model_config.intermediate_size,
             num_experts=num_local_experts,
             top_k=fd_config.model_config.num_experts_per_tok,
