@@ -484,6 +484,7 @@ class TestSleepWakeupBehavior(unittest.TestCase):
         runner.is_kvcache_sleeping = False
         runner.use_cudagraph = False
         runner.spec_method = None
+        runner.enable_cache_manager_v1 = False
         runner.local_rank = 0
         runner.device_id = 1
         runner.num_gpu_blocks = 8
