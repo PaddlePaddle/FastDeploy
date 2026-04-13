@@ -25,7 +25,14 @@ def format_load_report(result):
     if result["diagnoses"]:
         sections.append("### 诊断")
         sections.append("")
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
         sections.append(f'  共 {len(result["diagnoses"])} 条诊断，见详情: [detail/load_diagnoses.md](../detail/load_diagnoses.md)')
+=======
+        sections.append(
+            f'  共 {len(result["diagnoses"])} 条诊断，见详情: [detail/load_diagnoses.md](../detail/load_diagnoses.md)；'
+            '匹配明细见 [detail/load_select_release.md](../detail/load_select_release.md)'
+        )
+>>>>>>> develop
         sections.append("")
         detail_sections.append("## 诊断")
         detail_sections.append("")
@@ -182,6 +189,7 @@ def format_load_report(result):
         detail_sections.append("## Select/Release Per-Worker")
         detail_sections.append("")
 
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
     id_consistency = sr.get("id_consistency", {})
     if id_consistency:
         sections.append("### FIFO × ID 一致性校验")
@@ -209,6 +217,8 @@ def format_load_report(result):
         )
         detail_sections.append("")
 
+=======
+>>>>>>> develop
     if sr.get("worker_type_profile"):
         sections.append("### Worker URL 类型画像（基于 select）")
         sections.append("")

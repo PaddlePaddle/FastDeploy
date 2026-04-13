@@ -501,12 +501,15 @@ def _normalize_worker_type(worker_type):
     return "unknown"
 
 
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
 def _normalize_worker_url_key(url):
     if not url:
         return ""
     return re.sub(r"^https?://", "", str(url).strip().rstrip("/"))
 
 
+=======
+>>>>>>> develop
 def _infer_release_worker_type(release, selects, fallback_window_s=120):
     """为未显式标注 type 的 release 近似推断 worker type。
 
@@ -619,7 +622,10 @@ def match_select_release(lines, fallback_window_s=120):
                 {
                     "ts": ts,
                     "worker": trm.group(2),
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
                     "worker_key": _normalize_worker_url_key(trm.group(2)),
+=======
+>>>>>>> develop
                     # 文本默认按 prefill 记，再结合同 worker 邻近 select 做纠偏（mixed 场景）
                     "type": f'{_normalize_worker_type(token_type or "prefill")}_tokens',
                     "raw_token_type": token_type or "",
@@ -819,8 +825,12 @@ def match_select_release(lines, fallback_window_s=120):
     # 基于 select 构建 worker URL -> dominant type 映射
     per_worker_type_counts = defaultdict(lambda: defaultdict(int))
     for s in selects:
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
         wkey = s.get("worker_key") or _normalize_worker_url_key(s.get("worker"))
         per_worker_type_counts[wkey][_normalize_worker_type(s.get("type"))] += 1
+=======
+        per_worker_type_counts[s["worker"]][_normalize_worker_type(s.get("type"))] += 1
+>>>>>>> develop
     worker_dominant_type = {}
     for w, counts in per_worker_type_counts.items():
         worker_dominant_type[w] = sorted(counts.items(), key=lambda kv: -kv[1])[0][0] if counts else "unknown"
@@ -832,7 +842,11 @@ def match_select_release(lines, fallback_window_s=120):
         if r_type_raw.endswith("_tokens"):
             base_t = _normalize_worker_type(r_type_raw.replace("_tokens", ""))
             # token release 按 worker URL 对应的 select 类型映射，不做邻近时间纠偏
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
             mapped_t = worker_dominant_type.get(r.get("worker_key") or _normalize_worker_url_key(r.get("worker")), "unknown")
+=======
+            mapped_t = worker_dominant_type.get(r.get("worker", ""), "unknown")
+>>>>>>> develop
             if mapped_t in ("prefill", "decode", "mixed"):
                 base_t = mapped_t
             inferred_release_types[i] = f"{base_t}_tokens"
@@ -1129,6 +1143,7 @@ def _cli_self_test(args):
     msr = match_select_release(sample_lines)
     check("mixed token_releases inferred", msr["type_summary"].get("mixed", {}).get("token_releases", 0), 1)
     check("prefill token_releases remains 0", msr["type_summary"].get("prefill", {}).get("token_releases", 0), 0)
+<<<<<<< codex/modify-troubleshoot-for-skills-alignment-z2tpws
     check("id consistency exact match", msr["id_consistency"].get("both_present_and_equal", 0), 1)
 
     mismatch_lines = [
@@ -1137,6 +1152,8 @@ def _cli_self_test(args):
     ]
     mm = match_select_release(mismatch_lines)
     check("id mismatch detected", mm["id_consistency"].get("both_present_but_mismatch", 0), 1)
+=======
+>>>>>>> develop
 
     print(f'\n{"=" * 40}')
     print(f"Results: {passed} passed, {failed} failed")
