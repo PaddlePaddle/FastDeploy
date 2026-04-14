@@ -158,6 +158,9 @@ std::vector<paddle::Tensor> BlockAttnKernel(
   std::string pos_emb_type;
   if (use_neox_rotary_style == true) {
     pos_emb_type = "NEOX";
+  } else if (rope_head_dim == head_dim / 2) {
+    // vl model use this
+    pos_emb_type = "HALF_HEAD_DIM";
   } else {
     pos_emb_type = "NORMAL";
   }
