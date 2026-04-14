@@ -173,7 +173,7 @@ custom_ops/tmp*
 build
 
 .ccls-cache
-.claude
+.claude/settings.local.json
 
 third_party
 
