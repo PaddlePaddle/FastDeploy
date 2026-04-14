@@ -157,7 +157,15 @@ def _compute_sampling_mask(
         col_idx = paddle.arange(vocab_size, dtype=top_k.dtype).unsqueeze(0)  # [1, V]
         # top_k == 0 means "disabled" → keep all columns for that row.
         effective_k = paddle.where(top_k > 0, top_k, paddle.full_like(top_k, vocab_size))
-        topk_mask = col_idx < effective_k  # [B, V], True = inside top-k
+        strict_topk_mask = col_idx < effective_k  # [B, V], True = inside top-k
+
+        # Relax: also keep positions whose prob ties with the k-th element.
+        # boundary index (0-based) = effective_k - 1, clamped to [0, V-1].
+        k_idx = (effective_k - 1).clip(min=0).squeeze(-1).astype("int64")  # [B] k-th index
+        batch_idx = paddle.arange(k_idx.shape[0], dtype="int64")  # [B] bs index
+        boundary_prob = sorted_probs[batch_idx, k_idx].unsqueeze(-1)  # [B, 1] k-th prob
+        tie_mask = sorted_probs == boundary_prob  # [B, V]
+        topk_mask = strict_topk_mask | tie_mask  # [B, V]
 
         # Zero out tail, then renorm row-wise.
         masked_sorted_probs = paddle.where(topk_mask, sorted_probs, paddle.zeros_like(sorted_probs))
@@ -196,36 +204,13 @@ def _compute_sampling_mask(
     # ------------------------------------------------------------------
     # Stage 4: compute logZ for renormalization
     #
-    # Goal: log π_mask(k) = log π_full(k) - logZ, where π_mask is the
-    # distribution actually sampled from (top-k truncated + top-p nucleus).
-    #
-    # When top_k is active the sampling pipeline first renormalises to
-    # π_topk, then applies top-p on π_topk.  The total log-normaliser
-    # that maps π_full → π_mask absorbs both steps:
-    #
-    #   logZ = log Z_topk  +  log Z_topp_on_renorm
-    #
-    # where Z_topk = Σ_{j∈topk} π_full(j)   (= row_sums, already computed)
-    #       Z_topp = Σ_{k∈K}    π_topk(k)   (sum of renorm probs in K)
-    #
-    # Substituting:
-    #   log π_mask(k) = log π_full(k) - log Z_topk - log Z_topp
-    #                 = log π_topk(k) - log Z_topp    ✓
-    #
-    # When top_k is absent Z_topk = 1 → logZ = log Z_topp as before.
+    # Z_K = sum(probs[i] * final_mask[i]) for each request i
+    # logZ_K = log(Z_K), with small constant to avoid log(0)
     # ------------------------------------------------------------------
-    if has_top_k:
-        # Z_topp: sum of renormed probs that survive the intersection mask
-        final_mask = topk_mask & topp_mask
-        candidate_probs = paddle.where(final_mask, renorm_sorted_probs, paddle.zeros_like(renorm_sorted_probs))
-        z_topp = candidate_probs.sum(axis=-1)  # [B]
-        # row_sums: [B, 1] already clipped ≥ 1e-9, squeeze to [B]
-        log_z_topk = paddle.log(row_sums.squeeze(-1))
-        logz_per_batch = (log_z_topk + paddle.log(z_topp + 1e-10)).cpu().numpy()  # [B]
-    else:
-        candidate_probs = paddle.where(topp_mask, sorted_probs, paddle.zeros_like(sorted_probs))
-        z_k = candidate_probs.sum(axis=-1)  # [B]
-        logz_per_batch = paddle.log(z_k + 1e-10).cpu().numpy()  # [B]
+
+    candidate_probs = paddle.where(topp_mask, sorted_probs, paddle.zeros_like(sorted_probs))
+    z_k = candidate_probs.sum(axis=-1)  # [B]
+    logz_per_batch = paddle.log(z_k + 1e-10).cpu().numpy()  # [B]
 
     # ------------------------------------------------------------------
     # Stage 5: build sparse_indices (top-k) and topp_in_topk_mask
@@ -238,17 +223,20 @@ def _compute_sampling_mask(
     # up to max_k_topk columns), so only two GPU→CPU transfers are needed.
     # ------------------------------------------------------------------
     if has_top_k:
-        effective_k_cpu = effective_k.cpu().numpy().flatten().astype(int)  # [B]
-        max_k_topk = int(effective_k.max().item())
+        # actual_k[i] = number of retained tokens after tie-relaxed top-k.
+        # May exceed effective_k[i] when the k-th and (k+1)-th probs are equal.
+        actual_k = topk_mask.astype("int32").sum(axis=-1)  # [B]
+        actual_k_cpu = actual_k.cpu().numpy().flatten().astype(int)  # [B]
+        max_k_topk = int(actual_k.max().item())
         # Single D2H transfer for both outputs.
         topk_sorted_cpu = sorted_indices[:, :max_k_topk].cpu().numpy()  # [B, max_k_topk]
         topp_window_cpu = topp_mask[:, :max_k_topk].cpu().numpy()  # [B, max_k_topk]
-        # top-k indices: contiguous block in sorted order (0 .. effective_k-1).
+        # top-k indices: actual retained count per row (>= effective_k when ties exist).
         sparse_indices = [None] * real_bsz
         topp_in_topk_mask = [None] * real_bsz
         for i in range(real_bsz):
-            sparse_indices[i] = topk_sorted_cpu[i, : effective_k_cpu[i]]
-            topp_in_topk_mask[i] = topp_window_cpu[i, : effective_k_cpu[i]]
+            sparse_indices[i] = topk_sorted_cpu[i, : actual_k_cpu[i]]
+            topp_in_topk_mask[i] = topp_window_cpu[i, : actual_k_cpu[i]]
     else:
         k_per_row = topp_mask.astype("int32").sum(axis=-1)  # [B]
         max_k = int(k_per_row.max().item())
