@@ -42,9 +42,8 @@ class _GpuOpsStub(types.ModuleType):
     __path__ = []
 
     def __getattr__(self, name):
-        fqn = f"{self.__name__}.{name}"
-        sub = sys.modules.get(fqn)
-        return sub if sub is not None else None
+        sub = sys.modules.get(f"{self.__name__}.{name}")
+        return sub
 
 
 _gpu_ops_stub = _GpuOpsStub(_GPU_OPS)
