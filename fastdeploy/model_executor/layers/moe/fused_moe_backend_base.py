@@ -239,7 +239,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
                 )
         else:
-            return self.apply_tp(layer, x, gate, topk_ids_hookfunc, fc1_latent_proj, fc2_latent_proj)
+            return self.apply_tp(layer, x, gate, topk_ids_hookfunc)
 
 
 class UnquantizedFusedMoEMethod(MoEMethodBase):
