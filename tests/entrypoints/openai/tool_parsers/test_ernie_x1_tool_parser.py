@@ -443,6 +443,34 @@ class TestErnieX1ToolParser(unittest.TestCase):
         self.assertIsNotNone(results[1].tool_calls)
         self.assertEqual(results[1].tool_calls[0].function.arguments, "{}")
 
+    def test_streaming_empty_arguments_with_outer_brace_in_same_token(self):
+        """Regression: when arguments={} and outer } arrive in the same token '{}}',
+        regex (.*) over-captures the outer brace, producing '{}}'.
+
+        Real production data showed arguments='{}}}' for get_default_weather
+        with empty arguments. This test reproduces that exact scenario.
+        """
+        parser = self._new_parser()
+        results = self._simulate_streaming(
+            parser,
+            [
+                '<tool_call>{"name": "get_default_weather", "arguments": ',  # start + name + args key
+                "{}}",  # empty args + outer close brace in same token
+                "</tool_call>",  # end token
+            ],
+        )
+        # Step 1: name sent
+        self.assertIsNotNone(results[0])
+        self.assertEqual(results[0].tool_calls[0].function.name, "get_default_weather")
+        # Step 2: first-args branch, tool_call_portion is complete JSON
+        # regex (.*) captures '{}}'  but fix strips outer '}' -> '{}'
+        self.assertIsNotNone(results[1])
+        self.assertEqual(results[1].tool_calls[0].function.arguments, "{}")
+        # Step 3: end token, close branch
+        # diff = prev_arguments = {} (not None), delta_text = '' (empty after split)
+        # '}' not in '' -> returns None
+        self.assertIsNone(results[2])
+
     def test_streaming_close_with_number_ending_arguments(self):
         """Regression: close branch must flush remaining args ending with number.
 

@@ -267,6 +267,19 @@ class ErnieX1ToolParser(ToolParser):
                 )
                 if match:
                     cur_arguments_json = match.group(1)
+                    # When tool_call_portion is complete JSON, the regex
+                    # (.*) over-captures the outer closing brace of the
+                    # tool call object. Strip it from both
+                    # cur_arguments_json and delta_text, consistent with
+                    # the both-have-arguments branch handling.
+                    try:
+                        json.loads(tool_call_portion)
+                        if cur_arguments_json.endswith("}"):
+                            cur_arguments_json = cur_arguments_json[:-1]
+                        if delta_text.rstrip().endswith("}"):
+                            delta_text = delta_text.rstrip()[:-1]
+                    except Exception:
+                        pass
                 else:
                     cur_arguments_json = json.dumps(cur_arguments, ensure_ascii=False)
 
