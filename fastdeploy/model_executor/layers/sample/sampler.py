@@ -205,8 +205,7 @@ def _compute_sampling_mask(
     max_k = int(k_per_row.max().item())
 
     # ------------------------------------------------------------------
-    # Stage 5: compute logZ for renormalization
-    #
+    # Stage 5: compute logZ_K for renormalization
     # Z_K = sum(probs[i] * final_mask[i]) for each request i
     # logZ_K = log(Z_K), with small constant to avoid log(0)
     # ------------------------------------------------------------------
