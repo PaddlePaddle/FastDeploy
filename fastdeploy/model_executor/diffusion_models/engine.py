@@ -286,7 +286,7 @@ class DiffusionEngine:
         # SD3 latent: image / 8 (no extra packing)
         latent_h = img_h // 8
         latent_w = img_w // 8
-        latent_channels = 16  # SD3 VAE channels
+        latent_channels = self.vae.latent_channels
 
         # 1. 文本编码 (Text encoding)
         text_output = self.text_encoder.encode(prompt, dtype=dtype)
