@@ -14,9 +14,11 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "custom_ftok.h"
 #include "msg_utils.h"
 #include "paddle/extension.h"
@@ -29,6 +31,10 @@
 void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag) {
+#ifdef _WIN32
+  PD_THROW(
+      "GetOutputKVSignal is not supported on Windows (POSIX IPC required).");
+#else
   int msg_queue_id = 1024;
   if (const char* msg_que_str_tmp = std::getenv("INFERENCE_MSG_QUEUE_ID")) {
     std::string msg_que_str(msg_que_str_tmp);
@@ -57,12 +63,16 @@ void GetOutputKVSignal(const paddle::Tensor& x,
     out_data[i] = msg_rcv.mtext[i];
   }
   return;
+#endif
 }
 
 void GetOutputEp(const paddle::Tensor& x,
                  int64_t rank_id,
                  bool wait_flag,
                  int msg_queue_id) {
+#ifdef _WIN32
+  PD_THROW("GetOutputEp is not supported on Windows (POSIX IPC required).");
+#else
   static struct msgdata msg_rcv;
   if (const char* inference_msg_queue_id_env_p =
           std::getenv("INFERENCE_MSG_QUEUE_ID")) {
@@ -108,6 +118,7 @@ void GetOutputEp(const paddle::Tensor& x,
 #endif
 
   return;
+#endif
 }
 
 void GetOutputEPStatic(const paddle::Tensor& x,

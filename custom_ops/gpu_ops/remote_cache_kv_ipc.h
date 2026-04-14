@@ -14,16 +14,18 @@
 
 #pragma once
 
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#ifndef _WIN32
+#include <fcntl.h>
 #include <sys/ipc.h>
 #include <sys/mman.h>
 #include <sys/msg.h>
-#include <sys/stat.h>
-#include <sys/types.h>
 #include <unistd.h>
+#endif
 
 #include "custom_ftok.h"
 #include "driver_types.h"
@@ -58,6 +60,11 @@ struct RemoteCacheKvIpc {
               const int rank,
               const int num_layers,
               const int real_bsz) {
+#ifdef _WIN32
+      PD_THROW(
+          "RemoteCacheKvIpc::init is not supported on Windows "
+          "(POSIX IPC required).");
+#else
       layer_id_ = 0;
       num_layers_ = num_layers;
       msg_sed.mtype = 1;
@@ -85,9 +92,15 @@ struct RemoteCacheKvIpc {
         msgid = msgget(key, IPC_CREAT | 0666);
         inited = true;
       }
+#endif
     }
 
     void CUDART_CB send_signal() {
+#ifdef _WIN32
+      PD_THROW(
+          "RemoteCacheKvIpc::send_signal is not supported on Windows "
+          "(POSIX IPC required).");
+#else
       if (inited) {
         msg_sed.mtext[1] = layer_id_;
         if ((msgsnd(msgid, &msg_sed, (MAX_BSZ * 3 + 2) * 4, 0)) == -1) {
@@ -96,6 +109,7 @@ struct RemoteCacheKvIpc {
         layer_id_ = (layer_id_ + 1);
         assert(layer_id_ <= num_layers_);
       }
+#endif
     }
   };
 

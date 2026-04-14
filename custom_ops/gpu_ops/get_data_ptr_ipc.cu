@@ -17,6 +17,7 @@
 #include "helper.h"
 
 namespace {
+#ifndef _WIN32
 int sharedMemoryOpen2(const char *name, size_t sz, sharedMemoryInfo *info) {
   info->size = sz;
   info->shmFd = shm_open(name, O_RDWR, 0777);
@@ -31,10 +32,16 @@ int sharedMemoryOpen2(const char *name, size_t sz, sharedMemoryInfo *info) {
 
   return 0;
 }
+#endif
 }  // namespace
 
 std::vector<paddle::Tensor> GetDataPtrIpc(const paddle::Tensor &tmp_input,
                                           const std::string &shm_name) {
+#ifdef _WIN32
+  PD_THROW(
+      "GetDataPtrIpc is not supported on Windows "
+      "(POSIX shared memory required).");
+#else
   auto out_data_ptr_tensor =
       paddle::full({1}, 0, paddle::DataType::INT64, paddle::CPUPlace());
   auto out_data_ptr_tensor_ptr = out_data_ptr_tensor.data<int64_t>();
@@ -53,6 +60,7 @@ std::vector<paddle::Tensor> GetDataPtrIpc(const paddle::Tensor &tmp_input,
 
   out_data_ptr_tensor_ptr[0] = reinterpret_cast<int64_t>(ptr);
   return {out_data_ptr_tensor};
+#endif
 }
 
 PD_BUILD_STATIC_OP(get_data_ptr_ipc)
