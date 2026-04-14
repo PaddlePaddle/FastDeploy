@@ -158,6 +158,43 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
+    def helper_copy_func(forward_meta, xpu_forward_meta):
+        xpu_forward_meta.encoder_batch_map = forward_meta.encoder_batch_map
+        xpu_forward_meta.decoder_batch_map = forward_meta.decoder_batch_map
+        xpu_forward_meta.encoder_batch_idx = forward_meta.encoder_batch_idx
+        xpu_forward_meta.decoder_batch_idx = forward_meta.decoder_batch_idx
+        xpu_forward_meta.encoder_seq_lod = forward_meta.encoder_seq_lod
+        xpu_forward_meta.decoder_seq_lod = forward_meta.decoder_seq_lod
+        xpu_forward_meta.encoder_kv_lod = forward_meta.encoder_kv_lod
+        xpu_forward_meta.prefix_len = forward_meta.prefix_len
+        xpu_forward_meta.decoder_context_len = forward_meta.decoder_context_len
+        xpu_forward_meta.decoder_context_len_cache = forward_meta.decoder_context_len_cache
+        xpu_forward_meta.encoder_batch_map_cpu = forward_meta.encoder_batch_map_cpu
+        xpu_forward_meta.decoder_batch_map_cpu = forward_meta.decoder_batch_map_cpu
+        xpu_forward_meta.encoder_batch_idx_cpu = forward_meta.encoder_batch_idx_cpu
+        xpu_forward_meta.decoder_batch_idx_cpu = forward_meta.decoder_batch_idx_cpu
+        xpu_forward_meta.encoder_seq_lod_cpu = forward_meta.encoder_seq_lod_cpu
+        xpu_forward_meta.decoder_seq_lod_cpu = forward_meta.decoder_seq_lod_cpu
+        xpu_forward_meta.encoder_kv_lod_cpu = forward_meta.encoder_kv_lod_cpu
+        xpu_forward_meta.prefix_len_cpu = forward_meta.prefix_len_cpu
+        xpu_forward_meta.decoder_context_len_cpu = forward_meta.decoder_context_len_cpu
+        xpu_forward_meta.decoder_context_len_cache_cpu = forward_meta.decoder_context_len_cache_cpu
+        xpu_forward_meta.len_info_cpu = forward_meta.len_info_cpu
+
+    def helper_init_func(share_inputs, forward_meta):
+        forward_meta.ids_remove_padding = share_inputs["ids_remove_padding"]
+        forward_meta.rotary_embs = share_inputs["rope_emb"]
+        forward_meta.attn_backend = None
+        forward_meta.seq_lens_encoder = share_inputs["seq_lens_encoder"]
+        forward_meta.seq_lens_decoder = share_inputs["seq_lens_decoder"]
+        forward_meta.seq_lens_this_time = share_inputs["seq_lens_this_time"]
+        forward_meta.cum_offsets = share_inputs["cum_offsets"]
+        forward_meta.batch_id_per_token = share_inputs["batch_id_per_token"]
+        forward_meta.cu_seqlens_q = share_inputs["cu_seqlens_q"]
+        forward_meta.cu_seqlens_k = share_inputs["cu_seqlens_k"]
+        forward_meta.block_tables = share_inputs["block_tables"]
+        forward_meta.caches = share_inputs["caches"]
+
     xpu_forward_meta = XPUForwardMeta(
         ids_remove_padding=share_inputs["ids_remove_padding"],
         rotary_embs=share_inputs["rope_emb"],
@@ -173,14 +210,61 @@ def xpu_pre_process(
         max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
         is_speculative=use_speculate_method,
     )
+    xpu_forward_meta.init_tensor(seq_lens_encoder.shape[0])
+
+    skip_list = [
+        # "encoder_batch_map",
+        # "decoder_batch_map",
+        "encoder_batch_idx",
+        "decoder_batch_idx",
+        # "encoder_seq_lod",
+        # "decoder_seq_lod",
+        # "encoder_kv_lod",
+        # "prefix_len",
+        # "decoder_context_len",
+        # "decoder_context_len_cache",
+    ]
+
+    if use_cudagraph and forward_meta is not None:
+        # encoder_batch_map = forward_meta.encoder_batch_map
+        # decoder_batch_map = forward_meta.decoder_batch_map
+        encoder_batch_idx = forward_meta.encoder_batch_idx
+        decoder_batch_idx = forward_meta.decoder_batch_idx
+        # encoder_seq_lod = forward_meta.encoder_seq_lod
+        # decoder_seq_lod = forward_meta.decoder_seq_lod
+        # encoder_kv_lod = forward_meta.encoder_kv_lod
+        # prefix_len = forward_meta.prefix_len
+        # decoder_context_len = forward_meta.decoder_context_len
+        # decoder_context_len_cache = forward_meta.decoder_context_len_cache
+        # print(f"mark debug: id of forward_meta.encoder_seq_lod: {id(encoder_seq_lod)}")
+        # print(f"mark debug: dataptr of forward_meta.encoder_seq_lod: {encoder_seq_lod.data_ptr()}")
+    else:
+        # encoder_batch_map = xpu_forward_meta.encoder_batch_map
+        # decoder_batch_map = xpu_forward_meta.decoder_batch_map
+        encoder_batch_idx = xpu_forward_meta.encoder_batch_idx
+        decoder_batch_idx = xpu_forward_meta.decoder_batch_idx
+        # encoder_seq_lod = xpu_forward_meta.encoder_seq_lod
+        # decoder_seq_lod = xpu_forward_meta.decoder_seq_lod
+        # encoder_kv_lod = xpu_forward_meta.encoder_kv_lod
+        # prefix_len = xpu_forward_meta.prefix_len
+        # decoder_context_len = xpu_forward_meta.decoder_context_len
+        # decoder_context_len_cache = xpu_forward_meta.decoder_context_len_cache
+        # print(f"mark debug: id of xpu_forward_meta.encoder_seq_lod: {id(encoder_seq_lod)}")
+        # print(f"mark debug: dataptr of xpu_forward_meta.encoder_seq_lod: {encoder_seq_lod.data_ptr()}")
+    # for var_name in skip_list:
+    #     locals()[var_name] = getattr(xpu_forward_meta, var_name, None) if forward_meta is None or getattr(forward_meta, var_name, None) is None else getattr(forward_meta, var_name)
 
     (
         xpu_forward_meta.encoder_batch_map,
         xpu_forward_meta.decoder_batch_map,
-        xpu_forward_meta.encoder_batch_idx,
-        xpu_forward_meta.decoder_batch_idx,
+        # xpu_forward_meta.encoder_batch_idx,
+        # xpu_forward_meta.decoder_batch_idx,
+        _,
+        _,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
+        # _,
+        # _,
         xpu_forward_meta.encoder_kv_lod,
         xpu_forward_meta.prefix_len,
         xpu_forward_meta.decoder_context_len,
@@ -204,6 +288,27 @@ def xpu_pre_process(
         seq_lens_decoder,
         seq_lens_this_time,
         xpu_forward_meta.block_tables,
+        # encoder_batch_map,
+        # decoder_batch_map,
+        encoder_batch_idx,
+        decoder_batch_idx,
+        # encoder_seq_lod,
+        # decoder_seq_lod,
+        # encoder_kv_lod,
+        # prefix_len,
+        # decoder_context_len,
+        # decoder_context_len_cache,
+        # xpu_forward_meta.encoder_batch_map_cpu,
+        # xpu_forward_meta.decoder_batch_map_cpu,
+        # xpu_forward_meta.encoder_batch_idx_cpu,
+        # xpu_forward_meta.decoder_batch_idx_cpu,
+        # xpu_forward_meta.encoder_seq_lod_cpu,
+        # xpu_forward_meta.decoder_seq_lod_cpu,
+        # xpu_forward_meta.encoder_kv_lod_cpu,
+        # xpu_forward_meta.prefix_len_cpu,
+        # xpu_forward_meta.decoder_context_len_cpu,
+        # xpu_forward_meta.decoder_context_len_cache_cpu,
+        # xpu_forward_meta.len_info_cpu,
         block_size,
         num_speculative_tokens,
     )
@@ -215,8 +320,12 @@ def xpu_pre_process(
         ids_remove_padding.reshape([-1, 1]),
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
-        xpu_forward_meta.encoder_batch_idx,
-        xpu_forward_meta.decoder_batch_idx,
+        # encoder_seq_lod,
+        # decoder_seq_lod,
+        # xpu_forward_meta.encoder_batch_idx,
+        # xpu_forward_meta.decoder_batch_idx,
+        encoder_batch_idx,
+        decoder_batch_idx,
         xpu_forward_meta.encoder_seq_lod_cpu,
         xpu_forward_meta.decoder_seq_lod_cpu,
         xpu_forward_meta.encoder_batch_idx_cpu,
@@ -236,7 +345,7 @@ def xpu_pre_process(
         if forward_meta is None:
             return xpu_forward_meta
         else:
-            forward_meta.copy_from(xpu_forward_meta)
+            forward_meta.copy_from(xpu_forward_meta, skip_list)
             return forward_meta
     else:
         return xpu_forward_meta
