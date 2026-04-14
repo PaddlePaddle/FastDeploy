@@ -1562,7 +1562,8 @@ class ResourceManagerV1(ResourceManager):
         blocks_used_by_tasks = set()
         for task in self.tasks_list:
             if task is not None:
-                blocks_used_by_tasks.update(task.block_tables)
+                blocks_used_by_tasks.update(getattr(task, "block_tables", []))
+                blocks_used_by_tasks.update(getattr(task, "extend_block_tables", []))
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
@@ -1599,7 +1600,8 @@ class ResourceManagerV1(ResourceManager):
         blocks_used_by_tasks = set()
         for task in self.tasks_list:
             if task is not None:
-                blocks_used_by_tasks.update(task.block_tables)
+                blocks_used_by_tasks.update(getattr(task, "block_tables", []))
+                blocks_used_by_tasks.update(getattr(task, "extend_block_tables", []))
         evictable_blocks = used_blocks - len(blocks_used_by_tasks)
         tokens_used = used_blocks * self.config.cache_config.block_size
         token_usage = used_blocks / total_blocks if total_blocks > 0 else 0.0
