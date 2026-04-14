@@ -70,7 +70,7 @@ func newRotatingWriter(logDir string) (*rotatingWriter, error) {
 	}
 
 	// Open the date file (append mode).
-	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,7 @@ func (w *rotatingWriter) Close() error {
 func (w *rotatingWriter) rotateLocked(newDate string) {
 	// Open new date file for the new day first, before touching any state.
 	datePath := filepath.Join(w.logDir, "router-"+newDate+".log")
-	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Failed to open new log file %s: %v, keeping current file\n", datePath, err)
 		// Advance currentDate so we don't retry on every Write call.
@@ -243,7 +243,7 @@ func CloseLogFile() {
 	}
 }
 
-// StartLogCleanup runs periodic log cleanup in a background goroutine.
+// StartLogCleanup blocks running periodic log cleanup; call it in a goroutine.
 // It deletes archived log files older than MaxAgeDays and trims total log size
 // to stay under MaxTotalSizeMB.
 func StartLogCleanup(ctx context.Context, cfg Config) {

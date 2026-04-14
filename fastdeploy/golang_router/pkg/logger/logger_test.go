@@ -24,7 +24,7 @@ func TestLoggerInit(t *testing.T) {
 		defer os.RemoveAll("logs")
 
 		// sync.Once prevents re-init, so manually verify file creation logic
-		f, err := os.OpenFile("logs/router.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		f, err := os.OpenFile("logs/router.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
 			t.Fatalf("Failed to create log file: %v", err)
 		}
