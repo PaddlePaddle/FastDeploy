@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Literal, Optional
+from typing import Literal, Optional
 
 import paddle
 
@@ -37,8 +37,6 @@ class DiffusionConfig:
         scheduler_type: Scheduler to use. "flow_match_euler" is default for Flux.
         dtype: Compute dtype string — "float16", "bfloat16", or "float32".
         vae_path: Optional override path for VAE weights.
-        text_encoder_paths: Optional override paths for text encoders.
-            Flux uses [CLIP-L, T5-XXL]; SD3 uses [CLIP-L, CLIP-G, T5-XXL].
         max_sequence_length: Maximum token length for T5 encoder (default 512).
         seed: Random seed for reproducibility. None for random.
     """
@@ -62,7 +60,6 @@ class DiffusionConfig:
 
     # 可选路径覆盖 (Optional path overrides)
     vae_path: Optional[str] = None
-    text_encoder_paths: Optional[List[str]] = None
 
     def get_paddle_dtype(self) -> paddle.dtype:
         """Convert string dtype to paddle.dtype."""
