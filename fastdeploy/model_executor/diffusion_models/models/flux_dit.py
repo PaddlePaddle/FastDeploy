@@ -158,7 +158,7 @@ class FluxRoPE(nn.Layer):
         for i, dim in enumerate(self.axes_dim):
             pos = ids[:, i].cast(paddle.float32)
             half_dim = dim // 2
-            freqs = 1.0 / (self.theta ** (paddle.arange(0, half_dim, dtype=paddle.float32) / half_dim))
+            freqs = paddle.exp(-math.log(self.theta) * paddle.arange(0, half_dim, dtype=paddle.float32) / half_dim)
             angles = pos.unsqueeze(-1) * freqs.unsqueeze(0)
             cos_list.append(paddle.cos(angles).repeat_interleave(2, axis=-1))
             sin_list.append(paddle.sin(angles).repeat_interleave(2, axis=-1))
