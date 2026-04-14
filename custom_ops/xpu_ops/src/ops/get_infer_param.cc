@@ -68,16 +68,16 @@ std::vector<paddle::Tensor> GetInferParam(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& block_tables,
-    // paddle::Tensor& encoder_batch_map,
-    // paddle::Tensor& decoder_batch_map,
+    paddle::Tensor& encoder_batch_map,
+    paddle::Tensor& decoder_batch_map,
     paddle::Tensor& encoder_batch_idx,
     paddle::Tensor& decoder_batch_idx,
     paddle::Tensor& encoder_seq_lod,
     paddle::Tensor& decoder_seq_lod,
-    // paddle::Tensor& encoder_kv_lod,
-    // paddle::Tensor& prefix_len,
-    // paddle::Tensor& decoder_context_len,
-    // paddle::Tensor& decoder_context_len_cache,
+    paddle::Tensor& encoder_kv_lod,
+    paddle::Tensor& prefix_len,
+    paddle::Tensor& decoder_context_len,
+    paddle::Tensor& decoder_context_len_cache,
     // paddle::Tensor& encoder_batch_map_cpu,
     // paddle::Tensor& decoder_batch_map_cpu,
     // paddle::Tensor& encoder_batch_idx_cpu,
@@ -207,12 +207,12 @@ std::vector<paddle::Tensor> GetInferParam(
     prefix_block_num_per_seq = -1;
   }
 
-  auto encoder_batch_map = paddle::empty({encoder_batch_map_vec.size()},
-                                         seq_lens_encoder.type(),
-                                         seq_lens_encoder.place());
-  auto decoder_batch_map = paddle::empty({decoder_batch_map_vec.size()},
-                                         seq_lens_encoder.type(),
-                                         seq_lens_encoder.place());
+  // auto encoder_batch_map = paddle::empty({encoder_batch_map_vec.size()},
+  //                                        seq_lens_encoder.type(),
+  //                                        seq_lens_encoder.place());
+  // auto decoder_batch_map = paddle::empty({decoder_batch_map_vec.size()},
+  //                                        seq_lens_encoder.type(),
+  //                                        seq_lens_encoder.place());
   // auto encoder_batch_idx = paddle::empty({encoder_batch_idx_vec.size()},
   //                                        seq_lens_encoder.type(),
   //                                        seq_lens_encoder.place());
@@ -225,19 +225,19 @@ std::vector<paddle::Tensor> GetInferParam(
   // auto decoder_seq_lod = paddle::empty({decoder_seq_lod_vec.size()},
   //                                      seq_lens_encoder.type(),
   //                                      seq_lens_encoder.place());
-  auto encoder_kv_lod = paddle::empty({encoder_kv_lod_vec.size()},
-                                      seq_lens_encoder.type(),
-                                      seq_lens_encoder.place());
-  auto prefix_len = paddle::empty({prefix_len_vec.size()},
-                                  seq_lens_encoder.type(),
-                                  seq_lens_encoder.place());
-  auto decoder_context_len = paddle::empty({decoder_context_len_vec.size()},
-                                           seq_lens_encoder.type(),
-                                           seq_lens_encoder.place());
-  auto decoder_context_len_cache =
-      paddle::empty({decoder_context_len_cache_vec.size()},
-                    seq_lens_encoder.type(),
-                    seq_lens_encoder.place());
+  // auto encoder_kv_lod = paddle::empty({encoder_kv_lod_vec.size()},
+  //                                     seq_lens_encoder.type(),
+  //                                     seq_lens_encoder.place());
+  // auto prefix_len = paddle::empty({prefix_len_vec.size()},
+  //                                 seq_lens_encoder.type(),
+  //                                 seq_lens_encoder.place());
+  // auto decoder_context_len = paddle::empty({decoder_context_len_vec.size()},
+  //                                          seq_lens_encoder.type(),
+  //                                          seq_lens_encoder.place());
+  // auto decoder_context_len_cache =
+  //     paddle::empty({decoder_context_len_cache_vec.size()},
+  //                   seq_lens_encoder.type(),
+  //                   seq_lens_encoder.place());
 
   auto encoder_batch_map_cpu = paddle::empty({encoder_batch_map_vec.size()},
                                              seq_lens_encoder.type(),
@@ -507,16 +507,16 @@ PD_BUILD_OP(get_infer_param)
         "seq_lens_decoder",
         "seq_lens_this_time",
         "block_tables",
-        // "encoder_batch_map",
-        // "decoder_batch_map",
+        "encoder_batch_map",
+        "decoder_batch_map",
         "encoder_batch_idx",
         "decoder_batch_idx",
         "encoder_seq_lod",
         "decoder_seq_lod",
-        // "encoder_kv_lod",
-        // "prefix_len",
-        // "decoder_context_len",
-        // "decoder_context_len_cache",
+        "encoder_kv_lod",
+        "prefix_len",
+        "decoder_context_len",
+        "decoder_context_len_cache",
         //   "encoder_batch_map_cpu",
         //   "decoder_batch_map_cpu",
         //   "encoder_batch_idx_cpu",
@@ -554,16 +554,16 @@ PD_BUILD_OP(get_infer_param)
               "slot_mapping_enc",
               "slot_mapping_dec"})
     .SetInplaceMap({
-        //     {"encoder_batch_map", "encoder_batch_map_out"},
-        //     {"decoder_batch_map", "decoder_batch_map_out"},
+        {"encoder_batch_map", "encoder_batch_map_out"},
+        {"decoder_batch_map", "decoder_batch_map_out"},
         {"encoder_batch_idx", "encoder_batch_idx_out"},
         {"decoder_batch_idx", "decoder_batch_idx_out"},
         {"encoder_seq_lod", "encoder_seq_lod_out"},
         {"decoder_seq_lod", "decoder_seq_lod_out"},
-        //     {"encoder_kv_lod", "encoder_kv_lod_out"},
-        //     {"prefix_len", "prefix_len_out"},
-        //     {"decoder_context_len", "decoder_context_len_out"},
-        //     {"decoder_context_len_cache", "decoder_context_len_cache_out"},
+        {"encoder_kv_lod", "encoder_kv_lod_out"},
+        {"prefix_len", "prefix_len_out"},
+        {"decoder_context_len", "decoder_context_len_out"},
+        {"decoder_context_len_cache", "decoder_context_len_cache_out"},
     })
     .SetKernelFn(PD_KERNEL(GetInferParam))
     .Attrs({"block_size: int", "num_speculative_tokens: int"})
