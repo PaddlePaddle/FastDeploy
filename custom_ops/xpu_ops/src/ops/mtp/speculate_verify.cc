@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <atomic>
 #include <paddle/phi/backends/xpu/xpu_context.h>
 #include <stdio.h>
 #include "paddle/common/flags.h"
@@ -27,8 +28,8 @@
 namespace api = baidu::xpu::api;
 
 // Persistent seed/offset — mirrors GPU curand state lifecycle.
-static uint64_t g_seed = 0;
-static uint64_t g_offset = 0;
+ static std::atomic<uint64_t> g_seed{0};
+ static std::atomic<uint64_t> g_offset{0};
 
 void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
                      const paddle::Tensor &accept_tokens,

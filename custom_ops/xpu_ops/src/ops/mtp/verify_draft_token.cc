@@ -22,6 +22,7 @@
 //   fallback) 1 = GREEDY       : draft token == top-1 token (strict argmax
 //   match) 2 = TARGET_MATCH : draft token == target model's sampled token
 
+#include <atomic>
 #include <paddle/phi/backends/xpu/xpu_context.h>
 #include "paddle/extension.h"
 #include "xpu/plugin.h"
@@ -33,8 +34,8 @@
 namespace api = baidu::xpu::api;
 
 // Persistent seed/offset — mirrors GPU curand state lifecycle.
-static uint64_t g_seed = 0;
-static uint64_t g_offset = 0;
+static std::atomic<uint64_t> g_seed{0};
+static std::atomic<uint64_t> g_offset{0};
 
 // ============================================================
 // Host function
@@ -104,7 +105,7 @@ void VerifyDraftTokens(
                     seq_lens_this_time.place());
   int ret;
   if (xpu_ctx_flag) {
-    ret = xpu::do_host2device(ctx,
+    ret = api::do_host2device(ctx,
                               dev_curand_states_cpu.data(),
                               dev_curand_states_tensor.data<float>(),
                               dev_curand_states_cpu.size() * sizeof(float));

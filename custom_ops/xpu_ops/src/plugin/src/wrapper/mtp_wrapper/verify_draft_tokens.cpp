@@ -348,7 +348,7 @@ static int cpu_wrapper(
           output_token =
               topp_sampling_kernel(candidate_ids_now + i * max_candidate_len,
                                    candidate_scores_now + i * max_candidate_len,
-                                   curand_states + i,
+                                   curand_states + bid,
                                    actual_cand_len,
                                    topp[bid],
                                    bid);
@@ -542,6 +542,7 @@ int verify_draft_tokens(
   WRAPPER_ASSERT_LE(ctx, real_bsz, 1024);
   WRAPPER_ASSERT_LE(ctx, real_bsz * max_candidate_len, 2048);
   WRAPPER_ASSERT_LE(ctx, verify_window * max_candidate_len, 128);
+  WRAPPER_CHECK_PTR(ctx, int, real_bsz, step_output_len);
 
   if (ctx->dev().type() == api::kCPU) {
     return cpu_wrapper(ctx,

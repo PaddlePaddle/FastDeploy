@@ -325,7 +325,7 @@ __global__ void verify_draft_tokens(
           output_token =
               topp_sampling_kernel(candidate_ids_now + i * max_candidate_len,
                                    candidate_scores_now + i * max_candidate_len,
-                                   curand_states,
+                                   curand_states + bid,
                                    actual_cand_len,
                                    topp[bid]);
           break;
