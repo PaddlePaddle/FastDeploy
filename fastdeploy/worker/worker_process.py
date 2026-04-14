@@ -18,11 +18,13 @@ import argparse
 import asyncio
 import json
 import os
+import threading
 import time
 import traceback
 from typing import Tuple
 
 import numpy as np
+import zmq
 
 from fastdeploy.logger.logger import intercept_paddle_loggers
 
@@ -71,6 +73,7 @@ from fastdeploy.inter_communicator import (
     RearrangeExpertStatus,
 )
 from fastdeploy.inter_communicator.fmq import FMQ
+from fastdeploy.inter_communicator.zmq_client import ZmqIpcClient
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -185,6 +188,104 @@ class PaddleDisWorkerProc:
         queue_name = f"ctrl_w2e_rank{self.local_rank}_{engine_worker_queue_port}"
         logger.info(f"Init Control Output Queue: {queue_name}(producer)")
         self._ctrl_output = FMQ().queue(queue_name, "producer")
+
+    def init_prefetch_zmq_clients(self) -> None:
+        """
+        Initialize ZMQ PULL/PUSH clients for storage prefetch communication.
+
+        Connects to the Scheduler-side PUSH/PULL servers for this worker's local_rank.
+        Starts a background thread that continuously receives prefetch commands,
+        executes storage→CPU transfers, and sends done notifications back.
+
+        Only initialized when storage backend is configured and cache_manager_v1 is enabled.
+        """
+        if not self.fd_config.cache_config.kvcache_storage_backend or not envs.ENABLE_V1_KVCACHE_MANAGER:
+            return
+
+        port = self.parallel_config.local_engine_worker_queue_port
+        local_rank = self.local_rank
+
+        cmd_name = f"prefetch_cmd_rank{local_rank}_{port}"
+        done_name = f"prefetch_done_rank{local_rank}_{port}"
+
+        self._prefetch_cmd_client = ZmqIpcClient(name=cmd_name, mode=zmq.PULL)
+        self._prefetch_cmd_client.connect()
+
+        self._prefetch_done_client = ZmqIpcClient(name=done_name, mode=zmq.PUSH)
+        self._prefetch_done_client.connect()
+
+        logger.info(f"[StoragePrefetch] rank={local_rank} ZMQ clients connected: " f"cmd={cmd_name}, done={done_name}")
+
+        self._prefetch_loop_thread = threading.Thread(
+            target=self._prefetch_loop,
+            daemon=True,
+            name=f"StoragePrefetchLoop_rank{local_rank}",
+        )
+        self._prefetch_loop_thread.start()
+
+    def _prefetch_loop(self) -> None:
+        """
+        Background thread: receive prefetch commands and execute storage→CPU transfers.
+
+        Runs indefinitely (daemon thread, exits with process).
+        For each received StorageMetadata:
+          1. Calls cache_controller.prefetch_from_storage(metadata) asynchronously.
+          2. Waits for the AsyncTaskHandler to complete.
+          3. Sends a done notification (with status ok/error) back to Scheduler via ZMQ.
+        """
+        local_rank = self.local_rank
+        logger.info(f"[StoragePrefetch] prefetch_loop started for rank={local_rank}")
+
+        while True:
+            try:
+                err, msg = self._prefetch_cmd_client.receive_pyobj_once(block=True)
+                if err:
+                    logger.warning(f"[StoragePrefetch] rank={local_rank} recv error: {err}")
+                    continue
+                if msg is None:
+                    continue
+
+                request_id = msg.get("request_id", "")
+                metadata = msg.get("metadata")
+
+                if metadata is None:
+                    logger.warning(
+                        f"[StoragePrefetch] rank={local_rank} received msg without metadata, "
+                        f"request_id={request_id}"
+                    )
+                    continue
+
+                cache_controller = self.worker.model_runner.cache_controller
+                handler = cache_controller.prefetch_from_storage(metadata)
+
+                # Block until this worker's transfer completes
+                completed = handler.wait(timeout=metadata.timeout)
+
+                if completed and handler.error is None:
+                    done_msg = {
+                        "request_id": request_id,
+                        "host_block_ids": metadata.block_ids,
+                        "status": "ok",
+                    }
+                else:
+                    error_str = handler.error or "timeout"
+                    logger.warning(
+                        f"[StoragePrefetch] rank={local_rank} prefetch failed for "
+                        f"request_id={request_id}: {error_str}"
+                    )
+                    done_msg = {
+                        "request_id": request_id,
+                        "host_block_ids": metadata.block_ids,
+                        "status": "error",
+                        "error": error_str,
+                    }
+
+                self._prefetch_done_client.send_pyobj(done_msg)
+
+            except Exception as e:
+                logger.error(
+                    f"[StoragePrefetch] rank={local_rank} prefetch_loop exception: " f"{e}\n{traceback.format_exc()}"
+                )
 
     def init_health_status(self) -> None:
         """
@@ -1370,6 +1471,10 @@ def run_worker_proc() -> None:
 
     # Initialize health status
     worker_proc.init_health_status()
+
+    # Initialize storage prefetch ZMQ clients and start prefetch_loop thread.
+    # Must be called after model/cache initialization so cache_controller is ready.
+    worker_proc.init_prefetch_zmq_clients()
 
     worker_proc.start_task_queue_service()
 

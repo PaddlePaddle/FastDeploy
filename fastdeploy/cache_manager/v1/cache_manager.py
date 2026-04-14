@@ -107,6 +107,10 @@ class CacheManager(KVCacheBase):
         self._pending_backup: List[Tuple[List[BlockNode], List[int]]] = []
         self._pending_block_ids: List[int] = []
 
+        # Mapping from host_block_id -> BlockNode for LOADING_FROM_STORAGE blocks,
+        # used to quickly update status to HOST once prefetch completes.
+        self._prefetch_node_map: Dict[int, BlockNode] = {}
+
         # Storage scheduler (create using factory method if backend is configured)
         self._storage_scheduler = create_storage_scheduler(self.cache_config)
 
@@ -1004,10 +1008,78 @@ class CacheManager(KVCacheBase):
                 if wasted_block_ids:
                     self._host_pool.release(wasted_block_ids)
 
+                # Register nodes in prefetch_node_map for fast status update on done
+                for node in prefetch_nodes:
+                    self._prefetch_node_map[node.block_id] = node
+
                 return prefetch_nodes
         except Exception as e:
             logger.error(f"prepare_prefetch_metadata error: {e}, {str(traceback.format_exc())}")
             return []
+
+    def update_storage_blocks_to_host(self, host_block_ids: List[int]) -> None:
+        """
+        Mark storage-prefetched blocks as HOST after data transfer completes.
+
+        Called by Scheduler when all TP workers report prefetch done for a batch
+        of blocks. Transitions block status LOADING_FROM_STORAGE → HOST so that
+        these blocks become eligible for swap-in scheduling.
+
+        Args:
+            host_block_ids: List of host block IDs that finished loading.
+        """
+        if not host_block_ids:
+            return
+        try:
+            with self._lock:
+                updated = 0
+                for block_id in host_block_ids:
+                    node = self._prefetch_node_map.pop(block_id, None)
+                    if node is None:
+                        logger.warning(
+                            f"[StoragePrefetch] update_storage_blocks_to_host: "
+                            f"block_id={block_id} not found in prefetch_node_map"
+                        )
+                        continue
+                    if node.cache_status == CacheStatus.LOADING_FROM_STORAGE:
+                        node.cache_status = CacheStatus.HOST
+                        updated += 1
+                    else:
+                        logger.warning(
+                            f"[StoragePrefetch] update_storage_blocks_to_host: "
+                            f"block_id={block_id} unexpected status={node.cache_status}"
+                        )
+                logger.info(
+                    f"[StoragePrefetch] update_storage_blocks_to_host: "
+                    f"requested={len(host_block_ids)}, updated={updated}"
+                )
+        except Exception as e:
+            logger.error(f"update_storage_blocks_to_host error: {e}, {str(traceback.format_exc())}")
+
+    def abort_prefetch_blocks(self, host_block_ids: List[int]) -> None:
+        """
+        Abort in-flight prefetch blocks on failure.
+
+        Removes nodes from the prefetch_node_map, deletes them from the RadixTree,
+        and releases their host pool blocks. Called when the storage→CPU transfer
+        fails so that LOADING_FROM_STORAGE blocks do not leak.
+
+        Args:
+            host_block_ids: List of host block IDs whose prefetch should be aborted.
+        """
+        if not host_block_ids:
+            return
+        try:
+            with self._lock:
+                for block_id in host_block_ids:
+                    node = self._prefetch_node_map.pop(block_id, None)
+                    if node is None:
+                        continue
+                    self._radix_tree._remove_node_from_tree(node)
+                self._host_pool.release(host_block_ids)
+            logger.warning(f"[StoragePrefetch] abort_prefetch_blocks: released {len(host_block_ids)} host blocks")
+        except Exception as e:
+            logger.error(f"abort_prefetch_blocks error: {e}, {str(traceback.format_exc())}")
 
     # ============ Reset Methods ============
 

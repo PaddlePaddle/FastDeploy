@@ -709,5 +709,84 @@ class TestCacheManagerStorageScheduler(unittest.TestCase):
         _ = cache_manager.storage_scheduler
 
 
+class TestUpdateStorageBlocksToHost(unittest.TestCase):
+    """Tests for CacheManager.update_storage_blocks_to_host()."""
+
+    def _make_node_with_status(self, cache_manager, status):
+        """Allocate a host block and return a BlockNode with the given CacheStatus."""
+        from fastdeploy.cache_manager.v1.metadata import BlockNode
+
+        block_ids = cache_manager._host_pool.allocate(1)
+        self.assertIsNotNone(block_ids, "host pool exhausted")
+        block_id = block_ids[0]
+        node = BlockNode(block_id=block_id, hash_value="test_hash", cache_status=status)
+        return node, block_id
+
+    def test_update_transitions_loading_to_host(self):
+        """update_storage_blocks_to_host transitions LOADING_FROM_STORAGE → HOST."""
+        from fastdeploy.cache_manager.v1.metadata import CacheStatus
+
+        cache_manager = create_cache_manager(num_cpu_blocks=10)
+        node, block_id = self._make_node_with_status(cache_manager, CacheStatus.LOADING_FROM_STORAGE)
+        cache_manager._prefetch_node_map[block_id] = node
+
+        cache_manager.update_storage_blocks_to_host([block_id])
+
+        self.assertEqual(node.cache_status, CacheStatus.HOST)
+        self.assertNotIn(block_id, cache_manager._prefetch_node_map)
+
+    def test_update_multiple_blocks(self):
+        """update_storage_blocks_to_host handles multiple blocks in one call."""
+        from fastdeploy.cache_manager.v1.metadata import CacheStatus
+
+        cache_manager = create_cache_manager(num_cpu_blocks=20)
+        nodes = []
+        block_ids = []
+        for i in range(5):
+            node, block_id = self._make_node_with_status(cache_manager, CacheStatus.LOADING_FROM_STORAGE)
+            cache_manager._prefetch_node_map[block_id] = node
+            nodes.append(node)
+            block_ids.append(block_id)
+
+        cache_manager.update_storage_blocks_to_host(block_ids)
+
+        for node in nodes:
+            self.assertEqual(node.cache_status, CacheStatus.HOST)
+        for block_id in block_ids:
+            self.assertNotIn(block_id, cache_manager._prefetch_node_map)
+
+    def test_update_unknown_block_id_is_ignored(self):
+        """Unknown block_id (not in prefetch_node_map) logs warning and continues."""
+        cache_manager = create_cache_manager(num_cpu_blocks=10)
+        # Should not raise even if the block_id is not in the map
+        cache_manager.update_storage_blocks_to_host([9999])
+
+    def test_update_empty_list_is_noop(self):
+        """Empty block_ids list is a no-op."""
+        cache_manager = create_cache_manager(num_cpu_blocks=10)
+        # Should not raise or modify anything
+        cache_manager.update_storage_blocks_to_host([])
+
+    def test_update_wrong_status_does_not_change(self):
+        """Block already in HOST status is not re-processed."""
+        from fastdeploy.cache_manager.v1.metadata import CacheStatus
+
+        cache_manager = create_cache_manager(num_cpu_blocks=10)
+        node, block_id = self._make_node_with_status(cache_manager, CacheStatus.HOST)
+        cache_manager._prefetch_node_map[block_id] = node
+
+        cache_manager.update_storage_blocks_to_host([block_id])
+
+        # Status must remain HOST (not changed to something else)
+        self.assertEqual(node.cache_status, CacheStatus.HOST)
+        # The node is still removed from the map
+        self.assertNotIn(block_id, cache_manager._prefetch_node_map)
+
+    def test_prefetch_node_map_initially_empty(self):
+        """_prefetch_node_map is empty on a fresh CacheManager."""
+        cache_manager = create_cache_manager()
+        self.assertEqual(len(cache_manager._prefetch_node_map), 0)
+
+
 if __name__ == "__main__":
     unittest.main()

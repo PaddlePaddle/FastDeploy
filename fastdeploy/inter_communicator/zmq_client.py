@@ -143,6 +143,28 @@ class ZmqClientBase(ABC):
                 return envelope["data"]
         return envelope
 
+    def receive_pyobj_once(self, block=False):
+        """
+        Receive a single Pickle-serializable message from the socket.
+
+        Args:
+            block: If True, block until a message arrives. If False, return immediately.
+
+        Returns:
+            Tuple of (error, data). error is None on success, data is None if no message.
+        """
+        self._ensure_socket()
+        if self.socket is None or self.socket.closed:
+            return "zmq socket has closed", None
+        try:
+            flags = 0 if block else zmq.NOBLOCK
+            return None, self.recv_pyobj(flags=flags)
+        except zmq.Again:
+            return None, None
+        except Exception as e:
+            llm_logger.warning(f"[ZmqClient] receive_pyobj_once error: {e}")
+            return str(e), None
+
     @abstractmethod
     def close(self):
         pass
