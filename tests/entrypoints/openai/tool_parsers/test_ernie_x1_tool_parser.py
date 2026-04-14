@@ -245,13 +245,13 @@ class TestErnieX1ToolParser(unittest.TestCase):
         # Step 1: name sent
         self.assertIsNotNone(results[0])
         self.assertEqual(results[0].tool_calls[0].function.name, "fn")
-        # Step 2: first-args, streams value
+        # Step 2: first-args branch, regex extracts '{"k": "v' as arguments_delta
         self.assertIsNotNone(results[1])
-        # Step 3: end token in delta triggers close handling, flushes remaining
-        # close branch: diff from delta before </tool_call> is '"}}', rindex('}')
-        # streams remaining arguments portion
+        self.assertEqual(results[1].tool_calls[0].function.arguments, '{"k": "v')
+        # Step 3: end token in delta triggers close handling
+        # delta before </tool_call> is '"}}', close branch: rindex('}')=2, diff='"}'
         self.assertIsNotNone(results[2])
-        self.assertIsNotNone(results[2].tool_calls)
+        self.assertEqual(results[2].tool_calls[0].function.arguments, '"}')
 
     # --- Lines 160-172: new tool call start (cur_start > cur_end and cur_start > prev_start) ---
 
@@ -300,6 +300,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
                 '{"na',  # partial content, no name yet
             ],
         )
+        self.assertIsNone(results[0])
         self.assertIsNone(results[1])
 
     def test_streaming_continue_tool_call_with_name(self):
@@ -312,6 +313,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
                 '{"name": "get_weather"',  # name appears
             ],
         )
+        self.assertIsNone(results[0])
         self.assertIsNotNone(results[1])
         self.assertEqual(results[1].tool_calls[0].function.name, "get_weather")
         self.assertTrue(parser.current_tool_name_sent)
@@ -357,9 +359,9 @@ class TestErnieX1ToolParser(unittest.TestCase):
         parser.streamed_args_for_tool = [""]
         parser.prev_tool_call_arr = [{"name": "fn", "arguments": {"k": "v"}}]
         result = parser.extract_tool_calls_streaming(
-            '<tool_call>{"name":"fn","arguments":{"k":"v"}}',
+            '<tool_call>{"name":"fn","arguments":{"k":"v"',
             '<tool_call>{"name":"fn","arguments":{"k":"v"}}</tool_call>',
-            '"}}</tool_call>',
+            "}}</tool_call>",
             [1, 10],
             [1, 10, 2],
             [2],
@@ -367,6 +369,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
         )
         self.assertIsNotNone(result)
         self.assertIsNotNone(result.tool_calls)
+        self.assertEqual(result.tool_calls[0].function.arguments, "}")
 
     def test_streaming_text_after_completed_tool_call(self):
         """Cover lines 143-147: text content after a completed tool call.
@@ -391,8 +394,9 @@ class TestErnieX1ToolParser(unittest.TestCase):
             [30],
             self.dummy_request,
         )
-        # balanced counts, prev_end==cur_end, end not in delta -> returns content (line 147)
-        self.assertIsInstance(result, DeltaMessage)
+        # balanced counts, prev_end==cur_end, end not in delta -> returns content (line 149)
+        self.assertIsNotNone(result)
+        self.assertEqual(result.content, " text")
 
     def test_streaming_close_no_arguments(self):
         """Cover lines 182-183: close branch where prev arguments is None/empty"""
@@ -463,7 +467,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
             if r is not None and r.tool_calls and r.tool_calls[0].function.arguments is not None
         ]
         combined = "".join(streamed_args)
-        self.assertIn("123", combined)
+        self.assertEqual(combined, '{"count": 123}')
 
     def test_streaming_close_with_boolean_ending_arguments(self):
         """Regression: close branch must flush remaining args ending with boolean."""
@@ -482,7 +486,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
             if r is not None and r.tool_calls and r.tool_calls[0].function.arguments is not None
         ]
         combined = "".join(streamed_args)
-        self.assertIn("true", combined)
+        self.assertEqual(combined, '{"flag": true}')
 
     def test_streaming_close_with_nested_object_ending(self):
         """Regression: close branch must flush remaining args ending with nested '}'."""
@@ -501,8 +505,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
             if r is not None and r.tool_calls and r.tool_calls[0].function.arguments is not None
         ]
         combined = "".join(streamed_args)
-        self.assertIn("1", combined)
-        self.assertIn("}}", combined)
+        self.assertEqual(combined, '{"nested": {"a": 1}}')
 
     # --- Lines 202-206: else branch (cur_start < cur_end, edge case) ---
 
@@ -596,7 +599,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
         # Step 1: name sent
         # Step 2: first-args, regex finds "bei" in '{"location": "bei'
         self.assertIsNotNone(results[1])
-        self.assertIsNotNone(results[1].tool_calls)
+        self.assertEqual(results[1].tool_calls[0].function.arguments, '{"location": "bei')
 
     def test_streaming_first_arguments_no_regex_match(self):
         """Cover lines 266-267: regex doesn't match, fallback to json.dumps"""
@@ -626,25 +629,24 @@ class TestErnieX1ToolParser(unittest.TestCase):
             self.assertIsNotNone(result.tool_calls)
 
     def test_streaming_first_arguments_delta_not_in_json(self):
-        """Cover lines 271-272: delta_text not found in cur_arguments_json"""
+        """Cover lines 275-276: delta_text not found in cur_arguments_json, returns None.
+        When delta contains the arguments key itself (e.g. ', "arguments": {'),
+        regex extracts cur_arguments_json='{' but delta ', "arguments": {' is not in '{'.
+        """
         parser = self._new_parser()
-        self._simulate_streaming(
+        results = self._simulate_streaming(
             parser,
             [
-                '<tool_call>{"name": "fn"',  # start + name
+                '<tool_call>{"name": "fn"',  # start + partial name
+                ', "arguments": {',  # delta introduces arguments key + open brace
             ],
         )
-        # Now feed a delta that doesn't appear in the arguments JSON
-        result = parser.extract_tool_calls_streaming(
-            '<tool_call>{"name": "fn"',
-            '<tool_call>{"name": "fn", "arguments": {"k": "v"}}',
-            "ZZZZZ",
-            [1, 2],
-            [1, 2, 3],
-            [3],
-            self.dummy_request,
-        )
-        self.assertIsNone(result)
+        # Step 1: name sent
+        self.assertIsNotNone(results[0])
+        self.assertEqual(results[0].tool_calls[0].function.name, "fn")
+        # Step 2: first-args branch, regex extracts cur_arguments_json='{'
+        # delta_text=', "arguments": {' is NOT in '{' -> returns None
+        self.assertIsNone(results[1])
 
     # --- Lines 249-251: no cur_arguments and no prev_arguments ---
 
@@ -720,8 +722,9 @@ class TestErnieX1ToolParser(unittest.TestCase):
             [4],
             self.dummy_request,
         )
+        # both-have-arguments branch: delta_text="al" streamed as arguments
         self.assertIsNotNone(result)
-        self.assertIsNotNone(result.tool_calls)
+        self.assertEqual(result.tool_calls[0].function.arguments, "al")
 
     # --- Lines 253-255: cur_arguments reset (impossible branch) ---
 
@@ -872,6 +875,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
         self.assertEqual(results[2].tool_calls[0].function.name, "search")
         # Step 4: first arguments
         self.assertIsNotNone(results[3])
+        self.assertEqual(results[3].tool_calls[0].function.arguments, '{"query": "test')
         # Step 5: more arguments
         self.assertIsNotNone(results[4])
         self.assertEqual(results[4].tool_calls[0].function.arguments, " data")
@@ -900,6 +904,7 @@ class TestErnieX1ToolParser(unittest.TestCase):
         self.assertEqual(results[1].tool_calls[0].function.arguments, "{}")
         # Step 4: close branch, delta_text="" after stripping </tool_call>
         #   diff={} is not None, but "}" not in "" -> return None
+        self.assertIsNone(results[2])
         self.assertIsNone(results[3])
 
     def test_streaming_multiple_tool_calls(self):
