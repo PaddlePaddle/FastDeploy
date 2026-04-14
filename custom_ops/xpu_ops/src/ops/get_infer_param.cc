@@ -78,16 +78,16 @@ std::vector<paddle::Tensor> GetInferParam(
     paddle::Tensor& prefix_len,
     paddle::Tensor& decoder_context_len,
     paddle::Tensor& decoder_context_len_cache,
-    // paddle::Tensor& encoder_batch_map_cpu,
-    // paddle::Tensor& decoder_batch_map_cpu,
-    // paddle::Tensor& encoder_batch_idx_cpu,
-    // paddle::Tensor& decoder_batch_idx_cpu,
-    // paddle::Tensor& encoder_seq_lod_cpu,
-    // paddle::Tensor& decoder_seq_lod_cpu,
-    // paddle::Tensor& encoder_kv_lod_cpu,
-    // paddle::Tensor& prefix_len_cpu,
-    // paddle::Tensor& decoder_context_len_cpu,
-    // paddle::Tensor& decoder_context_len_cache_cpu,
+    paddle::Tensor& encoder_batch_map_cpu,
+    paddle::Tensor& decoder_batch_map_cpu,
+    paddle::Tensor& encoder_batch_idx_cpu,
+    paddle::Tensor& decoder_batch_idx_cpu,
+    paddle::Tensor& encoder_seq_lod_cpu,
+    paddle::Tensor& decoder_seq_lod_cpu,
+    paddle::Tensor& encoder_kv_lod_cpu,
+    paddle::Tensor& prefix_len_cpu,
+    paddle::Tensor& decoder_context_len_cpu,
+    paddle::Tensor& decoder_context_len_cache_cpu,
     // paddle::Tensor& len_info_cpu,
     int block_size,
     int num_speculative_tokens) {
@@ -239,44 +239,46 @@ std::vector<paddle::Tensor> GetInferParam(
   //                   seq_lens_encoder.type(),
   //                   seq_lens_encoder.place());
 
-  auto encoder_batch_map_cpu = paddle::empty({encoder_batch_map_vec.size()},
-                                             seq_lens_encoder.type(),
-                                             paddle::CPUPlace());
-  auto decoder_batch_map_cpu = paddle::empty({decoder_batch_map_vec.size()},
-                                             seq_lens_encoder.type(),
-                                             paddle::CPUPlace());
-  auto encoder_batch_idx_cpu = paddle::empty({encoder_batch_idx_vec.size()},
-                                             seq_lens_encoder.type(),
-                                             paddle::CPUPlace());
-  auto decoder_batch_idx_cpu = paddle::empty({decoder_batch_idx_vec.size()},
-                                             seq_lens_encoder.type(),
-                                             paddle::CPUPlace());
-  auto encoder_seq_lod_cpu = paddle::empty({encoder_seq_lod_vec.size()},
-                                           seq_lens_encoder.type(),
-                                           paddle::CPUPlace());
-  auto decoder_seq_lod_cpu = paddle::empty({decoder_seq_lod_vec.size()},
-                                           seq_lens_encoder.type(),
-                                           paddle::CPUPlace());
+  // auto encoder_batch_map_cpu = paddle::empty({encoder_batch_map_vec.size()},
+  //                                            seq_lens_encoder.type(),
+  //                                            paddle::CPUPlace());
+  // auto decoder_batch_map_cpu = paddle::empty({decoder_batch_map_vec.size()},
+  //                                            seq_lens_encoder.type(),
+  //                                            paddle::CPUPlace());
+  // auto encoder_batch_idx_cpu = paddle::empty({encoder_batch_idx_vec.size()},
+  //                                            seq_lens_encoder.type(),
+  //                                            paddle::CPUPlace());
+  // auto decoder_batch_idx_cpu = paddle::empty({decoder_batch_idx_vec.size()},
+  //                                            seq_lens_encoder.type(),
+  //                                            paddle::CPUPlace());
+  // auto encoder_seq_lod_cpu = paddle::empty({encoder_seq_lod_vec.size()},
+  //                                          seq_lens_encoder.type(),
+  //                                          paddle::CPUPlace());
+  // auto decoder_seq_lod_cpu = paddle::empty({decoder_seq_lod_vec.size()},
+  //                                          seq_lens_encoder.type(),
+  //                                          paddle::CPUPlace());
 
-  auto encoder_kv_lod_cpu = paddle::empty(
-      {encoder_kv_lod_vec.size()}, seq_lens_encoder.type(), paddle::CPUPlace());
-  auto prefix_len_cpu = paddle::empty(
-      {prefix_len_vec.size()}, seq_lens_encoder.type(), paddle::CPUPlace());
-  auto decoder_context_len_cpu = paddle::empty({decoder_context_len_vec.size()},
-                                               seq_lens_encoder.type(),
-                                               paddle::CPUPlace());
-  auto decoder_context_len_cache_cpu =
-      paddle::empty({decoder_context_len_cache_vec.size()},
-                    seq_lens_encoder.type(),
-                    paddle::CPUPlace());
+  // auto encoder_kv_lod_cpu = paddle::empty(
+  //     {encoder_kv_lod_vec.size()}, seq_lens_encoder.type(),
+  //     paddle::CPUPlace());
+  // auto prefix_len_cpu = paddle::empty(
+  //     {prefix_len_vec.size()}, seq_lens_encoder.type(), paddle::CPUPlace());
+  // auto decoder_context_len_cpu =
+  // paddle::empty({decoder_context_len_vec.size()},
+  //                                              seq_lens_encoder.type(),
+  //                                              paddle::CPUPlace());
+  // auto decoder_context_len_cache_cpu =
+  //     paddle::empty({decoder_context_len_cache_vec.size()},
+  //                   seq_lens_encoder.type(),
+  //                   paddle::CPUPlace());
+
+  auto len_info_cpu =
+      paddle::empty({7}, seq_lens_encoder.type(), paddle::CPUPlace());
 
   auto prefix_block_tables =
       paddle::empty({block_bs, block_num_per_seq},  // full size
                     seq_lens_encoder.type(),
                     seq_lens_encoder.place());
-
-  auto len_info_cpu =
-      paddle::empty({7}, seq_lens_encoder.type(), paddle::CPUPlace());
 
   // for store_paged_kv_cache of cudagraph mode
   // if slot_mapping is -1, store_paged_kv_cache will not write to kv cache
@@ -503,31 +505,19 @@ std::vector<paddle::DataType> GetInferParamInferDtype(
 
 PD_BUILD_OP(get_infer_param)
     .Inputs({
-        "seq_lens_encoder",
-        "seq_lens_decoder",
-        "seq_lens_this_time",
-        "block_tables",
-        "encoder_batch_map",
-        "decoder_batch_map",
-        "encoder_batch_idx",
-        "decoder_batch_idx",
-        "encoder_seq_lod",
-        "decoder_seq_lod",
-        "encoder_kv_lod",
-        "prefix_len",
-        "decoder_context_len",
-        "decoder_context_len_cache",
-        //   "encoder_batch_map_cpu",
-        //   "decoder_batch_map_cpu",
-        //   "encoder_batch_idx_cpu",
-        //   "decoder_batch_idx_cpu",
-        //   "encoder_seq_lod_cpu",
-        //   "decoder_seq_lod_cpu",
-        //   "encoder_kv_lod_cpu",
-        //   "prefix_len_cpu",
-        //   "decoder_context_len_cpu",
-        //   "decoder_context_len_cache_cpu",
-        //   "len_info_cpu"
+        "seq_lens_encoder",        "seq_lens_decoder",
+        "seq_lens_this_time",      "block_tables",
+        "encoder_batch_map",       "decoder_batch_map",
+        "encoder_batch_idx",       "decoder_batch_idx",
+        "encoder_seq_lod",         "decoder_seq_lod",
+        "encoder_kv_lod",          "prefix_len",
+        "decoder_context_len",     "decoder_context_len_cache",
+        "encoder_batch_map_cpu",   "decoder_batch_map_cpu",
+        "encoder_batch_idx_cpu",   "decoder_batch_idx_cpu",
+        "encoder_seq_lod_cpu",     "decoder_seq_lod_cpu",
+        "encoder_kv_lod_cpu",      "prefix_len_cpu",
+        "decoder_context_len_cpu", "decoder_context_len_cache_cpu",
+        // "len_info_cpu"
     })
     .Outputs({"encoder_batch_map_out",
               "decoder_batch_map_out",
@@ -540,17 +530,17 @@ PD_BUILD_OP(get_infer_param)
               "decoder_context_len_out",
               "decoder_context_len_cache_out",
               "prefix_block_tables",
-              "encoder_batch_map_cpu",
-              "decoder_batch_map_cpu",
-              "encoder_batch_idx_cpu",
-              "decoder_batch_idx_cpu",
-              "encoder_seq_lod_cpu",
-              "decoder_seq_lod_cpu",
-              "encoder_kv_lod_cpu",
-              "prefix_len_cpu",
-              "decoder_context_len_cpu",
-              "decoder_context_len_cache_cpu",
-              "len_info_cpu",
+              "encoder_batch_map_cpu_out",
+              "decoder_batch_map_cpu_out",
+              "encoder_batch_idx_cpu_out",
+              "decoder_batch_idx_cpu_out",
+              "encoder_seq_lod_cpu_out",
+              "decoder_seq_lod_cpu_out",
+              "encoder_kv_lod_cpu_out",
+              "prefix_len_cpu_out",
+              "decoder_context_len_cpu_out",
+              "decoder_context_len_cache_cpu_out",
+              "len_info_cpu_out",
               "slot_mapping_enc",
               "slot_mapping_dec"})
     .SetInplaceMap({
@@ -564,6 +554,17 @@ PD_BUILD_OP(get_infer_param)
         {"prefix_len", "prefix_len_out"},
         {"decoder_context_len", "decoder_context_len_out"},
         {"decoder_context_len_cache", "decoder_context_len_cache_out"},
+        {"encoder_batch_map_cpu", "encoder_batch_map_cpu_out"},
+        {"decoder_batch_map_cpu", "decoder_batch_map_cpu_out"},
+        {"encoder_batch_idx_cpu", "encoder_batch_idx_cpu_out"},
+        {"decoder_batch_idx_cpu", "decoder_batch_idx_cpu_out"},
+        {"encoder_seq_lod_cpu", "encoder_seq_lod_cpu_out"},
+        {"decoder_seq_lod_cpu", "decoder_seq_lod_cpu_out"},
+        {"encoder_kv_lod_cpu", "encoder_kv_lod_cpu_out"},
+        {"prefix_len_cpu", "prefix_len_cpu_out"},
+        {"decoder_context_len_cpu", "decoder_context_len_cpu_out"},
+        {"decoder_context_len_cache_cpu", "decoder_context_len_cache_cpu_out"},
+        // {"len_info_cpu", "len_info_cpu_out"}
     })
     .SetKernelFn(PD_KERNEL(GetInferParam))
     .Attrs({"block_size: int", "num_speculative_tokens: int"})

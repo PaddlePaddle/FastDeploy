@@ -297,16 +297,17 @@ class XPUForwardMeta(ForwardMeta):
         self.decoder_context_len = paddle.zeros(bsz, dtype="int32")
         self.decoder_context_len_cache = paddle.zeros(bsz, dtype="int32")
 
-        # self.encoder_batch_map_cpu = paddle.empty(bsz, dtype='int32', device='cpu')
-        # self.decoder_batch_map_cpu = paddle.empty(bsz, dtype='int32', device='cpu')
-        # self.encoder_batch_idx_cpu = paddle.empty(bsz, dtype='int32', device='cpu')
-        # self.decoder_batch_idx_cpu = paddle.empty(bsz, dtype='int32', device='cpu')
-        # self.encoder_seq_lod_cpu = paddle.empty(bsz + 1, dtype='int32', device='cpu')
-        # self.decoder_seq_lod_cpu = paddle.empty(bsz + 1, dtype='int32', device='cpu')
-        # self.encoder_kv_lod_cpu = paddle.empty(bsz + 1, dtype='int32', device='cpu')
-        # self.prefix_len_cpu = paddle.empty(bsz, dtype='int32', device='cpu')
-        # self.decoder_context_len_cpu = paddle.empty(bsz, dtype='int32', device='cpu')
-        # self.decoder_context_len_cache_cpu = paddle.empty(bsz, dtype='int32', device='cpu')
+        self.encoder_batch_map_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.decoder_batch_map_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.encoder_batch_idx_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.decoder_batch_idx_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.encoder_seq_lod_cpu = paddle.empty(bsz + 1, dtype="int32", device="cpu")
+        self.decoder_seq_lod_cpu = paddle.empty(bsz + 1, dtype="int32", device="cpu")
+        self.encoder_kv_lod_cpu = paddle.empty(bsz + 1, dtype="int32", device="cpu")
+        self.prefix_len_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.decoder_context_len_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.decoder_context_len_cache_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+
         # self.len_info_cpu = paddle.empty(7, dtype='int32', device='cpu')
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
