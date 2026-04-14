@@ -14,9 +14,11 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "paddle/extension.h"
 #include "../custom_ftok.h"
 
@@ -46,6 +48,11 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                              int real_k,
                              int64_t rank_id,
                              bool wait_flag) {
+#ifdef _WIN32
+  PD_THROW(
+      "SpeculateGetOutMmsgTopK is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   struct msgdata msg_rcv;
   int msg_queue_id = 1;
 
@@ -145,6 +152,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
   std::cout << std::endl;
 #endif
   return;
+#endif
 }
 
 PD_BUILD_STATIC_OP(speculate_get_output_topk)

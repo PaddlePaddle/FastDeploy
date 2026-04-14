@@ -12,14 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
+#endif
 #include <algorithm>
 #include "paddle/extension.h"
 

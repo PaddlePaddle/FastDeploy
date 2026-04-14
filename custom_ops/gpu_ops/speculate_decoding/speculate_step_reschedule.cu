@@ -222,6 +222,11 @@ void SpeculateStepSchedule(
     const int block_size,
     const int encoder_decoder_block_num,
     const int max_draft_tokens) {
+#ifdef _WIN32
+  PD_THROW(
+      "SpeculateStepSchedule is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   auto cu_stream = seq_lens_this_time.stream();
   const int bsz = seq_lens_this_time.shape()[0];
   const int block_num_per_seq = block_tables.shape()[1];
@@ -328,6 +333,7 @@ void SpeculateStepSchedule(
       printf("full msg buffer\n");
     }
   }
+#endif
 }
 
 PD_BUILD_STATIC_OP(speculate_step_reschedule)
