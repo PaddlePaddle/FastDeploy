@@ -109,6 +109,9 @@ from fastdeploy.model_executor.entropy_utils import (
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
+from fastdeploy.model_executor.layers.sample.logprobs import (
+    get_logprobs_starts_and_ends,
+)
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
@@ -216,158 +219,187 @@ def pre_process(
     )
 
 
-def _build_stream_transfer_data(
+# ---------------------------------------------------------------------------
+# Shared helpers
+# ---------------------------------------------------------------------------
+
+
+def _logprobs_to_numpy(logprobs: LogprobsTensors):
+    """Move LogprobsTensors to numpy once (avoids per-request Tensor overhead)."""
+    return (
+        logprobs.logprob_token_ids.cpu().numpy(),  # [T, K+1]
+        logprobs.logprobs.cpu().numpy(),  # [T, K+1]
+        logprobs.selected_token_ranks.cpu().numpy(),  # [T]
+    )
+
+
+def _make_logprobs_lists(ids_np, scores_np, ranks_np, row_slice):
+    """Build a LogprobsLists from pre-fetched numpy arrays using a row slice."""
+    s, e = row_slice
+    return LogprobsLists(
+        ids_np[s:e].tolist(),
+        scores_np[s:e].tolist(),
+        ranks_np[s:e].tolist(),
+    )
+
+
+def _build_pooler_results(
+    pooler_outputs: List[PoolingSequenceGroupOutput],
+) -> List[StreamTransferData]:
+    """Pack pooler (embedding) outputs into StreamTransferData list."""
+    results = []
+    for bid, pooler_output in enumerate(pooler_outputs):
+        if pooler_output is None:
+            continue
+        if pooler_output.dtype == paddle.bfloat16:
+            pooler_output = pooler_output.astype("float32")
+        results.append(
+            StreamTransferData(
+                decoder_state=DecoderState.TEXT,
+                pooler_output=pooler_output.numpy(),
+                batch_id=bid,
+            )
+        )
+    return results
+
+
+def _build_normal_sample_results(
     output_tokens: paddle.Tensor,
-    pooler_outputs: List[PoolingSequenceGroupOutput] = None,
-    logprobs: Optional[LogprobsTensors] = None,
-    prompt_logprobs_list: Optional[LogprobsTensors] = None,
-):
-    """Split output_tokens and output"""
+    logprobs: Optional[LogprobsTensors],
+    prompt_logprobs_list,
+) -> List[StreamTransferData]:
+    """Pack normal (non-speculative) sampled tokens into StreamTransferData list."""
+    tokens_np = output_tokens.numpy().reshape([-1])
+    batch_size = tokens_np.shape[0]
 
-    stream_transfer_datas = []
-    if output_tokens is not None:
+    lp_ids_np = lp_scores_np = lp_ranks_np = None
+    if logprobs:
+        lp_ids_np, lp_scores_np, lp_ranks_np = _logprobs_to_numpy(logprobs)
 
-        output_tokens = output_tokens.numpy().reshape([-1])
-        output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
-
-        # Pre-convert logprobs tensors to numpy once, then build LogprobsLists
-        # per sample — avoids creating paddle.Tensor objects via slice_rows()
-        # which are expensive to pickle over ZMQ.
-        _lp_token_ids_np = _lp_scores_np = _lp_ranks_np = None
+    results = []
+    for bid in range(batch_size):
+        item = StreamTransferData(
+            decoder_state=DecoderState.TEXT,
+            tokens=tokens_np[bid : bid + 1],
+            batch_id=bid,
+        )
         if logprobs:
-            _lp_token_ids_np = logprobs.logprob_token_ids.cpu().numpy()
-            _lp_scores_np = logprobs.logprobs.cpu().numpy()
-            _lp_ranks_np = logprobs.selected_token_ranks.cpu().numpy()
-
-        for bid, output_token_per_sample in enumerate(output_tokens_lists):
-            stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
-            )
-            if logprobs:
-                stream_transfer_data.logprobs = LogprobsLists(
-                    _lp_token_ids_np[bid : bid + 1].tolist(),
-                    _lp_scores_np[bid : bid + 1].tolist(),
-                    _lp_ranks_np[bid : bid + 1].tolist(),
-                )
-            if prompt_logprobs_list:
-                stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
-            stream_transfer_datas.append(stream_transfer_data)
-    elif pooler_outputs is not None:
-        for bid, pooler_output in enumerate(pooler_outputs):
-            if pooler_output is None:
-                continue
-            if pooler_output.dtype == paddle.bfloat16:
-                pooler_output = pooler_output.astype("float32")
-
-            pooler_output = pooler_output.numpy()
-
-            stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
-            )
-            stream_transfer_datas.append(stream_transfer_data)
-    return stream_transfer_datas
+            item.logprobs = _make_logprobs_lists(lp_ids_np, lp_scores_np, lp_ranks_np, (bid, bid + 1))
+        if prompt_logprobs_list:
+            item.prompt_logprobs = prompt_logprobs_list[bid]
+        results.append(item)
+    return results
 
 
-def _build_speculative_stream_transfer_data(
+def _build_speculative_sample_results(
     accept_tokens_cpu,
     accept_num_cpu,
-    logprobs: Optional[LogprobsTensors] = None,
-    prompt_logprobs_list=None,
-    cu_batch_token_offset=None,
-    output_type: int = 3,
-    last_preempted_idx=None,
-):
-    """Build StreamTransferData list for speculative decoding output.
-
-    Args:
-        accept_tokens_cpu: paddle.Tensor [max_bsz, max_draft+1] of accepted token IDs (CPU pinned).
-        accept_num_cpu: paddle.Tensor [max_bsz] of per-request accept counts (CPU pinned).
-        logprobs: LogprobsTensors with rows flattened across all accepted tokens.
-        prompt_logprobs_list: per-request prompt logprobs list.
-        cu_batch_token_offset: paddle.Tensor cumulative token offset for logprobs slicing.
-        output_type: 3=target, 4=draft.
-        last_preempted_idx: paddle.Tensor [max_bsz] of per-request last preempted token IDs (CPU pinned).
-    """
+    logprobs: Optional[LogprobsTensors],
+    prompt_logprobs_list,
+    cu_batch_token_offset,
+    output_type: int,
+    last_preempted_idx,
+) -> List[StreamTransferData]:
+    """Pack speculative-decoding accepted tokens into StreamTransferData list."""
     accept_num_np = accept_num_cpu.numpy().flatten()
     accept_tokens_np = accept_tokens_cpu.numpy()
     batch_size = accept_num_np.shape[0]
 
-    # Inject PREEMPTED_TOKEN_ID for slots that were preempted this step,
-    # mirroring what speculate_save_output kernel does in the non-ZMQ path.
-    # Vectorized: avoid Python for-loop over batch.
+    # Inject PREEMPTED_TOKEN_ID for preempted slots (vectorised).
     if last_preempted_idx is not None:
         preempted_np = last_preempted_idx.numpy().flatten()[:batch_size]
         accept_num_np[preempted_np != 0] = PREEMPTED_TOKEN_ID
 
-    # Pre-compute integer accept counts and clamped num_tokens as contiguous arrays
     accept_num_int = accept_num_np.astype(np.intp)
     num_tokens_arr = np.maximum(accept_num_int, 0)
-
-    # Build cumulative offset for logprobs slicing (once, outside loop)
-    cu_offsets = None
-    use_cu_offsets = False
-    if cu_batch_token_offset is not None:
-        cu_offsets = cu_batch_token_offset.numpy().flatten()
-        use_cu_offsets = len(cu_offsets) > batch_size  # need at least batch_size+1 entries
-
-    # Pre-compute per-bid logprobs start/end to avoid per-iteration branching
-    if use_cu_offsets:
-        logprobs_starts = cu_offsets[:batch_size].astype(np.intp)
-        logprobs_ends = cu_offsets[1 : batch_size + 1].astype(np.intp)
-    else:
-        cumsum = np.concatenate([[0], np.cumsum(num_tokens_arr[:batch_size])])
-        logprobs_starts = cumsum[:-1]
-        logprobs_ends = cumsum[1:]
-
-    # Reusable empty array to avoid repeated allocation
-    _empty_tokens = np.array([], dtype=np.int64)
-
-    # Pre-compute per-bid accept_num arrays (avoid np.array() call per iteration)
     accept_num_2d = accept_num_int[:batch_size].reshape(-1, 1).astype(np.int32)
+
+    logprobs_starts, logprobs_ends = get_logprobs_starts_and_ends(num_tokens_arr, cu_batch_token_offset)
+
+    has_logprobs = logprobs is not None
+    lp_ids_np = lp_scores_np = lp_ranks_np = None
+    if has_logprobs:
+        lp_ids_np, lp_scores_np, lp_ranks_np = _logprobs_to_numpy(logprobs)
 
     has_prompt_logprobs = bool(prompt_logprobs_list)
     prompt_logprobs_len = len(prompt_logprobs_list) if has_prompt_logprobs else 0
-    has_logprobs = logprobs is not None
+    _empty_tokens = np.array([], dtype=np.int64)
 
-    # Pre-convert logprobs tensors to numpy once — avoids creating per-request
-    # paddle.Tensor objects via slice_rows().  Pickle-serialising paddle.Tensor
-    # carries heavy framework metadata; numpy → list is much cheaper.
-    if has_logprobs:
-        _lp_token_ids_np = logprobs.logprob_token_ids.cpu().numpy()  # [T, K+1]
-        _lp_scores_np = logprobs.logprobs.cpu().numpy()  # [T, K+1]
-        _lp_ranks_np = logprobs.selected_token_ranks.cpu().numpy()  # [T]
-
-    stream_transfer_datas = [None] * batch_size
+    results = [None] * batch_size
     for bid in range(batch_size):
-        nt = num_tokens_arr[bid]
-        tokens_np = accept_tokens_np[bid, :nt] if nt > 0 else _empty_tokens
-
-        stream_data = StreamTransferData(
+        nt = int(num_tokens_arr[bid])
+        item = StreamTransferData(
             decoder_state=DecoderState.TEXT,
             batch_id=bid,
             tokens=None,
             speculative_decoding=True,
-            accept_tokens=tokens_np,
+            accept_tokens=accept_tokens_np[bid, :nt] if nt > 0 else _empty_tokens,
             accept_num=accept_num_2d[bid : bid + 1].reshape(-1),
             output_type=output_type,
         )
-
-        # Build LogprobsLists directly from numpy slices — avoids the
-        # paddle.Tensor overhead of LogprobsTensors.slice_rows().
         if has_logprobs and nt > 0:
-            s, e = int(logprobs_starts[bid]), int(logprobs_ends[bid])
-            stream_data.logprobs = LogprobsLists(
-                _lp_token_ids_np[s:e].tolist(),
-                _lp_scores_np[s:e].tolist(),
-                _lp_ranks_np[s:e].tolist(),
+            item.logprobs = _make_logprobs_lists(
+                lp_ids_np,
+                lp_scores_np,
+                lp_ranks_np,
+                (int(logprobs_starts[bid]), int(logprobs_ends[bid])),
             )
-
         if has_prompt_logprobs and bid < prompt_logprobs_len:
-            stream_data.prompt_logprobs = prompt_logprobs_list[bid]
+            item.prompt_logprobs = prompt_logprobs_list[bid]
+        results[bid] = item
+    return results
 
-        stream_transfer_datas[bid] = stream_data
 
-    return stream_transfer_datas
+# ---------------------------------------------------------------------------
+# Unified public entry
+# ---------------------------------------------------------------------------
+
+
+def build_stream_transfer_data(
+    *,
+    # normal sampling
+    output_tokens: Optional[paddle.Tensor] = None,
+    logprobs: Optional[LogprobsTensors] = None,
+    prompt_logprobs_list: Optional[LogprobsTensors] = None,
+    # pooler / embedding
+    pooler_outputs: Optional[List[PoolingSequenceGroupOutput]] = None,
+    # speculative decoding
+    accept_tokens_cpu=None,
+    accept_num_cpu=None,
+    cu_batch_token_offset=None,
+    output_type: int = 3,
+    last_preempted_idx=None,
+) -> List[StreamTransferData]:
+    """Unified builder for StreamTransferData.
+
+    Routing (mutually exclusive, checked in order):
+      1. pooler_outputs  → embedding results (_build_pooler_results)
+      2. accept_tokens_cpu and accept_num_cpu  → speculative decoding results
+      3. output_tokens   → normal sampled-token results
+    logprobs and prompt_logprobs_list are attached whenever provided and applicable.
+    """
+    if pooler_outputs is not None:
+        return _build_pooler_results(pooler_outputs)
+
+    if accept_tokens_cpu is not None and accept_num_cpu is not None:
+        return _build_speculative_sample_results(
+            accept_tokens_cpu=accept_tokens_cpu,
+            accept_num_cpu=accept_num_cpu,
+            logprobs=logprobs,
+            prompt_logprobs_list=prompt_logprobs_list,
+            cu_batch_token_offset=cu_batch_token_offset,
+            output_type=output_type,
+            last_preempted_idx=last_preempted_idx,
+        )
+
+    if output_tokens is not None:
+        return _build_normal_sample_results(
+            output_tokens=output_tokens,
+            logprobs=logprobs,
+            prompt_logprobs_list=prompt_logprobs_list,
+        )
+
+    return []
 
 
 def post_process_normal(
@@ -509,8 +541,8 @@ def save_output_normal(
             recover_batch_index_for_sampler_output(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
-            output = _build_stream_transfer_data(
-                recover_share_inputs_map["sampled_token_ids"],
+            output = build_stream_transfer_data(
+                output_tokens=recover_share_inputs_map["sampled_token_ids"],
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
             )
@@ -671,7 +703,7 @@ def save_output_specualate(
                 ],
             )
             # target tokens (mtype=3)
-            output = _build_speculative_stream_transfer_data(
+            output = build_stream_transfer_data(
                 accept_tokens_cpu=recover_share_inputs["accept_tokens_cpu"],
                 accept_num_cpu=recover_share_inputs["accept_num_cpu"],
                 logprobs=sampler_output.logprobs_tensors,
@@ -1157,5 +1189,5 @@ def post_process_pooling(
 
     if not skip_save_output:
         if save_each_rank or model_output.mp_rank == 0:
-            output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
+            output = build_stream_transfer_data(pooler_outputs=pooler_output.outputs)
             async_output_queue.put(output)

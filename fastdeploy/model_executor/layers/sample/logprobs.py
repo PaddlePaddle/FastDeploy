@@ -16,6 +16,7 @@
 
 from typing import Callable, List, Optional, Tuple
 
+import numpy as np
 import paddle
 import paddle.nn.functional as F
 import triton
@@ -219,3 +220,41 @@ def build_output_logprobs(
     logprobs_tensors = gather_logprobs(raw_logprobs, num_logprobs, token_ids=token_ids)
 
     return logprobs_tensors, cu_batch_token_offset
+
+
+def get_logprobs_starts_and_ends(
+    num_tokens_arr: np.ndarray, cu_batch_token_offset: Optional[np.ndarray] = None
+) -> Tuple[np.ndarray, np.ndarray]:
+    """
+    Calculate start and end indices for logprobs slicing.
+
+    Computes start and end positions for logprobs slicing based on token counts
+    per batch. Uses cumulative offset if provided, otherwise calculates from
+    num_tokens_arr cumulative sum.
+
+    Args:
+        num_tokens_arr: Array of token counts per batch(np.int).
+        cu_batch_token_offset: Optional cumulative batch token offset array.
+
+    Returns:
+        Tuple of start and end indices.
+    """
+    assert num_tokens_arr.min() >= 0
+    batch_size = num_tokens_arr.shape[0]
+    # Build cumulative offset for logprobs slicing (once, outside loop)
+    cu_offsets = None
+    use_cu_offsets = False
+    if cu_batch_token_offset is not None:
+        cu_offsets = cu_batch_token_offset.numpy().flatten()
+        use_cu_offsets = len(cu_offsets) > batch_size  # need at least batch_size+1 entries
+
+    # Pre-compute per-bid logprobs start/end to avoid per-iteration branching
+    if use_cu_offsets:
+        starts = cu_offsets[:batch_size].astype(np.intp)
+        ends = cu_offsets[1 : batch_size + 1].astype(np.intp)
+    else:
+        cumsum = np.concatenate([[0], np.cumsum(num_tokens_arr[:batch_size])])
+        starts = cumsum[:-1]
+        ends = cumsum[1:]
+
+    return starts, ends

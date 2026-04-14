@@ -20,7 +20,7 @@ from typing import Optional
 
 import numpy as np
 
-from fastdeploy.worker.output import LogprobsTensors
+from fastdeploy.worker.output import LogprobsLists, LogprobsTensors
 
 
 class DecoderState(Enum):
@@ -40,7 +40,7 @@ class StreamTransferData:
     batch_id: int
     tokens: Optional[np.array] = None
     speculative_decoding: bool = False
-    logprobs: Optional[LogprobsTensors] = None
+    logprobs: Optional[LogprobsLists] = None
     prompt_logprobs: Optional[LogprobsTensors] = None
     accept_tokens: Optional[np.array] = None
     accept_num: Optional[np.array] = None

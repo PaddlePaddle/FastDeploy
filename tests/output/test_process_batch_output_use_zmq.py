@@ -90,11 +90,7 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
     def test_process_logprobs_success(self):
         """Test successful logprobs parsing"""
         stream_data = MagicMock()
-        logprobs = MagicMock()
-        logprobs.tolists.return_value = LogprobsLists(
-            logprobs=[[0.5]], logprob_token_ids=[[1]], sampled_token_ranks=[0]
-        )
-        stream_data.logprobs = logprobs
+        stream_data.logprobs = LogprobsLists(logprobs=[[0.5]], logprob_token_ids=[[1]], sampled_token_ranks=[0])
         stream_data.tokens = np.array([1])
         stream_data.batch_id = 0
 
@@ -106,8 +102,10 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
     def test_process_logprobs_failure(self):
         """Test failed logprobs parsing"""
         stream_data = MagicMock()
-        stream_data.logprobs = MagicMock()
-        stream_data.logprobs.tolists.side_effect = Exception("Test error")
+        # Simulate a broken LogprobsLists where attribute access raises
+        bad_logprobs = MagicMock(spec=LogprobsLists)
+        bad_logprobs.logprobs.__getitem__ = MagicMock(side_effect=Exception("Test error"))
+        stream_data.logprobs = bad_logprobs
         stream_data.tokens = np.array([1])
         stream_data.batch_id = 0
 
@@ -328,17 +326,15 @@ class TestSpeculativeOutputMtype3(unittest.TestCase):
     @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0)
     def test_mtype3_with_logprobs(self):
         """mtype=3 with logprobs should populate top_logprobs on the result."""
-        logprobs_mock = MagicMock()
-        logprobs_mock.tolists.return_value = LogprobsLists(
-            logprobs=[[0.1, 0.05], [0.3, 0.2]],
-            logprob_token_ids=[[100, 101], [200, 201]],
-            sampled_token_ranks=[0, 1],
-        )
         stream_data = _make_stream_data(
             accept_tokens=np.array([100, 200], dtype=np.int64),
             accept_num=2,
             output_type=3,
-            logprobs=logprobs_mock,
+            logprobs=LogprobsLists(
+                logprobs=[[0.1, 0.05], [0.3, 0.2]],
+                logprob_token_ids=[[100, 101], [200, 201]],
+                sampled_token_ranks=[0, 1],
+            ),
         )
         result = self.processor._process_speculative_output_use_zmq(stream_data, self.task, 0, [])
         self.assertIsNotNone(result)
@@ -349,14 +345,14 @@ class TestSpeculativeOutputMtype3(unittest.TestCase):
 
     @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0)
     def test_mtype3_logprobs_parse_failure(self):
-        """mtype=3 with failing logprobs.tolists should not crash."""
-        logprobs_mock = MagicMock()
-        logprobs_mock.tolists.side_effect = RuntimeError("bad logprobs")
+        """mtype=3 with a broken LogprobsLists should not crash."""
+        bad_logprobs = MagicMock(spec=LogprobsLists)
+        bad_logprobs.logprobs.__getitem__ = MagicMock(side_effect=RuntimeError("bad logprobs"))
         stream_data = _make_stream_data(
             accept_tokens=np.array([100], dtype=np.int64),
             accept_num=1,
             output_type=3,
-            logprobs=logprobs_mock,
+            logprobs=bad_logprobs,
         )
         with patch("fastdeploy.output.token_processor.llm_logger"):
             result = self.processor._process_speculative_output_use_zmq(stream_data, self.task, 0, [])
@@ -506,17 +502,15 @@ class TestSpeculativeOutputMtype4(unittest.TestCase):
 
     def test_mtype4_with_logprobs(self):
         """mtype=4 with logprobs should populate draft_top_logprobs on the result."""
-        logprobs_mock = MagicMock()
-        logprobs_mock.tolists.return_value = LogprobsLists(
-            logprobs=[[0.1, 0.05], [0.3, 0.2], [0.4, 0.15]],
-            logprob_token_ids=[[10, 11], [20, 21], [30, 31]],
-            sampled_token_ranks=[0, 1, 2],
-        )
         stream_data = _make_stream_data(
             accept_tokens=np.array([10, 20, 30], dtype=np.int64),
             accept_num=3,
             output_type=4,
-            logprobs=logprobs_mock,
+            logprobs=LogprobsLists(
+                logprobs=[[0.1, 0.05], [0.3, 0.2], [0.4, 0.15]],
+                logprob_token_ids=[[10, 11], [20, 21], [30, 31]],
+                sampled_token_ranks=[0, 1, 2],
+            ),
         )
         result = self.processor._process_speculative_output_use_zmq(stream_data, self.task, 0, [])
         self.assertIsNotNone(result)
@@ -561,14 +555,14 @@ class TestSpeculativeOutputMtype4(unittest.TestCase):
         self.assertIsNone(result)
 
     def test_mtype4_logprobs_parse_failure(self):
-        """mtype=4 with failing logprobs should not crash, draft_top_logprobs stays None."""
-        logprobs_mock = MagicMock()
-        logprobs_mock.tolists.side_effect = RuntimeError("parse failure")
+        """mtype=4 with a broken LogprobsLists should not crash, draft_top_logprobs stays None."""
+        bad_logprobs = MagicMock(spec=LogprobsLists)
+        bad_logprobs.logprobs.__getitem__ = MagicMock(side_effect=RuntimeError("parse failure"))
         stream_data = _make_stream_data(
             accept_tokens=np.array([10], dtype=np.int64),
             accept_num=1,
             output_type=4,
-            logprobs=logprobs_mock,
+            logprobs=bad_logprobs,
         )
         with patch("fastdeploy.output.token_processor.llm_logger"):
             result = self.processor._process_speculative_output_use_zmq(stream_data, self.task, 0, [])
@@ -577,17 +571,15 @@ class TestSpeculativeOutputMtype4(unittest.TestCase):
 
     def test_mtype4_logprobs_fewer_rows_than_accept_num(self):
         """mtype=4 with fewer logprobs rows than accept_num should only iterate available rows."""
-        logprobs_mock = MagicMock()
-        logprobs_mock.tolists.return_value = LogprobsLists(
-            logprobs=[[0.1]],
-            logprob_token_ids=[[10]],
-            sampled_token_ranks=[0],
-        )
         stream_data = _make_stream_data(
             accept_tokens=np.array([10, 20, 30], dtype=np.int64),
             accept_num=3,
             output_type=4,
-            logprobs=logprobs_mock,
+            logprobs=LogprobsLists(
+                logprobs=[[0.1]],
+                logprob_token_ids=[[10]],
+                sampled_token_ranks=[0],
+            ),
         )
         result = self.processor._process_speculative_output_use_zmq(stream_data, self.task, 0, [])
         self.assertIsNotNone(result)
@@ -612,17 +604,15 @@ class TestSpeculativeMtype3And4Combined(unittest.TestCase):
             output_type=3,
         )
         # mtype=4: draft logprobs
-        logprobs_mock = MagicMock()
-        logprobs_mock.tolists.return_value = LogprobsLists(
-            logprobs=[[0.1, 0.05], [0.3, 0.2]],
-            logprob_token_ids=[[100, 101], [200, 201]],
-            sampled_token_ranks=[0, 1],
-        )
         draft_data = _make_stream_data(
             accept_tokens=np.array([100, 200], dtype=np.int64),
             accept_num=2,
             output_type=4,
-            logprobs=logprobs_mock,
+            logprobs=LogprobsLists(
+                logprobs=[[0.1, 0.05], [0.3, 0.2]],
+                logprob_token_ids=[[100, 101], [200, 201]],
+                sampled_token_ranks=[0, 1],
+            ),
         )
 
         results, _ = self.processor._process_batch_output_use_zmq([target_data, draft_data])
@@ -692,17 +682,15 @@ class TestSpeculativeMtype3And4Combined(unittest.TestCase):
             accept_num=0,
             output_type=3,
         )
-        logprobs_mock = MagicMock()
-        logprobs_mock.tolists.return_value = LogprobsLists(
-            logprobs=[[0.5]],
-            logprob_token_ids=[[10]],
-            sampled_token_ranks=[0],
-        )
         draft_data = _make_stream_data(
             accept_tokens=np.array([10], dtype=np.int64),
             accept_num=1,
             output_type=4,
-            logprobs=logprobs_mock,
+            logprobs=LogprobsLists(
+                logprobs=[[0.5]],
+                logprob_token_ids=[[10]],
+                sampled_token_ranks=[0],
+            ),
         )
 
         results, _ = self.processor._process_batch_output_use_zmq([target_data, draft_data])
@@ -727,20 +715,20 @@ class TestSpeculativeMtype3And4Combined(unittest.TestCase):
 
 
 class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
-    """Tests for _build_speculative_stream_transfer_data in pre_and_post_process.py."""
+    """Tests for build_stream_transfer_data in pre_and_post_process.py."""
 
     def test_basic_target_build(self):
         """Build StreamTransferData list for mtype=3 with 2 requests."""
         import paddle
 
         from fastdeploy.model_executor.pre_and_post_process import (
-            _build_speculative_stream_transfer_data,
+            build_stream_transfer_data,
         )
 
         accept_tokens_cpu = paddle.to_tensor([[100, 200, 0], [300, 0, 0]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([2, 1], dtype="int64")
 
-        result = _build_speculative_stream_transfer_data(
+        result = build_stream_transfer_data(
             accept_tokens_cpu=accept_tokens_cpu,
             accept_num_cpu=accept_num_cpu,
             output_type=3,
@@ -761,13 +749,13 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
         import paddle
 
         from fastdeploy.model_executor.pre_and_post_process import (
-            _build_speculative_stream_transfer_data,
+            build_stream_transfer_data,
         )
 
         accept_tokens_cpu = paddle.to_tensor([[10, 20, 30]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([3], dtype="int64")
 
-        result = _build_speculative_stream_transfer_data(
+        result = build_stream_transfer_data(
             accept_tokens_cpu=accept_tokens_cpu,
             accept_num_cpu=accept_num_cpu,
             output_type=4,
@@ -781,7 +769,7 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
         import paddle
 
         from fastdeploy.model_executor.pre_and_post_process import (
-            _build_speculative_stream_transfer_data,
+            build_stream_transfer_data,
         )
 
         accept_tokens_cpu = paddle.to_tensor([[100, 200, 0], [300, 400, 500]], dtype="int64")
@@ -789,7 +777,7 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
         # Request 1 is preempted
         last_preempted_idx = paddle.to_tensor([0, 99], dtype="int64")
 
-        result = _build_speculative_stream_transfer_data(
+        result = build_stream_transfer_data(
             accept_tokens_cpu=accept_tokens_cpu,
             accept_num_cpu=accept_num_cpu,
             output_type=3,
@@ -806,13 +794,13 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
         import paddle
 
         from fastdeploy.model_executor.pre_and_post_process import (
-            _build_speculative_stream_transfer_data,
+            build_stream_transfer_data,
         )
 
         accept_tokens_cpu = paddle.to_tensor([[100, 200, 0]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([0], dtype="int64")
 
-        result = _build_speculative_stream_transfer_data(
+        result = build_stream_transfer_data(
             accept_tokens_cpu=accept_tokens_cpu,
             accept_num_cpu=accept_num_cpu,
             output_type=3,
@@ -827,14 +815,14 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
         import paddle
 
         from fastdeploy.model_executor.pre_and_post_process import (
-            _build_speculative_stream_transfer_data,
+            build_stream_transfer_data,
         )
 
         accept_tokens_cpu = paddle.to_tensor([[100, 200]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([2], dtype="int64")
         prompt_logprobs_list = [np.array([0.1, 0.2])]
 
-        result = _build_speculative_stream_transfer_data(
+        result = build_stream_transfer_data(
             accept_tokens_cpu=accept_tokens_cpu,
             accept_num_cpu=accept_num_cpu,
             prompt_logprobs_list=prompt_logprobs_list,

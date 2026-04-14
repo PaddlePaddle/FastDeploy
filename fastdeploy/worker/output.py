@@ -56,10 +56,6 @@ class LogprobsLists(NamedTuple):
             self.sampled_token_ranks,  # unchanged
         )
 
-    def tolists(self):
-        """Return self — already in list form."""
-        return self
-
     def slice_rows(self, start: int, end: int):
         """
         Slice rows.

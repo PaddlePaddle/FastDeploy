@@ -367,7 +367,7 @@ class TokenProcessor:
                 if self.use_logprobs:
                     if getattr(stream_data, "logprobs", None) is not None:
                         try:
-                            logprobs_list: LogprobsLists = stream_data.logprobs.tolists()
+                            logprobs_list: LogprobsLists = stream_data.logprobs
                             result.outputs.logprob = float(logprobs_list.logprobs[0][0])
                             result.outputs.top_logprobs = logprobs_list
                         except Exception as e:
@@ -503,7 +503,7 @@ class TokenProcessor:
         logprobs_lists = None
         if self.use_logprobs and getattr(stream_data, "logprobs", None) is not None:
             try:
-                logprobs_lists = stream_data.logprobs.tolists()
+                logprobs_lists = stream_data.logprobs
             except Exception as e:
                 llm_logger.warning(f"Failed to parse speculative logprobs from StreamTransferData: {e}")
 
@@ -622,7 +622,7 @@ class TokenProcessor:
 
         if getattr(stream_data, "logprobs", None) is not None:
             try:
-                logprobs_lists = stream_data.logprobs.tolists()
+                logprobs_lists = stream_data.logprobs
                 n = min(num_tokens, len(logprobs_lists.logprobs))
                 if n > 0:
                     result.outputs.draft_top_logprobs = LogprobsLists(
@@ -768,19 +768,20 @@ class TokenProcessor:
                     finished_batch_result, unfinished_batch_result = [], []
                     for r in batch_result:
                         (finished_batch_result if r.finished else unfinished_batch_result).append(r)
+                    # Finished requests need no draft logprobs — output immediately.
                     if finished_batch_result:
-                        self.cached_generated_tokens.put_results(batch_result)
-                    else:
+                        self.cached_generated_tokens.put_results(finished_batch_result)
+                    # Unfinished requests must wait for draft logprobs (mtype=4).
+                    if unfinished_batch_result:
                         self._batch_result_buffer = unfinished_batch_result
                 elif mtype == 4:  # draft
-                    target_batch_result = []
-                    draft_batch_result = batch_result
                     if self._batch_result_buffer is not None:
-                        for target, decode in zip(self._batch_result_buffer, draft_batch_result):
+                        target_batch_result = []
+                        for target, decode in zip(self._batch_result_buffer, batch_result):
                             target.outputs.draft_top_logprobs = decode.outputs.draft_top_logprobs
                             target_batch_result.append(target)
                         self._batch_result_buffer = None
-                    self.cached_generated_tokens.put_results(target_batch_result)
+                        self.cached_generated_tokens.put_results(target_batch_result)
                 else:
                     self.cached_generated_tokens.put_results(batch_result)
             else:
