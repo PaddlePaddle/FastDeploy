@@ -22,7 +22,7 @@ PaddlePaddle implementation — no ppdiffusers or torch dependencies.
 Architecture:
   - N joint transformer blocks with independent img/txt normalization
   - Each block: AdaLN → QKV (separate for img & txt) → joint attention → FFN
-  - Sinusoidal positional encoding for spatial positions
+  - Learnable positional encoding for spatial positions
   - Timestep + pooled text conditioning via AdaLN-Zero
 """
 

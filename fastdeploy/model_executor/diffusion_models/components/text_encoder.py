@@ -97,7 +97,7 @@ class CLIPTextEncoder(nn.Layer):
             encoder.model = CLIPTextModel.from_pretrained(encoder_path, dtype=dtype)
             encoder.model.eval()
             logger.info("Loaded CLIP encoder from %s", encoder_path)
-        except Exception as e:
+        except (ImportError, OSError, ValueError) as e:
             logger.warning("Failed to load CLIP encoder from %s: %s", encoder_path, e)
 
         return encoder
@@ -172,7 +172,7 @@ class T5TextEncoder(nn.Layer):
             encoder.model = T5EncoderModel.from_pretrained(encoder_path, dtype=dtype)
             encoder.model.eval()
             logger.info("Loaded T5 encoder from %s", encoder_path)
-        except Exception as e:
+        except (ImportError, OSError, ValueError) as e:
             logger.warning("Failed to load T5 encoder from %s: %s", encoder_path, e)
 
         return encoder
@@ -332,6 +332,14 @@ class TextEncoderPipeline:
                 "CLIP-G encoder was requested but failed to load. "
                 "SD3 pooled embeddings will be incomplete — generation quality will be degraded."
             )
+            # Pad CLIP-L (768d) → 2048d to match SD3 text_proj input dimension
+            if pooled_prompt_embeds is not None:
+                pad_dim = 2048 - pooled_prompt_embeds.shape[-1]
+                if pad_dim > 0:
+                    pooled_prompt_embeds = paddle.concat(
+                        [pooled_prompt_embeds, paddle.zeros([pooled_prompt_embeds.shape[0], pad_dim], dtype=dtype)],
+                        axis=-1,
+                    )
 
         # T5-XXL → sequence embeddings for cross-attention
         prompt_embeds = None
