@@ -28,9 +28,6 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig, ModelConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.graph_optimization.decorator import (
-    support_graph_optimization,
-)
 from fastdeploy.model_executor.layers.activation import SiluAndMul
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.embeddings import VocabParallelEmbedding
@@ -223,9 +220,13 @@ class MiniCPM4DecoderLayer(nn.Layer):
         return hidden_states, residual
 
 
-@support_graph_optimization
 class MiniCPM4Model(nn.Layer):
-    """ """
+    """
+    Note: CUDA graph optimization is disabled for MiniCPM4 because the μP
+    scaling ops (element-wise multiply by scale_emb/residual_scale/lm_head_scale)
+    are not compatible with CUDA graph capture/replay; they produce token ID 0
+    (<unk>) during graph replay.
+    """
 
     def __init__(
         self,
@@ -276,7 +277,7 @@ class MiniCPM4Model(nn.Layer):
         self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
-            logger.info(f"Start load layer {i}")
+            logger.debug(f"Start load layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
     def forward(
@@ -444,10 +445,6 @@ class MiniCPM4ForCausalLM(ModelForCasualLM):
         hidden_states = self.minicpm4(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         return hidden_states
-
-    def clear_grpah_opt_backend(self):
-        """Clear graph optimization backend, the captured cuda graph will be cleaned"""
-        self.minicpm4.clear_grpah_opt_backend(fd_config=self.fd_config)
 
 
 class MiniCPM4PretrainedModel(PretrainedModel):

@@ -329,6 +329,31 @@ class GptOssScalingRotaryEmbedding:
         return pos_emb
 
 
+class LongRoPERotaryEmbedding:
+    """Rotary embedding with LongRoPE scaling factors (long_factor / short_factor)."""
+
+    def __init__(self, rotary_dim, base, ext_factors):
+        self.rotary_dim = rotary_dim
+        self.base = base
+        self.ext_factors = ext_factors
+
+    def __call__(self, position_ids):
+        bsz, max_seq_len = position_ids.shape[:2]
+        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        ext = paddle.to_tensor(self.ext_factors, dtype="float32")
+        inv_freq = inv_freq / ext
+        freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
+        if current_platform.is_gcu():
+            rot_emb = paddle.concat([freqs.cos(), freqs.sin()], axis=-1)
+            return rot_emb
+        # Use full-dim format [2, B, S, 1, D] like QwenRotaryEmbedding (neox-style)
+        rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
+        emb = paddle.concat([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, 1, self.rotary_dim))
+        rot_emb[0] = paddle.cos(emb)
+        rot_emb[1] = paddle.sin(emb)
+        return rot_emb
+
+
 def get_rope_impl(
     rotary_dim: int,
     base: 10000.0,
@@ -359,7 +384,21 @@ def get_rope_impl(
         )
         rotary_emb = rotary_emb_layer(position_ids)
     else:
-        rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        # Check for LongRoPE scaling (used by MiniCPM4 and similar models)
+        rope_scaling = getattr(model_config, "rope_scaling", None)
+        if rope_scaling and isinstance(rope_scaling, dict) and rope_scaling.get("rope_type") == "longrope":
+            original_max_pos = rope_scaling.get(
+                "original_max_position_embeddings",
+                getattr(model_config, "max_position_embeddings", 65536),
+            )
+            max_seq = position_ids.shape[1]
+            if max_seq > original_max_pos:
+                ext_factors = rope_scaling.get("long_factor", [1.0] * (rotary_dim // 2))
+            else:
+                ext_factors = rope_scaling.get("short_factor", [1.0] * (rotary_dim // 2))
+            rotary_emb_layer = LongRoPERotaryEmbedding(rotary_dim, base, ext_factors)
+        else:
+            rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
     return rotary_emb
 
