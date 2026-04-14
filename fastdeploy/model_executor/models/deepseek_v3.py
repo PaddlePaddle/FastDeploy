@@ -1059,17 +1059,6 @@ class DeepSeekV3Model(nn.Layer):
             prefix="deepseek_v3.norm",
         )
 
-        # self.position_ids_buffer = paddle.empty(
-        #     [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
-        # )
-        # self.mask_encoder_batch_buffer = paddle.empty(
-        #     [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
-        # )
-        # self.slot_mapping_buffer = paddle.empty(
-        #     [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int64
-        # )
-        self.fd_config = fd_config
-
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
@@ -1234,13 +1223,10 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
-        import nvtx
-
-        with nvtx.annotate("model_forward", color="red"):
-            hidden_states = self.model(
-                ids_remove_padding=ids_remove_padding,
-                forward_meta=forward_meta,
-            )
+        hidden_states = self.model(
+            ids_remove_padding=ids_remove_padding,
+            forward_meta=forward_meta,
+        )
         return hidden_states
 
     def clear_grpah_opt_backend(self):
