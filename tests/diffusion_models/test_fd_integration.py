@@ -252,6 +252,41 @@ class TestWeightRoundtrip:
             err_msg="Model B output differs from model A after loading A's weights",
         )
 
+    def test_multi_shard_path_traversal_rejected(self, tmp_path):
+        """Shard filenames with path traversal components are rejected."""
+        import json
+
+        from fastdeploy.model_executor.diffusion_models.components.weight_utils import (
+            load_model_weights,
+        )
+
+        weight_dir = tmp_path / "weights"
+        weight_dir.mkdir()
+        # Index file pointing to a traversal shard
+        index = {"weight_map": {"layer.weight": "../../../etc/passwd.safetensors"}}
+        (weight_dir / "diffusion_pytorch_model.safetensors.index.json").write_text(json.dumps(index))
+
+        model = paddle.nn.Linear(4, 4)
+        with pytest.raises(ValueError, match="Path traversal detected"):
+            load_model_weights(model, str(weight_dir))
+
+    def test_multi_shard_absolute_path_rejected(self, tmp_path):
+        """Shard filenames with absolute paths are rejected."""
+        import json
+
+        from fastdeploy.model_executor.diffusion_models.components.weight_utils import (
+            load_model_weights,
+        )
+
+        weight_dir = tmp_path / "weights"
+        weight_dir.mkdir()
+        index = {"weight_map": {"layer.weight": "/etc/passwd.safetensors"}}
+        (weight_dir / "diffusion_pytorch_model.safetensors.index.json").write_text(json.dumps(index))
+
+        model = paddle.nn.Linear(4, 4)
+        with pytest.raises(ValueError, match="Invalid shard filename"):
+            load_model_weights(model, str(weight_dir))
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 3. AutoencoderKL.from_pretrained() — config.json + weight loading

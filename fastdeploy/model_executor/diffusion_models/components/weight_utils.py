@@ -130,9 +130,11 @@ def load_model_weights(
         shard_files = sorted(set(index.get("weight_map", {}).values()))
         state_dict = {}
         for shard_file in shard_files:
-            if ".." in shard_file or os.path.isabs(shard_file):
+            if os.path.isabs(shard_file):
                 raise ValueError(f"Invalid shard filename in index: {shard_file}")
-            shard_path = os.path.join(weight_dir, shard_file)
+            shard_path = os.path.normpath(os.path.join(weight_dir, shard_file))
+            if not shard_path.startswith(os.path.normpath(weight_dir) + os.sep):
+                raise ValueError(f"Path traversal detected in shard filename: {shard_file}")
             shard_dict = load_safetensors_to_paddle(shard_path, dtype=dtype)
             state_dict.update(shard_dict)
         logger.info("Loaded %d shards (%d total tensors) from %s", len(shard_files), len(state_dict), weight_dir)
