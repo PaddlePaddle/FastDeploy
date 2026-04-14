@@ -990,6 +990,7 @@ class XPUModelRunner(ModelRunnerBase):
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
 
         # Set block tables
@@ -1585,6 +1586,12 @@ class XPUModelRunner(ModelRunnerBase):
             sampler_output = None
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        sampler_output.sampled_token_ids,
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
             else:
                 sampler_output = self.sampler(
                     logits,
@@ -1592,6 +1599,27 @@ class XPUModelRunner(ModelRunnerBase):
                     self.model_config.max_model_len,
                     self.share_inputs,
                 )
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_tokens"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_num"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["step_idx"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["stop_flags"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
 
             prompt_logprobs_list = None
             if not self.speculative_decoding:

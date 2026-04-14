@@ -206,6 +206,7 @@ jobs:
           -e "fd_router_url=${fd_router_url}" \
           -e "BASE_REF=${BASE_REF}" \
           -e "IS_PR=${IS_PR}" \
+          -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
 
           git config --global --add safe.directory /workspace/FastDeploy
@@ -226,3 +227,10 @@ jobs:
 
           bash scripts/run_golang_router.sh
           '
+
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}

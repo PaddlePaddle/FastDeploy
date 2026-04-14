@@ -51,60 +51,65 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
     const int64_t step_idx_now = step_idx[bid];
     const int64_t min_token_limit = min_tokens[bid];
 
-    const bool can_stop = (step_idx_now >= min_token_limit);
+    const bool can_stop = (step_idx_now + accept_num >= min_token_limit);
     if (!can_stop) return;
     if (!stop_flags[bid]) {
-      int accept_idx = 0;
+      /*
+        accept_idx 表示 stop_seq 最后 token 在 accept_tokens 中的位置 (0-based)
+        accept_idx = -1 表示 stop_seq 最后 token 在 pre_ids 的末尾
+        (pre_ids[step_idx_now - 1])，即上一轮延迟匹配的最后一个 token。
+        为防止在 stop_seqs 后面追加 eos 越界，跳过 accept_tokens[accept_num-1]
+        (当前轮最后一个 token)，该 token 延迟到下一轮匹配。
+        循环范围：accept_num > 0 时为 [-1, accept_num-2]；
+                  accept_num = 0 时为 [-1]（仅检查 pre_ids 末尾）。
+      */
+      int accept_idx = -1;
       bool is_end = false;
-      // 遍历起始位置
-      for (; accept_idx <= accept_num - 1 && !is_end; accept_idx++) {
+
+      // 统一检测：accept_idx = -1 对应上一轮延迟的最后 token 在 pre_ids 末尾
+      // 完整匹配 stop_seqs 的情况；accept_idx >= 0 对应当前轮 accept_tokens
+      // 中的匹配。两者共享同一套从后向前匹配逻辑。
+      int loop_end = (accept_num > 0) ? accept_num - 2 : -1;
+      for (; accept_idx <= loop_end && !is_end; accept_idx++) {
         if (step_idx_now + accept_idx + 1 < stop_seq_len) {
 #ifdef DEBUG_SPEC_STOP_SEQS
           printf("num %d < stop_seq_len %d\n",
-                 step_idx_now - accept_num + accept_idx + 1,
+                 step_idx_now + accept_idx + 1,
                  stop_seq_len);
 #endif
           continue;
         }
-        // 遍历一个 stop_seqs
+        // 从后向前匹配 stop_seq 的每个 token
         for (int i = stop_seq_len - 1; i >= 0; --i) {
           int64_t cur_token_idx = -1;
 
-          // 通过当前值判断 token 是在 pre_ids 还是 accept_token 里
-          if (stop_seq_len - 1 - i < accept_idx) {
+          int offset = stop_seq_len - 1 - i;
+          int accept_tokens_idx = accept_idx - offset;
+
+          if (accept_tokens_idx >= 0) {
 #ifdef DEBUG_SPEC_STOP_SEQS
             printf(
                 "AcceptTokens bid:%d. tid:%d, accept_idx:%d, "
-                "accept_token_idx: "
-                "%d\n",
+                "accept_token_idx: %d\n",
                 bid,
                 tid,
                 accept_idx,
-                accept_idx - (stop_seq_len - 1 - i) - 1);
+                accept_tokens_idx);
 #endif
-            cur_token_idx =
-                accept_tokens_now[accept_idx - (stop_seq_len - 1 - i) - 1];
+            cur_token_idx = accept_tokens_now[accept_tokens_idx];
           } else {
+            int pre_ids_idx = step_idx_now + accept_tokens_idx;
 #ifdef DEBUG_SPEC_STOP_SEQS
             printf(
                 "PreIds bid:%d. tid:%d, step_idx_now:%ld. "
-                "accept_idx:%d. "
-                "pre_id_idx: %ld\n",
+                "accept_idx:%d. pre_id_idx: %d\n",
                 bid,
                 tid,
                 step_idx_now,
                 accept_idx,
-                step_idx_now - accept_num + accept_idx -
-                    (stop_seq_len - 1 - i));
+                pre_ids_idx);
 #endif
-            int pre_ids_idx =
-                step_idx_now + accept_idx - (stop_seq_len - 1 - i);
-            // EC3
-            // 特殊拼接会导致input_ids最后一位无特殊token，即pre_ids[0]可能为23,
-            // 导致异常结束
-            if (pre_ids_idx <= 0) {
-              break;
-            }
+            if (pre_ids_idx < 0) break;
             cur_token_idx = pre_ids_now[pre_ids_idx];
           }
 #ifdef DEBUG_SPEC_STOP_SEQS
@@ -126,12 +131,11 @@ __global__ void spec_set_value_by_stop_seqs(bool *stop_flags,
       }
       if (is_end) {
 #ifdef DEBUG_SPEC_STOP_SEQS
-        printf("bid:%d end with accept_idx %d", bid, accept_idx);
+        printf("bid:%d end with accept_idx %d\n", bid, accept_idx);
 #endif
-
-        accept_nums[bid] = accept_idx;
-        accept_tokens_now[accept_idx - 1] = end_ids[0];
-        // stop_flags[bid] = true;
+        // accept_idx 在循环退出时已递增，指向 stop_seq 最后 token 的下一个位置
+        accept_nums[bid] = accept_idx + 1;
+        accept_tokens_now[accept_idx] = end_ids[0];
       }
     }
   }

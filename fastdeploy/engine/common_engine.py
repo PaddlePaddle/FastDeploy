@@ -61,7 +61,6 @@ from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import (
     EngineCacheQueue,
     EngineWorkerQueue,
-    IPCLock,
     IPCSignal,
     ZmqIpcServer,
     ZmqTcpServer,
@@ -218,10 +217,6 @@ class EngineService:
                 disable_any_whitespace=self.cfg.structured_outputs_config.disable_any_whitespace,
             )
         self._init_worker_monitor_signals()
-
-        # Pass the GPU KV cache lock to cache_manager for mutual exclusion
-        # between the CPU transfer process and the worker process.
-        self.resource_manager.cache_manager.gpu_cache_lock = self.gpu_cache_lock
 
         # Initialize RegisterManager
         self._register_manager = RegisterManager(
@@ -445,14 +440,6 @@ class EngineService:
             name="kv_cache_status",
             array=kv_cache_status,
             dtype=np.int32,
-            suffix=current_suffix,
-            create=True,
-        )
-
-        # gpu_cache_lock: file-based lock for mutual exclusion between worker
-        # and CPU transfer when accessing GPU KV cache.
-        self.gpu_cache_lock = IPCLock(
-            name="gpu_cache_lock",
             suffix=current_suffix,
             create=True,
         )
@@ -1935,6 +1922,11 @@ class EngineService:
                 token_ids = cum_tokens[prefix_offset:read_offset]
             else:
                 token_ids = []
+
+            if is_end and delta_text == "" and len(cum_tokens) > 0:
+                read_offset = self.data_processor.decode_status[req_id][1]
+                token_ids = cum_tokens[read_offset:]
+
             if is_end:
                 del self.data_processor.decode_status[req_id]
         return delta_text, token_ids
@@ -2478,6 +2470,7 @@ class EngineService:
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --reasoning_parser {self.cfg.structured_outputs_config.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --model_loader_extra_config '{json.dumps(self.cfg.load_config.model_loader_extra_config)}'"
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
             f" --cache-transfer-protocol {self.cfg.cache_config.cache_transfer_protocol}"

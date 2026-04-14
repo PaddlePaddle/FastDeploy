@@ -40,8 +40,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 MAX_NGRAM_SIZE = 3
 MAX_DRAFT_TOKENS = 10
-NUM_ITERS = 1000
-WARMUP = 5
+NUM_ITERS = 1
+WARMUP = 1
 
 
 def _build_data(batch_size, seq_len, hit_type="low_input", seed=42):

@@ -197,6 +197,7 @@ jobs:
           -e "FD_ZMQ_SEND_RESPONSE_SERVER_PORT=${FD_ZMQ_SEND_RESPONSE_SERVER_PORT}" \
           -e "FD_ZMQ_CONTROL_CMD_SERVER_PORTS=${FD_ZMQ_CONTROL_CMD_SERVER_PORTS}" \
           -e "fd_wheel_url=${fd_wheel_url}" \
+          -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
@@ -204,3 +205,10 @@ jobs:
           python -m pip install ${fd_wheel_url}
           bash scripts/run_pre_ce.sh
           '
+
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}

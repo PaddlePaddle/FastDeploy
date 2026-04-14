@@ -25,6 +25,7 @@ from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
+import fastdeploy
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -72,7 +73,7 @@ class Glm4MoeMLP(nn.Layer):
                 fd_config=fd_config,
                 prefix=f"{prefix}.up_gate_proj",
                 input_size=fd_config.model_config.hidden_size,
-                output_size=[intermediate_size, intermediate_size],
+                output_sizes=[intermediate_size, intermediate_size],
                 with_bias=False,
             )
 
@@ -168,6 +169,7 @@ class Glm4Moe(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             reduce_results=not self.merge_ffn_tp,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
@@ -180,6 +182,7 @@ class Glm4Moe(nn.Layer):
             layer_idx=layer_id,
             gate_correction_bias=self.gate.e_score_correction_bias,
             weight_key_map=weight_key_map,
+            topk_reduce_func=lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
         )
 
         if self.n_shared_experts > 0:
@@ -263,6 +266,14 @@ class Glm4MoeAttention(nn.Layer):
         return output
 
 
+def rms_norm_func(x, weight, eps):
+    rms_norm_out = paddle.nn.functional.rms_norm(x, x.shape[-1:], weight, eps)
+    if isinstance(rms_norm_out, (tuple, list)):
+        return rms_norm_out[0].astype(weight.dtype)
+    else:
+        return rms_norm_out.astype(weight.dtype)
+
+
 class Glm4MoeDecoderLayer(nn.Layer):
     """ """
 
@@ -316,8 +327,10 @@ class Glm4MoeDecoderLayer(nn.Layer):
         residual: paddle.Tensor = None,
     ):
         """ """
+        proxy_rmsnorm = rms_norm_func if fastdeploy.envs.FD_USE_PHI_RMSNORM else None
+
         hidden_states, residual = self.input_layernorm(
-            hidden_states, residual_input=residual, forward_meta=forward_meta
+            hidden_states, residual_input=residual, forward_meta=forward_meta, proxy_rmsnorm=proxy_rmsnorm
         )
 
         hidden_states = self.self_attn(
@@ -326,7 +339,7 @@ class Glm4MoeDecoderLayer(nn.Layer):
         )
 
         # Fully Connected
-        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
+        hidden_states, residual = self.post_attention_layernorm(hidden_states, residual, proxy_rmsnorm=proxy_rmsnorm)
 
         hidden_states = self.mlp(hidden_states, forward_meta)
 

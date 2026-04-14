@@ -148,6 +148,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
         )
         self.experts = FusedMoE(
             fd_config=fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             reduce_results=False,
             moe_intermediate_size=moe_intermediate_size,
             num_experts=num_experts,

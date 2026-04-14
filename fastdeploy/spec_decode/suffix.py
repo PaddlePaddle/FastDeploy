@@ -43,7 +43,7 @@ class SuffixProposer(Proposer):
 
         if SuffixDecodingCache is None:
             raise ImportError(
-                "arctic_inference.suffix_decoding is not available. Please install arctic-inference package."
+                "arctic_inference.suffix_decoding is not available. Please install via `pip install arctic-inference==0.1.2`."
             )
 
         # Initialize SuffixDecodingCache

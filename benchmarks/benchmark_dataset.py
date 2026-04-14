@@ -855,7 +855,7 @@ class RandomTokenDataset(BenchmarkDataset):
             sampled_input_len = sample_len(random_input_len, random_range_ratio)
             sampled_output_len = sample_len(random_output_len, random_range_ratio)
 
-            random.seed(21)
+            # random.seed(21)
             token_ids = [random.randint(2000, 10000) for _ in range(sampled_input_len)]
             # prompt_text = " ".join(words)
 

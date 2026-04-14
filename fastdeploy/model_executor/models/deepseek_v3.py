@@ -72,6 +72,7 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         cp_gather_indexer_k_quant_cache,
         indexer_k_quant_and_cache,
+        merge_prefill_decode_output,
         radix_topk_ragged_transform,
     )
 
@@ -166,6 +167,7 @@ class DeepSeekV3MoE(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config=fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             reduce_results=False,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
@@ -316,7 +318,8 @@ class DeepseekV3MLAAttention(nn.Layer):
             )
         else:
             # Default rope without scaling
-            max_position_embeddings = getattr(fd_config.model_config, "max_position_embeddings", 8192)
+            # The current `max_model_len` can cover the maximum context length.
+            max_position_embeddings = getattr(fd_config.model_config, "max_model_len", 8192)
             self.rotary_emb = DeepseekScalingRotaryEmbedding(
                 self.qk_rope_head_dim,
                 max_position_embeddings=max_position_embeddings,
@@ -398,7 +401,6 @@ class DeepseekV3MLAAttention(nn.Layer):
             fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
             fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
-            fmha_out_prefill = fmha_out_prefill * forward_meta.mask_encoder_batch.cast(fmha_out_prefill.dtype)
             fmha_out = fmha_out_prefill
 
         if need_do_decode:  # max_dec_len_this_time
@@ -433,7 +435,17 @@ class DeepseekV3MLAAttention(nn.Layer):
             )
 
             if need_do_prefill:
-                fmha_out += fmha_out_decode
+                merge_prefill_decode_output(
+                    fmha_out,
+                    fmha_out_decode,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.cu_seqlens_q,
+                    self.num_attention_heads_tp,
+                    self.v_head_dim,
+                    1,
+                )
             else:
                 fmha_out = fmha_out_decode
 
@@ -674,14 +686,13 @@ class Indexer(nn.Layer):
                 self.indexer_cache, k_fp8_cache, k_scale_cache, forward_meta.block_tables, forward_meta.cu_seqlens_k
             )
 
-            k_scale_cache = k_scale_cache.flatten()[: k.shape[0]]
-            k_cache = k_fp8_cache.view(paddle.float8_e4m3fn), k_scale_cache
+            k_scale_cache_real = k_scale_cache.flatten()[: k.shape[0]].contiguous()
+            k_cache = k_fp8_cache.view(paddle.float8_e4m3fn), k_scale_cache_real
 
             # TODO(changwenbin): Constructed using maskoffset
             # ks,ke = forward_meta.attn_mask_offsets[::2].contiguous(),forward_meta.attn_mask_offsets[1::2].contiguous()
             num_tokens = q_fp8.shape[0]
             ks = paddle.zeros(num_tokens, dtype=paddle.int32)
-            ks_topk = paddle.zeros(num_tokens, dtype=paddle.int32)
             ke = paddle.zeros(num_tokens, dtype=paddle.int32)
 
             bsz = forward_meta.seq_lens_this_time.shape[0]
@@ -696,20 +707,13 @@ class Indexer(nn.Layer):
 
             logits = deep_gemm.fp8_mqa_logits(
                 q_fp8, k_cache, weights, ks, ke, max_seqlen_k=max_seqlen_k, clean_logits=False
-            )
-
-            # To save GPU global memory usage
-            assert logits.size() == (num_tokens, max_seqlen_k)
-            tmp = paddle.full((num_tokens, num_tokens), float("-inf"))
-            for i in range(num_tokens):
-                tmp[i, ks[i] : ke[i]] = logits[i, : ke[i] - ks[i]]
-            logits = tmp
+            ).contiguous()
 
             radix_topk_ragged_transform(
-                logits.contiguous(),
+                logits,
                 indexer_top_k,
-                ks_topk,  # self.offsets,
-                ke - ks + 1,  # mask.contiguous(),#self.lengths,
+                ks,  # self.offsets,# 初始K方向偏移，
+                ke - ks,  # self.lengths,# 表明当前q 关注的k有多长;
                 None,  # forward_meta.seq_lens_decoder,
                 None,  # forward_meta.batch_id_per_token,
                 None,
@@ -740,12 +744,12 @@ class Indexer(nn.Layer):
                 schedule_metadata,
                 self.max_model_len,
                 clean_logits=True,
-            )
+            ).contiguous()
 
             radix_topk_ragged_transform(
-                logits.contiguous(),
+                logits,
                 indexer_top_k,
-                self.offsets,  # unused
+                forward_meta.cu_seqlens_q,
                 self.lengths,  # unused
                 cache_seqlens,
                 forward_meta.batch_id_per_token,
@@ -753,7 +757,7 @@ class Indexer(nn.Layer):
                 None,  # self.buffer
                 forward_meta.block_tables.shape[1],
                 self.index_topk,
-                1,  # q_head
+                1,  # kv_head
             )
 
         return indexer_top_k
@@ -885,7 +889,8 @@ class DeepseekV32DSAAttention(nn.Layer):
             )
         else:
             # Default rope without scaling
-            max_position_embeddings = getattr(fd_config.model_config, "max_position_embeddings", 8192)
+            # The current `max_model_len` can cover the maximum context length.
+            max_position_embeddings = getattr(fd_config.model_config, "max_model_len", 8192)
             self.rotary_emb = DeepseekScalingRotaryEmbedding(
                 self.qk_rope_head_dim,
                 max_position_embeddings=max_position_embeddings,
