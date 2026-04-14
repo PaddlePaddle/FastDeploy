@@ -16,6 +16,7 @@ import (
 type Config struct {
 	Level               string
 	Output              string
+	Dir                 string // log directory; defaults to "logs"
 	MaxAgeDays          int
 	MaxTotalSizeMB      int
 	CleanupIntervalSecs float64
@@ -88,15 +89,53 @@ func newRotatingWriter(logDir string) (*rotatingWriter, error) {
 	}, nil
 }
 
+// needsRotate checks if rotation is needed under the lock.
+func (w *rotatingWriter) needsRotate(today string) (bool, string) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	needs := today != w.currentDate && (w.retryAfter.IsZero() || !nowFunc().Before(w.retryAfter))
+	return needs, w.logDir
+}
+
+// tryOpenRotateFile checks if rotation is needed and pre-opens the new log file
+// outside the lock to avoid blocking other writers on slow file I/O.
+func (w *rotatingWriter) tryOpenRotateFile(today string) *os.File {
+	needs, logDir := w.needsRotate(today)
+	if !needs {
+		return nil
+	}
+
+	datePath := filepath.Join(logDir, "router-"+today+".log")
+	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to open new log file %s: %v, keeping current file\n", datePath, err)
+		return nil
+	}
+	return f
+}
+
 func (w *rotatingWriter) Write(p []byte) (n int, err error) {
+	today := nowFunc().Format("2006-01-02")
+
+	// Pre-open new file outside the lock to reduce lock-held I/O time.
+	preOpened := w.tryOpenRotateFile(today)
+
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
-	today := nowFunc().Format("2006-01-02")
-
-	// Detect day change and rotate. Also retry failed rotations after backoff.
+	// Authoritative rotation check under lock.
 	if today != w.currentDate && (w.retryAfter.IsZero() || !nowFunc().Before(w.retryAfter)) {
-		w.rotateLocked(today)
+		if preOpened != nil {
+			w.commitRotate(today, preOpened)
+			preOpened = nil // ownership transferred
+		} else {
+			// File open failed; set backoff so we don't retry on every Write.
+			w.retryAfter = nowFunc().Add(30 * time.Second)
+		}
+	}
+	// If another goroutine already rotated, close the unused pre-opened file.
+	if preOpened != nil {
+		preOpened.Close()
 	}
 
 	// Close previous file if grace period expired.
@@ -130,19 +169,8 @@ func (w *rotatingWriter) Close() error {
 	return nil
 }
 
-// rotateLocked performs the actual file rotation. Must be called with w.mu held.
-func (w *rotatingWriter) rotateLocked(newDate string) {
-	// Open new date file for the new day first, before touching any state.
-	datePath := filepath.Join(w.logDir, "router-"+newDate+".log")
-	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to open new log file %s: %v, keeping current file\n", datePath, err)
-		// Don't advance currentDate — keep writing to the old file and retry
-		// after a backoff to avoid hammering the filesystem on every Write call.
-		w.retryAfter = nowFunc().Add(30 * time.Second)
-		return
-	}
-
+// commitRotate finalises the rotation with a pre-opened file. Must be called with w.mu held.
+func (w *rotatingWriter) commitRotate(newDate string, f *os.File) {
 	// Rotation succeeded — clear any retry backoff.
 	w.retryAfter = time.Time{}
 
@@ -201,14 +229,33 @@ func parseLogDate(p []byte) string {
 	for i := 0; i+10 <= len(s); i++ {
 		c := s[i]
 		if c >= '0' && c <= '9' && i+10 <= len(s) && s[i+4] == '/' && s[i+7] == '/' {
-			// Found a candidate "YYYY/MM/DD"
+			// Found a candidate "YYYY/MM/DD" — validate it.
 			year := s[i : i+4]
 			month := s[i+5 : i+7]
 			day := s[i+8 : i+10]
+			if !isAllDigits(month) || !isAllDigits(day) {
+				continue
+			}
+			m := (month[0]-'0')*10 + (month[1] - '0')
+			d := (day[0]-'0')*10 + (day[1] - '0')
+			if m < 1 || m > 12 || d < 1 || d > 31 {
+				continue
+			}
+			_ = year // year already starts with a digit; any 4-digit year is acceptable
 			return year + "-" + month + "-" + day
 		}
 	}
 	return ""
+}
+
+// isAllDigits returns true if every byte in s is an ASCII digit.
+func isAllDigits(s string) bool {
+	for i := 0; i < len(s); i++ {
+		if s[i] < '0' || s[i] > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // Init initializes the logger.
@@ -218,13 +265,17 @@ func Init(cfg Config) {
 		flags := log.LstdFlags | log.Lshortfile
 
 		if cfg.Output == "file" {
-			if _, err := os.Stat("logs"); os.IsNotExist(err) {
-				if err := os.MkdirAll("logs", 0755); err != nil {
+			logDir := cfg.Dir
+			if logDir == "" {
+				logDir = "logs"
+			}
+			if _, err := os.Stat(logDir); os.IsNotExist(err) {
+				if err := os.MkdirAll(logDir, 0755); err != nil {
 					log.Fatalln("Failed to create logs directory:", err)
 				}
 			}
 			var err error
-			writer, err = newRotatingWriter("logs")
+			writer, err = newRotatingWriter(logDir)
 			if err != nil {
 				log.Fatalln("Failed to create rotating log writer:", err)
 			}
@@ -259,6 +310,11 @@ func StartLogCleanup(ctx context.Context, cfg Config) {
 		return
 	}
 
+	logDir := cfg.Dir
+	if logDir == "" {
+		logDir = "logs"
+	}
+
 	ticker := time.NewTicker(time.Duration(cfg.CleanupIntervalSecs * float64(time.Second)))
 	defer ticker.Stop()
 
@@ -267,7 +323,7 @@ func StartLogCleanup(ctx context.Context, cfg Config) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			cleanupLogs("logs", cfg.MaxAgeDays, cfg.MaxTotalSizeMB)
+			cleanupLogs(logDir, cfg.MaxAgeDays, cfg.MaxTotalSizeMB)
 		}
 	}
 }

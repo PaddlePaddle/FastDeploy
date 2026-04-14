@@ -44,6 +44,7 @@ func main() {
 	logCfg := logger.Config{
 		Level:               cfg.Log.Level,
 		Output:              cfg.Log.Output,
+		Dir:                 cfg.Log.Dir,
 		MaxAgeDays:          cfg.Log.MaxAgeDays,
 		MaxTotalSizeMB:      cfg.Log.MaxTotalSizeMB,
 		CleanupIntervalSecs: cfg.Log.CleanupIntervalSecs,

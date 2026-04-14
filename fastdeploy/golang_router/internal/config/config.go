@@ -51,6 +51,7 @@ type SchedulerConfig struct {
 type LogConfig struct {
 	Level               string  `yaml:"level"`                // debug, info, warn, error
 	Output              string  `yaml:"output"`               // stdout, file
+	Dir                 string  `yaml:"dir"`                  // log directory; defaults to "logs"
 	MaxAgeDays          int     `yaml:"max-age-days"`         // max days to keep log files; 0 = use default (7)
 	MaxTotalSizeMB      int     `yaml:"max-total-size-mb"`    // max total log size in MB; 0 = use default (500)
 	CleanupIntervalSecs float64 `yaml:"cleanup-interval-secs"` // cleanup check interval in seconds; 0 = use default (3600)
