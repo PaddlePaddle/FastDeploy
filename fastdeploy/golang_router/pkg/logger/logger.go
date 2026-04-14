@@ -79,7 +79,9 @@ func newRotatingWriter(logDir string) (*rotatingWriter, error) {
 	if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "[ERROR] Failed to remove symlink %s: %v\n", symlinkPath, err)
 	}
-	os.Symlink("router-"+today+".log", symlinkPath)
+	if err := os.Symlink("router-"+today+".log", symlinkPath); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to create symlink %s: %v\n", symlinkPath, err)
+	}
 
 	return &rotatingWriter{
 		currentFile: f,
@@ -164,7 +166,9 @@ func (w *rotatingWriter) rotateLocked(newDate string) {
 	if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
 		fmt.Fprintf(os.Stderr, "[ERROR] Failed to remove symlink %s: %v\n", symlinkPath, err)
 	}
-	os.Symlink("router-"+newDate+".log", symlinkPath)
+	if err := os.Symlink("router-"+newDate+".log", symlinkPath); err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to create symlink %s: %v\n", symlinkPath, err)
+	}
 }
 
 // parseLogDate extracts the date from a log line produced by log.LstdFlags.
