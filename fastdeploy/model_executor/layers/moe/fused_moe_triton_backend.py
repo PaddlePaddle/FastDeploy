@@ -1383,7 +1383,7 @@ def python_op_fused_moe_kernel_paddle(
     intermediate_cache3.reshape_([token_num, top_k, hidden_size])
     out = intermediate_cache3.sum(axis=1)
 
-    out = fc1_latent_proj(out)
+    out = fc2_latent_proj(out)
 
     return out
 
