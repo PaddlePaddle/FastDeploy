@@ -97,7 +97,7 @@ class XPUModelRunner(ModelRunnerBase):
         local_rank: int,
     ):
         super().__init__(fd_config=fd_config, device=device)
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -1578,7 +1578,7 @@ class XPUModelRunner(ModelRunnerBase):
             model_inputs["generated_modality"] = self.share_inputs["generated_modality"]
             if self.enable_mm:
                 model_inputs["image_features"] = self.share_inputs["image_features"]
-            
+
             # 3. Execute model
             model_output = self.model(
                 model_inputs,
@@ -2011,4 +2011,3 @@ class XPUModelRunner(ModelRunnerBase):
             cumsum_seqlens=cumsum_seqlens,
         )
         return rope_emb_lst
-    
