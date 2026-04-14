@@ -313,6 +313,15 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
+    def _can_preempt_with_decode_task(self):
+        """
+        A request is preemptable if it does NOT use extend tables AND is in decode status.
+        """
+        for req in self.running:
+            if not req.use_extend_tables and req.status == RequestStatus.RUNNING_DECODE:
+                return True
+        return False
+
     def preempted_all(self):
         with self.lock:
             preempted_reqs = []
@@ -350,14 +359,38 @@ class ResourceManagerV1(ResourceManager):
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, scheduled_reqs):
         """
         If the request cannot be scheduled, preempt the running request one by one until it can be scheduled. Last in, first out.
+        Only requests that is in decode status can be preempted.
         """
         can_schedule = False
-        while self._can_preempt():
-            if not self.cache_manager.can_allocate_gpu_blocks(num_new_blocks):
-                preempted_req = self.running.pop()
-                if preempted_req.use_extend_tables:
-                    self.running.insert(0, preempted_req)
-                    continue
+        while self._can_preempt_with_decode_task():
+            if self.cache_manager.can_allocate_gpu_blocks(num_new_blocks):
+                # The request can be scheduled.
+                can_schedule = True
+                break
+            else:
+                # Scan from back to front to find the last preemptable request
+                preempted_req = None
+                i = len(self.running) - 1
+                while i >= 0:
+                    candidate = self.running[i]
+                    # Skip requests that are not in decode status
+                    if candidate.status != RequestStatus.RUNNING_DECODE:
+                        i -= 1
+                        continue
+                    # Skip requests using extend tables
+                    if candidate.use_extend_tables:
+                        i -= 1
+                        continue
+                    # Found a valid preempt target
+                    preempted_req = candidate
+                    break
+
+                if preempted_req is None:
+                    # No preemptable request found (all have no output tokens or use extend tables)
+                    return False
+
+                # Remove the preempted request from the running list
+                self.running.pop(i)
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
                 if self.config.scheduler_config.splitwise_role == "decode":
@@ -396,10 +429,6 @@ class ResourceManagerV1(ResourceManager):
                     # No more request to preempt.
                     can_schedule = False
                     break
-            else:
-                # The request can be scheduled.
-                can_schedule = True
-                break
         self.current_reserve_output_block_num = self.init_reserve_output_block_num
         self.current_reserve_output_block_num_float = self.init_reserve_output_block_num
         self.can_relax_prefill_strategy = False
@@ -1025,7 +1054,7 @@ class ResourceManagerV1(ResourceManager):
                                 self.cache_manager.update_cache_blocks(
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
-                            request.status = RequestStatus.RUNNING
+                            request.status = RequestStatus.RUNNING_PREFILL
                             if self.config.scheduler_config.splitwise_role == "mixed":
                                 allocated_position = self.get_available_position()
                                 request.idx = allocated_position
@@ -1094,7 +1123,7 @@ class ResourceManagerV1(ResourceManager):
                                 self.cache_manager.update_cache_blocks(
                                     request, self.config.cache_config.block_size, request.num_computed_tokens
                                 )
-                            request.status = RequestStatus.RUNNING
+                            request.status = RequestStatus.RUNNING_PREFILL
                         else:
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
@@ -1334,6 +1363,7 @@ class ResourceManagerV1(ResourceManager):
     def add_request_in_p(self, requests: list[Request]):
         with self.lock:
             for request in requests:
+                request.status = RequestStatus.RUNNING_PREFILL
                 self.running.append(request)
 
     def preallocate_resource_in_p(self, request: Request):
@@ -1467,6 +1497,7 @@ class ResourceManagerV1(ResourceManager):
             ):
                 request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)
             request.need_prefill_tokens = len(request.prompt_token_ids) + 1
+            request.status = RequestStatus.RUNNING_DECODE
 
             request_output.metrics.decode_recv_req_time = request.metrics.decode_recv_req_time
             request_output.metrics.decode_preallocate_req_time = request.metrics.decode_preallocate_req_time

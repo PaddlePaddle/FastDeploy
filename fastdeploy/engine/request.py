@@ -50,10 +50,11 @@ from fastdeploy.worker.output import (
 
 class RequestStatus(Enum):
     WAITING = 0
-    RUNNING = 1
-    PREEMPTED = 2
-    FINISHED = 3
-    ABORT = 4
+    RUNNING_PREFILL = 1
+    RUNNING_DECODE = 2
+    PREEMPTED = 3
+    FINISHED = 4
+    ABORT = 5
 
 
 class RequestType(Enum):

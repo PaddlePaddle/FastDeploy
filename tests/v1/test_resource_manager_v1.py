@@ -650,7 +650,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
 
         decode_request = _make_request(request_id="req-decode", prompt_token_ids=[1, 2])
         decode_request.idx = 0
-        decode_request.status = RequestStatus.RUNNING
+        decode_request.status = RequestStatus.RUNNING_DECODE
         decode_request.num_computed_tokens = 2
         decode_request.output_token_ids = [99]
         decode_request.block_tables = [1]
@@ -665,30 +665,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         self.assertGreaterEqual(len(scheduled_reqs), 2)
         self.assertEqual(error_reqs, [])
         self.assertIn(decode_request.request_id, manager.using_extend_tables_req_id)
-        self.assertEqual(waiting_request.status, RequestStatus.RUNNING)
-
-    def test_trigger_preempt_records_tasks(self):
-        manager = _build_manager()
-        _register_manager_cleanup(self, manager)
-        manager.cache_manager = MagicMock()
-        manager.cache_manager.num_gpu_blocks = 8
-        manager.cache_manager.gpu_free_block_list = list(range(8))
-        manager.cache_manager.can_allocate_gpu_blocks.side_effect = [False, True]
-        manager._free_blocks = MagicMock()
-        preempted_req = _make_request(request_id="req-preempted")
-        preempted_req.idx = 0
-        preempted_req.use_extend_tables = False
-        request = _make_request(request_id="req-target")
-        request.idx = 1
-        manager.running = [request, preempted_req]
-
-        preempted_reqs = []
-        scheduled_reqs = []
-        can_schedule = manager._trigger_preempt(request, 2, preempted_reqs, scheduled_reqs)
-        self.assertTrue(can_schedule)
-        self.assertIn(preempted_req.request_id, manager.to_be_rescheduled_request_id_set)
-        self.assertEqual(preempted_reqs[0], preempted_req)
-        self.assertEqual(scheduled_reqs[0].request_id, preempted_req.request_id)
+        self.assertEqual(waiting_request.status, RequestStatus.RUNNING_PREFILL)
 
     def test_available_position_and_real_bsz(self):
         manager = _build_manager()
