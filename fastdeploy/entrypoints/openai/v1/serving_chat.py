@@ -331,8 +331,8 @@ class OpenAIServingChat(OpenAiServingBase):
         # api_server_logger.debug(f"Client {ctx.request_id} received: {data}")
         # The logprob for handling the response
         choices: list[ChatCompletionResponseChoice] = []
-        for choice_index, respose in accumula_output_map.items():
-            choice = await self._create_chat_completion_choice(respose, ctx)
+        for choice_index, response in accumula_output_map.items():
+            choice = await self._create_chat_completion_choice(response, ctx)
             choices.append(choice)
 
         choices = sorted(choices, key=lambda x: x.index)
