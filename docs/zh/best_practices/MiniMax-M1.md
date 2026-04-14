@@ -40,7 +40,7 @@ MiniMax-M1（456B 参数）在实际部署中需要量化。不同模式的 GPU 
 |------|---------|----------|
 | BF16 | ~912 GB | 12× A800-80GB, `--tensor-parallel-size 12` |
 | FP8 | ~456 GB | 6× A800-80GB, `--tensor-parallel-size 6` |
-| WINT4 | ~228 GB | 3× A800-80GB, `--tensor-parallel-size 4` |
+| WINT4 | ~228 GB | 4× A800-80GB, `--tensor-parallel-size 4` |
 
 ```shell
 # WINT4 量化部署（推荐最小配置）
