@@ -131,6 +131,16 @@ func (w *rotatingWriter) Close() error {
 
 // rotateLocked performs the actual file rotation. Must be called with w.mu held.
 func (w *rotatingWriter) rotateLocked(newDate string) {
+	// Open new date file for the new day first, before touching any state.
+	datePath := filepath.Join(w.logDir, "router-"+newDate+".log")
+	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to open new log file %s: %v, keeping current file\n", datePath, err)
+		// Advance currentDate so we don't retry on every Write call.
+		w.currentDate = newDate
+		return
+	}
+
 	// Close any lingering previous file.
 	if w.prevFile != nil {
 		w.prevFile.Close()
@@ -142,19 +152,6 @@ func (w *rotatingWriter) rotateLocked(newDate string) {
 	w.prevDate = w.currentDate
 	w.graceUntil = nowFunc().Add(gracePeriod)
 
-	// Open new date file for the new day.
-	datePath := filepath.Join(w.logDir, "router-"+newDate+".log")
-	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Printf("[ERROR] failed to open new log file %s: %v, keeping current file", datePath, err)
-		if w.prevFile != nil {
-			w.currentFile = w.prevFile
-			w.currentDate = w.prevDate
-			w.prevFile = nil
-			w.prevDate = ""
-		}
-		return
-	}
 	w.currentFile = f
 	w.currentDate = newDate
 
