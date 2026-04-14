@@ -76,7 +76,9 @@ func newRotatingWriter(logDir string) (*rotatingWriter, error) {
 	}
 
 	// Create/update symlink: router.log -> router-<today>.log
-	os.Remove(symlinkPath)
+	if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to remove symlink %s: %v\n", symlinkPath, err)
+	}
 	os.Symlink("router-"+today+".log", symlinkPath)
 
 	return &rotatingWriter{
@@ -159,7 +161,9 @@ func (w *rotatingWriter) rotateLocked(newDate string) {
 
 	// Update symlink: router.log -> router-<newDate>.log
 	symlinkPath := filepath.Join(w.logDir, "router.log")
-	os.Remove(symlinkPath)
+	if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "[ERROR] Failed to remove symlink %s: %v\n", symlinkPath, err)
+	}
 	os.Symlink("router-"+newDate+".log", symlinkPath)
 }
 
@@ -312,7 +316,9 @@ func cleanupLogs(logDir string, maxAgeDays, maxTotalSizeMB int) {
 		remaining := archives[:0]
 		for _, f := range archives {
 			if f.date.Before(cutoff) {
-				os.Remove(f.path)
+				if err := os.Remove(f.path); err != nil {
+					fmt.Fprintf(os.Stderr, "[ERROR] Failed to remove log file %s: %v\n", f.path, err)
+				}
 			} else {
 				remaining = append(remaining, f)
 			}
@@ -329,7 +335,9 @@ func cleanupLogs(logDir string, maxAgeDays, maxTotalSizeMB int) {
 		}
 		for len(archives) > 0 && totalSize > maxBytes {
 			oldest := archives[0]
-			os.Remove(oldest.path)
+			if err := os.Remove(oldest.path); err != nil {
+				fmt.Fprintf(os.Stderr, "[ERROR] Failed to remove log file %s: %v\n", oldest.path, err)
+			}
 			totalSize -= oldest.size
 			archives = archives[1:]
 		}

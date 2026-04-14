@@ -182,3 +182,37 @@ func TestContextPrefix(t *testing.T) {
 		}
 	})
 }
+
+func TestParseLogDate(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"standard INFO log line", "[INFO] 2024/03/15 10:30:45 some message", "2024-03-15"},
+		{"standard ERROR log line", "[ERROR] 2024/01/02 09:00:00 error occurred", "2024-01-02"},
+		{"standard WARN log line", "[WARN] 2025/12/31 23:59:59 warning msg", "2025-12-31"},
+		{"standard DEBUG log line", "[DEBUG] 2024/06/01 00:00:00 debug info", "2024-06-01"},
+		{"empty string", "", ""},
+		{"no date pattern", "no date here at all", ""},
+		{"incomplete date - only year", "2024/", ""},
+		{"incomplete date - year and month", "[INFO] 2024/03", ""},
+		{"short input", "abc", ""},
+		{"date without log prefix", "2024/03/15 10:30:45 message", "2024-03-15"},
+		{"date at different position", "prefix 2024/11/20 rest", "2024-11-20"},
+		{"slash but not date", "path/to/file is not a date", ""},
+		{"single character input", "x", ""},
+		{"exactly 10 chars non-date", "abcdefghij", ""},
+		{"boundary - first day of year", "[INFO] 2024/01/01 00:00:00 new year", "2024-01-01"},
+		{"boundary - last day of year", "[INFO] 2024/12/31 23:59:59 year end", "2024-12-31"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := parseLogDate([]byte(tt.input))
+			if got != tt.expected {
+				t.Errorf("parseLogDate(%q) = %q, want %q", tt.input, got, tt.expected)
+			}
+		})
+	}
+}
