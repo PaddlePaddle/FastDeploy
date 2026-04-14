@@ -1560,13 +1560,7 @@ class ResourceManagerV1(ResourceManager):
                 request.block_tables[request.num_cached_blocks :], request.request_id
             )
         else:
-            if self.config.cache_config.enable_prefix_caching:
-                self.cache_manager.release_block_ids(request)
-                self.cache_manager.recycle_gpu_blocks(
-                    request.block_tables[request.num_cached_blocks :], request.request_id
-                )
-            else:
-                self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
+            self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
         request.block_tables = []
 
         if request.request_id in self.using_extend_tables_req_id:
