@@ -143,7 +143,18 @@ func (w *rotatingWriter) rotateLocked(newDate string) {
 
 	// Open new date file for the new day.
 	datePath := filepath.Join(w.logDir, "router-"+newDate+".log")
-	w.currentFile, _ = os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+	if err != nil {
+		log.Printf("[ERROR] failed to open new log file %s: %v, keeping current file", datePath, err)
+		if w.prevFile != nil {
+			w.currentFile = w.prevFile
+			w.currentDate = w.prevDate
+			w.prevFile = nil
+			w.prevDate = ""
+		}
+		return
+	}
+	w.currentFile = f
 	w.currentDate = newDate
 
 	// Update symlink: router.log -> router-<newDate>.log
@@ -162,7 +173,7 @@ func parseLogDate(p []byte) string {
 	s := string(p)
 	for i := 0; i+10 <= len(s); i++ {
 		c := s[i]
-		if c >= '1' && c <= '9' && i+10 <= len(s) && s[i+4] == '/' && s[i+7] == '/' {
+		if c >= '0' && c <= '9' && i+10 <= len(s) && s[i+4] == '/' && s[i+7] == '/' {
 			// Found a candidate "YYYY/MM/DD"
 			year := s[i : i+4]
 			month := s[i+5 : i+7]
