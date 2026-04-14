@@ -39,7 +39,8 @@ def _torch_key_to_paddle(key: str) -> str:
     For Flux/SD3 diffusion models, PyTorch and Paddle use identical
     key names (both use [out, in, kH, kW] for Conv2D).  This function
     exists as an extension point for future architectures that may
-    require key remapping.
+    require key remapping (e.g., ``running_mean`` → ``_mean`` for
+    BatchNorm, or fusing separate QKV projections).
     """
     return key
 
@@ -114,11 +115,25 @@ def load_model_weights(
 
     pdparams_path = os.path.join(weight_dir, "model_state.pdparams")
     safetensors_path = os.path.join(weight_dir, "diffusion_pytorch_model.safetensors")
+    safetensors_index_path = os.path.join(weight_dir, "diffusion_pytorch_model.safetensors.index.json")
 
     if os.path.isfile(pdparams_path):
         state_dict = load_paddle_state_dict(pdparams_path)
     elif os.path.isfile(safetensors_path):
         state_dict = load_safetensors_to_paddle(safetensors_path, dtype=dtype)
+    elif os.path.isfile(safetensors_index_path):
+        # Multi-shard safetensors: load index → iterate unique shard files
+        import json
+
+        with open(safetensors_index_path, "r") as f:
+            index = json.load(f)
+        shard_files = sorted(set(index.get("weight_map", {}).values()))
+        state_dict = {}
+        for shard_file in shard_files:
+            shard_path = os.path.join(weight_dir, shard_file)
+            shard_dict = load_safetensors_to_paddle(shard_path, dtype=dtype)
+            state_dict.update(shard_dict)
+        logger.info("Loaded %d shards (%d total tensors) from %s", len(shard_files), len(state_dict), weight_dir)
     else:
         logger.warning(
             "No weight file found in %s (tried model_state.pdparams, " "diffusion_pytorch_model.safetensors)",

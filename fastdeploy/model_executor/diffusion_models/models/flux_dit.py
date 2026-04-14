@@ -43,10 +43,12 @@ import paddle.nn.functional as F
 class RMSNorm(nn.Layer):
     """Root Mean Square Layer Normalization.
 
-    .. todo:: Phase 3 — unify with ``fastdeploy.model_executor.layers.normalization.RMSNorm``
+    .. todo:: Phase 3 — unify with ``fastdeploy.model_executor.layers.layernorm.RMSNorm``
        once the diffusion pipeline carries an ``FDConfig`` instance.  The FD-native
-       RMSNorm requires ``FDConfig`` + fused CUDA kernels + batch-invariant dispatch
-       which are not yet wired into the diffusion engine.
+       ``RMSNorm`` requires ``FDConfig`` + fused CUDA kernels + batch-invariant dispatch
+       which are not yet wired into the diffusion engine.  See also
+       ``fastdeploy.model_executor.layers.normalization.RMSNorm`` for the fused kernel
+       variant.
     """
 
     def __init__(self, dim: int, eps: float = 1e-6) -> None:
@@ -67,7 +69,7 @@ class TimestepEmbedding(nn.Layer):
         self.frequency_dim = frequency_dim
         self.mlp = nn.Sequential(
             nn.Linear(frequency_dim, dim),
-            nn.Silu(),
+            nn.SiLU(),
             nn.Linear(dim, dim),
         )
 
@@ -200,7 +202,7 @@ class AdaLayerNormZero(nn.Layer):
 
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.silu = nn.Silu()
+        self.silu = nn.SiLU()
         self.linear = nn.Linear(dim, 6 * dim)
         self.norm = nn.LayerNorm(dim, epsilon=1e-6, weight_attr=False, bias_attr=False)
 
@@ -219,7 +221,7 @@ class AdaLayerNormZeroSingle(nn.Layer):
 
     def __init__(self, dim: int) -> None:
         super().__init__()
-        self.silu = nn.Silu()
+        self.silu = nn.SiLU()
         self.linear = nn.Linear(dim, 3 * dim)
         self.norm = nn.LayerNorm(dim, epsilon=1e-6, weight_attr=False, bias_attr=False)
 
@@ -236,7 +238,7 @@ class AdaLayerNormContinuous(nn.Layer):
 
     def __init__(self, dim: int, conditioning_dim: int, eps: float = 1e-6) -> None:
         super().__init__()
-        self.silu = nn.Silu()
+        self.silu = nn.SiLU()
         self.linear = nn.Linear(conditioning_dim, 2 * dim)
         self.norm = nn.LayerNorm(dim, epsilon=eps, weight_attr=False, bias_attr=False)
 
