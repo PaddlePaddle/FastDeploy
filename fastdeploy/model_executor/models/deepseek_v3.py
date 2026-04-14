@@ -362,7 +362,7 @@ class DeepseekV3MLAAttention(nn.Layer):
     ):
         """ """
 
-        fmha_out = None
+        attn_out = None
         if self.use_gated_attn:
             gate_out = self.gate(hidden_states)
 
