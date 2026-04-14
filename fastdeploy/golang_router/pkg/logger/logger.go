@@ -56,6 +56,7 @@ type rotatingWriter struct {
 	currentDate string    // "2006-01-02"
 	prevDate    string    // previous date during grace period
 	graceUntil  time.Time // when to close prevFile
+	retryAfter  time.Time // earliest time to retry a failed rotation (backoff)
 	logDir      string
 }
 
@@ -93,8 +94,8 @@ func (w *rotatingWriter) Write(p []byte) (n int, err error) {
 
 	today := nowFunc().Format("2006-01-02")
 
-	// Detect day change and rotate.
-	if today != w.currentDate {
+	// Detect day change and rotate. Also retry failed rotations after backoff.
+	if today != w.currentDate && (w.retryAfter.IsZero() || !nowFunc().Before(w.retryAfter)) {
 		w.rotateLocked(today)
 	}
 
@@ -136,10 +137,14 @@ func (w *rotatingWriter) rotateLocked(newDate string) {
 	f, err := os.OpenFile(datePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] Failed to open new log file %s: %v, keeping current file\n", datePath, err)
-		// Advance currentDate so we don't retry on every Write call.
-		w.currentDate = newDate
+		// Don't advance currentDate — keep writing to the old file and retry
+		// after a backoff to avoid hammering the filesystem on every Write call.
+		w.retryAfter = nowFunc().Add(30 * time.Second)
 		return
 	}
+
+	// Rotation succeeded — clear any retry backoff.
+	w.retryAfter = time.Time{}
 
 	// Close any lingering previous file.
 	if w.prevFile != nil {
