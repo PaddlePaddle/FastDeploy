@@ -16,6 +16,8 @@
 
 import asyncio
 import json
+import sys
+import tempfile
 import time
 import uuid
 from dataclasses import dataclass, field
@@ -78,7 +80,7 @@ class Endpoint:
 
 @dataclass
 class Config:
-    ipc_root: str = "/dev/shm"
+    ipc_root: str = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
     io_threads: int = 1
     copy: bool = False
     endpoints: Dict[str, Endpoint] = field(default_factory=dict)
