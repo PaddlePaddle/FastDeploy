@@ -76,11 +76,8 @@ func newRotatingWriter(logDir string) (*rotatingWriter, error) {
 	}
 
 	// Create/update symlink: router.log -> router-<today>.log
-	if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to remove symlink %s: %v\n", symlinkPath, err)
-	}
-	if err := os.Symlink("router-"+today+".log", symlinkPath); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to create symlink %s: %v\n", symlinkPath, err)
+	if err := updateSymlink(symlinkPath, "router-"+today+".log"); err != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] Symlink %s may be stale: %v\n", symlinkPath, err)
 	}
 
 	return &rotatingWriter{
@@ -163,12 +160,32 @@ func (w *rotatingWriter) rotateLocked(newDate string) {
 
 	// Update symlink: router.log -> router-<newDate>.log
 	symlinkPath := filepath.Join(w.logDir, "router.log")
+	if err := updateSymlink(symlinkPath, "router-"+newDate+".log"); err != nil {
+		fmt.Fprintf(os.Stderr, "[WARN] Symlink %s may be stale (points to old date): %v\n", symlinkPath, err)
+	}
+}
+
+// updateSymlink atomically replaces symlinkPath to point to target.
+// It tries os.Remove + os.Symlink first; if remove fails (e.g. permission denied)
+// it falls back to a temp-symlink + os.Rename for an atomic swap attempt.
+func updateSymlink(symlinkPath, target string) error {
+	// Fast path: remove old, create new.
 	if err := os.Remove(symlinkPath); err != nil && !os.IsNotExist(err) {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to remove symlink %s: %v\n", symlinkPath, err)
+		// Remove failed (e.g. permission issue). Try atomic rename as fallback.
+		tmp := symlinkPath + ".tmp"
+		if err2 := os.Symlink(target, tmp); err2 != nil {
+			return fmt.Errorf("remove old symlink: %w; create temp symlink: %v", err, err2)
+		}
+		if err2 := os.Rename(tmp, symlinkPath); err2 != nil {
+			os.Remove(tmp) // best-effort cleanup
+			return fmt.Errorf("remove old symlink: %w; rename temp symlink: %v", err, err2)
+		}
+		return nil
 	}
-	if err := os.Symlink("router-"+newDate+".log", symlinkPath); err != nil {
-		fmt.Fprintf(os.Stderr, "[ERROR] Failed to create symlink %s: %v\n", symlinkPath, err)
+	if err := os.Symlink(target, symlinkPath); err != nil {
+		return fmt.Errorf("create symlink: %w", err)
 	}
+	return nil
 }
 
 // parseLogDate extracts the date from a log line produced by log.LstdFlags.
