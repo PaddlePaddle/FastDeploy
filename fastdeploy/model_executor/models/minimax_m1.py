@@ -31,7 +31,6 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
-from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -178,10 +177,8 @@ class MiniMaxM1MoE(nn.Layer):
 
     def forward(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta):
         """Forward pass with router gating."""
-        moe_out = self.experts(hidden_states, self.gate, forward_meta)
-        if self.tp_size > 1:
-            moe_out = tensor_model_parallel_all_reduce(moe_out)
-        return moe_out
+        # FusedMoE(reduce_results=True) already handles all-reduce internally
+        return self.experts(hidden_states, self.gate, forward_meta)
 
 
 class MiniMaxM1Attention(nn.Layer):
