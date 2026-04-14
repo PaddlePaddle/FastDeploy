@@ -233,7 +233,7 @@ def xpu_pre_process(
         "prefix_len_cpu",
         "decoder_context_len_cpu",
         "decoder_context_len_cache_cpu",
-        # "len_info_cpu",
+        "len_info_cpu",
     ]
 
     if use_cudagraph and forward_meta is not None:
@@ -259,7 +259,7 @@ def xpu_pre_process(
         decoder_context_len_cpu = forward_meta.decoder_context_len_cpu
         decoder_context_len_cache_cpu = forward_meta.decoder_context_len_cache_cpu
 
-        # len_info_cpu = forward_meta.len_info_cpu
+        len_info_cpu = forward_meta.len_info_cpu
     else:
         encoder_batch_map = xpu_forward_meta.encoder_batch_map
         decoder_batch_map = xpu_forward_meta.decoder_batch_map
@@ -283,7 +283,7 @@ def xpu_pre_process(
         decoder_context_len_cpu = xpu_forward_meta.decoder_context_len_cpu
         decoder_context_len_cache_cpu = xpu_forward_meta.decoder_context_len_cache_cpu
 
-        # len_info_cpu = xpu_forward_meta.len_info_cpu
+        len_info_cpu = xpu_forward_meta.len_info_cpu
 
     # for var_name in skip_list:
     #     locals()[var_name] = getattr(xpu_forward_meta, var_name, None) if forward_meta is None or getattr(forward_meta, var_name, None) is None else getattr(forward_meta, var_name)
@@ -330,8 +330,8 @@ def xpu_pre_process(
         _,
         _,
         _,
-        xpu_forward_meta.len_info_cpu,
-        # _,
+        # xpu_forward_meta.len_info_cpu,
+        _,
         xpu_forward_meta.slot_mapping_enc,
         xpu_forward_meta.slot_mapping_dec,
     ) = get_infer_param(
@@ -359,14 +359,22 @@ def xpu_pre_process(
         prefix_len_cpu,
         decoder_context_len_cpu,
         decoder_context_len_cache_cpu,
-        # len_info_cpu,
+        len_info_cpu,
         block_size,
         num_speculative_tokens,
     )
 
-    xpu_forward_meta.enc_batch = xpu_forward_meta.len_info_cpu[0]
-    xpu_forward_meta.dec_batch = xpu_forward_meta.len_info_cpu[1]
-    xpu_forward_meta.total_enc_len = xpu_forward_meta.len_info_cpu[2]
+    # xpu_forward_meta.enc_batch = xpu_forward_meta.len_info_cpu[0]
+    # xpu_forward_meta.dec_batch = xpu_forward_meta.len_info_cpu[1]
+    # xpu_forward_meta.total_enc_len = xpu_forward_meta.len_info_cpu[2]
+    if use_cudagraph and forward_meta is not None:
+        forward_meta.enc_batch = len_info_cpu[0]
+        forward_meta.dec_batch = len_info_cpu[1]
+        forward_meta.total_enc_len = len_info_cpu[2]
+    else:
+        xpu_forward_meta.enc_batch = len_info_cpu[0]
+        xpu_forward_meta.dec_batch = len_info_cpu[1]
+        xpu_forward_meta.total_enc_len = len_info_cpu[2]
 
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
@@ -386,8 +394,8 @@ def xpu_pre_process(
         decoder_seq_lod_cpu,
         encoder_batch_idx_cpu,
         decoder_batch_idx_cpu,
-        xpu_forward_meta.len_info_cpu,
-        # len_info_cpu,
+        # xpu_forward_meta.len_info_cpu,
+        len_info_cpu,
         None,  # output_padding_offset
         -1,  # max bs
     )

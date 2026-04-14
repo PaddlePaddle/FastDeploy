@@ -498,7 +498,7 @@ std::vector<paddle::Tensor> GetInferParam(
     paddle::Tensor& prefix_len_cpu,
     paddle::Tensor& decoder_context_len_cpu,
     paddle::Tensor& decoder_context_len_cache_cpu,
-    //   paddle::Tensor& len_info_cpu,
+    paddle::Tensor& len_info_cpu,
     int block_size,
     int num_speculative_tokens);
 
@@ -1093,7 +1093,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("prefix_len_cpu"),
         py::arg("decoder_context_len_cpu"),
         py::arg("decoder_context_len_cache_cpu"),
-        //     py::arg("len_info_cpu"),
+        py::arg("len_info_cpu"),
         py::arg("block_size"),
         py::arg("num_speculative_tokens"),
         "Get infer parameters for block attention in XPU");

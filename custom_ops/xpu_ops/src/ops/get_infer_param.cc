@@ -88,7 +88,7 @@ std::vector<paddle::Tensor> GetInferParam(
     paddle::Tensor& prefix_len_cpu,
     paddle::Tensor& decoder_context_len_cpu,
     paddle::Tensor& decoder_context_len_cache_cpu,
-    // paddle::Tensor& len_info_cpu,
+    paddle::Tensor& len_info_cpu,
     int block_size,
     int num_speculative_tokens) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
@@ -272,8 +272,8 @@ std::vector<paddle::Tensor> GetInferParam(
   //                   seq_lens_encoder.type(),
   //                   paddle::CPUPlace());
 
-  auto len_info_cpu =
-      paddle::empty({7}, seq_lens_encoder.type(), paddle::CPUPlace());
+  // auto len_info_cpu =
+  //     paddle::empty({7}, seq_lens_encoder.type(), paddle::CPUPlace());
 
   auto prefix_block_tables =
       paddle::empty({block_bs, block_num_per_seq},  // full size
@@ -504,21 +504,31 @@ std::vector<paddle::DataType> GetInferParamInferDtype(
 }
 
 PD_BUILD_OP(get_infer_param)
-    .Inputs({
-        "seq_lens_encoder",        "seq_lens_decoder",
-        "seq_lens_this_time",      "block_tables",
-        "encoder_batch_map",       "decoder_batch_map",
-        "encoder_batch_idx",       "decoder_batch_idx",
-        "encoder_seq_lod",         "decoder_seq_lod",
-        "encoder_kv_lod",          "prefix_len",
-        "decoder_context_len",     "decoder_context_len_cache",
-        "encoder_batch_map_cpu",   "decoder_batch_map_cpu",
-        "encoder_batch_idx_cpu",   "decoder_batch_idx_cpu",
-        "encoder_seq_lod_cpu",     "decoder_seq_lod_cpu",
-        "encoder_kv_lod_cpu",      "prefix_len_cpu",
-        "decoder_context_len_cpu", "decoder_context_len_cache_cpu",
-        // "len_info_cpu"
-    })
+    .Inputs({"seq_lens_encoder",
+             "seq_lens_decoder",
+             "seq_lens_this_time",
+             "block_tables",
+             "encoder_batch_map",
+             "decoder_batch_map",
+             "encoder_batch_idx",
+             "decoder_batch_idx",
+             "encoder_seq_lod",
+             "decoder_seq_lod",
+             "encoder_kv_lod",
+             "prefix_len",
+             "decoder_context_len",
+             "decoder_context_len_cache",
+             "encoder_batch_map_cpu",
+             "decoder_batch_map_cpu",
+             "encoder_batch_idx_cpu",
+             "decoder_batch_idx_cpu",
+             "encoder_seq_lod_cpu",
+             "decoder_seq_lod_cpu",
+             "encoder_kv_lod_cpu",
+             "prefix_len_cpu",
+             "decoder_context_len_cpu",
+             "decoder_context_len_cache_cpu",
+             "len_info_cpu"})
     .Outputs({"encoder_batch_map_out",
               "decoder_batch_map_out",
               "encoder_batch_idx_out",
@@ -543,29 +553,28 @@ PD_BUILD_OP(get_infer_param)
               "len_info_cpu_out",
               "slot_mapping_enc",
               "slot_mapping_dec"})
-    .SetInplaceMap({
-        {"encoder_batch_map", "encoder_batch_map_out"},
-        {"decoder_batch_map", "decoder_batch_map_out"},
-        {"encoder_batch_idx", "encoder_batch_idx_out"},
-        {"decoder_batch_idx", "decoder_batch_idx_out"},
-        {"encoder_seq_lod", "encoder_seq_lod_out"},
-        {"decoder_seq_lod", "decoder_seq_lod_out"},
-        {"encoder_kv_lod", "encoder_kv_lod_out"},
-        {"prefix_len", "prefix_len_out"},
-        {"decoder_context_len", "decoder_context_len_out"},
-        {"decoder_context_len_cache", "decoder_context_len_cache_out"},
-        {"encoder_batch_map_cpu", "encoder_batch_map_cpu_out"},
-        {"decoder_batch_map_cpu", "decoder_batch_map_cpu_out"},
-        {"encoder_batch_idx_cpu", "encoder_batch_idx_cpu_out"},
-        {"decoder_batch_idx_cpu", "decoder_batch_idx_cpu_out"},
-        {"encoder_seq_lod_cpu", "encoder_seq_lod_cpu_out"},
-        {"decoder_seq_lod_cpu", "decoder_seq_lod_cpu_out"},
-        {"encoder_kv_lod_cpu", "encoder_kv_lod_cpu_out"},
-        {"prefix_len_cpu", "prefix_len_cpu_out"},
-        {"decoder_context_len_cpu", "decoder_context_len_cpu_out"},
-        {"decoder_context_len_cache_cpu", "decoder_context_len_cache_cpu_out"},
-        // {"len_info_cpu", "len_info_cpu_out"}
-    })
+    .SetInplaceMap(
+        {{"encoder_batch_map", "encoder_batch_map_out"},
+         {"decoder_batch_map", "decoder_batch_map_out"},
+         {"encoder_batch_idx", "encoder_batch_idx_out"},
+         {"decoder_batch_idx", "decoder_batch_idx_out"},
+         {"encoder_seq_lod", "encoder_seq_lod_out"},
+         {"decoder_seq_lod", "decoder_seq_lod_out"},
+         {"encoder_kv_lod", "encoder_kv_lod_out"},
+         {"prefix_len", "prefix_len_out"},
+         {"decoder_context_len", "decoder_context_len_out"},
+         {"decoder_context_len_cache", "decoder_context_len_cache_out"},
+         {"encoder_batch_map_cpu", "encoder_batch_map_cpu_out"},
+         {"decoder_batch_map_cpu", "decoder_batch_map_cpu_out"},
+         {"encoder_batch_idx_cpu", "encoder_batch_idx_cpu_out"},
+         {"decoder_batch_idx_cpu", "decoder_batch_idx_cpu_out"},
+         {"encoder_seq_lod_cpu", "encoder_seq_lod_cpu_out"},
+         {"decoder_seq_lod_cpu", "decoder_seq_lod_cpu_out"},
+         {"encoder_kv_lod_cpu", "encoder_kv_lod_cpu_out"},
+         {"prefix_len_cpu", "prefix_len_cpu_out"},
+         {"decoder_context_len_cpu", "decoder_context_len_cpu_out"},
+         {"decoder_context_len_cache_cpu", "decoder_context_len_cache_cpu_out"},
+         {"len_info_cpu", "len_info_cpu_out"}})
     .SetKernelFn(PD_KERNEL(GetInferParam))
     .Attrs({"block_size: int", "num_speculative_tokens: int"})
     .SetInferShapeFn(PD_INFER_SHAPE(GetInferParamInferShape))

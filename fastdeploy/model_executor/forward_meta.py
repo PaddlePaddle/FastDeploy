@@ -308,7 +308,7 @@ class XPUForwardMeta(ForwardMeta):
         self.decoder_context_len_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
         self.decoder_context_len_cache_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
 
-        # self.len_info_cpu = paddle.empty(7, dtype='int32', device='cpu')
+        self.len_info_cpu = paddle.empty(7, dtype="int32", device="cpu")
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """
