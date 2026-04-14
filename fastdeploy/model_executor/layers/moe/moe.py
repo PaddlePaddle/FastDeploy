@@ -282,27 +282,6 @@ class FusedMoE(nn.Layer):
             tp_size={self.tp_size}."
         )
 
-        # self.fc1_latent_proj_bias = self.create_parameter(
-        #     shape=[768],
-        #     dtype="bfloat16",
-        #     default_initializer=paddle.nn.initializer.Constant(0),
-        # )
-        # self.fc1_latent_proj_weight = self.create_parameter(
-        #     shape=[1536, 768],
-        #     dtype="bfloat16",
-        #     default_initializer=paddle.nn.initializer.Constant(0),
-        # )
-        # self.fc2_latent_proj_bias = self.create_parameter(
-        #     shape=[1536],
-        #     dtype="bfloat16",
-        #     default_initializer=paddle.nn.initializer.Constant(0),
-        # )
-        # self.fc2_latent_proj_weight = self.create_parameter(
-        #     shape=[768, 1536],
-        #     dtype="bfloat16",
-        #     default_initializer=paddle.nn.initializer.Constant(0),
-        # )
-
     def weight_loader(
         self,
         param,
