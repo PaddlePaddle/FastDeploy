@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Dict, Union
+from typing import Any, Dict, Union
 
 import numpy as np
 import paddle
@@ -548,7 +548,12 @@ class MiniMaxM1DecoderLayer(nn.Layer):
 
         hidden_states = residual + mlp_output
 
-        return hidden_states, residual
+        # Return None for residual — DeepNorm scaling already folds the
+        # residual stream into hidden_states (R·α + MLP·β).  Passing
+        # ``residual`` separately would cause the next layer's fused
+        # add-norm to double-count it.  Matches vLLM reference:
+        # ``return hidden_states, None``
+        return hidden_states, None
 
 
 @support_graph_optimization
@@ -722,7 +727,8 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         """Load model parameters from a weights iterator (v1 loader path).
 
         Handles HF→FD name mapping for:
-        - Full attention: q_proj/k_proj/v_proj → qkv_proj (stacked)
+        - Full attention: q_proj/k_proj/v_proj → qkv_proj (stacked via shard_id)
+        - Linear attention: q_proj/k_proj/v_proj → qkv_proj (concatenated, no shard_id)
         - MoE experts: w1/w3 → up_gate_proj, w2 → down_proj
         """
         from fastdeploy.model_executor.utils import (
@@ -746,10 +752,52 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
 
+        # Build attention type list to distinguish linear vs full attention layers.
+        # Linear attention layers use ColumnParallelLinear for qkv_proj which does
+        # NOT support shard_id — q/k/v must be concatenated before loading.
+        attn_type_list = getattr(
+            self.fd_config.model_config,
+            "attn_type_list",
+            MiniMaxM1DecoderLayer._build_attn_type_list(self.fd_config.model_config.num_hidden_layers),
+        )
+
+        def _is_linear_attn_layer(weight_name: str) -> bool:
+            """Check if a weight belongs to a linear attention layer."""
+            m = re.search(r"layers\.(\d+)\.", weight_name)
+            if m is None:
+                return False
+            layer_idx = int(m.group(1))
+            return layer_idx < len(attn_type_list) and attn_type_list[layer_idx] == 0
+
+        # Buffer for linear attention q/k/v weights that need concatenation.
+        # Key: (attn_prefix, suffix) → {"q": tensor, "k": tensor, "v": tensor}
+        linear_attn_qkv_buffers: Dict[str, Dict[str, Any]] = {}
+
         for loaded_weight_name, loaded_weight in weights_iterator:
             logger.debug(f"Loading weight: {loaded_weight_name}")
 
-            # Stacked params (q/k/v → qkv_proj)
+            model_param_name = None
+            param = None
+
+            # Linear attention q/k/v: buffer for concatenation (no shard_id)
+            if _is_linear_attn_layer(loaded_weight_name) and any(
+                proj in loaded_weight_name for proj in (".q_proj.", ".k_proj.", ".v_proj.")
+            ):
+                m = re.match(
+                    r"(.*\.self_attn)\.(q|k|v)_proj\.(weight|quant_weight|weight_scale|activation_scale)$",
+                    loaded_weight_name,
+                )
+                if m:
+                    attn_prefix = m.group(1)
+                    proj_type = m.group(2)
+                    suffix = m.group(3)
+                    buf_key = f"{attn_prefix}|{suffix}"
+                    if buf_key not in linear_attn_qkv_buffers:
+                        linear_attn_qkv_buffers[buf_key] = {}
+                    linear_attn_qkv_buffers[buf_key][proj_type] = loaded_weight
+                    continue
+
+            # Stacked params (q/k/v → qkv_proj for full attention layers)
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue
@@ -785,12 +833,39 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
                     weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
                     weight_loader(param, loaded_weight)
 
-            # Note: model_param_name and param are guaranteed to be set here.
-            # All three branches (stacked, expert, direct) set them before break;
-            # when no branch matches, direct loading's `continue` skips to the
-            # next outer iteration, so this line is never reached without them.
+            if model_param_name is None:
+                logger.warning(f"Weight {loaded_weight_name} not matched to any parameter, skipping")
+                continue
             model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
             process_weights_after_loading_fn(model_sublayer_name, param)
+
+        # Flush buffered linear attention q/k/v → concatenated qkv_proj
+        for buf_key, projections in linear_attn_qkv_buffers.items():
+            if "q" in projections and "k" in projections and "v" in projections:
+                attn_prefix, suffix = buf_key.split("|", 1)
+                q_w, k_w, v_w = projections["q"], projections["k"], projections["v"]
+                if isinstance(q_w, np.ndarray):
+                    merged = np.concatenate([q_w, k_w, v_w], axis=0)
+                else:
+                    merged = paddle.concat([q_w, k_w, v_w], axis=0)
+                model_param_name = f"{attn_prefix}.qkv_proj.{suffix}"
+                if model_param_name not in params_dict:
+                    logger.warning(f"Merged linear attn QKV key {model_param_name} not found, skipping")
+                    continue
+                param = params_dict[model_param_name]
+                weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
+                weight_loader(param, merged)
+                model_sublayer_name = re.sub(r"\.(up_gate_proj_weight|down_proj_weight|weight)$", "", model_param_name)
+                process_weights_after_loading_fn(model_sublayer_name, param)
+            else:
+                missing = [k for k in ("q", "k", "v") if k not in projections]
+                logger.warning(f"Incomplete linear attn QKV buffer {buf_key}, missing: {missing}")
+
+        # Tie lm_head weight to embed_tokens when tie_word_embeddings is set
+        if self.fd_config.model_config.tie_word_embeddings:
+            self.lm_head.linear.weight.set_value(
+                self.model.embed_tokens.embeddings.weight.transpose([1, 0]).astype(self.lm_head.linear.weight.dtype)
+            )
 
     def compute_logits(self, hidden_states: paddle.Tensor, forward_meta: ForwardMeta = None):
         """Compute logits."""

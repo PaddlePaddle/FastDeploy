@@ -640,3 +640,34 @@ def test_set_state_dict_passthrough(m):
         "lm_head.weight": np.zeros([1024, 256], dtype=np.float32),
     }
     model.set_state_dict(state)
+
+
+def test_multi_layer_residual_no_blowup(m):
+    """Regression: multi-layer forward must not cause residual blowup.
+
+    C1 fix: DeepNorm folds the residual into hidden_states, so the layer
+    returns ``(hidden_states, None)`` — not ``(hidden_states, residual)``.
+    If the old behaviour returns a non-None residual, the next iteration
+    adds it again → exponential growth.  This test stacks 4 layers and
+    checks the output norm stays bounded.
+    """
+    fd = _make_fd_config(num_layers=4)
+    model = m.MiniMaxM1Model(fd_config=fd)
+    ids = paddle.to_tensor([0, 1, 2, 3], dtype="int64")
+    meta = SimpleNamespace()
+    out = model(ids_remove_padding=ids, forward_meta=meta)
+    assert paddle.isfinite(out).all(), "Output contains NaN/Inf — residual blowup"
+    assert out.abs().max().item() < 1e4, (
+        f"Output magnitude {out.abs().max().item():.1f} too large — "
+        "possible residual double-counting (C1 regression)"
+    )
+
+
+def test_decoder_layer_returns_none_residual(m):
+    """DecoderLayer must return None as residual (DeepNorm convention)."""
+    fd = _make_fd_config()
+    layer = m.MiniMaxM1DecoderLayer(fd, layer_id=0, prefix="model.layers.0")
+    meta = SimpleNamespace()
+    h = paddle.randn([2, 4])
+    out, residual = layer(forward_meta=meta, hidden_states=h)
+    assert residual is None, f"Expected None residual (DeepNorm folds it into hidden_states), got {type(residual)}"
