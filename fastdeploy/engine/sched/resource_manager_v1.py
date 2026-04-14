@@ -323,7 +323,7 @@ class ResourceManagerV1(ResourceManager):
             req = self.running[i]
             if req.use_extend_tables:
                 continue
-            if req.num_computed_tokens < req.need_prefill_tokens:
+            if req.num_total_tokens <= req.need_prefill_tokens:
                 continue
             return self.running.pop(i)
 
