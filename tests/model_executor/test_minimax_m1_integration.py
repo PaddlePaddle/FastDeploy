@@ -108,11 +108,14 @@ def minimax_server():
     ]
 
     log_file = tempfile.NamedTemporaryFile(mode="w", prefix="minimax_m1_server_", suffix=".log", delete=False)
-    proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT)
+    proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT, start_new_session=True)
     try:
         if not _wait_for_server(PORT, timeout=900):
             # Dump last output for debugging
-            proc.kill()
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                proc.kill()
             proc.wait(timeout=10)
             log_file.close()
             with open(log_file.name, errors="replace") as f:
@@ -122,11 +125,14 @@ def minimax_server():
         yield PORT, MODEL_PATH
     finally:
         log_file.close()
-        proc.send_signal(signal.SIGTERM)
         try:
+            os.killpg(proc.pid, signal.SIGTERM)
             proc.wait(timeout=30)
-        except subprocess.TimeoutExpired:
-            proc.kill()
+        except (subprocess.TimeoutExpired, OSError):
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except OSError:
+                proc.kill()
             proc.wait(timeout=10)
 
 
