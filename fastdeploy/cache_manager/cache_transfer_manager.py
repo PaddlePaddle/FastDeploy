@@ -50,6 +50,7 @@ from fastdeploy.cache_manager.transfer_factory import (
 )
 from fastdeploy.config import CacheConfig, SpeculativeConfig
 from fastdeploy.engine.request import ControlRequest, ControlResponse
+from fastdeploy.envs import get_unique_name
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, KVCacheStatus
 from fastdeploy.inter_communicator.fmq import FMQ
 from fastdeploy.platforms import current_platform
@@ -450,10 +451,10 @@ class CacheTransferManager:
         for i in range(self.num_layers + self.num_extra_layers):
             # NOTE: num_extra_layer_gpu_blocks is usually equal to num_gpu_blocks
             num_gpu_blocks = self.num_gpu_blocks if i < self.num_layers else self.num_extra_layer_gpu_blocks
-            key_name = f"key_caches_{i}_rank{self.rank}.device{self.device}"
-            val_name = f"value_caches_{i}_rank{self.rank}.device{self.device}"
-            key_cache_scales_name = f"key_cache_scales_{i}_rank{self.rank}.device{self.device}"
-            value_cache_scales_name = f"value_cache_scales_{i}_rank{self.rank}.device{self.device}"
+            key_name = get_unique_name(f"key_caches_{i}_rank{self.rank}.device{self.device}")
+            val_name = get_unique_name(f"value_caches_{i}_rank{self.rank}.device{self.device}")
+            key_cache_scales_name = get_unique_name(f"key_cache_scales_{i}_rank{self.rank}.device{self.device}")
+            value_cache_scales_name = get_unique_name(f"value_cache_scales_{i}_rank{self.rank}.device{self.device}")
             key_cache_shape = [
                 num_gpu_blocks,
                 self.key_cache_shape[1],

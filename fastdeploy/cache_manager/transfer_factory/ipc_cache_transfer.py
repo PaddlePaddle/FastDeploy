@@ -21,6 +21,7 @@ from fastdeploy.cache_manager.ops import (
     ipc_sent_key_value_cache_by_remote_ptr,
     ipc_sent_key_value_cache_by_remote_ptr_block_sync,
 )
+from fastdeploy.envs import get_unique_name
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")
@@ -51,13 +52,19 @@ class IPCConnector:
             f"init ipc rank{self.rank_id} with remote {self.remote_gpu_id} {self.local_gpu_id}, cache dtype {self.cache_dtype}"
         )
         for layer_id in range(layer_num):
-            key_unique_name = f"key_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
-            value_unique_name = f"value_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
+            key_unique_name = get_unique_name(f"key_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}")
+            value_unique_name = get_unique_name(
+                f"value_caches_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
+            )
             self.remote_key_tensor_ptr_list.append(get_data_ptr_ipc(tmp, key_unique_name))
             self.remote_value_tensor_ptr_list.append(get_data_ptr_ipc(tmp, value_unique_name))
             if self.cache_dtype == "block_wise_fp8":
-                key_scale_name = f"key_cache_scales_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
-                val_scale_name = f"value_cache_scales_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
+                key_scale_name = get_unique_name(
+                    f"key_cache_scales_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
+                )
+                val_scale_name = get_unique_name(
+                    f"value_cache_scales_{layer_id}_rank{self.rank_id}.device{self.remote_gpu_id}"
+                )
                 self.remote_key_scale_tensor_ptr_list.append(get_data_ptr_ipc(tmp, key_scale_name))
                 self.remote_value_scale_tensor_ptr_list.append(get_data_ptr_ipc(tmp, val_scale_name))
         self.write_stream = paddle.device.Stream(f"gpu:{self.local_gpu_id}")

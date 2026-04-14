@@ -18,6 +18,7 @@ from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
 
+from fastdeploy.envs import get_unique_name
 from fastdeploy.utils import llm_logger
 
 

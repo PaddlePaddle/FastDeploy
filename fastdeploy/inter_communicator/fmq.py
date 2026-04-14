@@ -28,6 +28,7 @@ import zmq
 import zmq.asyncio
 
 from fastdeploy import envs
+from fastdeploy.envs import get_unique_name
 from fastdeploy.utils import fmq_logger
 
 # ==========================
@@ -113,7 +114,7 @@ class EndpointManager:
             return cls.config.endpoints[name]
 
         # Fallback: auto-generate endpoint
-        address = f"{cls.config.ipc_root}/fmq_{name}.ipc"
+        address = get_unique_name(f"{cls.config.ipc_root}/fmq_{name}.ipc")
         return Endpoint(protocol="ipc", address=address)
 
 
