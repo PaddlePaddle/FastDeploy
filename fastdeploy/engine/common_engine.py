@@ -2016,7 +2016,7 @@ class EngineService:
                             if batch_data:
                                 self.send_response_server.send_response(None, batch_data, worker_pid=wpid)
             except Exception as e:
-                self.llm_logger.error(f"Unexcepted error happend: {e}, {traceback.format_exc()!s}")
+                self.llm_logger.error(f"Unexpected error happend: {e}, {traceback.format_exc()!s}")
 
     def _decode_process_splitwise_requests(self):
         """

@@ -246,7 +246,7 @@ def xpu_process_output(
     else:
         output_padding_offset = getattr(share_inputs, "output_padding_offset", None)
 
-    hiddden_states = gather_next_token(
+    hidden_states = gather_next_token(
         forward_output,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
@@ -260,7 +260,7 @@ def xpu_process_output(
         output_padding_offset,  # output_padding_offset
         xpu_forward_meta.max_num_seqs,
     )
-    return hiddden_states
+    return hidden_states
 
 
 def xpu_post_process_normal(

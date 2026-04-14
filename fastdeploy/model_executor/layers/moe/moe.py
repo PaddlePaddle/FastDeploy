@@ -153,6 +153,7 @@ class FusedMoE(nn.Layer):
     def __init__(
         self,
         fd_config,
+        hidden_size: int = -1,
         reduce_results: bool = True,
         renormalize: bool = False,
         moe_intermediate_size: int = -1,
@@ -204,7 +205,7 @@ class FusedMoE(nn.Layer):
             self.tp_size == 1 and self.ep_size > 1
         ), "MoE only support parallelism on TP or EP dimension."
 
-        self.hidden_size = fd_config.model_config.hidden_size
+        self.hidden_size = hidden_size
         self.num_experts = num_experts
 
         self.num_local_experts = self.num_experts // self.ep_size
