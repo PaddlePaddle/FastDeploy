@@ -220,7 +220,7 @@ std::vector<paddle::DataType> CutlassFp8Fp8HalfBlockGemmFusedInferDtype(
 }
 
 PD_BUILD_STATIC_OP(cutlass_fp8_fp8_half_block_gemm_fused)
-    .Inputs({"x", "y", "x_sacle", "y_scale", paddle::Optional("bias")})
+    .Inputs({"x", "y", "x_scale", "y_scale", paddle::Optional("bias")})
     .Attrs({"transpose_x: bool",
             "transpose_y: bool",
             "output_dtype: std::string",

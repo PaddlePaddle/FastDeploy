@@ -30,8 +30,8 @@ pytestmark = pytest.mark.filterwarnings(
     "ignore:ast.Num is deprecated and will be removed in Python 3.14; use ast.Constant instead:DeprecationWarning"
 )
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda **_: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda **_: None
 
 warnings.filterwarnings(
     "ignore",

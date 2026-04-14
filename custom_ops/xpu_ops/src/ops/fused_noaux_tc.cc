@@ -76,19 +76,19 @@ std::vector<std::vector<int64_t>> FusedNoAuxTcInferShape(
     const float routed_scaling_factor) {
   std::vector<int64_t> topk_ids_shape = {gating_logits_shape[0], top_k};
   std::vector<int64_t> topk_weights_shape = {gating_logits_shape[0], top_k};
-  return {gating_logits_shape, topk_ids_shape, topk_weights_shape};
+  return {gating_logits_shape, topk_weights_shape, topk_ids_shape};
 }
 
 std::vector<paddle::DataType> FusedNoAuxTcInferDtype(
     const paddle::DataType& gating_logits_dtype,
     const paddle::DataType& bias_dtype) {
   return {
-      gating_logits_dtype, paddle::DataType::INT64, paddle::DataType::FLOAT32};
+      gating_logits_dtype, paddle::DataType::FLOAT32, paddle::DataType::INT32};
 }
 
 PD_BUILD_STATIC_OP(fused_noaux_tc)
     .Inputs({"gating_logits", "bias"})
-    .Outputs({"gating_logits_out", "topk_ids", "topk_weights"})
+    .Outputs({"gating_logits_out", "topk_weights", "topk_ids"})
     .Attrs({"n_group: int",
             "topk_group: int",
             "top_k: int",

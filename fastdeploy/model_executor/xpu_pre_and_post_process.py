@@ -55,6 +55,29 @@ if current_platform.is_xpu():
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
 
+def async_set_value(tgt, src):
+    if isinstance(src, (int, float, bool)):
+        src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
+    elif isinstance(src, (list, np.ndarray)):
+        dtype_str = str(tgt.dtype).split(".")[1]
+        np_dtype = dtype_str if dtype_str != "bfloat16" else "float32"
+        if isinstance(src, list):
+            src = np.array(src, dtype=np_dtype)
+        # TODO: support async_numpy_to_tensor
+        src = paddle.to_tensor(src, dtype=tgt.dtype)
+    elif isinstance(src, paddle.Tensor):
+        pass
+    else:
+        raise ValueError("async_set_value unsupported src type: {}".format(type(src)))
+    if src.shape != tgt.shape:
+        src = src.reshape(tgt.shape)
+    if src.dtype != tgt.dtype:
+        src = src.cast(tgt.dtype)
+    if src.place != tgt.place:
+        src = src.to(tgt.place)
+    tgt.copy_(src, blocking=False)
+
+
 def _build_stream_transfer_data(
     output_tokens: paddle.Tensor,
     pooler_outputs: List = None,
@@ -106,7 +129,6 @@ def xpu_pre_process(
     use_cudagraph=False,
 ) -> XPUForwardMeta:
     """ """
-    max_len = input_ids.shape[1]
 
     token_num_cpu = paddle.sum(seq_lens_this_time).cpu()
     if use_speculate_method:
@@ -124,14 +146,13 @@ def xpu_pre_process(
         share_inputs["cu_seqlens_q_output"] = cu_seqlens_q_output
         share_inputs["batch_id_per_token_output"] = batch_id_per_token_output
     else:
-        cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
         (
             ids_remove_padding,
             cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num_cpu, seq_lens_this_time)
+        ) = get_padding_offset(input_ids, seq_lens_this_time, token_num_cpu)
 
     share_inputs["batch_id_per_token"] = batch_id_per_token
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
@@ -225,7 +246,7 @@ def xpu_process_output(
     else:
         output_padding_offset = getattr(share_inputs, "output_padding_offset", None)
 
-    hiddden_states = gather_next_token(
+    hidden_states = gather_next_token(
         forward_output,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
@@ -239,7 +260,7 @@ def xpu_process_output(
         output_padding_offset,  # output_padding_offset
         xpu_forward_meta.max_num_seqs,
     )
-    return hiddden_states
+    return hidden_states
 
 
 def xpu_post_process_normal(

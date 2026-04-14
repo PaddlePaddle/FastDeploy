@@ -121,7 +121,7 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
           int64_t *token_ids_all_now =
               &token_ids_all[batch_id * max_model_len + prompt_len];
           int64_t *output_ids = &step_output_ids[batch_id * max_step_tokens];
-          int64_t base = cur_step_idx - output_len + 1;
+          int64_t base = cur_step_idx - output_len;
           for (int i = 0; i < output_len; i++) {
             token_ids_all_now[base + i] = output_ids[i];
           }

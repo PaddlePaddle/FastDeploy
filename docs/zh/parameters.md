@@ -56,6 +56,7 @@
 | ```tool_call_parser```       | `str`      | 指定要使用的function call解析器，以便从模型输出中抽取 function call内容|
 | ```tool_parser_plugin```       | `str`      | 指定要注册的tool parser文件路径，以便注册不在代码库中的parser，parser中代码格式需遵循代码库中格式|
 | ```load_choices```       | `str`      | 权重加载器选择，默认使用"default_v1"。支持"default"和"default_v1"，后者用于加载torch权重和权重加速|
+| ```model_loader_extra_config``` | `dict[str]` | 模型加载器额外配置选项。支持：<br> - `enable_multithread_load` (bool): 启用多线程权重加载。<br> - `num_threads` (int): 加载线程数，默认为8。<br> - `disable_mmap` (bool): 禁用内存映射文件访问，当mmap不支持时使用。<br> 示例：`'{"enable_multithread_load": true, "num_threads": 8}'` |
 | ```max_encoder_cache```   | `int` | 编码器缓存的最大token数（使用0表示禁用），默认-1（自动计算）|
 | ```max_processor_cache```  | `float` | 处理器缓存的最大字节数（以GiB为单位，使用0表示禁用），默认-1（自动计算）|
 | ```api_key```  |`list[str]`| 校验服务请求头中的API密钥，支持传入多个密钥；与环境变量`FD_API_KEY`中的值效果相同，且优先级高于环境变量配置|

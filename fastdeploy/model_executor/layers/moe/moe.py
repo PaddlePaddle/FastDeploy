@@ -153,6 +153,7 @@ class FusedMoE(nn.Layer):
     def __init__(
         self,
         fd_config,
+        hidden_size: int = -1,
         reduce_results: bool = True,
         renormalize: bool = False,
         moe_intermediate_size: int = -1,
@@ -204,7 +205,7 @@ class FusedMoE(nn.Layer):
             self.tp_size == 1 and self.ep_size > 1
         ), "MoE only support parallelism on TP or EP dimension."
 
-        self.hidden_size = fd_config.model_config.hidden_size
+        self.hidden_size = hidden_size
         self.num_experts = num_experts
 
         self.num_local_experts = self.num_experts // self.ep_size
@@ -788,7 +789,7 @@ class FusedMoE(nn.Layer):
         chunk_size = self.fd_config.parallel_config.chunked_moe_size
         token_num = x.shape[0]
         fake_x = paddle.empty(
-            shape=[0, self.fd_config.model_config.hidden_size],
+            shape=[0, self.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
         # input size that are less than a chunk, less than the max size data or empty input
