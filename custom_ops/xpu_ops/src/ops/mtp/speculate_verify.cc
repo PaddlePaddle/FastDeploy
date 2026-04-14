@@ -28,8 +28,8 @@
 namespace api = baidu::xpu::api;
 
 // Persistent seed/offset — mirrors GPU curand state lifecycle.
- static std::atomic<uint64_t> g_seed{0};
- static std::atomic<uint64_t> g_offset{0};
+static std::atomic<uint64_t> g_seed{0};
+static std::atomic<uint64_t> g_offset{0};
 
 void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
                      const paddle::Tensor &accept_tokens,
