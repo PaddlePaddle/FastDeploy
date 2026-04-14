@@ -72,8 +72,8 @@ std::vector<paddle::Tensor> GetInferParam(
     // paddle::Tensor& decoder_batch_map,
     paddle::Tensor& encoder_batch_idx,
     paddle::Tensor& decoder_batch_idx,
-    // paddle::Tensor& encoder_seq_lod,
-    // paddle::Tensor& decoder_seq_lod,
+    paddle::Tensor& encoder_seq_lod,
+    paddle::Tensor& decoder_seq_lod,
     // paddle::Tensor& encoder_kv_lod,
     // paddle::Tensor& prefix_len,
     // paddle::Tensor& decoder_context_len,
@@ -219,12 +219,12 @@ std::vector<paddle::Tensor> GetInferParam(
   // auto decoder_batch_idx = paddle::empty({decoder_batch_idx_vec.size()},
   //                                        seq_lens_encoder.type(),
   //                                        seq_lens_encoder.place());
-  auto encoder_seq_lod = paddle::empty({encoder_seq_lod_vec.size()},
-                                       seq_lens_encoder.type(),
-                                       seq_lens_encoder.place());
-  auto decoder_seq_lod = paddle::empty({decoder_seq_lod_vec.size()},
-                                       seq_lens_encoder.type(),
-                                       seq_lens_encoder.place());
+  // auto encoder_seq_lod = paddle::empty({encoder_seq_lod_vec.size()},
+  //                                      seq_lens_encoder.type(),
+  //                                      seq_lens_encoder.place());
+  // auto decoder_seq_lod = paddle::empty({decoder_seq_lod_vec.size()},
+  //                                      seq_lens_encoder.type(),
+  //                                      seq_lens_encoder.place());
   auto encoder_kv_lod = paddle::empty({encoder_kv_lod_vec.size()},
                                       seq_lens_encoder.type(),
                                       seq_lens_encoder.place());
@@ -511,8 +511,8 @@ PD_BUILD_OP(get_infer_param)
         // "decoder_batch_map",
         "encoder_batch_idx",
         "decoder_batch_idx",
-        // "encoder_seq_lod",
-        // "decoder_seq_lod",
+        "encoder_seq_lod",
+        "decoder_seq_lod",
         // "encoder_kv_lod",
         // "prefix_len",
         // "decoder_context_len",
@@ -558,8 +558,8 @@ PD_BUILD_OP(get_infer_param)
         //     {"decoder_batch_map", "decoder_batch_map_out"},
         {"encoder_batch_idx", "encoder_batch_idx_out"},
         {"decoder_batch_idx", "decoder_batch_idx_out"},
-        // {"encoder_seq_lod", "encoder_seq_lod_out"},
-        // {"decoder_seq_lod", "decoder_seq_lod_out"},
+        {"encoder_seq_lod", "encoder_seq_lod_out"},
+        {"decoder_seq_lod", "decoder_seq_lod_out"},
         //     {"encoder_kv_lod", "encoder_kv_lod_out"},
         //     {"prefix_len", "prefix_len_out"},
         //     {"decoder_context_len", "decoder_context_len_out"},
