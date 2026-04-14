@@ -32,7 +32,28 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 32
 ```
 
-### 2.2 Model Notes
+### 2.2 Quantized Deployment
+
+MiniMax-M1 (456B params) requires quantization for practical deployment. Approximate GPU requirements:
+
+| Mode | GPU Memory | Example Config |
+|------|-----------|----------------|
+| BF16 | ~912 GB | 12× A800-80GB, `--tensor-parallel-size 12` |
+| FP8 | ~456 GB | 6× A800-80GB, `--tensor-parallel-size 6` |
+| WINT4 | ~228 GB | 3× A800-80GB, `--tensor-parallel-size 4` |
+
+```shell
+# WINT4 quantization (recommended minimum)
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model "$MODEL_PATH" \
+    --quantization wint4 \
+    --tensor-parallel-size 4 \
+    --port 8180 \
+    --max-model-len 4096 \
+    --max-num-seqs 4
+```
+
+### 2.3 Model Notes
 
 - HuggingFace architecture: `MiniMaxText01ForCausalLM`
 - Hybrid layer layout: 70 linear-attention layers and 10 full-attention layers

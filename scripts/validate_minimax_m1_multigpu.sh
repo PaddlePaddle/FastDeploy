@@ -46,7 +46,7 @@ cleanup() {
         wait "$SERVER_PID" 2>/dev/null || true
     fi
 }
-trap cleanup EXIT
+trap 'cleanup; exit' EXIT INT TERM
 
 # ── Detect GPU count ──
 NUM_GPUS=$(python3 -c "import paddle; print(paddle.device.cuda.device_count())" 2>/dev/null || echo 0)

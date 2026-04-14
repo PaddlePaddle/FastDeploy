@@ -16,6 +16,7 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 
 import pytest
@@ -48,6 +49,8 @@ def _wait_for_server(port, timeout=900, interval=5):
                     return True
         except Exception:
             pass
+        if elapsed > 0 and elapsed % 60 == 0:
+            print(f"Waiting for server on port {port}... ({elapsed}/{timeout}s)")
         time.sleep(interval)
         elapsed += interval
     return False
@@ -104,17 +107,21 @@ def minimax_server():
         str(PORT),
     ]
 
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    log_file = tempfile.NamedTemporaryFile(mode="w", prefix="minimax_m1_server_", suffix=".log", delete=False)
+    proc = subprocess.Popen(cmd, stdout=log_file, stderr=subprocess.STDOUT)
     try:
         if not _wait_for_server(PORT, timeout=900):
             # Dump last output for debugging
             proc.kill()
-            out, _ = proc.communicate(timeout=10)
-            tail = out.decode(errors="replace")[-2000:] if out else "(no output)"
+            proc.wait(timeout=10)
+            log_file.close()
+            with open(log_file.name, errors="replace") as f:
+                tail = f.read()[-2000:] or "(no output)"
             pytest.fail(f"MiniMax-M1 server did not start within 900s.\nLast output:\n{tail}")
 
         yield PORT, MODEL_PATH
     finally:
+        log_file.close()
         proc.send_signal(signal.SIGTERM)
         try:
             proc.wait(timeout=30)

@@ -32,7 +32,28 @@ python -m fastdeploy.entrypoints.openai.api_server \
     --max-num-seqs 32
 ```
 
-### 2.2 模型特性
+### 2.2 量化部署
+
+MiniMax-M1（456B 参数）在实际部署中需要量化。不同模式的 GPU 显存需求参考：
+
+| 模式 | 显存需求 | 配置示例 |
+|------|---------|----------|
+| BF16 | ~912 GB | 12× A800-80GB, `--tensor-parallel-size 12` |
+| FP8 | ~456 GB | 6× A800-80GB, `--tensor-parallel-size 6` |
+| WINT4 | ~228 GB | 3× A800-80GB, `--tensor-parallel-size 4` |
+
+```shell
+# WINT4 量化部署（推荐最小配置）
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model "$MODEL_PATH" \
+    --quantization wint4 \
+    --tensor-parallel-size 4 \
+    --port 8180 \
+    --max-model-len 4096 \
+    --max-num-seqs 4
+```
+
+### 2.3 模型特性
 
 - HuggingFace 架构名：`MiniMaxText01ForCausalLM`
 - 层类型分布：70 层线性注意力 + 10 层全注意力
