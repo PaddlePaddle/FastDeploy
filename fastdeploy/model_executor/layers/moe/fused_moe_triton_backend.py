@@ -1268,7 +1268,8 @@ def python_op_fused_moe_kernel_paddle(
 
     from .triton_moe_kernels import fused_moe_kernel_paddle
 
-    x = fc1_latent_proj(x)
+    if fc1_latent_proj is not None:
+        x = fc1_latent_proj(x)
 
     if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0], False)
@@ -1383,7 +1384,8 @@ def python_op_fused_moe_kernel_paddle(
     intermediate_cache3.reshape_([token_num, top_k, hidden_size])
     out = intermediate_cache3.sum(axis=1)
 
-    out = fc2_latent_proj(out)
+    if fc2_latent_proj is not None:
+        out = fc2_latent_proj(out)
 
     return out
 
