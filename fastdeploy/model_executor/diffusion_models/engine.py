@@ -123,8 +123,8 @@ class DiffusionEngine:
         Flux uses 3-axis position IDs: (batch_index=0, row, col).
 
         Args:
-            height: Latent height (image_height // 16).
-            width: Latent width (image_width // 16).
+            height: Latent height (image_height // 8, before patch packing).
+            width: Latent width (image_width // 8, before patch packing).
             dtype: Tensor dtype.
 
         Returns:
@@ -293,10 +293,12 @@ class DiffusionEngine:
         prompt_embeds = text_output.prompt_embeds  # [B, seq_len, 4096]
         pooled_embeds = text_output.pooled_prompt_embeds  # [B, 2048] for SD3 (CLIP-L 768 + CLIP-G 1280)
 
-        # 无条件嵌入用于 CFG (Unconditional embeddings for classifier-free guidance)
+        # 无条件嵌入用于 CFG — 编码空字符串以匹配训练分布
+        # (Unconditional embeddings for CFG — encode empty strings to match training distribution)
         if do_cfg:
-            uncond_embeds = paddle.zeros_like(prompt_embeds)
-            uncond_pooled = paddle.zeros_like(pooled_embeds)
+            uncond_output = self.text_encoder.encode(["" for _ in prompt], dtype=dtype)
+            uncond_embeds = uncond_output.prompt_embeds
+            uncond_pooled = uncond_output.pooled_prompt_embeds
 
         # 2. 噪声初始化 (Initialize noise — spatial latents for SD3)
         if seed is not None:
