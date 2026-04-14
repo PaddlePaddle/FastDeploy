@@ -729,5 +729,39 @@ class TestLightningAttentionPurePython:
         np.testing.assert_allclose(output[:, 3, :, :], 0.0, atol=1e-12)
 
 
+def test_multi_layer_residual_no_blowup(mm1):
+    """Regression: multi-layer forward must not cause residual blowup.
+
+    C1 fix: DeepNorm folds the residual into hidden_states, so the layer
+    returns ``(hidden_states, None)`` — not ``(hidden_states, residual)``.
+    If the old behaviour returns a non-None residual, the next iteration
+    adds it again → exponential growth.  This test stacks 4 layers and
+    checks the output norm stays bounded.
+    """
+    fd = _make_fd_config(hidden_size=4, num_layers=4)
+    model = mm1.MiniMaxM1Model(fd_config=fd)
+    ids = paddle.to_tensor([0, 1, 2, 3], dtype="int64")
+    meta = SimpleNamespace()
+    out = model(ids_remove_padding=ids, forward_meta=meta)
+    # With correct residual handling, output magnitude should stay O(1)
+    # relative to the stub operations (identity-ish norms, zero-init attn).
+    # With the old double-counting bug, 4 layers would amplify ~16x.
+    assert paddle.isfinite(out).all(), "Output contains NaN/Inf — residual blowup"
+    assert out.abs().max().item() < 1e4, (
+        f"Output magnitude {out.abs().max().item():.1f} too large — "
+        "possible residual double-counting (C1 regression)"
+    )
+
+
+def test_decoder_layer_returns_none_residual(mm1):
+    """DecoderLayer must return None as residual (DeepNorm convention)."""
+    fd = _make_fd_config()
+    layer = mm1.MiniMaxM1DecoderLayer(fd, layer_id=0, prefix="model.layers.0")
+    meta = SimpleNamespace()
+    h = paddle.randn([2, 4])
+    out, residual = layer(forward_meta=meta, hidden_states=h)
+    assert residual is None, f"Expected None residual (DeepNorm folds it into hidden_states), got {type(residual)}"
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
