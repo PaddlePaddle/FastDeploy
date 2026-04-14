@@ -1066,12 +1066,28 @@ class DeepSeekV3Model(nn.Layer):
             prefix="deepseek_v3.norm",
         )
 
+        # self.position_ids_buffer = paddle.empty(
+        #     [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
+        # )
+        # self.mask_encoder_batch_buffer = paddle.empty(
+        #     [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
+        # )
+        # self.slot_mapping_buffer = paddle.empty(
+        #     [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int64
+        # )
+        self.fd_config = fd_config
+
     def forward(
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
     ):
         """ """
+        import nvtx
+
+        with nvtx.annotate("pre_process", color="green"):
+            self.pre_process(forward_meta)
+
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
 
         residual = None
@@ -1087,6 +1103,60 @@ class DeepSeekV3Model(nn.Layer):
             out = self.norm.allgather(out, forward_meta.ids_remove_padding.shape[0])
 
         return out
+
+    # def pre_process(self, forward_meta) -> None:
+    #     """ """
+
+    #     seq_lens_encoder = forward_meta.seq_lens_encoder
+    #     seq_lens_decoder = forward_meta.seq_lens_decoder
+    #     seq_lens_this_time = forward_meta.seq_lens_this_time
+
+    #     current_total_tokens = forward_meta.ids_remove_padding.shape[0]
+    #     position_ids = self.position_ids_buffer[:current_total_tokens]
+    #     mask_encoder_batch = self.mask_encoder_batch_buffer[:current_total_tokens]
+
+    #     get_position_ids_and_mask_encoder_batch(
+    #         seq_lens_encoder,
+    #         seq_lens_decoder,
+    #         seq_lens_this_time,
+    #         position_ids,
+    #         mask_encoder_batch,
+    #     )
+
+    #     block_size = self.fd_config.cache_config.block_size
+    #     block_idx = position_ids // block_size  # [num_tokens]
+    #     block_ids = forward_meta.block_tables[forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
+    #     block_offset = position_ids % block_size  # [num_tokens]
+    #     slot_mapping = (block_ids * block_size + block_offset).cast(paddle.int64)
+
+    #     forward_meta.position_ids = position_ids
+    #     paddle.assign(
+    #         slot_mapping,
+    #         self.slot_mapping_buffer[:current_total_tokens],
+    #     )
+    #     forward_meta.slot_mapping = self.slot_mapping_buffer[:current_total_tokens]
+    def pre_process(self, forward_meta) -> None:
+        """ """
+        current_total_tokens = forward_meta.ids_remove_padding.shape[0]
+        position_ids = paddle.empty([current_total_tokens], dtype=paddle.int32)
+        mask_encoder_batch = paddle.empty([current_total_tokens, 1], dtype=paddle.int32)
+
+        get_position_ids_and_mask_encoder_batch(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder,
+            forward_meta.seq_lens_this_time,
+            position_ids,
+            mask_encoder_batch,
+        )
+
+        block_size = self.fd_config.cache_config.block_size
+        block_idx = position_ids // block_size  # [num_tokens]
+        block_ids = forward_meta.block_tables[forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
+        block_offset = position_ids % block_size  # [num_tokens]
+        slot_mapping = (block_ids * block_size + block_offset).cast(paddle.int64)
+
+        forward_meta.position_ids = position_ids
+        forward_meta.slot_mapping = slot_mapping
 
 
 @ModelRegistry.register_model_class(
@@ -1113,15 +1183,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
-        )
-        self.position_ids_buffer = paddle.empty(
-            [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
-        )
-        self.mask_encoder_batch_buffer = paddle.empty(
-            [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
-        )
-        self.slot_mapping_buffer = paddle.empty(
-            [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int64
         )
 
     @classmethod
@@ -1219,37 +1280,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         logits[:, self.ori_vocab_size :] = -float("inf")
         return logits
 
-    def pre_process(self, forward_meta) -> None:
-        """ """
-        seq_lens_encoder = forward_meta.seq_lens_encoder
-        seq_lens_decoder = forward_meta.seq_lens_decoder
-        seq_lens_this_time = forward_meta.seq_lens_this_time
-
-        current_total_tokens = forward_meta.ids_remove_padding.shape[0]
-        position_ids = self.position_ids_buffer[:current_total_tokens]
-        mask_encoder_batch = self.mask_encoder_batch_buffer[:current_total_tokens]
-
-        get_position_ids_and_mask_encoder_batch(
-            seq_lens_encoder,
-            seq_lens_decoder,
-            seq_lens_this_time,
-            position_ids,
-            mask_encoder_batch,
-        )
-
-        block_size = self.fd_config.cache_config.block_size
-        block_idx = position_ids // block_size  # [num_tokens]
-        block_ids = forward_meta.block_tables[forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
-        block_offset = position_ids % block_size  # [num_tokens]
-        slot_mapping = (block_ids * block_size + block_offset).cast(paddle.int64)
-
-        forward_meta.position_ids = position_ids
-        paddle.assign(
-            slot_mapping,
-            self.slot_mapping_buffer[:current_total_tokens],
-        )
-        forward_meta.slot_mapping = self.slot_mapping_buffer[:current_total_tokens]
-
     def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
@@ -1270,11 +1300,13 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
-        self.pre_process(forward_meta)
-        hidden_states = self.model(
-            ids_remove_padding=ids_remove_padding,
-            forward_meta=forward_meta,
-        )
+        import nvtx
+
+        with nvtx.annotate("model_forward", color="red"):
+            hidden_states = self.model(
+                ids_remove_padding=ids_remove_padding,
+                forward_meta=forward_meta,
+            )
         return hidden_states
 
     def clear_grpah_opt_backend(self):
