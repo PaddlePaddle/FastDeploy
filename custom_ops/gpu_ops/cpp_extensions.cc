@@ -1637,6 +1637,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &GetPositionIdsAndMaskEncoderBatch,
         "get_position_ids_and_mask_encoder_batch function");
 
+#ifdef ENABLE_SM75_EXT_OPS
   /**
    * cutlass_scaled_mm.cu
    * cutlass_scaled_mm
@@ -1674,6 +1675,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("scales"),
         py::arg("scale_ub"));
+#endif
 #ifdef ENABLE_SM80_EXT_OPS
   m.def("decode_mla_write_cache",
         &DecodeMLAWriteCacheKernel,
@@ -1898,6 +1900,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("custom_numpy_to_tensor",
         &CustomNumpyToTensor,
         "custom_numpy_to_tensor function");
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("prefill_permute_to_masked_gemm",
         &PrefillPermuteToMaskedGemm,
         py::arg("x"),
@@ -1932,4 +1935,5 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("per_token_group_fp8_quant",
         &PerTokenGroupQuantFp8,
         "per_token_group_quant_fp8");
+#endif
 }
