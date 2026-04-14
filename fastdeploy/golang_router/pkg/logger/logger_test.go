@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestLoggerInit(t *testing.T) {
@@ -215,4 +217,143 @@ func TestParseLogDate(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStartLogCleanup(t *testing.T) {
+	t.Run("cleanup runs for file output and respects cancellation", func(t *testing.T) {
+		tmpDir := t.TempDir()
+
+		originalNowFunc := nowFunc
+		fixedNow := time.Date(2026, 4, 10, 12, 0, 0, 0, time.UTC)
+		nowFunc = func() time.Time { return fixedNow }
+		defer func() { nowFunc = originalNowFunc }()
+
+		// Create archived logs: one older than 1 day and one recent.
+		oldLog := filepath.Join(tmpDir, "router-2026-04-07.log")
+		recentLog := filepath.Join(tmpDir, "router-2026-04-09.log")
+		todayLog := filepath.Join(tmpDir, "router-2026-04-10.log")
+		for _, p := range []string{oldLog, recentLog, todayLog} {
+			if err := os.WriteFile(p, []byte("test"), 0644); err != nil {
+				t.Fatalf("failed to create test log %s: %v", p, err)
+			}
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			StartLogCleanup(ctx, Config{
+				Output:              "file",
+				Dir:                 tmpDir,
+				MaxAgeDays:          2,
+				CleanupIntervalSecs: 0.01,
+			})
+		}()
+
+		waitForCondition(t, 500*time.Millisecond, func() bool {
+			_, err := os.Stat(oldLog)
+			return os.IsNotExist(err)
+		}, "old log should be removed by StartLogCleanup")
+
+		if _, err := os.Stat(recentLog); err != nil {
+			t.Fatalf("recent log should be kept, stat err: %v", err)
+		}
+		if _, err := os.Stat(todayLog); err != nil {
+			t.Fatalf("today log should be kept, stat err: %v", err)
+		}
+
+		cancel()
+		select {
+		case <-done:
+		case <-time.After(500 * time.Millisecond):
+			t.Fatal("StartLogCleanup did not stop after context cancellation")
+		}
+	})
+
+	t.Run("non-file output returns immediately", func(t *testing.T) {
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			StartLogCleanup(context.Background(), Config{Output: "stdout", CleanupIntervalSecs: 1})
+		}()
+		select {
+		case <-done:
+		case <-time.After(200 * time.Millisecond):
+			t.Fatal("StartLogCleanup should return immediately for non-file output")
+		}
+	})
+}
+
+func TestRotatingWriterCrossDayGracePeriodIntegration(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	originalNowFunc := nowFunc
+	defer func() { nowFunc = originalNowFunc }()
+
+	current := time.Date(2026, 4, 10, 23, 59, 59, 0, time.UTC)
+	nowFunc = func() time.Time { return current }
+
+	w, err := newRotatingWriter(tmpDir)
+	if err != nil {
+		t.Fatalf("failed to create rotating writer: %v", err)
+	}
+	defer w.Close()
+
+	if _, err = w.Write([]byte("[INFO] 2026/04/10 23:59:59 first day line\n")); err != nil {
+		t.Fatalf("failed to write day-1 line: %v", err)
+	}
+
+	current = time.Date(2026, 4, 11, 0, 0, 1, 0, time.UTC)
+	if _, err = w.Write([]byte("[INFO] 2026/04/11 00:00:01 second day line\n")); err != nil {
+		t.Fatalf("failed to write day-2 line: %v", err)
+	}
+
+	if _, err = w.Write([]byte("[INFO] 2026/04/10 23:59:58 late previous-day line\n")); err != nil {
+		t.Fatalf("failed to write late previous-day line: %v", err)
+	}
+
+	day1Bytes, err := os.ReadFile(filepath.Join(tmpDir, "router-2026-04-10.log"))
+	if err != nil {
+		t.Fatalf("failed to read day-1 log: %v", err)
+	}
+	day1Content := string(day1Bytes)
+	if !strings.Contains(day1Content, "first day line") {
+		t.Fatalf("day-1 log missing initial line, content: %s", day1Content)
+	}
+	if !strings.Contains(day1Content, "late previous-day line") {
+		t.Fatalf("day-1 log missing late previous-day line, content: %s", day1Content)
+	}
+
+	day2Bytes, err := os.ReadFile(filepath.Join(tmpDir, "router-2026-04-11.log"))
+	if err != nil {
+		t.Fatalf("failed to read day-2 log: %v", err)
+	}
+	day2Content := string(day2Bytes)
+	if !strings.Contains(day2Content, "second day line") {
+		t.Fatalf("day-2 log missing day-2 line, content: %s", day2Content)
+	}
+	if strings.Contains(day2Content, "late previous-day line") {
+		t.Fatalf("late previous-day line should not be in day-2 file, content: %s", day2Content)
+	}
+
+	symlinkTarget, err := os.Readlink(filepath.Join(tmpDir, "router.log"))
+	if err != nil {
+		t.Fatalf("failed to read symlink: %v", err)
+	}
+	if symlinkTarget != "router-2026-04-11.log" {
+		t.Fatalf("router.log symlink target = %s, want router-2026-04-11.log", symlinkTarget)
+	}
+}
+
+func waitForCondition(t *testing.T, timeout time.Duration, cond func() bool, msg string) {
+	t.Helper()
+
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if cond() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal(msg)
 }
