@@ -27,10 +27,11 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.ops.gpu import (
-    flash_attn_varlen_forward, 
-    rotary_position_embedding, 
-    write_cache_kv
+    flash_attn_varlen_forward,
+    rotary_position_embedding,
+    write_cache_kv,
 )
+
 
 @dataclass
 class TritonAttentionMetadata(AttentionMetadata):
@@ -40,11 +41,10 @@ class TritonAttentionMetadata(AttentionMetadata):
 
     num_requests: int = 0
     num_actual_tokens: int = 0
-    seq_lens: paddle.Tensor = None
     query_start_loc: paddle.Tensor = None
     kv_start_loc: paddle.Tensor = None
     block_tables: paddle.Tensor = None
-
+    output: paddle.Tensor = None
 
 class MetaxTritonAttentionBackend(AttentionBackend):
     """
@@ -88,6 +88,17 @@ class MetaxTritonAttentionBackend(AttentionBackend):
         self.keep_pd_step_flag: bool = fd_config.speculative_config.model_type == "mtp"
         self.num_layers_draft_model: int = int(fd_config.speculative_config.method in ["mtp"])
         self.start_layer_index: int = fd_config.model_config.start_layer_index
+
+        self.block_tables_buffer = paddle.zeros(
+            [
+                self.max_num_seqs,
+                self.max_seq_len // self.block_size + fd_config.cache_config.enc_dec_block_num,
+            ],
+            dtype=paddle.int32,
+        )
+        self.query_start_loc_buffer = paddle.zeros([self.max_num_seqs + 1], dtype=paddle.int32)
+        self.kv_start_loc_buffer = paddle.zeros([self.max_num_seqs + 1], dtype=paddle.int32)
+        self.output_buffer = paddle.empty([self.max_seq_len, self.num_heads, self.head_dim], dtype=paddle.bfloat16)
 
     def get_attention_meta(self) -> AttentionMetadata:
         """get_attention_meta"""
@@ -136,22 +147,25 @@ class MetaxTritonAttentionBackend(AttentionBackend):
         request_seq_lens_this_time = seq_lens_this_time[request_batch_ids, 0]
         request_seq_lens_decoder = seq_lens_decoder[request_batch_ids, 0]
         request_seq_lens = request_seq_lens_decoder + request_seq_lens_this_time
-        request_query_start_loc = paddle.concat(
-            [paddle.zeros([1], dtype=paddle.int32), request_seq_lens_this_time.cumsum(axis=0, dtype=paddle.int32)],
-            axis=0,
-        )
-        request_kv_start_loc = paddle.concat(
-            [paddle.zeros([1], dtype=paddle.int32), request_seq_lens.cumsum(axis=0, dtype=paddle.int32)],
-            axis=0,
-        )
-        request_block_tables = block_tables[request_batch_ids]
+
+        request_block_tables = self.block_tables_buffer[:num_requests]
+        request_query_start_loc = self.query_start_loc_buffer[: num_requests + 1]
+        request_kv_start_loc = self.kv_start_loc_buffer[: num_requests + 1]
+
+        request_block_tables.copy_(block_tables[request_batch_ids])
+        request_query_start_loc[1:].copy_(request_seq_lens_this_time.cumsum(axis=0, dtype=paddle.int32))
+        request_kv_start_loc[1:].copy_(request_seq_lens.cumsum(axis=0, dtype=paddle.int32))
+        
+        if num_requests < self.max_num_seqs:
+            self.query_start_loc_buffer[num_requests + 1 :] = self.query_start_loc_buffer[num_requests]
+            self.kv_start_loc_buffer[num_requests + 1 :] = self.kv_start_loc_buffer[num_requests]
 
         metadata.num_requests = num_requests
         metadata.num_actual_tokens = num_actual_tokens
-        metadata.seq_lens = request_seq_lens
         metadata.query_start_loc = request_query_start_loc
         metadata.kv_start_loc = request_kv_start_loc
         metadata.block_tables = request_block_tables
+        metadata.output = self.output_buffer[:num_actual_tokens]
 
         self.attention_metadata: AttentionMetadata = metadata
 
@@ -204,7 +218,7 @@ class MetaxTritonAttentionBackend(AttentionBackend):
 
         query = qkv.view([-1, self.num_heads + 2 * self.kv_num_heads, self.head_dim])[:, : self.num_heads, :]
 
-        output = paddle.empty_like(query)
+        output = metadata.output
 
         flash_attn_varlen_forward(
             q=query,
