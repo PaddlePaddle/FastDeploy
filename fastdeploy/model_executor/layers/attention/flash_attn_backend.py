@@ -89,7 +89,7 @@ def init_flash_attn_version():
                 logger.info(f"The current platform[sm{get_sm_version()}] can't import Flash Attention V4.")
 
         if FLASH_ATTN_VERSION is None:
-            if sm_version >= 89 and any(num >= 89 for num in paddle.version.cuda_archs()):
+            if sm_version == 90 and 90 in paddle.version.cuda_archs():
                 FLASH_ATTN_VERSION = 3
                 logger.info("The current platform supports Flash Attention V3.")
             else:
