@@ -290,8 +290,12 @@ class AutoencoderKL(nn.Layer):
         block_out_channels = (128, 256, 512, 512)
 
         if os.path.isfile(config_file):
-            with open(config_file, "r") as f:
-                config = json.load(f)
+            try:
+                with open(config_file, "r") as f:
+                    config = json.load(f)
+            except (json.JSONDecodeError, ValueError) as e:
+                logger.warning("Failed to parse %s, using defaults: %s", config_file, e)
+                config = {}
             scaling_factor = config.get("scaling_factor", scaling_factor)
             shift_factor = config.get("shift_factor", shift_factor)
             latent_channels = config.get("latent_channels", latent_channels)

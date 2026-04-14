@@ -371,6 +371,29 @@ class TestVAEFromPretrained:
         latents = vae.encode(x)
         assert not paddle.isnan(latents).any(), "VAE encode produced NaN with random weights"
 
+    def test_from_pretrained_malformed_config_uses_defaults(self, tmp_path):
+        """from_pretrained falls back to defaults when config.json is malformed."""
+        from fastdeploy.model_executor.diffusion_models.components.vae import (
+            AutoencoderKL,
+        )
+
+        vae_dir = tmp_path / "vae"
+        vae_dir.mkdir()
+        # Write invalid JSON
+        with open(vae_dir / "config.json", "w") as f:
+            f.write("{not valid json!!!")
+
+        vae = AutoencoderKL.from_pretrained(str(tmp_path), dtype=paddle.float32, subfolder="vae")
+
+        # Should fall back to default scaling_factor (0.3611)
+        assert vae.scaling_factor == 0.3611
+        assert vae.shift_factor == 0.0
+
+        # Model should still produce valid output
+        x = paddle.randn([1, 3, 64, 64])
+        latents = vae.encode(x)
+        assert not paddle.isnan(latents).any(), "VAE encode produced NaN after malformed config"
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # 4. engine.load() Integration
@@ -755,3 +778,33 @@ class TestFullPipelineWithWeightLoading:
         assert pixels.min() >= 0 and pixels.max() <= 255
         # With random weights, we expect some variance (not a solid color)
         assert pixels.std() > 1.0, f"Image has no variance (std={pixels.std():.2f}), likely broken pipeline"
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 7. DiffusionConfig.validate() Contract
+# ═══════════════════════════════════════════════════════════════════════════
+class TestDiffusionConfigValidate:
+    """DiffusionConfig.validate() rejects invalid configurations."""
+
+    def test_max_sequence_length_zero_rejected(self):
+        """max_sequence_length=0 must raise ValueError."""
+        from fastdeploy.model_executor.diffusion_models.config import DiffusionConfig
+
+        config = DiffusionConfig(model_name_or_path="/fake", max_sequence_length=0)
+        with pytest.raises(ValueError, match="max_sequence_length"):
+            config.validate()
+
+    def test_max_sequence_length_negative_rejected(self):
+        """Negative max_sequence_length must raise ValueError."""
+        from fastdeploy.model_executor.diffusion_models.config import DiffusionConfig
+
+        config = DiffusionConfig(model_name_or_path="/fake", max_sequence_length=-1)
+        with pytest.raises(ValueError, match="max_sequence_length"):
+            config.validate()
+
+    def test_valid_config_passes(self):
+        """Valid configuration should not raise."""
+        from fastdeploy.model_executor.diffusion_models.config import DiffusionConfig
+
+        config = DiffusionConfig(model_name_or_path="/fake", max_sequence_length=512)
+        config.validate()  # Should not raise

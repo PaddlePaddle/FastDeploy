@@ -90,6 +90,8 @@ class DiffusionConfig:
             raise ValueError(f"num_inference_steps must be >= 1, got {self.num_inference_steps}")
         if self.guidance_scale < 0.0:
             raise ValueError(f"guidance_scale must be >= 0.0, got {self.guidance_scale}")
+        if self.max_sequence_length < 1:
+            raise ValueError(f"max_sequence_length must be >= 1, got {self.max_sequence_length}")
         if self.model_type not in ("flux", "sd3"):
             raise ValueError(f"model_type must be 'flux' or 'sd3', got '{self.model_type}'")
         # Validate dtype is supported

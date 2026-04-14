@@ -62,6 +62,27 @@ def _sigma_schedule_numpy(num_steps: int, shift: float = 1.0) -> np.ndarray:
 class TestSchedulerVsReference:
     """Flow matching scheduler: Paddle impl matches NumPy reference at every step."""
 
+    @pytest.mark.parametrize("shift", [1.0, 3.0])
+    def test_sigmas_match_numpy_reference(self, shift):
+        """Every sigma value matches the pure NumPy reference implementation."""
+        from fastdeploy.model_executor.diffusion_models.schedulers.flow_matching import (
+            FlowMatchEulerDiscreteScheduler,
+        )
+
+        scheduler = FlowMatchEulerDiscreteScheduler(num_train_timesteps=1000, shift=shift)
+        scheduler.set_timesteps(28, dtype=paddle.float64)
+        sigmas_paddle = scheduler.sigmas.numpy()
+
+        sigmas_numpy = _sigma_schedule_numpy(28, shift=shift)
+
+        np.testing.assert_allclose(
+            sigmas_paddle,
+            sigmas_numpy,
+            rtol=1e-10,
+            atol=1e-12,
+            err_msg=f"Paddle sigmas do not match NumPy reference (shift={shift})",
+        )
+
     def test_sd3_shifted_schedule_properties(self):
         """SD3 shift=3.0: sigmas still monotonically decrease, boundaries hold."""
         from fastdeploy.model_executor.diffusion_models.schedulers.flow_matching import (
