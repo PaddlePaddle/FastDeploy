@@ -481,7 +481,7 @@ class CacheManager(KVCacheBase):
     def match_prefix(
         self,
         request: Request,
-        skip_storage: bool = False,
+        skip_storage: bool = True,
     ) -> None:
         """
         Execute three-level cache matching (Device -> Host -> Storage).
@@ -531,13 +531,14 @@ class CacheManager(KVCacheBase):
                 if not (self._storage_scheduler and skip_storage):
                     self._radix_tree.increment_ref_nodes(matched_nodes)
 
-                matched_device_ids = [n.block_id for n in result.device_nodes]
-                matched_host_ids = [n.block_id for n in result.host_nodes]
                 logger.info(
                     f"match_prefix for request_id: {request.request_id} total_hashes: {len(block_hashes)}, "
                     f"total_matched: {result.total_matched_blocks} (device_blocks={result.matched_device_nums}, "
                     f"host_blocks={result.matched_host_nums}, storage_hashes={result.matched_storage_nums})"
                 )
+
+                matched_device_ids = [n.block_id for n in result.device_nodes]
+                matched_host_ids = [n.block_id for n in result.host_nodes]
                 logger.debug(
                     f"[match_prefix] request_id={request.request_id} "
                     f"matched_device_block_ids={matched_device_ids} "
