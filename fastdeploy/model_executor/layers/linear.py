@@ -61,7 +61,8 @@ class UnquantizedLinearMethod(QuantMethodBase):
         )
 
         if self.model_format == "torch" and "output_dim" in extra_weight_attrs:
-            extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
+            if extra_weight_attrs["output_dim"] is not None:
+                extra_weight_attrs["output_dim"] = not extra_weight_attrs["output_dim"]
 
         set_weight_attrs(
             layer.weight,

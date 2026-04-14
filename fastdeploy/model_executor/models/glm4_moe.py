@@ -73,7 +73,7 @@ class Glm4MoeMLP(nn.Layer):
                 fd_config=fd_config,
                 prefix=f"{prefix}.up_gate_proj",
                 input_size=fd_config.model_config.hidden_size,
-                output_size=[intermediate_size, intermediate_size],
+                output_sizes=[intermediate_size, intermediate_size],
                 with_bias=False,
             )
 

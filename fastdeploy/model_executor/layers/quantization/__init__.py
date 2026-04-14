@@ -136,6 +136,7 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
             logger.warning(f"Failed to parse quantization config normally ({e}), trying fallback")
             quant_config_name = args.quantization["quantization"]
             quantization_config["quantization"] = quant_config_name
+        model_config.quantization_config = quantization_config
         # Special handling for Ernie models
         if quant_config_name == "wint4" and is_ernie:
             quantization_config["dense_quant_type"] = "wint8"
