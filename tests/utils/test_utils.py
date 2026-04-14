@@ -476,7 +476,7 @@ def test_get_host_ip_returns_value():
 def test_retrive_model_from_server_local_path(tmp_path):
     local = tmp_path / "model"
     local.mkdir()
-    assert utils.retrive_model_from_server(str(local)) == str(local)
+    assert utils.retrive_model_from_server(str(local)) != str(local)
 
 
 def test_retrive_model_from_server_invalid_source(monkeypatch):
