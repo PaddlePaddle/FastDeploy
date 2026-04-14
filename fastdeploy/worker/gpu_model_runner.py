@@ -2847,7 +2847,7 @@ class GPUModelRunner(ModelRunnerBase):
             if self.is_kvcache_sleeping:
                 logger.info("GPU model runner's kv cache is already sleeping, no need to sleep again!")
                 return
-            if self.spec_method == SpecMethod.MTP:
+            if self.spec_method == SpecMethod.MTP and not self.enable_cache_manager_v1:
                 self.proposer.clear_mtp_cache()
             self.clear_cache()
             self.is_kvcache_sleeping = True

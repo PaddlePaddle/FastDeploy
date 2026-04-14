@@ -987,7 +987,7 @@ class CacheController(KVCacheBase):
         except Exception:
             return False
 
-    def free_cache(self) -> bool:
+    def free_cache(self, clear_storage: bool = False) -> bool:
         """
         Free all cache storage (GPU memory + CPU pinned memory + storage).
 
@@ -1008,7 +1008,8 @@ class CacheController(KVCacheBase):
             self._free_host_cache()
 
             # Clear storage
-            self._clear_storage()
+            if clear_storage:
+                self._clear_storage()
 
             return True
         except Exception:

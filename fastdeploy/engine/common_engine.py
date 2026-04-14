@@ -1446,22 +1446,25 @@ class EngineService:
             self._send_error_response(req.request_id, "Request is aborted since engine is paused.")
         self.scheduler.reset()
 
-        # pause cache transfer
-        if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-            self.llm_logger.info("Start to pause cache transfer.")
-            pause_transfer_request = ControlRequest(
-                request_id=f"{control_request.request_id}_pause_transfer", method="pause"
-            )
-            self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
-            # Wait for cache_transfer responses
-            asyncio.run(
-                self._wait_for_control_responses(
-                    f"{pause_transfer_request.request_id}", 60, executors=["cache_transfer"]
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            self.resource_manager.cache_manager.reset_cache()
+        else:
+            # pause cache transfer
+            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                self.llm_logger.info("Start to pause cache transfer.")
+                pause_transfer_request = ControlRequest(
+                    request_id=f"{control_request.request_id}_pause_transfer", method="pause"
                 )
-            )
-            self.llm_logger.info("Successfully paused cache transfer.")
+                self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
+                # Wait for cache_transfer responses
+                asyncio.run(
+                    self._wait_for_control_responses(
+                        f"{pause_transfer_request.request_id}", 60, executors=["cache_transfer"]
+                    )
+                )
+                self.llm_logger.info("Successfully paused cache transfer.")
 
-        self.resource_manager.cache_manager.reset()
+            self.resource_manager.cache_manager.reset()
         self.llm_logger.info("Successfully paused request generation.")
         return None
 
@@ -1744,10 +1747,14 @@ class EngineService:
             executors.add("worker")
         if "kv_cache" in tags:
             executors.add("worker")
-            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-                executors.add("cache_transfer")
-            if self.cfg.cache_config.enable_prefix_caching:
-                self.resource_manager.cache_manager.reset()
+            if envs.ENABLE_V1_KVCACHE_MANAGER:
+                if self.cfg.cache_config.enable_prefix_caching:
+                    self.resource_manager.cache_manager.reset_cache()
+            else:
+                if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                    executors.add("cache_transfer")
+                if self.cfg.cache_config.enable_prefix_caching:
+                    self.resource_manager.cache_manager.reset()
 
         # Dispatch sleep request to executors
         self.llm_logger.info(f"Dispatch sleep request to executors: {list(executors)}")
