@@ -411,6 +411,32 @@ class TestDPLocalScheduler(unittest.TestCase):
         self.assertEqual(scheduler.ids, ["fresh_req"])
         self.assertEqual(scheduler.ids_read_cursor, 1)
 
+    def test_get_requests_insufficient_resources(self):
+        """Test getting requests when resources are insufficient."""
+        mock_logger.reset_mock()
+
+        # Test with insufficient blocks - mock the condition variable to avoid threading issues
+        with patch.object(self.scheduler, "requests_not_empty"):
+            requests = self.scheduler.get_requests(
+                available_blocks=5, block_size=16, reserved_output_blocks=10, max_num_batched_tokens=1024, batch=1
+            )
+
+        self.assertEqual(requests, [])
+        # The logger should have been called for insufficient resources
+        self.assertTrue(mock_logger.debug.called)
+        # Check the message contains expected content
+        call_args = mock_logger.debug.call_args[0][0]
+        self.assertIn("insufficient", call_args.lower())
+
+    def test_get_requests_insufficient_batch(self):
+        """Test getting requests when batch size is insufficient."""
+        with patch.object(self.scheduler, "requests_not_empty"):
+            requests = self.scheduler.get_requests(
+                available_blocks=20, block_size=16, reserved_output_blocks=10, max_num_batched_tokens=1024, batch=0
+            )
+
+        self.assertEqual(requests, [])
+
     @patch("time.time")
     @patch.object(dp_scheduler_module, "envs")
     def test_get_requests_no_requests_available(self, mock_envs, mock_time):
