@@ -320,6 +320,36 @@ def _assert_sampling_mask_format(sampling_mask, max_tokens):
             assert idx >= 0, f"mask 索引不应为负数，实际: {idx}"
 
 
+def _assert_topp_in_topk_mask_format(topp_in_topk_mask, sampling_mask=None):
+    """验证 topp_in_topk_mask 字段格式的公共辅助函数。
+
+    topp_in_topk_mask 是 List[List[bool]]：
+    - 外层列表长度 == 生成的 token 数
+    - 内层列表为 bool 值，True 表示该 top-k 候选也被 top-p 选中
+    - 当传入 sampling_mask 时，验证两者内外列表长度一致
+    """
+    assert topp_in_topk_mask is not None, "topp_in_topk_mask 不应为 None"
+    assert isinstance(topp_in_topk_mask, list), "topp_in_topk_mask 应为 list"
+    assert len(topp_in_topk_mask) > 0, "topp_in_topk_mask 不应为空"
+
+    for i, token_mask in enumerate(topp_in_topk_mask):
+        assert isinstance(token_mask, list), f"每个 token 的 topp_in_topk_mask 应为 list，实际: {type(token_mask)}"
+        assert len(token_mask) > 0, "每个 token 的 topp_in_topk_mask 不应为空"
+        for val in token_mask:
+            assert isinstance(val, bool), f"topp_in_topk_mask 元素应为 bool，实际: {type(val)}"
+
+    if sampling_mask is not None:
+        assert len(topp_in_topk_mask) == len(sampling_mask), (
+            f"topp_in_topk_mask 外层长度 {len(topp_in_topk_mask)} "
+            f"应与 sampling_mask 外层长度 {len(sampling_mask)} 一致"
+        )
+        for i, (topp_mask, s_mask) in enumerate(zip(topp_in_topk_mask, sampling_mask)):
+            assert len(topp_mask) == len(s_mask), (
+                f"token {i}: topp_in_topk_mask 内层长度 {len(topp_mask)} "
+                f"应与 sampling_mask 内层长度 {len(s_mask)} 一致"
+            )
+
+
 def test_keep_sampling_mask_stream(api_url):
     """测试流式响应中 keep_sampling_mask 功能（MTP 模式）。
 
@@ -364,6 +394,8 @@ def test_keep_sampling_mask_stream(api_url):
                 for idx in token_mask:
                     assert isinstance(idx, int) and idx >= 0, f"mask 索引应为非负 int，实际: {idx}"
             all_sampling_masks.extend(mask)
+        # 无 top_k 时 topp_in_topk_mask 应不存在
+        assert choice.get("topp_in_topk_mask") is None, "无 top_k 时 topp_in_topk_mask 应为 None"
 
     # 最后一个 chunk 携带 usage 信息
     usage = chunks[-1].get("usage")
@@ -407,6 +439,8 @@ def test_keep_sampling_mask_non_stream(api_url):
     assert (
         len(sampling_mask) == completion_tokens
     ), f"sampling_mask 长度 {len(sampling_mask)} 应等于 completion_tokens {completion_tokens}"
+    # 无 top_k 时 topp_in_topk_mask 应不存在
+    assert choice.get("topp_in_topk_mask") is None, "无 top_k 时 topp_in_topk_mask 应为 None"
 
 
 def test_keep_sampling_mask_top_p_1_stream(api_url):
@@ -471,3 +505,97 @@ def test_keep_sampling_mask_consistent_with_top_p(api_url):
     avg_small = get_avg_mask_len(0.1)
     avg_large = get_avg_mask_len(0.9)
     assert avg_small <= avg_large, f"top_p=0.1 的平均 mask 长度 ({avg_small:.1f}) 应 <= top_p=0.9 ({avg_large:.1f})"
+
+
+def test_topp_in_topk_mask_with_topk_non_stream(api_url):
+    """测试非流式响应中使用 top_k 时 topp_in_topk_mask 功能（MTP 模式）。
+
+    验证：
+    1. sampling_mask 和 topp_in_topk_mask 均存在
+    2. 两者外层列表长度相同（== completion_tokens）
+    3. 每个位置内层列表长度相同（sampling_mask 为 top-k 下标，topp_in_topk_mask 为等长布尔掩码）
+    4. topp_in_topk_mask 中至少有一个 True（采样到的 token 一定在 top-p 候选集中）
+    """
+    max_tokens = 20
+    payload = {
+        "model": "default",
+        "temperature": 1.0,
+        "top_k": 50,
+        "top_p": 0.9,
+        "seed": 42,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "请用一句话介绍Python语言。"},
+        ],
+        "max_tokens": max_tokens,
+        "stream": False,
+    }
+
+    response = send_request(url=api_url, payload=payload).json()
+    assert "choices" in response, f"响应缺少 choices 字段: {response}"
+    choice = response["choices"][0]
+    assert "sampling_mask" in choice, f"choice 缺少 sampling_mask 字段: {choice}"
+    assert "topp_in_topk_mask" in choice, f"choice 缺少 topp_in_topk_mask 字段: {choice}"
+
+    sampling_mask = choice["sampling_mask"]
+    topp_in_topk_mask = choice["topp_in_topk_mask"]
+    completion_tokens = response["usage"]["completion_tokens"]
+
+    _assert_sampling_mask_format(sampling_mask, max_tokens)
+    _assert_topp_in_topk_mask_format(topp_in_topk_mask, sampling_mask)
+    assert (
+        len(sampling_mask) == completion_tokens
+    ), f"sampling_mask 长度 {len(sampling_mask)} 应等于 completion_tokens {completion_tokens}"
+
+    # 每个 token 的 topp_in_topk_mask 中至少有一个 True（采样到的 token 一定在 top-p 内）
+    for i, token_mask in enumerate(topp_in_topk_mask):
+        assert any(token_mask), f"token {i} 的 topp_in_topk_mask 中应至少有一个 True"
+
+
+def test_topp_in_topk_mask_with_topk_stream(api_url):
+    """测试流式响应中使用 top_k 时 topp_in_topk_mask 功能（MTP 模式）。
+
+    验证每个有内容的 chunk 携带 sampling_mask 和 topp_in_topk_mask，
+    两者内外列表长度一致。
+    """
+    max_tokens = 15
+    payload = {
+        "model": "default",
+        "temperature": 1.0,
+        "top_k": 50,
+        "top_p": 0.9,
+        "seed": 42,
+        "messages": [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": "1+1="},
+        ],
+        "max_tokens": max_tokens,
+        "stream": True,
+        "stream_options": {"include_usage": True},
+    }
+
+    response = send_request(url=api_url, payload=payload)
+    chunks = get_stream_chunks(response)
+    assert len(chunks) > 1, "流式响应应包含至少两个 chunk"
+
+    for chunk in chunks[:-1]:
+        choice = chunk["choices"][0]
+        has_content = bool(choice.get("delta", {}).get("content"))
+        mask = choice.get("sampling_mask")
+        topp_mask = choice.get("topp_in_topk_mask")
+        if has_content:
+            assert mask is not None, f"有内容的 chunk 缺少 sampling_mask: {choice}"
+            assert topp_mask is not None, f"有内容的 chunk 缺少 topp_in_topk_mask: {choice}"
+        if mask is not None and topp_mask is not None:
+            # 外层长度一致
+            assert len(mask) == len(
+                topp_mask
+            ), f"sampling_mask 外层长度 {len(mask)} != topp_in_topk_mask 外层长度 {len(topp_mask)}"
+            for j, (s_m, t_m) in enumerate(zip(mask, topp_mask)):
+                # 内层长度一致
+                assert len(s_m) == len(
+                    t_m
+                ), f"token {j}: sampling_mask 内层长度 {len(s_m)} != topp_in_topk_mask 内层长度 {len(t_m)}"
+                # 元素为 bool
+                for val in t_m:
+                    assert isinstance(val, bool), f"topp_in_topk_mask 元素应为 bool，实际: {type(val)}"

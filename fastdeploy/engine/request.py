@@ -412,6 +412,10 @@ class CompletionOutput:
     #   - Non-MTP: list[int]
     #   - MTP: list[list[int]]
     sampling_mask: Optional[Any] = None
+    # Top-p in top-k sampling
+    #   - Non-MTP: list[bool]
+    #   - MTP: list[list[bool]]
+    topp_in_topk_mask: Optional[Any] = None
 
     def to_dict(self):
         """
@@ -430,6 +434,7 @@ class CompletionOutput:
             "text": self.text,
             "reasoning_content": self.reasoning_content,
             "sampling_mask": self.sampling_mask,
+            "topp_in_topk_mask": self.topp_in_topk_mask,
         }
 
     @classmethod

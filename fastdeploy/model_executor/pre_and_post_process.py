@@ -201,6 +201,7 @@ def _build_stream_transfer_data(
     logprobs: Optional[LogprobsTensors] = None,
     prompt_logprobs_list: Optional[LogprobsTensors] = None,
     sampling_mask: Optional[List[np.ndarray]] = None,
+    topp_in_topk_mask: Optional[List[np.ndarray]] = None,
 ):
     """Split output_tokens and output"""
 
@@ -211,6 +212,7 @@ def _build_stream_transfer_data(
         output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
 
         sampling_mask_list = sampling_mask
+        topp_in_topk_mask_list = topp_in_topk_mask
 
         for bid, output_token_per_sample in enumerate(output_tokens_lists):
             stream_transfer_data = StreamTransferData(
@@ -222,6 +224,8 @@ def _build_stream_transfer_data(
                 stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
             if sampling_mask_list is not None:
                 stream_transfer_data.sampling_mask = sampling_mask_list[bid]
+            if topp_in_topk_mask_list is not None:
+                stream_transfer_data.topp_in_topk_mask = topp_in_topk_mask_list[bid]
             stream_transfer_datas.append(stream_transfer_data)
     elif pooler_outputs is not None:
         for bid, pooler_output in enumerate(pooler_outputs):
@@ -399,6 +403,7 @@ def post_process_normal(
                     logprobs=sampler_output.logprobs_tensors,
                     prompt_logprobs_list=model_output.prompt_logprobs_list,
                     sampling_mask=sampler_output.sampling_mask,
+                    topp_in_topk_mask=sampler_output.topp_in_topk_mask,
                 )
                 async_output_queue.put(output)
         else:
@@ -421,7 +426,14 @@ def post_process_normal(
             # Send sampling_mask via ZMQ side-channel when enabled.
             if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
                 # sampling_mask is List[np.ndarray] of sparse int indices, one array per request.
-                mask_dict = {i: arr.tolist() for i, arr in enumerate(sampler_output.sampling_mask)}
+                mask_dict = {}
+                for i in range(len(sampler_output.sampling_mask)):
+                    mask_dict[i] = {
+                        "sampling_mask": sampler_output.sampling_mask[i].tolist(),
+                        "topp_in_topk_mask": (
+                            sampler_output.topp_in_topk_mask[i].tolist() if sampler_output.topp_in_topk_mask else None
+                        ),
+                    }
                 sampling_mask_zmq_client.send_pyobj(mask_dict)
 
 
@@ -557,7 +569,16 @@ def post_process_specualate(
                 n = int(n)
                 if n > 0:
                     # List of n sparse index arrays, one per accepted token
-                    mask_dict[i] = [arr.tolist() for arr in sampler_output.sampling_mask[offset : offset + n]]
+                    sampling_mask_tmp = [arr.tolist() for arr in sampler_output.sampling_mask[offset : offset + n]]
+                    topp_in_topk_mask_tmp = (
+                        [arr.tolist() for arr in sampler_output.topp_in_topk_mask[offset : offset + n]]
+                        if sampler_output.topp_in_topk_mask
+                        else None
+                    )
+                    mask_dict[i] = {
+                        "sampling_mask": sampling_mask_tmp,
+                        "topp_in_topk_mask": topp_in_topk_mask_tmp,
+                    }
                 offset += n
             sampling_mask_zmq_client.send_pyobj(mask_dict)
 

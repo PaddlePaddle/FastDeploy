@@ -20,7 +20,7 @@ import time
 import traceback
 import uuid
 from collections.abc import Iterable
-from typing import List, Optional
+from typing import Any, List, Optional
 
 import numpy as np
 
@@ -422,8 +422,13 @@ class OpenAIServingChat:
                         logprobs=logprobs_res,
                         draft_logprobs=draft_logprobs_res,
                         sampling_mask=(
-                            self._make_sampling_mask_list(output["sampling_mask"])
+                            self._make_mask_list(output["sampling_mask"])
                             if output.get("sampling_mask") is not None
+                            else None
+                        ),
+                        topp_in_topk_mask=(
+                            self._make_mask_list(output["topp_in_topk_mask"])
+                            if output.get("topp_in_topk_mask") is not None
                             else None
                         ),
                         arrival_time=arrival_time,
@@ -547,6 +552,7 @@ class OpenAIServingChat:
             )
             prompt_logprobs_res_list = [[] for _ in range(num_choices)]
             sampling_mask_list = [[] for _ in range(num_choices)]
+            topp_in_topk_mask_list = [[] for _ in range(num_choices)]
             speculate_metrics = [None for _ in range(num_choices)]
             choices = []
             while num_choices > 0:
@@ -629,7 +635,10 @@ class OpenAIServingChat:
                             prompt_logprobs_res_list[idx].extend(clamp_prompt_logprobs(prompt_logprobs_res))
                     output_sampling_mask = output.get("sampling_mask", None)
                     if output_sampling_mask is not None:
-                        sampling_mask_list[idx].append(self._make_sampling_mask_list(output_sampling_mask))
+                        sampling_mask_list[idx].append(self._make_mask_list(output_sampling_mask))
+                    topp_in_topk_mask = output.get("topp_in_topk_mask", None)
+                    if topp_in_topk_mask is not None:
+                        topp_in_topk_mask_list[idx].append(self._make_mask_list(topp_in_topk_mask))
                     speculate_metrics[idx] = data["metrics"].get("speculate_metrics", None)
                     if data["finished"]:
                         num_choices -= 1
@@ -653,6 +662,7 @@ class OpenAIServingChat:
                             response_processor=response_processor,
                             prompt_logprobs_res_list=prompt_logprobs_res_list,
                             sampling_mask_list=sampling_mask_list,
+                            topp_in_topk_mask_list=topp_in_topk_mask_list,
                             max_tokens=max_tokens,
                             speculate_metrics=speculate_metrics[idx],
                         )
@@ -707,6 +717,7 @@ class OpenAIServingChat:
         draft_logprob_contents: list,
         prompt_logprobs_res_list: list,
         sampling_mask_list: list,
+        topp_in_topk_mask_list: list,
         response_processor: ChatResponseProcessor,
         max_tokens: int,
         speculate_metrics: SpeculateMetrics | None,
@@ -749,6 +760,10 @@ class OpenAIServingChat:
         if sampling_mask_list and sampling_mask_list[idx]:
             sampling_mask_full_res = [mask for step in sampling_mask_list[idx] for mask in step]
 
+        topp_in_topk_mask_full_res = None
+        if topp_in_topk_mask_list and topp_in_topk_mask_list[idx]:
+            topp_in_topk_mask_full_res = [mask for step in topp_in_topk_mask_list[idx] for mask in step]
+
         num_cached_tokens[idx] = data.get("num_cached_tokens", 0)
         num_input_image_tokens[idx] = data.get("num_input_image_tokens", 0)
         num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
@@ -771,6 +786,7 @@ class OpenAIServingChat:
             draft_logprobs=draft_logprobs_full_res,
             prompt_logprobs=prompt_logprobs_full_res,
             sampling_mask=sampling_mask_full_res,
+            topp_in_topk_mask=topp_in_topk_mask_full_res,
             finish_reason=finish_reason,
             speculate_metrics=speculate_metrics,
         )
@@ -973,16 +989,16 @@ class OpenAIServingChat:
         }
 
     @staticmethod
-    def _make_sampling_mask_list(sampling_mask) -> List[List[int]]:
-        """Wrap sampling_mask into a uniform List[List[int]] format.
-
+    def _make_mask_list(mask) -> List[List[Any]]:
+        """Wrap mask into a uniform List[List[Any]] format.
+        for example:
         sampling_mask is already in sparse-index form (no bool-to-index conversion needed):
           Non-MTP: List[int]        (indices for 1 token/step)  → [[idx, ...]]
           MTP:     List[List[int]]  (indices for N tokens/step) → [[idx, ...], ...]
         """
-        assert sampling_mask is not None
-        if sampling_mask and isinstance(sampling_mask[0], list):
+        assert mask is not None
+        if mask and isinstance(mask[0], list):
             # MTP: already List[List[int]], return as-is
-            return sampling_mask
+            return mask
         # Non-MTP: already List[int], wrap in outer list for uniform format
-        return [sampling_mask]
+        return [mask]
