@@ -302,8 +302,8 @@ class ErnieEncoding(BaseEncoding):
                 if image_idx >= len(images):
                     raise ValueError("prompt token ids has more image placeholder than in messages")
                 # append image_start_id
-                outputs["input_ids"].extend([cur_token_id])
-                outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]])
+                outputs["input_ids"].append(cur_token_id)
+                outputs["token_type_ids"].append(IDS_TYPE_FLAG["image"])
                 outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1
@@ -326,8 +326,8 @@ class ErnieEncoding(BaseEncoding):
                 if video_idx >= len(videos):
                     raise ValueError("prompt token ids has more video placeholder than in messages")
                 # append video_start_id
-                outputs["input_ids"].extend([cur_token_id])
-                outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]])
+                outputs["input_ids"].append(cur_token_id)
+                outputs["token_type_ids"].append(IDS_TYPE_FLAG["image"])
                 outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1
@@ -351,11 +351,11 @@ class ErnieEncoding(BaseEncoding):
                 video_idx += 1
                 st = cur_idx
             else:
-                outputs["input_ids"].extend([cur_token_id])
+                outputs["input_ids"].append(cur_token_id)
                 type_flag = (
                     IDS_TYPE_FLAG["image"] if cur_token_id in (image_end_id, video_end_id) else IDS_TYPE_FLAG["text"]
                 )
-                outputs["token_type_ids"].extend([type_flag])
+                outputs["token_type_ids"].append(type_flag)
                 outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1

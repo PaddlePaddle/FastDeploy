@@ -1384,7 +1384,7 @@ class MetaxModelRunner(ModelRunnerBase):
                     self.cache_kvs_map[val_cache_name] = val_cache
                     cache_kvs_list.extend([key_cache, val_cache])
                 else:
-                    cache_kvs_list.extend([key_cache])
+                    cache_kvs_list.append(key_cache)
                 if kv_cache_quant_type == "block_wise_fp8":
                     key_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
@@ -1399,7 +1399,7 @@ class MetaxModelRunner(ModelRunnerBase):
                         self.cache_kvs_map[value_cache_scales_name] = val_cache_scales
                         cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                     else:
-                        cache_kvs_list.extend([key_cache_scales])
+                        cache_kvs_list.append(key_cache_scales)
             else:
                 logger.info(f"..attaching kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
                 key_cache = paddle.empty(shape=[], dtype=cache_type)
@@ -1424,9 +1424,9 @@ class MetaxModelRunner(ModelRunnerBase):
                         self.cache_kvs_map[value_cache_scales_name] = val_cache_scales
                         cache_kvs_list.extend([key_cache_scales, val_cache_scales])
                 else:
-                    cache_kvs_list.extend([key_cache])
+                    cache_kvs_list.append(key_cache)
                     if kv_cache_quant_type == "block_wise_fp8":
-                        cache_kvs_list.extend([key_cache_scales])
+                        cache_kvs_list.append(key_cache_scales)
 
         self.share_inputs["caches"] = cache_kvs_list
 

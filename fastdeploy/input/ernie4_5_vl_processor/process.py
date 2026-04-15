@@ -397,8 +397,8 @@ class DataProcessor(MMBaseDataProcessor):
                 if image_idx >= len(images):
                     raise ValueError("prompt token ids has more image placeholder than in messages")
                 # append image_start_id
-                outputs["input_ids"].extend([cur_token_id])
-                outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]])
+                outputs["input_ids"].append(cur_token_id)
+                outputs["token_type_ids"].append(IDS_TYPE_FLAG["text"])
                 outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1
@@ -421,8 +421,8 @@ class DataProcessor(MMBaseDataProcessor):
                 if video_idx >= len(videos):
                     raise ValueError("prompt token ids has more video placeholder than in messages")
                 # append video_start_id
-                outputs["input_ids"].extend([cur_token_id])
-                outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]])
+                outputs["input_ids"].append(cur_token_id)
+                outputs["token_type_ids"].append(IDS_TYPE_FLAG["text"])
                 outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1
@@ -446,8 +446,8 @@ class DataProcessor(MMBaseDataProcessor):
                 video_idx += 1
                 st = cur_idx
             else:
-                outputs["input_ids"].extend([cur_token_id])
-                outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]])
+                outputs["input_ids"].append(cur_token_id)
+                outputs["token_type_ids"].append(IDS_TYPE_FLAG["text"])
                 outputs["position_ids"].append([outputs["cur_position"]] * 3)
                 outputs["cur_position"] += 1
                 st += 1

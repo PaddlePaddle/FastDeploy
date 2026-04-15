@@ -686,9 +686,9 @@ class TokenProcessor:
                         sampled_token_ranks=[sampled_rank],
                     )
                 else:
-                    result.outputs.draft_top_logprobs.logprob_token_ids.extend([topk_token_ids])
-                    result.outputs.draft_top_logprobs.logprobs.extend([topk_logprobs])
-                    result.outputs.draft_top_logprobs.sampled_token_ranks.extend([sampled_rank])
+                    result.outputs.draft_top_logprobs.logprob_token_ids.append(topk_token_ids)
+                    result.outputs.draft_top_logprobs.logprobs.append(topk_logprobs)
+                    result.outputs.draft_top_logprobs.sampled_token_ranks.append(sampled_rank)
             batch_result.append(result)
         return batch_result
 
@@ -898,9 +898,9 @@ class TokenProcessor:
                                 sampled_token_ranks=[sampled_rank],
                             )
                         else:
-                            result.outputs.top_logprobs.logprob_token_ids.extend([topk_token_ids])
-                            result.outputs.top_logprobs.logprobs.extend([topk_logprobs])
-                            result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
+                            result.outputs.top_logprobs.logprob_token_ids.append(topk_token_ids)
+                            result.outputs.top_logprobs.logprobs.append(topk_logprobs)
+                            result.outputs.top_logprobs.sampled_token_ranks.append(sampled_rank)
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
                     trace_carrier = tracing.trace_get_proc_propagate_context(rid=rid)
