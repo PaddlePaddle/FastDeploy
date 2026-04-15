@@ -539,6 +539,7 @@ class DataProcessor(MMBaseDataProcessor):
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
         outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["image"]] * num_tokens)
+        outputs["num_input_image_tokens"] += num_tokens
 
         _, h, w = meta["thw"]
         pos_ids = self._compute_3d_positions(1, h, w, outputs["cur_position"])
@@ -605,6 +606,7 @@ class DataProcessor(MMBaseDataProcessor):
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
         outputs["input_ids"].extend([self.image_patch_id] * num_tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["video"]] * num_tokens)
+        outputs["num_input_video_tokens"] += num_tokens
         outputs["image_type_ids"].extend([1] * t)
 
         pos_ids = self._compute_3d_positions(t, h, w, outputs["cur_position"])
