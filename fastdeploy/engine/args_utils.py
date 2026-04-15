@@ -600,10 +600,15 @@ class EngineArgs:
                 raise NotImplementedError("Only ENABLE_V1_KVCACHE_SCHEDULER=1 support max_logprobs=-1")
 
         if self.splitwise_role != "mixed":
-            if self.scheduler_name == "local" and self.router is None:
+            if self.scheduler_name == "splitwise":
                 raise ValueError(
-                    f"When using {self.splitwise_role} role and the {self.scheduler_name} "
-                    f"scheduler, please provide --router argument."
+                    "Setting scheduler_name as splitwise is not supported in pd deployment, "
+                    "please use router as scheduler."
+                )
+            if self.scheduler_name == "local" and self.router is None:
+                console_logger.warning(
+                    f"Running {self.splitwise_role} role with {self.scheduler_name} "
+                    f"scheduler without --router. Router registration and request routing will be disabled."
                 )
 
         if not (
