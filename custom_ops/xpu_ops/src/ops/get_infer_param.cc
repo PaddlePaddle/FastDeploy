@@ -25,7 +25,7 @@ namespace api = baidu::xpu::api;
 
 void lod_to_slot_mapping(api::Context* xpu_ctx,
                          paddle::Place place,
-                         const std::vector<int32_t>& block_table,
+                         const paddle::Tensor& block_table_xpu,
                          const std::vector<int32_t>& kv_seq_lod,
                          const std::vector<int32_t>& start_tokens,
                          const std::vector<int32_t>& real_batch,
@@ -35,10 +35,16 @@ void lod_to_slot_mapping(api::Context* xpu_ctx,
                          int32_t batch_size,
                          int32_t max_num_blocks_per_seq,
                          int32_t num_speculative_tokens) {
-  if (token_num <= 0) {
+  int32_t actual_token_num = kv_seq_lod[batch_size];
+  if (token_num <= 0 || actual_token_num <= 0) {
     return;
   }
-  std::vector<int32_t> slot_mapping_vec(token_num, -1);
+
+  int ret;
+
+  std::vector<int32_t> block_table_idx_vec(actual_token_num);
+  std::vector<int32_t> seq_offset_vec(actual_token_num);
+
   int32_t idx = 0;
   // For each Batch
   for (auto batch_ = 0; batch_ < batch_size; batch_++) {
@@ -47,20 +53,56 @@ void lod_to_slot_mapping(api::Context* xpu_ctx,
     int32_t dst_batch_id = real_batch[batch_];
     // for each token
     for (auto seq_ = seq_start; seq_ < seq_start + seq_len; seq_++) {
-      int32_t table_id = seq_ / block_size;
-      int32_t block_id =
-          block_table[dst_batch_id * max_num_blocks_per_seq + table_id];
-      int32_t seq_offset = seq_ % block_size;
-      int32_t dst_token_offset = block_id * block_size + seq_offset;
-      slot_mapping_vec[idx] = dst_token_offset;
+      block_table_idx_vec[idx] =
+          seq_ / block_size + dst_batch_id * max_num_blocks_per_seq;
+      seq_offset_vec[idx] = seq_ % block_size;
       idx++;
     }
   }
-  int ret = api::do_host2device(xpu_ctx,
-                                slot_mapping_vec.data(),
-                                slot_mapping,
-                                token_num * sizeof(int32_t));
+  auto block_table_idx =
+      paddle::empty({actual_token_num}, paddle::DataType::INT32, place);
+  auto seq_offset =
+      paddle::empty({actual_token_num}, paddle::DataType::INT32, place);
+  ret = api::do_host2device(xpu_ctx,
+                            block_table_idx_vec.data(),
+                            block_table_idx.data<int32_t>(),
+                            actual_token_num * sizeof(int32_t));
   PD_CHECK(ret == api::SUCCESS, "api::do_host2device failed.");
+  ret = api::do_host2device(xpu_ctx,
+                            seq_offset_vec.data(),
+                            seq_offset.data<int32_t>(),
+                            actual_token_num * sizeof(int32_t));
+  PD_CHECK(ret == api::SUCCESS, "api::do_host2device failed.");
+
+  // int32_t block_id =
+  //     block_table[dst_batch_id * max_num_blocks_per_seq + table_id];
+  auto block_id =
+      paddle::empty({actual_token_num}, paddle::DataType::INT32, place);
+  auto block_size_tensor =
+      paddle::full({1}, block_size, paddle::DataType::INT32, place);
+  ret = api::index_select<int32_t, int32_t>(xpu_ctx,
+                                            block_table_xpu.data<int32_t>(),
+                                            block_table_idx.data<int32_t>(),
+                                            block_id.data<int32_t>(),
+                                            {block_table_xpu.numel()},
+                                            actual_token_num,
+                                            0);
+  PD_CHECK(ret == api::SUCCESS, "api::index_select failed.");
+  // int32_t dst_token_offset = block_id * block_size + seq_offset;
+  ret = api::broadcast_mul<int32_t>(xpu_ctx,
+                                    block_id.data<int32_t>(),
+                                    block_size_tensor.data<int32_t>(),
+                                    block_id.data<int32_t>(),
+                                    {actual_token_num},
+                                    {1});
+  PD_CHECK(ret == api::SUCCESS, "api::broadcast_mul failed.");
+  ret = api::broadcast_add<int32_t>(xpu_ctx,
+                                    block_id.data<int32_t>(),
+                                    seq_offset.data<int32_t>(),
+                                    slot_mapping,
+                                    {actual_token_num},
+                                    {actual_token_num});
+  PD_CHECK(ret == api::SUCCESS, "api::broadcast_add failed.");
 }
 
 std::vector<paddle::Tensor> GetInferParam(
@@ -210,47 +252,41 @@ std::vector<paddle::Tensor> GetInferParam(
 
   // for store_paged_kv_cache of cudagraph mode
   // if slot_mapping is -1, store_paged_kv_cache will not write to kv cache
-  paddle::Tensor slot_mapping_enc = paddle::empty(
-      {total_enc_len}, paddle::DataType::INT32, seq_lens_encoder.place());
+  paddle::Tensor slot_mapping_enc = paddle::full(
+      {total_enc_len}, -1, paddle::DataType::INT32, seq_lens_encoder.place());
   // TODO: mtp mode not verified yet, need further adaption
   paddle::Tensor slot_mapping_dec =
-      paddle::empty({bsz * (1 + num_speculative_tokens)},
-                    paddle::DataType::INT32,
-                    seq_lens_decoder.place());
-  if (FLAGS_encoder_splice || FLAGS_decoder_splice) {
-    std::vector<int32_t> block_tables_vec(block_bs * block_num_per_seq);
-    r = xpu_memcpy(block_tables_vec.data(),
-                   block_tables.data<int32_t>(),
-                   sizeof(int32_t) * block_bs * block_num_per_seq,
-                   XPUMemcpyKind::XPU_DEVICE_TO_HOST);
-    if (FLAGS_encoder_splice) {
-      lod_to_slot_mapping(xpu_ctx->x_context(),
-                          seq_lens_encoder.place(),
-                          block_tables_vec,
-                          encoder_seq_lod_vec,
-                          prefix_len_vec,
-                          encoder_batch_map_vec,
-                          slot_mapping_enc.data<int32_t>(),
-                          slot_mapping_enc.numel(),
-                          block_size,
-                          enc_batch,
-                          block_num_per_seq,
-                          0);
-    }
-    if (FLAGS_decoder_splice) {
-      lod_to_slot_mapping(xpu_ctx->x_context(),
-                          seq_lens_decoder.place(),
-                          block_tables_vec,
-                          decoder_seq_lod_vec,
-                          decoder_context_len_cache_vec,
-                          decoder_batch_map_vec,
-                          slot_mapping_dec.data<int32_t>(),
-                          slot_mapping_dec.numel(),
-                          block_size,
-                          dec_batch,
-                          block_num_per_seq,
-                          num_speculative_tokens);
-    }
+      paddle::full({bsz * (1 + num_speculative_tokens)},
+                   -1,
+                   paddle::DataType::INT32,
+                   seq_lens_decoder.place());
+  if (FLAGS_encoder_splice) {
+    lod_to_slot_mapping(xpu_ctx->x_context(),
+                        seq_lens_encoder.place(),
+                        block_tables,
+                        encoder_seq_lod_vec,
+                        prefix_len_vec,
+                        encoder_batch_map_vec,
+                        slot_mapping_enc.data<int32_t>(),
+                        slot_mapping_enc.numel(),
+                        block_size,
+                        enc_batch,
+                        block_num_per_seq,
+                        0);
+  }
+  if (FLAGS_decoder_splice) {
+    lod_to_slot_mapping(xpu_ctx->x_context(),
+                        seq_lens_decoder.place(),
+                        block_tables,
+                        decoder_seq_lod_vec,
+                        decoder_context_len_cache_vec,
+                        decoder_batch_map_vec,
+                        slot_mapping_dec.data<int32_t>(),
+                        slot_mapping_dec.numel(),
+                        block_size,
+                        dec_batch,
+                        block_num_per_seq,
+                        num_speculative_tokens);
   }
 
   ret = api::do_host2device(
