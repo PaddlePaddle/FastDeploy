@@ -344,12 +344,12 @@ def test_process_batch_output_use_zmq_parses_logprobs():
         logprobs=[[0.1, 0.2]],
         sampled_token_ranks=[0],
     )
-    logprob_holder = types.SimpleNamespace(tolists=lambda: logprob_list)
+
     stream = types.SimpleNamespace(
         batch_id=0,
         tokens=np.array([5], dtype=np.int64),
         pooler_output=None,
-        logprobs=logprob_holder,
+        logprobs=logprob_list,
         prompt_logprobs={"0": -0.1},
     )
     with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
