@@ -78,6 +78,7 @@ std::vector<paddle::Tensor> GetInferParam(
     paddle::Tensor& prefix_len,
     paddle::Tensor& decoder_context_len,
     paddle::Tensor& decoder_context_len_cache,
+    paddle::Tensor& prefix_block_tables,
     paddle::Tensor& encoder_batch_map_cpu,
     paddle::Tensor& decoder_batch_map_cpu,
     paddle::Tensor& encoder_batch_idx_cpu,
@@ -206,11 +207,6 @@ std::vector<paddle::Tensor> GetInferParam(
   } else {
     prefix_block_num_per_seq = -1;
   }
-
-  auto prefix_block_tables =
-      paddle::empty({block_bs, block_num_per_seq},  // full size
-                    seq_lens_encoder.type(),
-                    seq_lens_encoder.place());
 
   // for store_paged_kv_cache of cudagraph mode
   // if slot_mapping is -1, store_paged_kv_cache will not write to kv cache
@@ -450,6 +446,7 @@ PD_BUILD_OP(get_infer_param)
              "prefix_len",
              "decoder_context_len",
              "decoder_context_len_cache",
+             "prefix_block_tables",
              "encoder_batch_map_cpu",
              "decoder_batch_map_cpu",
              "encoder_batch_idx_cpu",
@@ -471,7 +468,7 @@ PD_BUILD_OP(get_infer_param)
               "prefix_len_out",
               "decoder_context_len_out",
               "decoder_context_len_cache_out",
-              "prefix_block_tables",
+              "prefix_block_tables_out",
               "encoder_batch_map_cpu_out",
               "decoder_batch_map_cpu_out",
               "encoder_batch_idx_cpu_out",
@@ -496,6 +493,7 @@ PD_BUILD_OP(get_infer_param)
          {"prefix_len", "prefix_len_out"},
          {"decoder_context_len", "decoder_context_len_out"},
          {"decoder_context_len_cache", "decoder_context_len_cache_out"},
+         {"prefix_block_tables", "prefix_block_tables_out"},
          {"encoder_batch_map_cpu", "encoder_batch_map_cpu_out"},
          {"decoder_batch_map_cpu", "decoder_batch_map_cpu_out"},
          {"encoder_batch_idx_cpu", "encoder_batch_idx_cpu_out"},

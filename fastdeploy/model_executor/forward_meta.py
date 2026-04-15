@@ -285,7 +285,7 @@ class XPUForwardMeta(ForwardMeta):
     #
     slot_mapping_dec: Optional[paddle.Tensor] = None
 
-    def init_tensor(self, bsz):
+    def init_tensor(self, bsz, block_tables_shape):
         self.encoder_batch_map = paddle.empty(bsz, dtype="int32")
         self.decoder_batch_map = paddle.empty(bsz, dtype="int32")
         self.encoder_batch_idx = paddle.empty(bsz, dtype="int32")
@@ -296,6 +296,8 @@ class XPUForwardMeta(ForwardMeta):
         self.prefix_len = paddle.empty(bsz, dtype="int32")
         self.decoder_context_len = paddle.empty(bsz, dtype="int32")
         self.decoder_context_len_cache = paddle.empty(bsz, dtype="int32")
+
+        self.prefix_block_tables = paddle.empty(block_tables_shape, dtype="int32")
 
         self.encoder_batch_map_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
         self.decoder_batch_map_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
