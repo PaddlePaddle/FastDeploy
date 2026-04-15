@@ -210,14 +210,13 @@ std::vector<paddle::Tensor> GetInferParam(
 
   // for store_paged_kv_cache of cudagraph mode
   // if slot_mapping is -1, store_paged_kv_cache will not write to kv cache
-  paddle::Tensor slot_mapping_enc = paddle::full(
-      {total_enc_len}, -1, paddle::DataType::INT32, seq_lens_encoder.place());
+  paddle::Tensor slot_mapping_enc = paddle::empty(
+      {total_enc_len}, paddle::DataType::INT32, seq_lens_encoder.place());
   // TODO: mtp mode not verified yet, need further adaption
   paddle::Tensor slot_mapping_dec =
-      paddle::full({bsz * (1 + num_speculative_tokens)},
-                   -1,
-                   paddle::DataType::INT32,
-                   seq_lens_decoder.place());
+      paddle::empty({bsz * (1 + num_speculative_tokens)},
+                    paddle::DataType::INT32,
+                    seq_lens_decoder.place());
   if (FLAGS_encoder_splice || FLAGS_decoder_splice) {
     std::vector<int32_t> block_tables_vec(block_bs * block_num_per_seq);
     r = xpu_memcpy(block_tables_vec.data(),
@@ -232,7 +231,7 @@ std::vector<paddle::Tensor> GetInferParam(
                           prefix_len_vec,
                           encoder_batch_map_vec,
                           slot_mapping_enc.data<int32_t>(),
-                          total_enc_len,
+                          slot_mapping_enc.numel(),
                           block_size,
                           enc_batch,
                           block_num_per_seq,
@@ -246,7 +245,7 @@ std::vector<paddle::Tensor> GetInferParam(
                           decoder_context_len_cache_vec,
                           decoder_batch_map_vec,
                           slot_mapping_dec.data<int32_t>(),
-                          bsz * (1 + num_speculative_tokens),
+                          slot_mapping_dec.numel(),
                           block_size,
                           dec_batch,
                           block_num_per_seq,
