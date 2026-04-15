@@ -487,7 +487,7 @@ class TestSleepWakeupBehavior(unittest.TestCase):
         runner.local_rank = 0
         runner.device_id = 1
         runner.num_gpu_blocks = 8
-        runner.model = Mock(clear_grpah_opt_backend=Mock())
+        runner.model = Mock(clear_graph_opt_backend=Mock())
         runner.clear_cache = Mock()
         runner.initialize_kv_cache = Mock()
         runner.capture_model = Mock()
@@ -523,7 +523,7 @@ class TestSleepWakeupBehavior(unittest.TestCase):
 
         runner.sleep("weight,kv_cache")
 
-        runner.model.clear_grpah_opt_backend.assert_called_once()
+        runner.model.clear_graph_opt_backend.assert_called_once()
         runner.dynamic_weight_manager.clear_deepep_buffer.assert_called_once()
         runner.dynamic_weight_manager.clear_model_weight.assert_called_once()
         runner.dynamic_weight_manager.clear_communication_group.assert_called_once()
