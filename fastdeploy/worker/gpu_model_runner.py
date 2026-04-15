@@ -106,7 +106,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     pre_process,
     rebuild_padding,
     save_output_normal,
-    save_output_specualate,
+    save_output_speculate,
 )
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import (
@@ -2592,7 +2592,8 @@ class GPUModelRunner(ModelRunnerBase):
         sampler_output,
     ):
         if self.speculative_decoding:
-            save_output_specualate(
+            skip_save_output = self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
+            save_output_speculate(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
