@@ -173,7 +173,8 @@ def xpu_pre_process(
         max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
         is_speculative=use_speculate_method,
     )
-    xpu_forward_meta.init_tensor(seq_lens_encoder.shape[0], share_inputs["block_tables"].shape)
+    if not (use_cudagraph and forward_meta is not None):
+        xpu_forward_meta.init_tensor(seq_lens_encoder.shape[0], share_inputs["block_tables"].shape)
 
     skip_list = [
         "encoder_batch_map",
