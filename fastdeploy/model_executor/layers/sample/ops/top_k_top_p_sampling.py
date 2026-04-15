@@ -125,6 +125,7 @@ def top_k_top_p_sampling(
                 if topp_seed is not None:
                     topp_seed_device = paddle.empty(shape=topp_seed.shape, dtype=topp_seed.dtype)
                     topp_seed_device.copy_(topp_seed, False)
+
                 _, ids = paddle.tensor.top_p_sampling(
                     x,
                     top_p,

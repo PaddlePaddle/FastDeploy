@@ -127,6 +127,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.spec_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.spec_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.enable_keep_sampling_mask = fd_config.model_config.enable_keep_sampling_mask
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
@@ -1264,6 +1265,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
+            keep_sampling_mask=self.enable_keep_sampling_mask,
         )
         return token_num, token_num_event
 
@@ -2519,8 +2521,10 @@ class GPUModelRunner(ModelRunnerBase):
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                async_output_queue=self.async_output_queue,
                 save_each_rank=self.parallel_config.use_ep,
                 skip_save_output=skip_save_output,
+                enable_draft_logprob=self.speculative_config.enable_draft_logprob,
             )
         else:
             save_output_normal(
