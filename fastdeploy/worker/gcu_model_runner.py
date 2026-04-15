@@ -615,7 +615,7 @@ class GCUModelRunner(ModelRunnerBase):
             not ((self.share_inputs["seq_lens_this_time"] > 1).sum() > 0)
         )
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 

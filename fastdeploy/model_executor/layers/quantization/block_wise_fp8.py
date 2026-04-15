@@ -353,7 +353,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         else:
             x, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
                 x,
-                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
+                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0 or fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
                 output_scale_transpose=True,
                 using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
             )

@@ -30,14 +30,8 @@ import numpy as np
 import paddle
 from e2e.utils.serving_utils import clean_ports
 
-if not hasattr(paddle, "compat"):
-
-    class _PaddleCompat:
-        @staticmethod
-        def enable_torch_proxy(scope=None):
-            return None
-
-    paddle.compat = _PaddleCompat()
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda scope=None: None
 
 from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.engine.args_utils import EngineArgs

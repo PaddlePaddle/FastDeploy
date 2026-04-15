@@ -156,7 +156,7 @@ class KernelInterface:
             x_list = []
             const_args = [self.arg_names[i] for i in self.constexprs]
 
-            decalare_arg_exclude_constexpr = list(self.arg_exclude_constexpr)
+            declare_arg_exclude_constexpr = list(self.arg_exclude_constexpr)
             passed_arg_exclude_constexpr = list(self.arg_exclude_constexpr)
 
             const_hint_dict = {}
@@ -177,8 +177,8 @@ class KernelInterface:
                     else:
                         dtypes.append(paddle.int8)
                         passed_arg_exclude_constexpr[i] = "(CUdeviceptr)(nullptr)"
-                    decalare_arg_exclude_constexpr[i] = (
-                        "const paddle::optional<paddle::Tensor>&" + decalare_arg_exclude_constexpr[i]
+                    declare_arg_exclude_constexpr[i] = (
+                        "const paddle::optional<paddle::Tensor>&" + declare_arg_exclude_constexpr[i]
                     )
                 elif i in self.constexprs:
                     if isinstance(ele, bool):
@@ -193,9 +193,9 @@ class KernelInterface:
                 else:
                     x_list.append(ele)
                     if isinstance(ele, int):
-                        decalare_arg_exclude_constexpr[i] = "const int64_t " + decalare_arg_exclude_constexpr[i]
+                        declare_arg_exclude_constexpr[i] = "const int64_t " + declare_arg_exclude_constexpr[i]
                     elif isinstance(ele, float):
-                        decalare_arg_exclude_constexpr[i] = "const float " + decalare_arg_exclude_constexpr[i]
+                        declare_arg_exclude_constexpr[i] = "const float " + declare_arg_exclude_constexpr[i]
                     else:
                         assert False, f"Unsupported arg type: {type(ele)} for arg '{self.arg_names[i]}'"
 
@@ -215,9 +215,9 @@ class KernelInterface:
             const_args = [f"{{{ele}}}" for ele in const_args]
             const_args = ",".join(const_args)
 
-            lanuch_grid = list(self.grid)
-            for i in range(len(lanuch_grid)):
-                ele = lanuch_grid[i]
+            launch_grid = list(self.grid)
+            for i in range(len(launch_grid)):
+                ele = launch_grid[i]
                 if isinstance(ele, str):
                     keys = list(const_hint_dict.keys())
                     keys.sort(key=len, reverse=True)
@@ -226,15 +226,15 @@ class KernelInterface:
                             ele = ele.replace(key, f"{const_hint_dict[key]}")
                 else:
                     ele = str(ele)
-                lanuch_grid[i] = ele
+                launch_grid[i] = ele
 
-            if len(lanuch_grid) < 3:
-                lanuch_grid += ["1"] * (3 - len(lanuch_grid))
-            lanuch_grid = ",".join(lanuch_grid)
+            if len(launch_grid) < 3:
+                launch_grid += ["1"] * (3 - len(launch_grid))
+            launch_grid = ",".join(launch_grid)
 
             op_dict = {"op_name": op_name}
             op_dict["triton_kernel_args"] = ",".join(passed_arg_exclude_constexpr)
-            op_dict["tensor_and_attr"] = ",".join(decalare_arg_exclude_constexpr)
+            op_dict["tensor_and_attr"] = ",".join(declare_arg_exclude_constexpr)
 
             paddle_custom_op_file_path = f"{generated_dir}/{op_name}.cu"
             so_path = find_so_path(generated_dir, python_package_name)
@@ -257,7 +257,7 @@ class KernelInterface:
                     + f"""--out-name {op_name}_kernel  """
                     + """ -w {num_warps} -ns {num_stages} """
                     + f""" -s"{address_hint} {value_hint} {const_args}" """
-                    + f"""  -g "{lanuch_grid}" """
+                    + f"""  -g "{launch_grid}" """
                 )
 
                 all_tune_config = [const_hint_dict]

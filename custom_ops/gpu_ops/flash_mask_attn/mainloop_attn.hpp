@@ -490,6 +490,23 @@ struct CollectiveMainloopAttn {
 
       softmax.rescale_o(tOrO, scores_scale);
       consumer_wait(pipeline_v, smem_pipe_read_v);
+      if (seq_len_k - n_block * kBlockN < kBlockN) {
+        int valid_k = seq_len_k - n_block * kBlockN;
+        auto sVt_this = sVt(_, _, smem_pipe_read_v.index());
+        constexpr int kHdLo = decltype(get<0, 0>(shape(sVt_this)))::value;
+        constexpr int kHdHi = decltype(get<0, 1>(shape(sVt_this)))::value;
+        if (thread_idx >= valid_k && thread_idx < kBlockN) {
+#pragma unroll
+          for (int hd_hi = 0; hd_hi < kHdHi; ++hd_hi) {
+#pragma unroll
+            for (int hd_lo = 0; hd_lo < kHdLo; ++hd_lo) {
+              sVt_this(make_coord(make_coord(hd_lo, hd_hi), thread_idx)) =
+                  Element(0);
+            }
+          }
+        }
+        cutlass::arch::fence_view_async_shared();
+      }
       gemm</*zero_init=*/false, /*wg_wait=*/-1>(
           tiled_mma1, tOrP, tOrV(_, _, _, smem_pipe_read_v.index()), tOrO);
       warp_scheduler_barrier_arrive();

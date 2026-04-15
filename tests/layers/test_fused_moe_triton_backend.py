@@ -23,8 +23,8 @@ import types
 import paddle
 import pytest
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda scope=None: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda scope=None: None
 if not hasattr(paddle.nn.functional, "swiglu"):
     paddle.nn.functional.swiglu = lambda x: x
 
@@ -509,6 +509,9 @@ class TestFusedMoeTritonBackend:
             config,
             quant_config,
             hook,
+            layer,
+            None,
+            None,
         )
 
         assert "topk" in captured
@@ -529,6 +532,9 @@ class TestFusedMoeTritonBackend:
             layer.hidden_size,
             config,
             quant_config,
+            None,
+            layer,
+            None,
             None,
         )
 

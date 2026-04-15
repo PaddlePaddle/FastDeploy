@@ -14,7 +14,7 @@ paddleformers==0.4.1
 redis
 etcd3
 httpx
-tool_helpers
+fast_dataindex
 cupy-cuda12x
 pybind11[global]
 tabulate

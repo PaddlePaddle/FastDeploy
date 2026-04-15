@@ -210,6 +210,7 @@ class Ernie4_5_MoE(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config=fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.moe_num_experts,
             top_k=fd_config.model_config.moe_k,
@@ -701,9 +702,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
 
         return hidden_states
 
-    def clear_grpah_opt_backend(self):
+    def clear_graph_opt_backend(self):
         """Clear graph optimization backend, the captured cuda graph will be cleaned"""
-        self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
+        self.ernie.clear_graph_opt_backend(fd_config=self.fd_config)
 
 
 @ModelRegistry.register_model_class(

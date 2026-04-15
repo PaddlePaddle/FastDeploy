@@ -240,3 +240,10 @@ jobs:
         run: |
           echo "logprob test failed with exit code ${{ env.LOGPROB_EXIT_CODE }}"
           exit 8
+
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}

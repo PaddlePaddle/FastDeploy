@@ -34,7 +34,7 @@ __global__ void speculate_limit_thinking_content_length_kernel(
     int64_t* next_tokens,          // [bs, tokens_per_step]
     const int* max_think_lens,     // [bs]
     int* max_reply_lens,           // [bs]
-    int64_t* step_idx,             // [bs]
+    const int64_t* step_idx,       // [bs]
     const int64_t* eos_token_ids,  // [eos_len]
     int* limit_status,             // [bs]
     int* accept_num,               // [bs]
@@ -68,7 +68,7 @@ __global__ void speculate_limit_thinking_content_length_kernel(
   int new_accept_num = original_accept_num;
 
   // 本 step 的 token offset 对应的绝对 step
-  const int64_t current_base_step = step_idx[bid] - original_accept_num + 1;
+  const int64_t current_base_step = step_idx[bid] + 1;
 
   for (int token_offset = 0; token_offset < original_accept_num;
        token_offset++) {
@@ -100,8 +100,8 @@ __global__ void speculate_limit_thinking_content_length_kernel(
         // inject_token_ids[0]）
         if (status == 0 &&
             (current_step - 1) ==
-                max_think_len) {  // current_step - 1 是因为 speculate_verify 里
-                                  // step_idx + 1 了
+                max_think_len) {  // current_step - 1 : 已输出 current_step-1
+                                  // 个thinking token
           status = (inject_len > 0) ? 1 : done_status;
         }
       } else if (max_think_len == 0) {
@@ -181,13 +181,6 @@ __global__ void speculate_limit_thinking_content_length_kernel(
     }
   }
 
-  // 更新 step_idx / accept_num（被截断的 token 需要回退
-  // step_idx）
-  const int discarded_tokens = original_accept_num - new_accept_num;
-  if (discarded_tokens > 0) {
-    step_idx[bid] -= discarded_tokens;
-  }
-
   accept_num[bid] = new_accept_num;
   limit_status[bid] = status;
   max_reply_lens[bid] = max_reply_len;
@@ -221,7 +214,7 @@ void SpeculateLimitThinkingContentLength(
       const_cast<int64_t*>(next_tokens.data<int64_t>()),
       max_think_lens.data<int>(),
       const_cast<int*>(max_reply_lens.data<int>()),
-      const_cast<int64_t*>(step_idx.data<int64_t>()),
+      step_idx.data<int64_t>(),
       eos_token_ids.data<int64_t>(),
       const_cast<int*>(limit_status.data<int>()),
       const_cast<int*>(accept_num.data<int>()),

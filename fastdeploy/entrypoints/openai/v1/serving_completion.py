@@ -302,9 +302,9 @@ class OpenAIServingCompletion(OpenAiServingBase):
         try:
             choices: List[CompletionResponseChoice] = []
 
-            for choice_index, respose_list in accumula_output_map.items():
+            for choice_index, response_list in accumula_output_map.items():
                 response: RequestOutput | None = None
-                for response_current in respose_list:
+                for response_current in response_list:
                     if response_current.error_code != 200:
                         raise ValueError("{}".format(response_current.error_msg))
                     if response is None:

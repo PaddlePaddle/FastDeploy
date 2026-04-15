@@ -30,7 +30,7 @@ from fastdeploy.input.paddleocr_vl_processor.paddleocr_vl_processor import (
     PaddleOCRVLProcessor,
 )
 from fastdeploy.input.paddleocr_vl_processor.process import DataProcessor
-from fastdeploy.input.video_utils import sample_frames_paddleocr as sample_frames
+from fastdeploy.input.utils.video import sample_frames_paddleocr as sample_frames
 
 MODULE_PATH = "fastdeploy.input.paddleocr_vl_processor.process"
 

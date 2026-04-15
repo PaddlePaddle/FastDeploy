@@ -33,7 +33,7 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.engine.tasks import PoolingTask
-from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+from fastdeploy.input.image_processors.adaptive_processor import AdaptiveImageProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.utils import (
@@ -1308,7 +1308,7 @@ class MetaxModelRunner(ModelRunnerBase):
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
         self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
@@ -2511,7 +2511,7 @@ class MetaxModelRunner(ModelRunnerBase):
         """Dynamic model loader use to clear parameters use for RL"""
         # Clear CUDAGraph
         if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
+            self.model.clear_graph_opt_backend()
         # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
@@ -2566,12 +2566,7 @@ class MetaxModelRunner(ModelRunnerBase):
         return
 
     def _init_image_preprocess(self) -> None:
-        processor = DataProcessor(
-            tokenizer_name=self.model_config.model,
-            image_preprocessor_name=str(self.model_config.model),
-        )
-        processor.eval()
-        image_preprocess = processor.image_preprocessor
+        image_preprocess = AdaptiveImageProcessor.from_pretrained(str(self.model_config.model))
         image_preprocess.image_mean_tensor = paddle.to_tensor(image_preprocess.image_mean, dtype="float32").reshape(
             [1, 3, 1, 1]
         )
@@ -2623,7 +2618,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
     def extract_vision_features_ernie(self, vision_inputs: dict[str, list[paddle.Tensor]]) -> paddle.Tensor:
         """
-        vision feature extactor for ernie-vl
+        vision feature extractor for ernie-vl
         """
         assert len(vision_inputs["images_lst"]) > 0, "at least one image needed"
 

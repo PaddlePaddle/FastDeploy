@@ -46,6 +46,8 @@ from PIL import Image
 
 from fastdeploy.input.image_processors.common import is_scaled_image
 from fastdeploy.input.image_processors.common import smart_resize_qwen as smart_resize
+from fastdeploy.input.image_processors.registry import ImageProcessorRegistry
+from fastdeploy.input.mm_model_config import ERNIE4_5_VL
 from fastdeploy.utils import data_processor_logger
 
 OPENAI_CLIP_MEAN = [0.48145466, 0.4578275, 0.40821073]
@@ -116,6 +118,7 @@ def make_batched_videos(videos) -> List[VideoInput]:
     raise ValueError(f"Could not make batched video from {videos}")
 
 
+@ImageProcessorRegistry.register(ERNIE4_5_VL)
 class AdaptiveImageProcessor(BaseImageProcessor):
     r"""
     Constructs a adaptive image processor that dynamically resizes images based on the original images.

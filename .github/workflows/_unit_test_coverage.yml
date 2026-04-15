@@ -406,6 +406,13 @@ jobs:
           echo "coverage passed"
           exit 0
 
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}
+
   diff_coverage_report:
     needs: run_tests_with_coverage
     if: always()

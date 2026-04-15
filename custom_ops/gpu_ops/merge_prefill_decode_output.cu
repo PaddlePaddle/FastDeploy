@@ -44,12 +44,48 @@ __global__ void FillEncoderDecoderResKernel(T *encoder_res_data,
     return;
   }
 
-  const int load_idx =
-      ((cu_seq_q[bidb] + token_id) * head_num + bidh) * head_dim + land_id * 4;
+  const int base_idx =
+      ((cu_seq_q[bidb] + token_id) * head_num + bidh) * head_dim;
 
-  *reinterpret_cast<float2 *>(encoder_res_data + load_idx) =
-      *reinterpret_cast<float2 *>(decoder_res_data + load_idx);
+  if (head_dim == 128) {
+    const int load_idx = base_idx + land_id * 4;
+    *reinterpret_cast<float2 *>(encoder_res_data + load_idx) =
+        *reinterpret_cast<float2 *>(decoder_res_data + load_idx);
+  } else if (head_dim == 192) {
+    const int load_idx = base_idx + land_id * 4;
+    *reinterpret_cast<float2 *>(encoder_res_data + load_idx) =
+        *reinterpret_cast<float2 *>(decoder_res_data + load_idx);
+    if (land_id < 16) {
+      *reinterpret_cast<float2 *>(encoder_res_data + load_idx + 128) =
+          *reinterpret_cast<float2 *>(decoder_res_data + load_idx + 128);
+    }
+  } else if (head_dim == 256) {
+    // float4 = 单条LDG.128，性能最优
+    const int load_idx = base_idx + land_id * 8;
+    *reinterpret_cast<float4 *>(encoder_res_data + load_idx) =
+        *reinterpret_cast<float4 *>(decoder_res_data + load_idx);
+  }
 }
+
+#define LAUNCH_KERNEL(T, WARPS)                           \
+  FillEncoderDecoderResKernel<WARPS>                      \
+      <<<grid_dims, head_dim, 0, encoder_res.stream()>>>( \
+          const_cast<T *>(encoder_res.data<T>()),         \
+          const_cast<T *>(decoder_res.data<T>()),         \
+          seq_lens_encoder.data<int>(),                   \
+          seq_lens_decoder.data<int>(),                   \
+          seq_lens_this_time.data<int>(),                 \
+          cu_seq_q.data<int>(),                           \
+          head_num,                                       \
+          head_dim)
+
+#define LAUNCH_KERNEL_BY_HEAD_DIM(T) \
+  if (head_dim == 128)               \
+    LAUNCH_KERNEL(T, 4);             \
+  else if (head_dim == 192)          \
+    LAUNCH_KERNEL(T, 6);             \
+  else if (head_dim == 256)          \
+  LAUNCH_KERNEL(T, 8)
 
 void MergePrefillDecodeOutput(const paddle::Tensor &encoder_res,
                               const paddle::Tensor &decoder_res,
@@ -60,41 +96,20 @@ void MergePrefillDecodeOutput(const paddle::Tensor &encoder_res,
                               const int head_num,
                               const int head_dim,
                               const int max_token) {
-  if (head_dim != 128) {
-    PD_THROW("Only supported head_dim = 128");
+  if (head_dim != 128 && head_dim != 192 && head_dim != 256) {
+    PD_THROW("Only supported head_dim = 128, 192 or 256");
   }
   const int batch_size = seq_lens_encoder.shape()[0];
-  constexpr int warps = 4;
+  const int warps = head_dim / 32;
   const int tokens_block = (max_token + warps - 1) / warps;
-  dim3 grid_dims;
-  grid_dims.x = batch_size;
-  grid_dims.y = head_num;
-  grid_dims.z = tokens_block;
+  dim3 grid_dims(batch_size, head_num, tokens_block);
 
   if (encoder_res.dtype() == paddle::DataType::FLOAT16) {
     using T = phi::dtype::float16;
-    FillEncoderDecoderResKernel<warps>
-        <<<grid_dims, 128, 0, encoder_res.stream()>>>(
-            const_cast<T *>(encoder_res.data<T>()),
-            const_cast<T *>(decoder_res.data<T>()),
-            seq_lens_encoder.data<int>(),
-            seq_lens_decoder.data<int>(),
-            seq_lens_this_time.data<int>(),
-            cu_seq_q.data<int>(),
-            head_num,
-            head_dim);
+    LAUNCH_KERNEL_BY_HEAD_DIM(T);
   } else if (encoder_res.dtype() == paddle::DataType::BFLOAT16) {
     using T = phi::dtype::bfloat16;
-    FillEncoderDecoderResKernel<warps>
-        <<<grid_dims, 128, 0, encoder_res.stream()>>>(
-            const_cast<T *>(encoder_res.data<T>()),
-            const_cast<T *>(decoder_res.data<T>()),
-            seq_lens_encoder.data<int>(),
-            seq_lens_decoder.data<int>(),
-            seq_lens_this_time.data<int>(),
-            cu_seq_q.data<int>(),
-            head_num,
-            head_dim);
+    LAUNCH_KERNEL_BY_HEAD_DIM(T);
   }
 }
 
