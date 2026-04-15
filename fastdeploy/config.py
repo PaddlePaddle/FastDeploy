@@ -2064,7 +2064,10 @@ class FDConfig:
 
         if self.scheduler_config.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if int(envs.FD_DISABLE_CHUNKED_PREFILL):
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
+                else:
+                    self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.scheduler_config.max_num_batched_tokens = 2048
