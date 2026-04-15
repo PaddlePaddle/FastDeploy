@@ -2163,7 +2163,7 @@ class FDConfig:
         else:
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs
         if (
-            getattr(self.model_config, "num_max_dispatch_tokens_per_rank")
+            getattr(self.model_config, "num_max_dispatch_tokens_per_rank", None)
             and self.model_config.num_max_dispatch_tokens_per_rank != auto_dispatch_tokens
         ):
             logger.info(
