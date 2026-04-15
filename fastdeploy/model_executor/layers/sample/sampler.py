@@ -152,7 +152,15 @@ def _compute_sampling_mask(
         col_idx = paddle.arange(vocab_size, dtype=top_k.dtype).unsqueeze(0)  # [1, V]
         # top_k == 0 means "disabled" → keep all columns for that row.
         effective_k = paddle.where(top_k > 0, top_k, paddle.full_like(top_k, vocab_size))
-        topk_mask = col_idx < effective_k  # [B, V], True = inside top-k
+        strict_topk_mask = col_idx < effective_k  # [B, V], True = inside top-k
+
+        # Relax: also keep positions whose prob ties with the k-th element.
+        # boundary index (0-based) = effective_k - 1, clamped to [0, V-1].
+        k_idx = (effective_k - 1).clip(min=0).squeeze(-1).astype("int64")  # [B] k-th index
+        batch_idx = paddle.arange(k_idx.shape[0], dtype="int64")  # [B] bs index
+        boundary_prob = sorted_probs[batch_idx, k_idx].unsqueeze(-1)  # [B, 1] k-th prob
+        tie_mask = sorted_probs == boundary_prob  # [B, V]
+        topk_mask = strict_topk_mask | tie_mask  # [B, V]
 
         # Zero out tail, then renorm row-wise.
         masked_sorted_probs = paddle.where(topk_mask, sorted_probs, paddle.zeros_like(sorted_probs))
