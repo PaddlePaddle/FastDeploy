@@ -63,52 +63,63 @@ static int cpu_wrapper(api::Context* ctx,
     const int64_t step_idx_now = step_idx[bid];
     const int64_t min_token_limit = min_tokens[bid];
 
-    const bool can_stop = (step_idx_now >= min_token_limit);
+    // Align with GPU: can_stop = (step_idx_now + accept_num >= min_token_limit)
+    const bool can_stop = (step_idx_now + accept_num >= min_token_limit);
     if (!can_stop) continue;
+    if (stop_flags[bid]) continue;
     for (int tid = 0; tid < stop_seqs_bs; ++tid) {
-      const int stop_seq_len = stop_seqs_len[tid];
+      // Align with GPU: per-batch stop_seqs_len
+      const int stop_seq_len = stop_seqs_len[bid * stop_seqs_bs + tid];
       if (stop_seq_len <= 0) continue;
-      const int64_t* stop_seq_now = stop_seqs + tid * stop_seqs_max_len;
-      if (!stop_flags[bid]) {
-        int accept_idx = 0;
-        bool is_end = false;
-        // 遍历起始位置
-        for (; accept_idx <= accept_num - 1 && !is_end; accept_idx++) {
-          if (step_idx_now - accept_num + accept_idx + 1 < stop_seq_len) {
-            continue;
-          }
-          // 遍历一个 stop_seqs
-          for (int i = stop_seq_len - 1; i >= 0; --i) {
-            int64_t cur_token_idx = -1;
+      // Align with GPU: per-batch stop_seqs
+      const int64_t* stop_seq_now = stop_seqs +
+                                    bid * stop_seqs_max_len * stop_seqs_bs +
+                                    tid * stop_seqs_max_len;
 
-            // 通过当前值判断 token 是在 pre_ids 还是 accept_token 里
-            if (stop_seq_len - 1 - i < accept_idx) {
-              cur_token_idx =
-                  accept_tokens_now[accept_idx - (stop_seq_len - 1 - i) - 1];
-            } else {
-              int pre_ids_idx = step_idx_now - accept_num + accept_idx -
-                                (stop_seq_len - 1 - i);
-              // EC3
-              // 特殊拼接会导致input_ids最后一位无特殊token，即pre_ids[0]可能为23,
-              // 导致异常结束
-              if (pre_ids_idx <= 0) {
-                break;
-              }
-              cur_token_idx = pre_ids_now[pre_ids_idx];
-            }
-            if (cur_token_idx != stop_seq_now[i]) {
+      /*
+        Align with GPU:
+        accept_idx = -1 means the last token of stop_seq is at the end
+        of pre_ids (delayed match from the previous round).
+        Loop range: when accept_num > 0, [-1, accept_num-2];
+                    when accept_num = 0, [-1].
+      */
+      int accept_idx = -1;
+      bool is_end = false;
+
+      int loop_end = (accept_num > 0) ? accept_num - 2 : -1;
+      for (; accept_idx <= loop_end && !is_end; accept_idx++) {
+        if (step_idx_now + accept_idx + 1 < stop_seq_len) {
+          continue;
+        }
+        for (int i = stop_seq_len - 1; i >= 0; --i) {
+          int64_t cur_token_idx = -1;
+
+          int offset = stop_seq_len - 1 - i;
+          int accept_tokens_idx = accept_idx - offset;
+
+          if (accept_tokens_idx >= 0) {
+            cur_token_idx = accept_tokens_now[accept_tokens_idx];
+          } else {
+            int pre_ids_idx = step_idx_now + accept_tokens_idx;
+            // Align with GPU: use < 0 instead of <= 0
+            if (pre_ids_idx < 0) {
               break;
             }
-            if (i == 0) {
-              is_end = true;
-            }
+            cur_token_idx = pre_ids_now[pre_ids_idx];
+          }
+          if (cur_token_idx != stop_seq_now[i]) {
+            break;
+          }
+          if (i == 0) {
+            is_end = true;
           }
         }
-        if (is_end) {
-          accept_nums[bid] = accept_idx;
-          accept_tokens_now[accept_idx - 1] = end_ids[0];
-          stop_flags[bid] = true;
-        }
+      }
+      if (is_end) {
+        // Align with GPU: truncate accept_nums, write eos at accept_idx,
+        // do NOT set stop_flags here.
+        accept_nums[bid] = accept_idx + 1;
+        accept_tokens_now[accept_idx] = end_ids[0];
       }
     }
   }
@@ -185,7 +196,8 @@ int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                       pre_ids_len);
   WRAPPER_DUMP(ctx);
   WRAPPER_CHECK_PTR(ctx, int64_t, bs_now * accept_tokens_len, accept_tokens);
-  WRAPPER_CHECK_PTR(ctx, int64_t, stop_seqs_bs * stop_seqs_max_len, stop_seqs);
+  WRAPPER_CHECK_PTR(
+      ctx, int64_t, bs_now * stop_seqs_bs * stop_seqs_max_len, stop_seqs);
   WRAPPER_ASSERT_GT(ctx, bs_now, 0);
 
   if (ctx->dev().type() == api::kCPU) {

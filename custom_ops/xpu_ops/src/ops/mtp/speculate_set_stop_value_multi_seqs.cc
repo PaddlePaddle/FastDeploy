@@ -45,8 +45,9 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
   std::vector<int64_t> shape = accept_tokens.shape();
   std::vector<int64_t> stop_seqs_shape = stop_seqs.shape();
   int bs_now = shape[0];
-  int stop_seqs_bs = stop_seqs_shape[0];
-  int stop_seqs_max_len = stop_seqs_shape[1];
+  // Align with GPU: stop_seqs shape is [bs, stop_seqs_bs, stop_seqs_max_len]
+  int stop_seqs_bs = stop_seqs_shape[1];
+  int stop_seqs_max_len = stop_seqs_shape[2];
   int pre_ids_len = pre_ids.shape()[1];
   int accept_tokens_len = accept_tokens.shape()[1];
 
@@ -82,7 +83,8 @@ PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
              "stop_seqs_len",
              "end_ids",
              "min_tokens"})
-    .Outputs({"accept_tokens_out", "stop_flags_out"})
+    .Outputs({"accept_tokens_out", "accept_num_out", "stop_flags_out"})
     .SetInplaceMap({{"accept_tokens", "accept_tokens_out"},
+                    {"accept_num", "accept_num_out"},
                     {"stop_flags", "stop_flags_out"}})
     .SetKernelFn(PD_KERNEL(SpecGetStopFlagsMultiSeqs));
