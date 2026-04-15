@@ -2159,6 +2159,25 @@ class FDConfig:
                 self.speculative_config.num_speculative_tokens = 1
                 self.speculative_config.num_model_steps = 1
 
+        # Auto-compute num_max_dispatch_tokens_per_rank from max_num_seqs and num_speculative_tokens
+        if self.speculative_config is not None and self.speculative_config.method is not None:
+            num_spec_tokens = self.speculative_config.num_speculative_tokens
+            auto_dispatch_tokens = self.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
+        else:
+            auto_dispatch_tokens = self.scheduler_config.max_num_seqs
+        if (
+            getattr(self.model_config, "num_max_dispatch_tokens_per_rank", None)
+            and self.model_config.num_max_dispatch_tokens_per_rank != auto_dispatch_tokens
+        ):
+            logger.info(
+                f"Auto-setting num_max_dispatch_tokens_per_rank from "
+                f"{self.model_config.num_max_dispatch_tokens_per_rank} to {auto_dispatch_tokens} "
+                f"(max_num_seqs={self.scheduler_config.max_num_seqs}"
+                f"{f', num_speculative_tokens={num_spec_tokens}' if self.speculative_config is not None and self.speculative_config.method is not None else ''})."
+            )
+
+            self.model_config.num_max_dispatch_tokens_per_rank = auto_dispatch_tokens
+
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
             self.model_config.moe_phase = MoEPhase(phase="prefill")
