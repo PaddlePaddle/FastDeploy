@@ -493,7 +493,6 @@ class TestFusedMoeTritonBackend:
         }
 
         _ = backend.python_op_fused_moe_kernel_paddle(
-            layer,
             x,
             layer_added_weight_attrs_0,
             layer_added_scale_attrs_0,
@@ -510,6 +509,7 @@ class TestFusedMoeTritonBackend:
             config,
             quant_config,
             hook,
+            layer,
             None,
             None,
         )
@@ -517,7 +517,6 @@ class TestFusedMoeTritonBackend:
         assert "topk" in captured
 
         meta = backend.python_op_fused_moe_kernel_paddle_infer_meta(
-            layer,
             x,
             layer_added_weight_attrs_0,
             layer_added_scale_attrs_0,
@@ -534,6 +533,7 @@ class TestFusedMoeTritonBackend:
             config,
             quant_config,
             None,
+            layer,
             None,
             None,
         )

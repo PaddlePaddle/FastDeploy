@@ -1164,7 +1164,6 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
 
 
 def python_op_fused_moe_kernel_paddle_infer_meta(
-    layer,
     x,
     layer_added_weight_attrs_0,
     layer_added_scale_attrs_0,
@@ -1181,6 +1180,7 @@ def python_op_fused_moe_kernel_paddle_infer_meta(
     config: dict,
     quant_config,
     topk_ids_hookfunc,
+    layer,
     fc1_latent_proj,
     fc2_latent_proj,
 ):
@@ -1204,7 +1204,6 @@ def python_op_fused_moe_kernel_paddle_infer_meta(
     inplace_map={},
 )
 def python_op_fused_moe_kernel_paddle(
-    layer,
     x: paddle.Tensor,
     layer_added_weight_attrs_0: paddle.Tensor,
     layer_added_scale_attrs_0: paddle.Tensor,
@@ -1221,6 +1220,7 @@ def python_op_fused_moe_kernel_paddle(
     config: dict,
     quant_config,
     topk_ids_hookfunc,
+    layer,
     fc1_latent_proj,
     fc2_latent_proj,
 ):
@@ -1871,7 +1871,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         }
 
         return python_op_fused_moe_kernel_paddle(
-            layer,
             x,
             layer_added_weight_attrs_0,
             layer_added_scale_attrs_0,
@@ -1888,6 +1887,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             config,
             self.quant_config,
             topk_ids_hookfunc,
+            layer,
             fc1_latent_proj,
             fc2_latent_proj,
         )
