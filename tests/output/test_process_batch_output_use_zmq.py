@@ -22,6 +22,7 @@ import numpy as np
 
 from fastdeploy.config import PREEMPTED_TOKEN_ID
 from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
+from fastdeploy.model_executor.utils import build_stream_transfer_data
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.worker.output import LogprobsLists
@@ -721,9 +722,7 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
         """Build StreamTransferData list for mtype=3 with 2 requests."""
         import paddle
 
-        from fastdeploy.model_executor.pre_and_post_process import (
-            build_stream_transfer_data,
-        )
+        from fastdeploy.model_executor.utils import build_stream_transfer_data
 
         accept_tokens_cpu = paddle.to_tensor([[100, 200, 0], [300, 0, 0]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([2, 1], dtype="int64")
@@ -748,10 +747,6 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
         """Build StreamTransferData list for mtype=4 (draft)."""
         import paddle
 
-        from fastdeploy.model_executor.pre_and_post_process import (
-            build_stream_transfer_data,
-        )
-
         accept_tokens_cpu = paddle.to_tensor([[10, 20, 30]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([3], dtype="int64")
 
@@ -767,10 +762,6 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
     def test_preempted_request_injected(self):
         """If last_preempted_idx is nonzero for a slot, accept_num should be set to PREEMPTED_TOKEN_ID."""
         import paddle
-
-        from fastdeploy.model_executor.pre_and_post_process import (
-            build_stream_transfer_data,
-        )
 
         accept_tokens_cpu = paddle.to_tensor([[100, 200, 0], [300, 400, 500]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([2, 3], dtype="int64")
@@ -793,10 +784,6 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
         """accept_num=0 should produce empty tokens array."""
         import paddle
 
-        from fastdeploy.model_executor.pre_and_post_process import (
-            build_stream_transfer_data,
-        )
-
         accept_tokens_cpu = paddle.to_tensor([[100, 200, 0]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([0], dtype="int64")
 
@@ -813,10 +800,6 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
     def test_prompt_logprobs_assigned(self):
         """prompt_logprobs_list should be assigned to the corresponding stream_data."""
         import paddle
-
-        from fastdeploy.model_executor.pre_and_post_process import (
-            build_stream_transfer_data,
-        )
 
         accept_tokens_cpu = paddle.to_tensor([[100, 200]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([2], dtype="int64")

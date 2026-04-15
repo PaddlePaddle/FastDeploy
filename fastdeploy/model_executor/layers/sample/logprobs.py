@@ -223,7 +223,7 @@ def build_output_logprobs(
 
 
 def get_logprobs_starts_and_ends(
-    num_tokens_arr: np.ndarray, cu_batch_token_offset: Optional[np.ndarray] = None
+    num_tokens_arr: np.ndarray, cu_batch_token_offset: Optional[paddle.Tensor] = None
 ) -> Tuple[np.ndarray, np.ndarray]:
     """
     Calculate start and end indices for logprobs slicing.

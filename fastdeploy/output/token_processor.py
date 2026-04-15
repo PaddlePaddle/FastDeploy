@@ -642,6 +642,7 @@ class TokenProcessor:
         rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:
+                receive_datas = None
                 if (
                     self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1
                 ) or (rank_id == 0):

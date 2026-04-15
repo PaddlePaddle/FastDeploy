@@ -23,7 +23,7 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.inter_communicator import ZmqIpcClient
-from fastdeploy.model_executor.pre_and_post_process import build_stream_transfer_data
+from fastdeploy.model_executor.utils import build_stream_transfer_data
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
 
