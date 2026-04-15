@@ -14,7 +14,7 @@ paddleformers==1.0.0
 redis
 etcd3
 httpx
-tool_helpers
+fast_dataindex
 pybind11[global]
 tabulate
 gradio

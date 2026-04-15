@@ -702,9 +702,9 @@ class KernelInterface:
             const_args = [f"{{{ele}}}" for ele in const_args]
             const_args = ",".join(const_args)
 
-            lanuch_grid = list(self.grid)
-            for i in range(len(lanuch_grid)):
-                ele = lanuch_grid[i]
+            launch_grid = list(self.grid)
+            for i in range(len(launch_grid)):
+                ele = launch_grid[i]
                 if isinstance(ele, str):
                     for key in const_hint_dict.keys():
                         if key in ele:
@@ -712,10 +712,10 @@ class KernelInterface:
                 else:
                     ele = str(ele)
 
-                lanuch_grid[i] = ele
-            if len(lanuch_grid) < 3:
-                lanuch_grid += ["1"] * (3 - len(lanuch_grid))
-            lanuch_grid = ",".join(lanuch_grid)
+                launch_grid[i] = ele
+            if len(launch_grid) < 3:
+                launch_grid += ["1"] * (3 - len(launch_grid))
+            launch_grid = ",".join(launch_grid)
 
             op_dict = {"op_name": op_name, "reset_zero_when_tune": ""}
             op_dict["triton_kernel_args"] = ",".join(modified_arg_exclude_constexpr)
@@ -745,7 +745,7 @@ class KernelInterface:
                     + f"""--out-name {op_name}_kernel  """
                     + """ -w {num_warps} -ns {num_stages} """
                     + f""" -s"{address_hint} {value_hint} {const_args}" """
-                    + f"""  -g "{lanuch_grid}" """
+                    + f"""  -g "{launch_grid}" """
                 )
                 all_tune_config = [{key: value} for key, value in self.tune_config.items()]
                 if len(all_tune_config) == 0:

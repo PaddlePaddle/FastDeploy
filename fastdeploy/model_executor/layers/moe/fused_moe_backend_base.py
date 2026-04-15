@@ -218,6 +218,8 @@ class MoEMethodBase(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
@@ -237,7 +239,7 @@ class MoEMethodBase(QuantMethodBase):
                     layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
                 )
         else:
-            return self.apply_tp(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
+            return self.apply_tp(layer, x, gate, topk_ids_hookfunc)
 
 
 class UnquantizedFusedMoEMethod(MoEMethodBase):

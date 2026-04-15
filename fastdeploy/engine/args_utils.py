@@ -1498,7 +1498,11 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if current_platform.is_maca() or current_platform.is_iluvatar():
+                if (
+                    int(envs.FD_DISABLE_CHUNKED_PREFILL)
+                    or current_platform.is_maca()
+                    or current_platform.is_iluvatar()
+                ):
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM

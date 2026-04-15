@@ -666,11 +666,6 @@ class PaddleDisWorkerProc:
             # 2. Calculate the appropriate number of blocks
             model_block_memory_used = self.worker.cal_theortical_kvcache()
             num_blocks_local = int(available_kv_cache_memory // model_block_memory_used)
-            # NOTE(liuzichang): Too many block will lead to illegal memory access
-            # We will develop dynamic limits in future.
-            if num_blocks_local > 40000:
-                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
-                num_blocks_local = min(40000, num_blocks_local)
             logger.info(f"------- model_block_memory_used:{model_block_memory_used / 1024**3} GB --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
@@ -1301,7 +1296,7 @@ def run_worker_proc() -> None:
 
     # Enable batch-invariant mode for deterministic inference.
     # This must happen AFTER worker creation but BEFORE model loading,
-    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # because enable_batch_invariant_mode() calls paddle.enable_compat()
     # which makes torch appear available via proxy. If called before worker creation,
     # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
     # transformers) will fail when transformers tries to query torch metadata.

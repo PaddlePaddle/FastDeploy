@@ -1308,7 +1308,7 @@ class MetaxModelRunner(ModelRunnerBase):
         # Set forward_meta.is_dummy_or_profile_run to True to skip init_kv_signal_per_query for attention backends
         self.forward_meta.is_dummy_or_profile_run = is_dummy_or_profile_run
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
@@ -2623,7 +2623,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
     def extract_vision_features_ernie(self, vision_inputs: dict[str, list[paddle.Tensor]]) -> paddle.Tensor:
         """
-        vision feature extactor for ernie-vl
+        vision feature extractor for ernie-vl
         """
         assert len(vision_inputs["images_lst"]) > 0, "at least one image needed"
 

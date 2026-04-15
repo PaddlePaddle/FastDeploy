@@ -701,6 +701,36 @@ std::vector<paddle::Tensor> WeightQuantize(const paddle::Tensor& x,
                                            const int32_t arch,
                                            const int32_t group_size);
 
+void VerifyDraftTokens(
+    // Core I/O
+    const paddle::Tensor& step_output_ids,
+    const paddle::Tensor& step_output_len,
+    const paddle::Tensor& step_input_ids,
+    // Target model outputs (optional, required for TARGET_MATCH)
+    const paddle::optional<paddle::Tensor>& target_tokens,
+    // Candidate set (optional, required for TOPP/GREEDY)
+    const paddle::optional<paddle::Tensor>& candidate_ids,
+    const paddle::optional<paddle::Tensor>& candidate_scores,
+    const paddle::optional<paddle::Tensor>& candidate_lens,
+    // Sampling params
+    const paddle::Tensor& topp,
+    // Metadata
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& end_tokens,
+    const paddle::Tensor& is_block_step,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& reasoning_status,
+    // max_dec_len / step_idx for EOS/max-len detection
+    const paddle::Tensor& max_dec_len,
+    const paddle::Tensor& step_idx,
+    int max_seq_len,
+    int verify_window,
+    int verify_strategy,
+    bool reject_all,
+    bool accept_all);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("adjust_batch",
         &AdjustBatch,
@@ -1233,6 +1263,32 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("benchmark_mode"),
         py::arg("accept_all_drafts"),
         "Perform speculative verification for decoding");
+
+  m.def("verify_draft_tokens",
+        &VerifyDraftTokens,
+        py::arg("step_output_ids"),
+        py::arg("step_output_len"),
+        py::arg("step_input_ids"),
+        py::arg("target_tokens"),
+        py::arg("candidate_ids"),
+        py::arg("candidate_scores"),
+        py::arg("candidate_lens"),
+        py::arg("topp"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_this_time"),
+        py::arg("end_tokens"),
+        py::arg("is_block_step"),
+        py::arg("cu_seqlens_q_output"),
+        py::arg("reasoning_status"),
+        py::arg("max_dec_len"),
+        py::arg("step_idx"),
+        py::arg("max_seq_len"),
+        py::arg("verify_window"),
+        py::arg("verify_strategy"),
+        py::arg("reject_all"),
+        py::arg("accept_all"),
+        "Perform speculative verification for decoding v2");
 
   m.def("speculate_save_output",
         &SpeculateSaveWithOutputMsgStatic,
