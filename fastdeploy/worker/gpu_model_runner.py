@@ -45,6 +45,12 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.attention.dsa_attention_backend import (
+    DSAAttentionBackend,
+)
+from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
+    MLAAttentionBackend,
+)
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
@@ -1274,8 +1280,8 @@ class GPUModelRunner(ModelRunnerBase):
         applicable to all models that need per-token KV cache physical slot addresses.
         Results are stored in self.forward_meta.
         """
-        # NOTE(zhushengguang): Currently, only DeepSeek is supported.
-        if "Deepseek" not in str(self.model_config.architectures):
+        # NOTE(zhushengguang): Only support MLAAttentionBackend and DSAAttentionBackend currently.
+        if not isinstance(self.attn_backends[0], (MLAAttentionBackend, DSAAttentionBackend)):
             return
         current_total_tokens = self.forward_meta.ids_remove_padding.shape[0]
         position_ids = self.share_inputs["position_ids_buffer"][:current_total_tokens]
