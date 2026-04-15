@@ -261,7 +261,9 @@ def reference_impl(inputs: Dict[str, Any]) -> Dict[str, Any]:
             # Write history to token_ids_all (forward loop, mirrors kernel step 5)
             if output_len > 0:
                 base_addr = int(prompt_lens[batch_id])
-                base = cur_step_idx - output_len + 1
+                # 新语义: step_idx 入口 = 历史数量，处理后 cur_step_idx = 历史 + output_len
+                # 第一个 output token 写入位置 = cur_step_idx - output_len
+                base = cur_step_idx - output_len
                 for i in range(output_len):
                     write_idx = base_addr + base + i
                     if 0 <= write_idx < max_model_len:

@@ -805,9 +805,9 @@ def enable_batch_invariant_mode():
     if _batch_invariant_MODE:
         return
 
-    if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
-        paddle.compat.enable_torch_proxy()
-        # TODO(liujundong): Enabling torch proxy here has a global effect.
+    if hasattr(paddle, "enable_compat"):
+        paddle.enable_compat()
+        # TODO(liujundong): Enabling paddle.enable_compat() here has a global effect.
         # Do NOT call this function from module import time,
         # otherwise it may affect other test cases during pytest collection.
         # (ex: Could not import module 'PretrainedTokenizer' or No module named 'paddle.distributed.tensor')

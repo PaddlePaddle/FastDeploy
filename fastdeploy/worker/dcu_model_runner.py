@@ -76,6 +76,6 @@ class DCUModelRunner(GPUModelRunner):
             and not (prefill_exists if prefill_exists is not None else self.exist_prefill())
         )
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)

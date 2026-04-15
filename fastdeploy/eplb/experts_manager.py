@@ -112,7 +112,7 @@ class RedundantExpertManager:
         self.model_tokens_per_expert_stats_list = np.ones(
             (self.num_hidden_layers, self.num_logical_experts), dtype=np.int32
         )
-        self.caculate_expert_rank_table(True)
+        self.calculate_expert_rank_table(True)
 
         self.dp_rank_address = None
         self.need_allgather_load_weight_result = False
@@ -270,14 +270,14 @@ class RedundantExpertManager:
             if signal_update_weight_from_disk_array.value[0] == 1:
                 # step 2. async load weight: disk -> memory
                 self.model_tokens_per_expert_stats_list[:] = shm_all_experts_token_stats.value[:]
-                self.caculate_expert_rank_table()
+                self.calculate_expert_rank_table()
                 self.update_weight_from_disk()
                 signal_update_weight_from_disk_array.value[0] = 0
             time.sleep(0.5)
 
-    def caculate_expert_rank_table(self, is_init=False):
+    def calculate_expert_rank_table(self, is_init=False):
         """
-        caculate_expert_rank_table
+        calculate_expert_rank_table
         """
         num_groups = self.num_groups
         num_nodes = self.num_nodes

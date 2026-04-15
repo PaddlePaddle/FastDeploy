@@ -210,6 +210,7 @@ class Ernie4_5_MoE(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config=fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.moe_num_experts,
             top_k=fd_config.model_config.moe_k,

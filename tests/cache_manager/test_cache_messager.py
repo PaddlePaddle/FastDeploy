@@ -19,8 +19,8 @@ import numpy as np
 import paddle
 import pytest
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda *args, **kwargs: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda *args, **kwargs: None
 
 from fastdeploy.cache_manager import cache_messager
 

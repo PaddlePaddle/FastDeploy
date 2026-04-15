@@ -207,7 +207,7 @@ function copy_ops(){
 }
 
 function extract_ops_from_precompiled_wheel() {
-  local WHL_NAME="fastdeploy_gpu-0.0.0-py3-none-any.whl"
+  local WHL_NAME="fastdeploy_gpu-0.0.0-cp310-cp310-manylinux_2_28_x86_64.whl"
   if [ -z "$FD_COMMIT_ID" ]; then
     if git rev-parse HEAD >/dev/null 2>&1; then
       FD_COMMIT_ID=$(git rev-parse HEAD)

@@ -341,7 +341,7 @@ class QKRMSNorm(nn.Layer):
         forward_meta,
         proxy_rmsnorm=None,
     ) -> paddle.Tensor:
-        if proxy_rmsnorm is None and self.qk_norm_fused and forward_meta.step_use_cudagraph:
+        if proxy_rmsnorm is None and self.qk_norm_fused:
             qkv_out = qk_rmsnorm_fused(
                 qkv_out,
                 self.q_norm.weight,
