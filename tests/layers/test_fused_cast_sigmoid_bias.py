@@ -15,11 +15,13 @@
 """
 
 import importlib
+import os
 import sys
 from unittest import mock
 
 import paddle
 import paddle.nn.functional as F
+import pytest
 
 from fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias import (
     fused_cast_sigmoid_bias,
@@ -30,6 +32,25 @@ DTYPE_MAP = {
     "bfloat16": paddle.bfloat16,
     "float32": paddle.float32,
 }
+
+
+def _ensure_gpu_test_environment():
+    """Ensure GPU runtime and required custom ops are available for this test module."""
+    if not paddle.is_compiled_with_cuda():
+        pytest.skip(
+            "fused_cast_sigmoid_bias requires CUDA-enabled Paddle.",
+            allow_module_level=True,
+        )
+    custom_op_module = "fastdeploy.model_executor.ops.gpu_ops.fused_cast_sigmoid_bias"
+    if importlib.util.find_spec(custom_op_module) is None:
+        pytest.skip(
+            "fused_cast_sigmoid_bias custom op is not built or not importable.",
+            allow_module_level=True,
+        )
+    paddle.set_device("gpu")
+
+
+_ensure_gpu_test_environment()
 
 
 def reference_cast_sigmoid_bias(gate_out, bias, cast_type="float32"):
@@ -70,8 +91,9 @@ def test_functionality():
                 ), f"scores_with_bias dtype mismatch: {scores_with_bias.dtype}"
 
                 # Sigmoid output should be in [0, 1]
-                assert paddle.all(scores >= 0.0) and paddle.all(scores <= 1.0), "scores out of [0,1] range"
-
+                assert bool(paddle.all(scores >= 0.0).item()) and bool(
+                    paddle.all(scores <= 1.0).item()
+                ), "scores out of [0,1] range"
         print(f"  [PASS] dtype={dtype_name}")
 
     print("  All functionality tests passed.\n")
@@ -298,6 +320,10 @@ def test_accuracy_extreme_values_cast_types():
     print("  All extreme value cast_type tests passed.\n")
 
 
+@pytest.mark.skipif(
+    os.getenv("RUN_PERFORMANCE_TESTS") != "1",
+    reason="Performance benchmark is disabled by default. Set RUN_PERFORMANCE_TESTS=1 to enable.",
+)
 def test_performance():
     """Benchmark fused kernel vs reference implementation using CUDA events."""
     print("=" * 60)
@@ -397,7 +423,6 @@ def test_import_error():
 
 
 if __name__ == "__main__":
-    paddle.set_device("gpu")
     print("Running fused_cast_sigmoid_bias tests...\n")
 
     test_functionality()
@@ -407,7 +432,10 @@ if __name__ == "__main__":
     test_accuracy_extreme_values()
     test_accuracy_extreme_values_cast_types()
     test_import_error()
-    test_performance()
+    if os.getenv("RUN_PERFORMANCE_TESTS") == "1":
+        test_performance()
+    else:
+        print("Skipping performance benchmark. Set RUN_PERFORMANCE_TESTS=1 to enable.\n")
 
     print("=" * 60)
     print("All tests passed!")

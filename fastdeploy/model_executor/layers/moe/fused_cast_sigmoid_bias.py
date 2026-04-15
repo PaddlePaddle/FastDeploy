@@ -16,14 +16,20 @@
 
 import paddle
 
+_FUSED_CAST_SIGMOID_BIAS_IMPORT_ERROR = None
+
 try:
     from fastdeploy.model_executor.ops.gpu import (
         fused_cast_sigmoid_bias as _fused_cast_sigmoid_bias_cuda,
     )
 except ImportError as e:
-    raise ImportError(
-        "fused_cast_sigmoid_bias is not available. " "Please ensure the GPU custom ops are compiled."
-    ) from e
+    _fused_cast_sigmoid_bias_cuda = None
+    _FUSED_CAST_SIGMOID_BIAS_IMPORT_ERROR = e
+
+
+def is_available() -> bool:
+    """Return whether the fused GPU custom op is available."""
+    return _fused_cast_sigmoid_bias_cuda is not None
 
 
 def fused_cast_sigmoid_bias(
@@ -32,30 +38,36 @@ def fused_cast_sigmoid_bias(
     cast_type: str = "float32",
 ) -> tuple:
     """
-    融合操作：将gate_out转换为指定类型，应用sigmoid函数，并添加偏置。
+    Fused operation: cast gate_out to the specified type, apply sigmoid, and add bias.
 
-    该函数融合了以下三个独立操作：
+    This function fuses the following three separate operations:
       1. gate_out = gate_out.cast(cast_type)
       2. scores = sigmoid(gate_out)
       3. scores_with_bias = scores + e_score_correction_bias
 
     Args:
-        gate_out: [num_tokens, num_experts]，bf16/fp16/fp32类型 - 原始gate输出
-        e_score_correction_bias: [num_experts]，fp32类型 - 修正偏置
-        cast_type: 输出数据类型字符串，支持"float32"、"float16"、"bfloat16"
+        gate_out: [num_tokens, num_experts], bf16/fp16/fp32 dtype - raw gate output
+        e_score_correction_bias: [num_experts], fp32 dtype - correction bias
+        cast_type: output dtype string, supports "float32", "float16", "bfloat16"
 
     Returns:
-        scores: [num_tokens, num_experts]，cast_type类型 - sigmoid(gate_out)的结果
-        scores_with_bias: [num_tokens, num_experts]，cast_type类型 - 加上偏置后的分数
+        scores: [num_tokens, num_experts], cast_type dtype - result of sigmoid(gate_out)
+        scores_with_bias: [num_tokens, num_experts], cast_type dtype - scores with bias added
 
     Precision:
-        所有中间计算（cast、sigmoid、bias加法）均在float32精度下进行，
-        仅在最终存储时转换为cast_type。当cast_type为"float32"时，结果与
-        以下参考实现完全一致：
+        All intermediate computations (cast, sigmoid, bias addition) are performed
+        in float32 precision; conversion to cast_type happens only at the final store.
+        When cast_type is "float32", the result is bit-exact with the following
+        reference implementation:
             gate_fp32 = gate_out.cast("float32")
             scores = sigmoid(gate_fp32)
             scores_with_bias = scores + bias
-        当cast_type为"float16"/"bfloat16"时，精度损失仅来自最终的类型转换，
-        等价于在float32计算后调用.cast(cast_type)。
+        When cast_type is "float16"/"bfloat16", the only precision loss comes from
+        the final type conversion, equivalent to calling .cast(cast_type) after
+        computing in float32.
     """
+    if _fused_cast_sigmoid_bias_cuda is None:
+        raise ImportError(
+            "fused_cast_sigmoid_bias is not available. " "Please ensure the GPU custom ops are compiled."
+        ) from _FUSED_CAST_SIGMOID_BIAS_IMPORT_ERROR
     return _fused_cast_sigmoid_bias_cuda(gate_out, e_score_correction_bias, cast_type)
