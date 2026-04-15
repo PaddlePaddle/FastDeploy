@@ -28,8 +28,8 @@ from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
-from fastdeploy.input.video_utils import read_video_decord
-from fastdeploy.input.video_utils import sample_frames_paddleocr as sample_frames
+from fastdeploy.input.utils.video import read_video_decord
+from fastdeploy.input.utils.video import sample_frames_paddleocr as sample_frames
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
