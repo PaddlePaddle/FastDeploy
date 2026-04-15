@@ -286,20 +286,12 @@ class InputBatch:
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            if current_platform.is_cuda():
-                self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
-                self.batch_id_per_token_output = paddle.full(
-                    shape=[max_num_seqs * (max_draft_token_num + 1)],
-                    fill_value=0,
-                    dtype="int32",
-                )
-            else:
-                self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
-                self.batch_id_per_token_output = paddle.full(
-                    shape=[max_num_seqs * (max_draft_token_num + 1)],
-                    fill_value=0,
-                    dtype="int32",
-                )
+            self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+            self.batch_id_per_token_output = paddle.full(
+                shape=[max_num_seqs * (max_draft_token_num + 1)],
+                fill_value=0,
+                dtype="int32",
+            )
             # For V1_KVCACHE_SCHEDULER
             self.step_draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
