@@ -38,7 +38,7 @@ void lod_to_slot_mapping(api::Context* xpu_ctx,
   if (token_num <= 0) {
     return;
   }
-  std::vector<int32_t> slot_mapping_vec(token_num);
+  std::vector<int32_t> slot_mapping_vec(token_num, -1);
   int32_t idx = 0;
   // For each Batch
   for (auto batch_ = 0; batch_ < batch_size; batch_++) {
