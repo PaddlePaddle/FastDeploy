@@ -169,7 +169,7 @@ FastDeploy/
 | 文件 | 功能 | 开发指引 |
 |------|------|----------|
 | `text_processor.py` | `BaseDataProcessor` 文本处理器基类 | 输入处理扩展 |
-| `ernie4_5_processor.py` | ERNIE 4.5 输入处理器 | 百度模型输入处理 |
+| `multimodal_processor.py` | 统一多模态处理器 | 多模态输入处理 |
 | `ernie4_5_tokenizer.py` | ERNIE 4.5 分词器 | 分词逻辑修改 |
 | `preprocess.py` | 输入预处理工具 | 预处理流程 |
 
@@ -177,9 +177,9 @@ FastDeploy/
 
 | 目录 | 功能 |
 |------|------|
-| `ernie4_5_vl_processor/` | ERNIE 4.5 VL 图像/视频处理 |
-| `qwen_vl_processor/` | Qwen VL 多模态处理 |
-| `paddleocr_vl_processor/` | PaddleOCR VL 处理 |
+| `encodings/` | 模型特定编码策略 (Ernie, Qwen, PaddleOCR) |
+| `image_processors/` | 图像预处理 (Adaptive, Qwen, Qwen3, PaddleOCR) |
+| `multimodal_processor.py` | 统一多模态处理器 |
 
 ---
 

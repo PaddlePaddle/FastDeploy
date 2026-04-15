@@ -20,7 +20,7 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image
 
-from fastdeploy.input.ernie4_5_vl_processor.image_preprocessor.image_preprocessor_adaptive import (
+from fastdeploy.input.image_processors.adaptive_processor import (
     AdaptiveImageProcessor,
     make_batched_images,
     make_batched_videos,
