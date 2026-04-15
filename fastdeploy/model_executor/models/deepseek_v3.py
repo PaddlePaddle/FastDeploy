@@ -21,6 +21,7 @@ import re
 from typing import Dict
 
 import paddle
+import paddle.nn.functional as F
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
@@ -215,6 +216,9 @@ class DeepseekV3MLAAttention(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
         super().__init__()
 
+        self.fd_config = fd_config
+        self.use_gated_attn = getattr(self.fd_config.model_config, "use_gated_attn", False)
+        self.use_bias = getattr(self.fd_config.model_config, "use_bias", False)
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.hidden_size = fd_config.model_config.hidden_size
         self.num_attention_heads = fd_config.model_config.num_attention_heads
@@ -234,6 +238,14 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
         # NOTE: (changwenbin) qkv_a_proj horizontal fusion
+        if self.use_gated_attn:
+            self.gate = ReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.gate",
+                input_size=self.hidden_size,
+                output_size=self.num_attention_heads * self.v_head_dim,
+                with_bias=self.use_bias,
+            )
         self.qkv_a_proj_with_mqa = MergedReplicatedLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.qkv_a_proj_with_mqa",
@@ -277,7 +289,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=self.num_attention_heads * self.v_head_dim,
             output_size=self.hidden_size,
-            with_bias=False,
+            with_bias=self.use_bias,
             layer_id=layer_id,
         )
 
@@ -350,7 +362,10 @@ class DeepseekV3MLAAttention(nn.Layer):
     ):
         """ """
 
-        fmha_out = None
+        attn_out = None
+        if self.use_gated_attn:
+            gate_out = self.gate(hidden_states)
+
         # NOTE: (changwenbin) qkv_a_proj horizontal fusion
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
 
@@ -388,7 +403,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             key[..., self.qk_nope_head_dim :] = key_pe
             value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
 
-            fmha_out_prefill = self.mla_attn(
+            fmha_out = self.mla_attn(
                 q=query,
                 k=key,
                 v=value,
@@ -398,10 +413,10 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
-            fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
-            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
-            fmha_out = fmha_out_prefill
+            fmha_out.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
+            fmha_out = fmha_out[:, :, : self.v_head_dim]
+            fmha_out.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
+            attn_out = fmha_out
 
         if need_do_decode:  # max_dec_len_this_time
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
@@ -414,7 +429,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                 ]
             )
 
-            fmha_out_decode = self.mla_attn(
+            fmqa_out = self.mla_attn(
                 q=q_input,
                 k=None,
                 v=None,
@@ -424,20 +439,18 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_decode = fmha_out_decode.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
-                [1, 0, 2]
-            )
+            fmqa_out = fmqa_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose([1, 0, 2])
 
-            fmha_out_decode = (
-                self.kv_b_proj_bmm(fmha_out_decode, proj_type="v")
+            fmqa_out = (
+                self.kv_b_proj_bmm(fmqa_out, proj_type="v")
                 .transpose([1, 0, 2])
                 .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
 
             if need_do_prefill:
                 merge_prefill_decode_output(
-                    fmha_out,
-                    fmha_out_decode,
+                    attn_out,
+                    fmqa_out,
                     forward_meta.seq_lens_encoder,
                     forward_meta.seq_lens_decoder,
                     forward_meta.seq_lens_this_time,
@@ -447,9 +460,16 @@ class DeepseekV3MLAAttention(nn.Layer):
                     1,
                 )
             else:
-                fmha_out = fmha_out_decode
-
-        output = self.o_proj(fmha_out)
+                attn_out = fmqa_out
+        if self.use_gated_attn:
+            gated_attn_act = getattr(self.fd_config.model_config, "gated_attn_act", "sigmoid")
+            if gated_attn_act == "sigmoid":
+                attn_out = attn_out * F.sigmoid(gate_out)
+            elif gated_attn_act == "scaled_softsign":
+                attn_out = attn_out * ((F.softsign(gate_out) + 1.0) / 2.0)
+            else:
+                raise NotImplementedError(f"{gated_attn_act} not implemented")
+        output = self.o_proj(attn_out)
         return output
 
 
