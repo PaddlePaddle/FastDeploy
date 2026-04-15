@@ -2010,13 +2010,13 @@ class FDConfig:
             and self.router_config
             and self.router_config.router
         ):
-            # For RL scenario: version.yaml will be required for models in future releases.
+            # For RL scenario, version.yaml is required for models
             # Temporarily enforce use router to be enabled.
             self.model_config.read_model_version()
 
         self.read_from_config()
         self.postprocess()
-        self.init_cache_info()
+        self.init_pd_info()
         if test_mode:
             return
         self.check()
@@ -2371,18 +2371,17 @@ class FDConfig:
                 logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
 
-    def init_cache_info(self):
+    def init_pd_info(self):
         """
-        initialize cache info
+        initialize info for pd deployment
         """
-        # TODO: group the splitiwse params
         # There are two methods for splitwise deployment:
         # 1. v0 splitwise_scheduler or dp_scheduler
-        # 2. v1 local_scheduler + router
+        # 2. v1 local_scheduler + router (optional)
         self.splitwise_version = None
         if self.scheduler_config.name in ("splitwise", "dp"):
             self.splitwise_version = "v0"
-        elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
+        elif self.scheduler_config.name == "local":
             self.splitwise_version = "v1"
 
         # the information for registering this server to router or splitwise_scheduler
