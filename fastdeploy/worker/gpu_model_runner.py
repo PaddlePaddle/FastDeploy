@@ -1287,6 +1287,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
         block_size = self.cache_config.block_size
         block_idx = position_ids // block_size  # [num_tokens]
+        assert self.forward_meta.batch_id_per_token.shape == block_idx.shape
         block_ids = self.forward_meta.block_tables[self.forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
         block_offset = position_ids % block_size  # [num_tokens]
         slot_mapping = self.share_inputs["slot_mapping_buffer"][:current_total_tokens]
