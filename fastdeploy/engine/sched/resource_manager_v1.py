@@ -1282,7 +1282,7 @@ class ResourceManagerV1(ResourceManager):
         return self.real_bsz
 
     def _allocate_gpu_blocks(self, request: Request, num_blocks: int) -> List[int]:
-        llm_logger.info(f"[DEBUG allocate_gpu_blocks] request_id={request.request_id}, num_blocks={num_blocks}")
+        llm_logger.debug(f"[allocate_gpu_blocks] request_id={request.request_id}, num_blocks={num_blocks}")
         if self.enable_cache_manager_v1:
             return self.cache_manager.allocate_gpu_blocks(request, num_blocks)
         else:

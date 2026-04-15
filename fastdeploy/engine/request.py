@@ -34,7 +34,7 @@ from pydantic import BaseModel
 from typing_extensions import TypeVar
 
 from fastdeploy import envs
-from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
+from fastdeploy.cache_manager.v1.metadata import CacheLevel, CacheSwapMetadata
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import (
@@ -248,7 +248,7 @@ class Request:
         return self._prompt_hashes
 
     @property
-    def match_result(self) -> MatchResult:
+    def match_result(self) -> Optional[MatchResult]:
         return self._match_result
 
     def set_block_hasher(self, block_hasher: callable):
@@ -633,8 +633,8 @@ class BatchRequest:
                 self.cache_swap_metadata = CacheSwapMetadata(
                     src_block_ids=meta.src_block_ids,
                     dst_block_ids=meta.dst_block_ids,
-                    src_type="host",
-                    dst_type="device",
+                    src_type=CacheLevel.HOST,
+                    dst_type=CacheLevel.DEVICE,
                     hash_values=meta.hash_values,
                 )
 
@@ -648,8 +648,8 @@ class BatchRequest:
                 self.cache_evict_metadata = CacheSwapMetadata(
                     src_block_ids=meta.src_block_ids,
                     dst_block_ids=meta.dst_block_ids,
-                    src_type="device",
-                    dst_type="host",
+                    src_type=CacheLevel.DEVICE,
+                    dst_type=CacheLevel.HOST,
                     hash_values=meta.hash_values,
                 )
 

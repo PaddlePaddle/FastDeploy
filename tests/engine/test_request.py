@@ -21,7 +21,7 @@ from unittest.mock import Mock
 
 import numpy as np
 
-from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
+from fastdeploy.cache_manager.v1.metadata import CacheLevel, CacheSwapMetadata
 from fastdeploy.engine.request import (
     BatchRequest,
     CompletionOutput,
@@ -946,8 +946,8 @@ class TestBatchRequestAppendSwapEvictMetadata(unittest.TestCase):
         self.assertEqual(br.cache_swap_metadata.src_block_ids, [1, 2])
         self.assertEqual(br.cache_swap_metadata.dst_block_ids, [3, 4])
         self.assertEqual(br.cache_swap_metadata.hash_values, ["h1", "h2"])
-        self.assertEqual(br.cache_swap_metadata.src_type, "host")
-        self.assertEqual(br.cache_swap_metadata.dst_type, "device")
+        self.assertEqual(br.cache_swap_metadata.src_type, CacheLevel.HOST)
+        self.assertEqual(br.cache_swap_metadata.dst_type, CacheLevel.DEVICE)
 
     def test_append_swap_metadata_merges(self):
         """Subsequent append_swap_metadata extends existing lists."""
@@ -966,7 +966,7 @@ class TestBatchRequestAppendSwapEvictMetadata(unittest.TestCase):
         self.assertIsNotNone(br.cache_evict_metadata)
         self.assertEqual(br.cache_evict_metadata.src_block_ids, [5])
         self.assertEqual(br.cache_evict_metadata.dst_block_ids, [6])
-        self.assertEqual(br.cache_evict_metadata.dst_type, "host")
+        self.assertEqual(br.cache_evict_metadata.dst_type, CacheLevel.HOST)
 
     def test_append_evict_metadata_merges(self):
         """Subsequent append_evict_metadata extends existing lists."""

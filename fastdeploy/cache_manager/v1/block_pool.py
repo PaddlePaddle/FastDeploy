@@ -72,11 +72,9 @@ class BlockPool(ABC):
                 )
                 return None
 
-            allocated = []
-            for _ in range(num_blocks):
-                block_idx = self._free_blocks.pop(0)
-                self._used_blocks.add(block_idx)
-                allocated.append(block_idx)
+            allocated = self._free_blocks[-num_blocks:]
+            del self._free_blocks[-num_blocks:]
+            self._used_blocks.update(allocated)
 
             return allocated
 

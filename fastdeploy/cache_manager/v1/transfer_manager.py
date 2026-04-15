@@ -157,6 +157,10 @@ class CacheTransferManager:
     def _build_device_layer_indices(self) -> None:
         """Build layer-indexed Device cache lists from _cache_kvs_map."""
         if not self._cache_kvs_map:
+            self._device_key_caches = []
+            self._device_value_caches = []
+            self._device_key_scales = []
+            self._device_value_scales = []
             return
 
         self._device_key_caches = []
