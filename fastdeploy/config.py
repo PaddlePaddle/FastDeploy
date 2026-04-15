@@ -2162,13 +2162,17 @@ class FDConfig:
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
         else:
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs
-        if getattr(self.model_config, "num_max_dispatch_tokens_per_rank") and self.model_config.num_max_dispatch_tokens_per_rank != auto_dispatch_tokens:
+        if (
+            getattr(self.model_config, "num_max_dispatch_tokens_per_rank")
+            and self.model_config.num_max_dispatch_tokens_per_rank != auto_dispatch_tokens
+        ):
             logger.info(
                 f"Auto-setting num_max_dispatch_tokens_per_rank from "
                 f"{self.model_config.num_max_dispatch_tokens_per_rank} to {auto_dispatch_tokens} "
                 f"(max_num_seqs={self.scheduler_config.max_num_seqs}"
                 f"{f', num_speculative_tokens={num_spec_tokens}' if self.speculative_config is not None and self.speculative_config.method is not None else ''})."
             )
+
             self.model_config.num_max_dispatch_tokens_per_rank = auto_dispatch_tokens
 
         if self.scheduler_config.splitwise_role == "mixed":
