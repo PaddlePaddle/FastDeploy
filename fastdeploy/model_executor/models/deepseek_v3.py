@@ -45,7 +45,7 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
-from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.model_executor.layers.normalization import LayerNorm, RMSNorm
 from fastdeploy.model_executor.layers.rotary_embedding import (
     DeepseekScalingRotaryEmbedding,
 )
@@ -626,8 +626,13 @@ class Indexer(nn.Layer):
             output_size=self.index_head_dim,
             with_bias=False,
         )
-        self.k_norm = RMSNorm(fd_config, self.index_head_dim, eps=1e-6, prefix=f"{prefix}.k_norm")
-        # self.k_norm = LayerNorm(self.head_dim, eps=1e-6)
+        self.k_norm = LayerNorm(
+            fd_config=fd_config,
+            hidden_size=self.index_head_dim,
+            eps=1e-6,
+            prefix=f"{prefix}.k_norm",
+            with_bias=True,
+        )
 
         self.weights_proj = ReplicatedLinear(
             fd_config=fd_config,
@@ -656,7 +661,7 @@ class Indexer(nn.Layer):
         q_pe, q_nope = paddle.split(q, [self.rope_dim, self.index_head_dim - self.rope_dim], axis=-1)
 
         k = self.wk(hidden_states)
-        k, _ = self.k_norm(k)
+        k = self.k_norm(k)
         k_pe, k_nope = paddle.split(k, [self.rope_dim, self.index_head_dim - self.rope_dim], axis=-1)
 
         q_pe, k_pe = rotary_emb(forward_meta.position_ids, q_pe, k_pe.unsqueeze(1))
