@@ -780,6 +780,7 @@ class ResourceManagerV1(ResourceManager):
             # temperatory solution to avoid negative token_budget
             token_budget = max(token_budget, min(self.config.scheduler_config.max_num_batched_tokens, 512))
             need_abort_requests = []  # users trigger abortion
+            chunk_prefill_in_running_not_satisfied = False
 
             # First, schedule the RUNNING requests.
             req_index = 0
@@ -916,22 +917,17 @@ class ResourceManagerV1(ResourceManager):
                         req_index += 1
                         continue
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
+                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(num_new_block)
                     # Allocate blocks to prefill
-                    if self.cache_manager.can_allocate_gpu_blocks(num_new_block):
+                    if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                         request.block_tables.extend(
                             self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
                         )
                         # Prepare prefill task
                         scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
-                    else:  # Not enough blocks to allocate, trigger preemption
-                        can_schedule = self._trigger_preempt(request, num_new_block, preempted_reqs, scheduled_reqs)
-                        if not can_schedule:
-                            break
-                        request.block_tables.extend(
-                            self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
-                        )
-                        # Prepare prefill task
-                        scheduled_reqs.append(self._prepare_prefill_task(request, num_new_tokens))
+                    else:  # Not enough blocks to allocate
+                        chunk_prefill_in_running_not_satisfied = True
+                        break  # For chunk prefill request, if not satisfy condition for prefill, just break
                     token_budget -= num_new_tokens
                     request.num_computed_tokens += num_new_tokens
                     if (
@@ -949,7 +945,7 @@ class ResourceManagerV1(ResourceManager):
                 self.running.remove(request)
 
             # Second, schedule the WAITING requests.
-            if not preempted_reqs:
+            if (not preempted_reqs) and (not chunk_prefill_in_running_not_satisfied):
                 skip_requests: list[Request] = []
                 while self.waiting and token_budget > 0:
                     if (
