@@ -521,7 +521,7 @@ def post_process_specualate(
     )
 
 
-def save_output_specualate(
+def save_output_speculate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
