@@ -1244,15 +1244,16 @@ class GPUModelRunner(ModelRunnerBase):
         applicable to all models that need per-token KV cache physical slot addresses.
         Results are stored in self.forward_meta.
         """
+        # NOTE(zhushengguang): Currently, only DeepSeek is supported.
+        if "Deepseek" not in str(self.model_config.architectures):
+            return
         current_total_tokens = self.forward_meta.ids_remove_padding.shape[0]
         position_ids = self.share_inputs["position_ids_buffer"][:current_total_tokens]
-        mask_encoder_batch = self.share_inputs["mask_encoder_batch_buffer"][:current_total_tokens]
         get_position_ids_and_mask_encoder_batch(
             self.forward_meta.seq_lens_encoder,
             self.forward_meta.seq_lens_decoder,
             self.forward_meta.seq_lens_this_time,
             position_ids,
-            mask_encoder_batch,
         )
         block_size = self.cache_config.block_size
         block_idx = position_ids // block_size  # [num_tokens]
@@ -1856,7 +1857,7 @@ class GPUModelRunner(ModelRunnerBase):
             # 2. Padding inputs for cuda graph
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
-            # Compute position_ids and slot_mapping for KV cache addressing
+            # Compute position_ids and slot_mapping
             self._compute_position_ids_and_slot_mapping()
 
             model_inputs = {}
@@ -2195,7 +2196,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
-        # Compute position_ids and slot_mapping for KV cache addressing
+        # Compute position_ids and slot_mapping
         self._compute_position_ids_and_slot_mapping()
 
         model_inputs = {}
