@@ -241,7 +241,7 @@ def xpu_process_output(
 ) -> paddle.Tensor:
     """ """
 
-    hiddden_states = gather_next_token(
+    hidden_states = gather_next_token(
         forward_output,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
