@@ -111,7 +111,7 @@ class ErnieX1ToolParser(ToolParser):
                         )
                     )
                 return ExtractedToolCallInformation(
-                    tools_called=True,
+                    tools_called=len(tool_calls) > 0,
                     tool_calls=tool_calls,
                 )
             except Exception:
@@ -182,11 +182,13 @@ class ErnieX1ToolParser(ToolParser):
                     logger.debug("attempting to close tool call, but no tool call")
                     return None
                 diff = self.prev_tool_call_arr[self.current_tool_id].get("arguments")
-                if diff:
-                    if '"}' not in delta_text:
+                if diff is not None:
+                    if "}" not in delta_text:
                         return None
-                    end_loc = delta_text.rindex('"}')
-                    diff = delta_text[:end_loc] + '"}'
+                    end_loc = delta_text.rindex("}")
+                    diff = delta_text[:end_loc]
+                    if not diff:
+                        return None
                     logger.debug(
                         "Finishing tool and found diff that had not " "been streamed yet: %s",
                         diff,
@@ -248,15 +250,15 @@ class ErnieX1ToolParser(ToolParser):
             prev_arguments = self.prev_tool_call_arr[self.current_tool_id].get("arguments")
             cur_arguments = current_tool_call.get("arguments")
 
-            if not cur_arguments and not prev_arguments:
+            if cur_arguments is None and prev_arguments is None:
                 logger.debug("Skipping text %s - no arguments", delta_text)
                 delta = None
 
-            elif not cur_arguments and prev_arguments:
+            elif cur_arguments is None and prev_arguments is not None:
                 logger.error("should be impossible to have arguments reset " "mid-call. skipping streaming anything.")
                 delta = None
 
-            elif cur_arguments and not prev_arguments:
+            elif cur_arguments is not None and prev_arguments is None:
                 function_name = current_tool_call.get("name")
                 match = re.search(
                     r'\{"name":\s*"' + re.escape(function_name) + r'"\s*,\s*"arguments":\s*(.*)',
@@ -265,6 +267,19 @@ class ErnieX1ToolParser(ToolParser):
                 )
                 if match:
                     cur_arguments_json = match.group(1)
+                    # When tool_call_portion is complete JSON, the regex
+                    # (.*) over-captures the outer closing brace of the
+                    # tool call object. Strip it from both
+                    # cur_arguments_json and delta_text, consistent with
+                    # the both-have-arguments branch handling.
+                    try:
+                        json.loads(tool_call_portion)
+                        if cur_arguments_json.endswith("}"):
+                            cur_arguments_json = cur_arguments_json[:-1]
+                        if delta_text.rstrip().endswith("}"):
+                            delta_text = delta_text.rstrip()[:-1]
+                    except Exception:
+                        pass
                 else:
                     cur_arguments_json = json.dumps(cur_arguments, ensure_ascii=False)
 
@@ -287,7 +302,7 @@ class ErnieX1ToolParser(ToolParser):
                 )
                 self.streamed_args_for_tool[self.current_tool_id] += arguments_delta
 
-            elif cur_arguments and prev_arguments:
+            elif cur_arguments is not None and prev_arguments is not None:
                 try:
                     json.loads(tool_call_portion)
                     is_complete_json = True
