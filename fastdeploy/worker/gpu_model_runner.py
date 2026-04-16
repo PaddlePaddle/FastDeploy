@@ -2513,7 +2513,7 @@ class GPUModelRunner(ModelRunnerBase):
         model_output_data,
         sampler_output,
     ):
-        if self.speculative_decoding and self.spec_method == SpecMethod.MTP:
+        if self.speculative_decoding:
             save_output_specualate(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
@@ -2521,8 +2521,10 @@ class GPUModelRunner(ModelRunnerBase):
                 proposer_share_inputs=self.proposer.model_inputs,
                 local_rank=self.local_rank,
                 tensor_parallel_rank=self.parallel_config.tensor_parallel_rank,
-                splitwise_role=self.scheduler_config.splitwise_role,
                 save_each_rank=self.parallel_config.use_ep,
+                is_mtp_prefill=(
+                    self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
+                ),
             )
         else:
             save_output_normal(

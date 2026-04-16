@@ -530,10 +530,10 @@ def save_output_specualate(
     proposer_share_inputs: ProposerInputBatch,
     local_rank: int,
     tensor_parallel_rank: int,
-    splitwise_role: str = "mixed",
     save_each_rank: bool = False,
+    is_mtp_prefill: bool = False,
 ):
-    if splitwise_role == "prefill":
+    if is_mtp_prefill:
         if tensor_parallel_rank == 0:
             skip_chunk_prefill = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
             if sampler_output.logprobs_tensors is None:
@@ -604,7 +604,7 @@ def save_output_specualate(
     else:
         if sampler_output.logprobs_tensors is None:
             recover_share_inputs = recover_batch_index_for_output(
-                proposer_share_inputs,
+                share_inputs,
                 model_output.index_to_batch_id,
                 model_output.enable_pd_reorder,
                 [
