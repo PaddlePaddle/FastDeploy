@@ -110,7 +110,8 @@ class XPUModelRunner(ModelRunnerBase):
 
         # VL model config:
         if self.enable_mm:
-            self._init_image_preprocess()
+            if "Ernie4_5" in self.model_config.architectures[0]:
+                self._init_image_preprocess()
 
             self.amp_black = [
                 "reduce_sum",
@@ -134,16 +135,15 @@ class XPUModelRunner(ModelRunnerBase):
             else:
                 self.encoder_cache = None
 
-        self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.method
-        self.speculative_decoding = self.speculative_method is not None
-
         # used by SamplingMetadata
         self.enable_logprob = fd_config.model_config.enable_logprob  # fd_config.model_config.enable_logprob
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
 
+        # use spec
+        self.spec_method = self.fd_config.speculative_config.method
+        self.speculative_decoding = self.spec_method is not None
+
         #  Sampler
-        #  TODU(lilujia): sync with GPU
         if not self.speculative_decoding:
             self.sampler = Sampler(fd_config)
         else:
@@ -262,7 +262,7 @@ class XPUModelRunner(ModelRunnerBase):
 
             offset = self.share_inputs["cu_seqlens_q"][request.idx]
             prompt_hidden_states = hidden_states[offset : offset + num_logits]
-            logits = self.model.compute_logits(prompt_hidden_states)
+            logits = self.model.compute_logits(prompt_hidden_states, self.forward_meta)
             prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]
             prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
             if logprobs_mode == "raw_logprobs":
@@ -351,12 +351,6 @@ class XPUModelRunner(ModelRunnerBase):
             "encoder_cache_info": [],
             "feature_position_list": [],
         }
-        rope_3d_position_ids = {
-            "position_ids_idx": [],
-            "position_ids_lst": [],
-            "position_ids_offset": [0],
-            "max_tokens_lst": [],
-        }
 
         for request in request_list:
             if request.task_type.value != RequestType.PREFILL.value:
@@ -367,19 +361,6 @@ class XPUModelRunner(ModelRunnerBase):
                 if evict_mm_hashes:
                     for mm_hash in evict_mm_hashes:
                         self.encoder_cache.pop(mm_hash, None)
-
-            position_ids = request.multimodal_inputs["position_ids"]
-            rope_3d_position_ids["position_ids_idx"].append(request.idx)
-            rope_3d_position_ids["position_ids_lst"].append(position_ids)
-            rope_3d_position_ids["position_ids_offset"].append(
-                position_ids.shape[0] + rope_3d_position_ids["position_ids_offset"][-1]
-            )
-
-            # TODO xpu currently do not support pooling model
-            # if self.is_pooling_model:
-            #     rope_3d_position_ids["max_tokens_lst"].append(0)
-            # else:
-            rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
             if request.with_image:
                 inputs = request.multimodal_inputs
@@ -520,18 +501,6 @@ class XPUModelRunner(ModelRunnerBase):
                 thw_idx += 1
             self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
 
-        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
-            packed_position_ids = paddle.to_tensor(
-                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
-            )
-            rope_3d_lst = self.prepare_rope3d(
-                packed_position_ids,
-                rope_3d_position_ids["max_tokens_lst"],
-                rope_3d_position_ids["position_ids_offset"],
-            )
-            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
-                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
-
     def _get_feature_positions(
         self, mm_positions: List[ImagePosition], prefill_start_index: int, prefill_end_index: int
     ):
@@ -586,12 +555,33 @@ class XPUModelRunner(ModelRunnerBase):
         req_len = len(req_dicts)
         has_prefill_task = False
         has_decode_task = False
+        rope_3d_position_ids = {
+            "position_ids_idx": [],
+            "position_ids_lst": [],
+            "position_ids_offset": [0],
+            "max_tokens_lst": [],
+        }
 
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
+                # rope 3d
+                if self.enable_mm:
+                    position_ids = request.multimodal_inputs["position_ids"]
+                    rope_3d_position_ids["position_ids_idx"].append(idx)
+                    rope_3d_position_ids["position_ids_lst"].append(position_ids)
+                    rope_3d_position_ids["position_ids_offset"].append(
+                        len(position_ids) + rope_3d_position_ids["position_ids_offset"][-1]
+                    )
+
+                    # TODO xpu currently do not support pooling model
+                    # if self.is_pooling_model:
+                    #     rope_3d_position_ids["max_tokens_lst"].append(0)
+                    # else:
+                    rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
@@ -689,6 +679,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = request.get(
                 "top_p_normalized_logprobs", False
             )
+            self.share_inputs["generated_modality"][idx : idx + 1] = request.get("generated_modality", 0)
 
             self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
             self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
@@ -725,10 +716,21 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
 
         self._process_mm_features(req_dicts)
+        if len(rope_3d_position_ids["position_ids_idx"]) > 0:
+            packed_position_ids = paddle.to_tensor(
+                np.concatenate(rope_3d_position_ids["position_ids_lst"]), dtype="int64"
+            )
+            rope_3d_lst = self.prepare_rope3d(
+                packed_position_ids,
+                rope_3d_position_ids["max_tokens_lst"],
+                rope_3d_position_ids["position_ids_offset"],
+            )
+            for i, idx in enumerate(rope_3d_position_ids["position_ids_idx"]):
+                self.share_inputs["rope_emb"][idx : idx + 1, :] = rope_3d_lst[i]
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
@@ -877,7 +879,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
                 request, "temp_scaled_logprobs", False
             )
@@ -972,6 +974,8 @@ class XPUModelRunner(ModelRunnerBase):
             0,
             dtype="int64",
         )
+        self.share_inputs["generated_modality"] = paddle.full([max_num_seqs], -1, dtype="int32")
+
         self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
@@ -1391,6 +1395,7 @@ class XPUModelRunner(ModelRunnerBase):
             idx = i
             input_length = input_length_list[idx]
             max_dec_len = max_dec_len_list[idx]
+            self.share_inputs["generated_modality"][idx : idx + 1] = 0
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
@@ -1438,7 +1443,7 @@ class XPUModelRunner(ModelRunnerBase):
             block_num=block_num,
         )
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -1455,11 +1460,11 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == SpecMethod.NGRAM:
+        if self.spec_method == SpecMethod.NGRAM:
             # xpu not support ngram proposer now
             self.proposer = None
-        elif self.speculative_method == SpecMethod.MTP:
-            self.proposer = self.speculative_method.create_proposer(
+        elif self.spec_method == SpecMethod.MTP:
+            self.proposer = self.spec_method.create_proposer(
                 self.fd_config,
                 main_model=self.get_model(),
                 local_rank=self.local_rank,
@@ -1571,8 +1576,10 @@ class XPUModelRunner(ModelRunnerBase):
 
             model_inputs = {}
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
+            model_inputs["generated_modality"] = self.share_inputs["generated_modality"]
             if self.enable_mm:
                 model_inputs["image_features"] = self.share_inputs["image_features"]
+
             # 3. Execute model
             model_output = self.model(
                 model_inputs,
@@ -1582,7 +1589,7 @@ class XPUModelRunner(ModelRunnerBase):
                 model_output = model_output[: self.real_token_num]
             hidden_states = xpu_process_output(model_output, self.forward_meta, self.share_inputs)
             # 4. Compute logits, Sample
-            logits = self.model.compute_logits(hidden_states)
+            logits = self.model.compute_logits(hidden_states, self.forward_meta)
             sampler_output = None
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
@@ -1684,7 +1691,7 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
             # 6. Draft model propose
-            if self.speculative_method == SpecMethod.MTP:
+            if self.spec_method == SpecMethod.MTP:
                 self.proposer.run(full_hidden_states=model_output)
 
             # 7. Updata 'infer_seed' and step_paddle()
@@ -1737,7 +1744,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
         self.initialize_kv_cache(profile=True)
 
@@ -1759,7 +1766,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
 
