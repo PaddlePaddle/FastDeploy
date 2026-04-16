@@ -775,7 +775,8 @@ class ResourceManagerV1(ResourceManager):
                 if self.config.speculative_config is not None
                 else 1
             )
-
+            # temperatory solution to avoid negative token_budget
+            token_budget = max(token_budget, min(self.config.scheduler_config.max_num_batched_tokens, 512))
             need_abort_requests = []  # users trigger abortion
 
             # First, schedule the RUNNING requests.
