@@ -199,6 +199,9 @@ def xpu_pre_process(
         "decoder_context_len_cpu",
         "decoder_context_len_cache_cpu",
         "len_info_cpu",
+        "enc_batch",
+        "dec_batch",
+        "total_enc_len",
     ]
 
     if use_cudagraph and forward_meta is not None:
