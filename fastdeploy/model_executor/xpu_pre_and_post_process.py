@@ -34,8 +34,7 @@ if current_platform.is_xpu():
         gather_next_token,
         get_infer_param,
         get_padding_offset,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
+        limit_thinking_content_length,
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
@@ -276,44 +275,25 @@ def xpu_post_process_normal(
     save_each_rank: bool = False,
     async_output_queue: queue.Queue = None,
     think_end_id: int = None,
-    line_break_id: int = None,
+    splitwise_role_is_decode: bool = False,
 ) -> None:
     """ """
 
     sampled_token_ids = sampler_output.sampled_token_ids
 
     if think_end_id > 0:
-        limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
-        max_think_lens = share_inputs["max_think_lens"]
-        step_idx = share_inputs["step_idx"]
-        limit_think_status = share_inputs["limit_think_status"]
-        stop_flags = share_inputs["stop_flags"]
-        eos_token_ids = share_inputs["eos_token_id"]
-        if limit_strategy == "</think>":
-            # for ernie-45-vl
-            limit_thinking_content_length_v1(
-                sampled_token_ids,
-                max_think_lens,
-                step_idx,
-                limit_think_status,
-                stop_flags,
-                eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
-                think_end_id,
-            )
-        elif limit_strategy == "\n</think>\n\n":
-            # for ernie-x1
-            assert line_break_id > 0
-            limit_thinking_content_length_v2(
-                sampled_token_ids,
-                max_think_lens,
-                step_idx,
-                limit_think_status,
-                stop_flags,
-                think_end_id,
-                line_break_id,
-            )
-        else:
-            raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
+        limit_thinking_content_length(
+            sampled_token_ids,
+            share_inputs["max_think_lens"],
+            share_inputs["max_reply_lens"],
+            share_inputs["step_idx"],
+            share_inputs["limit_think_status"],
+            share_inputs["stop_flags"],
+            share_inputs["eos_token_id"],
+            share_inputs["inject_token_ids"],
+            think_end_id,
+            splitwise_role_is_decode,
+        )
 
     # 1. Set stop value
     paddle.assign(

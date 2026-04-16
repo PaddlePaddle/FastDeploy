@@ -1706,7 +1706,7 @@ class XPUModelRunner(ModelRunnerBase):
                     save_each_rank=self.parallel_config.data_parallel_size > 1,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,
-                    line_break_id=self.model_config.line_break_id,
+                    splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 )
 
             # 6. Draft model propose
