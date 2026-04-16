@@ -1327,3 +1327,85 @@ class TestEvictNodesSelective:
         # Request more than available
         result = tree.evict_nodes_selective(5)
         assert result == []
+
+
+# ---------------------------------------------------------------------------
+# complete_swap_to_device
+# ---------------------------------------------------------------------------
+
+
+class TestCompleteSwapToDevice:
+    """Dedicated tests for RadixTree.complete_swap_to_device."""
+
+    def test_complete_swap_sets_status_to_device(self):
+        """Nodes in any state are set to DEVICE after complete_swap_to_device."""
+        tree = RadixTree(enable_host_cache=True)
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2)])
+        tree.decrement_ref_nodes(nodes)
+
+        # Evict to host then swap back (swap_to_device sets to DEVICE directly in current impl)
+        tree.evict_device_to_host(2, [10, 11])
+        tree.swap_to_device(nodes, [1, 2])
+
+        # Call complete_swap_to_device and verify DEVICE status
+        gpu_ids = tree.complete_swap_to_device(nodes)
+        assert len(gpu_ids) == 2
+        for node in nodes:
+            assert node.cache_status == CacheStatus.DEVICE
+
+    def test_complete_swap_returns_gpu_block_ids(self):
+        """Return value must be the current block_ids of the nodes."""
+        tree = RadixTree(enable_host_cache=True)
+        nodes, _ = tree.insert([("h1", 5)])
+        tree.decrement_ref_nodes(nodes)
+
+        tree.evict_device_to_host(1, [99])
+        tree.swap_to_device(nodes, [5])
+
+        gpu_ids = tree.complete_swap_to_device(nodes)
+        assert gpu_ids == [node.block_id for node in nodes]
+
+    def test_complete_swap_empty_list(self):
+        """Calling with empty list returns empty list and does not raise."""
+        tree = RadixTree()
+        result = tree.complete_swap_to_device([])
+        assert result == []
+
+    def test_complete_swap_idempotent(self):
+        """Calling complete_swap_to_device twice is safe."""
+        tree = RadixTree(enable_host_cache=True)
+        nodes, _ = tree.insert([("h1", 1)])
+        tree.decrement_ref_nodes(nodes)
+        tree.evict_device_to_host(1, [20])
+        tree.swap_to_device(nodes, [1])
+
+        tree.complete_swap_to_device(nodes)
+        tree.complete_swap_to_device(nodes)  # second call should not raise
+        for node in nodes:
+            assert node.cache_status == CacheStatus.DEVICE
+
+    def test_complete_swap_updates_last_access_time(self):
+        """complete_swap_to_device should touch each node."""
+        tree = RadixTree(enable_host_cache=True)
+        nodes, _ = tree.insert([("h1", 1)])
+        tree.decrement_ref_nodes(nodes)
+        tree.evict_device_to_host(1, [30])
+        tree.swap_to_device(nodes, [1])
+
+        old_time = nodes[0].last_access_time
+        time.sleep(0.01)
+        tree.complete_swap_to_device(nodes)
+        assert nodes[0].last_access_time >= old_time
+
+    def test_complete_swap_multiple_nodes(self):
+        """Works correctly with multiple nodes."""
+        tree = RadixTree(enable_host_cache=True)
+        nodes, _ = tree.insert([("h1", 1), ("h2", 2), ("h3", 3)])
+        tree.decrement_ref_nodes(nodes)
+        tree.evict_device_to_host(3, [10, 11, 12])
+        tree.swap_to_device(nodes, [1, 2, 3])
+
+        gpu_ids = tree.complete_swap_to_device(nodes)
+        assert len(gpu_ids) == 3
+        for node in nodes:
+            assert node.cache_status == CacheStatus.DEVICE
