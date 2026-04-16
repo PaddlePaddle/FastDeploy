@@ -45,6 +45,12 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.attention.dsa_attention_backend import (
+    DSAAttentionBackend,
+)
+from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
+    MLAAttentionBackend,
+)
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
@@ -79,6 +85,7 @@ else:
         speculate_schedule_cache,
         set_data_ipc,
         unset_data_ipc,
+        get_position_ids_and_mask_encoder_batch,
     )
 
 import zmq
@@ -1267,6 +1274,33 @@ class GPUModelRunner(ModelRunnerBase):
         )
         return token_num, token_num_event
 
+    def _compute_position_ids_and_slot_mapping(self) -> None:
+        """Compute position_ids and slot_mapping for KV cache addressing.
+        This is a general computation based on sequence length info and block tables,
+        applicable to all models that need per-token KV cache physical slot addresses.
+        Results are stored in self.forward_meta.
+        """
+        # NOTE(zhushengguang): Only support MLAAttentionBackend and DSAAttentionBackend currently.
+        if not isinstance(self.attn_backends[0], (MLAAttentionBackend, DSAAttentionBackend)):
+            return
+        current_total_tokens = self.forward_meta.ids_remove_padding.shape[0]
+        position_ids = self.share_inputs["position_ids_buffer"][:current_total_tokens]
+        get_position_ids_and_mask_encoder_batch(
+            self.forward_meta.seq_lens_encoder,
+            self.forward_meta.seq_lens_decoder,
+            self.forward_meta.seq_lens_this_time,
+            position_ids,
+        )
+        block_size = self.cache_config.block_size
+        block_idx = position_ids // block_size  # [num_tokens]
+        assert self.forward_meta.batch_id_per_token.shape == block_idx.shape
+        block_ids = self.forward_meta.block_tables[self.forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
+        block_offset = position_ids % block_size  # [num_tokens]
+        slot_mapping = self.share_inputs["slot_mapping_buffer"][:current_total_tokens]
+        paddle.assign((block_ids * block_size + block_offset).cast(paddle.int64), slot_mapping)
+        self.forward_meta.position_ids = position_ids
+        self.forward_meta.slot_mapping = slot_mapping
+
     def _process_reorder(self) -> None:
         if self.attn_backends and getattr(self.attn_backends[0], "enable_ids_reorder", False):
             self.share_inputs.enable_pd_reorder = True
@@ -1860,6 +1894,8 @@ class GPUModelRunner(ModelRunnerBase):
             # 2. Padding inputs for cuda graph
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
+            # Compute position_ids and slot_mapping
+            self._compute_position_ids_and_slot_mapping()
 
             model_inputs = {}
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
@@ -2197,6 +2233,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
+        # Compute position_ids and slot_mapping
+        self._compute_position_ids_and_slot_mapping()
 
         model_inputs = {}
         model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]

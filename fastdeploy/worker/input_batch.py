@@ -188,6 +188,11 @@ class InputBatch:
         self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
         self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
 
+        # Initialize addressing buffers
+        _max_batched_tokens = self.scheduler_config.max_num_batched_tokens
+        self.position_ids_buffer = paddle.zeros([_max_batched_tokens], dtype=paddle.int32)
+        self.slot_mapping_buffer = paddle.zeros([_max_batched_tokens], dtype=paddle.int64)
+
         # Declare AttentionBackend buffers
         self.decoder_batch_ids = None
         self.decoder_tile_ids_per_batch = None
