@@ -77,8 +77,6 @@ if current_platform.is_cuda():
         radix_topk_ragged_transform,
     )
 
-    paddle.enable_compat(scope={"deep_gemm"})
-
 
 class DeepSeekV3MLP(nn.Layer):
     """
@@ -700,7 +698,7 @@ class Indexer(nn.Layer):
         # indexer write_cache
         indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
 
-        import deep_gemm
+        from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
 
         if forward_meta.max_len_tensor_cpu[1]:
 
