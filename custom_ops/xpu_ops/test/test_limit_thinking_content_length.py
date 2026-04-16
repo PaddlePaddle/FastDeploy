@@ -101,11 +101,7 @@ def ref_impl(
                 if status > done_status:
                     status = done_status
 
-        became_done_this_step = (
-            status == done_status
-            and prev_status != done_status
-            and prev_status < reply_base
-        )
+        became_done_this_step = status == done_status and prev_status != done_status and prev_status < reply_base
 
         # 3) 回复长度限制
         if max_reply_len >= 0:
@@ -402,10 +398,12 @@ class TestLimitThinkingContentLength(unittest.TestCase):
                 inject_token_ids=inject_ids,
             )
             ref_out = run_ref(np_inputs, THINK_END_ID, False)
-            self.assertEqual(ref_out["next_tokens"][0], expected_token,
-                             f"step={step}: expected token {expected_token}")
-            self.assertEqual(ref_out["limit_status"][0], expected_status_out,
-                             f"step={step}: expected status {expected_status_out}")
+            self.assertEqual(
+                ref_out["next_tokens"][0], expected_token, f"step={step}: expected token {expected_token}"
+            )
+            self.assertEqual(
+                ref_out["limit_status"][0], expected_status_out, f"step={step}: expected status {expected_status_out}"
+            )
 
     def test_became_done_not_count_reply(self):
         """刚进入 done_status 的这一步不计入回复。
@@ -466,9 +464,9 @@ class TestLimitThinkingContentLength(unittest.TestCase):
           step2: status=3, reply_len=1<2 → status=4
           step3: status=4, reply_len=2>=2 → 强制EOS, status=4"""
         for step, status_in, expected_status, expected_token in [
-            (10, 1, 3, 999),    # done→reply_base(2), reply_len=0→status=3
-            (11, 3, 4, 999),    # reply_len=1→status=4
-            (12, 4, 4, EOS_ID), # reply_len=2>=2, force EOS
+            (10, 1, 3, 999),  # done→reply_base(2), reply_len=0→status=3
+            (11, 3, 4, 999),  # reply_len=1→status=4
+            (12, 4, 4, EOS_ID),  # reply_len=2>=2, force EOS
         ]:
             np_inputs = make_inputs(
                 bs=1,
@@ -482,10 +480,12 @@ class TestLimitThinkingContentLength(unittest.TestCase):
                 inject_token_ids=[],
             )
             ref_out = run_ref(np_inputs, THINK_END_ID, False)
-            self.assertEqual(ref_out["next_tokens"][0], expected_token,
-                             f"step={step}: expected token {expected_token}")
-            self.assertEqual(ref_out["limit_status"][0], expected_status,
-                             f"step={step}: expected status {expected_status}")
+            self.assertEqual(
+                ref_out["next_tokens"][0], expected_token, f"step={step}: expected token {expected_token}"
+            )
+            self.assertEqual(
+                ref_out["limit_status"][0], expected_status, f"step={step}: expected status {expected_status}"
+            )
 
 
 if __name__ == "__main__":
