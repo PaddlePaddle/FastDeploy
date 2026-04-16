@@ -32,7 +32,7 @@ std::vector<paddle::Tensor> GatherNextToken(
     const paddle::Tensor& encoder_batch_map_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& len_info_cpu,
-    const paddle::optional<paddle::Tensor>& output_padding_offset,
+    bool is_speculative,
     int max_bsz) {
   phi::XPUPlace place(phi::backends::xpu::GetXPUCurrentDeviceId());
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
@@ -73,7 +73,7 @@ std::vector<paddle::Tensor> GatherNextToken(
       const_cast<int32_t*>(decoder_batch_map.data<int32_t>())};
 
   paddle::Tensor out;
-  if (output_padding_offset) {
+  if (is_speculative) {
     int need_delete_token_num = 0;
     if (enc_batch > 0) {
       need_delete_token_num =
@@ -88,7 +88,7 @@ std::vector<paddle::Tensor> GatherNextToken(
     return {out};
   }
 
-  if (output_padding_offset) {
+  if (is_speculative) {
     int r = fastdeploy::plugin::eb_mtp_gather_next_token<XPUType, XPUType>(
         ctx,
         reinterpret_cast<const XPUType*>(x.data<data_t>()),
@@ -124,14 +124,10 @@ std::vector<std::vector<int64_t>> GatherNextTokenInferShape(
     const std::vector<int64_t>& encoder_batch_map_cpu_shape,
     const std::vector<int64_t>& decoder_batch_map_cpu_shape,
     const std::vector<int64_t>& len_info_cpu_shape,
-    const paddle::optional<std::vector<int64_t>>& output_padding_offset_shape) {
-  // if (output_padding_offset_shape) {
-  //   PD_THROW("speculative decoding is not supported in XPU.");
-  // }
-  // int64_t bsz = cum_offsets_shape[0];
+    bool is_speculative) {
   int64_t bsz = 0;
   int64_t dim_embed = x_shape[1];
-  if (output_padding_offset_shape) {
+  if (is_speculative) {
     return {{-1, dim_embed}};
   } else {
     return {{bsz, dim_embed}};
@@ -148,8 +144,7 @@ std::vector<paddle::DataType> GatherNextTokenInferDtype(
     const paddle::DataType& decoder_seq_lod_cpu_dtype,
     const paddle::DataType& encoder_batch_map_cpu_dtype,
     const paddle::DataType& decoder_batch_map_cpu_dtype,
-    const paddle::DataType& len_info_cpu_dtype,
-    const paddle::optional<paddle::DataType>& output_padding_offset_dtype) {
+    const paddle::DataType& len_info_cpu_dtype) {
   return {x_dtype};
 }
 
@@ -163,10 +158,9 @@ PD_BUILD_STATIC_OP(gather_next_token)
              "decoder_seq_lod_cpu",
              "encoder_batch_map_cpu",
              "decoder_batch_map_cpu",
-             "len_info_cpu",
-             paddle::Optional("output_padding_offset")})
+             "len_info_cpu"})
     .Outputs({"out"})
-    .Attrs({"max_bsz: int"})
+    .Attrs({"is_speculative: bool", "max_bsz: int"})
     .SetKernelFn(PD_KERNEL(GatherNextToken))
     .SetInferShapeFn(PD_INFER_SHAPE(GatherNextTokenInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(GatherNextTokenInferDtype));

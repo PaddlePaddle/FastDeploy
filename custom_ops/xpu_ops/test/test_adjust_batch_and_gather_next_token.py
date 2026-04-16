@@ -24,7 +24,7 @@ from fastdeploy.model_executor.ops.xpu import (
 )
 
 
-def _run_test_base(seq_lens_this_time_data, output_padding_offset):
+def _run_test_base(seq_lens_this_time_data, is_speculative):
     """
     通用的基础测试执行函数，包含了两个场景共有的逻辑。
     """
@@ -120,7 +120,7 @@ def _run_test_base(seq_lens_this_time_data, output_padding_offset):
         encoder_batch_map_cpu,
         decoder_batch_map_cpu,
         len_info_cpu,
-        output_padding_offset,
+        is_speculative,
         -1,
     )
 
@@ -136,14 +136,14 @@ def _run_test_base(seq_lens_this_time_data, output_padding_offset):
         encoder_batch_map_cpu,
         decoder_batch_map_cpu,
         len_info_cpu,
-        output_padding_offset,
+        is_speculative,
         -1,
     )
 
     gather_out_np = gather_out.astype("float32").cpu().numpy()
     gather_out_cpu_np = gather_out_cpu.astype("float32").cpu().numpy()
 
-    if output_padding_offset is not None:
+    if is_speculative:
         np.testing.assert_allclose(gather_out_np, gather_out_cpu_np, err_msg="gather_next_token check failed!")
     else:
         for i in range(gather_out_cpu.shape[0]):
@@ -160,19 +160,14 @@ class TestXPUOps(unittest.TestCase):  # 继承 unittest.TestCase
         """测试混合批次处理中的 MTP (Multi-Token Prediction) 场景"""
         print("\nRunning test: test_mix_with_mtp")
         seq_lens_this_time_data = [100, 2, 0, 1, 120, 140, 3]
-        bsz = len(seq_lens_this_time_data)
-        output_padding_offset = paddle.zeros(bsz, dtype="int32")
-
-        _run_test_base(seq_lens_this_time_data, output_padding_offset)
+        _run_test_base(seq_lens_this_time_data, True)
         print("Test passed for scenario: With MTP")
 
     def test_mix_without_mtp(self):
         """测试非 MTP (Single-Token Prediction) 场景下的功能"""
         print("\nRunning test: test_mix_without_mtp")
         seq_lens_this_time_data = [100, 1, 0, 1, 120, 140, 1]
-        output_padding_offset = None  # 非 MTP 场景下，此参数为 None
-
-        _run_test_base(seq_lens_this_time_data, output_padding_offset)
+        _run_test_base(seq_lens_this_time_data, False)
         print("Test passed for scenario: Without MTP")
 
 

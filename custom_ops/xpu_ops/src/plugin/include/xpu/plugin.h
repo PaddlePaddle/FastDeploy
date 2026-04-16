@@ -766,7 +766,6 @@ DLL_EXPORT int speculate_limit_thinking_content_length_kernel(
     const int eos_token_id_len,
     const int inject_len,
     const bool splitwise_role_is_decode);
-
 DLL_EXPORT int verify_draft_tokens(
     api::Context* ctx,
     // Core I/O

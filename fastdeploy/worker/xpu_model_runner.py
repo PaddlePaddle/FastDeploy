@@ -135,8 +135,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.encoder_cache = None
 
         self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.method
-        self.speculative_decoding = self.speculative_method is not None
+        self.spec_method = self.fd_config.speculative_config.method
+        self.speculative_decoding = self.spec_method is not None
 
         # used by SamplingMetadata
         self.enable_logprob = fd_config.model_config.enable_logprob  # fd_config.model_config.enable_logprob
@@ -728,7 +728,7 @@ class XPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
@@ -877,7 +877,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
                 request, "temp_scaled_logprobs", False
             )
@@ -1070,12 +1070,18 @@ class XPUModelRunner(ModelRunnerBase):
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            self.share_inputs["output_cum_offsets"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.share_inputs["output_padding_offset"] = paddle.full(
+            self.share_inputs["cu_seqlens_q_output"] = paddle.full(
+                shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32"
+            )
+            self.share_inputs["batch_id_per_token_output"] = paddle.full(
                 shape=[max_num_seqs * (max_draft_token_num + 1)],
                 fill_value=0,
                 dtype="int32",
             )
+            # reasoning_status: per-sequence reasoning phase indicator
+            # 0=thinking, 1=emitting boundary, 2=response, 3=end
+            # verify_draft_tokens 在 reasoning_status==1 时强制拒绝所有 draft token
+            self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
             # For V1_KVCACHE_SCHEDULER
             self.share_inputs["step_draft_tokens"] = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
@@ -1439,7 +1445,7 @@ class XPUModelRunner(ModelRunnerBase):
             block_num=block_num,
         )
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -1456,19 +1462,16 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == SpecMethod.NGRAM:
-            # xpu not support ngram proposer now
+        if self.spec_method is None:
             self.proposer = None
-        elif self.speculative_method == SpecMethod.MTP:
-            self.proposer = self.speculative_method.create_proposer(
-                self.fd_config,
-                main_model=self.get_model(),
-                local_rank=self.local_rank,
-                device_id=self.device_id,
-                share_inputs=self.share_inputs,
-            )
-        else:
-            self.proposer = None
+            return
+        self.proposer = self.spec_method.create_proposer(
+            self.fd_config,
+            main_model=self.get_model(),
+            local_rank=self.local_rank,
+            device_id=self.device_id,
+            share_inputs=self.share_inputs,
+        )
 
     def _set_debug_level(
         self, debug_level: int = 0x1, model_forward_batch: Optional[List[Request]] = None, is_dummy_run: bool = False
@@ -1670,6 +1673,8 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                     self.parallel_config.data_parallel_size > 1,
                     skip_save_output,
+                    is_naive_mode=(self.speculative_decoding and self.proposer is None),
+                    prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
                 )
             else:
                 xpu_post_process_normal(
@@ -1685,8 +1690,11 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
             # 6. Draft model propose
-            if self.speculative_method == SpecMethod.MTP:
-                self.proposer.run(full_hidden_states=model_output)
+            if self.speculative_decoding and self.proposer is not None:
+                if self.spec_method == SpecMethod.MTP:
+                    self.proposer.run(full_hidden_states=model_output)
+                else:
+                    self.proposer.run(share_inputs=self.share_inputs)
 
             # 7. Updata 'infer_seed' and step_paddle()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1738,7 +1746,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
         self.initialize_kv_cache(profile=True)
 
@@ -1760,7 +1768,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
 

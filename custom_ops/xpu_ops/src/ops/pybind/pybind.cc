@@ -465,7 +465,7 @@ std::vector<paddle::Tensor> GatherNextToken(
     const paddle::Tensor& encoder_batch_map_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& len_info_cpu,
-    const paddle::optional<paddle::Tensor>& output_padding_offset,
+    bool is_speculative,
     int max_bsz);
 
 std::vector<paddle::Tensor> GetImgBoundaries(
@@ -1035,7 +1035,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("encoder_batch_map_cpu"),
         py::arg("decoder_batch_map_cpu"),
         py::arg("len_info_cpu"),
-        py::arg("output_padding_offset"),
+        py::arg("is_speculative"),
         py::arg("max_bsz"),
         "Gather next token for XPU");
 
@@ -1163,6 +1163,32 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("is_naive_mode"),
         py::arg("max_draft_tokens"),
         "Unified update model status");
+
+  m.def("verify_draft_tokens",
+        &VerifyDraftTokens,
+        py::arg("step_output_ids"),
+        py::arg("step_output_len"),
+        py::arg("step_input_ids"),
+        py::arg("target_tokens"),
+        py::arg("candidate_ids"),
+        py::arg("candidate_scores"),
+        py::arg("candidate_lens"),
+        py::arg("topp"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_this_time"),
+        py::arg("end_tokens"),
+        py::arg("is_block_step"),
+        py::arg("cu_seqlens_q_output"),
+        py::arg("reasoning_status"),
+        py::arg("max_dec_len"),
+        py::arg("step_idx"),
+        py::arg("max_seq_len"),
+        py::arg("verify_window"),
+        py::arg("verify_strategy"),
+        py::arg("reject_all"),
+        py::arg("accept_all"),
+        "Perform speculative verification for decoding v2");
 
   m.def("mtp_step_paddle",
         &MTPStepPaddle,
