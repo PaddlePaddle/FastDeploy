@@ -297,7 +297,7 @@ class TokenProcessor:
                     val = int(stream_data.accept_num[0])
                     if val > 0:
                         accept_nums.append(val)
-                result = self._process_speculative_output_use_zmq(stream_data, task, i, batch_result)
+                result = self._process_speculative_output_use_zmq(stream_data, task, i)
                 if result is not None:
                     batch_result.append(result)
                 continue
@@ -392,7 +392,7 @@ class TokenProcessor:
 
         return batch_result, accept_nums
 
-    def _process_speculative_output_use_zmq(self, stream_data, task, batch_id, batch_result):
+    def _process_speculative_output_use_zmq(self, stream_data, task, batch_id):
         """
         Process speculative decoding output from a single StreamTransferData.
 

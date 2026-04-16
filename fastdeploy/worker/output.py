@@ -61,9 +61,6 @@ class LogprobsLists(NamedTuple):
         Slice rows.
         Keeps the number of max_num_logprobs unchanged.
         """
-        # Slice logprob token IDs for the specified row range
-        # Slice logprob values for the specified row range
-        # Slice sampled token ranks for the specified row range
         return LogprobsLists(
             self.logprob_token_ids[start:end],
             self.logprobs[start:end],

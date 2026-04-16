@@ -716,13 +716,11 @@ class TestSpeculativeMtype3And4Combined(unittest.TestCase):
 
 
 class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
-    """Tests for build_stream_transfer_data in pre_and_post_process.py."""
+    """Tests for build_stream_transfer_data in fastdeploy.model_executor.utils."""
 
     def test_basic_target_build(self):
         """Build StreamTransferData list for mtype=3 with 2 requests."""
         import paddle
-
-        from fastdeploy.model_executor.utils import build_stream_transfer_data
 
         accept_tokens_cpu = paddle.to_tensor([[100, 200, 0], [300, 0, 0]], dtype="int64")
         accept_num_cpu = paddle.to_tensor([2, 1], dtype="int64")
@@ -814,6 +812,157 @@ class TestBuildSpeculativeStreamTransferData(unittest.TestCase):
 
         self.assertEqual(len(result), 1)
         np.testing.assert_array_equal(result[0].prompt_logprobs, prompt_logprobs_list[0])
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+
+# ---------------------------------------------------------------------------
+# Extra coverage: token_processor.py uncovered paths
+# ---------------------------------------------------------------------------
+
+
+class TestSpeculativeOutputSplitwiseDecode(unittest.TestCase):
+    """Cover splitwise_role='decode' paths in _process_speculative_output_use_zmq."""
+
+    def _make_splitwise_processor(self, *, aborted=False, rescheduled=False):
+        processor, task = _make_speculative_processor()
+        processor.cfg.scheduler_config.splitwise_role = "decode"
+        processor.resource_manager.to_be_aborted_req_id_set = {"spec_req_0"} if aborted else set()
+        processor.resource_manager.to_be_rescheduled_request_id_set = {"spec_req_0"} if rescheduled else set()
+        return processor, task
+
+    @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1)
+    @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1)
+    def test_splitwise_decode_aborted_returns_none(self):
+        """splitwise decode + ENABLE_V1_KVCACHE_SCHEDULER + aborted → None."""
+        processor, task = self._make_splitwise_processor(aborted=True)
+        stream_data = _make_stream_data(accept_tokens=np.array([100], dtype=np.int64), accept_num=1, output_type=3)
+        with patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            result = processor._process_speculative_output_use_zmq(stream_data, task, 0, [])
+        self.assertIsNone(result)
+
+    @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1)
+    def test_splitwise_decode_rescheduled_returns_none(self):
+        """splitwise decode + ENABLE_V1_KVCACHE_SCHEDULER + rescheduled → None."""
+        processor, task = self._make_splitwise_processor(rescheduled=True)
+        stream_data = _make_stream_data(accept_tokens=np.array([100], dtype=np.int64), accept_num=1, output_type=3)
+        with patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
+            result = processor._process_speculative_output_use_zmq(stream_data, task, 0, [])
+        self.assertIsNone(result)
+
+    @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0)
+    def test_splitwise_decode_second_token_records_metric(self):
+        """splitwise decode: second token (tokens_counter==1) triggers record_decode_recv_second_token."""
+        processor, task = self._make_splitwise_processor()
+        task.request_id = "spec_req_0"
+        processor.tokens_counter["spec_req_0"] = 1  # second token
+        stream_data = _make_stream_data(accept_tokens=np.array([100], dtype=np.int64), accept_num=1, output_type=3)
+        result = processor._process_speculative_output_use_zmq(stream_data, task, 0, [])
+        self.assertIsNotNone(result)
+        task.metrics.record_decode_recv_second_token.assert_called_once()
+
+
+class TestSpeculativeOutputPrefillReturnsNone(unittest.TestCase):
+    """is_prefill=True path should return None (non-splitwise scheduler)."""
+
+    @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0)
+    def test_prefill_role_returns_none(self):
+        processor, task = _make_speculative_processor()
+        # Mark task as prefill
+        task.disaggregate_info = {"role": "prefill"}
+        processor.cfg.scheduler_config.name = "priority"  # non-splitwise
+
+        stream_data = _make_stream_data(accept_tokens=np.array([100], dtype=np.int64), accept_num=1, output_type=3)
+        result = processor._process_speculative_output_use_zmq(stream_data, task, 0, [])
+        self.assertIsNone(result)
+
+    @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0)
+    def test_prefill_splitwise_returns_result(self):
+        """is_prefill=True but scheduler==splitwise should still return result."""
+        processor, task = _make_speculative_processor()
+        task.disaggregate_info = {"role": "prefill"}
+        processor.cfg.scheduler_config.name = "splitwise"
+
+        stream_data = _make_stream_data(accept_tokens=np.array([100], dtype=np.int64), accept_num=1, output_type=3)
+        result = processor._process_speculative_output_use_zmq(stream_data, task, 0, [])
+        self.assertIsNotNone(result)
+
+
+class TestSpeculativeOutputMultimodal(unittest.TestCase):
+    """Cover multimodal_inputs branch (lines 492-494)."""
+
+    @patch("fastdeploy.output.token_processor.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0)
+    def test_multimodal_inputs_populated_on_first_token(self):
+        processor, task = _make_speculative_processor()
+        task.messages = "hello"
+        # Simulate task.get("multimodal_inputs") returning a dict
+        task.get = MagicMock(
+            side_effect=lambda key, default=None: (
+                {"num_input_image_tokens": 3, "num_input_video_tokens": 7} if key == "multimodal_inputs" else default
+            )
+        )
+        task.multimodal_inputs = {"num_input_image_tokens": 3, "num_input_video_tokens": 7}
+
+        stream_data = _make_stream_data(accept_tokens=np.array([100], dtype=np.int64), accept_num=1, output_type=3)
+        result = processor._process_speculative_output_use_zmq(stream_data, task, 0, [])
+        self.assertIsNotNone(result)
+        self.assertEqual(result.num_input_image_tokens, 3)
+        self.assertEqual(result.num_input_video_tokens, 7)
+
+
+class TestBuildStreamTransferDataRouting(unittest.TestCase):
+    """Cover build_stream_transfer_data routing paths in pre_and_post_process (lines 493-543)."""
+
+    def test_pooler_bfloat16_cast(self):
+        """bfloat16 pooler output is cast to float32 before .numpy()."""
+        import paddle
+
+        pooler_out = paddle.ones([4], dtype="bfloat16")
+        result = build_stream_transfer_data(pooler_outputs=[pooler_out])
+        self.assertEqual(len(result), 1)
+        self.assertIsNotNone(result[0].pooler_output)
+
+    def test_normal_sample_with_prompt_logprobs(self):
+        """Normal sampling path with prompt_logprobs_list populates item.prompt_logprobs."""
+        import paddle
+
+        tokens = paddle.to_tensor([[42]], dtype="int64")
+        prompt_logprobs_list = [np.array([0.1, 0.2])]
+        result = build_stream_transfer_data(
+            output_tokens=tokens,
+            prompt_logprobs_list=prompt_logprobs_list,
+        )
+        self.assertEqual(len(result), 1)
+        np.testing.assert_array_equal(result[0].prompt_logprobs, prompt_logprobs_list[0])
+
+    def test_speculative_with_logprobs_and_cu_offset(self):
+        """Speculative path with cu_batch_token_offset uses offset-based slicing."""
+        import paddle
+
+        accept_tokens_cpu = paddle.to_tensor([[100, 200], [300, 0]], dtype="int64")
+        accept_num_cpu = paddle.to_tensor([2, 1], dtype="int64")
+        # cu_offsets [0,2,3] — length 3 > batch_size 2 → uses offset path
+        cu_offset = paddle.to_tensor([0, 2, 3], dtype="int64")
+
+        lp = MagicMock()
+        lp.logprob_token_ids = paddle.to_tensor([[1, 2], [3, 4], [5, 6]], dtype="int64")
+        lp.logprobs = paddle.to_tensor([[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]], dtype="float32")
+        lp.selected_token_ranks = paddle.to_tensor([0, 1, 0], dtype="int64")
+
+        result = build_stream_transfer_data(
+            accept_tokens_cpu=accept_tokens_cpu,
+            accept_num_cpu=accept_num_cpu,
+            logprobs=lp,
+            cu_batch_token_offset=cu_offset,
+            output_type=3,
+        )
+        self.assertEqual(len(result), 2)
+        # bid=0: tokens [0,2), 2 logprob rows
+        self.assertEqual(len(result[0].logprobs.logprobs), 2)
+        # bid=1: tokens [2,3), 1 logprob row
+        self.assertEqual(len(result[1].logprobs.logprobs), 1)
 
 
 if __name__ == "__main__":
