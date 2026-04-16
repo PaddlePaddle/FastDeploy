@@ -41,12 +41,6 @@ def _ensure_gpu_test_environment():
             "fused_cast_sigmoid_bias requires CUDA-enabled Paddle.",
             allow_module_level=True,
         )
-    custom_op_module = "fastdeploy.model_executor.ops.gpu_ops.fused_cast_sigmoid_bias"
-    if importlib.util.find_spec(custom_op_module) is None:
-        pytest.skip(
-            "fused_cast_sigmoid_bias custom op is not built or not importable.",
-            allow_module_level=True,
-        )
     paddle.set_device("gpu")
 
 
