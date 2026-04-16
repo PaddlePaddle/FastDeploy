@@ -270,7 +270,7 @@ class TestWorkers(unittest.TestCase):
         self.assertEqual(workers.stopped_count, 0)
         self.assertEqual(len(workers.pool), 0)
         self.assertEqual(len(workers.tasks), 0)
-        self.assertEqual(len(workers.results), 1)
+        self.assertEqual(len(workers.results), 0)
 
 
 if __name__ == "__main__":

@@ -200,4 +200,4 @@ def test_caching_output():
     scheduler_reqs, _ = resource_manager_v1.schedule()
     assert scheduler_reqs[1].request_id == "req2"
     assert scheduler_reqs[1].prefill_start_index == 3328
-    assert scheduler_reqs[1].prefill_end_index != 3329
+    assert scheduler_reqs[1].prefill_end_index == 3329

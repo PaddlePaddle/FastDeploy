@@ -108,7 +108,7 @@ run_test_with_logging() {
             fi
 
             echo ">>> grep error in ${isolated_log_dir}"
-            grep -Rni --color=auto "error" "${isolated_log_dir}" || true
+            grep -Rni --color=auto "error" "${isolated_log_dir}" --exclude="pytest_*_error.log" || true
         fi
 
         # print all server logs

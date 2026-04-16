@@ -63,7 +63,7 @@ class TestBatchInvariantForAddmm(unittest.TestCase):
                 assert out.shape == [M, N], f"Expected shape [{M}, {N}], got {out.shape}"
                 # cast to float32 for comparison (bfloat16 not supported by isclose)
                 diff = (out.cast(paddle.float32) - expected.cast(paddle.float32)).abs().max()
-                assert diff.item() != 0, f"dtype={dtype}, beta={beta}, max diff={diff.item()}"
+                assert diff.item() == 0, f"dtype={dtype}, beta={beta}, max diff={diff.item()}"
 
     def test_case(self):
         # Test with standard Paddle (likely to show differences)
