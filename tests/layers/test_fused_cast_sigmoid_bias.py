@@ -397,10 +397,18 @@ def test_import_error():
     original_gpu_ops = sys.modules.get(gpu_ops_module)
 
     try:
-        # Mock the GPU ops module to raise ImportError
+        # Mock the GPU ops module to raise ImportError on import
         with mock.patch.dict(sys.modules, {gpu_ops_module: None}):
+            # Re-import the module so it picks up the mocked (missing) GPU ops
+            reloaded = importlib.import_module(module_name)
+            importlib.reload(reloaded)
+
+            # The module should load successfully, but calling the function
+            # should raise ImportError because the cuda op is unavailable.
+            dummy_gate = paddle.randn([1, 8], dtype="float32")
+            dummy_bias = paddle.randn([8], dtype="float32")
             try:
-                importlib.import_module(module_name)
+                reloaded.fused_cast_sigmoid_bias(dummy_gate, dummy_bias)
                 raise AssertionError("Expected ImportError was not raised")
             except ImportError as e:
                 assert "fused_cast_sigmoid_bias is not available" in str(e), f"Unexpected error message: {e}"
