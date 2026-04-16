@@ -138,7 +138,7 @@ class TestConfig(unittest.TestCase):
             model_config=model_config,
             test_mode=True,
         )
-        fd_config.init_cache_info()
+        fd_config.init_pd_info()
         assert fd_config.register_info is not None
 
     def test_fdconfig_postprocess_ports(self):

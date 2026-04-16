@@ -111,7 +111,7 @@ class TestThinkingBudgetLogitsProcessor(unittest.TestCase):
         self._fdconfig_patches = [
             patch.object(FDConfig, "read_from_config", return_value=None),
             patch.object(FDConfig, "postprocess", return_value=None),
-            patch.object(FDConfig, "init_cache_info", return_value=None),
+            patch.object(FDConfig, "init_pd_info", return_value=None),
             patch.object(FDConfig, "check", return_value=None),
         ]
         for patcher in self._fdconfig_patches:

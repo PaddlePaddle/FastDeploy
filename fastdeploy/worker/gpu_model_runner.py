@@ -27,7 +27,7 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import PREEMPTED_TOKEN_ID, FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
@@ -2110,6 +2110,12 @@ class GPUModelRunner(ModelRunnerBase):
             self._cached_sampler_output = sampler_output
             self._cached_post_process_event = post_process_event
         else:
+            if (
+                self.fd_config.speculative_config.method == SpecMethod.MTP
+                and hasattr(self.proposer.model, "empty_input_forward")
+                and self.parallel_config.use_ep
+            ):
+                self._execute_empty_mtp_input(self.forward_meta)
             self._cached_model_output_data = None
             self._cached_sampler_output = None
             self._cached_post_process_event = None
@@ -2403,6 +2409,16 @@ class GPUModelRunner(ModelRunnerBase):
 
             # 5.1. Async cpy
             post_process_event = paddle.device.cuda.create_event()
+            if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+                # If one query is preempted, there is no sampled token for it, we use token_id PREEMPTED_TOKEN_ID to signal server, abort is finished.
+                paddle.assign(
+                    paddle.where(
+                        self.share_inputs["last_preempted_idx"][: sampler_output.sampled_token_ids.shape[0]] == 1,
+                        PREEMPTED_TOKEN_ID,
+                        sampler_output.sampled_token_ids,
+                    ),
+                    sampler_output.sampled_token_ids,
+                )
             # if not self.speculative_decoding:
             self.share_inputs["sampled_token_ids"].copy_(sampler_output.sampled_token_ids, False)
             if self.speculative_decoding:
@@ -2676,13 +2692,13 @@ class GPUModelRunner(ModelRunnerBase):
         """Dynamic model loader use to clear parameters use for RL"""
         # Clear CUDAGraph
         if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
+            self.model.clear_graph_opt_backend()
         # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.model.clear_grpah_opt_backend()
+            self.proposer.model.clear_graph_opt_backend()
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
@@ -2736,7 +2752,7 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info("GPU model runner's weight is already sleeping, no need to sleep again!")
                 return
             if self.use_cudagraph:
-                self.model.clear_grpah_opt_backend()
+                self.model.clear_graph_opt_backend()
             if self.fd_config.parallel_config.enable_expert_parallel:
                 self.dynamic_weight_manager.clear_deepep_buffer()
             self.dynamic_weight_manager.clear_model_weight()
