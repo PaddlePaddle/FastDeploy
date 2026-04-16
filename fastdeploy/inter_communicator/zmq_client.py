@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import sys
+import tempfile
 import time
 from abc import ABC, abstractmethod
 from multiprocessing.reduction import ForkingPickler
@@ -152,7 +154,8 @@ class ZmqIpcClient(ZmqClientBase):
     def __init__(self, name, mode):
         self.name = name
         self.mode = mode
-        self.file_name = f"/dev/shm/{name}.socket"
+        _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+        self.file_name = f"{_shm_dir}/{name}.socket"
         self.context = zmq.Context()
         self.socket = self.context.socket(self.mode)
 
