@@ -348,6 +348,22 @@ DLL_EXPORT int text_image_gather_scatter(api::Context* ctx,
                                          int64_t hidden_size,
                                          bool is_scatter);
 
+DLL_EXPORT int limit_thinking_content_length_kernel(
+    api::Context* ctx,
+    int64_t* next_tokens,
+    const int* max_think_lens,
+    int* max_reply_lens,
+    const int64_t* step_idx,
+    const int64_t* eos_token_ids,
+    int* limit_status,
+    const bool* stop_flags,
+    const int64_t think_end_id,
+    const int64_t* inject_token_ids,
+    const int bs,
+    const int eos_token_id_len,
+    const int inject_len,
+    const bool splitwise_role_is_decode);
+
 DLL_EXPORT int limit_thinking_content_length_kernel_v1(
     api::Context* ctx,
     int64_t* next_tokens,
