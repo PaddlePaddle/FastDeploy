@@ -19,26 +19,11 @@
 #include <sys/types.h>
 #include "paddle/extension.h"
 #include "../custom_ftok.h"
+#include "speculate_logprob_msg.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
-
-#define MAX_BSZ 512
-#define K 20
-#define MAX_DRAFT_TOKEN_NUM 6
-
-struct batch_msgdata {
-  int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
-  float scores[MAX_DRAFT_TOKEN_NUM * (K + 1)];
-  int ranks[MAX_DRAFT_TOKEN_NUM];
-};
-
-struct msgdata {
-  long mtype;
-  int meta[3 + MAX_BSZ];  // stop_flag, message_flag, bsz, batch_token_nums
-  batch_msgdata mtext[MAX_BSZ];
-};
 
 void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                              const paddle::Tensor& output_scores,
