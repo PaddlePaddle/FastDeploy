@@ -65,6 +65,9 @@ class BlockPool(ABC):
             List of allocated block indices if successful, None if not enough blocks
         """
         with self._lock:
+            if num_blocks == 0:
+                return []
+
             if num_blocks > len(self._free_blocks):
                 logger.warning(
                     f"BlockPool.allocate failed: not enough blocks, "
