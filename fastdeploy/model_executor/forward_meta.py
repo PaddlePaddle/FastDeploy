@@ -160,7 +160,8 @@ class ForwardMeta:
 
     # for mla & dsa
     position_ids: Optional[paddle.Tensor] = None
-    mask_encoder_batch: Optional[paddle.Tensor] = None
+    # for kvcache slot
+    slot_mapping: Optional[paddle.Tensor] = None
 
     real_bsz: int = 0
 
@@ -275,8 +276,14 @@ class XPUForwardMeta(ForwardMeta):
     hidden_states: Optional[paddle.Tensor] = None
 
     is_draft: bool = False
+    is_speculative: bool = False
     # max bs
     max_num_seqs: int = 0
+
+    # for spliced block_attn
+    slot_mapping_enc: Optional[paddle.Tensor] = None
+    #
+    slot_mapping_dec: Optional[paddle.Tensor] = None
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """

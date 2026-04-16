@@ -671,6 +671,7 @@ class ParallelConfig:
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
         self.disable_custom_all_reduce: bool = False
+        self.enable_flashinfer_allreduce_fusion: bool = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -2010,13 +2011,13 @@ class FDConfig:
             and self.router_config
             and self.router_config.router
         ):
-            # For RL scenario: version.yaml will be required for models in future releases.
+            # For RL scenario, version.yaml is required for models
             # Temporarily enforce use router to be enabled.
             self.model_config.read_model_version()
 
         self.read_from_config()
         self.postprocess()
-        self.init_cache_info()
+        self.init_pd_info()
         if test_mode:
             return
         self.check()
@@ -2064,7 +2065,10 @@ class FDConfig:
 
         if self.scheduler_config.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if int(envs.FD_DISABLE_CHUNKED_PREFILL):
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
+                else:
+                    self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.scheduler_config.max_num_batched_tokens = 2048
@@ -2155,6 +2159,25 @@ class FDConfig:
             if self.scheduler_config.splitwise_role == "prefill":
                 self.speculative_config.num_speculative_tokens = 1
                 self.speculative_config.num_model_steps = 1
+
+        # Auto-compute num_max_dispatch_tokens_per_rank from max_num_seqs and num_speculative_tokens
+        if self.speculative_config is not None and self.speculative_config.method is not None:
+            num_spec_tokens = self.speculative_config.num_speculative_tokens
+            auto_dispatch_tokens = self.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
+        else:
+            auto_dispatch_tokens = self.scheduler_config.max_num_seqs
+        if (
+            getattr(self.model_config, "num_max_dispatch_tokens_per_rank", None)
+            and self.model_config.num_max_dispatch_tokens_per_rank != auto_dispatch_tokens
+        ):
+            logger.info(
+                f"Auto-setting num_max_dispatch_tokens_per_rank from "
+                f"{self.model_config.num_max_dispatch_tokens_per_rank} to {auto_dispatch_tokens} "
+                f"(max_num_seqs={self.scheduler_config.max_num_seqs}"
+                f"{f', num_speculative_tokens={num_spec_tokens}' if self.speculative_config is not None and self.speculative_config.method is not None else ''})."
+            )
+
+            self.model_config.num_max_dispatch_tokens_per_rank = auto_dispatch_tokens
 
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
@@ -2349,18 +2372,17 @@ class FDConfig:
                 logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
 
-    def init_cache_info(self):
+    def init_pd_info(self):
         """
-        initialize cache info
+        initialize info for pd deployment
         """
-        # TODO: group the splitiwse params
         # There are two methods for splitwise deployment:
         # 1. v0 splitwise_scheduler or dp_scheduler
-        # 2. v1 local_scheduler + router
+        # 2. v1 local_scheduler + router (optional)
         self.splitwise_version = None
         if self.scheduler_config.name in ("splitwise", "dp"):
             self.splitwise_version = "v0"
-        elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
+        elif self.scheduler_config.name == "local":
             self.splitwise_version = "v1"
 
         # the information for registering this server to router or splitwise_scheduler

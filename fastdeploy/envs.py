@@ -43,7 +43,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Request logging master switch. Set to 0 to disable request logging.
     "FD_LOG_REQUESTS": lambda: int(os.getenv("FD_LOG_REQUESTS", "1")),
     # Request logging detail level (0-3). Higher level means more verbose output.
-    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "0")),
+    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "2")),
     # Max field length for request logging truncation.
     "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
     # Unified trace mode: off, local, otel, all.
