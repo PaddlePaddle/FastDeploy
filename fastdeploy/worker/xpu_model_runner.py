@@ -1129,6 +1129,7 @@ class XPUModelRunner(ModelRunnerBase):
             is_profiling=is_dummy_run,
             forward_meta=self.forward_meta,
             use_cudagraph=self.use_cudagraph,
+            num_speculative_tokens=self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
         )
 
         if self.use_cudagraph:
