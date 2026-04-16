@@ -77,6 +77,25 @@ if [ "${HAS_ENV_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
     check_approval "$echo_line1" 1 Jiang-Jia-Jun yuanlehome rainyfly Wanglongzhi2001
 fi
 
+LOG_KEYWORDS=(
+    "\.info\("
+    "\.debug\("
+    "\.error\("
+    "log_request\("
+    "log_request_error"
+)
+
+HAS_LOG_MODIFY=$(git diff upstream/$BRANCH \
+    -- . ':(exclude)scripts/check_approval.sh' \
+    | grep -E "^\+" \
+    | grep -vE "^\+\+\+" \
+    | grep -E $(printf -- "%s|" "${LOG_KEYWORDS[@]}" | sed 's/|$//') || true)
+
+if [ -n "${HAS_LOG_MODIFY}" ] && [ -n "${PR_ID}" ]; then
+    echo_line1="You must have one FastDeploy RD (xyxinyang(zhouchong), zyyzghb(zhangyongyue)) approval for modifying logging behavior (.info/.debug/.error/log_request)."
+    check_approval "$echo_line1" 1 xyxinyang zyyzghb
+fi
+
 if [[ "${BRANCH}" != "develop" ]] && [[ -n "${PR_ID}" ]]; then
     pr_info=$(curl -H "Authorization: token ${GITHUB_TOKEN}" \
         https://api.github.com/repos/PaddlePaddle/FastDeploy/pulls/${PR_ID})

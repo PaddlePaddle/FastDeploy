@@ -41,6 +41,7 @@ from fastdeploy.entrypoints.openai.tool_parsers.abstract_tool_parser import (
     ToolParser,
     ToolParserManager,
 )
+from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.utils import data_processor_logger
 
 
@@ -184,7 +185,9 @@ class Ernie45VLThinkingToolParser(ToolParser):
                     continue
 
             if not function_call_arr:
-                data_processor_logger.error("No valid tool calls found")
+                log_request_error(
+                    message="request[{request_id}] No valid tool calls found", request_id=request.request_id
+                )
                 return ExtractedToolCallInformation(tools_called=False, content=model_output)
 
             tool_calls = []
@@ -226,7 +229,11 @@ class Ernie45VLThinkingToolParser(ToolParser):
             )
 
         except Exception as e:
-            data_processor_logger.error(f"Error in extracting tool call from response: {str(e)}")
+            log_request_error(
+                message="request[{request_id}] Error in extracting tool call from response: {error}",
+                request_id=request.request_id,
+                error=str(e),
+            )
             return ExtractedToolCallInformation(tools_called=False, tool_calls=None, content=model_output)
 
     def extract_tool_calls_streaming(
@@ -343,7 +350,11 @@ class Ernie45VLThinkingToolParser(ToolParser):
                             )
                             return delta
                     except Exception as e:
-                        data_processor_logger.error(f"Error in streaming tool call extraction: {str(e)}")
+                        log_request_error(
+                            message="request[{request_id}] Error in streaming tool call extraction: {error}",
+                            request_id=request.get("request_id"),
+                            error=str(e),
+                        )
                         return None
             if "</tool_call>" in self.buffer:
                 end_pos = self.buffer.find("</tool_call>")
@@ -354,5 +365,9 @@ class Ernie45VLThinkingToolParser(ToolParser):
             return delta
 
         except Exception as e:
-            data_processor_logger.error(f"Error in streaming tool call extraction: {str(e)}")
+            log_request_error(
+                message="request[{request_id}] Error in streaming tool call extraction: {error}",
+                request_id=request.get("request_id"),
+                error=str(e),
+            )
             return None

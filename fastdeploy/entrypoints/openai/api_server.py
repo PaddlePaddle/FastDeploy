@@ -73,6 +73,11 @@ from fastdeploy.entrypoints.openai.v1.serving_completion import (
     OpenAIServingCompletion as OpenAIServingCompletionV1,
 )
 from fastdeploy.envs import environment_variables
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.utils import (
     ExceptionHandler,
@@ -325,7 +330,11 @@ async def connection_manager():
         await asyncio.wait_for(connection_semaphore.acquire(), timeout=0.001)
         yield
     except asyncio.TimeoutError:
-        api_server_logger.info(f"Reach max request concurrency, semaphore status: {connection_semaphore.status()}")
+        log_request(
+            level=RequestLogLevel.LIFECYCLE,
+            message="Reach max request concurrency, semaphore status: {status}",
+            status=connection_semaphore.status(),
+        )
         raise HTTPException(
             status_code=429, detail=f"Too many requests,current max concurrency is {args.max_concurrency}"
         )
@@ -545,7 +554,7 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     """
     Create a chat completion for the provided prompt and parameters.
     """
-    api_server_logger.debug(f"Chat Received request: {request.model_dump_json()}")
+    log_request(RequestLogLevel.FULL, message="Chat Received request: {request}", request=request.model_dump_json())
     if envs.TRACES_ENABLE:
         if req.headers:
             headers = dict(req.headers)
@@ -572,7 +581,11 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
                 return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
 
     except HTTPException as e:
-        api_server_logger.error(f"Error in chat completion: {str(e)}")
+        log_request_error(
+            message="request[{request_id}] Error in chat completion: {error}",
+            request_id=getattr(request, "request_id", None),
+            error=str(e),
+        )
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
 
@@ -582,7 +595,9 @@ async def create_completion(request: CompletionRequest, req: Request):
     """
     Create a completion for the provided prompt and parameters.
     """
-    api_server_logger.info(f"Completion Received request: {request.model_dump_json()}")
+    log_request(
+        RequestLogLevel.FULL, message="Completion Received request: {request}", request=request.model_dump_json()
+    )
     if envs.TRACES_ENABLE:
         if req.headers:
             headers = dict(req.headers)

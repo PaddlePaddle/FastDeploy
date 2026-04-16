@@ -831,6 +831,12 @@ def parse_args():
         help="Configuration of SpeculativeConfig.",
     )
     parser.add_argument(
+        "--enable_flashinfer_allreduce_fusion",
+        action="store_true",
+        default=False,
+        help="Flag to enable all reduce fusion kernel in flashinfer.",
+    )
+    parser.add_argument(
         "--max_num_batched_tokens",
         type=int,
         default=2048,

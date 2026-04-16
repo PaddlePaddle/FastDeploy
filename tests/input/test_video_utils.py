@@ -264,7 +264,7 @@ class TestSampleFramesQwen(unittest.TestCase):
 
     def test_fps_warning_when_nframes_exceeds_total(self):
         """fps so high that computed num_frames > total → warning logged."""
-        with self.assertLogs(level="WARNING"):
+        with self.assertLogs(logger="fastdeploy.main", level="WARNING"):
             sample_frames_qwen(2, 4, 100, {"num_of_frame": 10, "fps": 1.0}, fps=100.0)
 
     def test_divisible_by_4_correction(self):
