@@ -14,6 +14,7 @@
 
 import glob
 import os
+import re
 import time
 from typing import Any, Union
 
@@ -152,7 +153,7 @@ def pytest_runtest_makereport(item, call):
         log_dir = os.environ.get("FD_LOG_DIR", "log")
         os.makedirs(log_dir, exist_ok=True)
 
-        case_name = item.nodeid.split("::", 1)[-1]
+        case_name = re.sub(r"_+", "_", re.sub(r"[^\w\-.]", "_", item.nodeid.split("::", 1)[-1])).strip("_")[:200]
 
         error_log_file = os.path.join(log_dir, f"pytest_{case_name}_error.log")
 
