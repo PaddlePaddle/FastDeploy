@@ -599,9 +599,14 @@ class XPUModelRunner(ModelRunnerBase):
                     # Enable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                    if request.get("response_max_tokens") is not None:
+                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get("response_max_tokens")
+                    else:
+                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                 else:
                     # Disable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if (
@@ -798,9 +803,14 @@ class XPUModelRunner(ModelRunnerBase):
                     # Enable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                    if request.get("response_max_tokens") is not None:
+                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get("response_max_tokens")
+                    else:
+                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                 else:
                     # Disable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
@@ -978,7 +988,11 @@ class XPUModelRunner(ModelRunnerBase):
 
         # Initialize thinking related buffers
         self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["max_reply_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
         self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["inject_token_ids"] = paddle.to_tensor(
+            self.model_config.think_truncate_prompt_ids, dtype="int64"
+        ).reshape([-1, 1])
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
@@ -1679,6 +1693,8 @@ class XPUModelRunner(ModelRunnerBase):
                     skip_save_output,
                     is_naive_mode=(self.speculative_decoding and self.proposer is None),
                     prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
+                    think_end_id=self.model_config.think_end_id,
+                    splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 )
             else:
                 xpu_post_process_normal(

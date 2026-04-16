@@ -40,6 +40,7 @@ if current_platform.is_xpu():
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_clear_accept_nums,
+        speculate_limit_thinking_content_length,
         speculate_pre_process,
         speculate_save_output,
         speculate_set_stop_value_multi_seqs,
@@ -413,8 +414,25 @@ def xpu_post_process_specualate(
     skip_save_output: bool = False,
     is_naive_mode: bool = False,
     prefill_one_step_stop: bool = False,
+    think_end_id: int = -1,
+    splitwise_role_is_decode: bool = False,
 ):
     """"""
+
+    if think_end_id > 0:
+        speculate_limit_thinking_content_length(
+            share_inputs["accept_tokens"],
+            share_inputs["max_think_lens"],
+            share_inputs["max_reply_lens"],
+            share_inputs["step_idx"],
+            share_inputs["limit_think_status"],
+            share_inputs["accept_num"],
+            share_inputs["stop_flags"],
+            share_inputs["eos_token_id"],
+            share_inputs["inject_token_ids"],
+            think_end_id,
+            splitwise_role_is_decode,
+        )
 
     speculate_set_stop_value_multi_seqs(
         model_output.accept_tokens,
