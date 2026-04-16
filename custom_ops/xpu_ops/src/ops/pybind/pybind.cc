@@ -476,7 +476,6 @@ void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_encoder,
                            const paddle::Tensor& base_model_stop_flags);
 
-                           
 std::vector<paddle::Tensor> EagleGetHiddenStates(
     const paddle::Tensor& input,
     const paddle::Tensor& seq_lens_this_time,
@@ -1425,7 +1424,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("benchmark_mode"),
         py::arg("accept_all_drafts"),
         "Perform speculative verification for decoding");
-      
+
   m.def("limit_thinking_content_length",
         &LimitThinkingContentLength,
         py::arg("next_tokens"),
@@ -1440,7 +1439,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("splitwise_role_is_decode"),
         "Perform limit content for decoding");
 
- m.def("speculate_limit_thinking_content_length",
+  m.def("speculate_limit_thinking_content_length",
         &SpeculateLimitThinkingContentLength,
         py::arg("next_tokens"),
         py::arg("max_think_lens"),

@@ -21,7 +21,7 @@
 #endif
 
 void ReasoningPhaseTokenConstraint(
-    const paddle::Tensor& logits,                  // inplace output
+    const paddle::Tensor& logits,  // inplace output
     const paddle::Tensor& token_ids_all,
     const paddle::Tensor& prompt_lens,
     const paddle::Tensor& stop_flags,

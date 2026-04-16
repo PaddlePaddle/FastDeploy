@@ -63,24 +63,20 @@ __global__ void update_reasoning_status(const bool* stop_flags,
 
     int64_t t0 = -1, t1 = -1, t2 = -1, t3 = -1;
     if (cur_step >= 1) {
-      GM2LM(token_ids_all + pre_ids_offset + cur_step - 1,
-            &t0,
-            sizeof(int64_t));
+      GM2LM(
+          token_ids_all + pre_ids_offset + cur_step - 1, &t0, sizeof(int64_t));
     }
     if (cur_step >= 2) {
-      GM2LM(token_ids_all + pre_ids_offset + cur_step - 2,
-            &t1,
-            sizeof(int64_t));
+      GM2LM(
+          token_ids_all + pre_ids_offset + cur_step - 2, &t1, sizeof(int64_t));
     }
     if (cur_step >= 3) {
-      GM2LM(token_ids_all + pre_ids_offset + cur_step - 3,
-            &t2,
-            sizeof(int64_t));
+      GM2LM(
+          token_ids_all + pre_ids_offset + cur_step - 3, &t2, sizeof(int64_t));
     }
     if (cur_step >= 4) {
-      GM2LM(token_ids_all + pre_ids_offset + cur_step - 4,
-            &t3,
-            sizeof(int64_t));
+      GM2LM(
+          token_ids_all + pre_ids_offset + cur_step - 4, &t3, sizeof(int64_t));
     }
 
     int new_status = reasoning_status_lm;
@@ -97,8 +93,8 @@ __global__ void update_reasoning_status(const bool* stop_flags,
 
     // x = 1 -> x = 2 or x = 3
     if (new_status == 1 && cur_step >= 4) {
-      if (t3 == line_break_id && t2 == think_end_id &&
-          t1 == line_break_id && t0 == line_break_id) {
+      if (t3 == line_break_id && t2 == think_end_id && t1 == line_break_id &&
+          t0 == line_break_id) {
         new_status = 2;
       } else if (t3 != think_end_id && t2 != think_end_id &&
                  t1 != think_end_id && t0 != think_end_id) {
@@ -169,9 +165,8 @@ __global__ void apply_token_enforce_generation_scores(
     for (int v = 0; v < vocab_size; v += 64) {
       int chunk = (vocab_size - v < 64) ? (vocab_size - v) : 64;
       if (chunk == 64) {
-        LM2GM_ASYNC(fill_buffer,
-                     logits_dst + logits_offset + v,
-                     64 * sizeof(T));
+        LM2GM_ASYNC(
+            fill_buffer, logits_dst + logits_offset + v, 64 * sizeof(T));
       } else {
         T rem_buffer[64];
         for (int k = 0; k < chunk; k++) rem_buffer[k] = fill_val_t;
@@ -197,17 +192,17 @@ __global__ void apply_token_enforce_generation_scores(
 }
 
 // Template instantiations
-#define _XPU_DEF__APPLY_TOKEN_ENFORCE_(DATA_TYPE)                          \
+#define _XPU_DEF__APPLY_TOKEN_ENFORCE_(DATA_TYPE)                            \
   template __global__ void apply_token_enforce_generation_scores<DATA_TYPE>( \
-      const DATA_TYPE* logits_src,                                         \
-      DATA_TYPE* logits_dst,                                               \
-      const int64_t* allowed_tokens,                                       \
-      const int* reasoning_status,                                         \
-      const int* batch_id_per_token_output,                                \
-      const int* cu_seqlens_q_output,                                      \
-      int max_bsz,                                                         \
-      int vocab_size,                                                      \
-      int allowed_tokens_len,                                              \
+      const DATA_TYPE* logits_src,                                           \
+      DATA_TYPE* logits_dst,                                                 \
+      const int64_t* allowed_tokens,                                         \
+      const int* reasoning_status,                                           \
+      const int* batch_id_per_token_output,                                  \
+      const int* cu_seqlens_q_output,                                        \
+      int max_bsz,                                                           \
+      int vocab_size,                                                        \
+      int allowed_tokens_len,                                                \
       int token_num);
 _XPU_DEF__APPLY_TOKEN_ENFORCE_(float);
 _XPU_DEF__APPLY_TOKEN_ENFORCE_(float16);

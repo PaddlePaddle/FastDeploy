@@ -76,7 +76,8 @@ static int cpu_wrapper(api::Context* ctx,
     if (stop_flags[i] || reasoning_status[i] == 3) continue;
 
     int64_t cur_step = step_idx[i];
-    const int64_t* pre_ids_now = token_ids_all + i * max_seq_len + prompt_lens[i];
+    const int64_t* pre_ids_now =
+        token_ids_all + i * max_seq_len + prompt_lens[i];
     int64_t t0 = (cur_step >= 1) ? pre_ids_now[cur_step - 1] : -1;
     int64_t t1 = (cur_step >= 2) ? pre_ids_now[cur_step - 2] : -1;
     int64_t t2 = (cur_step >= 3) ? pre_ids_now[cur_step - 3] : -1;
@@ -96,8 +97,8 @@ static int cpu_wrapper(api::Context* ctx,
 
     // x = 1 -> x = 2 or x = 3
     if (new_status == 1 && cur_step >= 4) {
-      if (t3 == line_break_id && t2 == think_end_id &&
-          t1 == line_break_id && t0 == line_break_id) {
+      if (t3 == line_break_id && t2 == think_end_id && t1 == line_break_id &&
+          t0 == line_break_id) {
         new_status = 2;
       } else if (t3 != think_end_id && t2 != think_end_id &&
                  t1 != think_end_id && t0 != think_end_id) {
@@ -166,8 +167,8 @@ static int xpu3_wrapper(api::Context* ctx,
   using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
 
   // Kernel 1: Update reasoning status
-  int32_t ret_xre =
-      fd_xpu3::update_reasoning_status<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
+  int32_t ret_xre = fd_xpu3::
+      update_reasoning_status<<<ctx->ncluster(), 64, ctx->xpu_stream>>>(
           stop_flags,
           seq_lens_encoder,
           reinterpret_cast<const XPU_INT64*>(step_idx),

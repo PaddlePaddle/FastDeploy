@@ -52,18 +52,18 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
 
   if (token_num_data > 0) {
-    int r = fastdeploy::plugin::get_padding_offset(
-        ctx,
-        batch_id_per_token.data<int>(),
-        cum_offsets_out.data<int>(),
-        cu_seqlens_q.data<int>(),
-        cu_seqlens_k.data<int>(),
-        x_remove_padding.data<int64_t>(),
-        input_ids.data<int64_t>(),
-        seq_len.data<int>(),
-        max_seq_len,
-        bsz,
-        token_num_data);
+    int r =
+        fastdeploy::plugin::get_padding_offset(ctx,
+                                               batch_id_per_token.data<int>(),
+                                               cum_offsets_out.data<int>(),
+                                               cu_seqlens_q.data<int>(),
+                                               cu_seqlens_k.data<int>(),
+                                               x_remove_padding.data<int64_t>(),
+                                               input_ids.data<int64_t>(),
+                                               seq_len.data<int>(),
+                                               max_seq_len,
+                                               bsz,
+                                               token_num_data);
     PD_CHECK(r == 0, "fastdeploy::plugin::get_padding_offset failed.");
 
     // If draft_tokens is provided, re-compute x_remove_padding with
@@ -82,8 +82,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(
           max_draft_tokens,
           bsz,
           token_num_data);
-      PD_CHECK(r == 0,
-               "fastdeploy::plugin::speculate_remove_padding failed.");
+      PD_CHECK(r == 0, "fastdeploy::plugin::speculate_remove_padding failed.");
     }
   }
 
@@ -112,7 +111,9 @@ PD_BUILD_STATIC_OP(get_padding_offset)
              "seq_len",
              paddle::Optional("draft_tokens"),
              paddle::Optional("seq_lens_encoder")})
-    .Outputs({"x_remove_padding", "batch_id_per_token", "cu_seqlens_q",
+    .Outputs({"x_remove_padding",
+              "batch_id_per_token",
+              "cu_seqlens_q",
               "cu_seqlens_k"})
     .Attrs({"cpu_token_num: int64_t"})
     .SetKernelFn(PD_KERNEL(GetPaddingOffset))
