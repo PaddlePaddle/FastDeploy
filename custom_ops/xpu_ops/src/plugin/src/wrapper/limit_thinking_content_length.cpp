@@ -215,6 +215,7 @@ int limit_thinking_content_length_kernel(api::Context* ctx,
   WRAPPER_ASSERT_GT(ctx, bs, 0);
   WRAPPER_ASSERT_GT(ctx, eos_token_id_len, 0);
   WRAPPER_ASSERT_GE(ctx, inject_len, 0);
+  WRAPPER_ASSERT_LE(ctx, eos_token_id_len, 64);
   WRAPPER_CHECK_PTR(ctx, int64_t, bs, next_tokens);
   WRAPPER_CHECK_PTR(ctx, int, bs, max_think_lens);
   WRAPPER_CHECK_PTR(ctx, int, bs, max_reply_lens);

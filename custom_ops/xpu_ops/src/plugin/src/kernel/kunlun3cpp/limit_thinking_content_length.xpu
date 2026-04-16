@@ -53,7 +53,7 @@ __global__ void limit_thinking_content_length_kernel(
   int nclusters = cluster_num();
   if (clusterid != 0) return;
 
-  __simd__ __local__ int64_t eos_token_ids_lm[256];
+  __simd__ __local__ int64_t eos_token_ids_lm[64];
 
   for (int i = cid; i < bs; i += ncores) {
     int max_think_len_lm;
