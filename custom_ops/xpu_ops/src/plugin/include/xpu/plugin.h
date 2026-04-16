@@ -68,13 +68,12 @@ DLL_EXPORT int token_penalty_multi_scores(api::Context* ctx,
                                           const int64_t length_bad_words);
 
 DLL_EXPORT int get_padding_offset(api::Context* ctx,
-                                  int* padding_offset,
+                                  int* batch_id_per_token,
                                   int* cum_offsets_out,
                                   int* cu_seqlens_q,
                                   int* cu_seqlens_k,
                                   int64_t* x_remove_padding,
                                   const int64_t* input_ids,
-                                  const int* cum_offsets,
                                   const int* seq_lens,
                                   const int max_seq_len,
                                   const int bs,
@@ -767,6 +766,44 @@ DLL_EXPORT int speculate_limit_thinking_content_length_kernel(
     const int eos_token_id_len,
     const int inject_len,
     const bool splitwise_role_is_decode);
+DLL_EXPORT int verify_draft_tokens(
+    api::Context* ctx,
+    // Core I/O
+    int64_t* step_output_ids,
+    int* step_output_len,
+    const int64_t* step_input_ids,  // draft tokens
+    // Target model outputs (strategy-dependent interpretation)
+    const int64_t*
+        target_tokens,  // GREEDY:argmax, TARGET_MATCH:sampled, TOPP:unused
+    // Candidate set for TOPP/GREEDY (TARGET_MATCH: unused)
+    const int64_t* candidate_ids,
+    const float* candidate_scores,
+    const int* candidate_lens,
+    // Sampling params
+    const float* curand_states,  // nullptr for GREEDY/TARGET_MATCH
+    const float* topp,
+    // Metadata
+    const bool* stop_flags,
+    const int* seq_lens_encoder,
+    const int* seq_lens_this_time,
+    const int64_t* end_tokens,
+    const bool* is_block_step,
+    const int* cu_seqlens_q_output,
+    const int* reasoning_status,
+    // max_dec_len / step_idx for EOS/max-len detection (read-only)
+    const int64_t* max_dec_len,
+    const int64_t* step_idx,
+    // Dimensions and config
+    const int max_bsz,
+    const int real_bsz,
+    const int max_step_tokens,
+    const int end_length,
+    const int max_seq_len,
+    const int max_candidate_len,
+    const int verify_window,
+    const int verify_strategy,  // 0=TOPP, 1=GREEDY, 2=TARGET_MATCH
+    const bool reject_all,
+    const bool accept_all);
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 

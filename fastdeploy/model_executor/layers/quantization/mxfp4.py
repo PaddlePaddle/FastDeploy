@@ -14,8 +14,6 @@
 # limitations under the License.
 """
 
-import importlib
-import importlib.util
 import math
 from enum import Enum
 from typing import Callable, Optional
@@ -25,17 +23,18 @@ from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
-from fastdeploy.model_executor.utils import set_weight_attrs
+from fastdeploy.model_executor.utils import has_flashinfer, set_weight_attrs
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import moe_expert_dispatch
+
 from fastdeploy.utils import get_logger
 
 from ..moe import FusedMoE
 from .quant_base import QuantConfigBase, QuantMethodBase
 
-paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+paddle.enable_compat(scope={"flashinfer"})
 
 logger = get_logger("config", "config.log")
 
@@ -57,10 +56,6 @@ def check_device_capability(num):
         return major * 10 + minor >= num
     else:
         return False
-
-
-def has_flashinfer():
-    return importlib.util.find_spec("flashinfer") is not None
 
 
 def round_up(a, b):

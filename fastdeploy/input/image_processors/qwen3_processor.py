@@ -41,6 +41,8 @@ from paddleformers.transformers.legacy.tokenizer_utils_base import TensorType
 from PIL import Image
 
 from fastdeploy.input.image_processors.common import is_scaled_image, smart_resize
+from fastdeploy.input.image_processors.registry import ImageProcessorRegistry
+from fastdeploy.input.mm_model_config import QWEN3_VL
 from fastdeploy.utils import data_processor_logger
 
 IMAGE_MEAN = [0.5, 0.5, 0.5]
@@ -62,6 +64,7 @@ VideoInput = Union[
 ]
 
 
+@ImageProcessorRegistry.register(QWEN3_VL)
 class ImageProcessor(BaseImageProcessor):
     """
     Adaptive image processor for dynamic image resizing and preprocessing.

@@ -45,8 +45,12 @@ from fastdeploy.entrypoints.openai.v1.serving_base import (
     ServingResponseContext,
 )
 from fastdeploy.input.tokenizer_client import AsyncTokenizerClient, ImageDecodeRequest
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.utils import api_server_logger
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -178,7 +182,7 @@ class OpenAIServingChat(OpenAiServingBase):
 
         except Exception as e:
             error_msg = f"Error in _build_logprobs_response: {e}, {str(traceback.format_exc())}"
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
             return None
 
     @override
@@ -302,7 +306,14 @@ class OpenAIServingChat(OpenAiServingBase):
             max_tokens = request.max_completion_tokens or request.max_tokens
             choice_completion_tokens = response_ctx.choice_completion_tokens_dict[output.index]
             choice.finish_reason = self._calc_finish_reason(request_output, max_tokens, choice_completion_tokens)
-            api_server_logger.info(f"Chat Streaming response last send: {chunk.model_dump_json()}")
+            log_request(
+                level=RequestLogLevel.LIFECYCLE,
+                message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
+                request_id=request_id,
+                finish_reason=choice.finish_reason,
+                completion_tokens=choice_completion_tokens,
+                logprobs=choice.logprobs,
+            )
 
         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
         if request_output.finished and response_ctx.remain_choices == 0:
@@ -331,15 +342,19 @@ class OpenAIServingChat(OpenAiServingBase):
         # api_server_logger.debug(f"Client {ctx.request_id} received: {data}")
         # The logprob for handling the response
         choices: list[ChatCompletionResponseChoice] = []
-        for choice_index, respose in accumula_output_map.items():
-            choice = await self._create_chat_completion_choice(respose, ctx)
+        for choice_index, response in accumula_output_map.items():
+            choice = await self._create_chat_completion_choice(response, ctx)
             choices.append(choice)
 
         choices = sorted(choices, key=lambda x: x.index)
         res = ChatCompletionResponse(
             id=ctx.request_id, model=request.model, choices=choices, created=ctx.created_time, usage=response_ctx.usage
         )
-        api_server_logger.info(f"Chat response: {res.model_dump_json()}")
+        log_request(
+            level=RequestLogLevel.CONTENT,
+            message="Chat response: {response}",
+            response=res.model_dump_json(),
+        )
         return res
 
     async def _create_chat_completion_choice(

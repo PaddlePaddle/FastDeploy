@@ -19,8 +19,8 @@ def assert_value(x, y):
 @dataclass
 class TestCacheKVWithRopeParams:
     max_model_len: int = 32768
-    min_sampe_model_len: int = 1900
-    max_sampe_model_len: int = 2200
+    min_sample_model_len: int = 1900
+    max_sample_model_len: int = 2200
     q_head_num: int = 20
     kv_head_num: int = 4
     head_dim: int = 128
@@ -57,7 +57,7 @@ class TestCacheKVWithRope(unittest.TestCase):
         cls.seq_lens_this_time = [0] * cls.params.max_num_seqs
         global_block_start = 0
         for i in cls.batch_ids_prefill.tolist():
-            rand_token_num = random.randint(cls.params.min_sampe_model_len, cls.params.max_sampe_model_len)
+            rand_token_num = random.randint(cls.params.min_sample_model_len, cls.params.max_sample_model_len)
             cls.token_num += rand_token_num
             cls.cu_seqlens_q.append(cls.token_num)
             cls.seq_lens_this_time[i] = rand_token_num

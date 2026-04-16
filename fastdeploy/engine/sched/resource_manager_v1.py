@@ -927,6 +927,7 @@ class ResourceManagerV1(ResourceManager):
                     if (
                         self.config.cache_config.enable_prefix_caching
                         and self.config.scheduler_config.splitwise_role != "decode"
+                        and self.config.scheduler_config.splitwise_role != "prefill"
                     ):
                         self.cache_manager.update_cache_blocks(
                             request, self.config.cache_config.block_size, request.num_computed_tokens
@@ -1374,6 +1375,11 @@ class ResourceManagerV1(ResourceManager):
                     self.stop_flags[request.idx] = False
                     self.requests[request.request_id] = request
                     self.req_dict[request.request_id] = allocated_position
+
+                    self.cache_manager.update_cache_blocks(
+                        request, self.config.cache_config.block_size, request.need_prefill_tokens
+                    )
+
                     return True
                 else:
                     self._free_blocks(request)

@@ -275,8 +275,14 @@ class XPUForwardMeta(ForwardMeta):
     hidden_states: Optional[paddle.Tensor] = None
 
     is_draft: bool = False
+    is_speculative: bool = False
     # max bs
     max_num_seqs: int = 0
+
+    # for spliced block_attn
+    slot_mapping_enc: Optional[paddle.Tensor] = None
+    #
+    slot_mapping_dec: Optional[paddle.Tensor] = None
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """

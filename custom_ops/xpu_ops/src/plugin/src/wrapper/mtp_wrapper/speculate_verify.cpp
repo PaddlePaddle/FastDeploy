@@ -19,7 +19,6 @@
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
 namespace fd_xpu3 {
-typedef uint32_t curandStatePhilox4_32_10_t;
 
 template <bool ENABLE_TOPP, bool USE_TOPK>
 __attribute__((global)) void speculate_verify(
@@ -86,8 +85,6 @@ static inline unsigned int xorwow(unsigned int &state) {  // NOLINT
   state ^= state >> 13;
   return state;
 }
-
-typedef uint32_t curandStatePhilox4_32_10_t;
 
 static int64_t topp_sampling_kernel(const int64_t *candidate_ids,
                                     const float *candidate_scores,

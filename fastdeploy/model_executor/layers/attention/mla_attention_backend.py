@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import paddle
 
-paddle.enable_compat(scope={"flash_mla"})  # Enable torch proxy before importing flash_mla
+paddle.enable_compat(scope={"flash_mla"})  # Enable paddle.enable_compat before importing flash_mla
 import math
 import os
 from dataclasses import dataclass, field
@@ -277,10 +277,8 @@ class MLAAttentionBackend(AttentionBackend):
             self.padding_num_heads = 64 - self.num_heads
             self.heads_need_padding = True
             logger.warning(
-                "MLA num_attention_heads is less than 64, force to use 64 num_heads. "
-                "current num_heads=%d, tp_size=%d",
-                self.num_heads,
-                fd_config.parallel_config.tensor_parallel_size,
+                f"MLA num attention heads is less than 64, force to use 64 num heads. "
+                f"current num_heads={self.num_heads}, tp_size={fd_config.parallel_config.tensor_parallel_size}"
             )
         self.head_dim: int = fd_config.model_config.head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers

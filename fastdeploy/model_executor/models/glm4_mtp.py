@@ -369,3 +369,7 @@ class Glm4MTPForCausalLM(ModelForCasualLM):
         )
 
         return hidden_states
+
+    def clear_graph_opt_backend(self):
+        """Clear graph optimization backend, the captured cuda graph will be cleaned"""
+        self.model.clear_graph_opt_backend(fd_config=self.fd_config)
