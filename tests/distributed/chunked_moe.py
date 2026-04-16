@@ -85,6 +85,7 @@ class MockFDConfig:
         name = "default"
         splitwise_role = "mixed"
         max_num_seqs = 2
+        max_num_batched_tokens = 2048
 
     parallel_config = ParallelConfig()
     scheduler_config = SchedulerConfig()

@@ -45,6 +45,9 @@ from fastdeploy.model_executor.layers.linear import (
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    per_token_group_quant_fp8,
+)
 from fastdeploy.model_executor.layers.rotary_embedding import (
     DeepseekScalingRotaryEmbedding,
 )
@@ -55,16 +58,6 @@ from fastdeploy.model_executor.models.model_base import (
 )
 from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
     enable_compat_on_triton_kernel,
-)
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda() or current_platform.is_maca():
-    from fastdeploy.model_executor.ops.gpu import (
-        get_position_ids_and_mask_encoder_batch,
-    )
-
-from fastdeploy.model_executor.layers.quantization.fp8_utils import (
-    per_token_group_quant_fp8,
 )
 from fastdeploy.platforms import current_platform
 
@@ -344,7 +337,6 @@ class DeepseekV3MLAAttention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
         position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
 
@@ -449,33 +441,6 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         output = self.o_proj(fmha_out)
         return output
-
-
-def compute_slot_mapping(
-    block_tables: paddle.Tensor,  # [num_reqs, max_blocks_per_req]
-    positions: paddle.Tensor,  # [num_tokens] 每个token的位置
-    batch_id_per_token: paddle.Tensor,  # [num_tokens] 每个token属于哪个请求
-    block_size: int,
-) -> paddle.Tensor:
-    """
-    计算 slot_mapping
-
-    公式: slot = block_id * block_size + offset_in_block
-    """
-    # 1. 计算每个 token 对应的 block 索引
-    block_idx = positions // block_size  # [num_tokens]
-
-    # 2. 从 block_tables 中查表获取 block_id
-    # block_tables[batch_id_per_token, block_idx]
-    block_ids = block_tables[batch_id_per_token, block_idx]  # [num_tokens]
-
-    # 3. 计算在 block 内的偏移
-    block_offset = positions % block_size  # [num_tokens]
-
-    # 4. 计算 slot_mapping
-    slot_mapping = block_ids * block_size + block_offset
-
-    return slot_mapping.cast(paddle.int64)
 
 
 import triton
@@ -661,17 +626,12 @@ class Indexer(nn.Layer):
         weights = weights.unsqueeze(-1) * q_scale * self.softmax_scale * self.index_n_heads**-0.5
         weights = weights.squeeze(-1)
 
-        slot_mapping = compute_slot_mapping(
-            forward_meta.block_tables,
-            forward_meta.position_ids,
-            forward_meta.batch_id_per_token,
-            64,
-        )
-
         indexer_top_k = paddle.full([q_fp8.shape[0], self.index_topk], -1, dtype="int32")
 
         # indexer write_cache
-        indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
+        indexer_k_quant_and_cache(
+            k, self.indexer_cache, forward_meta.slot_mapping, self.quant_block_size, self.scale_fmt
+        )
 
         from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
 
@@ -935,7 +895,6 @@ class DeepseekV32DSAAttention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
         position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
@@ -1053,7 +1012,6 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor,
         position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         if hidden_states.shape[0] > 0:
@@ -1061,7 +1019,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
                 hidden_states, residual_input=residual, forward_meta=forward_meta
             )
 
-            hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
+            hidden_states = self.self_attn(forward_meta, hidden_states, position_ids)
 
             hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
         else:
@@ -1117,7 +1075,6 @@ class DeepSeekV3Model(nn.Layer):
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
         position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
@@ -1129,7 +1086,6 @@ class DeepSeekV3Model(nn.Layer):
                 hidden_states,
                 residual,
                 position_ids,
-                mask_encoder_batch,
             )
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
@@ -1163,12 +1119,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
-        )
-        self.position_ids_buffer = paddle.empty(
-            [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
-        )
-        self.mask_encoder_batch_buffer = paddle.empty(
-            [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
         )
 
     @classmethod
@@ -1266,25 +1216,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         logits[:, self.ori_vocab_size :] = -float("inf")
         return logits
 
-    def pre_process(self, forward_meta):
-        """ """
-        seq_lens_encoder = forward_meta.seq_lens_encoder
-        seq_lens_decoder = forward_meta.seq_lens_decoder
-        seq_lens_this_time = forward_meta.seq_lens_this_time
-
-        current_total_tokens = forward_meta.ids_remove_padding.shape[0]
-        position_ids = self.position_ids_buffer[:current_total_tokens]
-        mask_encoder_batch = self.mask_encoder_batch_buffer[:current_total_tokens]
-
-        get_position_ids_and_mask_encoder_batch(
-            seq_lens_encoder,
-            seq_lens_decoder,
-            seq_lens_this_time,
-            position_ids,
-            mask_encoder_batch,
-        )
-        return position_ids, mask_encoder_batch
-
     def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
@@ -1305,12 +1236,10 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
-        forward_meta.position_ids, mask_encoder_batch = self.pre_process(forward_meta)
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
             position_ids=forward_meta.position_ids,
-            mask_encoder_batch=mask_encoder_batch,
         )
         return hidden_states
 

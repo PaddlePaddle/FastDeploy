@@ -159,6 +159,8 @@ class ForwardMeta:
     exist_prefill: bool = False
 
     position_ids: Optional[paddle.Tensor] = None
+    # for kvcache slot
+    slot_mapping: Optional[paddle.Tensor] = None
 
     real_bsz: int = 0
 
