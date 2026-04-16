@@ -49,7 +49,11 @@ from fastdeploy.inter_communicator import (
     RearrangeExpertStatus,
     ZmqIpcClient,
 )
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.trace.constants import LoggingEventName
@@ -368,7 +372,10 @@ class EngineClient:
             main_process_metrics.request_prompt_tokens.observe(input_ids_len)
         except Exception as e:
             log_request_error(
-                message="add_requests error: {error}, {traceback}", error=e, traceback=traceback.format_exc()
+                message="request[{request_id}] add_requests error: {error}, {traceback}",
+                request_id=task.get("request_id"),
+                error=e,
+                traceback=traceback.format_exc(),
             )
             raise EngineError(str(e), error_code=400)
 
@@ -377,14 +384,18 @@ class EngineClient:
                 f"Input text is too long, input_ids_len ({input_ids_len}) "
                 f"+ min_tokens({min_tokens}) >= max_model_len({self.max_model_len})"
             )
-            log_request_error(message=error_msg)
+            log_request_error(
+                message="request[{request_id}] {error_msg}", request_id=task.get("request_id"), error_msg=error_msg
+            )
             raise EngineError(error_msg, error_code=400)
 
         if input_ids_len > self.max_model_len:
             error_msg = (
                 f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.max_model_len})."
             )
-            log_request_error(message=error_msg)
+            log_request_error(
+                message="request[{request_id}] {error_msg}", request_id=task.get("request_id"), error_msg=error_msg
+            )
             raise EngineError(error_msg, error_code=400)
 
         if "stop_seqs_len" in task and task["stop_seqs_len"]:
@@ -395,7 +406,9 @@ class EngineClient:
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
                     "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
                 )
-                log_request_error(message=error_msg)
+                log_request_error(
+                    message="request[{request_id}] {error_msg}", request_id=task.get("request_id"), error_msg=error_msg
+                )
                 raise EngineError(error_msg, error_code=400)
             stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
@@ -404,13 +417,17 @@ class EngineClient:
                         f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
                         "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
                     )
-                    log_request_error(message=error_msg)
+                    log_request_error(
+                        message="request[{request_id}] {error_msg}",
+                        request_id=task.get("request_id"),
+                        error_msg=error_msg,
+                    )
                     raise EngineError(error_msg, error_code=400)
 
         task["metrics"]["preprocess_end_time"] = time.time()
         preprocess_cost_time = task["metrics"]["preprocess_end_time"] - task["metrics"]["preprocess_start_time"]
         log_request(
-            level=1,
+            level=RequestLogLevel.STAGES,
             message="Cache request with request_id ({request_id}), preprocess time cost {preprocess_cost_time}",
             request_id=task.get("request_id"),
             preprocess_cost_time=preprocess_cost_time,
@@ -418,7 +435,7 @@ class EngineClient:
 
         self.valid_parameters(task)
         log_request(
-            level=3,
+            level=RequestLogLevel.FULL,
             message="Receive task: {task}",
             task=task,
         )
@@ -442,7 +459,10 @@ class EngineClient:
             )
         except Exception as e:
             log_request_error(
-                message="zmq_client send task error: {error}, {traceback}", error=e, traceback=traceback.format_exc()
+                message="request[{request_id}] zmq_client send task error: {error}, {traceback}",
+                request_id=task.get("request_id"),
+                error=e,
+                traceback=traceback.format_exc(),
             )
             raise EngineError(str(e), error_code=400)
 
@@ -481,7 +501,7 @@ class EngineClient:
             if data["reasoning_max_tokens"] > data["max_tokens"]:
                 data["reasoning_max_tokens"] = data["max_tokens"]
                 log_request(
-                    level=1,
+                    level=RequestLogLevel.STAGES,
                     message="req_id: {request_id}, reasoning_max_tokens exceeds max_tokens, the value of reasoning_max_tokens will be adjusted to {max_tokens}",
                     request_id=data["request_id"],
                     max_tokens=data["max_tokens"],
@@ -489,7 +509,7 @@ class EngineClient:
             if data.get("reasoning_effort") is not None:
                 data["reasoning_max_tokens"] = None
                 log_request(
-                    level=1,
+                    level=RequestLogLevel.STAGES,
                     message="req_id: {request_id}, reasoning_max_tokens and reasoning_effort are both set, enable_thinking will be disabled.",
                     request_id=data["request_id"],
                 )
@@ -510,7 +530,9 @@ class EngineClient:
                 is_chat = True
                 if not self.enable_logprob:
                     err_msg = "Logprobs is disabled, please enable it in startup config."
-                    log_request_error(message=err_msg)
+                    log_request_error(
+                        message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                    )
                     raise ParameterError("logprobs", err_msg)
                 top_logprobs = data.get("top_logprobs")
         elif isinstance(logprobs, int):
@@ -523,11 +545,15 @@ class EngineClient:
             max_logprobs = self.ori_vocab_size
         if max_logprobs < -1:
             err_msg = f"Invalid 'max_logprobs': must be >= -1, got {max_logprobs}."
-            log_request_error(message=err_msg)
+            log_request_error(
+                message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+            )
             raise ValueError("max_logprobs", err_msg)
         if max_logprobs > self.ori_vocab_size:
             err_msg = f"Invalid 'max_logprobs': must be <= vocab_size {self.ori_vocab_size}, got {max_logprobs}."
-            log_request_error(message=err_msg)
+            log_request_error(
+                message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+            )
             raise ValueError("max_logprobs", err_msg)
 
         prompt_logprobs = data.get("prompt_logprobs", None)
@@ -535,41 +561,55 @@ class EngineClient:
         if prompt_logprobs is not None:
             if not self.enable_logprob:
                 err_msg = "`enable_logprob` is disabled, please enable it in startup config."
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ParameterError("prompt_logprobs", err_msg)
 
             if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
                 err_msg = "prompt_logprobs is not support when FD_USE_GET_SAVE_OUTPUT_V1 is disabled."
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ParameterError("prompt_logprobs", err_msg)
 
             if self.enable_prefix_caching:
                 err_msg = "prompt_logprobs is not support when prefix caching is enabled."
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ParameterError("prompt_logprobs", err_msg)
 
             if prompt_logprobs == -1 and self.ori_vocab_size > max_logprobs:
                 err_msg = f"The requested value of ({self.ori_vocab_size}) for prompt_logprobs (-1) exceeds the maximum allowed value of ({max_logprobs})"
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ValueError("prompt_logprobs", err_msg)
 
             if prompt_logprobs < -1:
                 err_msg = (
                     f"prompt_logprobs must be a non-negative value or -1; the current value is {prompt_logprobs}."
                 )
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ValueError("prompt_logprobs", err_msg)
 
             if prompt_logprobs > max_logprobs:
                 err_msg = f"Number of prompt_logprobs requested ({prompt_logprobs}) exceeds maximum allowed value ({max_logprobs})."
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ValueError("prompt_logprobs", err_msg)
 
         # enable_logprob
         if top_logprobs is not None:
             if not self.enable_logprob:
                 err_msg = "Logprobs is disabled, please enable it in startup config."
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ParameterError("top_logprobs" if is_chat else "logprobs", err_msg)
 
             if not isinstance(top_logprobs, int):
@@ -577,28 +617,38 @@ class EngineClient:
                 err_msg = (
                     f"Invalid type for {'top_logprobs' if is_chat else 'logprobs'}: expected int but got {err_type}."
                 )
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ParameterError("top_logprobs" if is_chat else "logprobs", err_msg)
 
             if top_logprobs > max_logprobs:
                 err_msg = f"Number of {'top_logprobs' if is_chat else 'logprobs'} requested ({top_logprobs}) exceeds maximum allowed value ({max_logprobs})."
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                )
                 raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
             if not envs.FD_USE_GET_SAVE_OUTPUT_V1:
                 if top_logprobs < 0 or top_logprobs > max_logprobs:
                     err_msg = f"{'top_logprobs' if is_chat else 'logprobs'} must be between 0 and {max_logprobs}; the current value is {top_logprobs}."
-                    log_request_error(message=err_msg)
+                    log_request_error(
+                        message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                    )
                     raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
             else:
                 if top_logprobs == -1 and self.ori_vocab_size > max_logprobs:
                     err_msg = f"The requested value of ({self.ori_vocab_size}) for {'top_logprobs' if is_chat else 'logprobs'} (-1) exceeds the maximum allowed value of ({max_logprobs})"
-                    log_request_error(message=err_msg)
+                    log_request_error(
+                        message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                    )
                     raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
                 if top_logprobs < -1:
                     err_msg = f"{'top_logprobs' if is_chat else 'logprobs'} must be a non-negative value or -1; the current value is {top_logprobs}."
-                    log_request_error(message=err_msg)
+                    log_request_error(
+                        message="request[{request_id}] {err_msg}", request_id=data.get("request_id"), err_msg=err_msg
+                    )
                     raise ValueError("top_logprobs" if is_chat else "logprobs", err_msg)
 
     def check_health(self, time_interval_threashold=30):
@@ -634,13 +684,18 @@ class EngineClient:
             return response
         except asyncio.TimeoutError:
             error_response = ControlResponse(request_id, 500, "Timeout waiting for control method response")
-            log_request_error(message="Control request timed out: {error_response}", error_response=error_response)
+            log_request_error(
+                message="request[{request_id}] Control request timed out: {error_response}",
+                request_id=request_id,
+                error_response=error_response,
+            )
             return error_response
         except Exception as e:
             import traceback
 
             log_request_error(
-                message="Unknown error in control method: {error}\n{traceback}",
+                message="request[{request_id}] Unknown error in control method: {error}\n{traceback}",
+                request_id=request_id,
                 error=str(e),
                 traceback=traceback.format_exc(),
             )
@@ -1046,7 +1101,7 @@ class EngineClient:
     async def abort(self, request_id, n=1) -> None:
         if envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE:
             log_request(
-                level=0,
+                level=RequestLogLevel.LIFECYCLE,
                 message="abort request_id: {request_id}",
                 request_id=request_id,
             )
@@ -1070,7 +1125,7 @@ class EngineClient:
                 self._send_task(data)
 
             log_request(
-                level=0,
+                level=RequestLogLevel.LIFECYCLE,
                 message="Aborted request(s) {request_ids}.",
                 request_ids=",".join(request_ids),
             )

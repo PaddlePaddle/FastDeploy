@@ -44,7 +44,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.response_processors import ChatResponseProcessor
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
@@ -113,14 +117,16 @@ class OpenAIServingChat:
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
-            log_request_error(message=err_msg)
+            log_request_error(message="request[{request_id}] {error}", request_id=request.request_id, error=err_msg)
             return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
 
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
-                log_request_error(message=err_msg)
+                log_request_error(
+                    message="request[{request_id}] {error}", request_id=request.request_id, error=err_msg
+                )
                 return ErrorResponse(
                     error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
@@ -130,7 +136,11 @@ class OpenAIServingChat:
                 await self.engine_client.semaphore.acquire()
             else:
                 await asyncio.wait_for(self.engine_client.semaphore.acquire(), timeout=self.max_waiting_time)
-            log_request(level=1, message="semaphore status: {status}", status=self.engine_client.semaphore.status())
+            log_request(
+                RequestLogLevel.STAGES,
+                message="semaphore status: {status}",
+                status=self.engine_client.semaphore.status(),
+            )
 
             if request.request_id is not None:
                 request_id = request.request_id
@@ -143,7 +153,7 @@ class OpenAIServingChat:
             tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
             del request.trace_context
             log_request(
-                level=0,
+                level=RequestLogLevel.LIFECYCLE,
                 message="create chat completion request: {request_id}",
                 request_id=request_id,
             )
@@ -259,7 +269,9 @@ class OpenAIServingChat:
             choices=[],
             model=model_name,
         )
-        log_request(level=0, message="create chat completion request: {request_id}", request_id=request_id)
+        log_request(
+            RequestLogLevel.LIFECYCLE, message="create chat completion request: {request_id}", request_id=request_id
+        )
 
         try:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
@@ -383,7 +395,7 @@ class OpenAIServingChat:
                                 )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)} \n\n"
                             log_request(
-                                level=0,
+                                level=RequestLogLevel.LIFECYCLE,
                                 message="Chat Streaming response send_idx 0: request_id={request_id}, completion_tokens={completion_tokens}",
                                 request_id=request_id,
                                 completion_tokens=0,
@@ -513,11 +525,12 @@ class OpenAIServingChat:
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         if res["finished"]:
                             log_request(
-                                level=0,
-                                message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}",
+                                level=RequestLogLevel.LIFECYCLE,
+                                message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
                                 request_id=request_id,
                                 finish_reason=choice.finish_reason,
                                 completion_tokens=previous_num_tokens[idx],
+                                logprobs=logprobs_res,
                             )
                         choices = []
 
@@ -558,7 +571,7 @@ class OpenAIServingChat:
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             log_request(
-                level=2,
+                level=RequestLogLevel.STAGES,
                 message="release {request_id} {status}",
                 request_id=request_id,
                 status=self.engine_client.semaphore.status(),
@@ -730,7 +743,9 @@ class OpenAIServingChat:
             tracing.trace_req_finish(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
-            log_request(level=1, message="release {status}", status=self.engine_client.semaphore.status())
+            log_request(
+                RequestLogLevel.STAGES, message="release {status}", status=self.engine_client.semaphore.status()
+            )
 
         num_prompt_tokens = len(prompt_token_ids)
         num_generated_tokens = sum(previous_num_tokens)
@@ -757,7 +772,7 @@ class OpenAIServingChat:
             choices=choices,
             usage=usage,
         )
-        log_request(level=2, message="Chat response: {response}", response=res.model_dump_json())
+        log_request(RequestLogLevel.CONTENT, message="Chat response: {response}", response=res.model_dump_json())
         return res
 
     async def _create_chat_completion_choice(

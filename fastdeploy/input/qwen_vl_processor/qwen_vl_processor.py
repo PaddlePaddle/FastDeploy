@@ -18,7 +18,7 @@ import numpy as np
 
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
 from fastdeploy.input.utils import process_stop_token_ids
-from fastdeploy.logger.request_logger import log_request
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
@@ -263,7 +263,7 @@ class QwenVLProcessor(TextProcessor):
             else:
                 self.model_status_dict[request["request_id"]] = model_status
             request["enable_thinking"] = model_status == "think_start"
-        log_request(level=2, message="Processed request: {request}", request=request)
+        log_request(RequestLogLevel.CONTENT, message="Processed request: {request}", request=request)
 
         return request
 

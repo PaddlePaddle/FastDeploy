@@ -19,7 +19,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 from fastdeploy.engine.request import Request, RequestOutput
-from fastdeploy.logger.request_logger import log_request
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.utils import envs, scheduler_logger
 
@@ -117,7 +117,7 @@ class LocalScheduler:
             self.ids = list()
             self.requests = dict()
             self.responses = dict()
-        scheduler_logger.info("Scheduler has been reset")
+        log_request(RequestLogLevel.LIFECYCLE, message="Scheduler has been reset")
 
     def _recycle(self, request_id: Optional[str] = None):
         """
@@ -194,7 +194,7 @@ class LocalScheduler:
             self.requests_not_empty.notify_all()
         if len(valid_ids) > 0:
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Scheduler has enqueued some requests: {request_ids}",
                 request_ids=valid_ids,
             )
@@ -307,7 +307,7 @@ class LocalScheduler:
 
         if len(requests) > 0:
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Scheduler has pulled some request: {request_ids}",
                 request_ids=[request.request_id for request in requests],
             )
@@ -327,7 +327,7 @@ class LocalScheduler:
         finished_responses = [response.request_id for response in responses if response.finished]
         if len(finished_responses) > 0:
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Scheduler has received some finished responses: {request_ids}",
                 request_ids=finished_responses,
             )
@@ -396,7 +396,7 @@ class LocalScheduler:
                 if finished:
                     self._recycle(request_id)
                     log_request(
-                        level=2,
+                        RequestLogLevel.CONTENT,
                         message="Scheduler has pulled a finished response: {request_ids}",
                         request_ids=[request_id],
                     )

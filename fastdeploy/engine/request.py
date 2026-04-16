@@ -39,7 +39,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     StructuralTagResponseFormat,
     ToolCall,
 )
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.worker.output import (
     LogprobsLists,
     PromptLogprobs,
@@ -313,13 +317,13 @@ class Request:
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in req.metadata.items():
                 setattr(request, key, value)
-            log_request(level=1, message="The parameter metadata is obsolete.")
+            log_request(RequestLogLevel.STAGES, message="The parameter metadata is obsolete.")
 
         return request
 
     @classmethod
     def from_dict(cls, d: dict):
-        log_request(level=3, message="{request}", request=d)
+        log_request(RequestLogLevel.FULL, message="{request}", request=d)
         sampling_params: SamplingParams = None
         pooling_params: PoolingParams = None
         metrics: RequestMetrics = None
@@ -351,7 +355,8 @@ class Request:
                     )
             except Exception as e:
                 log_request_error(
-                    message="Convert mm_positions to ImagePosition error: {error}, {traceback}",
+                    message="request[{request_id}] Convert mm_positions to ImagePosition error: {error}, {traceback}",
+                    request_id=d.get("request_id"),
                     error=str(e),
                     traceback=traceback.format_exc(),
                 )

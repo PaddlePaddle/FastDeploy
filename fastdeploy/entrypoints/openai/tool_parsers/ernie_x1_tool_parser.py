@@ -257,7 +257,8 @@ class ErnieX1ToolParser(ToolParser):
 
             elif not cur_arguments and prev_arguments:
                 log_request_error(
-                    message="should be impossible to have arguments reset mid-call. skipping streaming anything."
+                    message="request[{request_id}] should be impossible to have arguments reset mid-call. skipping streaming anything.",
+                    request_id=request.request_id,
                 )
                 delta = None
 

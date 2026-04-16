@@ -22,6 +22,7 @@ from unittest.mock import MagicMock, Mock, patch
 import paddle
 
 from fastdeploy.engine.request import RequestMetrics, RequestOutput
+from fastdeploy.logger.request_logger import RequestLogLevel
 from fastdeploy.output.token_processor import TokenProcessor
 
 paddle.set_device("cpu")
@@ -307,7 +308,7 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
             # the code logs "sync preemption" and continues without triggering abort recycling
             # This is the expected behavior for speculative decoding mode
             mock_log_request.assert_any_call(
-                level=1,
+                RequestLogLevel.STAGES,
                 message="sync preemption for request_id {request_id} done.",
                 request_id=task_id,
             )

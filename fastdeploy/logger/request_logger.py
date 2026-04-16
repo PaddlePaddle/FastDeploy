@@ -25,19 +25,15 @@ Provides leveled request logging with L0-L3 levels:
 from enum import IntEnum
 
 from fastdeploy import envs
-from fastdeploy.logger.logger import FastDeployLogger
 
 
 class RequestLogLevel(IntEnum):
     """Request log level"""
 
-    L0 = 0  # Critical lifecycle events
-    L1 = 1  # Processing stage details
-    L2 = 2  # Request/response content (truncated)
-    L3 = 3  # Full data
-
-
-_request_logger = FastDeployLogger().get_logger("request", channel="request")
+    LIFECYCLE = 0  # Lifecycle start/end: creation, completion, abort
+    STAGES = 1  # Processing stages: semaphore, first token, signal handling
+    CONTENT = 2  # Content and scheduling: request params, scheduling, response
+    FULL = 3  # Complete raw data
 
 
 def _should_log(level: int) -> bool:
@@ -68,13 +64,15 @@ def log_request(level: int, message: str, **fields):
     if not _should_log(level):
         return
 
+    from fastdeploy.logger import _request_logger
+
     if not fields:
         _request_logger.info(message, stacklevel=2)
         return
 
     payload = fields
-    # L2 level content needs to be truncated
-    if int(level) == int(RequestLogLevel.L2):
+    # CONTENT level content needs to be truncated
+    if int(level) == int(RequestLogLevel.CONTENT):
         payload = {key: _truncate(value) for key, value in fields.items()}
 
     _request_logger.info(message.format(**payload), stacklevel=2)
@@ -88,6 +86,8 @@ def log_request_error(message: str, **fields):
         message: Log message template, supports {field} formatting
         **fields: Message fields
     """
+    from fastdeploy.logger import _request_logger
+
     if fields:
         _request_logger.error(message.format(**fields), stacklevel=2)
     else:

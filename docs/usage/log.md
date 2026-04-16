@@ -19,14 +19,14 @@ FastDeploy separates logs into three channels:
 
 Request logs (`request.log`) support 4 levels, controlled by the environment variable `FD_LOG_REQUESTS_LEVEL`:
 
-| Level | Description | Example Content |
-|-------|-------------|-----------------|
-| L0 | Critical lifecycle events | Request creation/initialization, completion stats (InputToken/OutputToken/latency), first and last streaming response, request abort |
-| L1 | Processing stage details | Semaphore acquire/release, first token time recording, signal handling (preemption/abortion/recovery), cache task, preprocess time, parameter adjustment warnings |
-| L2 | Request/response content and scheduling | Request parameters, processed request, scheduling info (enqueue/pull/finish), response content (long content is truncated) |
-| L3 | Full data | Complete request and response data, raw received request |
+| Level | Enum Name | Description | Example Content |
+|-------|-----------|-------------|-----------------|
+| 0 | LIFECYCLE | Lifecycle start/end | Request creation/initialization, completion stats (InputToken/OutputToken/latency), first and last streaming response, request abort |
+| 1 | STAGES | Processing stages | Semaphore acquire/release, first token time recording, signal handling (preemption/abortion/recovery), cache task, preprocess time, parameter adjustment warnings |
+| 2 | CONTENT | Content and scheduling | Request parameters, processed request, scheduling info (enqueue/pull/finish), response content (long content is truncated) |
+| 3 | FULL | Complete raw data | Complete request and response data, raw received request |
 
-Default level is L0, which only logs critical events. Higher levels include more detailed information but also increase log volume.
+Default level is 2 (CONTENT), which logs request parameters, scheduling info, and response content. Lower levels (0-1) only log critical events, while level 3 includes complete raw data.
 
 ## Log-Related Environment Variables
 
@@ -35,7 +35,7 @@ Default level is L0, which only logs critical events. Higher levels include more
 | `FD_LOG_DIR` | `log` | Log file storage directory |
 | `FD_LOG_LEVEL` | `INFO` | Log level, supports `INFO` or `DEBUG` |
 | `FD_LOG_REQUESTS` | `1` | Enable request logging, `0` to disable, `1` to enable |
-| `FD_LOG_REQUESTS_LEVEL` | `0` | Request log level, range 0-3 |
+| `FD_LOG_REQUESTS_LEVEL` | `2` | Request log level, range 0-3 |
 | `FD_LOG_MAX_LEN` | `2048` | Maximum length for L2 level log content (excess is truncated) |
 | `FD_LOG_BACKUP_COUNT` | `7` | Number of log files to retain |
 | `FD_DEBUG` | `0` | Debug mode, `1` enables DEBUG log level |

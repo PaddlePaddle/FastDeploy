@@ -42,6 +42,6 @@ def resolve_request_logging_defaults() -> dict[str, int]:
     """
     return {
         "enabled": int(os.getenv("FD_LOG_REQUESTS", "1")),
-        "level": int(os.getenv("FD_LOG_REQUESTS_LEVEL", "0")),
+        "level": int(os.getenv("FD_LOG_REQUESTS_LEVEL", "2")),
         "max_len": int(os.getenv("FD_LOG_MAX_LEN", "2048")),
     }

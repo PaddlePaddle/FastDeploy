@@ -73,7 +73,7 @@ class TestResolveRequestLoggingDefaults(unittest.TestCase):
         with patch.dict("os.environ", {}, clear=True):
             result = resolve_request_logging_defaults()
             self.assertEqual(result["enabled"], 1)
-            self.assertEqual(result["level"], 0)
+            self.assertEqual(result["level"], 2)
             self.assertEqual(result["max_len"], 2048)
 
     def test_custom_values(self):

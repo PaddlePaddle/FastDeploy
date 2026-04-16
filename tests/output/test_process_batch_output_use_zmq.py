@@ -21,6 +21,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 
 from fastdeploy.engine.request import CompletionOutput, RequestMetrics, RequestOutput
+from fastdeploy.logger.request_logger import RequestLogLevel
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.worker.output import LogprobsLists
 
@@ -181,7 +182,7 @@ class TestTokenProcessorLogprobs(unittest.TestCase):
 
             # Verify the recycling logic was triggered via log_request
             mock_log_request.assert_any_call(
-                level=1,
+                RequestLogLevel.STAGES,
                 message="start to recycle abort request_id {request_id}",
                 request_id=task_id,
             )

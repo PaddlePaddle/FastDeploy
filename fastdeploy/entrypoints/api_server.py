@@ -23,7 +23,11 @@ from fastapi.responses import Response, StreamingResponse
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     api_server_logger,
@@ -62,7 +66,7 @@ async def generate(request: dict):
     """
     generate stream api
     """
-    log_request(level=3, message="Receive request: {request}", request=request)
+    log_request(RequestLogLevel.FULL, message="Receive request: {request}", request=request)
     stream = request.get("stream", 0)
 
     if not stream:
@@ -73,7 +77,11 @@ async def generate(request: dict):
                 output = result
         except Exception as e:
             # 记录完整的异常堆栈信息
-            log_request_error(message="Error during generation: {error}", error=str(e))
+            log_request_error(
+                message="request[{request_id}] Error during generation: {error}",
+                request_id=request.get("request_id"),
+                error=str(e),
+            )
             # 返回结构化的错误消息并终止流
             output = {"error": str(e), "error_type": e.__class__.__name__}
         return output
@@ -85,7 +93,11 @@ async def generate(request: dict):
                 yield f"data: {json.dumps(result)}\n\n"
         except Exception as e:
             # 记录完整的异常堆栈信息
-            log_request_error(message="Error during generation: {error}", error=str(e))
+            log_request_error(
+                message="request[{request_id}] Error during generation: {error}",
+                request_id=request.get("request_id"),
+                error=str(e),
+            )
             # 返回结构化的错误消息并终止流
             error_msg = {"error": str(e), "error_type": e.__class__.__name__}
             yield f"data: {json.dumps(error_msg)}\n\n"

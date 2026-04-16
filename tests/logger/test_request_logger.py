@@ -25,56 +25,56 @@ from fastdeploy.logger.request_logger import (
 
 
 class TestRequestLogLevel(unittest.TestCase):
-    """测试 RequestLogLevel 枚举"""
+    """Test RequestLogLevel enum"""
 
     def test_level_values(self):
-        """测试级别值"""
-        self.assertEqual(int(RequestLogLevel.L0), 0)
-        self.assertEqual(int(RequestLogLevel.L1), 1)
-        self.assertEqual(int(RequestLogLevel.L2), 2)
-        self.assertEqual(int(RequestLogLevel.L3), 3)
+        """Test level values"""
+        self.assertEqual(int(RequestLogLevel.LIFECYCLE), 0)
+        self.assertEqual(int(RequestLogLevel.STAGES), 1)
+        self.assertEqual(int(RequestLogLevel.CONTENT), 2)
+        self.assertEqual(int(RequestLogLevel.FULL), 3)
 
 
 class TestShouldLog(unittest.TestCase):
-    """测试 _should_log 函数"""
+    """Test _should_log function"""
 
     def test_disabled_returns_false(self):
-        """FD_LOG_REQUESTS=0 应该返回 False"""
+        """FD_LOG_REQUESTS=0 should return False"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 0
             mock_envs.FD_LOG_REQUESTS_LEVEL = 3
-            self.assertFalse(_should_log(0))
+            self.assertFalse(_should_log(RequestLogLevel.LIFECYCLE))
 
     def test_level_within_threshold(self):
-        """级别在阈值内应该返回 True"""
+        """Level within threshold should return True"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 1
             mock_envs.FD_LOG_REQUESTS_LEVEL = 2
-            self.assertTrue(_should_log(0))
-            self.assertTrue(_should_log(1))
-            self.assertTrue(_should_log(2))
+            self.assertTrue(_should_log(RequestLogLevel.LIFECYCLE))
+            self.assertTrue(_should_log(RequestLogLevel.STAGES))
+            self.assertTrue(_should_log(RequestLogLevel.CONTENT))
 
     def test_level_above_threshold(self):
-        """级别超过阈值应该返回 False"""
+        """Level above threshold should return False"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 1
             mock_envs.FD_LOG_REQUESTS_LEVEL = 1
-            self.assertFalse(_should_log(2))
-            self.assertFalse(_should_log(3))
+            self.assertFalse(_should_log(RequestLogLevel.CONTENT))
+            self.assertFalse(_should_log(RequestLogLevel.FULL))
 
 
 class TestTruncate(unittest.TestCase):
-    """测试 _truncate 函数"""
+    """Test _truncate function"""
 
     def test_short_text_unchanged(self):
-        """短文本应该保持不变"""
+        """Short text should remain unchanged"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_MAX_LEN = 100
             result = _truncate("short text")
             self.assertEqual(result, "short text")
 
     def test_long_text_truncated(self):
-        """长文本应该被截断"""
+        """Long text should be truncated"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_MAX_LEN = 10
             result = _truncate("this is a very long text")
@@ -82,7 +82,7 @@ class TestTruncate(unittest.TestCase):
             self.assertEqual(len(result), 10)
 
     def test_non_string_converted(self):
-        """非字符串应该被转换"""
+        """Non-string should be converted"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_MAX_LEN = 100
             result = _truncate(12345)
@@ -90,63 +90,63 @@ class TestTruncate(unittest.TestCase):
 
 
 class TestLogRequest(unittest.TestCase):
-    """测试 log_request 函数"""
+    """Test log_request function"""
 
-    @patch("fastdeploy.logger.request_logger._request_logger")
+    @patch("fastdeploy.logger._request_logger")
     def test_log_when_enabled(self, mock_logger):
-        """启用时应该记录日志"""
+        """Should log when enabled"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 1
             mock_envs.FD_LOG_REQUESTS_LEVEL = 0
             mock_envs.FD_LOG_MAX_LEN = 2048
 
-            log_request(level=0, message="test {value}", value="hello")
+            log_request(RequestLogLevel.LIFECYCLE, message="test {value}", value="hello")
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             self.assertEqual(call_args, "test hello")
 
-    @patch("fastdeploy.logger.request_logger._request_logger")
+    @patch("fastdeploy.logger._request_logger")
     def test_no_log_when_disabled(self, mock_logger):
-        """禁用时不应该记录日志"""
+        """Should not log when disabled"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 0
             mock_envs.FD_LOG_REQUESTS_LEVEL = 3
 
-            log_request(level=0, message="test {value}", value="hello")
+            log_request(RequestLogLevel.LIFECYCLE, message="test {value}", value="hello")
             mock_logger.info.assert_not_called()
 
-    @patch("fastdeploy.logger.request_logger._request_logger")
+    @patch("fastdeploy.logger._request_logger")
     def test_no_log_when_level_too_high(self, mock_logger):
-        """级别过高时不应该记录日志"""
+        """Should not log when level is too high"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 1
             mock_envs.FD_LOG_REQUESTS_LEVEL = 0
 
-            log_request(level=2, message="test {value}", value="hello")
+            log_request(RequestLogLevel.CONTENT, message="test {value}", value="hello")
             mock_logger.info.assert_not_called()
 
-    @patch("fastdeploy.logger.request_logger._request_logger")
-    def test_l2_level_truncates_content(self, mock_logger):
-        """L2 级别应该截断内容"""
+    @patch("fastdeploy.logger._request_logger")
+    def test_content_level_truncates_content(self, mock_logger):
+        """CONTENT level should truncate content"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 1
             mock_envs.FD_LOG_REQUESTS_LEVEL = 3
             mock_envs.FD_LOG_MAX_LEN = 5
 
-            log_request(level=2, message="content: {data}", data="very long data")
+            log_request(RequestLogLevel.CONTENT, message="content: {data}", data="very long data")
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             self.assertEqual(call_args, "content: very ")
 
-    @patch("fastdeploy.logger.request_logger._request_logger")
-    def test_l0_level_no_truncation(self, mock_logger):
-        """L0 级别不应该截断内容"""
+    @patch("fastdeploy.logger._request_logger")
+    def test_lifecycle_level_no_truncation(self, mock_logger):
+        """LIFECYCLE level should not truncate content"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 1
             mock_envs.FD_LOG_REQUESTS_LEVEL = 3
             mock_envs.FD_LOG_MAX_LEN = 5
 
-            log_request(level=0, message="content: {data}", data="very long data")
+            log_request(RequestLogLevel.LIFECYCLE, message="content: {data}", data="very long data")
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             self.assertEqual(call_args, "content: very long data")
@@ -155,7 +155,7 @@ class TestLogRequest(unittest.TestCase):
 class TestLogRequestError(unittest.TestCase):
     """Test log_request_error function"""
 
-    @patch("fastdeploy.logger.request_logger._request_logger")
+    @patch("fastdeploy.logger._request_logger")
     def test_error_with_fields(self, mock_logger):
         """Error log with fields should format message"""
         log_request_error(message="request {request_id} failed: {error}", request_id="req-123", error="timeout")
@@ -163,7 +163,7 @@ class TestLogRequestError(unittest.TestCase):
         call_args = mock_logger.error.call_args[0][0]
         self.assertEqual(call_args, "request req-123 failed: timeout")
 
-    @patch("fastdeploy.logger.request_logger._request_logger")
+    @patch("fastdeploy.logger._request_logger")
     def test_error_without_fields(self, mock_logger):
         """Error log without fields should not call format"""
         log_request_error(message="simple error message")

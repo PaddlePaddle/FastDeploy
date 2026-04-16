@@ -45,7 +45,11 @@ from fastdeploy.entrypoints.openai.v1.serving_base import (
     ServingResponseContext,
 )
 from fastdeploy.input.tokenizer_client import AsyncTokenizerClient, ImageDecodeRequest
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.worker.output import LogprobsLists
 
@@ -303,11 +307,12 @@ class OpenAIServingChat(OpenAiServingBase):
             choice_completion_tokens = response_ctx.choice_completion_tokens_dict[output.index]
             choice.finish_reason = self._calc_finish_reason(request_output, max_tokens, choice_completion_tokens)
             log_request(
-                level=0,
-                message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}",
+                level=RequestLogLevel.LIFECYCLE,
+                message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
                 request_id=request_id,
                 finish_reason=choice.finish_reason,
                 completion_tokens=choice_completion_tokens,
+                logprobs=choice.logprobs,
             )
 
         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
@@ -346,7 +351,7 @@ class OpenAIServingChat(OpenAiServingBase):
             id=ctx.request_id, model=request.model, choices=choices, created=ctx.created_time, usage=response_ctx.usage
         )
         log_request(
-            level=2,
+            level=RequestLogLevel.CONTENT,
             message="Chat response: {response}",
             response=res.model_dump_json(),
         )

@@ -55,7 +55,7 @@ from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 
 from fastdeploy import envs
 from fastdeploy.input.utils import process_stop_token_ids
-from fastdeploy.logger.request_logger import log_request
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
@@ -365,7 +365,7 @@ class BaseTextProcessor(ABC):
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
         """Unified request pre-processing shared by all processors."""
-        log_request(level=2, message="Start processing request dict: {request}", request=request)
+        log_request(RequestLogLevel.CONTENT, message="Start processing request dict: {request}", request=request)
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
@@ -446,7 +446,7 @@ class BaseTextProcessor(ABC):
         if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
             request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 
-        log_request(level=2, message="Processed request dict: {request}", request=request)
+        log_request(RequestLogLevel.CONTENT, message="Processed request dict: {request}", request=request)
         return request
 
     def _apply_reasoning_parser(self, request):

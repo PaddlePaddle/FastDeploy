@@ -14,12 +14,19 @@
 """
 
 """
-Configure logging system
+Setup logging system
 
-Log channel separation:
-- fastdeploy.main: Main logs, output to fastdeploy.log and console.log
-- fastdeploy.request: Request logs, output to request.log
-- fastdeploy.console: Console logs, output to console.log and terminal
+This module handles logging initialization:
+- Basic setup: log directory creation
+- Optional: load external JSON config file via dictConfig
+
+Channel-based logger configuration is handled by FastDeployLogger._get_channel_logger()
+using manual addHandler for better performance.
+
+Log channels:
+- main: Main logs -> fastdeploy.log
+- request: Request logs -> request.log
+- console: Console logs -> console.log + terminal
 """
 
 import json
@@ -29,7 +36,6 @@ import os
 from pathlib import Path
 
 from fastdeploy import envs
-from fastdeploy.logger.config import resolve_log_level
 
 
 class MaxLevelFilter(logging.Filter):
@@ -40,25 +46,22 @@ class MaxLevelFilter(logging.Filter):
 
     def __init__(self, level):
         super().__init__()
-        self.level = logging._nameToLevel.get(level, level)
+        self.level = logging._nameToLevel.get(level, level) if isinstance(level, str) else level
 
     def filter(self, record):
         return record.levelno < self.level
 
 
 def _build_default_config(log_dir, log_level, backup_count):
-    """Build default logging configuration"""
+    """Build default logging configuration for dictConfig"""
     _FORMAT = "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
-
-    # Handlers for main channel
-    main_handlers = ["main_file", "console_file", "console_stdout", "error_file", "console_stderr"]
 
     return {
         "version": 1,
         "disable_existing_loggers": False,
         "filters": {
             "below_error": {
-                "()": "fastdeploy.logger.setup_logging.MaxLevelFilter",
+                "()": MaxLevelFilter,
                 "level": "ERROR",
             }
         },
@@ -127,13 +130,13 @@ def _build_default_config(log_dir, log_level, backup_count):
             # Default logger
             "fastdeploy": {
                 "level": "DEBUG",
-                "handlers": main_handlers,
+                "handlers": ["main_file", "console_file", "error_file", "console_stderr"],
                 "propagate": False,
             },
             # Main channel
             "fastdeploy.main": {
                 "level": "DEBUG",
-                "handlers": main_handlers,
+                "handlers": ["main_file", "console_file", "error_file", "console_stderr"],
                 "propagate": False,
             },
             # Request channel - only output to request.log and error.log
@@ -154,16 +157,22 @@ def _build_default_config(log_dir, log_level, backup_count):
 
 def setup_logging(log_dir=None, config_file=None):
     """
-    Setup FastDeploy logging configuration
+    Setup FastDeploy logging configuration.
+
+    This function:
+    1. Ensures the log directory exists
+    2. Optionally loads external JSON config file via dictConfig
+
+    Note: Channel-based loggers (get_logger with channel param) use manual addHandler
+    for better performance, independent of dictConfig.
 
     Args:
         log_dir: Log file storage directory, uses environment variable if not provided
-        config_file: JSON config file path, uses default config if not provided
+        config_file: Optional JSON config file path for dictConfig
     """
-
     # Avoid duplicate configuration
     if getattr(setup_logging, "_configured", False):
-        return logging.getLogger("fastdeploy")
+        return
 
     # Use log directory from environment variable, or use provided parameter or default value
     if log_dir is None:
@@ -172,33 +181,32 @@ def setup_logging(log_dir=None, config_file=None):
     # Ensure log directory exists
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 
-    # Resolve log level
-    log_level = resolve_log_level(getattr(envs, "FD_LOG_LEVEL", None), getattr(envs, "FD_DEBUG", 0))
-    backup_count = int(getattr(envs, "FD_LOG_BACKUP_COUNT", 7))
+    # Store log_dir for later use
+    setup_logging._log_dir = log_dir
 
-    # Build default configuration
-    default_config = _build_default_config(log_dir, log_level, backup_count)
+    # If config_file is provided, use dictConfig to load it
+    if config_file is not None:
+        is_debug = int(getattr(envs, "FD_DEBUG", 0))
+        log_level = "DEBUG" if is_debug else "INFO"
+        backup_count = int(getattr(envs, "FD_LOG_BACKUP_COUNT", 7))
 
-    # If config file is provided, load it
-    if config_file and os.path.exists(config_file):
-        with open(config_file, "r", encoding="utf-8") as f:
-            config = json.load(f)
+        if os.path.exists(config_file):
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
 
-        # Merge environment variable config into user config
-        if "handlers" in config:
-            for handler_config in config["handlers"].values():
-                if "backupCount" not in handler_config and "DailyRotating" in handler_config.get("class", ""):
-                    handler_config["backupCount"] = backup_count
-                if handler_config.get("level") == "INFO" and log_level == "DEBUG":
-                    handler_config["level"] = "DEBUG"
-    else:
-        config = default_config
+            # Merge environment variable config into user config
+            if "handlers" in config:
+                for handler_config in config["handlers"].values():
+                    if "backupCount" not in handler_config and "DailyRotating" in handler_config.get("class", ""):
+                        handler_config["backupCount"] = backup_count
+                    if handler_config.get("level") == "INFO" and log_level == "DEBUG":
+                        handler_config["level"] = "DEBUG"
+        else:
+            # Config file not found, use default config
+            config = _build_default_config(log_dir, log_level, backup_count)
 
-    # Apply logging configuration
-    logging.config.dictConfig(config)
+        # Apply logging configuration via dictConfig
+        logging.config.dictConfig(config)
 
-    # Avoid duplicate loading
+    # Mark as configured
     setup_logging._configured = True
-
-    # Return fastdeploy logger
-    return logging.getLogger("fastdeploy")

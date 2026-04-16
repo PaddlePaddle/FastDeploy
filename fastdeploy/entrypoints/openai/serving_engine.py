@@ -33,7 +33,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     InvalidParameterException,
 )
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.utils import ErrorCode, ErrorType, StatefulSemaphore, api_server_logger
 
 RequestT = TypeVar("RequestT")
@@ -104,7 +108,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
         """Acquire engine client semaphore with timeout"""
         try:
             log_request(
-                level=1,
+                level=RequestLogLevel.STAGES,
                 message="Acquire request:{request_id} status:{status}",
                 request_id=request_id,
                 status=self._get_semaphore().status(),
@@ -124,7 +128,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
         """Release engine client semaphore"""
         self._get_semaphore().release()
         log_request(
-            level=1,
+            level=RequestLogLevel.STAGES,
             message="Release request:{request_id} status:{status}",
             request_id=request_id,
             status=self._get_semaphore().status(),
@@ -205,7 +209,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
         request_id = self._generate_request_id(request)
         ctx.request_id = request_id
         log_request(
-            level=0,
+            level=RequestLogLevel.LIFECYCLE,
             message="Initialize request {request_id}: {request}",
             request_id=request_id,
             request=request,
@@ -269,7 +273,7 @@ class ZmqOpenAIServing(OpenAIServing):
         ctx.preprocess_requests = request_dicts
         for request_dict in request_dicts:
             log_request(
-                level=2,
+                level=RequestLogLevel.CONTENT,
                 message="batch add request_id: {request_id}, request: {request}",
                 request_id=request_dict["request_id"],
                 request=request_dict,
@@ -305,7 +309,7 @@ class ZmqOpenAIServing(OpenAIServing):
                 request_output_dicts = await asyncio.wait_for(request_output_queue.get(), timeout=60)
                 for request_output_dict in request_output_dicts:
                     log_request(
-                        level=3,
+                        level=RequestLogLevel.FULL,
                         message="Received RequestOutput: {request_output}",
                         request_output=request_output_dict,
                     )
@@ -327,7 +331,7 @@ class ZmqOpenAIServing(OpenAIServing):
         """Acquire engine client semaphore with timeout"""
         try:
             log_request(
-                level=1,
+                level=RequestLogLevel.STAGES,
                 message="Acquire request:{request_id} status:{status}",
                 request_id=request_id,
                 status=self._get_semaphore().status(),
@@ -348,7 +352,7 @@ class ZmqOpenAIServing(OpenAIServing):
         """Release engine client semaphore"""
         self._get_semaphore().release()
         log_request(
-            level=1,
+            level=RequestLogLevel.STAGES,
             message="Release request:{request_id} status:{status}",
             request_id=request_id,
             status=self._get_semaphore().status(),

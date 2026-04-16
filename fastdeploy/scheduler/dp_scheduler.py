@@ -21,7 +21,7 @@ import time
 from typing import Dict, List, Optional
 
 from fastdeploy.engine.request import Request, RequestOutput
-from fastdeploy.logger.request_logger import log_request
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.scheduler.data import ScheduledResponse
 from fastdeploy.scheduler.local_scheduler import LocalScheduler
 from fastdeploy.utils import get_logger
@@ -60,7 +60,7 @@ class DPLocalScheduler(LocalScheduler):
         finished_responses = [response.request_id for response in responses if response.finished]
         if len(finished_responses) > 0:
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Scheduler has received some finished responses: {request_ids}",
                 request_ids=finished_responses,
             )
@@ -152,7 +152,7 @@ class DPLocalScheduler(LocalScheduler):
 
         if len(requests) > 0:
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Scheduler has pulled some request: {request_ids}",
                 request_ids=[request.request_id for request in requests],
             )
@@ -203,7 +203,7 @@ class DPScheduler:
         while True:
             request = self.request_queues.get()
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Receive request from puller, request_id: {request_id}",
                 request_id=request.request_id,
             )

@@ -35,7 +35,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext, ZmqOpenAIServing
-from fastdeploy.logger.request_logger import log_request
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 
 
 def _get_embedding(
@@ -141,7 +141,7 @@ class OpenAIServingEmbedding(ZmqOpenAIServing):
     def _build_response(self, ctx: ServeContext, request_output: dict):
         """Generate final embedding response"""
         log_request(
-            level=2,
+            level=RequestLogLevel.CONTENT,
             message="[{request_id}] Embedding RequestOutput received:{request_output}",
             request_id=ctx.request_id,
             request_output=request_output,

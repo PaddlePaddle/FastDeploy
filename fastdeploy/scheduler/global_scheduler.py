@@ -25,7 +25,11 @@ import crcmod
 from redis import ConnectionPool
 
 from fastdeploy.engine.request import Request, RequestOutput
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.scheduler import utils
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.scheduler.storage import AdaptedRedis
@@ -372,7 +376,7 @@ class GlobalScheduler:
                 ttl=self.ttl,
             )
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Scheduler has enqueued some requests: {request_ids}",
                 request_ids=[request.request_id for request in requests],
             )
@@ -611,7 +615,7 @@ class GlobalScheduler:
 
         if len(requests) > 0:
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Scheduler has pulled some request: {request_ids}",
                 request_ids=[request.request_id for request in requests],
             )
@@ -678,7 +682,7 @@ class GlobalScheduler:
 
         if len(finished_request_ids) > 0:
             log_request(
-                level=2,
+                RequestLogLevel.CONTENT,
                 message="Scheduler has received some finished responses: {request_ids}",
                 request_ids=finished_request_ids,
             )
@@ -811,7 +815,7 @@ class GlobalScheduler:
                 if finished:
                     del self.local_responses[request_id]
                     log_request(
-                        level=2,
+                        RequestLogLevel.CONTENT,
                         message="Scheduler has pulled a finished response: {request_ids}",
                         request_ids=[request_id],
                     )
@@ -845,7 +849,7 @@ class GlobalScheduler:
             self.client.zrem(self._load_table_name(), self.name)
             self.local_responses = dict()
             self.stolen_requests = dict()
-        scheduler_logger.info("Scheduler has been reset")
+        log_request(RequestLogLevel.LIFECYCLE, message="Scheduler has been reset")
 
     def update_config(self, load_shards_num: Optional[int], reallocate: Optional[bool]):
         """

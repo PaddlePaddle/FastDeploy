@@ -38,7 +38,11 @@ from fastdeploy.entrypoints.openai.v1.serving_base import (
     ServeContext,
     ServingResponseContext,
 )
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.utils import ErrorType
 from fastdeploy.worker.output import LogprobsLists
 
@@ -277,15 +281,16 @@ class OpenAIServingCompletion(OpenAiServingBase):
                     request_output, request.max_tokens, choice_completion_tokens
                 )
                 log_request(
-                    level=0,
-                    message="Completion Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}",
+                    level=RequestLogLevel.LIFECYCLE,
+                    message="Completion Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
                     request_id=request_id,
                     finish_reason=choice.finish_reason,
                     completion_tokens=choice_completion_tokens,
+                    logprobs=choice.logprobs,
                 )
             if send_idx == 0 and not request.return_token_ids:
                 log_request(
-                    level=0,
+                    level=RequestLogLevel.LIFECYCLE,
                     message="Completion Streaming response send_idx 0: request_id={request_id}, completion_tokens={completion_tokens}",
                     request_id=request_id,
                     completion_tokens=response_ctx.choice_completion_tokens_dict[output.index],
@@ -304,7 +309,8 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 yield "data: [DONE]\n\n"
         except Exception as e:
             log_request_error(
-                message="Error in completion_stream_generator: {error}, {traceback}",
+                message="request[{request_id}] Error in completion_stream_generator: {error}, {traceback}",
+                request_id=request_id,
                 error=e,
                 traceback=traceback.format_exc(),
             )
@@ -342,13 +348,17 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 usage=response_ctx.usage,
             )
             log_request(
-                level=3,
+                level=RequestLogLevel.FULL,
                 message="Completion response: {response}",
                 response=res.model_dump_json(),
             )
             return res
         except Exception as e:
-            log_request_error(message="Error in completion_full_generator: {error}", error=e)
+            log_request_error(
+                message="request[{request_id}] Error in completion_full_generator: {error}",
+                request_id=ctx.request_id,
+                error=e,
+            )
             return self._create_error_response(str(e))
 
     def build_completion_choice(

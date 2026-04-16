@@ -40,7 +40,11 @@ from fastdeploy.engine.request import (
     SpeculateMetrics,
 )
 from fastdeploy.inter_communicator import ZmqIpcServer
-from fastdeploy.logger.request_logger import log_request, log_request_error
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
@@ -226,7 +230,7 @@ class TokenProcessor:
             recovery_stop = token_id == RECOVERY_STOP_SIGNAL
             if recovery_stop:
                 log_request(
-                    level=1,
+                    RequestLogLevel.STAGES,
                     message="recovery stop signal found at task {request_id}",
                     request_id=task_id,
                 )
@@ -258,7 +262,7 @@ class TokenProcessor:
                 # Print combined log with all required information
                 ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
                 log_request(
-                    level=0,
+                    RequestLogLevel.LIFECYCLE,
                     message=(
                         "Request={request_id}, InputToken={input_tokens}, "
                         "CachedDetail={cached_detail}, OutputToken={output_tokens}, "
@@ -308,7 +312,7 @@ class TokenProcessor:
                         and token_ids[-1] == PREEMPTED_TOKEN_ID
                     ):
                         log_request(
-                            level=1,
+                            RequestLogLevel.STAGES,
                             message="start to recycle abort request_id {request_id}",
                             request_id=task_id,
                         )
@@ -318,7 +322,7 @@ class TokenProcessor:
                         and token_ids[-1] == PREEMPTED_TOKEN_ID
                     ):
                         log_request(
-                            level=1,
+                            RequestLogLevel.STAGES,
                             message="sync preemption for request_id {request_id} done.",
                             request_id=task_id,
                         )
@@ -378,7 +382,7 @@ class TokenProcessor:
                             result.outputs.top_logprobs = logprobs_list
                         except Exception as e:
                             log_request(
-                                level=1,
+                                RequestLogLevel.STAGES,
                                 message="Failed to parse logprobs from StreamTransferData: {error}",
                                 error=str(e),
                             )
@@ -387,7 +391,7 @@ class TokenProcessor:
                             result.prompt_logprobs = stream_data.prompt_logprobs
                         except Exception as e:
                             log_request(
-                                level=1,
+                                RequestLogLevel.STAGES,
                                 message="Failed to parse prompt_logprobs from StreamTransferData: {error}",
                                 error=str(e),
                             )
@@ -565,7 +569,7 @@ class TokenProcessor:
                 if len(finished_task_ids) > 0:
                     for finished_task_id in finished_task_ids:
                         log_request(
-                            level=1,
+                            RequestLogLevel.STAGES,
                             message="finished_task_id: {finished_task_id}",
                             finished_task_id=finished_task_id,
                         )
@@ -575,7 +579,7 @@ class TokenProcessor:
                         result.error_code = 400
                         result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
                     log_request(
-                        level=1,
+                        RequestLogLevel.STAGES,
                         message="wait for sending cache, request_id: {request_id}, cost seconds: {cost_seconds}",
                         request_id=task_id,
                         cost_seconds=f"{time.time()-start_time:.5f}",
@@ -803,7 +807,7 @@ class TokenProcessor:
                 self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
                 if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, means preemption has happened in worker
                     log_request(
-                        level=1,
+                        RequestLogLevel.STAGES,
                         message="sync preemption for request_id {request_id} done.",
                         request_id=task_id,
                     )
@@ -817,7 +821,7 @@ class TokenProcessor:
                     recovery_stop = True
                     if recovery_stop:
                         log_request(
-                            level=1,
+                            RequestLogLevel.STAGES,
                             message="recovery stop signal found at task {request_id}",
                             request_id=task_id,
                         )
@@ -841,7 +845,7 @@ class TokenProcessor:
                 recovery_stop = token_id == RECOVERY_STOP_SIGNAL
                 if recovery_stop:
                     log_request(
-                        level=1,
+                        RequestLogLevel.STAGES,
                         message="recovery stop signal found at task {request_id}",
                         request_id=task_id,
                     )
@@ -853,7 +857,7 @@ class TokenProcessor:
                         ):
                             self.resource_manager.recycle_abort_task(task_id)
                             log_request(
-                                level=1,
+                                RequestLogLevel.STAGES,
                                 message="sync abortion for request_id {request_id} done.",
                                 request_id=task_id,
                             )
@@ -862,7 +866,7 @@ class TokenProcessor:
                             and token_id == PREEMPTED_TOKEN_ID
                         ):
                             log_request(
-                                level=1,
+                                RequestLogLevel.STAGES,
                                 message="sync preemption for request_id {request_id} done.",
                                 request_id=task_id,
                             )
@@ -894,7 +898,7 @@ class TokenProcessor:
                 task.metrics.cal_cost_time()
                 metrics = copy.copy(task.metrics)
                 log_request(
-                    level=1,
+                    RequestLogLevel.STAGES,
                     message="task:{request_id} start recode first token",
                     request_id=task.request_id,
                 )
@@ -1004,7 +1008,7 @@ class TokenProcessor:
                     ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
                     ttft_s = ttft + task.metrics.time_in_queue
                     log_request(
-                        level=0,
+                        RequestLogLevel.LIFECYCLE,
                         message=(
                             "Request={request_id}, InputToken={input_tokens}, "
                             "CachedDetail={cached_detail}, OutputToken={output_tokens}, "
@@ -1032,7 +1036,7 @@ class TokenProcessor:
                     if not is_prefill:
                         self._record_completion_metrics(task, current_time)
                     log_request(
-                        level=1,
+                        RequestLogLevel.STAGES,
                         message="task {request_id} received eos token. Recycling.",
                         request_id=task_id,
                     )
@@ -1046,7 +1050,7 @@ class TokenProcessor:
                         )  # when enable prefix caching, cache kv cache for output tokens
                     self._recycle_resources(task_id, i, task, result, is_prefill)
                     log_request(
-                        level=1,
+                        RequestLogLevel.STAGES,
                         message="eos token {request_id} Recycle end.",
                         request_id=task_id,
                     )
