@@ -322,6 +322,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+
+        if fc1_latent_proj is not None:
+            x = fc1_latent_proj(x)
+
         if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
             if layer.topk_method == "noaux_tc":
                 gate_out, topk_weights, topk_idx = get_moe_scores(
@@ -396,9 +400,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 getattr(layer, "renormalize", True),
                 topk_reduce_func=getattr(layer, "topk_reduce_func", None),
             )
-
-            if fc1_latent_proj is not None:
-                x = fc1_latent_proj(x)
 
             (
                 permute_input,
