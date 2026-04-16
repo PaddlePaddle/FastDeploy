@@ -17,8 +17,7 @@
 #include "xpu/plugin.h"
 #include "xpu/refactor/impl_public/wrapper_check.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 __attribute__((global)) void speculate_limit_thinking_content_length_kernel(
     int64_t* next_tokens,
@@ -37,15 +36,12 @@ __attribute__((global)) void speculate_limit_thinking_content_length_kernel(
     const int inject_len,
     const bool splitwise_role_is_decode);
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3
 
-namespace baidu {
-namespace xpu {
-namespace api {
+namespace fastdeploy {
 namespace plugin {
 
-static int cpu_wrapper(Context* ctx,
+static int cpu_wrapper(api::Context* ctx,
                        int64_t* next_tokens,
                        const int* max_think_lens,
                        int* max_reply_lens,
@@ -170,7 +166,7 @@ static int cpu_wrapper(Context* ctx,
   return api::SUCCESS;
 }
 
-static int xpu3_wrapper(Context* ctx,
+static int xpu3_wrapper(api::Context* ctx,
                         int64_t* next_tokens,
                         const int* max_think_lens,
                         int* max_reply_lens,
@@ -186,8 +182,8 @@ static int xpu3_wrapper(Context* ctx,
                         const int eos_token_id_len,
                         const int inject_len,
                         const bool splitwise_role_is_decode) {
-  using XPU_INT64 = typename XPUIndexType<int64_t>::type;
-  auto kernel = xpu3::plugin::speculate_limit_thinking_content_length_kernel;
+  using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
+  auto kernel = fd_xpu3::speculate_limit_thinking_content_length_kernel;
   int32_t ret_xre = kernel<<<1, 64, ctx->xpu_stream>>>(
       reinterpret_cast<XPU_INT64*>(next_tokens),
       max_think_lens,
@@ -209,7 +205,7 @@ static int xpu3_wrapper(Context* ctx,
 }
 
 int speculate_limit_thinking_content_length_kernel(
-    Context* ctx,
+    api::Context* ctx,
     int64_t* next_tokens,
     const int* max_think_lens,
     int* max_reply_lens,
@@ -302,6 +298,4 @@ int speculate_limit_thinking_content_length_kernel(
 }
 
 }  // namespace plugin
-}  // namespace api
-}  // namespace xpu
-}  // namespace baidu
+}  // namespace fastdeploy

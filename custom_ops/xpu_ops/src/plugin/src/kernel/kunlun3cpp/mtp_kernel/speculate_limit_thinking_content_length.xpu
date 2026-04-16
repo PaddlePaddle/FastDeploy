@@ -18,8 +18,7 @@
 #include "xpu/kernel/xtdk_math.h"
 #include "xpu/kernel/xtdk_simd.h"
 
-namespace xpu3 {
-namespace plugin {
+namespace fd_xpu3 {
 
 // 1) 支持 inject_token_ids（任意长度）
 // 2) 支持限制回复长度 max_reply_lens
@@ -200,5 +199,4 @@ __global__ void speculate_limit_thinking_content_length_kernel(
   }
 }
 
-}  // namespace plugin
-}  // namespace xpu3
+}  // namespace fd_xpu3

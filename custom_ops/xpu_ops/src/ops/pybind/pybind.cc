@@ -312,6 +312,29 @@ void SpeculateUpdateV3(const paddle::Tensor& seq_lens_encoder,
                        const paddle::Tensor& is_block_step,
                        const paddle::Tensor& stop_nums);
 
+void SpeculateLimitThinkingContentLength(const paddle::Tensor& next_tokens,
+                                         const paddle::Tensor& max_think_lens,
+                                         const paddle::Tensor& max_reply_lens,
+                                         const paddle::Tensor& step_idx,
+                                         const paddle::Tensor& limit_status,
+                                         const paddle::Tensor& accept_num,
+                                         const paddle::Tensor& stop_flags,
+                                         const paddle::Tensor& eos_token_ids,
+                                         const paddle::Tensor& inject_token_ids,
+                                         const int64_t think_end_id,
+                                         const bool splitwise_role_is_decode);
+
+void LimitThinkingContentLength(const paddle::Tensor& next_tokens,
+                                const paddle::Tensor& max_think_lens,
+                                const paddle::Tensor& max_reply_lens,
+                                const paddle::Tensor& step_idx,
+                                const paddle::Tensor& limit_status,
+                                const paddle::Tensor& stop_flags,
+                                const paddle::Tensor& eos_token_ids,
+                                const paddle::Tensor& inject_token_ids,
+                                const int64_t think_end_id,
+                                const bool splitwise_role_is_decode);
+
 std::vector<paddle::Tensor> TopPCandidates(
     const paddle::Tensor& probs,
     const paddle::Tensor& top_p,
@@ -437,6 +460,7 @@ void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
                            const paddle::Tensor& base_model_seq_lens_encoder,
                            const paddle::Tensor& base_model_stop_flags);
 
+                           
 std::vector<paddle::Tensor> EagleGetHiddenStates(
     const paddle::Tensor& input,
     const paddle::Tensor& seq_lens_this_time,
@@ -1380,6 +1404,35 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("benchmark_mode"),
         py::arg("accept_all_drafts"),
         "Perform speculative verification for decoding");
+      
+  m.def("limit_thinking_content_length",
+        &LimitThinkingContentLength,
+        py::arg("next_tokens"),
+        py::arg("max_think_lens"),
+        py::arg("max_reply_lens"),
+        py::arg("step_idx"),
+        py::arg("limit_status"),
+        py::arg("stop_flags"),
+        py::arg("eos_token_ids"),
+        py::arg("inject_token_ids"),
+        py::arg("think_end_id"),
+        py::arg("splitwise_role_is_decode"),
+        "Perform limit content for decoding");
+
+ m.def("speculate_limit_thinking_content_length",
+        &SpeculateLimitThinkingContentLength,
+        py::arg("next_tokens"),
+        py::arg("max_think_lens"),
+        py::arg("max_reply_lens"),
+        py::arg("step_idx"),
+        py::arg("limit_status"),
+        py::arg("accept_num"),
+        py::arg("stop_flags"),
+        py::arg("eos_token_ids"),
+        py::arg("inject_token_ids"),
+        py::arg("think_end_id"),
+        py::arg("splitwise_role_is_decode"),
+        "Perform speculative limit content for decoding");
 
   m.def("verify_draft_tokens",
         &VerifyDraftTokens,
