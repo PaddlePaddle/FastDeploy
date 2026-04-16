@@ -46,8 +46,12 @@ class LoggerTests(unittest.TestCase):
         shutil.rmtree(self.tmp_dir, ignore_errors=True)
 
     def test_unified_logger(self):
-        """Test _get_unified_logger through instance"""
-        test_cases = [(None, "fastdeploy"), ("module", "fastdeploy.module"), ("fastdeploy.utils", "fastdeploy.utils")]
+        """Test _get_unified_logger through instance (uses main channel)"""
+        test_cases = [
+            (None, "fastdeploy.main"),
+            ("module", "fastdeploy.main.module"),
+            ("fastdeploy.utils", "fastdeploy.utils"),  # 已有 fastdeploy. 前缀的保持不变
+        ]
 
         for name, expected in test_cases:
             with self.subTest(name=name):

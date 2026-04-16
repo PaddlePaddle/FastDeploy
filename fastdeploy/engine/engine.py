@@ -44,6 +44,11 @@ from fastdeploy.engine.common_engine import (
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
@@ -285,7 +290,7 @@ class LLMEngine:
         # Create Request struct after processing
         request = Request.from_dict(task)
         request.metrics.scheduler_recv_req_time = time.time()
-        llm_logger.info(f"Receive request {request}")
+        log_request(RequestLogLevel.CONTENT, message="Receive request {request}", request=request)
         request.metrics.preprocess_start_time = time.time()
 
         request.prompt_token_ids_len = len(request.prompt_token_ids)
@@ -304,12 +309,20 @@ class LLMEngine:
                 f"Input text is too long, length of prompt token({input_ids_len}) "
                 f"+ min_dec_len ({min_tokens}) >= max_model_len "
             )
-            llm_logger.error(error_msg)
+            log_request_error(
+                message="request[{request_id}] error: {error}",
+                request_id=request.get("request_id"),
+                error=error_msg,
+            )
             raise EngineError(error_msg, error_code=400)
 
         if input_ids_len > self.cfg.model_config.max_model_len:
             error_msg = f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.cfg.model_config.max_model_len})."
-            llm_logger.error(error_msg)
+            log_request_error(
+                message="request[{request_id}] error: {error}",
+                request_id=request.get("request_id"),
+                error=error_msg,
+            )
             raise EngineError(error_msg, error_code=400)
 
         if request.get("stop_seqs_len") is not None:
@@ -320,7 +333,11 @@ class LLMEngine:
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
                     "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
                 )
-                llm_logger.error(error_msg)
+                log_request_error(
+                    message="request[{request_id}] error: {error}",
+                    request_id=request.get("request_id"),
+                    error=error_msg,
+                )
                 raise EngineError(error_msg, error_code=400)
             stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
@@ -329,7 +346,11 @@ class LLMEngine:
                         f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
                         "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
                     )
-                    llm_logger.error(error_msg)
+                    log_request_error(
+                        message="request[{request_id}] error: {error}",
+                        request_id=request.get("request_id"),
+                        error=error_msg,
+                    )
                     raise EngineError(error_msg, error_code=400)
 
         if self._has_guided_input(request):
@@ -342,14 +363,22 @@ class LLMEngine:
                 request, err_msg = self.guided_decoding_checker.schema_format(request)
 
             if err_msg is not None:
-                llm_logger.error(err_msg)
+                log_request_error(
+                    message="request[{request_id}] error: {error}",
+                    request_id=request.get("request_id"),
+                    error=err_msg,
+                )
                 raise EngineError(err_msg, error_code=400)
 
         request.metrics.preprocess_end_time = time.time()
         request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
-        llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
-        llm_logger.debug(f"cache task: {request}")
+        log_request(
+            RequestLogLevel.STAGES,
+            message="Cache task with request_id ({request_id})",
+            request_id=request.get("request_id"),
+        )
+        log_request(RequestLogLevel.FULL, message="cache task: {request}", request=request)
 
     def _worker_processes_ready(self):
         """
@@ -717,11 +746,16 @@ class LLMEngine:
         Yields:
             dict: The generated response.
         """
-        llm_logger.info(f"Starting generation for prompt: {prompts}")
+        log_request(RequestLogLevel.CONTENT, message="Starting generation for prompt: {prompts}", prompts=prompts)
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happened while adding request, details={e}, {str(traceback.format_exc())}")
+            log_request_error(
+                message="request[{request_id}] error while adding request: {error}, {traceback}",
+                request_id=prompts.get("request_id"),
+                error=str(e),
+                traceback=traceback.format_exc(),
+            )
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request
@@ -740,7 +774,7 @@ class LLMEngine:
                 output = self.engine.data_processor.process_response_dict(
                     result.to_dict(), stream=False, include_stop_str_in_output=False, direct_decode=not stream
                 )
-                llm_logger.debug(f"Generate result: {output}")
+                log_request(RequestLogLevel.FULL, message="Generate result: {output}", output=output)
                 if not stream:
                     yield output
                 else:
