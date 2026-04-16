@@ -274,6 +274,11 @@ class EngineArgs:
     Flag to disable the custom all-reduce kernel.
     """
 
+    enable_flashinfer_allreduce_fusion: bool = False
+    """
+    Flag to enable all reduce fusion kernel in flashinfer.
+    """
+
     use_internode_ll_two_stage: bool = False
     """
     Flag to use the internode_ll_two_stage kernel.
@@ -994,6 +999,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.disable_custom_all_reduce,
             help="Flag to disable custom all-reduce.",
+        )
+        parallel_group.add_argument(
+            "--enable-flashinfer-allreduce-fusion",
+            action="store_true",
+            default=EngineArgs.enable_flashinfer_allreduce_fusion,
+            help="Flag to enable all reduce fusion kernel in flashinfer.",
         )
         parallel_group.add_argument(
             "--use-internode-ll-two-stage",

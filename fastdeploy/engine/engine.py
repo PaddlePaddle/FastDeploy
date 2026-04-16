@@ -656,6 +656,7 @@ class LLMEngine:
             "enable_entropy": self.cfg.model_config.enable_entropy,
             "ep_prefill_use_worst_num_tokens": self.cfg.parallel_config.ep_prefill_use_worst_num_tokens,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
+            "enable_flashinfer_allreduce_fusion": self.cfg.parallel_config.enable_flashinfer_allreduce_fusion,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
