@@ -85,16 +85,11 @@ LOG_KEYWORDS=(
     "log_request_error"
 )
 
-FILES=$(git diff --name-only upstream/$BRANCH \
-    | grep -v "scripts/check_approval.sh" || true)
-
-HAS_LOG_MODIFY=$(git diff upstream/$BRANCH -- $FILES \
+HAS_LOG_MODIFY=$(git diff upstream/$BRANCH \
+    -- . ':(exclude)scripts/check_approval.sh' \
     | grep -E "^\+" \
-    | grep -E $(printf -- "-e %s " "${LOG_KEYWORDS[@]}") || true)
-
-#HAS_LOG_MODIFY=$(git diff upstream/$BRANCH \
-#    | grep -E "^\+" \
-#    | grep -E $(printf -- "-e %s " "${LOG_KEYWORDS[@]}") || true)
+    | grep -vE "^\+\+\+" \
+    | grep -E $(printf -- "%s|" "${LOG_KEYWORDS[@]}" | sed 's/|$//') || true)
 
 if [ -n "${HAS_LOG_MODIFY}" ] && [ -n "${PR_ID}" ]; then
     echo_line1="You must have one FastDeploy RD (xyxinyang(zhouchong), zyyzghb(zhangyongyue)) approval for modifying logging behavior (.info/.debug/.error/log_request)."
