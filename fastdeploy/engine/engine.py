@@ -876,8 +876,14 @@ class LLMEngine:
                         + f" data parallel id {i}"
                     )
                     self.dp_processed[-1].start()
+
+                for i in range(
+                    1,
+                    self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
+                ):
+
                     while self.launched_expert_service_signal.value[i] == 0:
-                        time.sleep(1)
+                        time.sleep(0.1)
 
     def check_worker_initialize_status(self):
         """
