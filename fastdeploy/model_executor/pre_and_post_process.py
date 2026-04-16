@@ -15,7 +15,7 @@
 """
 
 import queue
-from typing import Dict, List, Optional, Union
+from typing import Dict, Optional, Union
 
 import numpy as np
 import paddle
@@ -110,9 +110,10 @@ from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
-from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
-from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
-from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
+from fastdeploy.model_executor.utils import build_stream_transfer_data
+from fastdeploy.output.pooler import PoolerOutput
+from fastdeploy.output.stream_transfer_data import StreamTransferData
+from fastdeploy.worker.output import ModelOutputData, SamplerOutput
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
@@ -206,45 +207,6 @@ def pre_process(
         batch_id_per_token_output,
         real_output_token_num,
     )
-
-
-def _build_stream_transfer_data(
-    output_tokens: paddle.Tensor,
-    pooler_outputs: List[PoolingSequenceGroupOutput] = None,
-    logprobs: Optional[LogprobsTensors] = None,
-    prompt_logprobs_list: Optional[LogprobsTensors] = None,
-):
-    """Split output_tokens and output"""
-
-    stream_transfer_datas = []
-    if output_tokens is not None:
-
-        output_tokens = output_tokens.numpy().reshape([-1])
-        output_tokens_lists = np.split(output_tokens, output_tokens.shape[0])
-
-        for bid, output_token_per_sample in enumerate(output_tokens_lists):
-            stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, tokens=output_token_per_sample, batch_id=bid
-            )
-            if logprobs:
-                stream_transfer_data.logprobs = logprobs.slice_rows(bid, bid + 1)
-            if prompt_logprobs_list:
-                stream_transfer_data.prompt_logprobs = prompt_logprobs_list[bid]
-            stream_transfer_datas.append(stream_transfer_data)
-    elif pooler_outputs is not None:
-        for bid, pooler_output in enumerate(pooler_outputs):
-            if pooler_output is None:
-                continue
-            if pooler_output.dtype == paddle.bfloat16:
-                pooler_output = pooler_output.astype("float32")
-
-            pooler_output = pooler_output.numpy()
-
-            stream_transfer_data = StreamTransferData(
-                decoder_state=DecoderState.TEXT, pooler_output=pooler_output, batch_id=bid
-            )
-            stream_transfer_datas.append(stream_transfer_data)
-    return stream_transfer_datas
 
 
 def post_process_normal(
@@ -386,8 +348,8 @@ def save_output_normal(
             recover_batch_index_for_sampler_output(
                 sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
             )
-            output = _build_stream_transfer_data(
-                recover_share_inputs_map["sampled_token_ids"],
+            output = build_stream_transfer_data(
+                output_tokens=recover_share_inputs_map["sampled_token_ids"],
                 logprobs=sampler_output.logprobs_tensors,
                 prompt_logprobs_list=model_output.prompt_logprobs_list,
             )
@@ -522,10 +484,64 @@ def save_output_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
+    async_output_queue: queue.Queue = None,
     save_each_rank: bool = False,
     skip_save_output: bool = False,
+    enable_draft_logprob: bool = False,
 ):
-    if not skip_save_output:
+    if skip_save_output:
+        share_inputs["last_preempted_idx"][:] = 0
+        return
+    if envs.FD_USE_GET_SAVE_OUTPUT_V1:
+        if save_each_rank or model_output.mp_rank == 0:
+            recover_batch_index_for_sampler_output(
+                sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+            )
+            recover_share_inputs = recover_batch_index_for_output(
+                share_inputs,
+                model_output.index_to_batch_id,
+                model_output.enable_pd_reorder,
+                [
+                    "accept_tokens_cpu",
+                    "accept_num_cpu",
+                    "seq_lens_decoder_cpu",
+                    "prompt_lens_cpu",
+                    "last_preempted_idx",
+                ],
+            )
+            # target tokens (mtype=3)
+            output = build_stream_transfer_data(
+                accept_tokens_cpu=recover_share_inputs["accept_tokens_cpu"],
+                accept_num_cpu=recover_share_inputs["accept_num_cpu"],
+                logprobs=sampler_output.logprobs_tensors,
+                prompt_logprobs_list=model_output.prompt_logprobs_list,
+                cu_batch_token_offset=sampler_output.cu_batch_token_offset,
+                output_type=3,
+                last_preempted_idx=recover_share_inputs["last_preempted_idx"],
+            )
+            async_output_queue.put(output)
+
+            # draft tokens (mtype=4): when enable_draft_logprob and logprobs available
+            # Only carry logprobs and a scalar accept_num — avoid serializing
+            # accept_tokens (numpy array) which draft path never uses.
+            if sampler_output.logprobs_tensors is not None and enable_draft_logprob:
+                draft_output = []
+                for sd in output:
+                    draft_sd = StreamTransferData(
+                        decoder_state=sd.decoder_state,
+                        batch_id=sd.batch_id,
+                        tokens=None,
+                        speculative_decoding=True,
+                        accept_tokens=None,
+                        accept_num=sd.accept_num,
+                        output_type=4,
+                    )
+                    draft_sd.logprobs = sd.logprobs
+                    draft_output.append(draft_sd)
+                async_output_queue.put(draft_output)
+
+        share_inputs["last_preempted_idx"][:] = 0
+    else:
         if sampler_output.logprobs_tensors is None:
             recover_share_inputs = recover_batch_index_for_output(
                 share_inputs,
@@ -582,7 +598,7 @@ def save_output_specualate(
                 model_output.mp_rank,
                 save_each_rank,
             )
-    share_inputs["last_preempted_idx"][:] = 0
+        share_inputs["last_preempted_idx"][:] = 0
 
 
 def post_process(
@@ -980,5 +996,5 @@ def post_process_pooling(
 
     if not skip_save_output:
         if save_each_rank or model_output.mp_rank == 0:
-            output = _build_stream_transfer_data(output_tokens=None, pooler_outputs=pooler_output.outputs)
+            output = build_stream_transfer_data(pooler_outputs=pooler_output.outputs)
             async_output_queue.put(output)

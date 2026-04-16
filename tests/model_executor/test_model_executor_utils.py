@@ -14,10 +14,13 @@
 
 import unittest
 
+import numpy as np
+
 from fastdeploy.model_executor.utils import (
     BitMaskTracker,
     TensorTracker,
     WeightsMapper,
+    get_logprobs_starts_and_ends,
     remap_weight_keys,
     set_weight_attrs,
     slice_fn,
@@ -178,6 +181,54 @@ class TestSliceFn(unittest.TestCase):
         w = np.ones((4, 8))
         result = slice_fn(w, output_dim=False, start=1, end=3)
         self.assertEqual(result.shape, (2, 8))
+
+
+class TestGetLogprobsStartsAndEnds(unittest.TestCase):
+    """Tests for get_logprobs_starts_and_ends."""
+
+    def test_no_cu_offset_basic(self):
+        """Without cu_batch_token_offset: uses cumsum of num_tokens_arr."""
+        num_tokens = np.array([2, 3, 1], dtype=np.intp)
+        starts, ends = get_logprobs_starts_and_ends(num_tokens)
+        np.testing.assert_array_equal(starts, [0, 2, 5])
+        np.testing.assert_array_equal(ends, [2, 5, 6])
+
+    def test_no_cu_offset_all_zeros(self):
+        """All-zero token counts produce zero-length slices."""
+        num_tokens = np.array([0, 0, 0], dtype=np.intp)
+        starts, ends = get_logprobs_starts_and_ends(num_tokens)
+        np.testing.assert_array_equal(starts, [0, 0, 0])
+        np.testing.assert_array_equal(ends, [0, 0, 0])
+
+    def test_cu_offset_sufficient_length(self):
+        """cu_batch_token_offset with length > batch_size uses offset slicing."""
+        import paddle
+
+        num_tokens = np.array([2, 3], dtype=np.intp)
+        # cu_offsets: [0, 2, 5] — length 3 > batch_size 2
+        cu_offset = paddle.to_tensor([0, 2, 5], dtype="int64")
+        starts, ends = get_logprobs_starts_and_ends(num_tokens, cu_offset)
+        np.testing.assert_array_equal(starts, [0, 2])
+        np.testing.assert_array_equal(ends, [2, 5])
+
+    def test_cu_offset_too_short_falls_back_to_cumsum(self):
+        """cu_batch_token_offset shorter than batch_size+1 falls back to cumsum."""
+        import paddle
+
+        num_tokens = np.array([1, 2, 3], dtype=np.intp)
+        # cu_offsets length == batch_size (3), not > batch_size → fallback
+        cu_offset = paddle.to_tensor([0, 1, 3], dtype="int64")
+        starts, ends = get_logprobs_starts_and_ends(num_tokens, cu_offset)
+        # fallback: cumsum of [1,2,3] → [0,1,3,6]
+        np.testing.assert_array_equal(starts, [0, 1, 3])
+        np.testing.assert_array_equal(ends, [1, 3, 6])
+
+    def test_single_batch(self):
+        """Single-element batch works correctly."""
+        num_tokens = np.array([4], dtype=np.intp)
+        starts, ends = get_logprobs_starts_and_ends(num_tokens)
+        np.testing.assert_array_equal(starts, [0])
+        np.testing.assert_array_equal(ends, [4])
 
 
 if __name__ == "__main__":

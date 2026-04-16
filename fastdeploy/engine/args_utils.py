@@ -581,7 +581,7 @@ class EngineArgs:
             self.enable_prefix_caching = False
         if (
             not current_platform.is_cuda()
-            or (self.speculative_config is not None and self.enable_logprob)
+            # or (self.speculative_config is not None and self.enable_logprob)
             or self.splitwise_role == "prefill"
             or self.dynamic_load_weight
         ):

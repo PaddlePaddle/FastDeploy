@@ -263,7 +263,7 @@ class TokenProcessor:
                 main_process_metrics.request_token_ratio.observe(token_ratio)
                 llm_logger.info(f"{self.resource_manager.info()}")
                 if self.cfg.speculative_config.method:
-                    self._compute_speculative_status()
+                    self._compute_speculative_status(result)
                 if not is_prefill:
                     self._record_completion_metrics(task, current_time)
                 self._recycle_resources(task_id, batch_id, task, result, is_prefill)
@@ -273,8 +273,13 @@ class TokenProcessor:
     def _process_batch_output_use_zmq(self, receive_datas):
         """
         process output sample by sample
+
+        Returns:
+            tuple: (batch_result, accept_nums) where accept_nums is a list of
+                   positive accept counts for speculative metrics (mtype=3 only).
         """
         batch_result = list()
+        accept_nums = []
         for _, stream_data in enumerate(receive_datas):
             i = stream_data.batch_id
             if self.resource_manager.stop_flags[i]:
@@ -282,6 +287,21 @@ class TokenProcessor:
 
             task: Request = self.resource_manager.tasks_list[i]
             task_id = task.request_id
+
+            if self.speculative_decoding and getattr(stream_data, "speculative_decoding", False):
+                # Collect accept_num during iteration to avoid second traversal
+                if (
+                    getattr(stream_data, "accept_num", None) is not None
+                    and getattr(stream_data, "output_type", 3) == 3
+                ):
+                    val = int(stream_data.accept_num[0])
+                    if val > 0:
+                        accept_nums.append(val)
+                result = self._process_speculative_output_use_zmq(stream_data, task, i)
+                if result is not None:
+                    batch_result.append(result)
+                continue
+
             token_ids = stream_data.tokens  # numpy.array
             if token_ids is not None and token_ids[-1] < 0:
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -347,7 +367,7 @@ class TokenProcessor:
                 if self.use_logprobs:
                     if getattr(stream_data, "logprobs", None) is not None:
                         try:
-                            logprobs_list: LogprobsLists = stream_data.logprobs.tolists()
+                            logprobs_list: LogprobsLists = stream_data.logprobs
                             result.outputs.logprob = float(logprobs_list.logprobs[0][0])
                             result.outputs.top_logprobs = logprobs_list
                         except Exception as e:
@@ -370,17 +390,259 @@ class TokenProcessor:
                 if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
                     batch_result.append(result)
 
-        return batch_result
+        return batch_result, accept_nums
+
+    def _process_speculative_output_use_zmq(self, stream_data, task, batch_id):
+        """
+        Process speculative decoding output from a single StreamTransferData.
+
+        Args:
+            stream_data: StreamTransferData with speculative decoding fields populated.
+            task: Request object for this batch entry.
+            batch_id: The batch index.
+            batch_result: The batch result list (for draft token path to append to).
+
+        Returns:
+            RequestOutput or None (None means the request was skipped/preempted).
+        """
+        task_id = task.request_id
+        accept_num_val = int(stream_data.accept_num[0])
+        mtype = getattr(stream_data, "output_type", 3)
+
+        # --- Draft token path (mtype=4) ---
+        if mtype == 4:
+            return self._process_draft_output_use_zmq(stream_data, task, batch_id, accept_num_val)
+
+        # --- Target token path (mtype=3) ---
+
+        # Per-request per-head accept count tracking
+        self._record_speculative_decoding_accept_num_per_request(task_id, accept_num_val)
+
+        # Preemption handling via accept_num
+        if accept_num_val == PREEMPTED_TOKEN_ID:
+            llm_logger.info(f"sync preemption for request_id {task_id} done.")
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                    self.resource_manager.recycle_abort_task(task_id)
+                if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                    self.resource_manager.reschedule_preempt_task(task_id)
+            return None
+
+        # Recovery stop
+        recovery_stop = False
+        if accept_num_val == -3:
+            recovery_stop = True
+            llm_logger.info(f"recovery stop signal found at task {task_id}")
+            token_ids = [RECOVERY_STOP_SIGNAL]
+        else:
+            token_ids = list(stream_data.accept_tokens[:accept_num_val])
+
+        # No tokens accepted this step
+        if accept_num_val == 0:
+            return None
+
+        if self.cfg.scheduler_config.splitwise_role == "decode":
+            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                if task_id in self.resource_manager.to_be_aborted_req_id_set:
+                    return None
+                if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
+                    return None
+
+        # Global counters for speculative status computation
+        self.total_step += 1
+        self.number_of_output_tokens += len(token_ids)
+
+        # Metrics recording
+        current_time = time.time()
+        if self.tokens_counter[task_id] == 0:
+            task.metrics.record_recv_first_token()
+            task.metrics.cal_cost_time()
+            metrics = copy.copy(task.metrics)
+            self._record_first_token_metrics(task, current_time)
+        else:
+            task.metrics.record_recv_token()
+            if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
+                task.metrics.record_decode_recv_second_token()
+            metrics = copy.copy(task.metrics)
+
+        self._record_metrics(task, current_time, token_ids)
+
+        is_prefill = task.disaggregate_info is not None and task.disaggregate_info.get("role") == "prefill"
+        is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
+
+        # Build RequestOutput with output_type
+        result = RequestOutput(
+            request_id=task_id,
+            output_type=mtype,
+            outputs=CompletionOutput(
+                index=batch_id,
+                send_idx=self.tokens_counter[task_id],
+                token_ids=[],
+                draft_token_ids=[],
+            ),
+            finished=False,
+            metrics=metrics,
+            ic_req_data=task.ic_req_data,
+            prompt_token_ids_len=task.prompt_token_ids_len,
+        )
+
+        # First token additional info
+        if self.tokens_counter[task_id] == 0:
+            if task.messages is not None:
+                result.prompt = task.messages
+            if task.get("multimodal_inputs", None):
+                result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
+                result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
+        result.num_cached_tokens = task.num_cached_tokens
+
+        # is_prefill + multi-token -> draft_token_ids
+        if is_prefill and len(token_ids) > 1:
+            result.outputs.draft_token_ids = token_ids[:]
+
+        # Parse logprobs once if available
+        logprobs_lists = None
+        if self.use_logprobs and getattr(stream_data, "logprobs", None) is not None:
+            try:
+                logprobs_lists = stream_data.logprobs
+            except Exception as e:
+                llm_logger.warning(f"Failed to parse speculative logprobs from StreamTransferData: {e}")
+
+        if getattr(stream_data, "prompt_logprobs", None) is not None:
+            try:
+                result.prompt_logprobs = stream_data.prompt_logprobs
+            except Exception as e:
+                llm_logger.warning(f"Failed to parse prompt_logprobs from StreamTransferData: {e}")
+
+        # Batch-assign logprobs outside the per-token loop (avoids per-token extend overhead).
+        # Original logic: for each token_index, extend top_logprobs one-by-one.
+        # Optimized: slice all at once, then set the last logprob value.
+        num_token_ids = len(token_ids)
+        if logprobs_lists is not None and num_token_ids > 0:
+            n_logprobs = min(num_token_ids, len(logprobs_lists.logprobs))
+            if n_logprobs > 0:
+                result.outputs.top_logprobs = LogprobsLists(
+                    logprob_token_ids=logprobs_lists.logprob_token_ids[:n_logprobs],
+                    logprobs=logprobs_lists.logprobs[:n_logprobs],
+                    sampled_token_ranks=logprobs_lists.sampled_token_ranks[:n_logprobs],
+                )
+                # logprob field stores the last processed token's logprob (matching original behavior)
+                result.outputs.logprob = float(logprobs_lists.logprobs[n_logprobs - 1][0])
+
+        # Multi-token loop processing
+        # Pre-check eos_token_ids type for O(1) lookup
+        eos_set = task.eos_token_ids if isinstance(task.eos_token_ids, set) else set(task.eos_token_ids)
+        for batch_token_index, token_id in enumerate(token_ids):
+            self.tokens_counter[task_id] += 1
+            if token_id != RECOVERY_STOP_SIGNAL:
+                if not (envs.FD_ENABLE_INTERNAL_ADAPTER and token_id in eos_set):
+                    result.outputs.token_ids.append(token_id)
+                task.output_token_ids.append(token_id)
+
+            if token_id in eos_set or is_prefill or recovery_stop:
+                result.finished = True
+                if recovery_stop:
+                    result.error_msg = "Recover is not supported, the result is incomplete!"
+
+                # Calculate statistics for the combined log
+                inference_start_time = task.metrics.get_inference_start_time(is_decode)
+                task.metrics.cal_cost_time()
+                e2e_time = current_time - inference_start_time
+                token_ratio = self.tokens_counter[task_id] / e2e_time
+
+                # Get cache information
+                gpu_cache = getattr(task.metrics, "gpu_cache_token_num", 0)
+                cpu_cache = getattr(task.metrics, "cpu_cache_token_num", 0)
+                total_cached = gpu_cache + cpu_cache
+
+                # Build cached detail dict
+                cached_detail = f'{{"CachedToken": {total_cached}, "GPU": {gpu_cache}, "CPU": {cpu_cache}}}'
+
+                # Print combined log
+                ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
+                ttft_s = ttft + task.metrics.time_in_queue
+                llm_logger.info(
+                    f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
+                    f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
+                    f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, TTFT_S={ttft_s:.2f}, "
+                    f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
+                    f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
+                )
+
+                main_process_metrics.request_token_ratio.observe(token_ratio)
+                llm_logger.info(f"{self.resource_manager.info()}")
+                if self.cfg.speculative_config.method:
+                    self._compute_speculative_status(result)
+                if not is_prefill:
+                    self._record_completion_metrics(task, current_time)
+                llm_logger.info(f"task {task_id} received eos token. Recycling.")
+                if (
+                    envs.ENABLE_V1_KVCACHE_SCHEDULER
+                    and self.cfg.cache_config.enable_prefix_caching
+                    and self.cfg.cache_config.enable_output_caching
+                ):
+                    self.resource_manager.cache_output_tokens(task)
+                self._recycle_resources(task_id, batch_id, task, result, is_prefill)
+                llm_logger.info(f"eos token {task_id} Recycle end.")
+                break
+
+        if not is_prefill or self.cfg.scheduler_config.name == "splitwise":
+            return result
+        return None
+
+    def _process_draft_output_use_zmq(self, stream_data, task, batch_id, accept_num_val):
+        """
+        Process draft token output (mtype=4) from speculative decoding via ZMQ.
+        Only processes logprobs (draft_top_logprobs), not actual tokens.
+
+        Args:
+            stream_data: StreamTransferData with output_type=4.
+            task: Request object.
+            batch_id: Batch index.
+            accept_num_val: Number of accepted tokens.
+
+        Returns:
+            RequestOutput with draft_top_logprobs populated.
+        """
+        num_tokens = max(accept_num_val, 0)
+        if num_tokens <= 0:
+            return None
+        task_id = task.request_id
+        result = RequestOutput(
+            request_id=task_id,
+            output_type=4,
+            outputs=CompletionOutput(
+                index=batch_id,
+                send_idx=None,
+                token_ids=[],
+                draft_token_ids=[],
+            ),
+            finished=False,
+            metrics=None,
+        )
+
+        if getattr(stream_data, "logprobs", None) is not None:
+            try:
+                logprobs_lists = stream_data.logprobs
+                n = min(num_tokens, len(logprobs_lists.logprobs))
+                if n > 0:
+                    result.outputs.draft_top_logprobs = LogprobsLists(
+                        logprob_token_ids=logprobs_lists.logprob_token_ids[:n],
+                        logprobs=logprobs_lists.logprobs[:n],
+                        sampled_token_ranks=logprobs_lists.sampled_token_ranks[:n],
+                    )
+            except Exception as e:
+                llm_logger.warning(f"Failed to parse draft logprobs from StreamTransferData: {e}")
+
+        return result
 
     def process_sampling_results_use_zmq(self):
         """
         use zmq to receive outputs from worker and process them
         """
-        if self.speculative_decoding:
-            raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
         rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:
+                receive_datas = None
                 if (
                     self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1
                 ) or (rank_id == 0):
@@ -391,8 +653,22 @@ class TokenProcessor:
 
                     self._reschedule_preempt_task_use_zmq(receive_datas)
 
-                    batch_result = self._process_batch_output_use_zmq(receive_datas)
-                    self.postprocess(batch_result)
+                    batch_result, accept_nums = self._process_batch_output_use_zmq(receive_datas)
+
+                    # Determine mtype for metrics and postprocess
+                    mtype = 3
+                    if receive_datas and hasattr(receive_datas[0], "output_type"):
+                        mtype = receive_datas[0].output_type
+
+                    # Batch-level speculative decoding metrics: only record for
+                    # mtype=3 (target tokens); skip mtype=4 (draft logprobs) to
+                    # avoid double-counting draft_tokens / max_emitted_tokens.
+                    # accept_nums already collected during _process_batch_output_use_zmq
+                    # (only positive values, filtering preempted/recovery/skipped).
+                    if self.speculative_decoding and mtype == 3 and accept_nums:
+                        self._record_speculative_decoding_metrics(accept_nums)
+
+                    self.postprocess(batch_result, mtype)
             except Exception as e:
                 llm_logger.error(f"Receive message:{receive_datas}, error:{e}")
                 continue
@@ -493,19 +769,20 @@ class TokenProcessor:
                     finished_batch_result, unfinished_batch_result = [], []
                     for r in batch_result:
                         (finished_batch_result if r.finished else unfinished_batch_result).append(r)
+                    # Finished requests need no draft logprobs — output immediately.
                     if finished_batch_result:
-                        self.cached_generated_tokens.put_results(batch_result)
-                    else:
+                        self.cached_generated_tokens.put_results(finished_batch_result)
+                    # Unfinished requests must wait for draft logprobs (mtype=4).
+                    if unfinished_batch_result:
                         self._batch_result_buffer = unfinished_batch_result
                 elif mtype == 4:  # draft
-                    target_batch_result = []
-                    draft_batch_result = batch_result
                     if self._batch_result_buffer is not None:
-                        for target, decode in zip(self._batch_result_buffer, draft_batch_result):
+                        target_batch_result = []
+                        for target, decode in zip(self._batch_result_buffer, batch_result):
                             target.outputs.draft_top_logprobs = decode.outputs.draft_top_logprobs
                             target_batch_result.append(target)
                         self._batch_result_buffer = None
-                    self.cached_generated_tokens.put_results(target_batch_result)
+                        self.cached_generated_tokens.put_results(target_batch_result)
                 else:
                     self.cached_generated_tokens.put_results(batch_result)
             else:

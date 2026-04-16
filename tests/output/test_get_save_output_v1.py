@@ -23,7 +23,7 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.inter_communicator import ZmqIpcClient
-from fastdeploy.model_executor.pre_and_post_process import _build_stream_transfer_data
+from fastdeploy.model_executor.utils import build_stream_transfer_data
 from fastdeploy.output.token_processor import TokenProcessor
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
 
@@ -175,7 +175,7 @@ class TestGetSaveOutputV1(unittest.TestCase):
 
         # put data into zmq client
         data = paddle.to_tensor([[100]], dtype="int64")
-        output_tokens = _build_stream_transfer_data(data)
+        output_tokens = build_stream_transfer_data(output_tokens=data)
         model_runner.async_output_queue.put(output_tokens)
 
         # check result
