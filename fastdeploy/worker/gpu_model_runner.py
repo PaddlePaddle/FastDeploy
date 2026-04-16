@@ -85,7 +85,7 @@ import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.tasks import PoolingTask
-from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+from fastdeploy.input.image_processors.adaptive_processor import AdaptiveImageProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.logger.deterministic_logger import DeterministicLogger
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -2728,13 +2728,13 @@ class GPUModelRunner(ModelRunnerBase):
         """Dynamic model loader use to clear parameters use for RL"""
         # Clear CUDAGraph
         if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
+            self.model.clear_graph_opt_backend()
         # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.model.clear_grpah_opt_backend()
+            self.proposer.model.clear_graph_opt_backend()
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
@@ -2788,7 +2788,7 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info("GPU model runner's weight is already sleeping, no need to sleep again!")
                 return
             if self.use_cudagraph:
-                self.model.clear_grpah_opt_backend()
+                self.model.clear_graph_opt_backend()
             if self.fd_config.parallel_config.enable_expert_parallel:
                 self.dynamic_weight_manager.clear_deepep_buffer()
             self.dynamic_weight_manager.clear_model_weight()
@@ -2867,12 +2867,7 @@ class GPUModelRunner(ModelRunnerBase):
         return
 
     def _init_image_preprocess(self) -> None:
-        processor = DataProcessor(
-            tokenizer_name=self.model_config.model,
-            image_preprocessor_name=str(self.model_config.model),
-        )
-        processor.eval()
-        image_preprocess = processor.image_preprocessor
+        image_preprocess = AdaptiveImageProcessor.from_pretrained(str(self.model_config.model))
         image_preprocess.image_mean_tensor = paddle.to_tensor(image_preprocess.image_mean, dtype="float32").reshape(
             [1, 3, 1, 1]
         )

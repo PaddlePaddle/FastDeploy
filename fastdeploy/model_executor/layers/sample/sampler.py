@@ -996,7 +996,8 @@ class SpeculativeSampler(nn.Layer):
         if self.enf_gen_phase_tag:
             reasoning_phase_token_constraint(
                 logits,
-                sampling_metadata.pre_token_ids,
+                token_ids_all,
+                prompt_lens,
                 share_inputs["stop_flags"],
                 share_inputs["seq_lens_this_time"],
                 share_inputs["seq_lens_encoder"],

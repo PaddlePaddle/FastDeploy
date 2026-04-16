@@ -18,7 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from fastdeploy.input.video_utils import (
+from fastdeploy.input.utils.video import (
     _is_gif,
     read_video_decord,
     sample_frames,
@@ -74,7 +74,7 @@ class TestIsGif(unittest.TestCase):
 class TestVideoReaderWrapper(unittest.TestCase):
     def _make_wrapper(self, video_path, mock_reader=None):
         """Construct a VideoReaderWrapper with decord mocked out."""
-        from fastdeploy.input.video_utils import VideoReaderWrapper
+        from fastdeploy.input.utils.video import VideoReaderWrapper
 
         if mock_reader is None:
             mock_reader = _make_mock_reader()
@@ -112,7 +112,7 @@ class TestVideoReaderWrapper(unittest.TestCase):
 
     def test_del_no_original_file(self):
         """__del__ should be a no-op when original_file is None."""
-        from fastdeploy.input.video_utils import VideoReaderWrapper
+        from fastdeploy.input.utils.video import VideoReaderWrapper
 
         wrapper = object.__new__(VideoReaderWrapper)
         wrapper.original_file = None
@@ -125,7 +125,7 @@ class TestVideoReaderWrapper(unittest.TestCase):
         import os
         import tempfile
 
-        from fastdeploy.input.video_utils import VideoReaderWrapper
+        from fastdeploy.input.utils.video import VideoReaderWrapper
 
         with tempfile.NamedTemporaryFile(delete=False) as f:
             tmp_path = f.name
@@ -138,7 +138,7 @@ class TestVideoReaderWrapper(unittest.TestCase):
 
     def test_non_gif_string_path_does_not_set_original_file(self):
         """Passing a non-GIF string path must NOT set original_file (bug fix)."""
-        from fastdeploy.input.video_utils import VideoReaderWrapper
+        from fastdeploy.input.utils.video import VideoReaderWrapper
 
         mock_reader = _make_mock_reader()
         mock_decord = MagicMock()
@@ -151,7 +151,7 @@ class TestVideoReaderWrapper(unittest.TestCase):
 
     def test_bytesio_non_gif_path_does_not_set_original_file(self):
         """Passing a BytesIO that is NOT a GIF must not set original_file."""
-        from fastdeploy.input.video_utils import VideoReaderWrapper
+        from fastdeploy.input.utils.video import VideoReaderWrapper
 
         mock_reader = _make_mock_reader()
         mock_decord = MagicMock()
@@ -172,16 +172,16 @@ class TestVideoReaderWrapper(unittest.TestCase):
 class TestReadVideoDecord(unittest.TestCase):
     def _patch_wrapper(self, num_frames=100, fps=25.0):
         """Return a context manager that replaces VideoReaderWrapper with a mock."""
-        from fastdeploy.input import video_utils
+        from fastdeploy.input.utils import video
 
         mock_wrapper = MagicMock()
         mock_wrapper.__len__ = MagicMock(return_value=num_frames)
         mock_wrapper.get_avg_fps = MagicMock(return_value=fps)
-        return patch.object(video_utils, "VideoReaderWrapper", return_value=mock_wrapper), mock_wrapper
+        return patch.object(video, "VideoReaderWrapper", return_value=mock_wrapper), mock_wrapper
 
     def test_existing_wrapper_passthrough(self):
         """Already-wrapped reader is returned as-is."""
-        from fastdeploy.input.video_utils import VideoReaderWrapper
+        from fastdeploy.input.utils.video import VideoReaderWrapper
 
         mock_wrapper = MagicMock(spec=VideoReaderWrapper)
         mock_wrapper.__len__ = MagicMock(return_value=50)
@@ -196,7 +196,7 @@ class TestReadVideoDecord(unittest.TestCase):
 
     def test_bytes_input_converted_to_bytesio(self):
         """bytes input is converted to BytesIO before creating VideoReaderWrapper."""
-        from fastdeploy.input import video_utils
+        from fastdeploy.input.utils import video
 
         captured = []
 
@@ -210,14 +210,14 @@ class TestReadVideoDecord(unittest.TestCase):
             def get_avg_fps(self):
                 return 10.0
 
-        with patch.object(video_utils, "VideoReaderWrapper", FakeWrapper):
+        with patch.object(video, "VideoReaderWrapper", FakeWrapper):
             reader, meta, path = read_video_decord(b"fake_video_bytes")
 
         self.assertIsInstance(captured[0], io.BytesIO)
 
     def test_string_path_input(self):
         """String path is passed through to VideoReaderWrapper."""
-        from fastdeploy.input import video_utils
+        from fastdeploy.input.utils import video
 
         class FakeWrapper:
             def __init__(self, path, *args, **kwargs):
@@ -229,7 +229,7 @@ class TestReadVideoDecord(unittest.TestCase):
             def get_avg_fps(self):
                 return 30.0
 
-        with patch.object(video_utils, "VideoReaderWrapper", FakeWrapper):
+        with patch.object(video, "VideoReaderWrapper", FakeWrapper):
             reader, meta, path = read_video_decord("/fake/path.mp4")
 
         self.assertEqual(meta["num_of_frame"], 60)
@@ -333,18 +333,18 @@ class TestSampleFramesDispatcher(unittest.TestCase):
     META = {"num_of_frame": 100, "fps": 25.0}
 
     def test_default_variant_is_paddleocr(self):
-        with patch("fastdeploy.input.video_utils.sample_frames_paddleocr", wraps=sample_frames_paddleocr) as mock_fn:
+        with patch("fastdeploy.input.utils.video.sample_frames_paddleocr", wraps=sample_frames_paddleocr) as mock_fn:
             sample_frames(1, 4, 100, self.META, num_frames=8)
             mock_fn.assert_called_once()
 
     def test_qwen_variant_dispatched(self):
-        with patch("fastdeploy.input.video_utils.sample_frames_qwen", wraps=sample_frames_qwen) as mock_fn:
+        with patch("fastdeploy.input.utils.video.sample_frames_qwen", wraps=sample_frames_qwen) as mock_fn:
             sample_frames(2, 4, 100, self.META, num_frames=8, variant="qwen")
             mock_fn.assert_called_once()
 
     def test_qwen_none_fps_converted_to_sentinel(self):
         """None fps/num_frames → converted to -1 before calling sample_frames_qwen."""
-        with patch("fastdeploy.input.video_utils.sample_frames_qwen", return_value=np.array([])) as mock_fn:
+        with patch("fastdeploy.input.utils.video.sample_frames_qwen", return_value=np.array([])) as mock_fn:
             sample_frames(2, 4, 100, self.META, fps=None, num_frames=None, variant="qwen")
             args = mock_fn.call_args[0]
             self.assertEqual(args[4], -1)  # fps sentinel
