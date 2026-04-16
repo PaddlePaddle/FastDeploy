@@ -173,7 +173,7 @@ def xpu_pre_process(
         forward_meta.max_num_seqs = share_inputs["seq_lens_this_time"].shape[0]
         forward_meta.is_speculative = use_speculate_method
 
-        block_tables = forward_meta.block_tables
+        xpu_forward_meta = forward_meta
     else:
         xpu_forward_meta = XPUForwardMeta(
             ids_remove_padding=share_inputs["ids_remove_padding"],
@@ -192,88 +192,33 @@ def xpu_pre_process(
         )
         xpu_forward_meta.init_tensor(seq_lens_encoder.shape[0], share_inputs["block_tables"].shape)
 
-        block_tables = xpu_forward_meta.block_tables
+    block_tables = xpu_forward_meta.block_tables
 
-    # skip_list = [
-    #     "encoder_batch_map",
-    #     "decoder_batch_map",
-    #     "encoder_batch_idx",
-    #     "decoder_batch_idx",
-    #     "encoder_seq_lod",
-    #     "decoder_seq_lod",
-    #     "encoder_kv_lod",
-    #     "prefix_len",
-    #     "decoder_context_len",
-    #     "decoder_context_len_cache",
-    #     "prefix_block_tables",
-    #     "encoder_batch_map_cpu",
-    #     "decoder_batch_map_cpu",
-    #     "encoder_batch_idx_cpu",
-    #     "decoder_batch_idx_cpu",
-    #     "encoder_seq_lod_cpu",
-    #     "decoder_seq_lod_cpu",
-    #     "encoder_kv_lod_cpu",
-    #     "prefix_len_cpu",
-    #     "decoder_context_len_cpu",
-    #     "decoder_context_len_cache_cpu",
-    #     "len_info_cpu",
-    #     "enc_batch",
-    #     "dec_batch",
-    #     "total_enc_len",
-    # ]
+    encoder_batch_map = xpu_forward_meta.encoder_batch_map
+    decoder_batch_map = xpu_forward_meta.decoder_batch_map
+    encoder_batch_idx = xpu_forward_meta.encoder_batch_idx
+    decoder_batch_idx = xpu_forward_meta.decoder_batch_idx
+    encoder_seq_lod = xpu_forward_meta.encoder_seq_lod
+    decoder_seq_lod = xpu_forward_meta.decoder_seq_lod
+    encoder_kv_lod = xpu_forward_meta.encoder_kv_lod
+    prefix_len = xpu_forward_meta.prefix_len
+    decoder_context_len = xpu_forward_meta.decoder_context_len
+    decoder_context_len_cache = xpu_forward_meta.decoder_context_len_cache
 
-    if use_cudagraph and forward_meta is not None:
-        encoder_batch_map = forward_meta.encoder_batch_map
-        decoder_batch_map = forward_meta.decoder_batch_map
-        encoder_batch_idx = forward_meta.encoder_batch_idx
-        decoder_batch_idx = forward_meta.decoder_batch_idx
-        encoder_seq_lod = forward_meta.encoder_seq_lod
-        decoder_seq_lod = forward_meta.decoder_seq_lod
-        encoder_kv_lod = forward_meta.encoder_kv_lod
-        prefix_len = forward_meta.prefix_len
-        decoder_context_len = forward_meta.decoder_context_len
-        decoder_context_len_cache = forward_meta.decoder_context_len_cache
+    prefix_block_tables = xpu_forward_meta.prefix_block_tables
 
-        prefix_block_tables = forward_meta.prefix_block_tables
+    encoder_batch_map_cpu = xpu_forward_meta.encoder_batch_map_cpu
+    decoder_batch_map_cpu = xpu_forward_meta.decoder_batch_map_cpu
+    encoder_batch_idx_cpu = xpu_forward_meta.encoder_batch_idx_cpu
+    decoder_batch_idx_cpu = xpu_forward_meta.decoder_batch_idx_cpu
+    encoder_seq_lod_cpu = xpu_forward_meta.encoder_seq_lod_cpu
+    decoder_seq_lod_cpu = xpu_forward_meta.decoder_seq_lod_cpu
+    encoder_kv_lod_cpu = xpu_forward_meta.encoder_kv_lod_cpu
+    prefix_len_cpu = xpu_forward_meta.prefix_len_cpu
+    decoder_context_len_cpu = xpu_forward_meta.decoder_context_len_cpu
+    decoder_context_len_cache_cpu = xpu_forward_meta.decoder_context_len_cache_cpu
 
-        encoder_batch_map_cpu = forward_meta.encoder_batch_map_cpu
-        decoder_batch_map_cpu = forward_meta.decoder_batch_map_cpu
-        encoder_batch_idx_cpu = forward_meta.encoder_batch_idx_cpu
-        decoder_batch_idx_cpu = forward_meta.decoder_batch_idx_cpu
-        encoder_seq_lod_cpu = forward_meta.encoder_seq_lod_cpu
-        decoder_seq_lod_cpu = forward_meta.decoder_seq_lod_cpu
-        encoder_kv_lod_cpu = forward_meta.encoder_kv_lod_cpu
-        prefix_len_cpu = forward_meta.prefix_len_cpu
-        decoder_context_len_cpu = forward_meta.decoder_context_len_cpu
-        decoder_context_len_cache_cpu = forward_meta.decoder_context_len_cache_cpu
-
-        len_info_cpu = forward_meta.len_info_cpu
-    else:
-        encoder_batch_map = xpu_forward_meta.encoder_batch_map
-        decoder_batch_map = xpu_forward_meta.decoder_batch_map
-        encoder_batch_idx = xpu_forward_meta.encoder_batch_idx
-        decoder_batch_idx = xpu_forward_meta.decoder_batch_idx
-        encoder_seq_lod = xpu_forward_meta.encoder_seq_lod
-        decoder_seq_lod = xpu_forward_meta.decoder_seq_lod
-        encoder_kv_lod = xpu_forward_meta.encoder_kv_lod
-        prefix_len = xpu_forward_meta.prefix_len
-        decoder_context_len = xpu_forward_meta.decoder_context_len
-        decoder_context_len_cache = xpu_forward_meta.decoder_context_len_cache
-
-        prefix_block_tables = xpu_forward_meta.prefix_block_tables
-
-        encoder_batch_map_cpu = xpu_forward_meta.encoder_batch_map_cpu
-        decoder_batch_map_cpu = xpu_forward_meta.decoder_batch_map_cpu
-        encoder_batch_idx_cpu = xpu_forward_meta.encoder_batch_idx_cpu
-        decoder_batch_idx_cpu = xpu_forward_meta.decoder_batch_idx_cpu
-        encoder_seq_lod_cpu = xpu_forward_meta.encoder_seq_lod_cpu
-        decoder_seq_lod_cpu = xpu_forward_meta.decoder_seq_lod_cpu
-        encoder_kv_lod_cpu = xpu_forward_meta.encoder_kv_lod_cpu
-        prefix_len_cpu = xpu_forward_meta.prefix_len_cpu
-        decoder_context_len_cpu = xpu_forward_meta.decoder_context_len_cpu
-        decoder_context_len_cache_cpu = xpu_forward_meta.decoder_context_len_cache_cpu
-
-        len_info_cpu = xpu_forward_meta.len_info_cpu
+    len_info_cpu = xpu_forward_meta.len_info_cpu
 
     (
         _,
@@ -331,15 +276,6 @@ def xpu_pre_process(
         num_speculative_tokens,
     )
 
-    if use_cudagraph and forward_meta is not None:
-        forward_meta.enc_batch = len_info_cpu[0]
-        forward_meta.dec_batch = len_info_cpu[1]
-        forward_meta.total_enc_len = len_info_cpu[2]
-    else:
-        xpu_forward_meta.enc_batch = len_info_cpu[0]
-        xpu_forward_meta.dec_batch = len_info_cpu[1]
-        xpu_forward_meta.total_enc_len = len_info_cpu[2]
-
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
         encoder_seq_lod,
@@ -358,25 +294,17 @@ def xpu_pre_process(
     adjusted_input = adjusted_input.squeeze(1)
 
     share_inputs["ids_remove_padding"].copy_(adjusted_input, False)
-    if use_cudagraph and forward_meta is not None:
-        forward_meta.ids_remove_padding.copy_(adjusted_input, False)
-        forward_meta.is_profiling = is_profiling
-        forward_meta.slot_mapping_enc.copy_(slot_mapping_enc, False)
-        forward_meta.slot_mapping_dec.copy_(slot_mapping_dec, False)
-    else:
-        xpu_forward_meta.ids_remove_padding = adjusted_input
-        # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
-        xpu_forward_meta.is_profiling = is_profiling
-        xpu_forward_meta.slot_mapping_enc = slot_mapping_enc
-        xpu_forward_meta.slot_mapping_dec = slot_mapping_dec
-    if use_cudagraph:
-        if forward_meta is None:
-            return xpu_forward_meta
-        else:
-            # forward_meta.copy_from(xpu_forward_meta, skip_list)
-            return forward_meta
-    else:
-        return xpu_forward_meta
+
+    xpu_forward_meta.enc_batch = len_info_cpu[0]
+    xpu_forward_meta.dec_batch = len_info_cpu[1]
+    xpu_forward_meta.total_enc_len = len_info_cpu[2]
+    xpu_forward_meta.ids_remove_padding = adjusted_input
+    # Set xpu_forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
+    xpu_forward_meta.is_profiling = is_profiling
+    xpu_forward_meta.slot_mapping_enc = slot_mapping_enc
+    xpu_forward_meta.slot_mapping_dec = slot_mapping_dec
+
+    return xpu_forward_meta
 
 
 def xpu_process_output(
