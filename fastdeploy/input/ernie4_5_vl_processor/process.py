@@ -778,7 +778,9 @@ class DataProcessor(MMBaseDataProcessor):
             min_pixels=self.video_min_pixels,
             max_pixels=self.video_max_pixels,
         )[1]
-        num_video_tokens = (patches_h * patches_w) // (self.spatial_conv_size**2 * self.temporal_conv_size)
+        num_video_tokens = (self.max_frames * patches_h * patches_w) // (
+            self.spatial_conv_size**2 * self.temporal_conv_size
+        )
         return min(num_video_tokens, seq_len)
 
     def get_mm_max_tokens_per_item(

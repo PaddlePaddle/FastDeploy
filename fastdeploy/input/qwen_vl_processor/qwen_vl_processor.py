@@ -315,3 +315,18 @@ class QwenVLProcessor(TextProcessor):
 
         outputs["mm_num_token_func"] = self.processor.mm_num_tokens
         return outputs
+
+    def get_mm_max_tokens_per_item(self, seq_len: int = None):
+        """Return max tokens per item for each modality (image / video).
+
+        Delegates to the inner DataProcessor so that upper layers
+        (common_engine, scheduler) can compute encoder budgets without
+        running dummy inputs through the model.
+
+        Args:
+            seq_len: Model's maximum sequence length (optional cap).
+
+        Returns:
+            Dict[str, int]: e.g. ``{"image": 1280, "video": 8192}``.
+        """
+        return self.processor.get_mm_max_tokens_per_item(seq_len)

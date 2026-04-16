@@ -344,6 +344,7 @@ class ModelConfig:
         self.override_name_from_config()
         self.read_from_env()
         self.read_model_config()
+        self.causal = not self.is_bidirectional
 
     @property
     def registry(self):
@@ -615,6 +616,17 @@ class ModelConfig:
     def _get_download_model(self, model_name, model_type="default"):
         # TODO: Provide dynamic graph for self-downloading and save to the specified download directory.
         pass
+
+    @property
+    def is_bidirectional(self) -> bool:
+        """Whether the model uses bidirectional (non-causal) attention.
+
+        EB5 (ERNIE5) models all use bidirectional mask attention.
+        Can also be controlled by setting `is_causal: false` in the model's config.json.
+        """
+        if hasattr(self, "is_causal"):
+            return not bool(self.is_causal)
+        return ErnieArchitectures.is_ernie5_arch(getattr(self, "architectures", []))
 
     def print(self):
         """
@@ -2176,8 +2188,8 @@ class FDConfig:
                 # It will hang when real batch_size < tp_size
                 self.graph_opt_config.filter_capture_size(tp_size=self.parallel_config.tensor_parallel_size)
 
-        if ErnieArchitectures.is_ernie5_arch(self.model_config.architectures):
-            # ernie5 model not support chunked_mm_input
+        if self.model_config.is_bidirectional:
+            # bidirectional mask models (e.g. EB5) do not support chunked_mm_input
             self.cache_config.disable_chunked_mm_input = True
 
         self.postprocess_devices_and_ports()
