@@ -1,0 +1,9 @@
+aiohttp
+tqdm
+numpy
+Pillow
+pyyaml
+requests
+paddle
+paddleformers
+fastdeploy

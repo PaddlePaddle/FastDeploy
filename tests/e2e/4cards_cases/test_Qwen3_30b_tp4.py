@@ -281,7 +281,7 @@ def test_non_thinking_prompt(api_url, headers):
 def test_profile_reset_block_num():
     """测试profile reset_block_num功能，与baseline diff不能超过5%"""
     log_file = "./log/config.log"
-    baseline = 40000
+    baseline = 74000
 
     if not os.path.exists(log_file):
         pytest.fail(f"Log file not found: {log_file}")

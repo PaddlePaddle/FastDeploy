@@ -149,7 +149,7 @@ class TestPrefillMode(BaseTestRadixTopk):
         # 调用算子
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 获取参考结果
@@ -173,39 +173,48 @@ class TestDecodeMode(BaseTestRadixTopk):
         paddle.seed(2025)
 
         batch_size = 2
-        q_num_heads = 4
-        num_rows = batch_size * q_num_heads
+        kv_head = 1  # decode 模式下，每个 batch 只有一个新 token
+        num_rows = batch_size * kv_head  # = batch_size
         max_len = 1024
         top_k = 8
 
         # 使用 paddle 构造数据
         input_pd = paddle.randn([num_rows, max_len], dtype="float32")
-        offsets_pd = paddle.arange(num_rows, dtype="int32")
-        lengths_pd = paddle.full([num_rows], 0, dtype="int32")
+
+        # 生成 cu_seqlens_q: 每个 batch 在打平的 query 中的偏移量
+        # 在 decode 模式下，每个 batch 只有一个新 token，所以 cu_seqlens_q = [0, 1, 2, ..., batch_size]
+        cu_seqlens_q_pd = paddle.concat(
+            [
+                paddle.zeros([1], dtype="int32"),
+                paddle.cumsum(paddle.ones([batch_size], dtype="int32")).astype("int32"),
+            ],
+            axis=0,
+        )
+
+        lengths_pd = paddle.full([num_rows], 0, dtype="int32")  # unused
         seq_len_decoder_pd = paddle.randint(16, 128, [batch_size], dtype="int32")
 
-        # 生成 batch_id_per_token
-        batch_id_per_token_pd = paddle.arange(num_rows, dtype="int32") // q_num_heads
-
-        # 调用算子
+        # 调用算子（不使用 block_tables，让它按照 prefill 模式类似的逻辑工作）
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
             input_pd,
             output_indices,
-            offsets_pd,
-            lengths_pd,
+            cu_seqlens_q_pd,
+            lengths_pd,  # unused
             seq_len_decoder_pd,
-            batch_id_per_token_pd,
-            None,
+            None,  # batch_id_per_token
+            None,  # block_tables
+            None,  # buffer
+            0,  # max_block_per_seq
             top_k,
-            q_num_heads,
+            kv_head,
         )
 
         # Decode 模式下，长度 = seq_len_decoder + 1
         decode_lengths = seq_len_decoder_pd + 1
 
-        # 获取参考结果
-        ref_indices = self.get_reference_topk(input_pd, decode_lengths, offsets_pd, top_k, q_num_heads)
+        # 获取参考结果（注意：num_rows = batch_size * kv_head）
+        ref_indices = self.get_reference_topk(input_pd, decode_lengths, cu_seqlens_q_pd, top_k, kv_head)
 
         # 对比结果
         result = self.compare_indices(output_indices, ref_indices)
@@ -234,7 +243,7 @@ class TestEdgeLengthZero(BaseTestRadixTopk):
 
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 预期结果：全是 -1
@@ -267,7 +276,7 @@ class TestEdgeLengthLessThanTopk(BaseTestRadixTopk):
 
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 获取参考结果
@@ -300,7 +309,7 @@ class TestEdgeLengthEqualTopk(BaseTestRadixTopk):
 
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 获取参考结果
@@ -338,7 +347,7 @@ class TestLargeScale(BaseTestRadixTopk):
 
         output_indices = paddle.full([num_rows, top_k], -1, dtype="int32")
         radix_topk_ragged_transform(
-            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, top_k, q_num_heads
+            input_pd, output_indices, offsets_pd, lengths_pd, None, None, None, None, 0, top_k, q_num_heads
         )
 
         # 获取参考结果

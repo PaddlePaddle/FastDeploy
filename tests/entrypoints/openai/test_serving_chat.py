@@ -20,7 +20,6 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
-import numpy as np
 import paddle
 
 import fastdeploy.envs as envs
@@ -307,50 +306,28 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.chat_completion_handler.engine_client.format_and_add_data = AsyncMock(
             side_effect=ParameterError("param", "bad")
         )
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            with patch("fastdeploy.entrypoints.openai.serving_chat.tracing.trace_req_start") as mock_trace:
-                resp = await self.chat_completion_handler.create_chat_completion(
-                    ChatCompletionRequest(
-                        messages=[{"role": "user", "content": "Hello"}],
-                        request_id="abc",
-                        stream=False,
-                    )
+        with patch("fastdeploy.entrypoints.openai.serving_chat.tracing.trace_req_start") as mock_trace:
+            resp = await self.chat_completion_handler.create_chat_completion(
+                ChatCompletionRequest(
+                    messages=[{"role": "user", "content": "Hello"}],
+                    request_id="abc",
+                    stream=False,
                 )
+            )
         self.assertEqual(resp.error.param, "param")
         self.assertIn("bad", resp.error.message)
         self.assertEqual(mock_trace.call_args.kwargs["rid"], "chatcmpl-abc")
 
         self.chat_completion_handler.engine_client.format_and_add_data = AsyncMock(side_effect=RuntimeError("boom"))
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            with patch("fastdeploy.entrypoints.openai.serving_chat.tracing.trace_req_start"):
-                resp = await self.chat_completion_handler.create_chat_completion(
-                    ChatCompletionRequest(
-                        messages=[{"role": "user", "content": "Hello"}],
-                        request_id="err",
-                        stream=False,
-                    )
+        with patch("fastdeploy.entrypoints.openai.serving_chat.tracing.trace_req_start"):
+            resp = await self.chat_completion_handler.create_chat_completion(
+                ChatCompletionRequest(
+                    messages=[{"role": "user", "content": "Hello"}],
+                    request_id="err",
+                    stream=False,
                 )
+            )
         self.assertIn("generator error", resp.error.message)
-
-        self.chat_completion_handler.engine_client.format_and_add_data = AsyncMock(return_value=np.array([1, 2]))
-        stream_mock = Mock(return_value="streamed")
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", True):
-            with patch(
-                "fastdeploy.entrypoints.openai.serving_chat.Request.from_generic_request",
-                return_value={"metrics": {}, "prompt_tokens": "pt", "max_tokens": 3},
-            ):
-                with patch("fastdeploy.entrypoints.openai.serving_chat.tracing.trace_req_start") as mock_trace:
-                    with patch.object(self.chat_completion_handler, "chat_completion_stream_generator", stream_mock):
-                        result = await self.chat_completion_handler.create_chat_completion(
-                            ChatCompletionRequest(
-                                messages=[{"role": "user", "content": "Hello"}],
-                                user="user",
-                                stream=True,
-                            )
-                        )
-        self.assertEqual(result, "streamed")
-        self.assertTrue(mock_trace.call_args.kwargs["rid"].startswith("chatcmpl-user-"))
-        self.assertEqual(stream_mock.call_args.args[3], [1, 2])
 
     async def test_create_chat_completion_full_and_waiting_errors(self):
         """Test full generator error and waiting error handling."""
@@ -361,15 +338,14 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.chat_completion_handler.engine_client.semaphore.status = Mock(return_value="ok")
 
         self.chat_completion_handler.engine_client.format_and_add_data = AsyncMock(return_value=[1, 2])
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            with patch.object(
-                self.chat_completion_handler,
-                "chat_completion_full_generator",
-                AsyncMock(side_effect=RuntimeError("boom")),
-            ):
-                resp = await self.chat_completion_handler.create_chat_completion(
-                    ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
-                )
+        with patch.object(
+            self.chat_completion_handler,
+            "chat_completion_full_generator",
+            AsyncMock(side_effect=RuntimeError("boom")),
+        ):
+            resp = await self.chat_completion_handler.create_chat_completion(
+                ChatCompletionRequest(messages=[{"role": "user", "content": "Hello"}], stream=False)
+            )
         self.assertIn("full generator error", resp.error.message)
 
         with patch(

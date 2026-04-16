@@ -27,7 +27,7 @@ import numpy as np
 
 import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
-from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
     CompletionRequest,
@@ -40,6 +40,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     ErrorResponse,
     PromptTokenUsageInfo,
     UsageInfo,
+)
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
 )
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
@@ -91,13 +96,15 @@ class OpenAIServingCompletion:
             err_msg = (
                 f"Only master node can accept completion request, please send request to master node: {self.master_ip}"
             )
-            api_server_logger.error(err_msg)
+            log_request_error(message="request[{request_id}] {error}", request_id=request.request_id, error=err_msg)
             return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
         if self.models:
             is_supported, request.model = self.models.is_supported_model(request.model)
             if not is_supported:
                 err_msg = f"Unsupported model: [{request.model}], support [{', '.join([x.name for x in self.models.model_paths])}] or default"
-                api_server_logger.error(err_msg)
+                log_request_error(
+                    message="request[{request_id}] {error}", request_id=request.request_id, error=err_msg
+                )
                 return ErrorResponse(
                     error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR, code=ErrorCode.MODEL_NOT_SUPPORT)
                 )
@@ -110,7 +117,11 @@ class OpenAIServingCompletion:
             request_id = f"cmpl-{request.user}-{uuid.uuid4()}"
         else:
             request_id = f"cmpl-{uuid.uuid4()}"
-        api_server_logger.info(f"Initialize request {request_id}: {request}")
+        log_request(
+            level=RequestLogLevel.LIFECYCLE,
+            message="Initialize request {request_id}",
+            request_id=request_id,
+        )
         tracing.trace_req_start(rid=request_id, trace_content=request.trace_context, role="FastDeploy")
         del request.trace_context
         request_prompt_ids = None
@@ -147,15 +158,20 @@ class OpenAIServingCompletion:
                 else:
                     raise ValueError("Prompt type must be one of: str, list[str], list[int], list[list[int]]")
         except Exception as e:
-            error_msg = f"OpenAIServingCompletion create_completion: {e}, {str(traceback.format_exc())}"
-            api_server_logger.error(error_msg)
+            error_msg = f"request[{request_id}] create_completion: {e}, {str(traceback.format_exc())}"
+            log_request_error(message=error_msg)
             return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
 
         if request_prompt_ids is not None:
             request_prompts = request_prompt_ids
 
         num_choices = len(request_prompts) * (1 if request.n is None else request.n)
-        api_server_logger.info(f"Start preprocessing request: req_id={request_id}), num_choices={num_choices}")
+        log_request(
+            RequestLogLevel.STAGES,
+            message="Start preprocessing request: req_id={request_id}), num_choices={num_choices}",
+            request_id=request_id,
+            num_choices=num_choices,
+        )
         prompt_batched_token_ids = []
         prompt_tokens_list = []
         max_tokens_list = []
@@ -169,7 +185,7 @@ class OpenAIServingCompletion:
                 f"OpenAIServingCompletion waiting error: {e}, {str(traceback.format_exc())}, "
                 f"max waiting time: {self.max_waiting_time}"
             )
-            api_server_logger.error(error_msg)
+            log_request_error(message="request[{request_id}] {error}", request_id=request_id, error=error_msg)
             return ErrorResponse(
                 error=ErrorInfo(message=error_msg, code=ErrorCode.TIMEOUT, type=ErrorType.TIMEOUT_ERROR)
             )
@@ -178,10 +194,7 @@ class OpenAIServingCompletion:
             try:
                 for idx, prompt in enumerate(request_prompts):
                     request_id_idx = f"{request_id}_{idx}"
-                    if not envs.ENABLE_V1_DATA_PROCESSOR:
-                        current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
-                    else:
-                        current_req_dict = Request.from_generic_request(request, request_id=f"{request_id}_0")
+                    current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["metrics"]["arrival_time"] = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
                     if isinstance(prompt_token_ids, np.ndarray):
@@ -191,14 +204,19 @@ class OpenAIServingCompletion:
                     max_tokens_list.append(current_req_dict.get("max_tokens"))
                     del current_req_dict
             except ParameterError as e:
-                api_server_logger.error(f"OpenAIServingCompletion format error: {e}, {e.message}")
+                log_request_error(
+                    message="request[{request_id}] format error: {error}, {error_message}",
+                    request_id=request_id,
+                    error=e,
+                    error_message=e.message,
+                )
                 self.engine_client.semaphore.release()
                 return ErrorResponse(
                     error=ErrorInfo(code="400", message=str(e.message), type="invalid_request", param=e.param)
                 )
             except Exception as e:
-                error_msg = f"OpenAIServingCompletion format error: {e}, {str(traceback.format_exc())}"
-                api_server_logger.error(error_msg)
+                error_msg = f"request[{request_id}] format error: {e}, {str(traceback.format_exc())}"
+                log_request_error(message=error_msg)
                 self.engine_client.semaphore.release()
                 return ErrorResponse(
                     error=ErrorInfo(message=str(e), code=ErrorCode.INVALID_VALUE, type=ErrorType.INVALID_REQUEST_ERROR)
@@ -229,20 +247,20 @@ class OpenAIServingCompletion:
                     )
                 except Exception as e:
                     error_msg = (
-                        f"OpenAIServingCompletion completion_full_generator error: {e}, {str(traceback.format_exc())}"
+                        f"request[{request_id}] completion_full_generator error: {e}, {str(traceback.format_exc())}"
                     )
-                    api_server_logger.error(error_msg)
+                    log_request_error(message=error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
         except asyncio.CancelledError as e:
             await self.engine_client.abort(f"{request_id}_0", num_choices)
             error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
             return ErrorResponse(
                 error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
             )
         except Exception as e:
-            error_msg = f"OpenAIServingCompletion create_completion error: {e}, {str(traceback.format_exc())}"
-            api_server_logger.error(error_msg)
+            error_msg = f"request[{request_id}] create_completion error: {e}, {str(traceback.format_exc())}"
+            log_request_error(message=error_msg)
             return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
 
     async def completion_full_generator(
@@ -371,10 +389,16 @@ class OpenAIServingCompletion:
                 prompt_tokens_list=prompt_tokens_list,
                 max_tokens_list=max_tokens_list,
             )
-            api_server_logger.info(f"Completion response: {res.model_dump_json()}")
+            log_request(
+                RequestLogLevel.CONTENT, message="Completion response: {response}", response=res.model_dump_json()
+            )
             return res
         except Exception as e:
-            api_server_logger.error(f"Error in completion_full_generator: {e}", exc_info=True)
+            log_request_error(
+                message="request[{request_id}] error in completion_full_generator: {error}",
+                request_id=request_id,
+                error=e,
+            )
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             tracing.trace_req_finish(request_id)
@@ -517,8 +541,11 @@ class OpenAIServingCompletion:
                                 ],
                             )
                             yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
-                            api_server_logger.info(
-                                f"Completion Streaming response send_idx 0: {chunk.model_dump_json()}"
+                            log_request(
+                                level=RequestLogLevel.LIFECYCLE,
+                                message="Completion Streaming response send_idx 0: request_id={request_id}, completion_tokens={completion_tokens}",
+                                request_id=request_id,
+                                completion_tokens=0,
                             )
                         first_iteration[idx] = False
 
@@ -553,9 +580,16 @@ class OpenAIServingCompletion:
                         num_image_tokens[idx] += output.get("num_image_tokens")
                     reasoning_tokens[idx] += output.get("reasoning_token_num", 0)
                     output_speculate_metrics = res["metrics"].get("speculate_metrics", None)
+
+                    if output["tool_calls"] is not None:
+                        tool_called[idx] = True
+
+                    if output["skipped"] and not request.return_token_ids:
+                        continue
+
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
-                        text=output["text"],
+                        text="" if output["skipped"] else (output["text"] or ""),
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=output["tool_calls"],
@@ -570,12 +604,6 @@ class OpenAIServingCompletion:
                         speculate_metrics=output_speculate_metrics,
                     )
 
-                    if output["tool_calls"] is not None:
-                        tool_called[idx] = True
-
-                    if output["skipped"]:
-                        continue
-
                     choices.append(delta_message)
 
                     if res["finished"]:
@@ -585,6 +613,8 @@ class OpenAIServingCompletion:
                             output,
                             tool_called[idx],
                         )
+                        if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
+                            choices[-1].finish_reason = "abort"
                         inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
@@ -592,8 +622,11 @@ class OpenAIServingCompletion:
                     if send_idx == 0 and not request.return_token_ids:
                         chunk_temp = chunk
                         chunk_temp.choices = choices
-                        api_server_logger.info(
-                            f"Completion Streaming response send_idx 0: {chunk_temp.model_dump_json()}"
+                        log_request(
+                            level=RequestLogLevel.LIFECYCLE,
+                            message="Completion Streaming response send_idx 0: request_id={request_id}, completion_tokens={completion_tokens}",
+                            request_id=request_id,
+                            completion_tokens=output_tokens[idx],
                         )
                         del chunk_temp
 
@@ -646,14 +679,26 @@ class OpenAIServingCompletion:
                                 metrics=res["metrics"] if request.collect_metrics else None,
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
-                        api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
+                        log_request(
+                            level=RequestLogLevel.LIFECYCLE,
+                            message="Completion Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
+                            request_id=request_id,
+                            finish_reason=chunk.choices[-1].finish_reason if chunk.choices else None,
+                            completion_tokens=output_tokens[idx],
+                            logprobs=logprobs_res,
+                        )
 
         except asyncio.CancelledError as e:
             await self.engine_client.abort(f"{request_id}_0", num_choices)
             error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
         except Exception as e:
-            api_server_logger.error(f"Error in completion_stream_generator: {e}, {str(traceback.format_exc())}")
+            log_request_error(
+                message="request[{request_id}] error in completion_stream_generator: {error}, {traceback}",
+                request_id=request_id,
+                error=e,
+                traceback=traceback.format_exc(),
+            )
             yield f"data: {ErrorResponse(error=ErrorInfo(message=str(e), code='400', type=ErrorType.INTERNAL_ERROR)).model_dump_json(exclude_unset=True)}\n\n"
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
@@ -725,6 +770,8 @@ class OpenAIServingCompletion:
                 output,
                 False,
             )
+            if final_res.get("error_msg", None) is not None and "Aborted" in final_res["error_msg"]:
+                finish_reason = "abort"
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
@@ -885,7 +932,11 @@ class OpenAIServingCompletion:
             )
 
         except Exception as e:
-            api_server_logger.error(f"Error in _build_logprobs_response: {str(e)}, {str(traceback.format_exc())}")
+            log_request_error(
+                message="Error in _build_logprobs_response: {error}, {traceback}",
+                error=str(e),
+                traceback=traceback.format_exc(),
+            )
             return None
 
     def _build_prompt_logprobs(

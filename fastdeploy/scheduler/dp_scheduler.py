@@ -21,9 +21,10 @@ import time
 from typing import Dict, List, Optional
 
 from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.scheduler.data import ScheduledResponse
 from fastdeploy.scheduler.local_scheduler import LocalScheduler
-from fastdeploy.utils import envs, get_logger
+from fastdeploy.utils import get_logger
 
 
 class DPLocalScheduler(LocalScheduler):
@@ -58,7 +59,11 @@ class DPLocalScheduler(LocalScheduler):
 
         finished_responses = [response.request_id for response in responses if response.finished]
         if len(finished_responses) > 0:
-            self.scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Scheduler has received some finished responses: {request_ids}",
+                request_ids=finished_responses,
+            )
 
         with self.mutex:
             self.batch_responses_per_step.append([response.raw for response in responses])
@@ -131,56 +136,25 @@ class DPLocalScheduler(LocalScheduler):
         Returns:
             List of Request objects ready for processing
         """
-        if available_blocks <= reserved_output_blocks or batch < 1:
-            self.scheduler_logger.debug(
-                f"Scheduler's resource are insufficient: available_blocks={available_blocks} "
-                f"reserved_output_blocks={reserved_output_blocks} batch={batch} "
-                f"max_num_batched_tokens={max_num_batched_tokens}"
-            )
-            return []
-        required_total_blocks = 0
-        current_prefill_tokens = 0
-        start_batch_time = time.time()
+        # DP scheduler is used in V1, there is no need to manage request fetching in the scheduler, resource_manager_v1 will do that.
         requests: List[Request] = []
 
         with self.requests_not_empty:
-            while True:
-                batch_ids = self.requests_not_empty.wait_for(
-                    lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch],
-                    0.005,
-                )
-                if batch_ids:
-                    for request_id in batch_ids:
-                        request = self.requests[request_id]
-                        required_input_blocks = self.calc_required_blocks(request.prompt_tokens_ids_len, block_size)
-                        current_prefill_tokens += request.prompt_tokens_ids_len
-                        required_total_blocks += required_input_blocks + reserved_output_blocks
-                        if required_total_blocks > available_blocks:
-                            break
-
-                        requests.append(request.raw)
-                        self.ids_read_cursor += 1
-                        start_batch_time = time.time()
-                        if current_prefill_tokens > max_num_batched_tokens:
-                            break
-                        if len(requests) >= batch:
-                            break
-                if (
-                    (current_prefill_tokens > max_num_batched_tokens)
-                    or (len(requests) >= batch)
-                    or (time.time() - start_batch_time > envs.FD_EP_BATCHED_TOKEN_TIMEOUT)
-                ):
-                    break
-
-        if batch_ids:
-            if len(batch_ids) > 0 and len(requests) == 0:
-                self.scheduler_logger.debug(
-                    f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}"
-                )
+            batch_ids = self.requests_not_empty.wait_for(
+                lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + 1],
+                0.005,
+            )
+            if batch_ids:
+                for request_id in batch_ids:
+                    request = self.requests[request_id]
+                    requests.append(request.raw)
+                    self.ids_read_cursor += 1
 
         if len(requests) > 0:
-            self.scheduler_logger.info(
-                f"Scheduler has pulled some request: {[request.request_id for request in requests]}"
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Scheduler has pulled some request: {request_ids}",
+                request_ids=[request.request_id for request in requests],
             )
 
         return requests
@@ -228,7 +202,11 @@ class DPScheduler:
     def _put_requests_to_local(self):
         while True:
             request = self.request_queues.get()
-            self.scheduler_logger.info(f"Receive request from puller, request_id: {request.request_id}")
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Receive request from puller, request_id: {request_id}",
+                request_id=request.request_id,
+            )
             self._scheduler.put_requests([request])
 
     def _get_response_from_local(self):

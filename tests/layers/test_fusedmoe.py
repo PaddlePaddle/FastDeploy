@@ -506,9 +506,41 @@ class FuseMoEWrapper(paddle.nn.Layer):
             skip_quant=True,
             weight_dtype="float32",
         )
+        self.gating.weight.set_value(paddle.rand(self.gating.weight.shape, dtype=paddle.float32))
+
+        self.fc1_latent_proj = None
+        self.fc2_latent_proj = None
+
+        if self.fd_config.model_config.use_latent_moe:
+            self.fc1_latent_proj = ReplicatedLinear(
+                fd_config=self.fd_config,
+                input_size=self.fd_config.model_config.hidden_size,
+                output_size=self.fd_config.model_config.moe_latent_size,
+                with_bias=True,
+            )
+            self.fc1_latent_proj.weight.set_value(
+                paddle.zeros(self.fc1_latent_proj.weight.shape).cast(paddle.float8_e4m3fn)
+            )
+            self.fc1_latent_proj.bias.set_value(paddle.zeros(self.fc1_latent_proj.bias.shape))
+
+            self.fc2_latent_proj = ReplicatedLinear(
+                fd_config=self.fd_config,
+                input_size=self.fd_config.model_config.moe_latent_size,
+                output_size=self.fd_config.model_config.hidden_size,
+                with_bias=True,
+            )
+            self.fc2_latent_proj.weight.set_value(
+                paddle.zeros(self.fc2_latent_proj.weight.shape).cast(paddle.float8_e4m3fn)
+            )
+            self.fc2_latent_proj.bias.set_value(paddle.zeros(self.fc2_latent_proj.bias.shape))
 
         self.fused_moe = FusedMoE(
             fd_config=self.fd_config,
+            hidden_size=(
+                self.fd_config.model_config.moe_latent_size
+                if self.fd_config.model_config.use_latent_moe
+                else self.fd_config.model_config.hidden_size
+            ),
             moe_intermediate_size=self.fd_config.model_config.moe_intermediate_size,
             num_experts=self.fd_config.model_config.moe_num_experts,
             top_k=self.fd_config.model_config.moe_k,
@@ -516,8 +548,8 @@ class FuseMoEWrapper(paddle.nn.Layer):
             layer_idx=666,
             weight_key_map=weight_key_map,
             topk_method="noaux_tc",
-            topk_group=4,
-            n_group=8,
+            topk_group=0,
+            n_group=0,
             gate_correction_bias=paddle.zeros([self.fd_config.model_config.moe_num_experts], paddle.float32),
             # gate_correction_bias = gate_correction_bias_real_data
         )
@@ -557,11 +589,20 @@ class FuseMoEWrapper(paddle.nn.Layer):
 class TestFusedMoE(unittest.TestCase):
     def setUp(self) -> None:
         self.architectures = ["Ernie4_5_MoeForCausalLM"]
-        self.hidden_size = 4096
-        self.moe_intermediate_size = 2048
-        self.moe_num_experts = 64
-        self.moe_k = 8
-        self.num_layers = 2
+        self.hidden_size = 1536
+        self.moe_intermediate_size = 1024
+
+        self.moe_num_experts = 256
+        self.moe_k = 16
+        self.use_latent_moe = True
+        self.moe_latent_size = 768
+
+        # self.moe_num_experts = 128
+        # self.moe_k = 8
+        # self.use_latent_moe = False
+        # self.moe_latent_size = 768
+
+        self.num_layers = 50
         self.num_attention_heads = -1
         self.model_config = self.build_model_config()
 
@@ -583,6 +624,8 @@ class TestFusedMoE(unittest.TestCase):
             "moe_k": self.moe_k,
             "num_attention_heads": self.num_attention_heads,
             "dtype": "bfloat16",
+            "use_latent_moe": self.use_latent_moe,
+            "moe_latent_size": self.moe_latent_size,
         }
 
         tmp_dir = f"./tmpwedfewfef{paddle.distributed.get_rank()}"
@@ -634,9 +677,10 @@ class TestFusedMoE(unittest.TestCase):
                         out = cache_hidden_states + cache_hidden_states
                     else:
                         gating = fused_moe[j % real_weight_layers].gating
-                        gating.weight.set_value(paddle.rand(gating.weight.shape, dtype=paddle.float32))
+                        fc1_latent_proj = fused_moe[j % real_weight_layers].fc1_latent_proj
+                        fc2_latent_proj = fused_moe[j % real_weight_layers].fc2_latent_proj
                         out = fused_moe[j % real_weight_layers].fused_moe(
-                            cache_hidden_states[idx], gating, forward_meta=MockForwardMeta()
+                            cache_hidden_states[idx], gating, MockForwardMeta(), None, fc1_latent_proj, fc2_latent_proj
                         )
 
                 return out

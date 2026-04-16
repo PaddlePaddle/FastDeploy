@@ -16,9 +16,14 @@
 
 import asyncio
 import os
+import sys
 import unittest
 import uuid
 import weakref
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
+
+from e2e.utils.serving_utils import clean_ports
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.async_llm import AsyncLLM
@@ -42,6 +47,10 @@ class TestAsyncLLMEngine(unittest.TestCase):
     def setUpClass(cls):
         """Set up AsyncLLM for testing"""
         try:
+            # Clean ports before starting the engine
+            print("Pre-test port cleanup...")
+            clean_ports()
+
             # Use unique ports to avoid conflicts
             base_port = int(os.getenv("FD_ENGINE_QUEUE_PORT", "6778"))
             cache_port = int(os.getenv("FD_CACHE_QUEUE_PORT", "6779"))

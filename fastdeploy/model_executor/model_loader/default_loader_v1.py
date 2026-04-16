@@ -49,7 +49,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
 
     def clean_memory_fragments(self) -> None:
         """clean_memory_fragments"""
-        if current_platform.is_cuda() or current_platform.is_maca():
+        if current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar():
             paddle.device.empty_cache()
             paddle.device.synchronize()
 
@@ -57,7 +57,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
     @measure_time()
     def load_weights(self, model, fd_config: FDConfig, enable_cache: bool = False) -> None:
         model_path = get_model_path(fd_config)
-        weights_iterator = get_weight_iterator(model_path)
+        weights_iterator = get_weight_iterator(model_path, fd_config.load_config)
         if enable_cache:
             load_weights_from_cache(model, weights_iterator)
         else:

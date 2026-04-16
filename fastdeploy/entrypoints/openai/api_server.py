@@ -73,6 +73,11 @@ from fastdeploy.entrypoints.openai.v1.serving_completion import (
     OpenAIServingCompletion as OpenAIServingCompletionV1,
 )
 from fastdeploy.envs import environment_variables
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.utils import (
     ExceptionHandler,
@@ -80,6 +85,8 @@ from fastdeploy.utils import (
     StatefulSemaphore,
     api_server_logger,
     console_logger,
+    get_host_ip,
+    get_version_info,
     is_port_available,
     retrive_model_from_server,
 )
@@ -284,6 +291,7 @@ async def lifespan(app: FastAPI):
     app.state.completion_handler = completion_handler
     app.state.embedding_handler = embedding_handler
     app.state.reward_handler = reward_handler
+    app.state.event_loop = asyncio.get_running_loop()
 
     if llm_engine is not None and not isinstance(llm_engine, AsyncLLM):
         llm_engine.engine.data_processor = engine_client.data_processor
@@ -322,7 +330,11 @@ async def connection_manager():
         await asyncio.wait_for(connection_semaphore.acquire(), timeout=0.001)
         yield
     except asyncio.TimeoutError:
-        api_server_logger.info(f"Reach max request concurrency, semaphore status: {connection_semaphore.status()}")
+        log_request(
+            level=RequestLogLevel.LIFECYCLE,
+            message="Reach max request concurrency, semaphore status: {status}",
+            status=connection_semaphore.status(),
+        )
         raise HTTPException(
             status_code=429, detail=f"Too many requests,current max concurrency is {args.max_concurrency}"
         )
@@ -406,6 +418,44 @@ async def is_paused(request: Request) -> Response:
     return control_response.to_api_json_response()
 
 
+@app.post("/v1/sleep")
+async def sleep(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+    # Support both JSON body and query parameter
+    if await request.body():
+        request_data = await request.json()
+    else:
+        # Extract query params
+        request_data = dict(request.query_params)
+
+    try:
+        control_request = ControlRequest(request_id, "sleep", request_data)
+    except TypeError as e:
+        return JSONResponse(status_code=400, content={"error": "Invalid parameter type", "message": str(e)})
+
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.post("/v1/wakeup")
+async def wakeup(request: Request) -> Response:
+    request_id = f"control-{uuid.uuid4()}"
+    # Support both JSON body and query parameter
+    if await request.body():
+        request_data = await request.json()
+    else:
+        # Extract query params
+        request_data = dict(request.query_params)
+
+    try:
+        control_request = ControlRequest(request_id, "wakeup", request_data)
+    except TypeError as e:
+        return JSONResponse(status_code=400, content={"error": "Invalid parameter type", "message": str(e)})
+
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
 @app.post("/v1/update_weights")
 async def update_weights(request: Request) -> Response:
     request_id = f"control-{uuid.uuid4()}"
@@ -422,21 +472,35 @@ async def update_weights(request: Request) -> Response:
             )
         args["version"] = request_data["version"]
 
-    # Validate and extract rsync_config parameter
-    if "rsync_config" in request_data and request_data["rsync_config"] is not None:
-        if not isinstance(request_data["rsync_config"], dict):
+    # Validate and extract verify_checksum parameter
+    if "verify_checksum" in request_data and request_data["verify_checksum"] is not None:
+        if not isinstance(request_data["verify_checksum"], bool):
             return JSONResponse(
                 status_code=400,
-                content={"error": "Invalid parameter type", "message": "rsync_config must be a dictionary"},
+                content={"error": "Invalid parameter type", "message": "verify_checksum must be a boolean"},
             )
-        if "etcd_server" not in request_data["rsync_config"]:
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Invalid parameter type", "message": "rsync_config must contain etcd_server"},
-            )
-        args["rsync_config"] = request_data["rsync_config"]
+        args["verify_checksum"] = request_data["verify_checksum"]
 
     control_request = ControlRequest(request_id, "update_weights", args)
+    control_response = await app.state.engine_client.run_control_method(control_request)
+    return control_response.to_api_json_response()
+
+
+@app.post("/v1/abort_requests")
+async def abort_requests(request: Request):
+    body = await request.json()
+    abort_all = body.get("abort_all", False)
+    req_ids = body.get("req_ids", None)
+
+    # 参数校验
+    if not abort_all and not req_ids:
+        return JSONResponse(status_code=400, content={"error": "must provide abort_all=true or req_ids"})
+
+    control_request = ControlRequest(
+        request_id=f"control-{uuid.uuid4()}",
+        method="abort_requests",
+        args={"abort_all": abort_all, "req_ids": req_ids or []},
+    )
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
 
@@ -490,7 +554,7 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     """
     Create a chat completion for the provided prompt and parameters.
     """
-    api_server_logger.debug(f"Chat Received request: {request.model_dump_json()}")
+    log_request(RequestLogLevel.FULL, message="Chat Received request: {request}", request=request.model_dump_json())
     if envs.TRACES_ENABLE:
         if req.headers:
             headers = dict(req.headers)
@@ -517,7 +581,11 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
                 return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
 
     except HTTPException as e:
-        api_server_logger.error(f"Error in chat completion: {str(e)}")
+        log_request_error(
+            message="request[{request_id}] Error in chat completion: {error}",
+            request_id=getattr(request, "request_id", None),
+            error=str(e),
+        )
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
 
@@ -527,7 +595,9 @@ async def create_completion(request: CompletionRequest, req: Request):
     """
     Create a completion for the provided prompt and parameters.
     """
-    api_server_logger.info(f"Completion Received request: {request.model_dump_json()}")
+    log_request(
+        RequestLogLevel.FULL, message="Completion Received request: {request}", request=request.model_dump_json()
+    )
     if envs.TRACES_ENABLE:
         if req.headers:
             headers = dict(req.headers)
@@ -606,8 +676,14 @@ def update_model_weight(request: Request) -> Response:
     update model weight
     """
     if app.state.dynamic_load_weight:
-        status_code, msg = app.state.engine_client.update_model_weight()
-        return JSONResponse(content=msg, status_code=status_code)
+        if envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
+            request_id = f"control-{uuid.uuid4()}"
+            control_request = ControlRequest(request_id, "wakeup")
+            control_response = app.state.engine_client.run_control_method_sync(control_request, app.state.event_loop)
+            return control_response.to_api_json_response()
+        else:
+            status_code, msg = app.state.engine_client.update_model_weight()
+            return JSONResponse(content=msg, status_code=status_code)
     else:
         return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
@@ -619,8 +695,14 @@ def clear_load_weight(request: Request) -> Response:
     clear model weight
     """
     if app.state.dynamic_load_weight:
-        status_code, msg = app.state.engine_client.clear_load_weight()
-        return JSONResponse(content=msg, status_code=status_code)
+        if envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
+            request_id = f"control-{uuid.uuid4()}"
+            control_request = ControlRequest(request_id, "sleep")
+            control_response = app.state.engine_client.run_control_method_sync(control_request, app.state.event_loop)
+            return control_response.to_api_json_response()
+        else:
+            status_code, msg = app.state.engine_client.clear_load_weight()
+            return JSONResponse(content=msg, status_code=status_code)
     else:
         return JSONResponse(content={"error": "Dynamic Load Weight Disabled."}, status_code=404)
 
@@ -719,11 +801,60 @@ def config_info() -> Response:
 
     def process_object(obj):
         if hasattr(obj, "__dict__"):
-            # 处理有__dict__属性的对象
             return obj.__dict__
-        return None  # 或其他默认处理
+        if isinstance(obj, (set, frozenset)):
+            return list(obj)
+        return str(obj)
 
     cfg_dict = {k: v for k, v in cfg.__dict__.items()}
+
+    # Version info
+    cfg_dict["version_info"] = get_version_info()
+
+    # Chat template
+    cfg_dict["chat_template"] = chat_template
+
+    # Server config from args
+    cfg_dict["server_config"] = {
+        "host": args.host,
+        "port": args.port,
+        "workers": args.workers,
+        "metrics_port": args.metrics_port,
+        "controller_port": args.controller_port,
+        "max_concurrency": args.max_concurrency,
+        "max_waiting_time": args.max_waiting_time,
+        "timeout": args.timeout,
+        "timeout_graceful_shutdown": args.timeout_graceful_shutdown,
+        "served_model_name": args.served_model_name,
+        "task": args.task,
+        "model_config_name": args.model_config_name,
+        "tokenizer_base_url": args.tokenizer_base_url,
+        "enable_mm_output": args.enable_mm_output,
+        "tool_call_parser": args.tool_call_parser,
+        "tool_parser_plugin": args.tool_parser_plugin,
+    }
+
+    # GPU info
+    try:
+        import paddle
+
+        from fastdeploy.platforms import current_platform
+
+        device_info = {}
+        device_info["device_type"] = current_platform.device_name
+        device_info["device_count"] = paddle.device.cuda.device_count()
+        device_ids = str(cfg.parallel_config.device_ids).split(",") if cfg.parallel_config else ["0"]
+        first_device = int(device_ids[0].strip()) - 1
+        props = paddle.device.cuda.get_device_properties(first_device)
+        device_info["device_name"] = props.name
+        device_info["device_total_memory"] = props.total_memory
+        device_info["device_multi_processor_count"] = props.multi_processor_count
+        device_info["device_major"] = props.major
+        device_info["device_minor"] = props.minor
+        cfg_dict["device_info"] = device_info
+    except Exception:
+        cfg_dict["device_info"] = None
+
     env_dict = {k: v() for k, v in environment_variables.items()}
     cfg_dict["env_config"] = env_dict
     result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
@@ -772,7 +903,7 @@ def control_scheduler(request: ControlSchedulerRequest):
     Control the scheduler behavior with the given parameters.
     """
 
-    content = ErrorResponse(error=ErrorInfo(message="Scheduler updated successfully", code=0))
+    content = ErrorResponse(error=ErrorInfo(message="Scheduler updated successfully", code="0"))
 
     global llm_engine
     if llm_engine is None:
@@ -849,6 +980,11 @@ def launch_worker_monitor():
 
 def main():
     """main函数"""
+
+    if args.ips and get_host_ip() not in args.ips:
+        api_server_logger.error(f"Worker IP {get_host_ip()} not in the list of allowed IPs {args.ips}.")
+        return
+
     if args.local_data_parallel_id == 0:
         if not load_engine():
             return

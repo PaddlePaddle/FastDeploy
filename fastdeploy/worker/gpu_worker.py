@@ -16,7 +16,7 @@
 
 import gc
 import time
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import paddle
 import pynvml
@@ -126,14 +126,12 @@ class GpuWorker(WorkerBase):
         before_run_meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
 
         logger.info(
-            (
-                "Before running the profile, the memory usage info is as follows:",
-                f"\nDevice Total memory: {before_run_meminfo.total / Gb}",
-                f"\nDevice used memory: {before_run_meminfo.used / Gb}",
-                f"\nDevice free memory: {before_run_meminfo.free / Gb}",
-                f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
-                f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
-            )
+            "Before running the profile, the memory usage info is as follows:"
+            f"\nDevice Total memory: {before_run_meminfo.total / Gb}"
+            f"\nDevice used memory: {before_run_meminfo.used / Gb}"
+            f"\nDevice free memory: {before_run_meminfo.free / Gb}"
+            f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}"
+            f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}"
         )
 
         # 2. Profile run
@@ -161,16 +159,14 @@ class GpuWorker(WorkerBase):
 
         end_time = time.perf_counter()
         logger.info(
-            (
-                "After running the profile, the memory usage info is as follows:",
-                f"\nDevice Total memory: {after_run_meminfo.total / Gb}",
-                f"\nDevice used memory: {after_run_meminfo.used / Gb}",
-                f"\nDevice free memory: {after_run_meminfo.free / Gb}",
-                f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
-                f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
-                f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
-                f"Profile time: {end_time - start_time}",
-            )
+            "After running the profile, the memory usage info is as follows:"
+            f"\nDevice Total memory: {after_run_meminfo.total / Gb}"
+            f"\nDevice used memory: {after_run_meminfo.used / Gb}"
+            f"\nDevice free memory: {after_run_meminfo.free / Gb}"
+            f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}"
+            f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}"
+            f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}"
+            f"Profile time: {end_time - start_time}"
         )
 
         return available_kv_cache_memory  # return to calculate the block num in this device
@@ -192,9 +188,17 @@ class GpuWorker(WorkerBase):
         if self.fd_config.routing_replay_config.enable_routing_replay:
             self.model_runner.initialize_routing_replay_manager()
 
-    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+    def update_weights(self, version: str = None, verify_checksum: bool = False):
         """update weights in place"""
-        return self.model_runner.update_weights(version, rsync_config)
+        return self.model_runner.update_weights(version, verify_checksum)
+
+    def sleep(self, **kwargs) -> None:
+        """Offload memory from GPU"""
+        return self.model_runner.sleep(**kwargs)
+
+    def wakeup(self, **kwargs) -> None:
+        """Reload memory into GPU"""
+        return self.model_runner.wakeup(**kwargs)
 
     def execute_model(
         self,

@@ -46,6 +46,7 @@ func Init(cfg *config.Config, managerAPI common.ManagerAPI) {
 		cacheBlockSize:      cfg.Scheduler.CacheBlockSize,
 		tokenizerURL:        cfg.Scheduler.TokenizerURL,
 		tokenizerTimeout:    time.Duration(cfg.Scheduler.TokenizerTimeoutSecs * float64(time.Second)),
+		evictionDuration:    time.Duration(cfg.Scheduler.EvictionDurationMins * float64(time.Minute)),
 	}
 
 	scheduler := &Scheduler{
@@ -124,7 +125,7 @@ func SelectWorker(ctx context.Context, workers []string, message string, workerT
 
 	// 2) Prefill: current token processing count (process_tokens)
 	var tokens uint64
-	if workerType == "prefill" && message != "" {
+	if (workerType == "prefill" || workerType == "mixed") && message != "" {
 		tokenCounter := GetOrCreateTokenCounter(ctx, selectWorkerURL)
 		tokenCounter.Add(estimateTokens(message))
 		tokens = tokenCounter.Get()

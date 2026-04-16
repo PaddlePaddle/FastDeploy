@@ -1,4 +1,3 @@
-
 // Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,174 +12,230 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <cooperative_groups.h>
+
 #include "paddle/extension.h"
+
 #include "helper.h"
 
-// #define DEBUG_EAGLE_KERNEL
+namespace cg = cooperative_groups;
 
-__global__ void computeOrderKernel(const int* last_seq_lens_this_time,
-                                   const int* seq_lens_this_time,
-                                   const int64_t* step_idx,
-                                   int* src_map,
-                                   int* output_token_num,
-                                   int bsz) {
-  int in_offset = 0;
-  int out_offset = 0;
-  if (threadIdx.x == 0) {
-    for (int i = 0; i < bsz; ++i) {
-      int cur_seq_lens_this_time = seq_lens_this_time[i];
-      int cur_last_seq_lens_this_time = last_seq_lens_this_time[i];
-#ifdef DEBUG_EAGLE_KERNEL
-      printf(
-          "batch %d: cur_seq_lens_this_time:%d. "
-          "cur_last_seq_lens_this_time:%d\n",
-          i,
-          cur_seq_lens_this_time,
-          cur_last_seq_lens_this_time);
-#endif
+// Fused kernel: block 0 computes position_map and output_token_num in parallel
+// (one thread per batch element), then all blocks synchronize via
+// cooperative_groups grid sync, and finally all threads perform the hidden
+// states rebuild in parallel.
+template <typename T, int VecSize>
+__global__ void rebuildSelfHiddenStatesKernel(
+    const T* input,
+    const int* last_seq_lens_this_time,
+    const int* seq_lens_this_time,
+    const int* seq_lens_encoder,
+    int* position_map,
+    int* output_token_num,
+    T* out,
+    const int bsz,
+    const int dim_embed,
+    const int input_token_num) {
+  cg::grid_group grid = cg::this_grid();
+
+  // Dynamic shared memory layout: [in_count|out_count|in_offsets|out_offsets]
+  extern __shared__ int smem[];
+  int* in_count = smem;
+  int* out_count = smem + bsz;
+  int* in_offsets = smem + 2 * bsz;
+  int* out_offsets = smem + 3 * bsz;
+
+  // Phase 1: compute position_map (parallelized across threads in block 0)
+  if (blockIdx.x == 0) {
+    // Phase 1a: each thread computes counts for its batch elements
+    for (int t = threadIdx.x; t < bsz; t += blockDim.x) {
+      int cur_seq_lens_this_time = seq_lens_this_time[t];
+      int cur_last_seq_lens_this_time = last_seq_lens_this_time[t];
       // 1. encoder
-      if (step_idx[i] == 1 && cur_seq_lens_this_time > 0) {
-#ifdef DEBUG_EAGLE_KERNEL
-        printf("batch %d last_step is encoder \n", i);
-#endif
-        in_offset += 1;
-        src_map[out_offset++] = in_offset - 1;
-#ifdef DEBUG_EAGLE_KERNEL
-        printf("batch %d finish. src_map[%d]=%d \n",
-               i,
-               out_offset - 1,
-               in_offset - 1);
-#endif
+      if (seq_lens_encoder[t] > 0 && cur_seq_lens_this_time > 0) {
+        in_count[t] = 1;
+        out_count[t] = 1;
         // 2. decoder
-      } else if (cur_seq_lens_this_time > 0) /* =1 */ {
-#ifdef DEBUG_EAGLE_KERNEL
-        printf("batch %d is decoder\n", i);
-#endif
-        in_offset += cur_last_seq_lens_this_time;
-        src_map[out_offset++] = in_offset - 1;
+      } else if (cur_seq_lens_this_time > 0) {
+        in_count[t] = cur_last_seq_lens_this_time;
+        out_count[t] = 1;
         // 3. stop
       } else {
-        // first token end
-        if (step_idx[i] == 1) {
-#ifdef DEBUG_EAGLE_KERNEL
-          printf("batch %d finished in first token \n", i);
-#endif
-          in_offset += cur_last_seq_lens_this_time > 0 ? 1 : 0;
-          // normal end
+        if (seq_lens_encoder[t] > 0) {
+          in_count[t] = cur_last_seq_lens_this_time > 0 ? 1 : 0;
         } else {
-#ifdef DEBUG_EAGLE_KERNEL
-          printf("batch %d finished in non-first token \n", i);
-#endif
-          in_offset += cur_last_seq_lens_this_time;
+          in_count[t] = cur_last_seq_lens_this_time;
         }
+        out_count[t] = 0;
       }
     }
-    output_token_num[0] = out_offset;
-#ifdef DEBUG_EAGLE_KERNEL
-    printf("position map output_token_num%d:\n", output_token_num[0]);
-    for (int i = 0; i < output_token_num[0]; i++) {
-      printf("%d ", src_map[i]);
-    }
-    printf("\n");
-#endif
-  }
-}
+    __syncthreads();
 
-template <typename T, int PackSize>
-__global__ void rebuildSelfHiddenStatesKernel(
-    const T* input, int* src_map, T* output, int dim_embed, int elem_cnt) {
-  using LoadT = AlignedVector<T, PackSize>;
+    // Phase 1b: prefix sum (thread 0 computes exclusive prefix sums)
+    if (threadIdx.x == 0) {
+      int in_acc = 0, out_acc = 0;
+      for (int i = 0; i < bsz; i++) {
+        in_offsets[i] = in_acc;
+        out_offsets[i] = out_acc;
+        in_acc += in_count[i];
+        out_acc += out_count[i];
+      }
+      output_token_num[0] = out_acc;
+    }
+    __syncthreads();
+
+    // Phase 1c: each thread fills position_map for its batch elements
+    for (int t = threadIdx.x; t < bsz; t += blockDim.x) {
+      int in_off = in_offsets[t];
+      int out_off = out_offsets[t];
+      int cur_seq_lens_this_time = seq_lens_this_time[t];
+      int cur_last_seq_lens_this_time = last_seq_lens_this_time[t];
+      // 1. encoder
+      if (seq_lens_encoder[t] > 0 && cur_seq_lens_this_time > 0) {
+        position_map[in_off] = out_off;
+        // 2. decoder
+      } else if (cur_seq_lens_this_time > 0) {
+        position_map[in_off + cur_last_seq_lens_this_time - 1] = out_off;
+      }
+      // 3. stop: no writes needed (position_map stays -1 from memset)
+    }
+  }
+
+  // Phase 2: grid-wide sync to ensure position_map is ready
+  grid.sync();
+
+  // Phase 3: rebuild hidden states in parallel
+  using LoadT = AlignedVector<T, VecSize>;
   LoadT src_vec;
 
-  int global_thread_idx = blockDim.x * blockIdx.x + threadIdx.x;
-  for (int elem_id = global_thread_idx * PackSize; elem_id < elem_cnt;
-       elem_id += blockDim.x * gridDim.x * PackSize) {
-    int output_token_idx = elem_id / dim_embed;
-    int input_token_idx = src_map[output_token_idx];
-    int offset = elem_id % dim_embed;
-    Load<T, PackSize>(input + input_token_idx * dim_embed + offset, &src_vec);
-    Store<T, PackSize>(src_vec, output + output_token_idx * dim_embed + offset);
+  int elem_cnt = input_token_num * dim_embed;
+  int global_thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
+  for (int elem_idx = global_thread_idx * VecSize; elem_idx < elem_cnt;
+       elem_idx += blockDim.x * gridDim.x * VecSize) {
+    int ori_token_idx = elem_idx / dim_embed;
+    int token_idx = position_map[ori_token_idx];
+    if (token_idx >= 0) {
+      int offset = elem_idx % dim_embed;
+      Load<T, VecSize>(input + ori_token_idx * dim_embed + offset, &src_vec);
+      Store<T, VecSize>(src_vec, out + token_idx * dim_embed + offset);
+    }
   }
 }
 
 template <paddle::DataType D>
 std::vector<paddle::Tensor> DispatchDtype(
-    const paddle::Tensor input,
-    const paddle::Tensor last_seq_lens_this_time,
-    const paddle::Tensor seq_lens_this_time,
-    const paddle::Tensor step_idx) {
+    const paddle::Tensor& input,
+    const paddle::Tensor& last_seq_lens_this_time,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder) {
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
 
-  int input_token_num = input.shape()[0];
-  int dim_embed = input.shape()[1];
+  auto input_token_num = input.shape()[0];
+  auto dim_embed = input.shape()[1];
   int bsz = seq_lens_this_time.shape()[0];
-  auto src_map = paddle::full({input_token_num},
-                              -1,
-                              seq_lens_this_time.dtype(),
-                              seq_lens_this_time.place());
-  auto output_token_num = paddle::full(
-      {1}, 0, seq_lens_this_time.dtype(), seq_lens_this_time.place());
 
-  computeOrderKernel<<<1, 1, 0, seq_lens_this_time.stream()>>>(
-      last_seq_lens_this_time.data<int>(),
-      seq_lens_this_time.data<int>(),
-      step_idx.data<int64_t>(),
-      src_map.data<int>(),
-      output_token_num.data<int>(),
-      bsz);
+  auto position_map = paddle::empty(
+      {input_token_num}, seq_lens_this_time.dtype(), input.place());
+  cudaMemsetAsync(position_map.data<int>(),
+                  0xFF,
+                  input_token_num * sizeof(int),
+                  input.stream());
 
-  int output_token_num_cpu =
-      output_token_num.copy_to(paddle::CPUPlace(), false).data<int>()[0];
+  auto output_token_num =
+      paddle::empty({1}, seq_lens_this_time.dtype(), input.place());
 
-  auto out = paddle::full(
-      {output_token_num_cpu, dim_embed}, -1, input.type(), input.place());
+  // Pre-allocate output with max possible size (input_token_num)
+  auto out =
+      paddle::empty({input_token_num, dim_embed}, input.dtype(), input.place());
 
   constexpr int packSize = VEC_16B / (sizeof(DataType_));
-  int elem_cnt = output_token_num_cpu * dim_embed;
-  // printf("output_token_num: %d, dim_embed: %d, cnt: %d. packSize: %d\n",
-  // output_token_num_cpu, dim_embed,elem_cnt, packSize);
+  int elem_cnt = input_token_num * dim_embed;
   assert(elem_cnt % packSize == 0);
 
-  int pack_num = elem_cnt / packSize;
+  // Grid size linearly related to bsz for cooperative launch efficiency
+  // and CUDA graph capture friendliness
+  constexpr int thread_per_block = 128;
+  constexpr int DESIRED_BLOCKS_PER_BATCH = 4;
+  int dynamic_smem_size = 4 * bsz * static_cast<int>(sizeof(int));
 
-  int grid_size = 1;
+  // Cooperative launch limit: use conservative smem upper bound for caching
+  static const int max_grid_size = [&]() {
+    int blocks_per_sm = 0;
+    constexpr int smem_upper_bound = 4 * 512 * sizeof(int);  // 8KB
+    cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+        &blocks_per_sm,
+        rebuildSelfHiddenStatesKernel<DataType_, packSize>,
+        thread_per_block,
+        smem_upper_bound);
+    int dev = 0;
+    cudaGetDevice(&dev);
+    int sms = 0;
+    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+    return blocks_per_sm * sms;
+  }();
 
-  GetNumBlocks(pack_num, &grid_size);
+  int blocks_per_batch =
+      std::min(DESIRED_BLOCKS_PER_BATCH, max_grid_size / std::max(bsz, 1));
+  blocks_per_batch = std::max(blocks_per_batch, 1);
+  int grid_size = std::min(bsz * blocks_per_batch, max_grid_size);
+  grid_size = std::max(grid_size, 1);
 
-  constexpr int threadPerBlock = 128;
+  const DataType_* input_ptr =
+      reinterpret_cast<const DataType_*>(input.data<data_t>());
+  const int* last_seq_lens_this_time_ptr = last_seq_lens_this_time.data<int>();
+  const int* seq_lens_this_time_ptr = seq_lens_this_time.data<int>();
+  const int* seq_lens_encoder_ptr = seq_lens_encoder.data<int>();
+  int* position_map_ptr = position_map.data<int>();
+  int* output_token_num_ptr = output_token_num.data<int>();
+  DataType_* out_ptr = reinterpret_cast<DataType_*>(out.data<data_t>());
+  int dim_embed_int = static_cast<int>(dim_embed);
+  int input_token_num_int = static_cast<int>(input_token_num);
 
-  rebuildSelfHiddenStatesKernel<DataType_, packSize>
-      <<<grid_size, threadPerBlock, 0, input.stream()>>>(
-          reinterpret_cast<const DataType_*>(input.data<data_t>()),
-          src_map.data<int>(),
-          reinterpret_cast<DataType_*>(out.data<data_t>()),
-          dim_embed,
-          elem_cnt);
+  void* kernel_args[] = {&input_ptr,
+                         &last_seq_lens_this_time_ptr,
+                         &seq_lens_this_time_ptr,
+                         &seq_lens_encoder_ptr,
+                         &position_map_ptr,
+                         &output_token_num_ptr,
+                         &out_ptr,
+                         &bsz,
+                         &dim_embed_int,
+                         &input_token_num_int};
 
-  return {out};
+  cudaLaunchCooperativeKernel(
+      (void*)rebuildSelfHiddenStatesKernel<DataType_, packSize>,
+      dim3(grid_size),
+      dim3(thread_per_block),
+      kernel_args,
+      dynamic_smem_size,
+      input.stream());
+
+  return {out, output_token_num};
 }
 
 std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& input,
     const paddle::Tensor& last_seq_lens_this_time,
     const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& step_idx) {
+    const paddle::Tensor& seq_lens_encoder) {
   switch (input.dtype()) {
     case paddle::DataType::BFLOAT16:
       return DispatchDtype<paddle::DataType::BFLOAT16>(
-          input, last_seq_lens_this_time, seq_lens_this_time, step_idx);
+          input, last_seq_lens_this_time, seq_lens_this_time, seq_lens_encoder);
     case paddle::DataType::FLOAT16:
       return DispatchDtype<paddle::DataType::FLOAT16>(
-          input, last_seq_lens_this_time, seq_lens_this_time, step_idx);
+          input, last_seq_lens_this_time, seq_lens_this_time, seq_lens_encoder);
     default:
       PD_THROW("Not support this data type");
   }
 }
 
 PD_BUILD_STATIC_OP(eagle_get_self_hidden_states)
-    .Inputs(
-        {"input", "last_seq_lens_this_time", "seq_lens_this_time", "step_idx"})
-    .Outputs({"out"})
+    .Inputs({"input",
+             "last_seq_lens_this_time",
+             "seq_lens_this_time",
+             "seq_lens_encoder"})
+    .Outputs({"out", "output_token_num"})
     .SetKernelFn(PD_KERNEL(EagleGetSelfHiddenStates));

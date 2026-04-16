@@ -1,0 +1,5 @@
+max_model_len: 131072
+max_num_seqs: 256
+tensor_parallel_size: 2
+kvcache_storage_backend: "mooncake"
+enable_output_caching: True

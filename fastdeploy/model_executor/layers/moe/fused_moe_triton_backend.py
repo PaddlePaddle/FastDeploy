@@ -20,6 +20,7 @@ import paddle
 from paddle import nn
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -40,6 +41,7 @@ except ImportError:
     pass
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    fused_stack_transpose_quant,
     quant_weight_ue8m0,
     transform_scale_ue8m0,
 )
@@ -290,6 +292,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -679,6 +683,8 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -978,6 +984,8 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -1172,6 +1180,9 @@ def python_op_fused_moe_kernel_paddle_infer_meta(
     config: dict,
     quant_config,
     topk_ids_hookfunc,
+    layer,
+    fc1_latent_proj,
+    fc2_latent_proj,
 ):
     token_num = x.shape[0]
     return paddle.static.MetaTensor(shape=[token_num, hidden_size], dtype=x.dtype)
@@ -1209,19 +1220,34 @@ def python_op_fused_moe_kernel_paddle(
     config: dict,
     quant_config,
     topk_ids_hookfunc,
+    layer,
+    fc1_latent_proj,
+    fc2_latent_proj,
 ):
 
     token_num = x.shape[0]
     if x.shape[0] == 0:
         return paddle.zeros([token_num, hidden_size], dtype=x.dtype)
 
-    topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-        gate_out,
-        gate_correction_bias,
-        top_k,
-        True,  # apply_norm_weight
-        False,
-    )
+    if layer.topk_method == "noaux_tc":
+        gate_out, topk_weights, topk_ids = get_moe_scores(
+            gate_out,
+            layer.n_group,
+            layer.topk_group,
+            layer.top_k,
+            layer.routed_scaling_factor,
+            layer.gate_correction_bias,
+            getattr(layer, "renormalize", True),
+        )
+    else:
+        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            gate_correction_bias,
+            top_k,
+            True,  # apply_norm_weight
+            False,
+        )
+
     if topk_ids_hookfunc is not None:
         topk_ids_hookfunc(topk_ids=topk_ids)
 
@@ -1242,11 +1268,14 @@ def python_op_fused_moe_kernel_paddle(
 
     from .triton_moe_kernels import fused_moe_kernel_paddle
 
+    if fc1_latent_proj is not None:
+        x = fc1_latent_proj(x)
+
     if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0], False)
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            x, using_pow2_scale=False, output_scale_transpose=False
+            x, using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE, output_scale_transpose=False
         )
         x_scale = x_scale[: x.shape[0]]
 
@@ -1304,7 +1333,9 @@ def python_op_fused_moe_kernel_paddle(
         )
     else:
         x_q, x_scale = paddle.incubate.nn.functional.fp8_quant_blockwise(
-            intermediate_cache2, using_pow2_scale=False, output_scale_transpose=False
+            intermediate_cache2,
+            using_pow2_scale=fastdeploy.envs.FD_FP8_QUANT_WITH_POW2SCALE,
+            output_scale_transpose=False,
         )
         x_scale = x_scale[: x_q.shape[0]]
 
@@ -1352,6 +1383,9 @@ def python_op_fused_moe_kernel_paddle(
 
     intermediate_cache3.reshape_([token_num, top_k, hidden_size])
     out = intermediate_cache3.sum(axis=1)
+
+    if fc2_latent_proj is not None:
+        out = fc2_latent_proj(out)
 
     return out
 
@@ -1632,22 +1666,46 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                     )
                     weight[expert_id].copy_(weight_quant, False)
             else:
-                weight = paddle.empty(shape=weight_shape, dtype=weight_dtype)
-                scale_list = []
+                if fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
+                    num_expert = layer.num_local_experts
+                    expert_weight_list = [getattr(layer, unquantized_weight_name)[i] for i in range(num_expert)]
+                    weight = paddle.empty(shape=weight_shape, dtype=weight_dtype)
+                    scale_list = []
+                    chunk_size = 64
 
-                for expert_id in range(layer.num_local_experts):
-                    w_q, s_fp32 = quant_weight_ue8m0(
-                        weight_dequant=getattr(layer, unquantized_weight_name)[expert_id]
-                        .transpose([1, 0])
-                        .contiguous(),
-                        weight_block_size=self.quant_config.weight_block_size,
-                    )
-                    s_ue8m0 = transform_scale_ue8m0(
-                        s_fp32, mn=w_q.shape[-2], weight_block_size=self.quant_config.weight_block_size
-                    )
-                    weight[expert_id].copy_(w_q, False)
-                    scale_list.append(s_ue8m0)
-                scale = paddle.to_tensor(scale_list)
+                    for start_idx in range(0, num_expert, chunk_size):
+                        end_idx = min(start_idx + chunk_size, num_expert)
+                        local_chunk_size = end_idx - start_idx
+                        chunk_experts = [w.contiguous() for w in expert_weight_list[start_idx:end_idx]]
+
+                        w1_t_quant, w1_t_scale = fused_stack_transpose_quant(
+                            chunk_experts, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
+                        )
+                        w1_t_quant = w1_t_quant.reshape([local_chunk_size, -1, w1_t_quant.shape[-1]])
+                        w1_t_scale = w1_t_scale.reshape([local_chunk_size, -1, w1_t_scale.shape[-1]])
+
+                        weight[start_idx:end_idx].copy_(w1_t_quant, False)
+                        scale_list.append(w1_t_scale)
+
+                    scale = paddle.concat(scale_list, axis=0)
+                else:
+                    weight = paddle.empty(shape=weight_shape, dtype=weight_dtype)
+                    scale_list = []
+
+                    for expert_id in range(layer.num_local_experts):
+                        w_q, s_fp32 = quant_weight_ue8m0(
+                            weight_dequant=getattr(layer, unquantized_weight_name)[expert_id]
+                            .transpose([1, 0])
+                            .contiguous(),
+                            weight_block_size=self.quant_config.weight_block_size,
+                        )
+                        s_ue8m0 = transform_scale_ue8m0(
+                            s_fp32, mn=w_q.shape[-2], weight_block_size=self.quant_config.weight_block_size
+                        )
+                        weight[expert_id].copy_(w_q, False)
+                        scale_list.append(s_ue8m0)
+                    scale = paddle.to_tensor(scale_list)
+                scale = scale.transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
 
             free_tensor(getattr(layer, unquantized_weight_name))
             free_tensor(getattr(layer, weight_name))
@@ -1676,7 +1734,23 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             else:
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
-                scale_param.data = scale.transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
+                scale_param.data = scale
+            if bool(envs.FD_USE_BLACKWELL_GEMM):
+                import blackwell_ops
+
+                scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
+                scale_bw_name = scale_name + "_bw"
+                setattr(
+                    layer,
+                    scale_bw_name,
+                    scale_bw,
+                )
+                if layer.fd_config.scheduler_config.splitwise_role != "mixed":
+                    setattr(
+                        layer,
+                        scale_name,
+                        None,
+                    )
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize
@@ -1764,6 +1838,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -1811,4 +1887,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             config,
             self.quant_config,
             topk_ids_hookfunc,
+            layer,
+            fc1_latent_proj,
+            fc2_latent_proj,
         )

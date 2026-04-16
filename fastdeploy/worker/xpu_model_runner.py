@@ -31,7 +31,7 @@ from paddle import nn
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import ImagePosition, Request, RequestType
-from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+from fastdeploy.input.image_processors.adaptive_processor import AdaptiveImageProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.utils import (
@@ -97,7 +97,7 @@ class XPUModelRunner(ModelRunnerBase):
         local_rank: int,
     ):
         super().__init__(fd_config=fd_config, device=device)
-        self.enable_mm = self.model_config.enable_mm
+        self.enable_mm = self.fd_config.enable_mm_runtime
         self.rank = rank
         self.local_rank = local_rank
         self.device_id = device_id
@@ -135,8 +135,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.encoder_cache = None
 
         self.device_id = device_id
-        self.speculative_method = self.fd_config.speculative_config.method
-        self.speculative_decoding = self.speculative_method is not None
+        self.spec_method = self.fd_config.speculative_config.method
+        self.speculative_decoding = self.spec_method is not None
 
         # used by SamplingMetadata
         self.enable_logprob = fd_config.model_config.enable_logprob  # fd_config.model_config.enable_logprob
@@ -485,12 +485,12 @@ class XPUModelRunner(ModelRunnerBase):
                             image_features_output is not None
                         ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
                         grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                        mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                        mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                         # add feature to encoder cache
                         self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
-                        feature_idx += mm_token_lenght
+                        feature_idx += mm_token_length
                         thw_idx += 1
 
                     feature_start = feature_position.offset
@@ -510,13 +510,13 @@ class XPUModelRunner(ModelRunnerBase):
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             for feature_position in multi_vision_inputs["feature_position_list"]:
                 grid_thw = multi_vision_inputs["grid_thw_lst"][thw_idx]
-                mm_token_lenght = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_lenght]
+                mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
 
                 feature_start = feature_position.offset
                 feature_end = feature_position.offset + feature_position.length
                 merge_image_features.append(mm_feature[feature_start:feature_end])
-                feature_idx += mm_token_lenght
+                feature_idx += mm_token_length
                 thw_idx += 1
             self.share_inputs["image_features"] = paddle.concat(merge_image_features, axis=0)
 
@@ -728,7 +728,7 @@ class XPUModelRunner(ModelRunnerBase):
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
@@ -877,7 +877,7 @@ class XPUModelRunner(ModelRunnerBase):
 
         self.share_inputs["not_need_stop"][0] = True
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
                 request, "temp_scaled_logprobs", False
             )
@@ -990,6 +990,7 @@ class XPUModelRunner(ModelRunnerBase):
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
 
         # Set block tables
@@ -1069,12 +1070,18 @@ class XPUModelRunner(ModelRunnerBase):
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            self.share_inputs["output_cum_offsets"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            self.share_inputs["output_padding_offset"] = paddle.full(
+            self.share_inputs["cu_seqlens_q_output"] = paddle.full(
+                shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32"
+            )
+            self.share_inputs["batch_id_per_token_output"] = paddle.full(
                 shape=[max_num_seqs * (max_draft_token_num + 1)],
                 fill_value=0,
                 dtype="int32",
             )
+            # reasoning_status: per-sequence reasoning phase indicator
+            # 0=thinking, 1=emitting boundary, 2=response, 3=end
+            # verify_draft_tokens 在 reasoning_status==1 时强制拒绝所有 draft token
+            self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
             # For V1_KVCACHE_SCHEDULER
             self.share_inputs["step_draft_tokens"] = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
@@ -1114,6 +1121,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.cache_config.block_size,
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
+
+        # TODO(chenhuan): support cached_token_num
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
@@ -1126,6 +1135,7 @@ class XPUModelRunner(ModelRunnerBase):
             is_profiling=is_dummy_run,
             forward_meta=self.forward_meta,
             use_cudagraph=self.use_cudagraph,
+            num_speculative_tokens=self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
         )
 
         if self.use_cudagraph:
@@ -1212,7 +1222,7 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Initialize attention meta data
         """
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
@@ -1249,7 +1259,11 @@ class XPUModelRunner(ModelRunnerBase):
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
         # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
-        create_cache_tensor = profile or self.scheduler_config.splitwise_role == "mixed"
+        create_cache_tensor = profile or not (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend
+            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        )
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
             while cache_ready_signal.value[local_rank] != 1:
@@ -1435,7 +1449,7 @@ class XPUModelRunner(ModelRunnerBase):
             block_num=block_num,
         )
 
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
@@ -1452,19 +1466,16 @@ class XPUModelRunner(ModelRunnerBase):
         """
         Init speculative proposer
         """
-        if self.speculative_method == SpecMethod.NGRAM:
-            # xpu not support ngram proposer now
+        if self.spec_method is None:
             self.proposer = None
-        elif self.speculative_method == SpecMethod.MTP:
-            self.proposer = self.speculative_method.create_proposer(
-                self.fd_config,
-                main_model=self.get_model(),
-                local_rank=self.local_rank,
-                device_id=self.device_id,
-                share_inputs=self.share_inputs,
-            )
-        else:
-            self.proposer = None
+            return
+        self.proposer = self.spec_method.create_proposer(
+            self.fd_config,
+            main_model=self.get_model(),
+            local_rank=self.local_rank,
+            device_id=self.device_id,
+            share_inputs=self.share_inputs,
+        )
 
     def _set_debug_level(
         self, debug_level: int = 0x1, model_forward_batch: Optional[List[Request]] = None, is_dummy_run: bool = False
@@ -1577,14 +1588,18 @@ class XPUModelRunner(ModelRunnerBase):
             )
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
-            hidden_states = xpu_process_output(
-                model_output, self.share_inputs["cum_offsets"], self.forward_meta, self.share_inputs
-            )
+            hidden_states = xpu_process_output(model_output, self.forward_meta, self.share_inputs)
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
             sampler_output = None
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        sampler_output.sampled_token_ids,
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
             else:
                 sampler_output = self.sampler(
                     logits,
@@ -1592,6 +1607,27 @@ class XPUModelRunner(ModelRunnerBase):
                     self.model_config.max_model_len,
                     self.share_inputs,
                 )
+                if self.parallel_config.tensor_parallel_size > 1:
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_tokens"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["accept_num"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["step_idx"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
+                    paddle.distributed.broadcast(
+                        self.share_inputs["stop_flags"],
+                        self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
+                        group=self.parallel_config.tp_group,
+                    )
 
             prompt_logprobs_list = None
             if not self.speculative_decoding:
@@ -1641,6 +1677,8 @@ class XPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                     self.parallel_config.data_parallel_size > 1,
                     skip_save_output,
+                    is_naive_mode=(self.speculative_decoding and self.proposer is None),
+                    prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
                 )
             else:
                 xpu_post_process_normal(
@@ -1656,8 +1694,11 @@ class XPUModelRunner(ModelRunnerBase):
                 )
 
             # 6. Draft model propose
-            if self.speculative_method == SpecMethod.MTP:
-                self.proposer.run(full_hidden_states=model_output)
+            if self.speculative_decoding and self.proposer is not None:
+                if self.spec_method == SpecMethod.MTP:
+                    self.proposer.run(full_hidden_states=model_output)
+                else:
+                    self.proposer.run(share_inputs=self.share_inputs)
 
             # 7. Updata 'infer_seed' and step_paddle()
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
@@ -1709,7 +1750,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Execute a forward pass with dummy inputs to profile the memory usage of the model"""
 
         self.num_gpu_blocks = self.cache_config.total_block_num
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks, profile=True)
         self.initialize_kv_cache(profile=True)
 
@@ -1731,7 +1772,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.num_gpu_blocks = num_gpu_blocks
 
         # Reset block table and kv cache with global block num
-        if self.speculative_method == SpecMethod.MTP:
+        if self.spec_method == SpecMethod.MTP:
             self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
         self.initialize_kv_cache()
 
@@ -1814,12 +1855,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.forward_meta.clear_caches()
 
     def _init_image_preprocess(self) -> None:
-        processor = DataProcessor(
-            tokenizer_name=self.model_config.model,
-            image_preprocessor_name=str(self.model_config.model),
-        )
-        processor.eval()
-        image_preprocess = processor.image_preprocessor
+        image_preprocess = AdaptiveImageProcessor.from_pretrained(str(self.model_config.model))
         image_preprocess.image_mean_tensor = paddle.to_tensor(image_preprocess.image_mean, dtype="float32").reshape(
             [1, 3, 1, 1]
         )
@@ -1871,7 +1907,7 @@ class XPUModelRunner(ModelRunnerBase):
 
     def extract_vision_features_ernie(self, vision_inputs: dict[str, list[paddle.Tensor]]) -> paddle.Tensor:
         """
-        vision feature extactor for ernie-vl
+        vision feature extractor for ernie-vl
         """
         assert len(vision_inputs["images_lst"]) > 0, "at least one image needed"
 

@@ -32,8 +32,17 @@ on:
         required: true
 
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: gpu_4cards_test
+
   run_4_cards_tests:
     runs-on: [self-hosted, GPU-h20-4Cards]
+    needs: check_bypass
+    if: ${{ inputs.FASTDEPLOY_WHEEL_URL != '' && needs.check_bypass.outputs.can-skip != 'true' }}
     timeout-minutes: 30
     steps:
       - name: Code Prepare
@@ -72,12 +81,27 @@ jobs:
             if ls "${REPO_NAME}"* >/dev/null 2>&1; then
               echo "ERROR: Failed to clean ${REPO_NAME}* after multiple attempts"
               ls -ld "${REPO_NAME}"*
-              exit 1
+              echo "Attempting force cleanup with find..."
+              find /workspace -mindepth 1 -maxdepth 1 -name "${REPO_NAME}*" -type d -exec chmod -R u+rwx {} \; -exec rm -rf {} + 2>/dev/null || true
+              if ls "${REPO_NAME}"* >/dev/null 2>&1; then
+                echo "ERROR: Force cleanup still failed"
+                exit 1
+              else
+                echo "Force cleanup succeeded"
+              fi
             fi
           '
 
-          wget -q --no-proxy ${fd_archive_url}
-          tar -xf FastDeploy.tar.gz
+          wget -q --no-proxy ${fd_archive_url} || {
+            echo "ERROR: Failed to download archive from ${fd_archive_url}"
+            exit 1
+          }
+
+          tar --no-same-owner -xf FastDeploy.tar.gz || {
+            echo "ERROR: Failed to extract archive"
+            exit 1
+          }
+
           rm -rf FastDeploy.tar.gz
           cd FastDeploy
           git config --global user.name "FastDeployCI"
@@ -157,8 +181,17 @@ jobs:
             docker rm -f ${runner_name} || true
           fi
 
-          docker run --rm --ipc=host --net=host \
+          export RDMA_DEVICES=$(find /dev/infiniband/uverbs* -maxdepth 1 -not -type d | xargs -I{} echo '--device {}:{}')
+
+          docker run --rm --net=host \
+          --sysctl kernel.msgmax=1048576 \
+          --sysctl kernel.msgmnb=268435456 \
           --name ${runner_name} \
+          --cap-add=SYS_PTRACE --cap-add=IPC_LOCK \
+          --shm-size=64G \
+          ${RDMA_DEVICES} \
+          --device=/dev/infiniband/rdma_cm \
+          --ulimit memlock=-1:-1 \
           -v $(pwd):/workspace -w /workspace \
           -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
           -v "${CACHE_DIR}/.cache:/root/.cache" \
@@ -170,10 +203,15 @@ jobs:
           -e "FD_METRICS_PORT=${FD_METRICS_PORT}" \
           -e "FLASK_PORT=${FLASK_PORT}" \
           -e "FD_CACHE_QUEUE_PORT=${FD_CACHE_QUEUE_PORT}" \
+          -e "FD_ROUTER_PORT=${FD_ROUTER_PORT}" \
+          -e "FD_CONNECTOR_PORT=${FD_CONNECTOR_PORT}" \
+          -e "FD_RDMA_PORT=${FD_RDMA_PORT}" \
+          -e "CLEAN_CUDA=1" \
           -e TZ="Asia/Shanghai" \
           -e "fd_wheel_url=${fd_wheel_url}" \
           -e "BASE_REF=${BASE_REF}" \
           -e "IS_PR=${IS_PR}" \
+          -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -c '
 
           git config --global --add safe.directory /workspace/FastDeploy
@@ -192,3 +230,10 @@ jobs:
           export CUDA_VISIBLE_DEVICES=0,1,2,3
           bash scripts/run_gpu_4cards.sh
           '
+
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}

@@ -22,7 +22,7 @@ Why mock:
 
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastdeploy.router.router import Router, RouterArgs
 
@@ -142,6 +142,171 @@ class TestRouterRegisteredNumber(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["mixed"], 1)
         self.assertEqual(result["prefill"], 0)
         self.assertEqual(result["decode"], 0)
+
+
+class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
+    """Tests for /v1/abort_requests route in router.py."""
+
+    def _make_mock_session(self, responses):
+        """Create a mock aiohttp.ClientSession where post() returns coroutines."""
+        mock_session = MagicMock()
+        call_count = 0
+
+        def post_side_effect(*args, **kwargs):
+            nonlocal call_count
+            resp = responses[call_count]
+            call_count += 1
+            if isinstance(resp, Exception):
+                raise resp
+
+            async def _coro():
+                return resp
+
+            return _coro()
+
+        mock_session.post = MagicMock(side_effect=post_side_effect)
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=False)
+        return mock_session
+
+    @patch("fastdeploy.router.router.check_service_health_async", new_callable=AsyncMock, return_value=True)
+    async def test_abort_broadcasts_to_all_but_returns_decode_only(self, mock_health):
+        """P and D both receive the request, but only D results are aggregated."""
+        from fastdeploy.router.router import abort_requests as abort_fn
+        from fastdeploy.router.router import app
+
+        router = Router(_make_args(splitwise=True))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.1", port=8001, role="prefill"))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.2", port=8002, role="decode"))
+        app.state.router = router
+
+        prefill_resp = AsyncMock()
+        prefill_resp.status = 200
+        prefill_resp.json = AsyncMock(
+            return_value={
+                "request_id": "control-p",
+                "status": "success",
+                "error_message": None,
+                "result": {"aborted": [{"request_id": "req-1_0", "output_token_count": 0}], "not_found": []},
+            }
+        )
+        decode_resp = AsyncMock()
+        decode_resp.status = 200
+        decode_resp.json = AsyncMock(
+            return_value={
+                "request_id": "control-d",
+                "status": "success",
+                "error_message": None,
+                "result": {"aborted": [{"request_id": "req-1_0", "output_token_count": 15}], "not_found": []},
+            }
+        )
+
+        mock_session = self._make_mock_session([prefill_resp, decode_resp])
+        mock_request = AsyncMock()
+        mock_request.json = AsyncMock(return_value={"req_ids": ["req-1"]})
+
+        with patch("fastdeploy.router.router.aiohttp.ClientSession", return_value=mock_session):
+            resp = await abort_fn(mock_request)
+
+        import json
+
+        body = json.loads(resp.body)
+        self.assertEqual(len(body["result"]["aborted"]), 1)
+        self.assertEqual(body["result"]["aborted"][0]["output_token_count"], 15)
+        self.assertEqual(body["status"], "success")
+        self.assertEqual(mock_session.post.call_count, 2)
+
+    @patch("fastdeploy.router.router.check_service_health_async", new_callable=AsyncMock, return_value=True)
+    async def test_abort_decode_error_returns_error_status(self, mock_health):
+        """When D node returns a non-200 status, status should be 'error'."""
+        from fastdeploy.router.router import abort_requests as abort_fn
+        from fastdeploy.router.router import app
+
+        router = Router(_make_args(splitwise=True))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.1", port=8001, role="prefill"))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.2", port=8002, role="decode"))
+        app.state.router = router
+
+        prefill_resp = AsyncMock()
+        prefill_resp.status = 200
+        prefill_resp.json = AsyncMock(
+            return_value={
+                "request_id": "control-p",
+                "status": "success",
+                "error_message": None,
+                "result": {"aborted": [], "not_found": []},
+            }
+        )
+        decode_resp = AsyncMock()
+        decode_resp.status = 500
+
+        mock_session = self._make_mock_session([prefill_resp, decode_resp])
+        mock_request = AsyncMock()
+        mock_request.json = AsyncMock(return_value={"abort_all": True})
+
+        with patch("fastdeploy.router.router.aiohttp.ClientSession", return_value=mock_session):
+            resp = await abort_fn(mock_request)
+
+        import json
+
+        body = json.loads(resp.body)
+        self.assertEqual(body["status"], "error")
+        self.assertIsNotNone(body["error_message"])
+
+    @patch("fastdeploy.router.router.check_service_health_async", new_callable=AsyncMock, return_value=True)
+    async def test_abort_decode_exception_returns_error(self, mock_health):
+        """When D node connection fails (exception), error should be captured."""
+        from fastdeploy.router.router import abort_requests as abort_fn
+        from fastdeploy.router.router import app
+
+        router = Router(_make_args(splitwise=True))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.1", port=8001, role="prefill"))
+        await router.register_instance(_make_instance_dict(host_ip="10.0.0.2", port=8002, role="decode"))
+        app.state.router = router
+
+        prefill_resp = AsyncMock()
+        prefill_resp.status = 200
+        prefill_resp.json = AsyncMock(
+            return_value={
+                "request_id": "control-p",
+                "status": "success",
+                "error_message": None,
+                "result": {"aborted": [], "not_found": []},
+            }
+        )
+
+        # D node raises exception — but asyncio.gather(return_exceptions=True) captures it
+        # So we pass the exception as a response directly
+        mock_session = self._make_mock_session([prefill_resp, prefill_resp])  # placeholder
+        call_idx = [0]
+
+        def post_with_exception(*args, **kwargs):
+            call_idx[0] += 1
+            if call_idx[0] == 1:
+                # prefill: normal
+                async def _coro():
+                    return prefill_resp
+
+                return _coro()
+            else:
+                # decode: raise (gather with return_exceptions=True will catch)
+                async def _coro_err():
+                    raise ConnectionError("refused")
+
+                return _coro_err()
+
+        mock_session.post = MagicMock(side_effect=post_with_exception)
+        mock_request = AsyncMock()
+        mock_request.json = AsyncMock(return_value={"abort_all": True})
+
+        with patch("fastdeploy.router.router.aiohttp.ClientSession", return_value=mock_session):
+            resp = await abort_fn(mock_request)
+
+        import json
+
+        body = json.loads(resp.body)
+        self.assertEqual(body["status"], "error")
+        self.assertIn("refused", body["error_message"])
 
 
 if __name__ == "__main__":

@@ -34,8 +34,7 @@ Note: Because the 4.3.8 SDK in the image is incompatible with KMD, paddle cannot
 ### 3.2 Install paddle
 
 ```bash
-pip3 install paddlepaddle==3.4.0.dev20260226 -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
-pip3 install paddle-iluvatar-gpu==3.0.0.dev20260226 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+pip3 install paddlepaddle-iluvatar==3.4.0.dev20260326 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
 ```
 
 ### 3.3 Install or build FastDeploy
@@ -59,7 +58,6 @@ script list bellow:
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 run_demo.py
@@ -136,7 +134,6 @@ server:
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -193,7 +190,6 @@ server:
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -230,7 +226,6 @@ server:
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -285,7 +280,6 @@ The script as bellow:
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 run_demo_vl.py
@@ -384,7 +378,6 @@ server:
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -424,7 +417,6 @@ server:
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 python3 -m fastdeploy.entrypoints.openai.api_server \
@@ -475,7 +467,6 @@ server:
 ```bash
 #!/bin/bash
 export PADDLE_XCCL_BACKEND=iluvatar_gpu
-export INFERENCE_MSG_QUEUE_ID=232132
 export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 export CUDA_VISIBLE_DEVICES=1
@@ -541,3 +532,7 @@ python3 infer_ocr_vl_benchmark.py
 ```
 
 After each image is inferred, a corresponding `md` file will be generated in the `output` path. Running the entire benchmark (1355 images) takes approximately 1.8 hours.
+
+## 5. Quantization Format Support
+- `W8A16`: `--quantization wint8`
+- `W4A16`: `--quantization wint4`

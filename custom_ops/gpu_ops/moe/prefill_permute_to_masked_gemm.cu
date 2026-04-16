@@ -218,9 +218,11 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
             DISPATCH_TOPK(
                 paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 4)
             DISPATCH_TOPK(
+                paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 6)
+            DISPATCH_TOPK(
                 paddle::DataType::BFLOAT16, paddle::DataType::FLOAT32, 8)
             default:
-              PD_THROW("Unsupported topk value, must be 4 or 8");
+              PD_THROW("Unsupported topk value, must be 4 or 6 or 8");
           }
         }
         case paddle::DataType::INT32: {

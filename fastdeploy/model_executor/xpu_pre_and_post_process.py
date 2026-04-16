@@ -40,21 +40,41 @@ if current_platform.is_xpu():
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_clear_accept_nums,
-        speculate_get_output_padding_offset,
-        speculate_get_padding_offset,
-        speculate_get_seq_lens_output,
+        speculate_pre_process,
         speculate_save_output,
         speculate_set_stop_value_multi_seqs,
-        speculate_set_value_by_flags_and_idx,
         speculate_step_paddle,
         speculate_step_reschedule,
         speculate_step_system_cache,
-        speculate_update,
         step_paddle,
+        unified_update_model_status,
         update_inputs,
         update_inputs_v1,
     )
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
+
+
+def async_set_value(tgt, src):
+    if isinstance(src, (int, float, bool)):
+        src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
+    elif isinstance(src, (list, np.ndarray)):
+        dtype_str = str(tgt.dtype).split(".")[1]
+        np_dtype = dtype_str if dtype_str != "bfloat16" else "float32"
+        if isinstance(src, list):
+            src = np.array(src, dtype=np_dtype)
+        # TODO: support async_numpy_to_tensor
+        src = paddle.to_tensor(src, dtype=tgt.dtype)
+    elif isinstance(src, paddle.Tensor):
+        pass
+    else:
+        raise ValueError("async_set_value unsupported src type: {}".format(type(src)))
+    if src.shape != tgt.shape:
+        src = src.reshape(tgt.shape)
+    if src.dtype != tgt.dtype:
+        src = src.cast(tgt.dtype)
+    if src.place != tgt.place:
+        src = src.to(tgt.place)
+    tgt.copy_(src, blocking=False)
 
 
 def _build_stream_transfer_data(
@@ -106,44 +126,25 @@ def xpu_pre_process(
     is_profiling: bool = False,
     forward_meta=None,
     use_cudagraph=False,
+    num_speculative_tokens=0,
 ) -> XPUForwardMeta:
     """ """
-    max_len = input_ids.shape[1]
-    cum_offsets_now = paddle.cumsum(max_len - seq_lens_this_time, dtype="int32")
-    token_num = paddle.sum(seq_lens_this_time)
 
+    token_num_cpu = paddle.sum(seq_lens_this_time).cpu()
     if use_speculate_method:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = speculate_get_padding_offset(
-            input_ids,
-            draft_tokens,
-            cum_offsets_now,
-            token_num,
-            seq_lens_this_time,
-            seq_lens_encoder,
+            cu_seqlens_q_output,
+            batch_id_per_token_output,
+            real_output_token_num,
+        ) = speculate_pre_process(
+            token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder
         )
-        seq_lens_output = speculate_get_seq_lens_output(
-            seq_lens_this_time,
-            seq_lens_encoder,
-            seq_lens_decoder,
-        )
-        if isinstance(seq_lens_output, list):
-            seq_lens_output = seq_lens_output[0]
-        output_token_num = paddle.sum(seq_lens_output)
-        output_cum_offsets_tmp = paddle.cumsum(max_len - seq_lens_output, dtype="int32")
-        output_padding_offset, output_cum_offsets = speculate_get_output_padding_offset(
-            output_cum_offsets_tmp,
-            output_token_num,
-            seq_lens_output,
-            max_len,
-        )
-        share_inputs["output_cum_offsets"].copy_(output_cum_offsets, False)
-        share_inputs["output_padding_offset"].copy_(output_padding_offset, False)
+        share_inputs["cu_seqlens_q_output"] = cu_seqlens_q_output
+        share_inputs["batch_id_per_token_output"] = batch_id_per_token_output
     else:
         (
             ids_remove_padding,
@@ -151,9 +152,8 @@ def xpu_pre_process(
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, cum_offsets_now, token_num, seq_lens_this_time)
+        ) = get_padding_offset(input_ids, seq_lens_this_time, token_num_cpu)
 
-    share_inputs["cum_offsets"] = cum_offsets
     share_inputs["batch_id_per_token"] = batch_id_per_token
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
@@ -165,12 +165,13 @@ def xpu_pre_process(
         seq_lens_encoder=share_inputs["seq_lens_encoder"],
         seq_lens_decoder=share_inputs["seq_lens_decoder"],
         seq_lens_this_time=share_inputs["seq_lens_this_time"],
-        cum_offsets=share_inputs["cum_offsets"],
         batch_id_per_token=share_inputs["batch_id_per_token"],
         cu_seqlens_q=share_inputs["cu_seqlens_q"],
         cu_seqlens_k=share_inputs["cu_seqlens_k"],
         block_tables=share_inputs["block_tables"],
         caches=share_inputs["caches"],
+        max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
+        is_speculative=use_speculate_method,
     )
 
     (
@@ -196,8 +197,15 @@ def xpu_pre_process(
         xpu_forward_meta.decoder_context_len_cpu,
         xpu_forward_meta.decoder_context_len_cache_cpu,
         xpu_forward_meta.len_info_cpu,
+        xpu_forward_meta.slot_mapping_enc,
+        xpu_forward_meta.slot_mapping_dec,
     ) = get_infer_param(
-        seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, xpu_forward_meta.block_tables, block_size
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_this_time,
+        xpu_forward_meta.block_tables,
+        block_size,
+        num_speculative_tokens,
     )
     xpu_forward_meta.enc_batch = xpu_forward_meta.len_info_cpu[0]
     xpu_forward_meta.dec_batch = xpu_forward_meta.len_info_cpu[1]
@@ -205,7 +213,6 @@ def xpu_pre_process(
 
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
-        cum_offsets,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
         xpu_forward_meta.encoder_batch_idx,
@@ -237,20 +244,13 @@ def xpu_pre_process(
 
 def xpu_process_output(
     forward_output,
-    cum_offsets: paddle.Tensor,
     xpu_forward_meta: XPUForwardMeta,
     share_inputs,
 ) -> paddle.Tensor:
     """ """
 
-    if isinstance(share_inputs, dict):
-        output_padding_offset = share_inputs.get("output_padding_offset", None)
-    else:
-        output_padding_offset = getattr(share_inputs, "output_padding_offset", None)
-
-    hiddden_states = gather_next_token(
+    hidden_states = gather_next_token(
         forward_output,
-        cum_offsets,
         xpu_forward_meta.encoder_seq_lod,
         xpu_forward_meta.decoder_seq_lod,
         xpu_forward_meta.encoder_batch_map,
@@ -260,10 +260,10 @@ def xpu_process_output(
         xpu_forward_meta.encoder_batch_map_cpu,
         xpu_forward_meta.decoder_batch_map_cpu,
         xpu_forward_meta.len_info_cpu,
-        output_padding_offset,  # output_padding_offset
-        -1,  # max_input_length
+        xpu_forward_meta.is_speculative,
+        xpu_forward_meta.max_num_seqs,
     )
-    return hiddden_states
+    return hidden_states
 
 
 def xpu_post_process_normal(
@@ -411,6 +411,8 @@ def xpu_post_process_specualate(
     share_inputs: Dict[str, paddle.Tensor],
     save_each_rank: bool = False,
     skip_save_output: bool = False,
+    is_naive_mode: bool = False,
+    prefill_one_step_stop: bool = False,
 ):
     """"""
 
@@ -427,7 +429,7 @@ def xpu_post_process_specualate(
         model_output.min_tokens,
     )
 
-    speculate_update(
+    unified_update_model_status(
         model_output.seq_lens_encoder,
         model_output.seq_lens_decoder,
         model_output.not_need_stop,
@@ -439,6 +441,13 @@ def xpu_post_process_specualate(
         model_output.seq_lens_this_time,
         model_output.is_block_step,
         model_output.mask_rollback,
+        model_output.pre_ids,
+        model_output.prompt_lens,
+        model_output.step_idx,
+        model_output.eos_token_id,
+        model_output.max_dec_len,
+        is_naive_mode,
+        prefill_one_step_stop,
     )
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:
@@ -458,18 +467,6 @@ def xpu_post_process_specualate(
             raise NotImplementedError("Not support speculate_save_output_topk now.")
 
     speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
-
-    # Update pre_ids through accept tokens
-    speculate_set_value_by_flags_and_idx(
-        model_output.pre_ids,
-        model_output.accept_tokens,
-        model_output.accept_num,
-        model_output.stop_flags,
-        model_output.seq_lens_this_time,
-        model_output.seq_lens_encoder,
-        model_output.seq_lens_decoder,
-        model_output.step_idx,
-    )
 
 
 def step_xpu(

@@ -34,8 +34,7 @@ void prof_start();
 void prof_stop();
 
 std::vector<paddle::Tensor> AdjustBatch(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
-    const paddle::Tensor& cum_offsets,  // [bsz, 1]
+    const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_idx,
@@ -58,11 +57,10 @@ void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag);
 
-std::vector<paddle::Tensor> BlockAttn(
+std::vector<paddle::Tensor> SplitEmbeddingKVCacheBlockAttn(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& rotary_embs,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& prefix_block_tables,
@@ -83,6 +81,50 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache_xpu,
     const paddle::Tensor& decoder_batch_map_xpu,
     const paddle::Tensor& prefix_len_xpu,
+    const paddle::Tensor& slot_mapping_enc,
+    const paddle::Tensor& slot_mapping_dec,
+    const paddle::optional<paddle::Tensor>& k_scales,
+    const paddle::optional<paddle::Tensor>& v_scales,
+    const paddle::optional<paddle::Tensor>& k_scales_inv,
+    const paddle::optional<paddle::Tensor>& v_scales_inv,
+    const paddle::optional<paddle::Tensor>& k_zeros,
+    const paddle::optional<paddle::Tensor>& v_zeros,
+    const paddle::optional<paddle::Tensor>& shift,
+    const paddle::optional<paddle::Tensor>& smooth,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const paddle::optional<paddle::Tensor>& kv_signal_data_cpu,
+    const paddle::optional<paddle::Tensor>& cachekv_signal_thread_cpu,
+    const bool use_neox_rotary_style,
+    const bool rope_3d = false);
+
+// deprecated, keep for unit test, will be removed in the future
+std::vector<paddle::Tensor> BlockAttnFused(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& rotary_embs,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& prefix_block_tables,
+    const paddle::Tensor& len_info_cpu,
+    const paddle::Tensor& encoder_seq_lod_cpu,
+    const paddle::Tensor& decoder_seq_lod_cpu,
+    const paddle::Tensor& encoder_kv_lod_cpu,
+    const paddle::Tensor& encoder_batch_map_cpu,
+    const paddle::Tensor& decoder_context_len_cpu,
+    const paddle::Tensor& decoder_context_len_cache_cpu,
+    const paddle::Tensor& decoder_batch_map_cpu,
+    const paddle::Tensor& prefix_len_cpu,
+    const paddle::Tensor& encoder_seq_lod_xpu,
+    const paddle::Tensor& decoder_seq_lod_xpu,
+    const paddle::Tensor& encoder_kv_lod_xpu,
+    const paddle::Tensor& encoder_batch_map_xpu,
+    const paddle::Tensor& decoder_context_len_xpu,
+    const paddle::Tensor& decoder_context_len_cache_xpu,
+    const paddle::Tensor& decoder_batch_map_xpu,
+    const paddle::Tensor& prefix_len_xpu,
+    const paddle::Tensor& slot_mapping_enc,
+    const paddle::Tensor& slot_mapping_dec,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -210,7 +252,7 @@ void DraftModelUpdate(const paddle::Tensor& inter_next_tokens,
                       const paddle::Tensor& seq_lens_encoder,
                       const paddle::Tensor& seq_lens_decoder,
                       const paddle::Tensor& step_idx,
-                      const paddle::Tensor& output_cum_offsets,
+                      const paddle::Tensor& cu_seqlens_q_output,
                       const paddle::Tensor& stop_flags,
                       const paddle::Tensor& not_need_stop,
                       const paddle::Tensor& max_dec_len,
@@ -254,8 +296,8 @@ void SpeculateTokenPenaltyMultiScores(
     const paddle::Tensor& min_len,
     const paddle::Tensor& eos_token_id,
     const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& output_padding_offset,
-    const paddle::Tensor& output_cum_offsets,
+    const paddle::Tensor& batch_id_per_token_output,
+    const paddle::Tensor& cu_seqlens_q_output,
     const int max_seq_len);
 
 void SpeculateUpdateV3(const paddle::Tensor& seq_lens_encoder,
@@ -413,8 +455,7 @@ std::vector<paddle::Tensor> EagleGetSelfHiddenStates(
     const paddle::Tensor& step_idx);
 
 std::vector<paddle::Tensor> GatherNextToken(
-    const paddle::Tensor& x,            // [token_num, dim_embed]
-    const paddle::Tensor& cum_offsets,  // [bsz, 1]
+    const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
     const paddle::Tensor& decoder_seq_lod,
     const paddle::Tensor& encoder_batch_map,
@@ -424,7 +465,7 @@ std::vector<paddle::Tensor> GatherNextToken(
     const paddle::Tensor& encoder_batch_map_cpu,
     const paddle::Tensor& decoder_batch_map_cpu,
     const paddle::Tensor& len_info_cpu,
-    const paddle::optional<paddle::Tensor>& output_padding_offset,
+    bool is_speculative,
     int max_bsz);
 
 std::vector<paddle::Tensor> GetImgBoundaries(
@@ -437,7 +478,8 @@ std::vector<paddle::Tensor> GetInferParam(
     const paddle::Tensor& seq_lens_decoder,
     const paddle::Tensor& seq_lens_this_time,
     const paddle::Tensor& block_tables,
-    int block_size);
+    int block_size,
+    int num_speculative_tokens);
 
 void GetOutputStatic(const paddle::Tensor& x, int64_t rank_id, bool wait_flag);
 
@@ -456,9 +498,8 @@ void GetOutputEPDynamic(const paddle::Tensor& x,
                         int msg_queue_id);
 
 std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
-                                             const paddle::Tensor& cum_offsets,
-                                             const paddle::Tensor& token_num,
-                                             const paddle::Tensor& seq_len);
+                                             const paddle::Tensor& seq_len,
+                                             const int64_t cpu_token_num);
 
 void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& stop_flags,
@@ -500,6 +541,14 @@ std::vector<paddle::Tensor> SpeculateGetPaddingOffset(
     const paddle::Tensor& seq_len,
     const paddle::Tensor& seq_lens_encoder);
 
+std::vector<paddle::Tensor> SpeculatePreProcess(
+    const int64_t cpu_token_num,
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::Tensor& draft_tokens,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder);
+
 void StepPaddle(const paddle::Tensor& stop_flags,
                 const paddle::Tensor& seq_lens_this_time,
                 const paddle::Tensor& ori_seq_lens_encoder,
@@ -539,6 +588,25 @@ void MTPStepPaddle(
     const paddle::Tensor& free_list_len,
     const int block_size,
     const int max_draft_tokens);
+
+void UnifiedUpdateModelStatus(const paddle::Tensor& seq_lens_encoder,
+                              const paddle::Tensor& seq_lens_decoder,
+                              const paddle::Tensor& has_running_seqs,
+                              const paddle::Tensor& step_input_ids,
+                              const paddle::Tensor& adaptive_step_input_len,
+                              const paddle::Tensor& step_output_ids,
+                              const paddle::Tensor& step_output_len,
+                              const paddle::Tensor& stop_flags,
+                              const paddle::Tensor& seq_lens_this_time,
+                              const paddle::Tensor& is_paused,
+                              const paddle::Tensor& mask_rollback,
+                              const paddle::Tensor& token_ids_all,
+                              const paddle::Tensor& prompt_lens,
+                              const paddle::Tensor& step_idx,
+                              const paddle::Tensor& end_tokens,
+                              const paddle::Tensor& max_dec_len,
+                              const bool is_naive_mode,
+                              const bool prefill_one_step_stop);
 
 void SpeculateStepPaddle(
     const paddle::Tensor& stop_flags,
@@ -678,11 +746,40 @@ std::vector<paddle::Tensor> WeightQuantize(const paddle::Tensor& x,
                                            const int32_t arch,
                                            const int32_t group_size);
 
+void VerifyDraftTokens(
+    // Core I/O
+    const paddle::Tensor& step_output_ids,
+    const paddle::Tensor& step_output_len,
+    const paddle::Tensor& step_input_ids,
+    // Target model outputs (optional, required for TARGET_MATCH)
+    const paddle::optional<paddle::Tensor>& target_tokens,
+    // Candidate set (optional, required for TOPP/GREEDY)
+    const paddle::optional<paddle::Tensor>& candidate_ids,
+    const paddle::optional<paddle::Tensor>& candidate_scores,
+    const paddle::optional<paddle::Tensor>& candidate_lens,
+    // Sampling params
+    const paddle::Tensor& topp,
+    // Metadata
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& end_tokens,
+    const paddle::Tensor& is_block_step,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& reasoning_status,
+    // max_dec_len / step_idx for EOS/max-len detection
+    const paddle::Tensor& max_dec_len,
+    const paddle::Tensor& step_idx,
+    int max_seq_len,
+    int verify_window,
+    int verify_strategy,
+    bool reject_all,
+    bool accept_all);
+
 PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("adjust_batch",
         &AdjustBatch,
         py::arg("x"),
-        py::arg("cum_offsets"),
         py::arg("encoder_seq_lod"),
         py::arg("decoder_seq_lod"),
         py::arg("encoder_batch_idx"),
@@ -697,11 +794,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "adjust batch in XPU");
 
   m.def("block_attn",
-        &BlockAttn,
+        &SplitEmbeddingKVCacheBlockAttn,
         py::arg("qkv"),
         py::arg("key_cache"),
         py::arg("value_cache"),
-        py::arg("cum_offsets"),
         py::arg("rotary_embs"),
         py::arg("block_tables"),
         py::arg("prefix_block_tables"),
@@ -722,6 +818,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("decoder_context_len_cache_xpu"),
         py::arg("decoder_batch_map_xpu"),
         py::arg("prefix_len_xpu"),
+        py::arg("slot_mapping_enc"),
+        py::arg("slot_mapping_dec"),
         py::arg("k_scales"),
         py::arg("v_scales"),
         py::arg("k_scales_inv"),
@@ -737,6 +835,49 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("use_neox_rotary_style"),
         py::arg("rope_3d") = false,
         "block attention in XPU");
+
+  m.def("block_attn_fused",
+        &BlockAttnFused,
+        py::arg("qkv"),
+        py::arg("key_cache"),
+        py::arg("value_cache"),
+        py::arg("rotary_embs"),
+        py::arg("block_tables"),
+        py::arg("prefix_block_tables"),
+        py::arg("len_info_cpu"),
+        py::arg("encoder_seq_lod_cpu"),
+        py::arg("decoder_seq_lod_cpu"),
+        py::arg("encoder_kv_lod_cpu"),
+        py::arg("encoder_batch_map_cpu"),
+        py::arg("decoder_context_len_cpu"),
+        py::arg("decoder_context_len_cache_cpu"),
+        py::arg("decoder_batch_map_cpu"),
+        py::arg("prefix_len_cpu"),
+        py::arg("encoder_seq_lod_xpu"),
+        py::arg("decoder_seq_lod_xpu"),
+        py::arg("encoder_kv_lod_xpu"),
+        py::arg("encoder_batch_map_xpu"),
+        py::arg("decoder_context_len_xpu"),
+        py::arg("decoder_context_len_cache_xpu"),
+        py::arg("decoder_batch_map_xpu"),
+        py::arg("prefix_len_xpu"),
+        py::arg("slot_mapping_enc"),
+        py::arg("slot_mapping_dec"),
+        py::arg("k_scales"),
+        py::arg("v_scales"),
+        py::arg("k_scales_inv"),
+        py::arg("v_scales_inv"),
+        py::arg("k_zeros"),
+        py::arg("v_zeros"),
+        py::arg("shift"),
+        py::arg("smooth"),
+        py::arg("q_norm_weight"),
+        py::arg("k_norm_weight"),
+        py::arg("kv_signal_data_cpu"),
+        py::arg("cachekv_signal_thread_cpu"),
+        py::arg("use_neox_rotary_style"),
+        py::arg("rope_3d") = false,
+        "block attention fused in XPU");
 
   m.def("create_kv_signal_sender",
         &create_cachekv_signal_thread,
@@ -812,7 +953,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_encoder"),         // 编码器序列长度张量
         py::arg("seq_lens_decoder"),         // 解码器序列长度张量
         py::arg("step_idx"),                 // 步骤索引张量
-        py::arg("output_cum_offsets"),       // 输出累积偏移量张量
+        py::arg("cu_seqlens_q_output"),      // 输出累积偏移量张量
         py::arg("stop_flags"),               // 停止标志张量
         py::arg("not_need_stop"),            // 无需停止标志张量
         py::arg("max_dec_len"),              // 最大解码长度张量
@@ -885,7 +1026,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("gather_next_token",
         &GatherNextToken,
         py::arg("x"),
-        py::arg("cum_offsets"),
         py::arg("encoder_seq_lod"),
         py::arg("decoder_seq_lod"),
         py::arg("encoder_batch_map"),
@@ -895,7 +1035,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("encoder_batch_map_cpu"),
         py::arg("decoder_batch_map_cpu"),
         py::arg("len_info_cpu"),
-        py::arg("output_padding_offset"),
+        py::arg("is_speculative"),
         py::arg("max_bsz"),
         "Gather next token for XPU");
 
@@ -913,6 +1053,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_this_time"),
         py::arg("block_tables"),
         py::arg("block_size"),
+        py::arg("num_speculative_tokens"),
         "Get infer parameters for block attention in XPU");
 
   m.def("get_peer_mem_addr",
@@ -975,9 +1116,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("get_padding_offset",
         &GetPaddingOffset,
         py::arg("input_ids"),
-        py::arg("cum_offsets"),
-        py::arg("token_num"),
         py::arg("seq_len"),
+        py::arg("cpu_token_num"),
         "get padding offset function");
 
   m.def("init_kv_signal_per_query",
@@ -1001,6 +1141,54 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("enable_softmax_top_k_fused"),
         py::arg("redundant_ep_rank_num_plus_one"),
         "moe export RedundantTopKSelect function");
+
+  m.def("unified_update_model_status",
+        &UnifiedUpdateModelStatus,
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        py::arg("has_running_seqs"),
+        py::arg("step_input_ids"),
+        py::arg("adaptive_step_input_len"),
+        py::arg("step_output_ids"),
+        py::arg("step_output_len"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("is_paused"),
+        py::arg("mask_rollback"),
+        py::arg("token_ids_all"),
+        py::arg("prompt_lens"),
+        py::arg("step_idx"),
+        py::arg("end_tokens"),
+        py::arg("max_dec_len"),
+        py::arg("is_naive_mode"),
+        py::arg("max_draft_tokens"),
+        "Unified update model status");
+
+  m.def("verify_draft_tokens",
+        &VerifyDraftTokens,
+        py::arg("step_output_ids"),
+        py::arg("step_output_len"),
+        py::arg("step_input_ids"),
+        py::arg("target_tokens"),
+        py::arg("candidate_ids"),
+        py::arg("candidate_scores"),
+        py::arg("candidate_lens"),
+        py::arg("topp"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_this_time"),
+        py::arg("end_tokens"),
+        py::arg("is_block_step"),
+        py::arg("cu_seqlens_q_output"),
+        py::arg("reasoning_status"),
+        py::arg("max_dec_len"),
+        py::arg("step_idx"),
+        py::arg("max_seq_len"),
+        py::arg("verify_window"),
+        py::arg("verify_strategy"),
+        py::arg("reject_all"),
+        py::arg("accept_all"),
+        "Perform speculative verification for decoding v2");
 
   m.def("mtp_step_paddle",
         &MTPStepPaddle,
@@ -1117,8 +1305,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("min_len"),
         py::arg("eos_token_id"),
         py::arg("seq_lens_this_time"),
-        py::arg("output_padding_offset"),
-        py::arg("output_cum_offsets"),
+        py::arg("batch_id_per_token_output"),
+        py::arg("cu_seqlens_q_output"),
         py::arg("max_seq_len"),
         "Applies token penalty with multiple scores");
 
@@ -1182,7 +1370,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("max_dec_len"),
         py::arg("end_tokens"),
         py::arg("is_block_step"),
-        py::arg("output_cum_offsets"),
+        py::arg("cu_seqlens_q_output"),
         py::arg("actual_candidate_len"),
         py::arg("actual_draft_token_nums"),
         py::arg("topp"),
@@ -1192,6 +1380,32 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("benchmark_mode"),
         py::arg("accept_all_drafts"),
         "Perform speculative verification for decoding");
+
+  m.def("verify_draft_tokens",
+        &VerifyDraftTokens,
+        py::arg("step_output_ids"),
+        py::arg("step_output_len"),
+        py::arg("step_input_ids"),
+        py::arg("target_tokens"),
+        py::arg("candidate_ids"),
+        py::arg("candidate_scores"),
+        py::arg("candidate_lens"),
+        py::arg("topp"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_this_time"),
+        py::arg("end_tokens"),
+        py::arg("is_block_step"),
+        py::arg("cu_seqlens_q_output"),
+        py::arg("reasoning_status"),
+        py::arg("max_dec_len"),
+        py::arg("step_idx"),
+        py::arg("max_seq_len"),
+        py::arg("verify_window"),
+        py::arg("verify_strategy"),
+        py::arg("reject_all"),
+        py::arg("accept_all"),
+        "Perform speculative verification for decoding v2");
 
   m.def("speculate_save_output",
         &SpeculateSaveWithOutputMsgStatic,
@@ -1245,6 +1459,16 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_output"),
         py::arg("max_seq_len"),
         "Get output padding offset");
+
+  m.def("speculate_pre_process",
+        &SpeculatePreProcess,
+        py::arg("cpu_token_num"),
+        py::arg("input_ids"),
+        py::arg("seq_len"),
+        py::arg("draft_tokens"),
+        py::arg("seq_lens_encoder"),
+        py::arg("seq_lens_decoder"),
+        "speculate pre process to remove padding and to acquire cu_seq_len");
 
   m.def("speculate_get_padding_offset",
         &SpeculateGetPaddingOffset,
@@ -1419,7 +1643,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &TopPCandidates,
         py::arg("probs"),
         py::arg("top_p"),
-        py::arg("output_padding_offset"),
+        py::arg("batch_id_per_token_output"),
         py::arg("candidates_len"),
         py::arg("max_seq_len"),
         "Generate top-p candidates based on probability distributions");

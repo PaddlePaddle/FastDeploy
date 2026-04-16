@@ -12,6 +12,7 @@ import (
 	"strconv"
 
 	scheduler_handler "github.com/PaddlePaddle/FastDeploy/router/internal/scheduler/handler"
+	"github.com/PaddlePaddle/FastDeploy/router/pkg/logger"
 )
 
 // Precompile regex to avoid repeated compilation
@@ -108,6 +109,7 @@ func (m *Manager) GetMetrics(ctx context.Context, rawURL string) (int, int, int)
 func (m *Manager) GetRemoteMetrics(ctx context.Context, rawURL string) (int, int, int) {
 	runningCnt, waitingCnt, availableGpuBlockNum, err := GetMetricsByURL(ctx, rawURL)
 	if err != nil {
+		logger.Warn(ctx, "GetRemoteMetrics failed for %s, falling back to local counter: %v", rawURL, err)
 		runningNewCnt := redrictCounter(ctx, rawURL)
 		return runningNewCnt, 0, 0
 	}

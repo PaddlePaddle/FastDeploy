@@ -62,6 +62,7 @@ __global__ void RebuildAppendPaddingKernel(T *output_data,
        i += gridDim.x * blockDim.x * VecSize) {
     const int out_token_id = i / dim_embed;
     const int bi = batch_id_per_token_output[out_token_id];
+    if (bi < 0) continue;
     if (seq_len_this_time[bi] == 0) continue;
     if (seq_len_decoder[bi] == 0 && seq_len_encoder[bi] == 0) continue;
 

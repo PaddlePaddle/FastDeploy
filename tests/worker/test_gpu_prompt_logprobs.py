@@ -64,6 +64,7 @@ class MockConfig:
     scheduler_config = SchedulerConfig()
     cache_config = CacheConfig()
     parallel_config = ParallelConfig()
+    enable_mm_runtime = model_config.enable_mm
 
     def get_max_chunk_tokens(self, mm_max_tokens_per_item=None):
         return 8192

@@ -18,29 +18,42 @@ import inspect
 import os
 import re
 import sys
-from importlib.metadata import PackageNotFoundError, distribution
 
 import paddle
 import triton
 from paddle.base.framework import OpProtoHolder
 
 from fastdeploy import envs
+from fastdeploy.utils import _is_package_installed
 
 compile_file = triton.__path__[0] + "/tools/compile.py"
 link_file = triton.__path__[0] + "/tools/link.py"
 python_path = sys.executable
 
+if _is_package_installed("torch"):
+    with paddle.use_compat_guard(enable=True, silent=True):
+        from triton.runtime.driver import _create_driver
 
-def _is_package_installed(dist_name: str) -> bool:
-    try:
-        distribution(dist_name)
-        return True
-    except PackageNotFoundError:
-        return False
+        paddle_driver = _create_driver()
+
+
+def swap_driver_guard(fn):
+    from triton.runtime.driver import driver
+
+    # A lightweight wrapper to enable compatibility for triton kernel
+    def wrapped_fn(*args, **kwargs):
+        driver.set_active(paddle_driver)
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            driver.reset_active()
+
+    return wrapped_fn
 
 
 def enable_compat_on_triton_kernel(triton_kernel):
     # When torch is not installed, this decorator does not do anything, just return the original triton kernel.
+    # Because the `paddle.enable_compat(scope={"triton"})` already enabled in `__init__.py`, it will take zero runtime overhead.
     if not _is_package_installed("torch"):
         return triton_kernel
 
@@ -49,7 +62,7 @@ def enable_compat_on_triton_kernel(triton_kernel):
             self.kernel = kernel
 
         def __getitem__(self, index):
-            return paddle.use_compat_guard(enable=True, silent=True)(self.kernel[index])
+            return swap_driver_guard(self.kernel[index])
 
     return WrappedTritonKernel(triton_kernel)
 
@@ -689,9 +702,9 @@ class KernelInterface:
             const_args = [f"{{{ele}}}" for ele in const_args]
             const_args = ",".join(const_args)
 
-            lanuch_grid = list(self.grid)
-            for i in range(len(lanuch_grid)):
-                ele = lanuch_grid[i]
+            launch_grid = list(self.grid)
+            for i in range(len(launch_grid)):
+                ele = launch_grid[i]
                 if isinstance(ele, str):
                     for key in const_hint_dict.keys():
                         if key in ele:
@@ -699,10 +712,10 @@ class KernelInterface:
                 else:
                     ele = str(ele)
 
-                lanuch_grid[i] = ele
-            if len(lanuch_grid) < 3:
-                lanuch_grid += ["1"] * (3 - len(lanuch_grid))
-            lanuch_grid = ",".join(lanuch_grid)
+                launch_grid[i] = ele
+            if len(launch_grid) < 3:
+                launch_grid += ["1"] * (3 - len(launch_grid))
+            launch_grid = ",".join(launch_grid)
 
             op_dict = {"op_name": op_name, "reset_zero_when_tune": ""}
             op_dict["triton_kernel_args"] = ",".join(modified_arg_exclude_constexpr)
@@ -732,7 +745,7 @@ class KernelInterface:
                     + f"""--out-name {op_name}_kernel  """
                     + """ -w {num_warps} -ns {num_stages} """
                     + f""" -s"{address_hint} {value_hint} {const_args}" """
-                    + f"""  -g "{lanuch_grid}" """
+                    + f"""  -g "{launch_grid}" """
                 )
                 all_tune_config = [{key: value} for key, value in self.tune_config.items()]
                 if len(all_tune_config) == 0:

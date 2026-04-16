@@ -14,6 +14,8 @@ jobs:
   clone:
     name: FD-Clone-Linux-XPU
     uses: ./.github/workflows/_clone_linux.yml
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   xpu_build_test:
     name: xpu_build_test
@@ -22,6 +24,8 @@ jobs:
     with:
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   xpu_4cards_case_test:
     name: xpu_4cards_case_test
@@ -32,6 +36,8 @@ jobs:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
       FASTDEPLOY_WHEEL_URL: ${{ needs.xpu_build_test.outputs.wheel_path }}
       MODEL_PATH: /ssd3/model
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   xpu_8cards_case_test:
     name: xpu_8cards_case_test
@@ -42,3 +48,5 @@ jobs:
       DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
       FASTDEPLOY_WHEEL_URL: ${{ needs.xpu_build_test.outputs.wheel_path }}
       MODEL_PATH: /ssd3/model
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}

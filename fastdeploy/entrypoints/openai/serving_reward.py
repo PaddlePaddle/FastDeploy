@@ -14,14 +14,12 @@
 # limitations under the License.
 """
 
-import time
 from collections.abc import AsyncGenerator
 
 from typing_extensions import override
 
-import fastdeploy.envs as envs
 from fastdeploy.engine.pooling_params import PoolingParams
-from fastdeploy.engine.request import PoolingRequestOutput, Request, RewardRequestOutput
+from fastdeploy.engine.request import PoolingRequestOutput, RewardRequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatRewardData,
     ChatRewardRequest,
@@ -30,7 +28,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext, ZmqOpenAIServing
-from fastdeploy.utils import api_server_logger
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 
 
 class OpenAIServingReward(ZmqOpenAIServing):
@@ -46,25 +44,13 @@ class OpenAIServingReward(ZmqOpenAIServing):
     @override
     def _request_to_dict(self, ctx: ServeContext):
         request: ChatRewardRequest = ctx.request
-        if not envs.ENABLE_V1_DATA_PROCESSOR:
-            request_dict = super()._request_to_dict(ctx)
-            if hasattr(request, "to_pooling_params"):
-                pooling_params: PoolingParams = request.to_pooling_params()
-                pooling_params.verify("reward", self.cfg.model_config)
-                request_dict["pooling_params"] = pooling_params.to_dict()
-                request_dict["metrics"] = {}
-            return request_dict
-        else:
-            request_obj: Request = None
-            if hasattr(request, "to_pooling_params"):
-                pooling_params: PoolingParams = request.to_pooling_params()
-                pooling_params.verify("reward", self.cfg.model_config)
-                request_obj = Request.from_generic_request(
-                    req=request, request_id=ctx.request_id, pooling_params=pooling_params
-                )
-                request_obj.metrics.arrival_time = time.time()
-                super()._process_chat_template_kwargs(request_obj)
-            return request_obj
+        request_dict = super()._request_to_dict(ctx)
+        if hasattr(request, "to_pooling_params"):
+            pooling_params: PoolingParams = request.to_pooling_params()
+            pooling_params.verify("reward", self.cfg.model_config)
+            request_dict["pooling_params"] = pooling_params.to_dict()
+            request_dict["metrics"] = {}
+        return request_dict
 
     @override
     def _request_to_batch_dicts(self, ctx: ServeContext):
@@ -91,7 +77,7 @@ class OpenAIServingReward(ZmqOpenAIServing):
         response: ChatRewardResponse = None
         generators: AsyncGenerator[ChatRewardResponse, None] = self.handle(ctx)
         async for r in generators:
-            api_server_logger.info(f"engine pooling result:{r}")
+            log_request(RequestLogLevel.CONTENT, message="engine pooling result: {result}", result=r)
             r.data[0].index = idx
             idx += 1
             if response is None or isinstance(r, ErrorResponse):
@@ -107,7 +93,12 @@ class OpenAIServingReward(ZmqOpenAIServing):
     @override
     def _build_response(self, ctx: ServeContext, request_output: dict):
         """Generate final reward response"""
-        api_server_logger.info(f"[{ctx.request_id}] Reward RequestOutput received:{request_output}")
+        log_request(
+            level=RequestLogLevel.CONTENT,
+            message="Reward RequestOutput received: request_id={request_id}, output={request_output}",
+            request_id=ctx.request_id,
+            request_output=request_output,
+        )
 
         base = PoolingRequestOutput.from_dict(request_output)
         reward_res = RewardRequestOutput.from_base(base)

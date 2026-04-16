@@ -16,7 +16,7 @@
 
 from .engine_cache_queue import EngineCacheQueue
 from .engine_worker_queue import EngineWorkerQueue
-from .ipc_signal import IPCLock, IPCSignal, shared_memory_exists
+from .ipc_signal import IPCSignal, shared_memory_exists
 from .ipc_signal_const import (
     ExistTaskStatus,
     KVCacheStatus,
@@ -31,7 +31,6 @@ __all__ = [
     "ZmqIpcClient",
     "ZmqIpcServer",
     "ZmqTcpServer",
-    "IPCLock",
     "IPCSignal",
     "EngineWorkerQueue",
     "EngineCacheQueue",

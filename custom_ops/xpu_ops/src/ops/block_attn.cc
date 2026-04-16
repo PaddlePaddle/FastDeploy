@@ -66,7 +66,6 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& rotary_embs,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& prefix_block_tables,
@@ -122,7 +121,6 @@ std::vector<paddle::Tensor> BlockAttnKernel(
   auto qkv_shape = qkv.dims();
   auto cache_shape = key_cache.dims();
   auto block_table_shape = block_tables.dims();
-  const int bsz = cum_offsets.dims()[0];
   const int block_batch = block_table_shape[0];
   const int max_block_per_seq = block_table_shape[1];
   const int kv_num_heads = cache_shape[1];
@@ -158,9 +156,10 @@ std::vector<paddle::Tensor> BlockAttnKernel(
     rope_head_dim = rotary_embs.dims()[4];
   }
   std::string pos_emb_type;
-  if (use_neox_rotary_style == true) {
+  if (use_neox_rotary_style) {
     pos_emb_type = "NEOX";
   } else if (rope_head_dim == head_dim / 2) {
+    // vl model use this
     pos_emb_type = "HALF_HEAD_DIM";
   } else {
     pos_emb_type = "NORMAL";
@@ -344,12 +343,14 @@ std::vector<paddle::Tensor> BlockAttnKernel(
                   value_cache.data<cdata_t>())),
               vsl.usual_lod_vp,     // seq_lod
               vsl.slot_mapping_vp,  // real_batch
+              prefix_lens_vp,       // start_tokens
               param.batch_size,     // batch_size
               1,                    // emb_batch_size
               rope_max_seqlen,      // max_seqlen
               param.head_num,
               param.kv_head_num,
               param.head_dim,
+              rope_head_dim,
               param.max_batch_size,
               block_size,
               max_block_per_seq,
@@ -588,7 +589,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
         ret = infer_ops::
             split_neox_cache_kv_encoder<XPU_XType, float, XPU_CType, int>(
                 xpu_ctx->x_context(),
-                reinterpret_cast<const XPU_XType*>(qkv.data<data_t>()),  // qkv
+                reinterpret_cast<const XPU_XType*>(qkv.data<data_t>()) +
+                    total_enc_len * qkv_shape[qkv_shape.size() - 1],  // qkv
                 reinterpret_cast<const float*>(
                     rotary_embs.data<float>()),  // rotary_pos_emb
                 reinterpret_cast<const int*>(
@@ -600,14 +602,16 @@ std::vector<paddle::Tensor> BlockAttnKernel(
                     key_cache.data<cdata_t>())),
                 const_cast<XPU_CType*>(reinterpret_cast<const XPU_CType*>(
                     value_cache.data<cdata_t>())),
-                decoder_seq_lod_vp,    // seq_lod
-                decoder_batch_map_vp,  // real_batch
-                param.batch_size,      // batch_size
-                1,                     // emb_batch_size
-                rope_max_seqlen,       // max_seqlen
+                decoder_seq_lod_vp,            // seq_lod
+                decoder_batch_map_vp,          // real_batch
+                decoder_context_len_cache_vp,  // start_tokens
+                param.batch_size,              // batch_size
+                1,                             // emb_batch_size
+                rope_max_seqlen,               // max_seqlen
                 param.head_num,
                 param.kv_head_num,
                 param.head_dim,
+                rope_head_dim,
                 param.max_batch_size,
                 block_size,
                 max_block_per_seq,
@@ -808,6 +812,7 @@ std::vector<paddle::Tensor> BlockAttnKernel(
             param.head_num,
             param.kv_head_num,
             param.head_dim,
+            rope_head_dim,
             param.max_batch_size,
             block_size,
             max_block_per_seq,
@@ -980,11 +985,10 @@ std::vector<paddle::Tensor> BlockAttnKernel(
   return {block_attn_out};
 }
 
-std::vector<paddle::Tensor> BlockAttn(
+std::vector<paddle::Tensor> BlockAttnFused(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
     const paddle::Tensor& value_cache,
-    const paddle::Tensor& cum_offsets,
     const paddle::Tensor& rotary_embs,
     const paddle::Tensor& block_tables,
     const paddle::Tensor& prefix_block_tables,
@@ -1005,6 +1009,8 @@ std::vector<paddle::Tensor> BlockAttn(
     const paddle::Tensor& decoder_context_len_cache,
     const paddle::Tensor& decoder_batch_map,
     const paddle::Tensor& prefix_len,
+    const paddle::Tensor& slot_mapping_enc,
+    const paddle::Tensor& slot_mapping_dec,
     const paddle::optional<paddle::Tensor>& k_scales,
     const paddle::optional<paddle::Tensor>& v_scales,
     const paddle::optional<paddle::Tensor>& k_scales_inv,
@@ -1023,7 +1029,6 @@ std::vector<paddle::Tensor> BlockAttn(
   return BlockAttnKernel<TX, TC, TS>(qkv,                           \
                                      key_cache,                     \
                                      value_cache,                   \
-                                     cum_offsets,                   \
                                      rotary_embs,                   \
                                      block_tables,                  \
                                      prefix_block_tables,           \
@@ -1065,7 +1070,7 @@ std::vector<paddle::Tensor> BlockAttn(
   } else if (cache_dtype == paddle::DataType::INT8) {
     APPLY_KERNEL(paddle::bfloat16, int8_t, paddle::bfloat16);
   } else {
-    PD_THROW("block_attn not support cache_dtype==%d",
+    PD_THROW("block_attn_fused not support cache_dtype==%d",
              static_cast<int>(cache_dtype));
     return {};
   }
@@ -1095,11 +1100,10 @@ std::vector<paddle::DataType> BlockAttnInferDtype(
   return {qkv_dtype};
 }
 
-PD_BUILD_STATIC_OP(block_attn)
+PD_BUILD_STATIC_OP(block_attn_fused)
     .Inputs({"qkv",
              "key_cache",
              "value_cache",
-             "cum_offsets",
              "rotary_embs",
              "block_tables",
              "prefix_block_tables",
@@ -1120,6 +1124,8 @@ PD_BUILD_STATIC_OP(block_attn)
              "decoder_context_len_cache",
              "decoder_batch_map",
              "prefix_len",
+             "slot_mapping_enc",
+             "slot_mapping_dec",
              paddle::Optional("k_scales"),
              paddle::Optional("v_scales"),
              paddle::Optional("k_scales_inv"),
@@ -1134,6 +1140,6 @@ PD_BUILD_STATIC_OP(block_attn)
              paddle::Optional("cachekv_signal_thread_cpu")})
     .Attrs({"use_neox_rotary_style:bool", "rope_3d:bool"})
     .Outputs({"block_attn_out"})
-    .SetKernelFn(PD_KERNEL(BlockAttn))
+    .SetKernelFn(PD_KERNEL(BlockAttnFused))
     .SetInferShapeFn(PD_INFER_SHAPE(BlockAttnInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(BlockAttnInferDtype));

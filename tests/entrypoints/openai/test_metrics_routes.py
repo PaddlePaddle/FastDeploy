@@ -66,6 +66,9 @@ def _build_mock_args():
         tokenizer_base_url=None,
         dynamic_load_weight=False,
         reasoning_parser=None,
+        task=None,
+        model_config_name=None,
+        tool_call_parser=None,
     )
 
 
@@ -197,7 +200,7 @@ def test_config_info_process_object_branches():
         data = json.loads(resp.body.decode("utf-8"))
         # The object with __dict__ becomes its dict; the one without becomes null
         assert data.get("with_dict") == {"a": 1}
-        assert "without_dict" in data and data["without_dict"] is None
+        assert "without_dict" in data and isinstance(data["without_dict"], str)
 
 
 def test_metrics_app_routes_when_metrics_port_diff():
@@ -264,5 +267,155 @@ def test_metrics_app_config_info_branches():
         assert resp2.status_code == 200
         data = json.loads(resp2.body.decode("utf-8"))
         assert data.get("with_dict") == {"x": 42}
-        assert "without_dict" in data and data["without_dict"] is None
+        assert "without_dict" in data and isinstance(data["without_dict"], str)
         assert "env_config" in data
+
+
+def _reload_api_server():
+    """Helper: reload api_server with standard mocks, return the module."""
+    with (
+        patch("fastdeploy.utils.FlexibleArgumentParser.parse_args") as mock_parse_args,
+        patch("fastdeploy.utils.retrive_model_from_server") as mock_retrive_model,
+        patch("fastdeploy.entrypoints.chat_utils.load_chat_template") as mock_load_template,
+    ):
+        mock_parse_args.return_value = _build_mock_args()
+        mock_retrive_model.return_value = "test-model"
+        mock_load_template.return_value = None
+
+        from fastdeploy.entrypoints.openai import api_server as api_server_mod
+
+        api_server = importlib.reload(api_server_mod)
+    return api_server
+
+
+def test_config_info_server_config_matches_args():
+    """Verify server_config values are populated from args."""
+    api_server = _reload_api_server()
+    from types import SimpleNamespace as NS
+
+    api_server.llm_engine = NS(cfg=NS())
+
+    resp = _get_route(api_server.app, "/config-info").endpoint()
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode("utf-8"))
+
+    sc = data["server_config"]
+    assert sc["host"] == "0.0.0.0"
+    assert sc["port"] == 8000
+    assert sc["workers"] == 1
+    assert sc["metrics_port"] is None
+    assert sc["controller_port"] == -1
+    assert sc["max_concurrency"] == 16
+    assert sc["max_waiting_time"] == -1
+    assert sc["timeout"] == 0
+    assert sc["timeout_graceful_shutdown"] == 0
+    assert sc["served_model_name"] is None
+    assert sc["task"] is None
+    assert sc["model_config_name"] is None
+    assert sc["tokenizer_base_url"] is None
+    assert sc["enable_mm_output"] is False
+    assert sc["tool_call_parser"] is None
+    assert sc["tool_parser_plugin"] is None
+
+
+def test_config_info_top_level_fields():
+    """Verify version_info, chat_template, device_info, env_config all present."""
+    api_server = _reload_api_server()
+    from types import SimpleNamespace as NS
+
+    api_server.llm_engine = NS(cfg=NS(key="val"))
+
+    resp = _get_route(api_server.app, "/config-info").endpoint()
+    data = json.loads(resp.body.decode("utf-8"))
+
+    assert "version_info" in data
+    assert "chat_template" in data
+    assert "device_info" in data
+    assert "env_config" in data
+    assert isinstance(data["env_config"], dict)
+    # cfg field should propagate
+    assert data["key"] == "val"
+
+
+def test_config_info_process_object_set_and_frozenset():
+    """Cover process_object branch for set/frozenset -> list."""
+    api_server = _reload_api_server()
+    from types import SimpleNamespace as NS
+
+    api_server.llm_engine = NS(
+        cfg=NS(
+            my_set={3, 1, 2},
+            my_frozenset=frozenset(["b", "a"]),
+        )
+    )
+
+    resp = _get_route(api_server.app, "/config-info").endpoint()
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode("utf-8"))
+
+    assert isinstance(data["my_set"], list)
+    assert sorted(data["my_set"]) == [1, 2, 3]
+    assert isinstance(data["my_frozenset"], list)
+    assert sorted(data["my_frozenset"]) == ["a", "b"]
+
+
+def test_config_info_non_ascii_content():
+    """Cover ensure_ascii=False path with unicode in cfg."""
+    api_server = _reload_api_server()
+    from types import SimpleNamespace as NS
+
+    api_server.llm_engine = NS(cfg=NS(desc="中文描述", emoji="🚀"))
+
+    resp = _get_route(api_server.app, "/config-info").endpoint()
+    assert resp.status_code == 200
+    raw = resp.body.decode("utf-8")
+    # Non-ASCII chars should appear directly, not as \uXXXX escapes
+    assert "中文描述" in raw
+    assert "🚀" in raw
+    data = json.loads(raw)
+    assert data["desc"] == "中文描述"
+    assert data["emoji"] == "🚀"
+
+
+def test_config_info_cfg_fields_propagated():
+    """Verify that all cfg.__dict__ entries end up in the response."""
+    api_server = _reload_api_server()
+    from types import SimpleNamespace as NS
+
+    api_server.llm_engine = NS(
+        cfg=NS(
+            model_name="Qwen-7B",
+            max_seq_len=4096,
+            use_fp16=True,
+            parallel_config=None,
+        )
+    )
+
+    resp = _get_route(api_server.app, "/config-info").endpoint()
+    data = json.loads(resp.body.decode("utf-8"))
+
+    assert data["model_name"] == "Qwen-7B"
+    assert data["max_seq_len"] == 4096
+    assert data["use_fp16"] is True
+    assert data["parallel_config"] is None
+
+
+def test_config_info_nested_objects():
+    """Cover process_object with nested custom objects."""
+    api_server = _reload_api_server()
+    from types import SimpleNamespace as NS
+
+    class Inner:
+        pass
+
+    inner = Inner()
+    inner.lr = 0.01
+    inner.steps = 100
+
+    api_server.llm_engine = NS(cfg=NS(train_config=inner))
+
+    resp = _get_route(api_server.app, "/config-info").endpoint()
+    assert resp.status_code == 200
+    data = json.loads(resp.body.decode("utf-8"))
+
+    assert data["train_config"] == {"lr": 0.01, "steps": 100}

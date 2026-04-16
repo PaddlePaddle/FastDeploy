@@ -17,7 +17,7 @@
 import gc
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import paddle
 from paddle import nn
@@ -191,9 +191,9 @@ class MetaxWorker(WorkerBase):
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
-    def update_weights(self, version: str = None, rsync_config: Dict[str, Any] = None):
+    def update_weights(self, version: str = None, verify_checksum: bool = False):
         """update weights in place"""
-        return self.model_runner.update_weights(version, rsync_config)
+        return self.model_runner.update_weights(version, verify_checksum)
 
     def execute_model(
         self,

@@ -78,6 +78,16 @@ def wait_for_mooncake_master(host: str = "127.0.0.1", port: int = FD_MOONCAKE_MA
     return False
 
 
+def prepare_log_dir(name):
+    """
+    Prepare log directory for test.
+    """
+    base = os.getenv("FD_LOG_DIR", "log")
+    path = os.path.join(base, name)
+    os.makedirs(path, exist_ok=True)
+    return path
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
     """
@@ -136,8 +146,8 @@ def setup_and_run_server():
         )
 
     env_master = os.environ.copy()
-    env_master["FD_LOG_DIR"] = "log_master"
-    os.makedirs("log_master", exist_ok=True)
+    master_log_dir = prepare_log_dir("log_master")
+    env_master["FD_LOG_DIR"] = master_log_dir
 
     master_cmd = [
         "mooncake_master",
@@ -147,7 +157,7 @@ def setup_and_run_server():
         f"--http_metadata_server_port={FD_MOONCAKE_METADATA_PORT}",
     ]
 
-    with open("log_master/nohup", "w") as logfile:
+    with open(os.path.join(master_log_dir, "nohup"), "w") as logfile:
         process_master = subprocess.Popen(
             master_cmd,
             stdout=logfile,
@@ -160,7 +170,7 @@ def setup_and_run_server():
     if not wait_for_mooncake_master(port=FD_MOONCAKE_MASTER_PORT, timeout=30):
         print("[ERROR] Mooncake Master failed to start")
         # Print mooncake master log for debugging
-        master_log_path = "log_master/nohup"
+        master_log_path = os.path.join(master_log_dir, "nohup")
         if os.path.exists(master_log_path):
             print(f"\n===== Mooncake Master Log ({master_log_path}) =====")
             with open(master_log_path, "r") as f:
@@ -175,9 +185,9 @@ def setup_and_run_server():
     # ======================== Start Router ========================
     print("start router...")
     env_router = os.environ.copy()
-    env_router["FD_LOG_DIR"] = "log_router"
-    os.makedirs("log_router", exist_ok=True)
-    router_log_path = "log_router/nohup.log"
+    router_log_dir = prepare_log_dir("log_router")
+    env_router["FD_LOG_DIR"] = router_log_dir
+    router_log_path = os.path.join(router_log_dir, "nohup")
 
     router_cmd = [
         sys.executable,
@@ -201,13 +211,14 @@ def setup_and_run_server():
     print("start prefill...")
     env_prefill = os.environ.copy()
     env_prefill["CUDA_VISIBLE_DEVICES"] = "0"
-    env_prefill["FD_LOG_DIR"] = "log_prefill"
-    os.makedirs("log_prefill", exist_ok=True)
+    prefill_log_dir = prepare_log_dir("log_prefill")
+    env_prefill["FD_LOG_DIR"] = prefill_log_dir
+
     # Mooncake environment variables for prefill
     for k, v in mooncake_env.items():
         env_prefill[k] = v
 
-    prefill_log_path = "log_prefill/nohup.log"
+    prefill_log_path = os.path.join(prefill_log_dir, "nohup.log")
     prefill_cmd = [
         sys.executable,
         "-m",
@@ -254,13 +265,13 @@ def setup_and_run_server():
     print("start decode...")
     env_decode = os.environ.copy()
     env_decode["CUDA_VISIBLE_DEVICES"] = "1"
-    env_decode["FD_LOG_DIR"] = "log_decode"
-    os.makedirs("log_decode", exist_ok=True)
+    decode_log_dir = prepare_log_dir("log_decode")
+    env_decode["FD_LOG_DIR"] = decode_log_dir
     # Mooncake environment variables for decode
     for k, v in mooncake_env.items():
         env_decode[k] = v
 
-    decode_log_path = "log_decode/nohup.log"
+    decode_log_path = os.path.join(decode_log_dir, "nohup.log")
     decode_cmd = [
         sys.executable,
         "-m",

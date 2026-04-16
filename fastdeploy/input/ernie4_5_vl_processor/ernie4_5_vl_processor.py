@@ -22,6 +22,7 @@ from paddleformers.generation import GenerationConfig
 
 from fastdeploy.input.ernie4_5_processor import Ernie4_5Processor
 from fastdeploy.input.utils import IDS_TYPE_FLAG, process_stop_token_ids
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
@@ -59,6 +60,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         self.tool_parser_dict = dict()
         self.decode_status = dict()
         self.model_status_dict = dict()
+        self.tokenizer_type = "ernie4_5"
         self._load_tokenizer()
 
         # Generation config
@@ -210,6 +212,11 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
             bad_words_token_ids = self.update_bad_words(bad_words, bad_words_token_ids)
             request["bad_words_token_ids"] = bad_words_token_ids
 
+        logits_processors_args = self._prepare_think_stop_sentence(
+            request.get("logits_processors_args") or {}, max_model_len
+        )
+        request["logits_processors_args"] = logits_processors_args
+
         if request.get("prompt_token_ids"):
             messages = request.get("messages")
             if messages:
@@ -257,6 +264,10 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         # 截断超过长度限制的prompt
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+        logits_processors_args = self._update_thinking_prompt_state(
+            request["prompt_token_ids"], request.get("logits_processors_args") or {}
+        )
+        request["logits_processors_args"] = logits_processors_args
 
         max_tokens = max_model_len - len(request["prompt_token_ids"])
         if request.get("max_tokens") is None:
@@ -284,7 +295,7 @@ class Ernie4_5_VLProcessor(Ernie4_5Processor):
         if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
             request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 
-        data_processor_logger.info(f"Processed request {request}")
+        log_request(RequestLogLevel.CONTENT, message="Processed request: {request}", request=request)
         return request
 
     def append_completion_tokens(self, multimodal_inputs, completion_token_ids):

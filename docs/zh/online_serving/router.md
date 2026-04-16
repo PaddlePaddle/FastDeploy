@@ -152,6 +152,7 @@ Router 通过 HTTP 接口对外提供统一的调度服务，同时支持运行�
 |----------|------|------|
 | POST | `/v1/chat/completions` | 对外提供基于 Chat 接口的推理请求调度服务 |
 | POST | `/v1/completions` | 对外提供通用文本补全请求的调度服务 |
+| POST | `/v1/abort_requests` | 中断推理请求，释放 GPU 显存和计算资源。支持传入 `req_ids` 或 `abort_all=true`，返回已中断请求列表及其已生成的 token 数 |
 | POST | `/register` | 推理实例向 Router 注册自身信息，用于参与调度 |
 | GET | `/registered` | 查询当前已注册的推理实例列表 |
 | GET | `/registered_number` | 查询当前已注册的推理实例数量 |
@@ -194,6 +195,7 @@ scheduler:
   prefill-policy: "cache_aware" # pd分离模式下prefill节点调度策略; 默认: process_tokens
   decode-policy: "request_num" # pd分离模式下decode节点调度策略; 默认: request_num
   eviction-interval-secs: 60 # cache-aware策略清理过期cache的间隔时间
+  eviction-duration-mins: 30 # cache-aware策略radix tree节点驱逐时间(分钟); 默认: 30
   balance-abs-threshold: 1 # cache-aware策略绝对阈值
   balance-rel-threshold: 0.2 # cache-aware策略相对阈值
   hit-ratio-weight: 1.0 # cache-aware策略命中率权重

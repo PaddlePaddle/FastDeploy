@@ -21,6 +21,7 @@ import re
 from typing import Dict
 
 import paddle
+import paddle.nn.functional as F
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
@@ -44,7 +45,10 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.lm_head import ParallelLMHead
 from fastdeploy.model_executor.layers.moe.moe import FusedMoE
-from fastdeploy.model_executor.layers.normalization import RMSNorm
+from fastdeploy.model_executor.layers.normalization import LayerNorm, RMSNorm
+from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    per_token_group_quant_fp8,
+)
 from fastdeploy.model_executor.layers.rotary_embedding import (
     DeepseekScalingRotaryEmbedding,
 )
@@ -53,15 +57,8 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
-from fastdeploy.platforms import current_platform
-
-if current_platform.is_cuda() or current_platform.is_maca():
-    from fastdeploy.model_executor.ops.gpu import (
-        get_position_ids_and_mask_encoder_batch,
-    )
-
-from fastdeploy.model_executor.layers.quantization.fp8_utils import (
-    per_token_group_quant_fp8,
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
 )
 from fastdeploy.platforms import current_platform
 
@@ -69,10 +66,9 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         cp_gather_indexer_k_quant_cache,
         indexer_k_quant_and_cache,
+        merge_prefill_decode_output,
         radix_topk_ragged_transform,
     )
-
-    paddle.enable_compat(scope={"deep_gemm"})
 
 
 class DeepSeekV3MLP(nn.Layer):
@@ -163,6 +159,7 @@ class DeepSeekV3MoE(nn.Layer):
 
         self.experts = FusedMoE(
             fd_config=fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             reduce_results=False,
             renormalize=self.norm_topk_prob,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
@@ -210,6 +207,9 @@ class DeepseekV3MLAAttention(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
         super().__init__()
 
+        self.fd_config = fd_config
+        self.use_gated_attn = getattr(self.fd_config.model_config, "use_gated_attn", False)
+        self.use_bias = getattr(self.fd_config.model_config, "use_bias", False)
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.hidden_size = fd_config.model_config.hidden_size
         self.num_attention_heads = fd_config.model_config.num_attention_heads
@@ -229,6 +229,14 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
         # NOTE: (changwenbin) qkv_a_proj horizontal fusion
+        if self.use_gated_attn:
+            self.gate = ReplicatedLinear(
+                fd_config=fd_config,
+                prefix=f"{prefix}.gate",
+                input_size=self.hidden_size,
+                output_size=self.num_attention_heads * self.v_head_dim,
+                with_bias=self.use_bias,
+            )
         self.qkv_a_proj_with_mqa = MergedReplicatedLinear(
             fd_config=fd_config,
             prefix=f"{prefix}.qkv_a_proj_with_mqa",
@@ -272,7 +280,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             prefix=f"{prefix}.o_proj",
             input_size=self.num_attention_heads * self.v_head_dim,
             output_size=self.hidden_size,
-            with_bias=False,
+            with_bias=self.use_bias,
             layer_id=layer_id,
         )
 
@@ -286,7 +294,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             v_head_dim=self.v_head_dim,
         )
         self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
-        if self.rope_scaling:
+        if self.rope_scaling and "factor" in self.rope_scaling:
             mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
             scaling_factor = self.rope_scaling["factor"]
             mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
@@ -313,7 +321,8 @@ class DeepseekV3MLAAttention(nn.Layer):
             )
         else:
             # Default rope without scaling
-            max_position_embeddings = getattr(fd_config.model_config, "max_position_embeddings", 8192)
+            # The current `max_model_len` can cover the maximum context length.
+            max_position_embeddings = getattr(fd_config.model_config, "max_model_len", 8192)
             self.rotary_emb = DeepseekScalingRotaryEmbedding(
                 self.qk_rope_head_dim,
                 max_position_embeddings=max_position_embeddings,
@@ -341,12 +350,13 @@ class DeepseekV3MLAAttention(nn.Layer):
         self,
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
 
-        fmha_out = None
+        attn_out = None
+        if self.use_gated_attn:
+            gate_out = self.gate(hidden_states)
+
         # NOTE: (changwenbin) qkv_a_proj horizontal fusion
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
 
@@ -360,7 +370,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
         key_pe.reshape_([-1, 1, self.qk_rope_head_dim])
-        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+        query_pe, key_pe = self.rotary_emb(forward_meta.position_ids, query_pe, key_pe)
 
         compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
 
@@ -384,7 +394,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             key[..., self.qk_nope_head_dim :] = key_pe
             value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
 
-            fmha_out_prefill = self.mla_attn(
+            fmha_out = self.mla_attn(
                 q=query,
                 k=key,
                 v=value,
@@ -394,11 +404,10 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
-            fmha_out_prefill = fmha_out_prefill[:, :, : self.v_head_dim]
-            fmha_out_prefill.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
-            fmha_out_prefill = fmha_out_prefill * mask_encoder_batch.cast(fmha_out_prefill.dtype)
-            fmha_out = fmha_out_prefill
+            fmha_out.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
+            fmha_out = fmha_out[:, :, : self.v_head_dim]
+            fmha_out.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
+            attn_out = fmha_out
 
         if need_do_decode:  # max_dec_len_this_time
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
@@ -411,7 +420,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                 ]
             )
 
-            fmha_out_decode = self.mla_attn(
+            fmqa_out = self.mla_attn(
                 q=q_input,
                 k=None,
                 v=None,
@@ -421,50 +430,131 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            fmha_out_decode = fmha_out_decode.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose(
-                [1, 0, 2]
-            )
+            fmqa_out = fmqa_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose([1, 0, 2])
 
-            fmha_out_decode = (
-                self.kv_b_proj_bmm(fmha_out_decode, proj_type="v")
+            fmqa_out = (
+                self.kv_b_proj_bmm(fmqa_out, proj_type="v")
                 .transpose([1, 0, 2])
                 .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
 
             if need_do_prefill:
-                fmha_out += fmha_out_decode
+                merge_prefill_decode_output(
+                    attn_out,
+                    fmqa_out,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.cu_seqlens_q,
+                    self.num_attention_heads_tp,
+                    self.v_head_dim,
+                    1,
+                )
             else:
-                fmha_out = fmha_out_decode
-
-        output = self.o_proj(fmha_out)
+                attn_out = fmqa_out
+        if self.use_gated_attn:
+            gated_attn_act = getattr(self.fd_config.model_config, "gated_attn_act", "sigmoid")
+            if gated_attn_act == "sigmoid":
+                attn_out = attn_out * F.sigmoid(gate_out)
+            elif gated_attn_act == "scaled_softsign":
+                attn_out = attn_out * ((F.softsign(gate_out) + 1.0) / 2.0)
+            else:
+                raise NotImplementedError(f"{gated_attn_act} not implemented")
+        output = self.o_proj(attn_out)
         return output
 
 
-def compute_slot_mapping(
-    block_tables: paddle.Tensor,  # [num_reqs, max_blocks_per_req]
-    positions: paddle.Tensor,  # [num_tokens] 每个token的位置
-    batch_id_per_token: paddle.Tensor,  # [num_tokens] 每个token属于哪个请求
-    block_size: int,
-) -> paddle.Tensor:
-    """
-    计算 slot_mapping
+import triton
+import triton.language as tl
 
-    公式: slot = block_id * block_size + offset_in_block
-    """
-    # 1. 计算每个 token 对应的 block 索引
-    block_idx = positions // block_size  # [num_tokens]
 
-    # 2. 从 block_tables 中查表获取 block_id
-    # block_tables[batch_id_per_token, block_idx]
-    block_ids = block_tables[batch_id_per_token, block_idx]  # [num_tokens]
+@enable_compat_on_triton_kernel
+@triton.jit()
+def extract_kernel(
+    q,
+    weight,
+    cu_seqlens_q,
+    seq_lens_encoder,
+    seq_lens_decoder,
+    output,
+    out_weight,
+    cache_seqlens,
+    HIDDEN_DIM: tl.constexpr,
+    WEIGHT_DIM: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
 
-    # 3. 计算在 block 内的偏移
-    block_offset = positions % block_size  # [num_tokens]
+    batch_id = tl.program_id(axis=0)
+    cache_kv_len = tl.load(seq_lens_decoder + batch_id)
 
-    # 4. 计算 slot_mapping
-    slot_mapping = block_ids * block_size + block_offset
+    # 这个batch不是decoder，所以不需要动弹
+    if cache_kv_len <= 0:
+        return
 
-    return slot_mapping.cast(paddle.int64)
+    cu_len_this_batch = tl.load(cu_seqlens_q + batch_id)
+
+    read_offsets = tl.arange(0, BLOCK_SIZE)
+    read_weight_offsets = tl.arange(0, WEIGHT_DIM)
+
+    q += cu_len_this_batch * HIDDEN_DIM
+    weight += cu_len_this_batch * WEIGHT_DIM
+
+    row_data = tl.load(q + read_offsets, mask=read_offsets < HIDDEN_DIM)
+    weight_row_data = tl.load(weight + read_weight_offsets, mask=read_weight_offsets < WEIGHT_DIM)
+
+    output += batch_id * HIDDEN_DIM
+    out_weight += batch_id * WEIGHT_DIM
+
+    tl.store(output + read_offsets, row_data, mask=read_offsets < HIDDEN_DIM)
+    tl.store(out_weight + read_weight_offsets, weight_row_data, mask=read_weight_offsets < WEIGHT_DIM)
+
+    tl.store(cache_seqlens + batch_id, cache_kv_len + 1)
+
+
+def extract_decoder_token_from_q(
+    q: paddle.Tensor,
+    weight: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+    seq_lens_decoder: paddle.Tensor,
+):
+    assert len(q.shape) == 2
+    assert len(weight.shape) == 2
+    assert len(cu_seqlens_q.shape) == 1
+    assert len(seq_lens_encoder.shape) == 1
+    assert len(seq_lens_decoder.shape) == 1
+
+    max_bsz = seq_lens_decoder.shape[0]
+
+    hidden_dim = q.shape[-1]
+    weight_dim = weight.shape[-1]
+
+    # if q.shape[0] <= max_bsz:
+    #     max_bsz = q.shape[0]
+    out = paddle.zeros([max_bsz, hidden_dim], dtype=q.dtype)
+    out_weight = paddle.zeros([max_bsz, weight_dim], dtype=weight.dtype)
+
+    cache_seqlens = paddle.zeros_like(seq_lens_decoder)
+
+    BLOCK_SIZE = triton.next_power_of_2(hidden_dim)
+
+    grid = (max_bsz,)
+
+    extract_kernel[grid](
+        q,
+        weight,
+        cu_seqlens_q,
+        seq_lens_encoder,
+        seq_lens_decoder,
+        out,
+        out_weight,
+        cache_seqlens,
+        hidden_dim,
+        weight_dim,
+        BLOCK_SIZE,
+    )
+
+    return out, out_weight, cache_seqlens
 
 
 class Indexer(nn.Layer):
@@ -500,8 +590,13 @@ class Indexer(nn.Layer):
             output_size=self.index_head_dim,
             with_bias=False,
         )
-        self.k_norm = RMSNorm(fd_config, self.index_head_dim, eps=1e-6, prefix=f"{prefix}.k_norm")
-        # self.k_norm = LayerNorm(self.head_dim, eps=1e-6)
+        self.k_norm = LayerNorm(
+            fd_config=fd_config,
+            hidden_size=self.index_head_dim,
+            eps=1e-6,
+            prefix=f"{prefix}.k_norm",
+            with_bias=True,
+        )
 
         self.weights_proj = ReplicatedLinear(
             fd_config=fd_config,
@@ -521,7 +616,7 @@ class Indexer(nn.Layer):
         # self.buffer = paddle.zeros([2048 * 2048], dtype=paddle.uint8)
 
     def forward(
-        self, forward_meta: ForwardMeta, hidden_states: paddle.Tensor, qr: paddle.Tensor, positions, rotary_emb
+        self, forward_meta: ForwardMeta, hidden_states: paddle.Tensor, qr: paddle.Tensor, rotary_emb
     ) -> paddle.Tensor:
         self.indexer_cache = forward_meta.caches[2 * self.layer_id + 1]
 
@@ -530,10 +625,10 @@ class Indexer(nn.Layer):
         q_pe, q_nope = paddle.split(q, [self.rope_dim, self.index_head_dim - self.rope_dim], axis=-1)
 
         k = self.wk(hidden_states)
-        k, _ = self.k_norm(k)
+        k = self.k_norm(k)
         k_pe, k_nope = paddle.split(k, [self.rope_dim, self.index_head_dim - self.rope_dim], axis=-1)
 
-        q_pe, k_pe = rotary_emb(positions, q_pe, k_pe.unsqueeze(1))
+        q_pe, k_pe = rotary_emb(forward_meta.position_ids, q_pe, k_pe.unsqueeze(1))
         q_pe = q_pe.reshape(-1, self.index_n_heads, self.rope_dim)
         k_pe = k_pe.reshape(-1, 1, self.rope_dim)
 
@@ -557,19 +652,14 @@ class Indexer(nn.Layer):
         weights = weights.unsqueeze(-1) * q_scale * self.softmax_scale * self.index_n_heads**-0.5
         weights = weights.squeeze(-1)
 
-        slot_mapping = compute_slot_mapping(
-            forward_meta.block_tables,
-            forward_meta.position_ids,
-            forward_meta.batch_id_per_token,
-            64,
-        )
-
         indexer_top_k = paddle.full([q_fp8.shape[0], self.index_topk], -1, dtype="int32")
 
         # indexer write_cache
-        indexer_k_quant_and_cache(k, self.indexer_cache, slot_mapping, self.quant_block_size, self.scale_fmt)
+        indexer_k_quant_and_cache(
+            k, self.indexer_cache, forward_meta.slot_mapping, self.quant_block_size, self.scale_fmt
+        )
 
-        import deep_gemm
+        from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
 
         if forward_meta.max_len_tensor_cpu[1]:
 
@@ -580,66 +670,78 @@ class Indexer(nn.Layer):
                 self.indexer_cache, k_fp8_cache, k_scale_cache, forward_meta.block_tables, forward_meta.cu_seqlens_k
             )
 
-            k_scale_cache = k_scale_cache.flatten()[: k.shape[0]]
-            k_cache = k_fp8_cache.view(paddle.float8_e4m3fn), k_scale_cache
+            k_scale_cache_real = k_scale_cache.flatten()[: k.shape[0]].contiguous()
+            k_cache = k_fp8_cache.view(paddle.float8_e4m3fn), k_scale_cache_real
 
             # TODO(changwenbin): Constructed using maskoffset
             # ks,ke = forward_meta.attn_mask_offsets[::2].contiguous(),forward_meta.attn_mask_offsets[1::2].contiguous()
             num_tokens = q_fp8.shape[0]
             ks = paddle.zeros(num_tokens, dtype=paddle.int32)
-            ke = paddle.arange(num_tokens, dtype=paddle.int32) + 1  # + (seq_len_kv - seq_len)
+            ke = paddle.zeros(num_tokens, dtype=paddle.int32)
+
+            bsz = forward_meta.seq_lens_this_time.shape[0]
+            for i in range(bsz):
+                if forward_meta.seq_lens_encoder[i] > 0:
+                    token_start_k = forward_meta.cu_seqlens_k[i]
+                    token_end_k = forward_meta.cu_seqlens_k[i + 1]
+                    ks[token_start_k:token_end_k] = forward_meta.cu_seqlens_k[i]
+                    ke[token_start_k:token_end_k] = paddle.arange(token_start_k, token_end_k, dtype=paddle.int32) + 1
+
             max_seqlen_k = (ke - ks).max().item()
 
             logits = deep_gemm.fp8_mqa_logits(
                 q_fp8, k_cache, weights, ks, ke, max_seqlen_k=max_seqlen_k, clean_logits=False
-            )
-
-            # To save GPU global memory usage
-            assert logits.size() == (num_tokens, max_seqlen_k)
-            tmp = paddle.full((num_tokens, num_tokens), float("-inf"))
-            for i in range(num_tokens):
-                tmp[i, ks[i] : ke[i]] = logits[i, : ke[i] - ks[i]]
-            logits = tmp
+            ).contiguous()
 
             radix_topk_ragged_transform(
-                logits.contiguous(),
+                logits,
                 indexer_top_k,
-                ks,  # self.offsets,
-                ke,  # mask.contiguous(),#self.lengths,
+                ks,  # self.offsets,# 初始K方向偏移，
+                ke - ks,  # self.lengths,# 表明当前q 关注的k有多长;
                 None,  # forward_meta.seq_lens_decoder,
                 None,  # forward_meta.batch_id_per_token,
+                None,
                 None,  # self.buffer
+                0,
                 self.index_topk,
                 1,
             )
 
         if forward_meta.max_len_tensor_cpu[2]:
 
-            seq_len_kv = forward_meta.seq_lens_decoder + forward_meta.seq_lens_this_time
+            decoder_q, decoder_weight, cache_seqlens = extract_decoder_token_from_q(
+                q_fp8.reshape(-1, self.index_n_heads * self.index_head_dim),
+                weights,
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+            )
 
-            schedule_metadata = deep_gemm.get_paged_mqa_logits_metadata(seq_len_kv, 64, deep_gemm.get_num_sms())
+            schedule_metadata = deep_gemm.get_paged_mqa_logits_metadata(cache_seqlens, 64, deep_gemm.get_num_sms())
 
             logits = deep_gemm.fp8_paged_mqa_logits(
-                q_fp8.unsqueeze(1),
+                decoder_q.reshape(-1, 1, self.index_n_heads, self.index_head_dim),
                 self.indexer_cache.unsqueeze(2),
-                weights,
-                seq_len_kv,
+                decoder_weight,
+                cache_seqlens,
                 forward_meta.block_tables,
                 schedule_metadata,
                 self.max_model_len,
                 clean_logits=True,
-            )
+            ).contiguous()
 
             radix_topk_ragged_transform(
-                logits.contiguous(),
+                logits,
                 indexer_top_k,
-                self.offsets,  # unused
+                forward_meta.cu_seqlens_q,
                 self.lengths,  # unused
-                seq_len_kv,
+                cache_seqlens,
                 forward_meta.batch_id_per_token,
+                forward_meta.block_tables,
                 None,  # self.buffer
+                forward_meta.block_tables.shape[1],
                 self.index_topk,
-                1,
+                1,  # kv_head
             )
 
         return indexer_top_k
@@ -673,6 +775,9 @@ class DeepseekV32DSAAttention(nn.Layer):
 
         self.attn_softmax_scale = self.qk_head_dim**-0.5
         self.rope_theta = fd_config.model_config.rope_theta
+        if fd_config.model_config.model_type == "glm_moe_dsa":
+            self.rope_theta = fd_config.model_config.rope_parameters["rope_theta"]
+
         self.rms_norm_eps = fd_config.model_config.rms_norm_eps
 
         assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
@@ -734,7 +839,7 @@ class DeepseekV32DSAAttention(nn.Layer):
             v_head_dim=self.v_head_dim,
         )
         self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
-        if self.rope_scaling:
+        if self.rope_scaling and "factor" in self.rope_scaling:
             mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
             scaling_factor = self.rope_scaling["factor"]
             mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
@@ -768,7 +873,8 @@ class DeepseekV32DSAAttention(nn.Layer):
             )
         else:
             # Default rope without scaling
-            max_position_embeddings = getattr(fd_config.model_config, "max_position_embeddings", 8192)
+            # The current `max_model_len` can cover the maximum context length.
+            max_position_embeddings = getattr(fd_config.model_config, "max_model_len", 8192)
             self.rotary_emb = DeepseekScalingRotaryEmbedding(
                 self.qk_rope_head_dim,
                 max_position_embeddings=max_position_embeddings,
@@ -807,8 +913,6 @@ class DeepseekV32DSAAttention(nn.Layer):
         self,
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         qkv_a_out = self.qkv_a_proj_with_mqa(hidden_states)
@@ -821,15 +925,13 @@ class DeepseekV32DSAAttention(nn.Layer):
         query = self.q_a_layernorm(query)[0]
 
         # DSA indexer
-        indexer_top_k = self.indexer(
-            forward_meta, hidden_states, query, position_ids, rotary_emb=self.indexer_rotary_emb
-        )
+        indexer_top_k = self.indexer(forward_meta, hidden_states, query, rotary_emb=self.indexer_rotary_emb)
 
         query = self.q_b_proj(query)
         query.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
-        query_pe, key_pe = self.rotary_emb(position_ids, query_pe, key_pe)
+        query_pe, key_pe = self.rotary_emb(forward_meta.position_ids, query_pe, key_pe)
         q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]).contiguous(), proj_type="k")
         q_input = paddle.concat([q_nope_out.transpose([1, 0, 2]).contiguous(), query_pe], axis=-1)
 
@@ -925,8 +1027,6 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
         residual: paddle.Tensor,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         if hidden_states.shape[0] > 0:
@@ -934,7 +1034,7 @@ class DeepSeekV3DecoderLayer(nn.Layer):
                 hidden_states, residual_input=residual, forward_meta=forward_meta
             )
 
-            hidden_states = self.self_attn(forward_meta, hidden_states, position_ids, mask_encoder_batch)
+            hidden_states = self.self_attn(forward_meta, hidden_states)
 
             hidden_states, residual = self.post_attention_layernorm(hidden_states, residual)
         else:
@@ -989,8 +1089,6 @@ class DeepSeekV3Model(nn.Layer):
         self,
         ids_remove_padding: paddle.Tensor,
         forward_meta: ForwardMeta,
-        position_ids: paddle.Tensor,
-        mask_encoder_batch: paddle.Tensor,
     ):
         """ """
         hidden_states = self.embed_tokens(ids_remove_padding=ids_remove_padding, forward_meta=forward_meta)
@@ -1001,8 +1099,6 @@ class DeepSeekV3Model(nn.Layer):
                 forward_meta,
                 hidden_states,
                 residual,
-                position_ids,
-                mask_encoder_batch,
             )
         out = self.norm(hidden_states, residual, forward_meta=forward_meta)[0]
 
@@ -1036,12 +1132,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
             embedding_dim=fd_config.model_config.hidden_size,
             num_embeddings=fd_config.model_config.vocab_size,
             prefix="lm_head",
-        )
-        self.position_ids_buffer = paddle.empty(
-            [fd_config.scheduler_config.max_num_batched_tokens], dtype=paddle.int32
-        )
-        self.mask_encoder_batch_buffer = paddle.empty(
-            [fd_config.scheduler_config.max_num_batched_tokens, 1], dtype=paddle.int32
         )
 
     @classmethod
@@ -1139,25 +1229,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         logits[:, self.ori_vocab_size :] = -float("inf")
         return logits
 
-    def pre_process(self, forward_meta):
-        """ """
-        seq_lens_encoder = forward_meta.seq_lens_encoder
-        seq_lens_decoder = forward_meta.seq_lens_decoder
-        seq_lens_this_time = forward_meta.seq_lens_this_time
-
-        current_total_tokens = forward_meta.ids_remove_padding.shape[0]
-        position_ids = self.position_ids_buffer[:current_total_tokens]
-        mask_encoder_batch = self.mask_encoder_batch_buffer[:current_total_tokens]
-
-        get_position_ids_and_mask_encoder_batch(
-            seq_lens_encoder,
-            seq_lens_decoder,
-            seq_lens_this_time,
-            position_ids,
-            mask_encoder_batch,
-        )
-        return position_ids, mask_encoder_batch
-
     def empty_input_forward(self, forward_meta):
         """
         empty_input_forward
@@ -1178,18 +1249,15 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         forward_meta: ForwardMeta,
     ):
         ids_remove_padding = inputs["ids_remove_padding"]
-        forward_meta.position_ids, mask_encoder_batch = self.pre_process(forward_meta)
         hidden_states = self.model(
             ids_remove_padding=ids_remove_padding,
             forward_meta=forward_meta,
-            position_ids=forward_meta.position_ids,
-            mask_encoder_batch=mask_encoder_batch,
         )
         return hidden_states
 
-    def clear_grpah_opt_backend(self):
+    def clear_graph_opt_backend(self):
         """Clear graph optimization backend, the captured cuda graph will be cleaned"""
-        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+        self.model.clear_graph_opt_backend(fd_config=self.fd_config)
 
 
 class DeepSeekV3PretrainedModel(PretrainedModel):
@@ -1234,3 +1302,29 @@ class DeepSeekV32PretrainedModel(DeepSeekV3PretrainedModel):
     @classmethod
     def arch_name(self):
         return "DeepseekV32ForCausalLM"
+
+
+@ModelRegistry.register_model_class(
+    architecture="Glm4MoeLiteForCausalLM",
+    module_name="deepseek_v3",
+    category=ModelCategory.TEXT_GENERATION,
+    primary_use=ModelCategory.TEXT_GENERATION,
+)
+class Glm4MoeLiteForCausalLM(DeepseekV3ForCausalLM):
+    """
+    Glm4MoeLiteForCausalLM
+    """
+
+    @classmethod
+    def name(cls):
+        return "Glm4MoeLiteForCausalLM"
+
+
+class Glm4MoeLitePretrainedModel(DeepSeekV3PretrainedModel):
+    """
+    Glm4MoeLite
+    """
+
+    @classmethod
+    def arch_name(self):
+        return "Glm4MoeLiteForCausalLM"

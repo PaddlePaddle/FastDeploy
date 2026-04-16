@@ -14,7 +14,8 @@ function __NEW_GPU_ROOTPORT_FILE__() {
     echo "" > ${gpu_root_port_filename} 2>/dev/null
     for gpu_bus in $(lspci 2>/dev/null | grep -iE "Communication controller: | controller: NVIDIA" | awk '{print $1}')
     do
-        readlink "/sys/bus/pci/devices/0000:${gpu_bus}" 2>/dev/null | awk -F [/] '{print $6}' >> ${gpu_root_port_filename}
+        [[ "$gpu_bus" != 0000:* ]] && gpu_bus="0000:${gpu_bus}"
+        readlink "/sys/bus/pci/devices/${gpu_bus}" 2>/dev/null | awk -F [/] '{print $6}' >> ${gpu_root_port_filename}
     done
 }
 

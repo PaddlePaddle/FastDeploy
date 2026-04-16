@@ -218,6 +218,10 @@ class _VerifyContext:
         self.output_len_now += 1
 
 
+# NOTE: try_verify_window_fallback was removed from the CUDA kernel.
+# TOPP strategy now rejects immediately when draft token is not in candidate set.
+
+
 def verify_draft_tokens_ref(
     step_output_ids,
     step_output_len,
@@ -251,6 +255,8 @@ def verify_draft_tokens_ref(
     dev_curand_states = [random.Random(0).random() for _ in range(max_step_tokens)]
 
     step_output_ids_flat = step_output_ids.reshape(-1)
+    # Kernel initializes step_output_ids to -1 for all slots
+    step_output_ids_flat[:] = -1
     step_input_ids_flat = step_input_ids.reshape(-1)
     candidate_ids_flat = candidate_ids.reshape(-1) if candidate_ids is not None else None
     candidate_scores_flat = candidate_scores.reshape(-1) if candidate_scores is not None else None
@@ -302,29 +308,6 @@ def verify_draft_tokens_ref(
                     step_input_ids_now[i + 1],
                     actual_cand_len,
                 )
-                if not accepted:
-                    # verify_window fallback
-                    ii = i
-                    if (
-                        max_candidate_len >= 2
-                        and candidate_ids_now[ii * max_candidate_len + 1] == step_input_ids_now[ii + 1]
-                    ):
-                        j, ii = 0, ii + 1
-                        while j < verify_window and ii < seq_lens_this_time[bid] - 1:
-                            if candidate_ids_now[ii * max_candidate_len] != step_input_ids_now[ii + 1]:
-                                break
-                            j += 1
-                            ii += 1
-                        if j >= verify_window:
-                            for k in range(i, ii):
-                                if ctx.emit_token(k, step_input_ids_now[k + 1]):
-                                    i = k
-                                    break
-                            if ctx.stopped:
-                                break
-                            i = ii
-                            continue
-                    break
             elif verify_strategy in (1, 2):  # GREEDY / TARGET_MATCH
                 accepted = target_tokens_now[i] == step_input_ids_now[i + 1]
 
@@ -702,65 +685,6 @@ class TestVerifyDraftTokens(unittest.TestCase):
         self.assertEqual(VerifyStrategy.from_string("target_match"), VerifyStrategy.TARGET_MATCH)
         with self.assertRaises(ValueError):
             VerifyStrategy.from_string("invalid")
-
-    def test_topp_verify_window_fallback(self):
-        """Test TOPP verify_window fallback: top-2 match + consecutive top-1 matches."""
-        real_bsz, max_draft_tokens, max_candidate_len, verify_window = 1, 8, 4, 2
-
-        inputs = gen_verify_draft_tokens_inputs(
-            real_bsz=real_bsz,
-            max_draft_tokens=max_draft_tokens,
-            verify_strategy=VerifyStrategy.TOPP.value,
-            max_candidate_len=max_candidate_len,
-            verify_window=verify_window,
-            seed=42,
-        )
-
-        # Rebuild arrays for full seq_lens_this_time
-        new_slt = max_draft_tokens + 1
-        inputs["seq_lens_this_time"] = np.array([new_slt], dtype=np.int32)
-        inputs["cu_seqlens_q_output"] = np.array([0], dtype=np.int32)
-
-        rng = np.random.default_rng(42)
-        sum_seq = new_slt
-        inputs["candidate_ids"] = rng.integers(0, 1000, size=(sum_seq, max_candidate_len), dtype=np.int64)
-        inputs["candidate_scores"] = rng.random(size=(sum_seq, max_candidate_len)).astype(np.float32)
-        inputs["candidate_scores"] /= inputs["candidate_scores"].sum(axis=1, keepdims=True)
-        inputs["candidate_lens"] = rng.integers(1, max_candidate_len + 1, size=sum_seq, dtype=np.int32)
-
-        # Draft tokens
-        draft_tokens = [100, 200, 300, 400, 500, 600, 700]
-        for i, token in enumerate(draft_tokens):
-            inputs["step_input_ids"][0, i + 1] = token
-
-        # Position 0: draft NOT in candidates, but top-2 matches draft
-        inputs["candidate_ids"][0] = [999, 100, 998, 997]
-        # Positions 1,2: top-1 matches next draft tokens
-        inputs["candidate_ids"][1] = [200, 888, 777, 666]
-        inputs["candidate_ids"][2] = [300, 555, 444, 333]
-        inputs["candidate_lens"][:3] = 4
-        inputs["is_block_step"] = np.zeros(real_bsz, dtype=bool)
-
-        self._run_and_compare(inputs, label="verify_window_fallback")
-
-    def test_topp_verify_window_no_fallback(self):
-        """Test TOPP when verify_window fallback does NOT trigger."""
-        inputs = gen_verify_draft_tokens_inputs(
-            real_bsz=1,
-            max_draft_tokens=5,
-            verify_strategy=VerifyStrategy.TOPP.value,
-            max_candidate_len=4,
-            verify_window=2,
-            seed=42,
-        )
-
-        inputs["step_input_ids"][0, 1:] = [999, 998, 997, 996]
-        inputs["candidate_ids"][:] = 0
-        inputs["candidate_ids"][0] = [1, 2, 3, 4]
-        inputs["candidate_lens"][0] = 4
-        inputs["seq_lens_this_time"][0] = 5
-
-        self._run_and_compare(inputs, label="verify_window_no_fallback")
 
 
 if __name__ == "__main__":

@@ -39,8 +39,8 @@ def load_deep_ep() -> ModuleType:
 
     try:
         if envs.FD_USE_PFCC_DEEP_EP:
-            # Enable torch proxy before importing deep_ep (required by PFCC/PaddleFleet variants)
-            paddle.compat.enable_torch_proxy(scope={"deep_ep"})
+            # Enable paddle.enable_compat before importing deep_ep (required by PFCC/PaddleFleet variants)
+            paddle.enable_compat(scope={"deep_ep"})
             try:
                 import paddlefleet.ops.deep_ep as deep_ep  # type: ignore
 
@@ -163,6 +163,7 @@ class DeepEPBuffer:
         if self.deepep_buffer is not None:
             self.clear_buffer()
 
+        num_qps_per_rank = max(24, self.num_experts // self.ep_size)
         if self.splitwise_role == "mixed":
             logger.info("Initializing mixed mode buffer (low latency).")
             self.deepep_buffer = deep_ep.Buffer(
@@ -170,7 +171,7 @@ class DeepEPBuffer:
                 self.num_nvl_bytes,
                 self.num_rdma_bytes,
                 low_latency_mode=True,
-                num_qps_per_rank=24,
+                num_qps_per_rank=num_qps_per_rank,
             )
             self.deepep_buffer.set_num_sms(14)  # TODO: tune in future
         else:
@@ -183,7 +184,7 @@ class DeepEPBuffer:
                     self.num_nvl_bytes,
                     self.num_rdma_bytes,
                     low_latency_mode=True,
-                    num_qps_per_rank=24,
+                    num_qps_per_rank=num_qps_per_rank,
                 )
             else:
                 raise ValueError(f"Unknown generation phase: {self.moe_phase.phase}")
@@ -199,7 +200,7 @@ class DeepEPBuffer:
                 if self.ep_size // 8 > 1:
                     num_qps_per_rank_now = self.ep_size // 8
                 else:
-                    num_qps_per_rank_now = 1
+                    num_qps_per_rank_now = self.num_experts // self.ep_size
             self.deepep_buffer = deep_ep.Buffer(
                 self.group,
                 self.num_nvl_bytes,
@@ -508,6 +509,7 @@ class EPRunner:
                     expert_in_rank_num_list=expert_in_rank_num_list,
                     tokens_per_expert_stats_list=tokens_per_expert_stats_list,
                     redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
+                    topk_reduce_func=getattr(layer, "topk_reduce_func", None),
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
@@ -533,6 +535,7 @@ class EPRunner:
                     layer.routed_scaling_factor,
                     layer.gate_correction_bias,
                     getattr(layer, "renormalize", True),
+                    topk_reduce_func=getattr(layer, "topk_reduce_func", None),
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(

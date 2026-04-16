@@ -54,33 +54,6 @@ def yarn_get_mscale(scale=1, mscale=1):
     return 0.1 * mscale * math.log(scale) + 1.0
 
 
-def compute_slot_mapping(
-    block_tables: paddle.Tensor,  # [num_reqs, max_blocks_per_req]
-    positions: paddle.Tensor,  # [num_tokens] 每个token的位置
-    batch_id_per_token: paddle.Tensor,  # [num_tokens] 每个token属于哪个请求
-    block_size: int,
-) -> paddle.Tensor:
-    """
-    计算 slot_mapping
-
-    公式: slot = block_id * block_size + offset_in_block
-    """
-    # 1. 计算每个 token 对应的 block 索引
-    block_idx = positions // block_size  # [num_tokens]
-
-    # 2. 从 block_tables 中查表获取 block_id
-    # block_tables[batch_id_per_token, block_idx]
-    block_ids = block_tables[batch_id_per_token, block_idx]  # [num_tokens]
-
-    # 3. 计算在 block 内的偏移
-    block_offset = positions % block_size  # [num_tokens]
-
-    # 4. 计算 slot_mapping
-    slot_mapping = block_ids * block_size + block_offset
-
-    return slot_mapping.cast(paddle.int64)
-
-
 @dataclass
 class DSAAttentionMetadata(AttentionMetadata):
     """
@@ -136,7 +109,7 @@ class DSAAttentionBackend(AttentionBackend):
         self.rope_theta: float = (
             10000.0 if fd_config.model_config.rope_theta is None else fd_config.model_config.rope_theta
         )
-        self.rope_3d: bool = getattr(fd_config.model_config, "rope_3d", False)
+        self.rope_3d: bool = fd_config.enable_rope_3d_runtime
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
         self.speculative_method: str = fd_config.speculative_config.method
         self.use_speculate: bool = self.speculative_method is not None
@@ -344,21 +317,13 @@ class DSAAttentionBackend(AttentionBackend):
 
             from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
-        k_range = paddle.tensor(200.0)
-        scale = paddle.abs(compressed_kv).max() / k_range
-
-        slot_mapping = compute_slot_mapping(
-            forward_meta.block_tables,
-            forward_meta.position_ids,
-            forward_meta.batch_id_per_token,
-            self.block_size,
-        )
+        scale = paddle.abs(compressed_kv).max() / 200.0
 
         dsk_attn_write_cache(
             compressed_kv,
             k_pe,
             latent_cache,
-            slot_mapping,
+            forward_meta.slot_mapping,
             scale.cast(paddle.float32),
             "fp8_ds_mla",
         )
@@ -378,10 +343,12 @@ class DSAAttentionBackend(AttentionBackend):
         if forward_meta.max_len_tensor_cpu[2]:  # max_enc_len_this_time
 
             tile_scheduler_metadata, _ = flash_mla.get_mla_metadata()
-
+            new_cache_shape = latent_cache.shape
+            assert new_cache_shape[1] == 1
+            new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
             fmha_out_decode, _ = flash_mla.flash_mla_with_kvcache(
                 q.unsqueeze(1).contiguous(),
-                latent_cache.transpose([0, 2, 1, 3]).contiguous(),
+                latent_cache.view(new_cache_shape),
                 None,  # forward_meta.block_tables,
                 None,  # cache_seqlens
                 512,  # self.qk_nope_head_dim,

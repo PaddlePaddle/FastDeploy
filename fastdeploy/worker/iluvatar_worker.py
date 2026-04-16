@@ -40,7 +40,7 @@ class IluvatarWorker(GpuWorker):
         local_rank: int,
         rank: int,
     ):
-        if fd_config.model_config.enable_mm:
+        if fd_config.enable_mm_runtime:
             paddle.set_flags({"FLAGS_enable_ixattnbkd": True, "FLAGS_enable_ixdnn_attn": False})
         super(IluvatarWorker, self).__init__(
             fd_config=fd_config,
@@ -126,11 +126,6 @@ class IluvatarPaddleDisWorkerProc(PaddleDisWorkerProc):
             # 2. Calculate the appropriate number of blocks
             model_block_memory_used = self.worker.cal_theortical_kvcache()
             num_blocks_local = int(available_kv_cache_memory // model_block_memory_used)
-            # NOTE(liuzichang): Too many block will lead to illegal memory access
-            # We will develop dynamic limits in future.
-            if num_blocks_local > 40000:
-                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
-                num_blocks_local = min(40000, num_blocks_local)
             logger.info(f"------- model_block_memory_used:{model_block_memory_used} --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 

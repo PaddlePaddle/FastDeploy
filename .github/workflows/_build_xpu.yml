@@ -36,9 +36,22 @@ on:
       wheel_path:
         description: "Output path of the generated wheel"
         value: ${{ jobs.xpu-build-test.outputs.wheel_path }}
+    secrets:
+      github-token:
+        required: true
+
 jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: build_xpu
+
   xpu-build-test:
     runs-on: [self-hosted, XPU-P800]
+    needs: check_bypass
+    if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     outputs:
       wheel_path: ${{ steps.set_output.outputs.wheel_path }}
     steps:

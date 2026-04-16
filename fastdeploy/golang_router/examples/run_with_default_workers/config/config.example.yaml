@@ -9,6 +9,7 @@ scheduler:
   prefill-policy: "cache_aware"
   decode-policy: "request_num"
   eviction-interval-secs: 60
+  eviction-duration-mins: 30 # eviction duration for cache-aware radix tree nodes (minutes); default: 30
   balance-abs-threshold: 1
   balance-rel-threshold: 0.2
   hit-ratio-weight: 1.0

@@ -64,24 +64,15 @@ def _configure_logger(name=None):
     return logger
 
 
-from fastdeploy.utils import envs
+from fastdeploy.utils import _is_package_installed, envs
 
 # Configure root logger
 _configure_logger()
-
-import uuid
 
 # suppress warning log from paddlepaddle
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
 os.environ["AISTUDIO_LOG"] = "critical"
-# set prometheus dir
-if os.getenv("PROMETHEUS_MULTIPROC_DIR", "") == "":
-    prom_dir = f"/tmp/fd_prom_{str(uuid.uuid4())}"
-    os.environ["PROMETHEUS_MULTIPROC_DIR"] = prom_dir
-    if os.path.exists(prom_dir):
-        os.rmdir(prom_dir)
-    os.mkdir(prom_dir)
 
 import typing
 
@@ -111,16 +102,11 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.llm import LLM
 from fastdeploy.utils import console_logger, current_package_version, get_version_info
 
-paddle.compat.enable_torch_proxy(scope={"triton"})
-# paddle.compat.enable_torch_proxy(scope={"triton"}) enables the torch proxy
-# specifically for the 'triton' module. This means `import torch` inside 'triton'
-# will actually import paddle's compatibility layer (acting as torch).
-#
-# 'scope' acts as an allowlist. To add other modules, you can do:
-# paddle.compat.enable_torch_proxy(scope={"triton", "new_module"})
-#
-# Note: Ensure that any torch APIs used in 'new_module' are already implemented in Paddle.
-
+# We can use enable_compat only when torch is not installed, otherwise it will
+# cause some unexpected issues in triton kernels. We use enable_compat_on_triton_kernel
+# for these cases.
+if not _is_package_installed("torch"):
+    paddle.enable_compat(scope={"triton"})
 
 if envs.FD_DEBUG != 1:
     # Log level has been configured above

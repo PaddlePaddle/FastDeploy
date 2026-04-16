@@ -14,42 +14,21 @@
 # limitations under the License.
 """
 
-import io
+import gc
+import glob
 import os
+import re
 import time
 from multiprocessing.shared_memory import SharedMemory
 from typing import Any, Dict, List
 
 import numpy as np
 import paddle
+import yaml
 from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
-
-
-def sync_weights_by_rdma(config, step, rank):
-    from checkpoint_transfer.core import RDMAWeightsDownloader
-
-    downloader = RDMAWeightsDownloader(config)
-    downloader.initialize()
-    logger.info(f"Fetching weights for step:{step}, rank:{rank}...")
-    data = downloader.get_weights(step, rank)
-    if data is None:
-        logger.error("Failed to get weights!")
-        raise Exception("Failed to rsync weights through checkpoint_transfer")
-    logger.info(f"Successfully retrieved data. Type: {type(data)}")
-    if isinstance(data, np.ndarray):
-        data_bytes = data.tobytes()
-    elif isinstance(data, (bytes, bytearray)):
-        data_bytes = data
-    else:
-        data_bytes = bytes(data)
-    logger.info(f"Data size: {len(data_bytes)} bytes")
-
-    buffer = io.BytesIO(data_bytes)
-    new_state_dict = paddle.load(buffer)
-    return new_state_dict
 
 
 class DynamicWeightManager:
@@ -72,6 +51,7 @@ class DynamicWeightManager:
         else:
             self.model_list = models
         self._capture_model_state()
+        self.rdma_handle = None
         if self.load_config.load_strategy == "rsync":
             self.update_weights_by_rdma()
         else:
@@ -88,10 +68,10 @@ class DynamicWeightManager:
         """Capture and store initial model parameters state."""
         for model in self.model_list:
             for name, param in model.state_dict().items():
-                logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}")
+                logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}, place={param.place}")
                 self.state_dict[name] = param
 
-    def update_weights_by_rdma(self, version: str = None, rsync_config: Dict[str, Any] = None):
+    def update_weights_by_rdma(self, version: str = None, verify_checksum: bool = False):
         def valid_parameters(old_state_dict, new_state_dict):
             is_valid = True
             for key in old_state_dict:
@@ -107,30 +87,37 @@ class DynamicWeightManager:
                     )
                 elif old_state_dict[key].dtype != new_state_dict[key].dtype:
                     is_valid = False
-                    logger.error(f"Invalid parameter: {key} dtype mismatch")
+                    logger.error(
+                        f"Invalid parameter: {key} dtype mismatch, old:{old_state_dict[key].dtype}, new:{new_state_dict[key].dtype}"
+                    )
             return is_valid
 
-        if rsync_config is None:
-            rsync_config = self.fd_config.load_config.rsync_config
-        if rsync_config is None or len(rsync_config) == 0:
-            raise Exception(
-                "rsync config not set, please set it in 1) launch arguments '--rsync-config' "
-                "or 2) interface arguments 'rsync_config'"
-            )
-
-        if version is None or version == "":
+        bootstrap_load = version is None or version == ""
+        if bootstrap_load:
             version = self.read_model_version_from_file()
         if version is None or version == "":
             raise Exception(
-                "rsync model version not set, please set it in 1) {model_version}/version.txt "
+                "rsync model version not set, please set it in 1) {model_version}/version.yaml "
                 "or 2) interface arguments 'version'"
             )
 
-        logger.info(f"START update_weights_by_rdma, version:{version}, rsync_config:{rsync_config}")
-        rank = self.local_rank
+        logger.info(
+            f"START rank:{self.local_rank}/{self.nranks} update_weights_by_rdma, "
+            f"version:{version}, verify_checksum:{verify_checksum}, bootstrap_load:{bootstrap_load}"
+        )
+
+        if self.rdma_handle is None:
+            from checkpoint_transfer import CheckpointTransfer
+
+            config = self.fd_config.load_config.rsync_config
+            logger.info(f"CheckpointTransfer rsync config:{config}")
+            self.rdma_handle = CheckpointTransfer(**config, local_rank=self.local_rank, group_size=self.nranks)
+            self.rdma_handle.initialize()
 
         sync_start = time.perf_counter()
-        new_state_dict = sync_weights_by_rdma(rsync_config, version, rank)
+        new_state_dict = dict()
+        for key, param in self.rdma_handle.receive_stream(step_id=version, verify_checksum=verify_checksum):
+            new_state_dict[key] = param
         sync_cost = time.perf_counter() - sync_start
         logger.info(f"weights sync cost {sync_cost:.2f} seconds")
 
@@ -141,22 +128,27 @@ class DynamicWeightManager:
             raise ValueError(error_msg)
 
         update_start = time.perf_counter()
-        for name, param in old_state_dict.items():
-            param.set_value(new_state_dict[name])
+        for name, target_param in old_state_dict.items():
+            new_param = new_state_dict[name]
+            if bootstrap_load and not target_param._is_initialized():
+                new_param = new_param.cuda()
+                new_param._share_buffer_to(target_param)
+            else:
+                target_param.set_value(new_param)
+
         update_cost = time.perf_counter() - update_start
         logger.info(f"params set value cost {update_cost:.2f} seconds")
-
         total_cost = time.perf_counter() - sync_start
         logger.info(
             f"END update_weights_by_rdma, cost {total_cost:.2f} seconds"
-            f" version:{version}, rsync_config: {rsync_config}",
+            f" version:{version}, verify_checksum: {verify_checksum}, local_rank: {self.local_rank}",
         )
         return {
             "sync_cost": sync_cost,
             "update_cost": update_cost,
             "total_cost": total_cost,
             "version": version,
-            "rank": rank,
+            "rank": self.local_rank,
         }
 
     def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
@@ -198,21 +190,122 @@ class DynamicWeightManager:
         # step5: recapture cuda_graph
         # step6: update weight status signal
 
+    def restart_communication_group(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            paddle.distributed.restart_process_group()
+            paddle.distributed.restart_process_group(self.parallel_config.tp_group)
+            if self.parallel_config.enable_expert_parallel:
+                paddle.distributed.restart_process_group(self.parallel_config.ep_group)
+            logger.info(f"finish restarting communication groups! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def recreate_deepep_buffer(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            from fastdeploy.model_executor.layers.moe.ep import DeepEPBufferManager
+
+            DeepEPBufferManager.recreate_buffer()
+            # ep barrier
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            logger.info(f"finish recreating deepep buffer! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def reload_model_weights(self):
+        if not self.first_load:
+            start_time = time.perf_counter()
+            strategy_handlers = {
+                "ipc_snapshot": self._update_ipc_snapshot,
+                "ipc": self._update_ipc,
+            }
+
+            if handler := strategy_handlers.get(self.load_config.load_strategy):
+                handler()
+            else:
+                raise ValueError(f"Unsupported strategy: {self.load_config.load_strategy}")
+            logger.info(f"finish reload model weights! time cost: {time.perf_counter()-start_time:.3f}s")
+
     def _update_ipc_snapshot(self):
-        """Update using IPC snapshot strategy for elastic recovery."""
-        model_path = os.path.join(
-            self.fd_config.model_config.model,
-            f"model_state.tp0{self.meta_src_id}.pdparams",
-        )
+        """Update using IPC snapshot strategy for elastic recovery.
 
-        try:
+        Loading priority:
+          1. Chunked part files  (model_state.tp{rank}.{id}.part{N}.pdparams)
+          2. Single full file    (model_state.tp{rank}.{id}.pdparams)
+          3. Legacy format       (model_state.tp0{id}.pdparams)
+          4. Shared fallback dir (/shared_ipc_meta/...)
+        """
+        model_dir = self.fd_config.model_config.model
+        base_name = f"model_state.tp{paddle.distributed.get_rank()}.{self.meta_src_id}"
+        legacy_base_name = f"model_state.tp0{self.meta_src_id}"
+
+        # --- Priority 1: load from chunked part files to avoid memory spike ---
+        part_pattern = os.path.join(model_dir, f"{base_name}.part*.pdparams")
+        all_part_files = glob.glob(part_pattern)
+
+        valid_part_files = []
+        invalid_part_files = []
+        part_regex = re.compile(r"\.part(\d+)\.")
+
+        for path in all_part_files:
+            match = part_regex.search(path)
+            if not match:
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            try:
+                part_idx = int(match.group(1))
+            except (TypeError, ValueError):
+                invalid_part_files.append(os.path.basename(path))
+                continue
+            valid_part_files.append((part_idx, path))
+
+        if invalid_part_files:
+            logger.warning(
+                "Found snapshot part files with invalid naming pattern under %s: %s. "
+                "These files will be ignored when loading IPC snapshot parts.",
+                model_dir,
+                ", ".join(invalid_part_files),
+            )
+
+        part_files = [p for _, p in sorted(valid_part_files, key=lambda item: item[0])]
+
+        if part_files:
+            logger.info(f"Found {len(part_files)} snapshot part files for {base_name}")
+            for load_idx, part_path in enumerate(part_files):
+                match = re.search(r"\.part(\d+)\.", part_path)
+                # Use part index parsed from filename to keep logs and src_type consistent with file naming
+                part_index = int(match.group(1)) if match else load_idx
+                logger.info(f"Loading snapshot part {part_index+1}/{len(part_files)} from {part_path}")
+                ipc_state_dict = paddle.load(part_path, safetensors=True)
+                self._update_model_from_state(ipc_state_dict, f"snapshot-part{part_index}")
+                del ipc_state_dict
+                gc.collect()
+            logger.info(f"IPC snapshot update completed from {len(part_files)} part files under {model_dir}")
+            return
+
+        # --- Priority 2: single full pdparams file ---
+        model_path = os.path.join(model_dir, f"{base_name}.pdparams")
+        if os.path.exists(model_path):
             ipc_state_dict = paddle.load(model_path, safetensors=True)
-        except FileNotFoundError:
-            fallback_path = f"/shared_ipc_meta/model_state.tp0{self.meta_src_id}.pdparams"
-            ipc_state_dict = paddle.load(fallback_path)
+            self._update_model_from_state(ipc_state_dict, "snapshot")
+            logger.info(f"IPC snapshot update completed from {model_path}")
+            return
 
+        # --- Priority 3: legacy format (model_state.tp0{id}.pdparams) ---
+        legacy_path = os.path.join(model_dir, f"{legacy_base_name}.pdparams")
+        if os.path.exists(legacy_path):
+            ipc_state_dict = paddle.load(legacy_path, safetensors=True)
+            self._update_model_from_state(ipc_state_dict, "snapshot")
+            logger.info(f"IPC snapshot update completed from legacy format {legacy_path}")
+            return
+
+        # --- Priority 4: shared directory fallback ---
+        fallback_path = f"/shared_ipc_meta/{base_name}.pdparams"
+        if not os.path.exists(fallback_path):
+            raise FileNotFoundError(
+                f"No snapshot found for {base_name}: " f"checked {model_dir} (new/legacy) and {fallback_path}"
+            )
+        logger.info(f"No local snapshot in {model_dir}, fallback to {fallback_path}")
+        ipc_state_dict = paddle.load(fallback_path)
         self._update_model_from_state(ipc_state_dict, "snapshot")
-        logger.info(f"IPC snapshot update parameters completed from {model_path}")
+        logger.info(f"IPC snapshot update completed from {fallback_path}")
 
     def _update_ipc(self):
         """Update using standard IPC strategy (requires Training Worker)."""
@@ -257,6 +350,30 @@ class DynamicWeightManager:
         if shutdown_process_group:
             paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
+
+    def clear_deepep_buffer(self):
+        start_time = time.perf_counter()
+        from fastdeploy.model_executor.layers.moe.ep import DeepEPBufferManager
+
+        DeepEPBufferManager.clear_buffer()
+        logger.info(f"finish clearing deepep buffer! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def clear_model_weight(self):
+        start_time = time.perf_counter()
+        for model in self.model_list:
+            for param in model.state_dict().values():
+                param._clear_data()
+        logger.info(f"finish clearing model weight! time cost: {time.perf_counter()-start_time:.3f}s")
+
+    def clear_communication_group(self):
+        start_time = time.perf_counter()
+        if self.parallel_config.enable_expert_parallel:
+            paddle.distributed.barrier(self.parallel_config.ep_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
+        if self.parallel_config.tensor_parallel_size > 1:
+            paddle.distributed.barrier(self.parallel_config.tp_group)
+            paddle.distributed.shutdown_process_group(self.parallel_config.tp_group)
+        logger.info(f"finish clearing communication groups! time cost: {time.perf_counter()-start_time:.3f}s")
 
     def _update_model_from_state(self, state_dict: Dict[str, paddle.Tensor], src_type: str):
         """Update model parameters from given state dictionary."""
@@ -365,13 +482,23 @@ class DynamicWeightManager:
 
     def read_model_version_from_file(self):
         model_dir = self.fd_config.model_config.model
-        version_file = os.path.join(model_dir, "version.txt")
+        version_file = os.path.join(model_dir, "version.yaml")
         try:
             with open(version_file, "r", encoding="utf-8") as f:
-                version = f.read().strip()
-            return version
-        except (FileNotFoundError, OSError, IOError) as e:
-            logger.error(f"Failed to read model version file '{version_file}': {e}")
+                version_info = yaml.safe_load(f) or {}
+
+            if not isinstance(version_info, dict):
+                logger.error(f"Failed to read model step from '{version_file}': yaml content is not a mapping")
+                return None
+
+            step = version_info.get("step")
+            if step is None:
+                logger.error(f"Failed to read model step from '{version_file}': missing 'step' field")
+                return None
+
+            return str(step)
+        except (FileNotFoundError, OSError, IOError, yaml.YAMLError) as e:
+            logger.error(f"Failed to read model step from '{version_file}': {e}")
             return None
 
     @staticmethod

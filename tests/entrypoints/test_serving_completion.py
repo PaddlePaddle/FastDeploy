@@ -20,7 +20,6 @@ from unittest.mock import AsyncMock, Mock, patch
 import numpy as np
 import paddle
 
-import fastdeploy.envs as envs
 import fastdeploy.metrics.trace as tracing
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.utils import ErrorCode, ParameterError
@@ -124,40 +123,21 @@ class TestServingCompletion(unittest.IsolatedAsyncioTestCase):
         ec = _make_engine_client()
         ec.format_and_add_data = AsyncMock(side_effect=ParameterError("max_tokens", "bad"))
         serving = OpenAIServingCompletion(ec, None, "pid", None, -1)
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            res = await _assert_error(self, serving, _make_request(prompt_token_ids=[1, 2]), param="max_tokens")
+        res = await _assert_error(self, serving, _make_request(prompt_token_ids=[1, 2]), param="max_tokens")
         ec.semaphore.release.assert_called_once()
-        ec = _make_engine_client()
-        ec.format_and_add_data = AsyncMock(side_effect=ValueError("bad"))
-        serving = OpenAIServingCompletion(ec, None, "pid", None, -1)
-
-        def fake_from_generic_request(_, request_id):
-            return {"prompt": "hi", "request_id": request_id, "prompt_tokens": [1], "max_tokens": 2, "metrics": {}}
-
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", True):
-            with patch(
-                "fastdeploy.entrypoints.openai.serving_completion.Request.from_generic_request",
-                side_effect=fake_from_generic_request,
-            ):
-                await _assert_error(self, serving, _make_request(prompt="hi"), code=ErrorCode.INVALID_VALUE)
         ec = _make_engine_client()
         ec.format_and_add_data = AsyncMock(return_value=np.array([1, 2]))
         serving = OpenAIServingCompletion(ec, None, "pid", None, -1)
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            with patch.object(serving, "completion_full_generator", AsyncMock(side_effect=RuntimeError("boom"))):
-                await _assert_error(
-                    self, serving, _make_request(prompt="hi"), contains="completion_full_generator error"
-                )
+        with patch.object(serving, "completion_full_generator", AsyncMock(side_effect=RuntimeError("boom"))):
+            await _assert_error(self, serving, _make_request(prompt="hi"), contains="completion_full_generator error")
         serving = OpenAIServingCompletion(_make_engine_client(), None, "pid", None, -1)
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            with patch.object(serving, "completion_stream_generator", return_value="streamed"):
-                res = await serving.create_completion(_make_request(request_id="req123", stream=True))
+        with patch.object(serving, "completion_stream_generator", return_value="streamed"):
+            res = await serving.create_completion(_make_request(request_id="req123", stream=True))
         self.assertEqual(res, "streamed")
         serving = OpenAIServingCompletion(_make_engine_client(), None, "pid", None, -1)
-        with patch.object(envs, "ENABLE_V1_DATA_PROCESSOR", False):
-            await _assert_error(
-                self, serving, _StreamRaiser(**_make_request().__dict__), contains="create_completion error"
-            )
+        await _assert_error(
+            self, serving, _StreamRaiser(**_make_request().__dict__), contains="create_completion error"
+        )
 
     async def test_completion_full_generator_branches(self):
         ec = _make_engine_client()

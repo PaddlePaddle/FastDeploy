@@ -138,7 +138,7 @@ class TestSpeculateScheduleCache(unittest.TestCase):
         self.is_block_step = paddle.zeros((self.real_bsz,), dtype=paddle.bool)
 
         # not_need_stop lives on CPU in the caller; the kernel copies to device internally
-        self.not_need_stop = paddle.zeros((1,), dtype=paddle.bool).cpu()
+        self.not_need_stop = paddle.zeros((1,), dtype=paddle.bool)
 
         # Choose threshold so with: bid0 triggers, bid1 already stopped, padding (5-3)=2 -> stop_sum = 1+1+2 = 4
 

@@ -39,7 +39,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     StructuralTagResponseFormat,
     ToolCall,
 )
-from fastdeploy.utils import data_processor_logger
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.worker.output import (
     LogprobsLists,
     PromptLogprobs,
@@ -313,15 +317,13 @@ class Request:
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in req.metadata.items():
                 setattr(request, key, value)
-            from fastdeploy.utils import api_server_logger
-
-            api_server_logger.warning("The parameter metadata is obsolete.")
+            log_request(RequestLogLevel.STAGES, message="The parameter metadata is obsolete.")
 
         return request
 
     @classmethod
     def from_dict(cls, d: dict):
-        data_processor_logger.debug(f"{d}")
+        log_request(RequestLogLevel.FULL, message="{request}", request=d)
         sampling_params: SamplingParams = None
         pooling_params: PoolingParams = None
         metrics: RequestMetrics = None
@@ -352,8 +354,11 @@ class Request:
                         ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
                     )
             except Exception as e:
-                data_processor_logger.error(
-                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
+                log_request_error(
+                    message="request[{request_id}] Convert mm_positions to ImagePosition error: {error}, {traceback}",
+                    request_id=d.get("request_id"),
+                    error=str(e),
+                    traceback=traceback.format_exc(),
                 )
         return cls(
             request_id=d["request_id"],
@@ -460,13 +465,12 @@ class Request:
             "ic_req_data": self.ic_req_data,
         }
 
-        # During multimodal PD separation, position_ids are required
         if isinstance(self.multimodal_inputs, dict):
             # Optimize multimodal data transfer during PD separation:
-            # - V1 mode (ENABLE_V1_KVCACHE_SCHEDULER=1): Only position_ids needed for decode nodes
+            # - V1 mode (ENABLE_V1_KVCACHE_SCHEDULER=1): position_ids, mm_positions and mm_hashes needed for decode nodes
             # - V0 mode (ENABLE_V1_KVCACHE_SCHEDULER=0): Full field set required for compatibility
             # This filtering significantly reduces serialized data size for large numpy arrays
-            allowed_keys = {"position_ids"}
+            allowed_keys = {"position_ids", "mm_positions", "mm_hashes"}
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 allowed_keys.update(["input_ids", "token_type_ids", "images", "image_type_ids", "grid_thw"])
 
@@ -866,6 +870,7 @@ class RequestMetrics:
 
     llm_engine_recv_req_timestamp: Optional[float] = None
     llm_engine_send_req_to_engine_timestamp: Optional[float] = None
+    llm_engine_send_req_to_decoder_engine_timestamp: Optional[float] = None
     llm_engine_recv_latest_token_timestamp: Optional[float] = None
     llm_engine_recv_token_timestamp: Optional[float] = None
 
@@ -952,6 +957,10 @@ class RequestMetrics:
 
     def __setitem__(self, key, value):
         setattr(self, key, value)
+
+    # Set engine time for decoder-node
+    def update_decoder_start_time(self):
+        self.llm_engine_send_req_to_decoder_engine_timestamp = self.decode_inference_start_time
 
 
 class RequestOutput:
