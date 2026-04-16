@@ -946,7 +946,7 @@ class ResourceManagerV1(ResourceManager):
                         len(self.running)
                         + len(self.to_be_rescheduled_request_id_set)
                         + len(self.to_be_aborted_req_id_set)
-                        + sum([req.status == RequestStatus.PREEMPTED for req in self.waiting])
+                        + sum(req.status == RequestStatus.PREEMPTED for req in self.waiting)
                         >= self.max_num_seqs
                     ):
                         break
@@ -1564,7 +1564,7 @@ class ResourceManagerV1(ResourceManager):
 
     def update_metrics(self, verbose=False):
         # Update metrics
-        num_tasks = sum([1 if task else 0 for task in self.tasks_list])
+        num_tasks = sum(1 if task else 0 for task in self.tasks_list)
         blocks_used_by_tasks = set()
         for task in self.tasks_list:
             if task is not None:
