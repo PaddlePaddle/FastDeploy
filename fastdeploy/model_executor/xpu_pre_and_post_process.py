@@ -148,7 +148,6 @@ def xpu_pre_process(
     else:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
