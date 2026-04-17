@@ -595,19 +595,27 @@ class XPUModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
-                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                    # Enable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-                    if request.get("response_max_tokens") is not None:
-                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get("response_max_tokens")
+                if request.get("enable_thinking") is not None:
+                    enable_thinking = bool(request.get("enable_thinking"))
+                    logger.debug(f"request {request.request_id} with {enable_thinking=} at idx {idx}")
+                    self.share_inputs["enable_thinking"][idx : idx + 1, :] = enable_thinking
+                    if enable_thinking:
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                        if request.get("reasoning_max_tokens") is not None:
+                            # Enable thinking
+                            self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                        else:
+                            self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                        if request.get("response_max_tokens") is not None:
+                            # Enable thinking
+                            self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get("response_max_tokens")
+                        else:
+                            self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                     else:
+                        # Disable thinking
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                         self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
-                else:
-                    # Disable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                    self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if (
                     hasattr(request, "sampling_params")
