@@ -27,11 +27,9 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.ops.gpu import (
-    flash_attn_kvcache_forward,
     flash_attn_varlen_forward,
     rotary_position_embedding,
     write_cache_kv,
-    write_cache_kv_with_rope,
 )
 
 
@@ -43,18 +41,9 @@ class FlashAttentionMetadata(AttentionMetadata):
 
     num_requests: int = 0
     num_actual_tokens: int = 0
-
-    num_prefills: int = 0
-    num_prefill_tokens: int = 0
-    prefill_query_start_loc: paddle.Tensor = None
-    prefill_prefix_kv_lens: paddle.Tensor = None
-    prefill_block_tables: paddle.Tensor = None
-
-    num_decodes: int = 0
-    num_decode_tokens: int = 0
-    decode_cache_seq_lens: paddle.Tensor = None
-    decode_block_tables: paddle.Tensor = None
-
+    query_start_loc: paddle.Tensor = None
+    kv_start_loc: paddle.Tensor = None
+    block_tables: paddle.Tensor = None
     output: paddle.Tensor = None
 
 
@@ -65,7 +54,7 @@ class MetaxFlashAttentionBackend(AttentionBackend):
 
     __infer_dynamic_dims_fields__ = ["attention_metadata"]
     attention_metadata: FlashAttentionMetadata
-    enable_ids_reorder: bool = True
+    enable_ids_reorder: bool = envs.FD_PD_REORDER
 
     def __init__(
         self,
@@ -80,7 +69,6 @@ class MetaxFlashAttentionBackend(AttentionBackend):
         FlashAttentionBackend __init__
         """
         super().__init__()
-        self.attention_metadata: FlashAttentionMetadata = None
         self.max_seq_len: int = fd_config.model_config.max_model_len
         self.max_num_seqs: int = fd_config.scheduler_config.max_num_seqs
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
@@ -109,10 +97,10 @@ class MetaxFlashAttentionBackend(AttentionBackend):
             ],
             dtype=paddle.int32,
         )
-        self.prefill_query_start_loc_buffer = paddle.zeros([self.max_num_seqs + 1], dtype=paddle.int32)
-        self.prefill_prefix_kv_lens_buffer = paddle.zeros([self.max_num_seqs + 1], dtype=paddle.int32)
-        self.decode_cache_seq_lens_buffer = paddle.zeros([self.max_num_seqs], dtype=paddle.int32)
-        self.output_buffer = paddle.empty([self.max_seq_len, self.num_heads * self.head_dim], dtype=paddle.bfloat16)
+        self.query_start_loc_buffer = paddle.zeros([self.max_num_seqs + 1], dtype=paddle.int32)
+        self.kv_start_loc_buffer = paddle.zeros([self.max_num_seqs + 1], dtype=paddle.int32)
+        self.output_buffer = paddle.empty([self.max_seq_len, self.num_heads, self.head_dim], dtype=paddle.bfloat16)
+
 
     def get_attention_meta(self) -> AttentionMetadata:
         """get_attention_meta"""
@@ -141,7 +129,6 @@ class MetaxFlashAttentionBackend(AttentionBackend):
         seq_lens_decoder = forward_meta.seq_lens_decoder
         batch_id_per_token = forward_meta.batch_id_per_token
         cu_seqlens_q = forward_meta.cu_seqlens_q
-        cu_seqlens_k = forward_meta.cu_seqlens_k
         block_tables = forward_meta.block_tables
 
         if envs.FD_DEBUG:
@@ -153,207 +140,36 @@ class MetaxFlashAttentionBackend(AttentionBackend):
             print(f"seq_lens_this_time: {seq_lens_this_time}")
             print(f"batch_id_per_token: {batch_id_per_token}")
             print(f"cu_seqlens_q: {cu_seqlens_q}")
-            print(f"cu_seqlens_k: {cu_seqlens_k}")
             print(f"block_tables: {block_tables}")
 
         request_batch_ids = paddle.where(seq_lens_this_time > 0)[0]
-        prefill_batch_ids = paddle.where(seq_lens_encoder > 0)[0]
-
         num_requests = request_batch_ids.shape[0]
-        num_prefills = prefill_batch_ids.shape[0]
-        num_decodes = num_requests - num_prefills
-
         num_actual_tokens = ids_remove_padding.shape[0]
-        if self.use_speculate:
-            num_prefill_tokens = paddle.sum(seq_lens_encoder).item()
-            num_decode_tokens = num_actual_tokens - num_prefill_tokens
-        else:
-            num_decode_tokens = num_decodes
-            num_prefill_tokens = num_actual_tokens - num_decode_tokens
 
-        request_block_tables = self.block_tables_buffer[:num_requests]
-        prefill_query_start_loc = self.prefill_query_start_loc_buffer[: num_prefills + 1]
-        prefill_prefix_kv_lens = self.prefill_prefix_kv_lens_buffer[: num_prefills + 1]
-        decode_cache_seq_lens = self.decode_cache_seq_lens_buffer[:num_decodes]
-
-        request_seq_lens_this_time = seq_lens_this_time[request_batch_ids].squeeze(-1)
-        request_seq_lens_decoder = seq_lens_decoder[request_batch_ids].squeeze(-1)
+        request_seq_lens_this_time = seq_lens_this_time[request_batch_ids, 0]
+        request_seq_lens_decoder = seq_lens_decoder[request_batch_ids, 0]
         request_seq_lens = request_seq_lens_decoder + request_seq_lens_this_time
 
+        request_block_tables = self.block_tables_buffer[:num_requests]
+        request_query_start_loc = self.query_start_loc_buffer[: num_requests + 1]
+        request_kv_start_loc = self.kv_start_loc_buffer[: num_requests + 1]
+
         request_block_tables.copy_(block_tables[request_batch_ids])
-
-        if num_prefills > 0:
-            prefill_query_start_loc[1:].copy_(
-                request_seq_lens_this_time[num_decodes:].cumsum(axis=0, dtype=paddle.int32)
-            )
-            prefill_prefix_kv_lens[1:].copy_(request_seq_lens[num_decodes:].cumsum(axis=0, dtype=paddle.int32))
-
-        if num_decodes > 0:
-            if not self.rope_3d:
-                decode_cache_seq_lens.copy_(request_seq_lens_decoder[:num_decodes])
-            else:
-                decode_cache_seq_lens.copy_(request_seq_lens[:num_decodes])
-
-        if envs.FD_DEBUG:
-            print(f"num_requests: {num_requests} = {num_prefills} + {num_decodes}")
-            print(f"num_actual_tokens: {num_actual_tokens} = {num_prefill_tokens} + {num_decode_tokens}")
+        request_query_start_loc[1:].copy_(request_seq_lens_this_time.cumsum(axis=0, dtype=paddle.int32))
+        request_kv_start_loc[1:].copy_(request_seq_lens.cumsum(axis=0, dtype=paddle.int32))
+        
+        if num_requests < self.max_num_seqs:
+            self.query_start_loc_buffer[num_requests + 1 :] = self.query_start_loc_buffer[num_requests]
+            self.kv_start_loc_buffer[num_requests + 1 :] = self.kv_start_loc_buffer[num_requests]
 
         metadata.num_requests = num_requests
         metadata.num_actual_tokens = num_actual_tokens
-
-        metadata.num_prefills = num_prefills
-        metadata.num_prefill_tokens = num_prefill_tokens
-        metadata.prefill_query_start_loc = prefill_query_start_loc
-        metadata.prefill_prefix_kv_lens = prefill_prefix_kv_lens
-        metadata.prefill_block_tables = request_block_tables[num_decodes:]
-
-        metadata.num_decodes = num_decodes
-        metadata.num_decode_tokens = num_decode_tokens
-        metadata.decode_cache_seq_lens = decode_cache_seq_lens
-        metadata.decode_block_tables = request_block_tables[:num_decodes]
-
+        metadata.query_start_loc = request_query_start_loc
+        metadata.kv_start_loc = request_kv_start_loc
+        metadata.block_tables = request_block_tables
         metadata.output = self.output_buffer[:num_actual_tokens]
 
-        self.attention_metadata = metadata
-
-    def _forward_extend(
-        self,
-        qkv: paddle.Tensor,
-        layer: Attention,
-        forward_meta: MetaxForwardMeta,
-    ) -> paddle.Tensor:
-        metadata = self.attention_metadata
-
-        key_cache = forward_meta.caches[2 * layer.layer_id]
-        value_cache = forward_meta.caches[2 * layer.layer_id + 1]
-
-        rotary_position_embedding(
-            qkv,
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.batch_id_per_token,
-            forward_meta.cu_seqlens_q,
-            forward_meta.rotary_embs,
-            self.num_heads,
-            self.kv_num_heads,
-            self.head_dim,
-            self.max_seq_len,
-            layer.use_neox_rotary_style,
-            self.rope_3d,
-        )
-
-        write_cache_kv(
-            qkv,
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.batch_id_per_token,
-            forward_meta.cu_seqlens_q,
-            forward_meta.block_tables,
-            key_cache,
-            value_cache,
-            self.num_heads,
-            self.kv_num_heads,
-            self.head_dim,
-            self.max_seq_len,
-        )
-
-        prefill_qkv = qkv[metadata.num_decode_tokens :].view(
-            [-1, self.num_heads + 2 * self.kv_num_heads, self.head_dim]
-        )
-        query, key, value = prefill_qkv.split([self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
-
-        flash_attn_varlen_forward(
-            q=query,
-            k=key_cache,
-            v=value_cache,
-            cu_seqlens_q=metadata.prefill_query_start_loc,
-            cu_seqlens_k=metadata.prefill_prefix_kv_lens,
-            block_tables=metadata.prefill_block_tables,
-            alibi_slopes=None,
-            out=metadata.output[metadata.num_decode_tokens :],
-            max_seqlen_q=self.max_seq_len,
-            max_seqlen_k=self.max_seq_len,
-            dropout_p=0.0,
-            softmax_scale=self.softmax_scale,
-            causal=self.causal,
-            window_size_left=-1,
-            window_size_right=-1,
-            softcap=0.0,
-        )
-
-        return metadata.output
-
-    def _forward_decode(
-        self,
-        qkv: paddle.Tensor,
-        layer: Attention,
-        forward_meta: MetaxForwardMeta,
-    ) -> paddle.Tensor:
-        metadata = self.attention_metadata
-
-        key_cache = forward_meta.caches[2 * layer.layer_id]
-        value_cache = forward_meta.caches[2 * layer.layer_id + 1]
-
-        if self.rope_3d:
-            write_cache_kv_with_rope(
-                qkv,
-                forward_meta.seq_lens_encoder,
-                forward_meta.seq_lens_decoder,
-                forward_meta.batch_id_per_token,
-                forward_meta.cu_seqlens_q,
-                forward_meta.block_tables,
-                forward_meta.rotary_embs,
-                key_cache,
-                value_cache,
-                self.num_heads,
-                self.kv_num_heads,
-                self.head_dim,
-                self.max_seq_len,
-                layer.use_neox_rotary_style,
-                self.rope_3d,
-                self.use_speculate,
-            )
-
-            decode_qkv = qkv[: metadata.num_decode_tokens].view(
-                [metadata.num_decodes, -1, self.num_heads + 2 * self.kv_num_heads, self.head_dim]
-            )
-            query, key, value = decode_qkv[:, :, : self.num_heads, :], None, None
-            rotary_embs = (None, None)
-
-        else:
-            decode_qkv = qkv[: metadata.num_decode_tokens].view(
-                [metadata.num_decodes, -1, self.num_heads + 2 * self.kv_num_heads, self.head_dim]
-            )
-            query, key, value = decode_qkv.split([self.num_heads, self.kv_num_heads, self.kv_num_heads], axis=-2)
-            rotary_embs = (
-                forward_meta.rotary_embs_bf16[0, 0, :, 0, :],
-                forward_meta.rotary_embs_bf16[1, 0, :, 0, :],
-            )
-
-        flash_attn_kvcache_forward(
-            q=query,
-            k_cache=key_cache,
-            v_cache=value_cache,
-            k=key,
-            v=value,
-            rotary_cos=rotary_embs[0],
-            rotary_sin=rotary_embs[1],
-            cache_seqlens=metadata.decode_cache_seq_lens,
-            cache_batch_idx=None,
-            cache_leftpad=None,
-            block_tables=metadata.decode_block_tables,
-            alibi_slopes=None,
-            out=metadata.output[: metadata.num_decode_tokens],
-            softmax_scale=self.softmax_scale,
-            causal=self.causal,
-            window_size_left=-1,
-            window_size_right=-1,
-            softcap=0.0,
-            rotary_interleaved=(not layer.use_neox_rotary_style),
-            num_splits=1,
-        )
-
-        return metadata.output
+        self.attention_metadata: AttentionMetadata = metadata
 
     @paddle.no_grad()
     def forward_mixed(
@@ -369,10 +185,62 @@ class MetaxFlashAttentionBackend(AttentionBackend):
     ) -> paddle.Tensor:
         metadata = self.attention_metadata
 
-        if metadata.num_prefills > 0:
-            self._forward_extend(qkv, layer, forward_meta)
+        key_cache = forward_meta.caches[2 * layer.layer_id]
+        value_cache = forward_meta.caches[2 * layer.layer_id + 1]
 
-        if metadata.num_decodes > 0:
-            self._forward_decode(qkv, layer, forward_meta)
+        rotary_position_embedding(
+            qkv,
+            None,
+            forward_meta.seq_lens_decoder,
+            forward_meta.batch_id_per_token,
+            forward_meta.cu_seqlens_q,
+            forward_meta.rotary_embs,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+            self.max_seq_len,
+            layer.use_neox_rotary_style,
+            self.rope_3d,
+        )
 
-        return metadata.output
+        write_cache_kv(
+            qkv,
+            None,
+            forward_meta.seq_lens_decoder,
+            forward_meta.batch_id_per_token,
+            forward_meta.cu_seqlens_q,
+            forward_meta.block_tables,
+            key_cache,
+            value_cache,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+            self.max_seq_len,
+        )
+
+        query = qkv.view([-1, self.num_heads + 2 * self.kv_num_heads, self.head_dim])[:, : self.num_heads, :]
+
+        output = metadata.output
+
+        flash_attn_varlen_forward(
+            q=query,
+            k=key_cache,
+            v=value_cache,
+            out=output,
+            cu_seqlens_q=metadata.query_start_loc,
+            cu_seqlens_k=metadata.kv_start_loc,
+            block_tables=metadata.block_tables,
+            alibi_slopes=None,
+            max_seqlen_q=self.max_seq_len,
+            max_seqlen_k=self.max_seq_len,
+            dropout_p=0.0,
+            softmax_scale=self.softmax_scale,
+            causal=self.causal,
+            window_size_left=-1,
+            window_size_right=-1,
+            softcap=0.0,
+        )
+
+        output = output.view([-1, self.num_heads * self.head_dim])
+
+        return output
