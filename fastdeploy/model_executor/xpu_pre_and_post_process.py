@@ -298,17 +298,15 @@ def xpu_pre_process(
     xpu_forward_meta.enc_batch = len_info_cpu[0]
     xpu_forward_meta.dec_batch = len_info_cpu[1]
     xpu_forward_meta.total_enc_len = len_info_cpu[2]
+    xpu_forward_meta.ids_remove_padding = adjusted_input
     # Set xpu_forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
     xpu_forward_meta.is_profiling = is_profiling
 
+    # prefill does not use cudagraph, inplace copy is not needed
+    xpu_forward_meta.slot_mapping_enc = slot_mapping_enc
     if use_cudagraph and forward_meta is not None:
-        # xpu_forward_meta.ids_remove_padding.copy_(adjusted_input)
-        xpu_forward_meta.ids_remove_padding = adjusted_input
-        xpu_forward_meta.slot_mapping_enc.copy_(slot_mapping_enc)
         xpu_forward_meta.slot_mapping_dec.copy_(slot_mapping_dec)
     else:
-        xpu_forward_meta.ids_remove_padding = adjusted_input
-        xpu_forward_meta.slot_mapping_enc = slot_mapping_enc
         xpu_forward_meta.slot_mapping_dec = slot_mapping_dec
 
     return xpu_forward_meta
