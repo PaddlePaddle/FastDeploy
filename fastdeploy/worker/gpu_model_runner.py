@@ -126,6 +126,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.spec_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.spec_method is not None
         self.enable_logprob = fd_config.model_config.enable_logprob
+        self.enable_keep_sampling_mask = fd_config.model_config.enable_keep_sampling_mask
         self.enable_early_stop = self.fd_config.early_stop_config.enable_early_stop
         self.is_pooling_model = self.fd_config.model_config.runner_type == "pooling"
         self.ori_vocab_size = self.fd_config.model_config.ori_vocab_size
@@ -235,6 +236,17 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Rollout routing replay config
         self.routing_replay_manager = None
+
+        # ZMQ side-channel for sampling_mask in non-FD_USE_GET_SAVE_OUTPUT_V1 path
+        self.sampling_mask_zmq_client = None
+        if not envs.FD_USE_GET_SAVE_OUTPUT_V1 and self.enable_keep_sampling_mask:
+            rank_id = self.parallel_config.local_data_parallel_id
+            port = self.parallel_config.engine_worker_queue_port[rank_id]
+            self.sampling_mask_zmq_client = ZmqIpcClient(
+                name=f"sampling_mask_output_rank_{rank_id}_{port}", mode=zmq.PUSH
+            )
+            self.sampling_mask_zmq_client.connect()
+            logger.info(f"create send zmq sampling_mask_output_rank_{rank_id}_{port}")
 
         self.zmq_client = None
         self.async_output_queue = None
@@ -1233,6 +1245,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
+            keep_sampling_mask=self.enable_keep_sampling_mask,
         )
         return token_num, token_num_event
 
@@ -2485,6 +2498,7 @@ class GPUModelRunner(ModelRunnerBase):
                 share_inputs=self.share_inputs,
                 save_each_rank=self.parallel_config.use_ep,
                 skip_save_output=skip_save_output,
+                sampling_mask_zmq_client=self.sampling_mask_zmq_client,
             )
         else:
             save_output_normal(
@@ -2493,6 +2507,7 @@ class GPUModelRunner(ModelRunnerBase):
                 share_inputs=self.share_inputs,
                 async_output_queue=self.async_output_queue,
                 save_each_rank=self.parallel_config.use_ep,
+                sampling_mask_zmq_client=self.sampling_mask_zmq_client,
             )
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:
