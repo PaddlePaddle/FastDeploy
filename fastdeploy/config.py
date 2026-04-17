@@ -775,7 +775,7 @@ class SpeculativeConfig:
         "benchmark_mode": False,
         "enf_gen_phase_tag": False,
         "enable_draft_logprob": False,
-        "verify_strategy": "topp",
+        "verify_strategy": "target_match",
         "accept_policy": "normal",
     }
 
