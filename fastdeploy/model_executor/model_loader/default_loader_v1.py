@@ -95,8 +95,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
                     assert_never(convert_type)
 
                 model = model_cls(fd_config)
-                if fd_config.load_config.dynamic_load_weight or fd_config.model_config.enable_cache:
-                    process_final_after_loading(model, fd_config)
+                # if fd_config.load_config.dynamic_load_weight or fd_config.model_config.enable_cache:
+                #     process_final_after_loading(model, fd_config)
 
         model.eval()
         # RL model not need set_state_dict

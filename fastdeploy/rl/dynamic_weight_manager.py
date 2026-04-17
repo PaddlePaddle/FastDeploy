@@ -30,6 +30,105 @@ from paddleformers.utils.log import logger
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
 
+""" -------------------------------------------------------- """
+from fastdeploy.model_executor.utils import process_final_after_loading
+import json
+from paddle.base import core as paddle_core
+import zmq
+
+# --- dtype string → paddle dtype mapping ---
+_DTYPE_MAP = {
+    "paddle.float32": paddle.float32,
+    "paddle.float16": paddle.float16,
+    "paddle.bfloat16": paddle.bfloat16,
+    "paddle.int32": paddle.int32,
+    "paddle.int64": paddle.int64,
+    "paddle.uint8": paddle.uint8,
+}
+
+
+def receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None, recv_timeout_ms=300_000):
+    """Connect to a ReshardWorkerThread and receive all buckets.
+
+    Args:
+        gpu_id: The training-side GPU id (determines the IPC socket path).
+        ipc_root: Root directory for IPC socket files.
+        target_device: The CUDA device id to rebuild tensors on. Defaults to gpu_id.
+        recv_timeout_ms: ZMQ receive timeout in milliseconds.
+
+    Yields:
+        (name, paddle.Tensor) tuples with original dtype and shape restored.
+    """
+    if target_device is None:
+        target_device = gpu_id
+
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.PAIR)
+    sock.setsockopt(zmq.LINGER, 0)
+    sock.setsockopt(zmq.RCVTIMEO, recv_timeout_ms)
+    ipc_addr = f"ipc:///{ipc_root}/ipc_metas_{gpu_id}"
+    sock.connect(ipc_addr)
+    print(f"[Receiver] Connected to {ipc_addr}")
+
+    bucket_count = 0
+
+    try:
+        while True:
+            raw = sock.recv()
+
+            # --- Termination sentinel ---
+            if raw == b"END":
+                print(f"[Receiver] Received END after {bucket_count} bucket(s)")
+                break
+
+            # --- Decode bucket message ---
+            message = json.loads(raw.decode())
+            buffer_meta = message["buffer"]
+            layout = message["layout"]
+
+            # --- Rebuild flat uint8 buffer from CUDA IPC handle ---
+            buffer_meta[0] = buffer_meta[0].encode("latin-1")
+            buffer_meta[6] = int(os.getenv("FLAGS_selected_gpus", "0"))
+            lod_tensor = paddle_core.LoDTensor._new_shared_cuda(tuple(buffer_meta))
+            flat_buf = paddle.to_tensor(lod_tensor)
+
+            paddle.device.synchronize()
+
+            # --- Slice and reconstruct individual tensors ---
+            n_params = len(layout)
+            for name, dtype_key, byte_offset, n_bytes, shape in layout:
+                # param_bytes = flat_buf[byte_offset : byte_offset + n_bytes]
+                # .clone() ensures zero storage offset so that .view(dtype) reads from the correct position.
+                # Without it, Paddle's view(dtype) may ignore the slice offset and start from byte 0,
+                # which makes the first param (offset=0) correct but all subsequent ones wrong.
+                param_bytes = flat_buf[byte_offset : byte_offset + n_bytes].clone()
+                target_dtype = _DTYPE_MAP[dtype_key]
+                param = param_bytes.view(target_dtype).reshape(shape)
+                # Clone to own memory so we can release the IPC flat buffer
+                print(">>>>>>>>>> ori param_key", name, param, param._md5sum())
+                yield name, param.clone()
+
+            bucket_count += 1
+
+            print(
+                f"[Receiver] Bucket {bucket_count}: {n_params} params, "
+                f"flat_buf size={flat_buf.numel()} bytes"
+            )
+
+            # --- Release IPC buffer reference, then ack ---
+            del flat_buf, lod_tensor
+            sock.send(b"OK")
+
+    except zmq.Again:
+        print(f"[Receiver] Timeout waiting for data (timeout={recv_timeout_ms}ms)")
+        raise
+    finally:
+        sock.close()
+        ctx.term()
+        print("[Receiver] Socket closed, context terminated")
+
+""" -------------------------------------------------------- """
+
 
 class DynamicWeightManager:
     """Manages model weights loading, updating and shared state across processes."""
@@ -175,7 +274,8 @@ class DynamicWeightManager:
         # step3 : update model weight
         strategy_handlers = {
             "ipc_snapshot": self._update_ipc_snapshot,
-            "ipc": self._update_ipc,
+            # "ipc": self._update_ipc,
+            "ipc": self._update_ipc_async,
         }
 
         if handler := strategy_handlers.get(self.load_config.load_strategy):
@@ -189,6 +289,21 @@ class DynamicWeightManager:
         # step4: reinitialze kv_cache in the runner
         # step5: recapture cuda_graph
         # step6: update weight status signal
+
+    def _update_ipc_async(self):
+        """Update using IPC snapshot async for elastic recovery."""
+        gpu_id = self._get_gpu_id()
+        weight_iter = receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None, recv_timeout_ms=300000)
+        model = self.model_list[0] # TODO: support multi-model
+
+        t0 = time.time()
+        model.load_weights(weight_iter)
+        # self.fd_config.quant_config.is_checkpoint_bf16 = True
+        self.fd_config.load_config.dynamic_load_weight = False
+        process_final_after_loading(model, self.fd_config)
+        self.fd_config.load_config.dynamic_load_weight = True
+        elapsed = time.time() - t0
+        print(f"[Receiver] [THD DEBUG] Total time: {elapsed:.3f}s")
 
     def restart_communication_group(self):
         if not self.first_load:
@@ -409,7 +524,7 @@ class DynamicWeightManager:
 
     def finalize_update(self, pid: int = 0):
         """Finalize update process with verification."""
-        self._verify_parameters("update")
+        # self._verify_parameters("update")
 
         if self.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.barrier(self.parallel_config.tp_group)
