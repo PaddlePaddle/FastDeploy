@@ -398,6 +398,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             response_processor=response_processor,
             max_tokens=2,
             speculate_metrics=None,
+            sampling_mask_list=None,
         )
 
         self.assertEqual(choice.finish_reason, "recover_stop")
@@ -421,6 +422,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             response_processor=response_processor,
             max_tokens=2,
             speculate_metrics=None,
+            sampling_mask_list=None,
         )
         self.assertEqual(choice_length.finish_reason, "length")
 
