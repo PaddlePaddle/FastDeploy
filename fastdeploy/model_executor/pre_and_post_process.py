@@ -627,12 +627,15 @@ def save_output_specualate(
             accept_nums = model_output.accept_num[:real_bsz].flatten().tolist()
             mask_dict = {}
             offset = 0
+            total_masks = len(sampler_output.sampling_mask)
             for i, n in enumerate(accept_nums):
-                n = int(n)
+                n = max(int(n), 0)
                 if n > 0:
                     # List of n sparse index arrays, one per accepted token
                     mask_dict[i] = [arr.tolist() for arr in sampler_output.sampling_mask[offset : offset + n]]
                 offset += n
+            if offset != total_masks:
+                raise ValueError(f"sampling_mask length mismatch: expected {offset}, got {total_masks}")
             sampling_mask_zmq_client.send_pyobj(mask_dict)
     share_inputs["last_preempted_idx"][:] = 0
 

@@ -1170,7 +1170,7 @@ class SpeculativeSampler(nn.Layer):
 
         keep_sampling_mask = sampling_metadata.keep_sampling_mask
         # Build logprobs via unified path (outside of sampling logic)
-        if sampling_metadata.max_num_logprobs is not None:
+        if sampling_metadata.max_num_logprobs is not None or keep_sampling_mask:
             logprobs_tensors, cu_batch_token_offset, target_logits = build_output_logprobs(
                 logits,
                 sampling_metadata,
