@@ -305,7 +305,7 @@ def xpu_pre_process(
     # prefill does not use cudagraph, inplace copy is not needed
     xpu_forward_meta.slot_mapping_enc = slot_mapping_enc
     if use_cudagraph and forward_meta is not None:
-        xpu_forward_meta.slot_mapping_dec.copy_(slot_mapping_dec)
+        xpu_forward_meta.slot_mapping_dec.copy_(slot_mapping_dec, False)
     else:
         xpu_forward_meta.slot_mapping_dec = slot_mapping_dec
 
