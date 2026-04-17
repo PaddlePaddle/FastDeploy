@@ -140,8 +140,9 @@ class DPLocalScheduler(LocalScheduler):
         requests: List[Request] = []
 
         with self.requests_not_empty:
+            batch_size = max(1, batch)
             batch_ids = self.requests_not_empty.wait_for(
-                lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + 1],
+                lambda: self.ids[self.ids_read_cursor : self.ids_read_cursor + batch_size],
                 0.005,
             )
             if batch_ids:
