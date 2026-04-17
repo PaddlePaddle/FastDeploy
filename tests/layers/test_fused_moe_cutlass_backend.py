@@ -978,7 +978,15 @@ class TestMoePermuteTrueRealOps:
         fc2_latent_proj = FC2Proj()
 
         def fake_get_moe_scores(
-            gate_out, n_group, topk_group, top_k, routed_scaling_factor, bias, renormalize, topk_reduce_func=None
+            gate_out,
+            n_group,
+            topk_group,
+            top_k,
+            routed_scaling_factor,
+            bias,
+            renormalize,
+            topk_reduce_func=None,
+            use_fused_cast=False,
         ):
             return gate_out, paddle.to_tensor([[0.6, 0.4]]), paddle.to_tensor([[0, 1]])
 
