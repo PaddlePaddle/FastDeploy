@@ -1510,8 +1510,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 1. During profiling, it creates its own kv cache.
         # 2. If no need to profile, create kv cache if cache managers do not exist.
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
+            self.fd_config.cache_config.kvcache_storage_backend
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
 
@@ -2794,8 +2793,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.cache_controller.free_gpu_cache()
         else:
             create_cache_tensor = profile or not (
-                self.fd_config.cache_config.num_cpu_blocks > 0
-                or self.fd_config.cache_config.kvcache_storage_backend
+                self.fd_config.cache_config.kvcache_storage_backend
                 or self.fd_config.scheduler_config.splitwise_role != "mixed"
             )
             local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
