@@ -228,6 +228,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "0")
     ),
+    # When True, use per-request new_token_ratio to estimate reserved blocks (SGLang-style).
+    # When False, fall back to the legacy fixed-block reservation strategy.
+    "FD_USE_NEW_TOKEN_RATIO_RESERVE": lambda: bool(int(os.getenv("FD_USE_NEW_TOKEN_RATIO_RESERVE", "1"))),
     # Timeout for worker process health check in seconds
     "FD_WORKER_ALIVE_TIMEOUT": lambda: int(os.getenv("FD_WORKER_ALIVE_TIMEOUT", "30")),
     # File path for file storage backend

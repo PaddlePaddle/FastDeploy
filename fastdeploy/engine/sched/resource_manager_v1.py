@@ -232,12 +232,24 @@ class ResourceManagerV1(ResourceManager):
         self.bos_client = None
         self.async_preprocess_pool = ThreadPoolExecutor(max_workers=4)
 
-        self.init_new_token_ratio = envs.FD_INIT_NEW_TOKEN_RATIO
-        self.min_new_token_ratio = envs.FD_MIN_NEW_TOKEN_RATIO
-        self.new_token_ratio_decay = envs.FD_NEW_TOKEN_RATIO_DECAY
-        self.clip_max_new_tokens = envs.FD_CLIP_MAX_NEW_TOKENS
-        self.retract_decode_steps = envs.FD_RETRACT_DECODE_STEPS
-        self.new_token_ratio = self.init_new_token_ratio
+        self.use_new_token_ratio_reserve = envs.FD_USE_NEW_TOKEN_RATIO_RESERVE
+        if self.use_new_token_ratio_reserve:
+            self.init_new_token_ratio = envs.FD_INIT_NEW_TOKEN_RATIO
+            self.min_new_token_ratio = envs.FD_MIN_NEW_TOKEN_RATIO
+            self.new_token_ratio_decay = envs.FD_NEW_TOKEN_RATIO_DECAY
+            self.clip_max_new_tokens = envs.FD_CLIP_MAX_NEW_TOKENS
+            self.retract_decode_steps = envs.FD_RETRACT_DECODE_STEPS
+            self.new_token_ratio = self.init_new_token_ratio
+        else:
+            self.init_reserve_output_block_num = envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+            self.decay_output_block_num = envs.FD_RESERVE_DECAY_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+            self.min_reserve_output_block_num = (
+                envs.FD_RESERVE_MIN_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
+            )
+            self.current_reserve_output_block_num = self.init_reserve_output_block_num
+            self.current_reserve_output_block_num_float = float(self.init_reserve_output_block_num)
+            self.can_relax_prefill_strategy = True
+
         # Scheduler-side requests that have not been moved into resource manager waiting queue yet.
         self.scheduler_unhandled_request_num = 0
 
@@ -456,7 +468,7 @@ class ResourceManagerV1(ResourceManager):
 
                 llm_logger.debug(self.info())
                 self._info_each_block()
-                self._recompute_new_token_ratio_on_preemption()
+                self._reset_reserve_on_preemption()
 
                 if preempted_req == request:
                     # No more request to preempt.
@@ -465,34 +477,35 @@ class ResourceManagerV1(ResourceManager):
 
         return can_schedule
 
-    def _recompute_new_token_ratio_on_preemption(self):
-        """Recompute new_token_ratio based on actual decode progress of running requests.
+    def _reset_reserve_on_preemption(self):
+        """Reset reserved blocks on preemption."""
+        if self.use_new_token_ratio_reserve:
+            if not self.running:
+                self.new_token_ratio = self.init_new_token_ratio
+                return
+            total_decoded_tokens = sum(len(req.output_token_ids) for req in self.running)
+            total_max_new_tokens = 0
+            for req in self.running:
+                max_tokens = req.sampling_params.max_tokens
+                if max_tokens is None:
+                    max_tokens = self.config.model_config.max_model_len - req.prompt_token_ids_len
+                total_max_new_tokens += max_tokens
+            num_running_decode = sum(
+                [1 if req.num_total_tokens > req.need_prefill_tokens else 0 for req in self.running]
+            )
+            new_ratio = (total_decoded_tokens + self.retract_decode_steps * num_running_decode) / (
+                total_max_new_tokens + 1
+            )
+            self.new_token_ratio = min(new_ratio, self.init_new_token_ratio)
+            llm_logger.info(
+                f"Estimate new token ratio for preemption: {self.new_token_ratio}, "
+                f"total_decoded_tokens={total_decoded_tokens}, total_max_new_tokens={total_max_new_tokens}, num_running_decode={num_running_decode}"
+            )
 
-        Aligned with SGLang's retract_decode logic: estimate the ratio as the actual
-        fraction of max_tokens already decoded plus a small lookahead, rather than
-        naively resetting to the initial value. This avoids over-reserving when most
-        requests are near completion, and under-reserving when they've just started.
-
-        Formula:
-            ratio = (total_decoded + RETRACT_DECODE_STEPS * num_running) / (total_max_new_tokens + 1)
-        capped at init_new_token_ratio so preemption never makes the ratio more
-        aggressive than the initial setting.
-        """
-        if not self.running:
-            self.new_token_ratio = self.init_new_token_ratio
-            return
-        total_decoded_tokens = sum(len(req.output_token_ids) for req in self.running)
-        total_max_new_tokens = 0
-        for req in self.running:
-            max_tokens = req.sampling_params.max_tokens
-            if max_tokens is None:
-                max_tokens = self.config.model_config.max_model_len - req.prompt_token_ids_len
-            total_max_new_tokens += max_tokens
-        num_running_decode = sum([1 if req.num_total_tokens > req.need_prefill_tokens else 0 for req in self.running])
-        new_ratio = (total_decoded_tokens + self.retract_decode_steps * num_running_decode) / (
-            total_max_new_tokens + 1
-        )
-        self.new_token_ratio = min(new_ratio, self.init_new_token_ratio)
+        else:
+            self.current_reserve_output_block_num = self.init_reserve_output_block_num
+            self.current_reserve_output_block_num_float = float(self.init_reserve_output_block_num)
+            self.can_relax_prefill_strategy = False
 
     def _get_running_request_reserve_blocks(self, request: Request) -> int:
         """Estimate KV-cache blocks to reserve for a running request's future decode tokens.
@@ -512,15 +525,17 @@ class ResourceManagerV1(ResourceManager):
         return (reserved_tokens + block_size - 1) // block_size
 
     def _get_can_schedule_prefill_threshold_block(self, num_chunk_new_block):
-        """Compute the minimum free blocks required to admit a new prefill request.
-
-        The threshold includes: (1) blocks needed for the prefill itself, and
-        (2) blocks reserved for all running decode requests' future output tokens,
-        estimated per-request via _get_running_request_reserve_blocks. This prevents
-        new prefills from starving ongoing decodes of KV-cache capacity.
-        """
-        reserve_blocks = sum(self._get_running_request_reserve_blocks(req) for req in self.running)
-        can_schedule_block_num_threshold = num_chunk_new_block + reserve_blocks
+        """Compute the minimum free blocks required to admit a new prefill request."""
+        if self.use_new_token_ratio_reserve:
+            reserve_blocks = sum(self._get_running_request_reserve_blocks(req) for req in self.running)
+            can_schedule_block_num_threshold = num_chunk_new_block + reserve_blocks
+        else:
+            if self.can_relax_prefill_strategy:
+                can_schedule_block_num_threshold = num_chunk_new_block
+            else:
+                can_schedule_block_num_threshold = (
+                    num_chunk_new_block + len(self.running) * self.current_reserve_output_block_num
+                )
         if self.config.speculative_config.method is not None:
             can_schedule_block_num_threshold = min(
                 can_schedule_block_num_threshold + 1, self.config.cache_config.max_block_num_per_seq
@@ -1202,11 +1217,20 @@ class ResourceManagerV1(ResourceManager):
 
             if len(batch_request) > 0:
                 llm_logger.debug(f"schedued_reqs: {batch_request}")
-                self.current_reserve_output_block_num_float -= self.decay_output_block_num
-                self.new_token_ratio = max(
-                    self.new_token_ratio - self.new_token_ratio_decay,
-                    self.min_new_token_ratio
-                )
+                if self.use_new_token_ratio_reserve:
+                    self.new_token_ratio = max(
+                        self.new_token_ratio - self.new_token_ratio_decay,
+                        self.min_new_token_ratio,
+                    )
+                else:
+                    self.current_reserve_output_block_num_float -= self.decay_output_block_num
+                    self.current_reserve_output_block_num = max(
+                        int(self.current_reserve_output_block_num_float),
+                        self.min_reserve_output_block_num,
+                        0,
+                    )
+                    if self.current_reserve_output_block_num == 0:
+                        self.can_relax_prefill_strategy = True
 
             self._log_console_scheduler_metrics(batch_request)
 
@@ -1656,7 +1680,7 @@ class ResourceManagerV1(ResourceManager):
 
     def finish_requests(self, request_ids: Union[str, Iterable[str]]):
         llm_logger.info(f"recycle resources for requests: {request_ids}")
-        self.update_metrics(verbose=True)
+        self.update_metrics()
         try:
             if isinstance(request_ids, str):
                 request_ids = (request_ids,)
@@ -1711,7 +1735,7 @@ class ResourceManagerV1(ResourceManager):
         except Exception as e:
             llm_logger.error(f"finish_request err: {e}, {str(traceback.format_exc())}")
         finally:
-            self.update_metrics(verbose=True)
+            self.update_metrics()
 
     def clear_data(self):
         self.waiting: deque[Request] = deque()
