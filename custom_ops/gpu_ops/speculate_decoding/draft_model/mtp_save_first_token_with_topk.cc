@@ -1,4 +1,4 @@
-// Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+// Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -18,29 +18,27 @@
 #include <sys/msg.h>
 #include <sys/types.h>
 #include "paddle/extension.h"
-#include "../custom_ftok.h"
-#include "speculate_logprob_msg.h"
+#include "../../custom_ftok.h"
+#include "../speculate_logprob_msg.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
 
-void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
-                              const paddle::Tensor& logprob_token_ids,
-                              const paddle::Tensor& logprob_scores,
-                              const paddle::Tensor& logprob_ranks,
-                              const paddle::Tensor& token_num_per_batch,
-                              const paddle::Tensor& cu_batch_token_offset,
-                              const paddle::Tensor& not_need_stop,
-                              const paddle::Tensor& seq_lens_decoder,
-                              const paddle::Tensor& prompt_lens,
-                              const paddle::Tensor& preempted_idx,
-                              int message_flag,  // Target: 3, Draft: 4
-                              int64_t rank_id,
-                              bool save_each_rank) {
-  // NOTE(yaohuicong): Skip non-zero TP ranks — they share identical sampling
-  // outputs, so only rank 0 needs to send results to the message queue.
-  if (rank_id > 0) {
+void MTPSaveFirstTokenWithTopK(const paddle::Tensor& sampled_token_ids,
+                               const paddle::Tensor& logprob_token_ids,
+                               const paddle::Tensor& logprob_scores,
+                               const paddle::Tensor& logprob_ranks,
+                               const paddle::Tensor& token_num_per_batch,
+                               const paddle::Tensor& cu_batch_token_offset,
+                               const paddle::Tensor& not_need_stop,
+                               const paddle::Tensor& seq_lens_decoder,
+                               const paddle::Tensor& prompt_lens,
+                               const paddle::Tensor& preempted_idx,
+                               int message_flag,  // Target: 3, Draft: 4
+                               int64_t rank_id,
+                               bool save_each_rank) {
+  if (!save_each_rank && rank_id > 0) {
     return;
   }
 
@@ -126,10 +124,12 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   int max_num_logprobs = logprob_token_ids.shape()[1];
   for (int i = 0; i < bsz; i++) {
     int cur_token_num;
-    if (seq_lens_decoder_data[i] < prompt_lens_data[i]) {
+    if (seq_lens_decoder_data[i] < prompt_lens_data[i] ||
+        token_num_per_batch_data[i] == 0) {
+      // chunk prefill or stop slots
       cur_token_num = 0;
     } else {
-      cur_token_num = token_num_per_batch_data[i];
+      cur_token_num = token_num_per_batch_data[i] + 1;
     }
     msg_sed.meta[3 + i] = cur_token_num;
     if (preempted_idx_data[i] == 1) {
@@ -141,25 +141,34 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
     for (int j = 0; j < cur_token_num; j++) {
       auto* cur_tokens = &cur_batch_msg_sed->tokens[j * (SPEC_LOGPROB_K + 1)];
       auto* cur_scores = &cur_batch_msg_sed->scores[j * (SPEC_LOGPROB_K + 1)];
-      for (int k = 0; k < SPEC_LOGPROB_K + 1; k++) {
-        if (k == 0) {
-          cur_tokens[k] = (int)sampled_token_ids_data[i * max_draft_tokens + j];
-          cur_scores[k] =
-              logprob_scores_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
-                                  k];
-        } else if (k < max_num_logprobs) {
-          cur_tokens[k] = (int)
-              logprob_token_ids_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
-                                     k];
-          cur_scores[k] =
-              logprob_scores_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
-                                  k];
-        } else {
-          cur_tokens[k] = -1;
-          cur_scores[k] = 0.0;
+      if (j == 0) {
+        // first token has full logprobs
+        for (int k = 0; k < SPEC_LOGPROB_K + 1; k++) {
+          if (k == 0) {
+            cur_tokens[k] =
+                (int)sampled_token_ids_data[i * max_draft_tokens + j];
+            cur_scores[k] =
+                logprob_scores_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
+                                    k];
+          } else if (k < max_num_logprobs) {
+            // only for first token
+            cur_tokens[k] =
+                (int)logprob_token_ids_data[(token_offset + j) *
+                                                (SPEC_LOGPROB_K + 1) +
+                                            k];
+            cur_scores[k] =
+                logprob_scores_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
+                                    k];
+          } else {
+            cur_tokens[k] = -1;
+            cur_scores[k] = 0.0;
+          }
         }
+        cur_batch_msg_sed->ranks[j] = (int)logprob_ranks_data[token_offset + j];
+      } else {
+        // draft token only has token_id
+        cur_tokens[0] = (int)sampled_token_ids_data[i * max_draft_tokens + j];
       }
-      cur_batch_msg_sed->ranks[j] = (int)logprob_ranks_data[token_offset + j];
     }
   }
 #ifdef SPECULATE_SAVE_WITH_OUTPUT_DEBUG
@@ -194,7 +203,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   }
 }
 
-PD_BUILD_STATIC_OP(speculate_save_output_topk)
+PD_BUILD_STATIC_OP(mtp_save_first_token_with_topk)
     .Inputs({"sampled_token_ids",
              "logprob_token_ids",
              "logprob_scores",
@@ -206,4 +215,4 @@ PD_BUILD_STATIC_OP(speculate_save_output_topk)
              "prompt_lens",
              "preempted_idx"})
     .Attrs({"message_flag: int", "rank_id: int64_t", "save_each_rank: bool"})
-    .SetKernelFn(PD_KERNEL(SpeculateSaveOutMmsgTopK));
+    .SetKernelFn(PD_KERNEL(MTPSaveFirstTokenWithTopK));
