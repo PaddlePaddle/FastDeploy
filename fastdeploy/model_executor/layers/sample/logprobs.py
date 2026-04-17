@@ -206,7 +206,7 @@ def build_output_logprobs(
         mask = idx < share_inputs["accept_num"].unsqueeze(1)
         token_ids = paddle.masked_select(share_inputs["accept_tokens"], mask)
 
-    # Adapate for sampling mask
+    # Adapt for sampling mask
     if num_logprobs is None:
         return None, None, output_logits
 
