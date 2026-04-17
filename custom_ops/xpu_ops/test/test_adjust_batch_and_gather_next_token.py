@@ -159,6 +159,15 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
     np.testing.assert_allclose(adjusted_output_np, adjusted_output_cpu_np, err_msg="adjust_batch check failed!")
 
     # 测试 gather_next_token
+    print(f"mark debug: adjusted_output.shape={adjusted_output.shape}")
+    print(f"mark debug: encoder_seq_lod.shape={encoder_seq_lod.shape}")
+    print(f"mark debug: decoder_seq_lod.shape={decoder_seq_lod.shape}")
+    print(f"mark debug: encoder_batch_map.shape={encoder_batch_map.shape}")
+    print(f"mark debug: decoder_batch_map.shape={decoder_batch_map.shape}")
+    print(f"mark debug: encoder_seq_lod_cpu.shape={encoder_seq_lod_cpu.shape}")
+    print(f"mark debug: decoder_seq_lod_cpu.shape={decoder_seq_lod_cpu.shape}")
+    print(f"mark debug: encoder_batch_map_cpu.shape={encoder_batch_map_cpu.shape}")
+    print(f"mark debug: decoder_batch_map_cpu.shape={decoder_batch_map_cpu.shape}")
     gather_out = gather_next_token(
         adjusted_output,
         encoder_seq_lod,
