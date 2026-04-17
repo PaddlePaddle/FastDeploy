@@ -52,6 +52,10 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
 
   if (token_num_data > 0) {
+    if (draft_tokens) {
+      // TODO(chenhuan09) : support speculate mode
+      PD_THROW("draft tokens is not supported now.");
+    }
     int r =
         fastdeploy::plugin::get_padding_offset(ctx,
                                                batch_id_per_token.data<int>(),
@@ -65,25 +69,6 @@ std::vector<paddle::Tensor> GetPaddingOffset(
                                                bsz,
                                                token_num_data);
     PD_CHECK(r == 0, "fastdeploy::plugin::get_padding_offset failed.");
-
-    // If draft_tokens is provided, re-compute x_remove_padding with
-    // speculative decoding support
-    if (draft_tokens) {
-      int max_draft_tokens = draft_tokens.get().shape()[1];
-      r = fastdeploy::plugin::speculate_remove_padding(
-          ctx,
-          x_remove_padding.data<int64_t>(),
-          input_ids.data<int64_t>(),
-          draft_tokens.get().data<int64_t>(),
-          seq_len.data<int>(),
-          seq_lens_encoder.get().data<int>(),
-          cum_offsets_out.data<int>(),
-          max_seq_len,
-          max_draft_tokens,
-          bsz,
-          token_num_data);
-      PD_CHECK(r == 0, "fastdeploy::plugin::speculate_remove_padding failed.");
-    }
   }
   if (input_ids.is_cpu()) {
     delete ctx;

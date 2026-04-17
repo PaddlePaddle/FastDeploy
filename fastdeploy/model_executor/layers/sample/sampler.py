@@ -1188,6 +1188,24 @@ class SpeculativeSampler(nn.Layer):
             sampling_metadata.pre_token_ids,
         )
 
+        if self.enf_gen_phase_tag:
+            reasoning_phase_token_constraint(
+                logits,
+                sampling_metadata.token_ids_all,
+                sampling_metadata.prompt_lens,
+                share_inputs["stop_flags"],
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+                share_inputs["step_idx"],
+                share_inputs["reasoning_allowed_tokens"],
+                share_inputs["reasoning_status"],
+                share_inputs["batch_id_per_token_output"],
+                share_inputs["cu_seqlens_q_output"],
+                share_inputs["enable_thinking"],
+                self.think_end_id,
+                self.line_break_id,
+            )
+
         probs = F.softmax(logits)
 
         is_naive = self.spec_method is None or self.spec_method == SpecMethod.NAIVE
