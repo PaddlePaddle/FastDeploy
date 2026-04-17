@@ -344,8 +344,8 @@ if [ "$failed_count" -ne 0 ]; then
     if [ -d "${run_path}/unittest_logs" ]; then
         echo "Cleaning empty directories..."
 
-        # remove console_error.log files (cleanup logs from stopped processes)
-        find "${run_path}/unittest_logs" -name "console_error.log*" -delete || true
+        # remove *error.log* files (cleanup logs from stopped processes)
+        find "${run_path}/unittest_logs" \( -name "console_error.log*" -o -name "error.log*" \) -delete || true
 
         # perform multi-round clean until no more empty directories are found
         while true; do
