@@ -137,11 +137,13 @@ __global__ void apply_token_enforce_generation_scores(
   float fill_val_f = std::is_same<T, float16>::value ? -1e4f : -1e10f;
   __simd__ float fill_tmp_f[2];
   fill_tmp_f[0] = fill_val_f;
-  T fill_val_t;
-  primitive_cast<float, T>(fill_tmp_f, &fill_val_t, 1);
+  __simd__ T fill_val_arr[2];
+  primitive_cast<float, T>(fill_tmp_f, fill_val_arr, 1);
+  T fill_val_t = fill_val_arr[0];
 
-  T fill_buffer[64];
+  __simd__ T fill_buffer[64];
   for (int k = 0; k < 64; k++) fill_buffer[k] = fill_val_t;
+  mfence_lm();
 
   for (int i = cid; i < token_num; i += ncores) {
     int bs_idx;
@@ -168,8 +170,9 @@ __global__ void apply_token_enforce_generation_scores(
         LM2GM_ASYNC(
             fill_buffer, logits_dst + logits_offset + v, 64 * sizeof(T));
       } else {
-        T rem_buffer[64];
+        __simd__ T rem_buffer[64];
         for (int k = 0; k < chunk; k++) rem_buffer[k] = fill_val_t;
+        mfence_lm();
         LM2GM_ASYNC(
             rem_buffer, logits_dst + logits_offset + v, chunk * sizeof(T));
       }
