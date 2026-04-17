@@ -85,7 +85,9 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       PD_CHECK(r == 0, "fastdeploy::plugin::speculate_remove_padding failed.");
     }
   }
-
+  if (input_ids.is_cpu()) {
+    delete ctx;
+  }
   return {x_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k};
 }
 
