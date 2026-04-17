@@ -582,12 +582,7 @@ def save_output_specualate(
                     proposer_share_inputs,
                     proposer_share_inputs.index_to_batch_id,
                     proposer_share_inputs.enable_pd_reorder,
-                    [
-                        "base_model_draft_tokens",
-                        "seq_lens_decoder",
-                        "prompt_lens",
-                        "step_idx",
-                    ],
+                    ["base_model_draft_tokens"],
                 )
                 mtp_save_first_token_with_topk(
                     recover_proposer_share_inputs_map["base_model_draft_tokens"],

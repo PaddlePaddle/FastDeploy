@@ -21,18 +21,19 @@
 #include <sys/types.h>
 #include "paddle/extension.h"
 
-#define MAX_BSZ 512
-#define K 20
+#define SPEC_LOGPROB_MAX_BSZ 512
+#define SPEC_LOGPROB_K 20
 #define MAX_DRAFT_TOKEN_NUM 6
 
 struct batch_msgdata {
-  int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
-  float scores[MAX_DRAFT_TOKEN_NUM * (K + 1)];
+  int tokens[MAX_DRAFT_TOKEN_NUM * (SPEC_LOGPROB_K + 1)];
+  float scores[MAX_DRAFT_TOKEN_NUM * (SPEC_LOGPROB_K + 1)];
   int ranks[MAX_DRAFT_TOKEN_NUM];
 };
 
 struct msgdata {
   long mtype;
-  int meta[3 + MAX_BSZ];  // stop_flag, message_flag, bsz, batch_token_nums
-  batch_msgdata mtext[MAX_BSZ];
+  // stop_flag, message_flag, bsz, batch_token_nums
+  int meta[3 + SPEC_LOGPROB_MAX_BSZ];
+  batch_msgdata mtext[SPEC_LOGPROB_MAX_BSZ];
 };
