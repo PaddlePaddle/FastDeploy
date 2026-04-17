@@ -302,7 +302,8 @@ def xpu_pre_process(
     xpu_forward_meta.is_profiling = is_profiling
 
     if use_cudagraph and forward_meta is not None:
-        xpu_forward_meta.ids_remove_padding.copy_(adjusted_input)
+        # xpu_forward_meta.ids_remove_padding.copy_(adjusted_input)
+        xpu_forward_meta.ids_remove_padding = adjusted_input
         xpu_forward_meta.slot_mapping_enc.copy_(slot_mapping_enc)
         xpu_forward_meta.slot_mapping_dec.copy_(slot_mapping_dec)
     else:
