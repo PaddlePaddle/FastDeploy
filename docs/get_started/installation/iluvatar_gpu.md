@@ -34,17 +34,24 @@ Note: Because the 4.3.8 SDK in the image is incompatible with KMD, paddle cannot
 ### 3.2 Install paddle
 
 ```bash
-pip3 install paddlepaddle-iluvatar==3.4.0.dev20260326 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/
+pip3 install paddlepaddle-iluvatar==3.4.0.dev20260326 -i https://www.paddlepaddle.org.cn/packages/nightly/ixuca/ --extra-index-url https://mirrors.aliyun.com/pypi/simple/
 ```
 
 ### 3.3 Install or build FastDeploy
+
+You can install FastDeploy in either of the following ways:
+
+- pip install
 ```bash
 pip3 install fastdeploy_iluvatar_gpu==2.5.0.dev0 -i https://www.paddlepaddle.org.cn/packages/stable/ixuca/ --extra-index-url https://mirrors.aliyun.com/pypi/simple/
 ```
+
+- Build from source
 You can build FastDeploy from source if you need the ```latest version```.
 ```bash
-git clone https://github.com/PaddlePaddle/FastDeploy
+git clone --recursive https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy
+pip3 install -r requirements_iluvatar.txt -i https://mirrors.aliyun.com/pypi/simple/
 bash build.sh
 ```
 
@@ -451,9 +458,9 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
 ### 4.3 PaddleOCR-VL series
 #### 4.3.1 PaddleOCR-VL-0.9B
 
-- (Optional) Install paddleocr
+- (Optional) Build and install paddleocr from source
 
-To install the latest `paddleocr`, you can compile it from source. The image contains a compilation and installation based on source code `39128c2c7fd40be44d8f33498cabd4ec10f1bfcd`.
+To install the latest `paddleocr`, you can compile it from source. The version in the image is `3.3.2`.
 
 ```bash
 git clone -b main https://github.com/PaddlePaddle/PaddleOCR.git
@@ -515,7 +522,7 @@ import os
 from paddleocr import PaddleOCRVL
 
 input_path = "./images"
-pipeline = PaddleOCRVL(vl_rec_backend="fastdeploy-server", vl_rec_server_url="http://127.0.0.1:8180/v1")
+pipeline = PaddleOCRVL(vl_rec_backend="fastdeploy-server", vl_rec_server_url="http://127.0.0.1:8180/v1", device="iluvatar_gpu")
 file_list = os.listdir(input_path)
 for file_name in file_list:
     file_path = os.path.join(input_path, file_name)
