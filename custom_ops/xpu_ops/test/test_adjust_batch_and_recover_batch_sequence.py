@@ -122,7 +122,6 @@ def _run_test_base(seq_lens_this_time_data):
     # test adjust_batch
     adjusted_output = adjust_batch(
         input_tensor,
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_idx,
@@ -138,7 +137,6 @@ def _run_test_base(seq_lens_this_time_data):
 
     adjusted_output_cpu = adjust_batch(
         input_tensor.cpu(),
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_idx,

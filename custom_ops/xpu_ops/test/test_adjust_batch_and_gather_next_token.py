@@ -34,7 +34,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
     seq_lens_this_time = paddle.to_tensor(seq_lens_this_time_data, dtype="int32")
 
     bsz = seq_lens_this_time.shape[0]
-    cum_offsets = paddle.zeros(bsz, dtype="int32")
     block_table = paddle.arange(0, 56, dtype="int32").reshape((bsz, 8))
 
     (
@@ -126,7 +125,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
     # 测试 adjust_batch
     adjusted_output = adjust_batch(
         input_tensor,
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_idx,
@@ -142,7 +140,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
 
     adjusted_output_cpu = adjust_batch(
         input_tensor.cpu(),
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_idx,
@@ -164,7 +161,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
     # 测试 gather_next_token
     gather_out = gather_next_token(
         adjusted_output,
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_map,
@@ -180,7 +176,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
 
     gather_out_cpu = gather_next_token(
         adjusted_output.cpu(),
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_map,
