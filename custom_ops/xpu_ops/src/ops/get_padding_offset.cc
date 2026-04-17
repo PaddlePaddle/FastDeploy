@@ -52,7 +52,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
 
   if (token_num_data > 0) {
-    if (draft_tokens) {
+    if (draft_tokens || seq_lens_encoder) {
       // TODO(chenhuan09) : support speculate mode
       PD_THROW("draft tokens is not supported now.");
     }
