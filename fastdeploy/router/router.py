@@ -402,19 +402,19 @@ class Router:
 
                     # gather all tasks concurrently
                     all_tasks = prefill_tasks + decode_tasks + mixed_tasks
-                    for inst, coro in all_tasks:
-                        try:
-                            resp = await coro
-                            if resp.status != 200:
-                                logger.warning(f"Instance {inst.url()} unhealthy: {resp.status}")
-                                if inst in self.prefill_servers:
-                                    prefill_to_remove.append(inst)
-                                elif inst in self.decode_servers:
-                                    decode_to_remove.append(inst)
-                                elif inst in self.mixed_servers:
-                                    mixed_to_remove.append(inst)
-                        except Exception as e:
-                            logger.warning(f"Instance {inst.url()} check failed: {e}")
+                    results = await asyncio.gather(*[coro for _, coro in all_tasks], return_exceptions=True)
+                    for i, (inst, _) in enumerate(all_tasks):
+                        resp = results[i]
+                        if isinstance(resp, Exception):
+                            logger.warning(f"Instance {inst.url()} check failed: {resp}")
+                            if inst in self.prefill_servers:
+                                prefill_to_remove.append(inst)
+                            elif inst in self.decode_servers:
+                                decode_to_remove.append(inst)
+                            elif inst in self.mixed_servers:
+                                mixed_to_remove.append(inst)
+                        elif resp.status != 200:
+                            logger.warning(f"Instance {inst.url()} unhealthy: {resp.status}")
                             if inst in self.prefill_servers:
                                 prefill_to_remove.append(inst)
                             elif inst in self.decode_servers:
