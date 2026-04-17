@@ -552,14 +552,14 @@ class EngineClient:
 
     async def run_control_method(self, request: ControlRequest):
         api_server_logger.info(f"Received control request: {request}")
+        request_id = request.request_id
+        dealer, response_queue = await self.connection_manager.get_connection(request_id)
+        dealer.write([b"", request_id.encode("utf-8")])
         req_dict = request.to_dict()
         if not self.enable_mm and not envs.ENABLE_V1_DATA_PROCESSOR:
             self.zmq_client.send_json(req_dict)
         else:
             self.zmq_client.send_pyobj(req_dict)
-        request_id = request.request_id
-        dealer, response_queue = await self.connection_manager.get_connection(request_id)
-        dealer.write([b"", request_id.encode("utf-8")])
         try:
             # todo: support user specified timeout. default 600s is enough for most control cases
             response = await asyncio.wait_for(response_queue.get(), timeout=600)
