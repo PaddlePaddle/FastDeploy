@@ -158,51 +158,69 @@ def xpu_pre_process(
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
-    xpu_forward_meta = XPUForwardMeta(
-        ids_remove_padding=share_inputs["ids_remove_padding"],
-        rotary_embs=share_inputs["rope_emb"],
-        attn_backend=None,
-        seq_lens_encoder=share_inputs["seq_lens_encoder"],
-        seq_lens_decoder=share_inputs["seq_lens_decoder"],
-        seq_lens_this_time=share_inputs["seq_lens_this_time"],
-        batch_id_per_token=share_inputs["batch_id_per_token"],
-        cu_seqlens_q=share_inputs["cu_seqlens_q"],
-        cu_seqlens_k=share_inputs["cu_seqlens_k"],
-        block_tables=share_inputs["block_tables"],
-        caches=share_inputs["caches"],
-        max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
-        is_speculative=use_speculate_method,
-    )
-    if not (use_cudagraph and forward_meta is not None):
+    if use_cudagraph and forward_meta is not None:
+        forward_meta.ids_remove_padding.copy_(share_inputs["ids_remove_padding"], False)
+        forward_meta.rotary_embs.copy_(share_inputs["rope_emb"], False)
+        forward_meta.attn_backend = None
+        forward_meta.seq_lens_encoder.copy_(share_inputs["seq_lens_encoder"], False)
+        forward_meta.seq_lens_decoder.copy_(share_inputs["seq_lens_decoder"], False)
+        forward_meta.seq_lens_this_time.copy_(share_inputs["seq_lens_this_time"], False)
+        forward_meta.batch_id_per_token.copy_(share_inputs["batch_id_per_token"], False)
+        forward_meta.cu_seqlens_q.copy_(share_inputs["cu_seqlens_q"], False)
+        forward_meta.cu_seqlens_k.copy_(share_inputs["cu_seqlens_k"], False)
+        forward_meta.block_tables.copy_(share_inputs["block_tables"], False)
+        forward_meta.caches = share_inputs["caches"]
+        forward_meta.max_num_seqs = share_inputs["seq_lens_this_time"].shape[0]
+        forward_meta.is_speculative = use_speculate_method
+
+        block_tables = forward_meta.block_tables
+    else:
+        xpu_forward_meta = XPUForwardMeta(
+            ids_remove_padding=share_inputs["ids_remove_padding"],
+            rotary_embs=share_inputs["rope_emb"],
+            attn_backend=None,
+            seq_lens_encoder=share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=share_inputs["seq_lens_decoder"],
+            seq_lens_this_time=share_inputs["seq_lens_this_time"],
+            batch_id_per_token=share_inputs["batch_id_per_token"],
+            cu_seqlens_q=share_inputs["cu_seqlens_q"],
+            cu_seqlens_k=share_inputs["cu_seqlens_k"],
+            block_tables=share_inputs["block_tables"],
+            caches=share_inputs["caches"],
+            max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
+            is_speculative=use_speculate_method,
+        )
         xpu_forward_meta.init_tensor(seq_lens_encoder.shape[0], share_inputs["block_tables"].shape)
 
-    skip_list = [
-        "encoder_batch_map",
-        "decoder_batch_map",
-        "encoder_batch_idx",
-        "decoder_batch_idx",
-        "encoder_seq_lod",
-        "decoder_seq_lod",
-        "encoder_kv_lod",
-        "prefix_len",
-        "decoder_context_len",
-        "decoder_context_len_cache",
-        "prefix_block_tables",
-        "encoder_batch_map_cpu",
-        "decoder_batch_map_cpu",
-        "encoder_batch_idx_cpu",
-        "decoder_batch_idx_cpu",
-        "encoder_seq_lod_cpu",
-        "decoder_seq_lod_cpu",
-        "encoder_kv_lod_cpu",
-        "prefix_len_cpu",
-        "decoder_context_len_cpu",
-        "decoder_context_len_cache_cpu",
-        "len_info_cpu",
-        "enc_batch",
-        "dec_batch",
-        "total_enc_len",
-    ]
+        block_tables = xpu_forward_meta.block_tables
+
+    # skip_list = [
+    #     "encoder_batch_map",
+    #     "decoder_batch_map",
+    #     "encoder_batch_idx",
+    #     "decoder_batch_idx",
+    #     "encoder_seq_lod",
+    #     "decoder_seq_lod",
+    #     "encoder_kv_lod",
+    #     "prefix_len",
+    #     "decoder_context_len",
+    #     "decoder_context_len_cache",
+    #     "prefix_block_tables",
+    #     "encoder_batch_map_cpu",
+    #     "decoder_batch_map_cpu",
+    #     "encoder_batch_idx_cpu",
+    #     "decoder_batch_idx_cpu",
+    #     "encoder_seq_lod_cpu",
+    #     "decoder_seq_lod_cpu",
+    #     "encoder_kv_lod_cpu",
+    #     "prefix_len_cpu",
+    #     "decoder_context_len_cpu",
+    #     "decoder_context_len_cache_cpu",
+    #     "len_info_cpu",
+    #     "enc_batch",
+    #     "dec_batch",
+    #     "total_enc_len",
+    # ]
 
     if use_cudagraph and forward_meta is not None:
         encoder_batch_map = forward_meta.encoder_batch_map
@@ -280,13 +298,13 @@ def xpu_pre_process(
         _,
         _,
         _,
-        xpu_forward_meta.slot_mapping_enc,
-        xpu_forward_meta.slot_mapping_dec,
+        slot_mapping_enc,
+        slot_mapping_dec,
     ) = get_infer_param(
         seq_lens_encoder,
         seq_lens_decoder,
         seq_lens_this_time,
-        xpu_forward_meta.block_tables,
+        block_tables,
         encoder_batch_map,
         decoder_batch_map,
         encoder_batch_idx,
@@ -340,14 +358,22 @@ def xpu_pre_process(
     adjusted_input = adjusted_input.squeeze(1)
 
     share_inputs["ids_remove_padding"].copy_(adjusted_input, False)
-    xpu_forward_meta.ids_remove_padding = adjusted_input
-    # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
-    xpu_forward_meta.is_profiling = is_profiling
+    if use_cudagraph and forward_meta is not None:
+        forward_meta.ids_remove_padding.copy_(adjusted_input, False)
+        forward_meta.is_profiling = is_profiling
+        forward_meta.slot_mapping_enc.copy_(slot_mapping_enc, False)
+        forward_meta.slot_mapping_dec.copy_(slot_mapping_dec, False)
+    else:
+        xpu_forward_meta.ids_remove_padding = adjusted_input
+        # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
+        xpu_forward_meta.is_profiling = is_profiling
+        xpu_forward_meta.slot_mapping_enc = slot_mapping_enc
+        xpu_forward_meta.slot_mapping_dec = slot_mapping_dec
     if use_cudagraph:
         if forward_meta is None:
             return xpu_forward_meta
         else:
-            forward_meta.copy_from(xpu_forward_meta, skip_list)
+            # forward_meta.copy_from(xpu_forward_meta, skip_list)
             return forward_meta
     else:
         return xpu_forward_meta
