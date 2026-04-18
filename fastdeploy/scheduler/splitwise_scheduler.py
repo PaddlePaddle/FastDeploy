@@ -33,6 +33,7 @@ from fastdeploy.engine.request import (
     RequestMetrics,
     RequestOutput,
 )
+from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.utils import scheduler_logger as logger
 
 
@@ -240,7 +241,12 @@ class NodeInfo:
             for req_id, pairs in self.reqs.items():
                 load, arrival_time = pairs
                 if cur_time - arrival_time > ttl:
-                    logger.error(f"InferScheduler Expire Reqs({req_id}), arrival({arrival_time}), ttl({ttl})")
+                    log_request_error(
+                        message="InferScheduler Expire Reqs({req_id}), arrival({arrival_time}), ttl({ttl})",
+                        req_id=req_id,
+                        arrival_time=arrival_time,
+                        ttl=ttl,
+                    )
                     expire_reqs.add((req_id, load))
             for req_id, load in expire_reqs:
                 if req_id in self.reqs:
@@ -378,7 +384,7 @@ class ResultReader:
                             )
                             self.data.appendleft(result)
 
-                            logger.error(f"Req({req_id}) is expired({self.ttl})")
+                            log_request_error(message="Req({req_id}) is expired({ttl})", req_id=req_id, ttl=self.ttl)
                             expired_reqs.add(req_id)
                             continue
                         keys.append(req_id)
@@ -511,7 +517,11 @@ class APIScheduler:
             except IndexError:
                 continue
             except Exception as e:
-                logger.error(f"APIScheduler Schedule req error: {e!s}, {str(traceback.format_exc())}")
+                log_request_error(
+                    message="APIScheduler Schedule req error: {error}, {traceback}",
+                    error=str(e),
+                    traceback=traceback.format_exc(),
+                )
 
     def schedule(self, req, pnodes, dnodes, mnodes, group=""):
         """
@@ -841,7 +851,11 @@ class InferScheduler:
 
                 req = self.reqs_queue.popleft()
                 if cur_time - req.metrics.arrival_time > self.ttl:
-                    logger.error(f"req({req.request_id}) is expired({self.ttl}) when InferScheduler Get Requests")
+                    log_request_error(
+                        message="req({request_id}) is expired({ttl}) when InferScheduler Get Requests",
+                        request_id=req.request_id,
+                        ttl=self.ttl,
+                    )
                     self.node.finish_req(req.request_id)
                     continue
                 current_prefill_tokens += req.prompt_token_ids_len

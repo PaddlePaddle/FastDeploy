@@ -45,6 +45,12 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.attention.dsa_attention_backend import (
+    DSAAttentionBackend,
+)
+from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
+    MLAAttentionBackend,
+)
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
@@ -79,13 +85,14 @@ else:
         speculate_schedule_cache,
         set_data_ipc,
         unset_data_ipc,
+        get_position_ids_and_mask_encoder_batch,
     )
 
 import zmq
 
 from fastdeploy import envs
 from fastdeploy.engine.tasks import PoolingTask
-from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+from fastdeploy.input.image_processors.adaptive_processor import AdaptiveImageProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.logger.deterministic_logger import DeterministicLogger
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -1267,6 +1274,33 @@ class GPUModelRunner(ModelRunnerBase):
         )
         return token_num, token_num_event
 
+    def _compute_position_ids_and_slot_mapping(self) -> None:
+        """Compute position_ids and slot_mapping for KV cache addressing.
+        This is a general computation based on sequence length info and block tables,
+        applicable to all models that need per-token KV cache physical slot addresses.
+        Results are stored in self.forward_meta.
+        """
+        # NOTE(zhushengguang): Only support MLAAttentionBackend and DSAAttentionBackend currently.
+        if not isinstance(self.attn_backends[0], (MLAAttentionBackend, DSAAttentionBackend)):
+            return
+        current_total_tokens = self.forward_meta.ids_remove_padding.shape[0]
+        position_ids = self.share_inputs["position_ids_buffer"][:current_total_tokens]
+        get_position_ids_and_mask_encoder_batch(
+            self.forward_meta.seq_lens_encoder,
+            self.forward_meta.seq_lens_decoder,
+            self.forward_meta.seq_lens_this_time,
+            position_ids,
+        )
+        block_size = self.cache_config.block_size
+        block_idx = position_ids // block_size  # [num_tokens]
+        assert self.forward_meta.batch_id_per_token.shape == block_idx.shape
+        block_ids = self.forward_meta.block_tables[self.forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
+        block_offset = position_ids % block_size  # [num_tokens]
+        slot_mapping = self.share_inputs["slot_mapping_buffer"][:current_total_tokens]
+        paddle.assign((block_ids * block_size + block_offset).cast(paddle.int64), slot_mapping)
+        self.forward_meta.position_ids = position_ids
+        self.forward_meta.slot_mapping = slot_mapping
+
     def _process_reorder(self) -> None:
         if self.attn_backends and getattr(self.attn_backends[0], "enable_ids_reorder", False):
             self.share_inputs.enable_pd_reorder = True
@@ -1860,6 +1894,8 @@ class GPUModelRunner(ModelRunnerBase):
             # 2. Padding inputs for cuda graph
             self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
+            # Compute position_ids and slot_mapping
+            self._compute_position_ids_and_slot_mapping()
 
             model_inputs = {}
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
@@ -2197,6 +2233,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Padding inputs for cuda graph
         self.padding_cudagraph_inputs()
+        # Compute position_ids and slot_mapping
+        self._compute_position_ids_and_slot_mapping()
 
         model_inputs = {}
         model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
@@ -2514,13 +2552,17 @@ class GPUModelRunner(ModelRunnerBase):
         sampler_output,
     ):
         if self.speculative_decoding:
-            skip_save_output = self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
             save_output_specualate(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
+                proposer_share_inputs=self.proposer.model_inputs,
+                local_rank=self.local_rank,
+                tensor_parallel_rank=self.parallel_config.tensor_parallel_rank,
                 save_each_rank=self.parallel_config.use_ep,
-                skip_save_output=skip_save_output,
+                is_mtp_prefill=(
+                    self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
+                ),
             )
         else:
             save_output_normal(
@@ -2728,13 +2770,13 @@ class GPUModelRunner(ModelRunnerBase):
         """Dynamic model loader use to clear parameters use for RL"""
         # Clear CUDAGraph
         if self.use_cudagraph:
-            self.model.clear_grpah_opt_backend()
+            self.model.clear_graph_opt_backend()
         # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
         if self.spec_method == SpecMethod.MTP:
-            self.proposer.model.clear_grpah_opt_backend()
+            self.proposer.model.clear_graph_opt_backend()
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
@@ -2788,7 +2830,7 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info("GPU model runner's weight is already sleeping, no need to sleep again!")
                 return
             if self.use_cudagraph:
-                self.model.clear_grpah_opt_backend()
+                self.model.clear_graph_opt_backend()
             if self.fd_config.parallel_config.enable_expert_parallel:
                 self.dynamic_weight_manager.clear_deepep_buffer()
             self.dynamic_weight_manager.clear_model_weight()
@@ -2867,12 +2909,7 @@ class GPUModelRunner(ModelRunnerBase):
         return
 
     def _init_image_preprocess(self) -> None:
-        processor = DataProcessor(
-            tokenizer_name=self.model_config.model,
-            image_preprocessor_name=str(self.model_config.model),
-        )
-        processor.eval()
-        image_preprocess = processor.image_preprocessor
+        image_preprocess = AdaptiveImageProcessor.from_pretrained(str(self.model_config.model))
         image_preprocess.image_mean_tensor = paddle.to_tensor(image_preprocess.image_mean, dtype="float32").reshape(
             [1, 3, 1, 1]
         )

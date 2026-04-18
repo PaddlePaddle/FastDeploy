@@ -950,3 +950,66 @@ class TestMoePermuteTrueRealOps:
         assert list(out.shape) == [num_tokens, hidden_size], f"wrong shape: {out.shape}"
         assert not paddle.isnan(out).any(), "output contains NaN"
         assert not paddle.isinf(out).any(), "output contains Inf"
+
+    def test_apply_tp_with_both_latent_projs(self, monkeypatch):
+        """Test apply_tp with both fc1_latent_proj and fc2_latent_proj applied."""
+        fc1_called = {"count": 0}
+        fc2_called = {"count": 0}
+
+        class FC1Proj(paddle.nn.Layer):
+            def forward(self, x):
+                fc1_called["count"] += 1
+                return x * 2
+
+        class FC2Proj(paddle.nn.Layer):
+            def forward(self, x):
+                fc2_called["count"] += 1
+                return x + 10
+
+        fc1_latent_proj = FC1Proj()
+        fc2_latent_proj = FC2Proj()
+
+        def fake_get_moe_scores(
+            gate_out, n_group, topk_group, top_k, routed_scaling_factor, bias, renormalize, topk_reduce_func=None
+        ):
+            return gate_out, paddle.to_tensor([[0.6, 0.4]]), paddle.to_tensor([[0, 1]])
+
+        def fake_dispatch(*args, **kwargs):
+            permute_input = paddle.ones([1, 2]) * 2  # fc1_latent_proj applied
+            token_nums_per_expert = paddle.to_tensor([1, 0])
+            permute_indices_per_token = paddle.to_tensor([0])
+            topk_weights = paddle.to_tensor([[0.6, 0.4]])
+            topk_idx = paddle.to_tensor([[0, 1]])
+            expert_idx_per_token = paddle.to_tensor([0])
+            dequant_scale = None
+            max_tokens_per_expert = None
+            return (
+                permute_input,
+                token_nums_per_expert,
+                permute_indices_per_token,
+                topk_weights,
+                topk_idx,
+                expert_idx_per_token,
+                dequant_scale,
+                max_tokens_per_expert,
+            )
+
+        def fake_reduce(*args, **kwargs):
+            return paddle.ones([1, 2]) * 5
+
+        monkeypatch.setattr(backend, "get_moe_scores", fake_get_moe_scores, raising=False)
+        monkeypatch.setattr(backend, "moe_expert_dispatch", fake_dispatch, raising=False)
+        monkeypatch.setattr(backend, "moe_expert_reduce", fake_reduce, raising=False)
+
+        layer = DummyLayer(topk_method="noaux_tc")
+        method = backend.CutlassMoEMethod(None)
+        monkeypatch.setattr(method, "compute_ffn", lambda *args, **kwargs: paddle.ones([1, 2]) * 4)
+
+        x = paddle.ones([1, 2])
+        gate = paddle.nn.Identity()
+        out = method.apply_tp(layer, x, gate, fc1_latent_proj=fc1_latent_proj, fc2_latent_proj=fc2_latent_proj)
+
+        # Output should be 5 (from reduce) + 10 (from fc2_latent_proj) = 15
+        np.testing.assert_allclose(out.numpy(), np.full((1, 2), 15.0))
+        assert fc1_called["count"] == 1, "fc1_latent_proj should be called exactly once"
+        assert fc2_called["count"] == 1, "fc2_latent_proj should be called exactly once"

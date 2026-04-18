@@ -39,6 +39,7 @@ def _make_cfg(**ov):
     pc.use_internode_ll_two_stage = pc.disable_sequence_parallel_moe = False
     pc.shutdown_comm_group_if_worker_idle = False
     pc.ep_prefill_use_worst_num_tokens = False
+    pc.enable_flashinfer_allreduce_fusion = False
     sc = ns(max_num_seqs=256, max_num_batched_tokens=4096, splitwise_role="mixed", name="local")
     sc.enable_overlap_schedule = False
     cc = ns(num_gpu_blocks_override=None, gpu_memory_utilization=0.9, block_size=16, enc_dec_block_num=0)

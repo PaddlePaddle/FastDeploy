@@ -843,11 +843,11 @@ class TestEngineClientValidParameters(unittest.TestCase):
         """Test valid_parameters adjusts reasoning_max_tokens when needed."""
         data = {"max_tokens": 50, "reasoning_max_tokens": 100, "request_id": "test-id"}  # Larger than max_tokens
 
-        with patch("fastdeploy.entrypoints.engine_client.api_server_logger") as mock_logger:
+        with patch("fastdeploy.entrypoints.engine_client.log_request") as mock_log_request:
             self.engine_client.valid_parameters(data)
 
             self.assertEqual(data["reasoning_max_tokens"], 50)
-            mock_logger.warning.assert_called_once()
+            mock_log_request.assert_called_once()
 
     def test_valid_parameters_reasoning_max_tokens_with_reasoning_effort(self):
         """Test valid_parameters when both reasoning_max_tokens and reasoning_effort are set."""
@@ -858,14 +858,13 @@ class TestEngineClientValidParameters(unittest.TestCase):
             "request_id": "test-id",
         }
 
-        with patch("fastdeploy.entrypoints.engine_client.api_server_logger") as mock_logger:
+        with patch("fastdeploy.entrypoints.engine_client.log_request") as mock_log_request:
             self.engine_client.valid_parameters(data)
 
             # When reasoning_effort is set, reasoning_max_tokens should be set to None
             self.assertIsNone(data["reasoning_max_tokens"])
-            mock_logger.warning.assert_called_once()
-            warning_call = mock_logger.warning.call_args[0][0]
-            self.assertIn("reasoning_max_tokens and reasoning_effort are both set", warning_call)
+            # log_request is called once: for reasoning_effort conflict (reasoning_max_tokens=50 < max_tokens=100)
+            mock_log_request.assert_called_once()
 
     def test_valid_parameters_temperature_zero_adjustment(self):
         """Test valid_parameters adjusts zero temperature."""
@@ -1846,7 +1845,7 @@ def test_add_requests_objgraph_and_error_paths(minimal_engine_client):
     with (
         patch(
             "fastdeploy.entrypoints.engine_client.os.getenv",
-            side_effect=lambda k: "1" if k == "FD_ENABLE_OBJGRAPH_DEBUG" else None,
+            side_effect=lambda k, default=None: "1" if k == "FD_ENABLE_OBJGRAPH_DEBUG" else default,
         ),
         patch("fastdeploy.entrypoints.engine_client._has_objgraph", True),
         patch("fastdeploy.entrypoints.engine_client._has_psutil", False),

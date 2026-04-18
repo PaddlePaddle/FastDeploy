@@ -47,9 +47,13 @@ sys.modules["fastdeploy.engine.request"] = Mock()
 sys.modules["fastdeploy.scheduler"] = Mock()
 sys.modules["fastdeploy.scheduler.local_scheduler"] = Mock()
 sys.modules["fastdeploy.scheduler.data"] = Mock()
+sys.modules["fastdeploy.logger"] = Mock()
+sys.modules["fastdeploy.logger.request_logger"] = Mock()
 
 # Mock the get_logger function
 sys.modules["fastdeploy.utils"].get_logger = Mock(return_value=mock_logger)
+# Mock the log_request function
+sys.modules["fastdeploy.logger.request_logger"].log_request = Mock()
 
 
 # Mock the Request, RequestOutput, and ScheduledResponse classes
@@ -240,8 +244,9 @@ class TestDPLocalScheduler(unittest.TestCase):
 
     def test_put_results_with_finished_requests(self):
         """Test putting results with finished requests."""
-        # Reset mock logger
-        mock_logger.reset_mock()
+        # Get the mock log_request function
+        mock_log_request = sys.modules["fastdeploy.logger.request_logger"].log_request
+        mock_log_request.reset_mock()
 
         # Create mock request outputs
         results = [
@@ -254,13 +259,12 @@ class TestDPLocalScheduler(unittest.TestCase):
         with patch.object(self.scheduler, "responses_not_empty"):
             self.scheduler.put_results(results)
 
-        # Check that finished requests were logged - the logger should have been called
-        self.assertTrue(mock_logger.info.called)
+        # Check that finished requests were logged via log_request
+        self.assertTrue(mock_log_request.called)
         # Get the actual call arguments to verify the message format
-        call_args = mock_logger.info.call_args[0][0]
-        self.assertIn("finished responses", call_args)
-        self.assertIn("req1", call_args)
-        self.assertIn("req3", call_args)
+        call_kwargs = mock_log_request.call_args[1]
+        self.assertIn("finished responses", call_kwargs.get("message", ""))
+        self.assertIn("req1", str(call_kwargs.get("request_ids", [])))
 
     def test_put_results_with_new_responses(self):
         """Test putting results with new responses."""
