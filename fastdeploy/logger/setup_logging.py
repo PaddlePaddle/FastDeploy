@@ -14,7 +14,19 @@
 """
 
 """
-配置日志系统
+Setup logging system
+
+This module handles logging initialization:
+- Basic setup: log directory creation
+- Optional: load external JSON config file via dictConfig
+
+Channel-based logger configuration is handled by FastDeployLogger._get_channel_logger()
+using manual addHandler for better performance.
+
+Log channels:
+- main: Main logs -> fastdeploy.log
+- request: Request logs -> request.log
+- console: Console logs -> console.log + terminal
 """
 
 import json
@@ -27,54 +39,29 @@ from fastdeploy import envs
 
 
 class MaxLevelFilter(logging.Filter):
-    """过滤低于指定级别的日志记录。
+    """Filter log records below specified level.
 
-    用于将 INFO/DEBUG 路由到 stdout，ERROR/CRITICAL 路由到 stderr。
+    Used to route INFO/DEBUG to stdout, ERROR/CRITICAL to stderr.
     """
 
     def __init__(self, level):
         super().__init__()
-        self.level = logging._nameToLevel.get(level, level)
+        self.level = logging._nameToLevel.get(level, level) if isinstance(level, str) else level
 
     def filter(self, record):
         return record.levelno < self.level
 
 
-def setup_logging(log_dir=None, config_file=None):
-    """
-    设置FastDeploy的日志配置
-
-    Args:
-        log_dir: 日志文件存储目录，如果不提供则使用环境变量
-        config_file: JSON配置文件路径，如果不提供则使用默认配置
-    """
-
-    # 避免重复配置
-    if getattr(setup_logging, "_configured", False):
-        return logging.getLogger("fastdeploy")
-
-    # 使用环境变量中的日志目录，如果没有则使用传入的参数或默认值
-    if log_dir is None:
-        log_dir = getattr(envs, "FD_LOG_DIR", "log")
-
-    # 确保日志目录存在
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-
-    # 从环境变量获取日志级别和备份数量
-    is_debug = int(getattr(envs, "FD_DEBUG", 0))
-    FASTDEPLOY_LOGGING_LEVEL = "DEBUG" if is_debug else "INFO"
-    backup_count = int(getattr(envs, "FD_LOG_BACKUP_COUNT", 7))
-
-    # 定义日志输出格式
+def _build_default_config(log_dir, log_level, backup_count):
+    """Build default logging configuration for dictConfig"""
     _FORMAT = "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
 
-    # 默认配置
-    default_config = {
+    return {
         "version": 1,
         "disable_existing_loggers": False,
         "filters": {
             "below_error": {
-                "()": "fastdeploy.logger.setup_logging.MaxLevelFilter",
+                "()": MaxLevelFilter,
                 "level": "ERROR",
             }
         },
@@ -91,99 +78,135 @@ def setup_logging(log_dir=None, config_file=None):
             },
         },
         "handlers": {
-            # 控制台标准输出，用于 INFO/DEBUG（低于 ERROR 级别）
+            # Console stdout for INFO/DEBUG (below ERROR level)
             "console_stdout": {
                 "class": "logging.StreamHandler",
-                "level": FASTDEPLOY_LOGGING_LEVEL,
+                "level": log_level,
                 "filters": ["below_error"],
                 "formatter": "colored",
                 "stream": "ext://sys.stdout",
             },
-            # 控制台错误输出，用于 ERROR/CRITICAL
+            # Console stderr for ERROR/CRITICAL
             "console_stderr": {
                 "class": "logging.StreamHandler",
                 "level": "ERROR",
                 "formatter": "colored",
                 "stream": "ext://sys.stderr",
             },
-            # 默认错误日志，保留最新1个小时的日志，位置在log/error.log
+            # Main log file
+            "main_file": {
+                "class": "fastdeploy.logger.handlers.LazyFileHandler",
+                "level": log_level,
+                "formatter": "standard",
+                "filename": os.path.join(log_dir, "fastdeploy.log"),
+                "backupCount": backup_count,
+            },
+            # Console log file
+            "console_file": {
+                "class": "fastdeploy.logger.handlers.LazyFileHandler",
+                "level": log_level,
+                "formatter": "standard",
+                "filename": os.path.join(log_dir, "console.log"),
+                "backupCount": backup_count,
+            },
+            # Request log file
+            "request_file": {
+                "class": "fastdeploy.logger.handlers.LazyFileHandler",
+                "level": log_level,
+                "formatter": "standard",
+                "filename": os.path.join(log_dir, "request.log"),
+                "backupCount": backup_count,
+            },
+            # Error log file
             "error_file": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
+                "class": "fastdeploy.logger.handlers.LazyFileHandler",
                 "level": "ERROR",
                 "formatter": "standard",
                 "filename": os.path.join(log_dir, "error.log"),
-                "when": "H",
-                "interval": 1,
-                "backupCount": 1,
-            },
-            # 全量日志，保留最新1小时的日志，位置在log/default.log
-            "default_file": {
-                "class": "logging.handlers.TimedRotatingFileHandler",
-                "level": FASTDEPLOY_LOGGING_LEVEL,
-                "formatter": "standard",
-                "filename": os.path.join(log_dir, "default.log"),
-                "when": "H",
-                "interval": 1,
-                "backupCount": 1,
-            },
-            # 错误日志归档，保留7天内的日志，每隔1小时一个文件，形式如：FastDeploy/log/2025-08-14/error_2025-08-14-18.log
-            "error_archive": {
-                "class": "fastdeploy.logger.handlers.IntervalRotatingFileHandler",
-                "level": "ERROR",
-                "formatter": "standard",
-                "filename": os.path.join(log_dir, "error.log"),
-                "backupDays": 7,
-                "interval": 1,
-                "encoding": "utf-8",
-            },
-            # 全量日志归档，保留7天内的日志，每隔1小时一个文件，形式如：FastDeploy/log/2025-08-14/default_2025-08-14-18.log
-            "default_archive": {
-                "class": "fastdeploy.logger.handlers.IntervalRotatingFileHandler",
-                "level": FASTDEPLOY_LOGGING_LEVEL,
-                "formatter": "standard",
-                "filename": os.path.join(log_dir, "default.log"),
-                "backupDays": 7,
-                "interval": 1,
-                "encoding": "utf-8",
+                "backupCount": backup_count,
             },
         },
         "loggers": {
-            # 默认日志记录器,全局共享
+            # Default logger
             "fastdeploy": {
                 "level": "DEBUG",
-                "handlers": [
-                    "console_stdout",
-                    "console_stderr",
-                    "error_file",
-                    "default_file",
-                    "error_archive",
-                    "default_archive",
-                ],
+                "handlers": ["main_file", "console_file", "error_file", "console_stderr"],
                 "propagate": False,
-            }
+            },
+            # Main channel
+            "fastdeploy.main": {
+                "level": "DEBUG",
+                "handlers": ["main_file", "console_file", "error_file", "console_stderr"],
+                "propagate": False,
+            },
+            # Request channel - only output to request.log and error.log
+            "fastdeploy.request": {
+                "level": "DEBUG",
+                "handlers": ["request_file", "error_file", "console_stderr"],
+                "propagate": False,
+            },
+            # Console channel - output to console.log and terminal
+            "fastdeploy.console": {
+                "level": "DEBUG",
+                "handlers": ["console_file", "console_stdout", "error_file", "console_stderr"],
+                "propagate": False,
+            },
         },
     }
 
-    # 如果提供了配置文件，则加载配置文件
-    if config_file and os.path.exists(config_file):
-        with open(config_file, "r", encoding="utf-8") as f:
-            config = json.load(f)
 
-        # 合并环境变量配置到用户配置中,环境变量的优先级高于自定义的优先级
-        if "handlers" in config:
-            for handler_name, handler_config in config["handlers"].items():
-                if "backupCount" not in handler_config and "DailyRotating" in handler_config.get("class", ""):
-                    handler_config["backupCount"] = backup_count
-                if handler_config.get("level") == "INFO" and is_debug:
-                    handler_config["level"] = "DEBUG"
-    else:
-        config = default_config
+def setup_logging(log_dir=None, config_file=None):
+    """
+    Setup FastDeploy logging configuration.
 
-    # 应用日志配置
-    logging.config.dictConfig(config)
+    This function:
+    1. Ensures the log directory exists
+    2. Optionally loads external JSON config file via dictConfig
 
-    # 避免重复加载
+    Note: Channel-based loggers (get_logger with channel param) use manual addHandler
+    for better performance, independent of dictConfig.
+
+    Args:
+        log_dir: Log file storage directory, uses environment variable if not provided
+        config_file: Optional JSON config file path for dictConfig
+    """
+    # Avoid duplicate configuration
+    if getattr(setup_logging, "_configured", False):
+        return
+
+    # Use log directory from environment variable, or use provided parameter or default value
+    if log_dir is None:
+        log_dir = getattr(envs, "FD_LOG_DIR", "log")
+
+    # Ensure log directory exists
+    Path(log_dir).mkdir(parents=True, exist_ok=True)
+
+    # Store log_dir for later use
+    setup_logging._log_dir = log_dir
+
+    # If config_file is provided, use dictConfig to load it
+    if config_file is not None:
+        is_debug = int(getattr(envs, "FD_DEBUG", 0))
+        log_level = "DEBUG" if is_debug else "INFO"
+        backup_count = int(getattr(envs, "FD_LOG_BACKUP_COUNT", 7))
+
+        if os.path.exists(config_file):
+            with open(config_file, "r", encoding="utf-8") as f:
+                config = json.load(f)
+
+            # Merge environment variable config into user config
+            if "handlers" in config:
+                for handler_config in config["handlers"].values():
+                    if "backupCount" not in handler_config and "DailyRotating" in handler_config.get("class", ""):
+                        handler_config["backupCount"] = backup_count
+                    if handler_config.get("level") == "INFO" and log_level == "DEBUG":
+                        handler_config["level"] = "DEBUG"
+        else:
+            # Config file not found, use default config
+            config = _build_default_config(log_dir, log_level, backup_count)
+
+        # Apply logging configuration via dictConfig
+        logging.config.dictConfig(config)
+
+    # Mark as configured
     setup_logging._configured = True
-
-    # 返回fastdeploy的logger
-    return logging.getLogger("fastdeploy")

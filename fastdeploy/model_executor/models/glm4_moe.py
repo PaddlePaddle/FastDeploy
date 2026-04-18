@@ -130,7 +130,6 @@ class Glm4Moe(nn.Layer):
         self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
         self.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         self.tp_group = fd_config.parallel_config.tp_group
-
         self.use_ep = self.expert_parallel_size > 1
         self.use_tp = self.tensor_parallel_size > 1
 
@@ -229,6 +228,7 @@ class Glm4MoeAttention(nn.Layer):
             input_size=fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim,
             output_size=fd_config.model_config.hidden_size,
             layer_id=layer_id,
+            enable_all_reduce_fusion=fd_config.parallel_config.enable_flashinfer_allreduce_fusion,
         )
 
         self.attn = Attention(
@@ -561,9 +561,9 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
 
         return hidden_states
 
-    def clear_grpah_opt_backend(self):
+    def clear_graph_opt_backend(self):
         """Clear graph optimization backend, the captured cuda graph will be cleaned"""
-        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+        self.model.clear_graph_opt_backend(fd_config=self.fd_config)
 
 
 class Glm4MoePretrainedModel(PretrainedModel):

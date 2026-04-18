@@ -214,6 +214,8 @@ class XPUAttentionBackend(AttentionBackend):
             forward_meta.decoder_context_len_cache,
             forward_meta.decoder_batch_map,
             forward_meta.prefix_len,
+            forward_meta.slot_mapping_enc,
+            forward_meta.slot_mapping_dec,
             cache_k_scale,
             cache_v_scale,
             cache_k_out_scale,

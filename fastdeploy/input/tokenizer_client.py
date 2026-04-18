@@ -20,6 +20,7 @@ from typing import Any, Optional, Union
 import httpx
 from pydantic import BaseModel, HttpUrl
 
+from fastdeploy.logger.request_logger import log_request, log_request_error
 from fastdeploy.utils import data_processor_logger
 
 
@@ -161,7 +162,12 @@ class AsyncTokenizerClient:
 
                 except httpx.RequestError as e:
                     # Network error, keep polling
-                    data_processor_logger.debug(f"Request error while polling tokenize task {task_tag}: {e}")
+                    log_request(
+                        level=3,
+                        message="Request error while polling tokenize task {task_tag}: {error}",
+                        task_tag=task_tag,
+                        error=str(e),
+                    )
 
                 # 超时检测
                 if asyncio.get_event_loop().time() - start_time > self.max_wait:
@@ -193,10 +199,15 @@ class AsyncTokenizerClient:
                             raise RuntimeError(f"Tokenize task creation failed, {resp.json().get('message')}")
                         return resp.json().get("result")
                     except Exception as e:
-                        data_processor_logger.error(f"Attempt to decode_request {attempt + 1} failed: {e}")
+                        log_request_error(
+                            message="Attempt to decode_request {attempt} failed: {error}",
+                            attempt=attempt + 1,
+                            error=str(e),
+                        )
                         if attempt == self.max_retries - 1:
-                            data_processor_logger.error(
-                                f"Max retries of decode_request reached. Giving up. request is {request}"
+                            log_request_error(
+                                message="Max retries of decode_request reached. Giving up. request is {request}",
+                                request=str(request),
                             )
                         await asyncio.sleep(1)
             except httpx.RequestError as e:

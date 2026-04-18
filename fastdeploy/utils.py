@@ -16,15 +16,12 @@
 
 import argparse
 import asyncio
-import codecs
 import hashlib
 import importlib
 import json
-import logging
 import os
 import pickle
 import random
-import re
 import socket
 import subprocess
 import sys
@@ -36,8 +33,6 @@ from enum import Enum
 from functools import cache
 from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
-from logging.handlers import BaseRotatingHandler
-from pathlib import Path
 from typing import Any, Literal, TypeVar, Union
 
 import numpy as np
@@ -53,7 +48,7 @@ from typing_extensions import TypeIs, assert_never
 
 from fastdeploy import envs
 from fastdeploy.entrypoints.openai.protocol import ErrorInfo, ErrorResponse
-from fastdeploy.logger.logger import FastDeployLogger
+from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.worker.output import PromptLogprobs
 
 T = TypeVar("T")
@@ -193,6 +188,19 @@ class ExceptionHandler:
             loc = first_error.get("loc", [])
             param = loc[-1] if loc else None
             message = first_error.get("msg", str(exc))
+
+        # Try to extract request_id from request body
+        request_id = None
+        try:
+            body = await request.body()
+            if body:
+                import json
+
+                body_json = json.loads(body)
+                request_id = body_json.get("request_id")
+        except Exception:
+            pass
+
         err = ErrorResponse(
             error=ErrorInfo(
                 message=message,
@@ -201,7 +209,13 @@ class ExceptionHandler:
                 param=param,
             )
         )
-        api_server_logger.error(f"invalid_request_error: {request.url} {param} {message}")
+        log_request_error(
+            message="request[{request_id}] invalid_request_error: {url} {param} {msg}",
+            request_id=request_id or "unknown",
+            url=str(request.url),
+            param=param,
+            msg=message,
+        )
         return JSONResponse(content=err.model_dump(), status_code=HTTPStatus.BAD_REQUEST)
 
 
@@ -224,139 +238,18 @@ class ErrorCode(str, Enum):
     CLIENT_ABORTED = "client_aborted"
 
 
-class ColoredFormatter(logging.Formatter):
-    """自定义日志格式器，用于控制台输出带颜色"""
+# Backward compatibility: logger classes have been moved to fastdeploy.logger module
+# Use lazy import to avoid circular dependencies
+def __getattr__(name):
+    if name == "ColoredFormatter":
+        from fastdeploy.logger.formatters import ColoredFormatter
 
-    COLOR_CODES = {
-        logging.WARNING: 33,  # 黄色
-        logging.ERROR: 31,  # 红色
-        logging.CRITICAL: 31,  # 红色
-    }
+        return ColoredFormatter
+    elif name == "DailyRotatingFileHandler":
+        from fastdeploy.logger.handlers import DailyRotatingFileHandler
 
-    def format(self, record):
-        color_code = self.COLOR_CODES.get(record.levelno, 0)
-        prefix = f"\033[{color_code}m"
-        suffix = "\033[0m"
-        message = super().format(record)
-        if color_code:
-            message = f"{prefix}{message}{suffix}"
-        return message
-
-
-class DailyRotatingFileHandler(BaseRotatingHandler):
-    """
-    like `logging.TimedRotatingFileHandler`, but this class support multi-process
-    """
-
-    def __init__(
-        self,
-        filename,
-        backupCount=0,
-        encoding="utf-8",
-        delay=False,
-        utc=False,
-        **kwargs,
-    ):
-        """
-            初始化 RotatingFileHandler 对象。
-
-        Args:
-            filename (str): 日志文件的路径，可以是相对路径或绝对路径。
-            backupCount (int, optional, default=0): 保存的备份文件数量，默认为 0，表示不保存备份文件。
-            encoding (str, optional, default='utf-8'): 编码格式，默认为 'utf-8'。
-            delay (bool, optional, default=False): 是否延迟写入，默认为 False，表示立即写入。
-            utc (bool, optional, default=False): 是否使用 UTC 时区，默认为 False，表示不使用 UTC 时区。
-            kwargs (dict, optional): 其他参数将被传递给 BaseRotatingHandler 类的 init 方法。
-
-        Raises:
-            TypeError: 如果 filename 不是 str 类型。
-            ValueError: 如果 backupCount 小于等于 0。
-        """
-        self.backup_count = backupCount
-        self.utc = utc
-        self.suffix = "%Y-%m-%d"
-        self.base_log_path = Path(filename)
-        self.base_filename = self.base_log_path.name
-        self.current_filename = self._compute_fn()
-        self.current_log_path = self.base_log_path.with_name(self.current_filename)
-        BaseRotatingHandler.__init__(self, filename, "a", encoding, delay)
-
-    def shouldRollover(self, record):
-        """
-        check scroll through the log
-        """
-        if self.current_filename != self._compute_fn():
-            return True
-        return False
-
-    def doRollover(self):
-        """
-        scroll log
-        """
-        if self.stream:
-            self.stream.close()
-            self.stream = None
-
-        self.current_filename = self._compute_fn()
-        self.current_log_path = self.base_log_path.with_name(self.current_filename)
-
-        if not self.delay:
-            self.stream = self._open()
-
-        self.delete_expired_files()
-
-    def _compute_fn(self):
-        """
-        Calculate the log file name corresponding current time
-        """
-        return self.base_filename + "." + time.strftime(self.suffix, time.localtime())
-
-    def _open(self):
-        """
-        open new log file
-        """
-        if self.encoding is None:
-            stream = open(str(self.current_log_path), self.mode)
-        else:
-            stream = codecs.open(str(self.current_log_path), self.mode, self.encoding)
-
-        if self.base_log_path.exists():
-            try:
-                if not self.base_log_path.is_symlink() or os.readlink(self.base_log_path) != self.current_filename:
-                    os.remove(self.base_log_path)
-            except OSError:
-                pass
-
-        try:
-            os.symlink(self.current_filename, str(self.base_log_path))
-        except OSError:
-            pass
-        return stream
-
-    def delete_expired_files(self):
-        """
-        delete expired log files
-        """
-        if self.backup_count <= 0:
-            return
-
-        file_names = os.listdir(str(self.base_log_path.parent))
-        result = []
-        prefix = self.base_filename + "."
-        plen = len(prefix)
-        for file_name in file_names:
-            if file_name[:plen] == prefix:
-                suffix = file_name[plen:]
-                if re.match(r"^\d{4}-\d{2}-\d{2}(\.\w+)?$", suffix):
-                    result.append(file_name)
-        if len(result) < self.backup_count:
-            result = []
-        else:
-            result.sort()
-            result = result[: len(result) - self.backup_count]
-
-        for file_name in result:
-            os.remove(str(self.base_log_path.with_name(file_name)))
+        return DailyRotatingFileHandler
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def chunk_list(lst: list[T], chunk_size: int):
@@ -1054,12 +947,6 @@ def parse_quantization(value: str):
         return {"quantization": value}
 
 
-# 日志使用全局访问点（兼容原有使用方式）
-def get_logger(name, file_name=None, without_formater=False, print_to_console=False):
-    """全局函数包装器，保持向后兼容"""
-    return FastDeployLogger().get_logger(name, file_name, without_formater, print_to_console)
-
-
 def check_download_links(bos_client, links, timeout=1):
     """
     check bos download links
@@ -1154,20 +1041,6 @@ def download_from_bos(bos_client, bos_links, retry: int = 0):
                     if attempt == retry - 1:  # Last attempt failed
                         yield False, f"Failed after {retry} retries for {link}: {str(traceback.format_exc())}"
             break
-
-
-llm_logger = get_logger("fastdeploy", "fastdeploy.log")
-data_processor_logger = get_logger("data_processor", "data_processor.log")
-scheduler_logger = get_logger("scheduler", "scheduler.log")
-api_server_logger = get_logger("api_server", "api_server.log")
-console_logger = get_logger("console", "console.log", print_to_console=True)
-spec_logger = get_logger("speculate", "speculate.log")
-zmq_client_logger = get_logger("zmq_client", "zmq_client.log")
-trace_logger = FastDeployLogger().get_trace_logger("trace", "trace.log")
-router_logger = get_logger("router", "router.log")
-fmq_logger = get_logger("fmq", "fmq.log")
-obj_logger = get_logger("obj", "obj.log")  # debug内存问题
-register_manager_logger = get_logger("register_manager", "register_manager.log")
 
 
 def parse_type(return_type: Callable[[str], T]) -> Callable[[str], T]:
@@ -1338,3 +1211,26 @@ def all_gather_values(value: int | float | bool, group: paddle.distributed.commu
     paddle.distributed.all_gather(_global, _local, group)
     _results = [_type(t.item()) for t in _global]
     return _results
+
+
+# =============================================================================
+# Logger re-export (backward compatibility)
+# Actual implementation is in fastdeploy.logger module, re-exported here to
+# support existing import patterns
+# NOTE: Must be at the end of file to avoid circular imports
+# =============================================================================
+from fastdeploy.logger import (  # noqa: F401
+    api_server_logger,
+    console_logger,
+    data_processor_logger,
+    fmq_logger,
+    get_logger,
+    llm_logger,
+    obj_logger,
+    register_manager_logger,
+    router_logger,
+    scheduler_logger,
+    spec_logger,
+    trace_logger,
+    zmq_client_logger,
+)

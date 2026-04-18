@@ -19,26 +19,11 @@
 #include <sys/types.h>
 #include "paddle/extension.h"
 #include "../custom_ftok.h"
+#include "speculate_logprob_msg.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
-
-#define MAX_BSZ 512
-#define K 20
-#define MAX_DRAFT_TOKEN_NUM 6
-
-struct batch_msgdata {
-  int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
-  float scores[MAX_DRAFT_TOKEN_NUM * (K + 1)];
-  int ranks[MAX_DRAFT_TOKEN_NUM];
-};
-
-struct msgdata {
-  long mtype;
-  int meta[3 + MAX_BSZ];  // stop_flag, message_flag, bsz, batch_token_nums
-  batch_msgdata mtext[MAX_BSZ];
-};
 
 void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
                               const paddle::Tensor& logprob_token_ids,
@@ -154,16 +139,21 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
     auto* cur_batch_msg_sed = &msg_sed.mtext[i];
     int token_offset = cu_batch_token_offset_data[i];
     for (int j = 0; j < cur_token_num; j++) {
-      auto* cur_tokens = &cur_batch_msg_sed->tokens[j * (K + 1)];
-      auto* cur_scores = &cur_batch_msg_sed->scores[j * (K + 1)];
-      for (int k = 0; k < K + 1; k++) {
+      auto* cur_tokens = &cur_batch_msg_sed->tokens[j * (SPEC_LOGPROB_K + 1)];
+      auto* cur_scores = &cur_batch_msg_sed->scores[j * (SPEC_LOGPROB_K + 1)];
+      for (int k = 0; k < SPEC_LOGPROB_K + 1; k++) {
         if (k == 0) {
           cur_tokens[k] = (int)sampled_token_ids_data[i * max_draft_tokens + j];
-          cur_scores[k] = logprob_scores_data[(token_offset + j) * (K + 1) + k];
+          cur_scores[k] =
+              logprob_scores_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
+                                  k];
         } else if (k < max_num_logprobs) {
-          cur_tokens[k] =
-              (int)logprob_token_ids_data[(token_offset + j) * (K + 1) + k];
-          cur_scores[k] = logprob_scores_data[(token_offset + j) * (K + 1) + k];
+          cur_tokens[k] = (int)
+              logprob_token_ids_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
+                                     k];
+          cur_scores[k] =
+              logprob_scores_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
+                                  k];
         } else {
           cur_tokens[k] = -1;
           cur_scores[k] = 0.0;
@@ -182,15 +172,15 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
     auto* cur_batch_msg_sed = &msg_sed.mtext[i];
     std::cout << "batch " << i << " token_num: " << cur_token_num << std::endl;
     for (int j = 0; j < cur_token_num; j++) {
-      auto* cur_tokens = &cur_batch_msg_sed->tokens[j * (K + 1)];
-      auto* cur_scores = &cur_batch_msg_sed->scores[j * (K + 1)];
+      auto* cur_tokens = &cur_batch_msg_sed->tokens[j * (SPEC_LOGPROB_K + 1)];
+      auto* cur_scores = &cur_batch_msg_sed->scores[j * (SPEC_LOGPROB_K + 1)];
       std::cout << "tokens: ";
-      for (int k = 0; k < K + 1; k++) {
+      for (int k = 0; k < SPEC_LOGPROB_K + 1; k++) {
         std::cout << cur_tokens[k] << " ";
       }
       std::cout << std::endl;
       std::cout << "scores: ";
-      for (int k = 0; k < K + 1; k++) {
+      for (int k = 0; k < SPEC_LOGPROB_K + 1; k++) {
         std::cout << cur_scores[k] << " ";
       }
       std::cout << std::endl;

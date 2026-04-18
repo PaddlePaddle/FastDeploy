@@ -17,10 +17,11 @@ import unittest
 from unittest.mock import Mock, patch  # noqa: F401
 
 from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
+from fastdeploy.logger.request_logger import RequestLogLevel
 
 # Real FastDeploy imports
 from fastdeploy.scheduler.local_scheduler import LocalScheduler
-from fastdeploy.utils import envs, scheduler_logger
+from fastdeploy.utils import envs
 
 
 class TestLocalScheduler(unittest.TestCase):
@@ -221,9 +222,9 @@ class TestLocalScheduler(unittest.TestCase):
 
     def test_reset_logs_message(self):
         """Test that reset logs appropriate message."""
-        with patch.object(scheduler_logger, "info") as mock_info:
+        with patch("fastdeploy.scheduler.local_scheduler.log_request") as mock_log:
             self.scheduler.reset()
-            mock_info.assert_called_once_with("Scheduler has been reset")
+            mock_log.assert_called_once_with(RequestLogLevel.LIFECYCLE, message="Scheduler has been reset")
 
     def test_put_requests_duplicate_handling(self):
         """Test handling of duplicate request IDs."""
@@ -449,12 +450,14 @@ class TestLocalScheduler(unittest.TestCase):
         # Add request first
         self.scheduler.put_requests([self.mock_request_1])
 
-        with patch.object(scheduler_logger, "info") as mock_info:
+        with patch("fastdeploy.scheduler.local_scheduler.log_request") as mock_log_request:
             mock_output = self._create_test_request_output("req_1", finished=True)
             self.scheduler.put_results([mock_output])
 
-            # Should log finished response
-            self._assert_log_contains(mock_info, "finished responses")
+            # Should log finished response via log_request
+            mock_log_request.assert_called_once()
+            call_kwargs = mock_log_request.call_args[1]
+            self.assertIn("finished responses", call_kwargs.get("message", ""))
 
 
 if __name__ == "__main__":

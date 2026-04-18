@@ -80,8 +80,8 @@ def get_filename(url=None):
     tid = threading.get_ident()
 
     # 去掉后缀，防止save-jpg报错
-    image_filname = f"{t.year}-{t.month:02d}-{t.day:02d}-{pid}-{tid}-{md5_hash}"
-    return image_filname
+    image_filename = f"{t.year}-{t.month:02d}-{t.day:02d}-{pid}-{tid}-{md5_hash}"
+    return image_filename
 
 
 def get_downloadable(
