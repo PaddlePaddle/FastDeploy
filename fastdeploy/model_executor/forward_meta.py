@@ -153,6 +153,8 @@ class ForwardMeta:
     moe_num_chunk: int = 1
     max_moe_num_chunk: int = 1
 
+    audio_token_num: int = 0
+
     # for zero size
     is_zero_size: bool = False
     # for prefill
