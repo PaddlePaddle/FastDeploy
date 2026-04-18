@@ -670,6 +670,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
+        logger.info(f"gate_out.shape:{gate_out.shape}")
+        gate_out = paddle.randn(gate_out.shape, dtype="float32")
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         hidden_size = x.shape[1]
 
@@ -735,7 +737,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
             use_tbo = os.getenv("USE_TBO", "0")
-            token_split_factor = 2 if int(use_tbo) == 1 else 1
+            token_split_factor = 8 if int(use_tbo) == 1 else 1
             max_tokens_per_rank = (
                 layer.fd_config.scheduler_config.max_num_batched_tokens
                 // layer.fd_config.parallel_config.tensor_parallel_size
@@ -754,7 +756,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
             max_token_num = layer.ep_size * max_tokens_per_rank
             permute_input = permute_input.reshape([layer.num_local_experts, max_token_num, recv_x_value.shape[-1]])
-
+            # logger.info(f"permute_input.shaoe:{permute_input.shape}")
             # ffn_out: [num_local_experts, m, hidden_size]
             # NVFP4 dispatch returns BF16 (no pre-quantized scale), so permute_scale is empty.
             # Use per-expert 1/input_scale (up_gate_proj_input_scale_quant) as input_global_scale,

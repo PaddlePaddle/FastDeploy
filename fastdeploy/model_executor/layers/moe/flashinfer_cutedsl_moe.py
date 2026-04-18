@@ -159,7 +159,10 @@ def flashinfer_cutedsl_moe_masked(
 
     # === GEMM1: gate+up projection ===
     # grouped_gemm_nt_masked requires output in [m, 2*n, l] layout
+    # logger.info(f"num_experts:{num_experts}")
+    # logger.info(f"m:{m}")
     gateup_output = paddle.empty([num_experts, m, n * 2], dtype=paddle.bfloat16)
+
     gateup_output = gateup_output.transpose([1, 2, 0])  # [m, 2*n, num_experts]
 
     # w1:           [E, 2*n, k//2]  → _perm(., 1, 2, 0) → [2*n, k//2, E]
