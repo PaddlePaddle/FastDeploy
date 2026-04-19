@@ -292,6 +292,8 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -681,6 +683,8 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -980,6 +984,8 @@ class TensorWiseFP8MoEMethod(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -1174,6 +1180,9 @@ def python_op_fused_moe_kernel_paddle_infer_meta(
     config: dict,
     quant_config,
     topk_ids_hookfunc,
+    layer,
+    fc1_latent_proj,
+    fc2_latent_proj,
 ):
     token_num = x.shape[0]
     return paddle.static.MetaTensor(shape=[token_num, hidden_size], dtype=x.dtype)
@@ -1211,19 +1220,34 @@ def python_op_fused_moe_kernel_paddle(
     config: dict,
     quant_config,
     topk_ids_hookfunc,
+    layer,
+    fc1_latent_proj,
+    fc2_latent_proj,
 ):
 
     token_num = x.shape[0]
     if x.shape[0] == 0:
         return paddle.zeros([token_num, hidden_size], dtype=x.dtype)
 
-    topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
-        gate_out,
-        gate_correction_bias,
-        top_k,
-        True,  # apply_norm_weight
-        False,
-    )
+    if layer.topk_method == "noaux_tc":
+        gate_out, topk_weights, topk_ids = get_moe_scores(
+            gate_out,
+            layer.n_group,
+            layer.topk_group,
+            layer.top_k,
+            layer.routed_scaling_factor,
+            layer.gate_correction_bias,
+            getattr(layer, "renormalize", True),
+        )
+    else:
+        topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+            gate_out,
+            gate_correction_bias,
+            top_k,
+            True,  # apply_norm_weight
+            False,
+        )
+
     if topk_ids_hookfunc is not None:
         topk_ids_hookfunc(topk_ids=topk_ids)
 
@@ -1243,6 +1267,9 @@ def python_op_fused_moe_kernel_paddle(
     )
 
     from .triton_moe_kernels import fused_moe_kernel_paddle
+
+    if fc1_latent_proj is not None:
+        x = fc1_latent_proj(x)
 
     if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
         x_q, x_scale = fastdeploy.model_executor.ops.gpu.per_token_quant(x, quant_config.weight_block_size[0], False)
@@ -1356,6 +1383,9 @@ def python_op_fused_moe_kernel_paddle(
 
     intermediate_cache3.reshape_([token_num, top_k, hidden_size])
     out = intermediate_cache3.sum(axis=1)
+
+    if fc2_latent_proj is not None:
+        out = fc2_latent_proj(out)
 
     return out
 
@@ -1808,6 +1838,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Triton compute Fused MoE.
@@ -1855,4 +1887,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             config,
             self.quant_config,
             topk_ids_hookfunc,
+            layer,
+            fc1_latent_proj,
+            fc2_latent_proj,
         )

@@ -736,6 +736,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Paddle Use DeepGemm compute Fused MoE.

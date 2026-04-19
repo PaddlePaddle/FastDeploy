@@ -278,6 +278,11 @@ class EngineArgs:
     Flag to disable the custom all-reduce kernel.
     """
 
+    enable_flashinfer_allreduce_fusion: bool = False
+    """
+    Flag to enable all reduce fusion kernel in flashinfer.
+    """
+
     use_internode_ll_two_stage: bool = False
     """
     Flag to use the internode_ll_two_stage kernel.
@@ -604,10 +609,15 @@ class EngineArgs:
                 raise NotImplementedError("Only ENABLE_V1_KVCACHE_SCHEDULER=1 support max_logprobs=-1")
 
         if self.splitwise_role != "mixed":
-            if self.scheduler_name == "local" and self.router is None:
+            if self.scheduler_name == "splitwise":
                 raise ValueError(
-                    f"When using {self.splitwise_role} role and the {self.scheduler_name} "
-                    f"scheduler, please provide --router argument."
+                    "Setting scheduler_name as splitwise is not supported in pd deployment, "
+                    "please use router as scheduler."
+                )
+            if self.scheduler_name == "local" and self.router is None:
+                console_logger.warning(
+                    f"Running {self.splitwise_role} role with {self.scheduler_name} "
+                    f"scheduler without --router. Router registration and request routing will be disabled."
                 )
 
         if not (
@@ -993,6 +1003,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.disable_custom_all_reduce,
             help="Flag to disable custom all-reduce.",
+        )
+        parallel_group.add_argument(
+            "--enable-flashinfer-allreduce-fusion",
+            action="store_true",
+            default=EngineArgs.enable_flashinfer_allreduce_fusion,
+            help="Flag to enable all reduce fusion kernel in flashinfer.",
         )
         parallel_group.add_argument(
             "--use-internode-ll-two-stage",
@@ -1509,7 +1525,11 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if current_platform.is_maca() or current_platform.is_iluvatar():
+                if (
+                    int(envs.FD_DISABLE_CHUNKED_PREFILL)
+                    or current_platform.is_maca()
+                    or current_platform.is_iluvatar()
+                ):
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM

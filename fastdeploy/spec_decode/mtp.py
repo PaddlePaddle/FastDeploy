@@ -65,7 +65,6 @@ else:
         eagle_get_self_hidden_states,
         eagle_gather_hidden_states,
         hybrid_mtp_ngram,
-        mtp_save_first_token,
         mtp_step_paddle,
         share_external_data,
         speculate_get_logits,
@@ -685,7 +684,7 @@ class MTPProposer(Proposer):
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
         )
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
@@ -717,7 +716,7 @@ class MTPProposer(Proposer):
 
         self.forward_meta.is_draft = True
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
@@ -847,23 +846,26 @@ class MTPProposer(Proposer):
         )
 
         if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
-            skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
-            recover_model_output_map = recover_batch_index_for_output(
-                self.model_inputs,
-                self.model_inputs.index_to_batch_id,
-                self.model_inputs.enable_pd_reorder,
-                ["base_model_draft_tokens", "seq_lens_decoder", "prompt_lens", "step_idx"],
-            )
-            mtp_save_first_token(
-                recover_model_output_map["base_model_draft_tokens"],
-                self.model_inputs["not_need_stop"],
-                recover_model_output_map["seq_lens_decoder"],
-                recover_model_output_map["prompt_lens"],
-                recover_model_output_map["step_idx"],
-                self.local_rank,
-                self.parallel_config.use_ep,
-                skip_save,
-            )
+            if current_platform.is_xpu():
+                # Note(wangyanpeng): mtp_save_first_token for GPU platforms has been moved to model_runner.
+                # Only XPU platform is retained here.
+                skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
+                recover_model_output_map = recover_batch_index_for_output(
+                    self.model_inputs,
+                    self.model_inputs.index_to_batch_id,
+                    self.model_inputs.enable_pd_reorder,
+                    ["base_model_draft_tokens", "seq_lens_decoder", "prompt_lens", "step_idx"],
+                )
+                mtp_save_first_token(
+                    recover_model_output_map["base_model_draft_tokens"],
+                    self.model_inputs["not_need_stop"],
+                    recover_model_output_map["seq_lens_decoder"],
+                    recover_model_output_map["prompt_lens"],
+                    recover_model_output_map["step_idx"],
+                    self.local_rank,
+                    self.parallel_config.use_ep,
+                    skip_save,
+                )
             # Ensure only save first token once.
             paddle.assign(
                 paddle.where(
@@ -1085,6 +1087,7 @@ class MTPProposer(Proposer):
                     self.model_inputs["draft_tokens"],
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["seq_lens_decoder"],
+                    num_speculative_tokens=self.speculative_config.num_speculative_tokens,
                 )
 
                 if self.enable_mm:
