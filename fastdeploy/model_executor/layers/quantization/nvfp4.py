@@ -670,13 +670,27 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
-        logger.info(f"gate_out.shape:{gate_out.shape}")
-        gate_out = paddle.randn(gate_out.shape, dtype="float32")
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         hidden_size = x.shape[1]
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
+
+        use_fp4_comm_quant = envs.FD_USE_NVFP4_COMM_QUANT
+
+        if use_fp4_comm_quant:
+            # FP4 communication quantization: quantize to FP4 before dispatch,
+            # reducing communication volume by ~2x vs BF16.
+            x_fp4, x_fp4_scale = fp4_quantize(
+                x, layer.up_gate_proj_input_scale_quant, sf_vec_size=16, is_sf_swizzled_layout=False
+            )
+            x_fp4_scale = x_fp4_scale.view(paddle.float32)  # float8_e4m3fn -> float32
+            dispatch_input = x_fp4
+            dispatch_scale = x_fp4_scale
+        else:
+            # BF16 communication: dispatch BF16 data without pre-quantization.
+            dispatch_input = x
+            dispatch_scale = None
 
         event = deep_ep.Buffer.capture()
 
@@ -692,11 +706,12 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
             handle,
             event,
         ) = self.ep_prefill_runner.dispatch(
-            x,
+            dispatch_input,
             topk_idx,
             topk_weights,
             expert_alignment=128,
             previous_event=event,
+            x_scale_tensor=dispatch_scale,
         )
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
@@ -737,7 +752,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
             use_tbo = os.getenv("USE_TBO", "0")
-            token_split_factor = 8 if int(use_tbo) == 1 else 1
+            token_split_factor = 2 if int(use_tbo) == 1 else 1
             max_tokens_per_rank = (
                 layer.fd_config.scheduler_config.max_num_batched_tokens
                 // layer.fd_config.parallel_config.tensor_parallel_size
@@ -754,25 +769,48 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                 )
             )
 
-            max_token_num = layer.ep_size * max_tokens_per_rank
-            permute_input = permute_input.reshape([layer.num_local_experts, max_token_num, recv_x_value.shape[-1]])
-            # logger.info(f"permute_input.shaoe:{permute_input.shape}")
-            # ffn_out: [num_local_experts, m, hidden_size]
-            # NVFP4 dispatch returns BF16 (no pre-quantized scale), so permute_scale is empty.
-            # Use per-expert 1/input_scale (up_gate_proj_input_scale_quant) as input_global_scale,
-            # consistent with apply_ep_decode which also uses this value directly.
-            ffn_out = flashinfer_cutedsl_moe_masked(
-                hidden_states=(permute_input, None),
-                input_global_scale=layer.up_gate_proj_input_scale_quant.expand([layer.num_local_experts]),
-                w1=layer.up_gate_proj_weight,
-                w1_blockscale=layer.up_gate_proj_blockscale_swizzled,
-                w1_alpha=layer.g1_alphas,
-                w2=layer.down_proj_weight,
-                a2_global_scale=layer.down_proj_input_scale_quant.expand([layer.num_local_experts]),
-                w2_blockscale=layer.down_proj_blockscale_swizzled,
-                w2_alpha=layer.g2_alphas,
-                masked_m=token_nums_per_expert.squeeze(-1),
-            )
+            if recv_x_scale is not None:
+                # FP4 pre-quantized dispatch path:
+                # permute_input is uint8 [E, M, hidden//2] (FP4 packed)
+                # permute_scale is float32 [E, M, hidden//64] with custom strides
+                # from C++ kernel (physical layout [E, S, M], non-contiguous).
+                # Convert scale to float8_e4m3fn, then apply swizzle for
+                # grouped_gemm_nt_masked which expects SFA in swizzled layout
+                # (32, 4, rm, 4, rk, l) logical / (l, rm, rk, 32, 4, 4) physical.
+                # This is the same _process_scale_interleaved used for weight
+                # blockscale, converting flat [E, M, K] to swizzled layout.
+                permute_scale_fp8 = permute_scale.contiguous().view(paddle.float8_e4m3fn)
+                permute_scale_swizzled = _process_scale_interleaved(permute_scale_fp8)
+                permute_input_t = permute_input.transpose([1, 2, 0])
+                permute_scale_swizzled_t = permute_scale_swizzled.transpose([1, 2, 0])
+
+                ffn_out = flashinfer_cutedsl_moe_masked(
+                    hidden_states=(permute_input_t, permute_scale_swizzled_t),
+                    input_global_scale=None,
+                    w1=layer.up_gate_proj_weight,
+                    w1_blockscale=layer.up_gate_proj_blockscale_swizzled,
+                    w1_alpha=layer.g1_alphas,
+                    w2=layer.down_proj_weight,
+                    a2_global_scale=layer.down_proj_input_scale_quant.expand([layer.num_local_experts]),
+                    w2_blockscale=layer.down_proj_blockscale_swizzled,
+                    w2_alpha=layer.g2_alphas,
+                    masked_m=token_nums_per_expert.squeeze(-1),
+                )
+            else:
+                # BF16 dispatch path: permute_input is BF16, quantize to FP4
+                # inside flashinfer_cutedsl_moe_masked
+                ffn_out = flashinfer_cutedsl_moe_masked(
+                    hidden_states=(permute_input, None),
+                    input_global_scale=layer.up_gate_proj_input_scale_quant.expand([layer.num_local_experts]),
+                    w1=layer.up_gate_proj_weight,
+                    w1_blockscale=layer.up_gate_proj_blockscale_swizzled,
+                    w1_alpha=layer.g1_alphas,
+                    w2=layer.down_proj_weight,
+                    a2_global_scale=layer.down_proj_input_scale_quant.expand([layer.num_local_experts]),
+                    w2_blockscale=layer.down_proj_blockscale_swizzled,
+                    w2_alpha=layer.g2_alphas,
+                    masked_m=token_nums_per_expert.squeeze(-1),
+                )
 
             tmp_ffn_out = call_depermute_prefill_combine(
                 x=ffn_out,
