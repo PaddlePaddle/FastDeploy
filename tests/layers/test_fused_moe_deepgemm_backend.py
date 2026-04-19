@@ -290,39 +290,39 @@ class TestWeightManagement:
         }
         m.process_loaded_weights(layer, sd)
 
-    def test_process_prequanted_weights(self, monkeypatch):
+    @pytest.mark.parametrize("ue8m0", [False, True])
+    def test_process_prequanted_weights(self, monkeypatch, ue8m0):
         monkeypatch.setattr(dgb, "get_tensor", lambda t, _m: t)
-        for ue8m0 in (False, True):
-            layer = _DummyLayer()
-            m = _init(layer, _QuantConfig(ue8m0=ue8m0))
-            up_sc = paddle.ones(
-                _scale_shape(layer.hidden_size, layer.moe_intermediate_size * 2),
-                "float32",
-            )
-            dn_sc = paddle.ones(
-                _scale_shape(layer.moe_intermediate_size, layer.hidden_size),
-                "float32",
-            )
-            sd = [
-                ("up_scale_0", up_sc),
-                ("down_scale_0", dn_sc),
-                (
-                    "up",
-                    [
-                        paddle.ones(
-                            [layer.hidden_size, layer.moe_intermediate_size * 2],
-                            "int8",
-                        )
-                    ],
-                ),
-                (
-                    "down",
-                    [paddle.ones([layer.moe_intermediate_size, layer.hidden_size], "int8")],
-                ),
-                ("ids", [0]),
-            ]
-            m.process_prequanted_weights(layer, state_dict=sd, is_rearrange=False)
-            assert layer.up_gate_proj_weight_scale_inv.shape[0] == layer.num_local_experts
+        layer = _DummyLayer()
+        m = _init(layer, _QuantConfig(ue8m0=ue8m0))
+        up_sc = paddle.ones(
+            _scale_shape(layer.hidden_size, layer.moe_intermediate_size * 2),
+            "float32",
+        )
+        dn_sc = paddle.ones(
+            _scale_shape(layer.moe_intermediate_size, layer.hidden_size),
+            "float32",
+        )
+        sd = [
+            ("up_scale_0", up_sc),
+            ("down_scale_0", dn_sc),
+            (
+                "up",
+                [
+                    paddle.ones(
+                        [layer.hidden_size, layer.moe_intermediate_size * 2],
+                        "int8",
+                    )
+                ],
+            ),
+            (
+                "down",
+                [paddle.ones([layer.moe_intermediate_size, layer.hidden_size], "int8")],
+            ),
+            ("ids", [0]),
+        ]
+        m.process_prequanted_weights(layer, state_dict=sd, is_rearrange=False)
+        assert layer.up_gate_proj_weight_scale_inv.shape[0] == layer.num_local_experts
 
 
 # ── Tests: apply_tp with FD_USE_PHI_FP8_QUANT=False ────────────────────────
