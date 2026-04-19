@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import signal
+import sys
 import threading
 import time
 import traceback
@@ -201,8 +202,11 @@ class ExpertService:
             for p in self.cache_manager_processes:
                 self.llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    pgid = os.getpgid(p.pid)
-                    os.killpg(pgid, signal.SIGTERM)
+                    if sys.platform != "win32":
+                        pgid = os.getpgid(p.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    else:
+                        p.terminate()
                 except Exception as e:
                     console_logger.error(
                         f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
