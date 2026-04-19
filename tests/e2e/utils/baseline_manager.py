@@ -12,7 +12,7 @@ class BaselineManager:
         self.base_dir = base_dir
 
     def _get_path(self, name: str):
-        branch = os.getenv("TEST_BRANCH", "default")
+        branch = os.getenv("TEST_BRANCH", "0419")
         if os.getenv("STATIC_C8") == "1":
             c8_mode = "_static_c8"
         elif os.getenv("DYNAMIC_C8") == "1":

@@ -609,9 +609,9 @@ def test_non_stream_with_logprobs(api_url):
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "21b_tp1_dp4_logprobs_non_stream_static_baseline.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_logprobs_non_stream_static_baseline_0419.txt")
     else:
-        base_file = "21b_tp1_dp4_logprobs_non_stream_static_baseline.txt"
+        base_file = "21b_tp1_dp4_logprobs_non_stream_static_baseline_0419.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = json.load(f)
@@ -647,9 +647,9 @@ def test_stream_with_logprobs(api_url):
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
-        base_file = os.path.join(base_path, "21b_tp1_dp4_logprobs_stream_static_baseline.txt")
+        base_file = os.path.join(base_path, "21b_tp1_dp4_logprobs_stream_static_baseline_0419.txt")
     else:
-        base_file = "21b_tp1_dp4_logprobs_stream_static_baseline.txt"
+        base_file = "21b_tp1_dp4_logprobs_stream_static_baseline_0419.txt"
 
     with open(base_file, "r", encoding="utf-8") as f:
         baseline = json.load(f)
