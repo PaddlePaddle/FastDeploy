@@ -709,7 +709,13 @@ class FusedMoE(nn.Layer):
         return out
 
     def forward(
-        self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta = None, shared_experts: nn.Layer = None
+        self,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        forward_meta: ForwardMeta = None,
+        shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ):
         """
         Defines the forward computation of the moe layer.
@@ -762,7 +768,13 @@ class FusedMoE(nn.Layer):
             )
         else:
             out = self.forward_normal(
-                x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                x,
+                gate,
+                forward_meta,
+                topk_ids_hookfunc,
+                shared_experts,
+                fc1_latent_proj,
+                fc2_latent_proj,
             )
 
         if self.reduce_results and self.tp_size > 1:
@@ -829,6 +841,8 @@ class FusedMoE(nn.Layer):
         forward_meta: ForwardMeta,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ):
         """
         Normal mode of forward.
@@ -842,7 +856,13 @@ class FusedMoE(nn.Layer):
         """
         if current_platform.is_cuda():
             out = self.quant_method.apply(
-                self, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                self,
+                x,
+                gate,
+                topk_ids_hookfunc,
+                shared_experts,
+                fc1_latent_proj,
+                fc2_latent_proj,
             )
         else:
             out = self.quant_method.apply(self, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)

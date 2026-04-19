@@ -90,7 +90,7 @@ pip install ./dist/fastdeploy*.whl
     "metadata_server": "http://0.0.0.0:15002/metadata",
     "master_server_addr": "0.0.0.0:15001",
     "global_segment_size": 1000000000,
-    "local_buffer_size": 134217728,
+    "local_buffer_size": 1048576,
     "protocol": "rdma",
     "rdma_devices": ""
 }

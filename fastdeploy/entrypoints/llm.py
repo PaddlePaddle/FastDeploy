@@ -36,6 +36,7 @@ from fastdeploy.entrypoints.chat_utils import load_chat_template
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionToolsParam
 from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.input.utils import validate_model_path
+from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.utils import (
     deprecated_kwargs_warning,
     llm_logger,
@@ -139,7 +140,11 @@ class LLM:
                                 continue
                             self.req_output[request_id].add(result)
             except Exception as e:
-                llm_logger.error(f"Unexcepted error happened: {e}, {traceback.format_exc()!s}")
+                log_request_error(
+                    message="Unexpected error happened: {error}, {traceback}",
+                    error=e,
+                    traceback=traceback.format_exc(),
+                )
 
     def generate(
         self,
@@ -437,7 +442,11 @@ class LLM:
             return result
 
         except Exception as e:
-            llm_logger.error(f"Error building sample logprobs from LogprobsLists: {e}, {str(traceback.format_exc())}")
+            log_request_error(
+                message="Error building sample logprobs from LogprobsLists: {error}, {traceback}",
+                error=e,
+                traceback=traceback.format_exc(),
+            )
 
     def _build_prompt_logprobs(
         self,

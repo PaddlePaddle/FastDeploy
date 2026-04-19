@@ -14,7 +14,7 @@ paddleformers==1.0.0
 redis
 etcd3
 httpx
-tool_helpers
+fast_dataindex
 pybind11[global]
 tabulate
 gradio
@@ -43,3 +43,4 @@ msgspec
 safetensors>=0.7.0
 py-cpuinfo
 transformers>=4.55.1,<5.0.0
+paddleocr[doc-parser]==3.3.2

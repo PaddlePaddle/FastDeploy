@@ -33,6 +33,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     InvalidParameterException,
 )
 from fastdeploy.envs import FD_SUPPORT_MAX_CONNECTIONS
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.utils import ErrorCode, ErrorType, StatefulSemaphore, api_server_logger
 
 RequestT = TypeVar("RequestT")
@@ -96,13 +101,18 @@ class OpenAIServing(ABC, Generic[RequestT]):
         is_supported, adjusted_name = self.models.is_supported_model(model_name)
         if not is_supported:
             err_msg = f"Unsupported model: [{model_name}]"
-            api_server_logger.error(err_msg)
+            log_request_error(message=err_msg)
         return is_supported, adjusted_name
 
     async def _acquire_semaphore(self, request_id: str) -> bool:
         """Acquire engine client semaphore with timeout"""
         try:
-            api_server_logger.info(f"Acquire request:{request_id} status:{self._get_semaphore().status()}")
+            log_request(
+                level=RequestLogLevel.STAGES,
+                message="Acquire request:{request_id} status:{status}",
+                request_id=request_id,
+                status=self._get_semaphore().status(),
+            )
             if self.max_waiting_time < 0:
                 await self._get_semaphore().acquire()
             else:
@@ -111,13 +121,18 @@ class OpenAIServing(ABC, Generic[RequestT]):
         except asyncio.TimeoutError:
             self._release_semaphore(request_id)
             error_msg = f"Request waiting timeout, request:{request_id} max waiting time:{self.max_waiting_time}"
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
             return False
 
     def _release_semaphore(self, request_id: str) -> None:
         """Release engine client semaphore"""
         self._get_semaphore().release()
-        api_server_logger.info(f"Release request:{request_id} status:{self._get_semaphore().status()}")
+        log_request(
+            level=RequestLogLevel.STAGES,
+            message="Release request:{request_id} status:{status}",
+            request_id=request_id,
+            status=self._get_semaphore().status(),
+        )
 
     def _create_error_response(
         self,
@@ -128,7 +143,7 @@ class OpenAIServing(ABC, Generic[RequestT]):
     ) -> ErrorResponse:
         """Create standardized error response"""
         traceback.print_exc()
-        api_server_logger.error(message)
+        log_request_error(message=message)
         return ErrorResponse(error=ErrorInfo(message=message, type=error_type, code=code, param=param))
 
     def _generate_request_id(self, request: RequestT) -> str:
@@ -193,7 +208,12 @@ class OpenAIServing(ABC, Generic[RequestT]):
 
         request_id = self._generate_request_id(request)
         ctx.request_id = request_id
-        api_server_logger.info(f"Initialize request {request_id}: {request}")
+        log_request(
+            level=RequestLogLevel.LIFECYCLE,
+            message="Initialize request {request_id}: {request}",
+            request_id=request_id,
+            request=request,
+        )
 
         # Step 2: Semaphore acquisition
         if not await self._acquire_semaphore(request_id):
@@ -252,7 +272,12 @@ class ZmqOpenAIServing(OpenAIServing):
         request_dicts = self._request_to_batch_dicts(ctx)
         ctx.preprocess_requests = request_dicts
         for request_dict in request_dicts:
-            api_server_logger.info(f"batch add request_id: {request_dict['request_id']}, request: {request_dict}")
+            log_request(
+                level=RequestLogLevel.CONTENT,
+                message="batch add request_id: {request_id}, request: {request}",
+                request_id=request_dict["request_id"],
+                request=request_dict,
+            )
             await self.engine_client.format_and_add_data(request_dict)
 
     def _process_chat_template_kwargs(self, request_dict):
@@ -283,7 +308,11 @@ class ZmqOpenAIServing(OpenAIServing):
             while num_choices > 0:
                 request_output_dicts = await asyncio.wait_for(request_output_queue.get(), timeout=60)
                 for request_output_dict in request_output_dicts:
-                    api_server_logger.debug(f"Received RequestOutput: {request_output_dict}")
+                    log_request(
+                        level=RequestLogLevel.FULL,
+                        message="Received RequestOutput: {request_output}",
+                        request_output=request_output_dict,
+                    )
                     if request_output_dict["finished"] is True:
                         num_choices -= 1
                     yield request_output_dict
@@ -301,7 +330,12 @@ class ZmqOpenAIServing(OpenAIServing):
     async def _acquire_semaphore(self, request_id: str) -> bool:
         """Acquire engine client semaphore with timeout"""
         try:
-            api_server_logger.info(f"Acquire request:{request_id} status:{self._get_semaphore().status()}")
+            log_request(
+                level=RequestLogLevel.STAGES,
+                message="Acquire request:{request_id} status:{status}",
+                request_id=request_id,
+                status=self._get_semaphore().status(),
+            )
             if self.max_waiting_time < 0:
                 await self._get_semaphore().acquire()
             else:
@@ -310,14 +344,19 @@ class ZmqOpenAIServing(OpenAIServing):
         except asyncio.TimeoutError:
             self._release_semaphore(request_id)
             error_msg = f"Request waiting timeout, request:{request_id} max waiting time:{self.max_waiting_time}"
-            api_server_logger.error(error_msg)
+            log_request_error(message=error_msg)
             return False
 
     @override
     def _release_semaphore(self, request_id: str) -> None:
         """Release engine client semaphore"""
         self._get_semaphore().release()
-        api_server_logger.info(f"Release request:{request_id} status:{self._get_semaphore().status()}")
+        log_request(
+            level=RequestLogLevel.STAGES,
+            message="Release request:{request_id} status:{status}",
+            request_id=request_id,
+            status=self._get_semaphore().status(),
+        )
 
     @override
     def _check_master(self) -> bool:

@@ -24,8 +24,8 @@ from unittest.mock import patch
 import numpy as np
 from PIL import Image as PILImage
 
-import fastdeploy.input.ernie4_5_vl_processor.process_video as process_video_module
-from fastdeploy.input.ernie4_5_vl_processor.process_video import (
+import fastdeploy.input.utils.video as process_video_module
+from fastdeploy.input.utils.video import (
     get_frame_indices,
     read_frames_decord,
     read_video_decord,

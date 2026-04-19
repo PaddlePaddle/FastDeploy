@@ -68,6 +68,7 @@ class RolloutModelConfig:
         routing_replay_config: str = None,
         load_choices: str = "default_v1",
         lm_head_fp32: bool = False,
+        moe_gate_fp32: bool = True,
     ):
         # Required parameters
         self.model = model_name_or_path
@@ -121,6 +122,7 @@ class RolloutModelConfig:
         self.routing_replay_config = routing_replay_config
         self.load_choices = load_choices
         self.lm_head_fp32 = lm_head_fp32
+        self.moe_gate_fp32 = moe_gate_fp32
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k, v in self.__dict__.items())

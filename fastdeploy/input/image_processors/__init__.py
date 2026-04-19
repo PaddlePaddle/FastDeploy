@@ -25,3 +25,6 @@ from fastdeploy.input.image_processors.qwen3_processor import (  # noqa: F401
 from fastdeploy.input.image_processors.qwen_processor import (  # noqa: F401
     ImageProcessor as QwenImageProcessor,
 )
+from fastdeploy.input.image_processors.registry import (  # noqa: F401
+    ImageProcessorRegistry,
+)

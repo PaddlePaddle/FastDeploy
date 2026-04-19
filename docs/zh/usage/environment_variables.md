@@ -25,7 +25,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_LOG_REQUESTS": lambda: int(os.getenv("FD_LOG_REQUESTS", "1")),
 
     # 请求日志详细级别 (0-3)。级别越高输出越详细。
-    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "0")),
+    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "2")),
 
     # 请求日志字段截断最大长度。
     "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
