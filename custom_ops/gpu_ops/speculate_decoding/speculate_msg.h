@@ -16,9 +16,12 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+// POSIX-only: message queue headers
+#if !defined(_WIN32)
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "paddle/extension.h"
 
 #define MAX_BSZ 256

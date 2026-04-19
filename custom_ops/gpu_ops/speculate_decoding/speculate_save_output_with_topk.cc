@@ -14,9 +14,11 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#if !defined(_WIN32)
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "paddle/extension.h"
 #include "../custom_ftok.h"
 #include "speculate_logprob_msg.h"
@@ -38,6 +40,11 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
                               int message_flag,  // Target: 3, Draft: 4
                               int64_t rank_id,
                               bool save_each_rank) {
+#if defined(_WIN32)
+  PD_THROW(
+      "SpeculateSaveOutMmsgTopK is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   // NOTE(yaohuicong): Skip non-zero TP ranks — they share identical sampling
   // outputs, so only rank 0 needs to send results to the message queue.
   if (rank_id > 0) {
@@ -192,6 +199,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   if (msgsnd(msgid, &msg_sed, sizeof(msg_sed) - sizeof(long), 0) == -1) {
     printf("full msg buffer\n");
   }
+#endif
 }
 
 PD_BUILD_STATIC_OP(speculate_save_output_topk)
