@@ -232,10 +232,12 @@ class RMSNorm(nn.Layer):
                   operations (like linear transformation) on the `residual_input`.
         """
         x_dtype = x.dtype
-        x = x.astype(self.weight.dtype)
+        if x.dtype != self.weight.dtype:
+            x = x.astype(self.weight.dtype)
         if residual_input is not None:
             residual_input_dtype = residual_input.dtype
-            residual_input = residual_input.astype(self.weight.dtype)
+            if residual_input.dtype != self.weight.dtype:
+                residual_input = residual_input.astype(self.weight.dtype)
 
         if residual_input is None:
             residual_out = x
@@ -276,9 +278,13 @@ class RMSNorm(nn.Layer):
                 x = x + residual_input
             norm_out = proxy_rmsnorm(x, self.weight, self.eps), x
 
-        out = norm_out[0].astype(x_dtype)
+        out = norm_out[0]
+        if out.dtype != x_dtype:
+            out = out.astype(x_dtype)
         if residual_input is not None:
-            residual_out = norm_out[1].astype(residual_input_dtype)
+            residual_out = norm_out[1]
+            if residual_out.dtype != residual_input_dtype:
+                residual_out = residual_out.astype(residual_input_dtype)
 
         if self.split_x:
             assert residual_out is not None
