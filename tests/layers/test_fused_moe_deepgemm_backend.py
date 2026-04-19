@@ -101,7 +101,12 @@ dgb = None  # populated by _install_stubs fixture
 
 @pytest.fixture(autouse=True, scope="module")
 def _install_stubs():
-    """Inject GPU stubs into sys.modules for import, restore on teardown."""
+    """Inject GPU stubs into sys.modules for import, restore on teardown.
+
+    Uses ``scope="module"`` so stubs are installed once.  The global ``dgb``
+    reference is safe because individual tests mutate it only via
+    ``monkeypatch`` (function-scoped by default), which auto-reverts.
+    """
     global dgb  # noqa: PLW0603
     saved = {}
     for key, mod in _STUB_ENTRIES.items():
@@ -370,15 +375,15 @@ class TestApplyTpNonPhiInput:
             _gpu,
             "ep_moe_expert_dispatch_fp8",
             lambda *a, **kw: (
-                paddle.zeros([2, H], "int8"),
-                paddle.ones([1, 1], "float32"),
-                paddle.zeros([2], "int32"),
-                paddle.zeros([1], "int32"),
-                paddle.zeros([1], "int32"),
-                paddle.ones([2, 1], "float32"),
-                paddle.zeros([2], "int32"),
-                paddle.zeros([1], "int32"),
-                paddle.zeros([2], "int32"),
+                paddle.zeros([2, H], "int8"),  # permute_input
+                paddle.ones([1, 1], "float32"),  # permute_scale
+                paddle.zeros([2], "int32"),  # permute_indices_per_token
+                paddle.zeros([1], "int32"),  # recv_num_tokens_cumsum
+                paddle.zeros([1], "int32"),  # recv_num_tokens_padded_cumsum
+                paddle.ones([2, 1], "float32"),  # dst_weights
+                paddle.zeros([2], "int32"),  # dst_indices
+                paddle.zeros([1], "int32"),  # cumsum_idx_gpu
+                paddle.zeros([2], "int32"),  # m_indices
             ),
         )
         monkeypatch.setattr(
@@ -420,12 +425,12 @@ class TestApplyEpPrefillAdditive:
                     paddle.ones([x.shape[0], 1], "float32"),
                 )
                 return (
-                    (paddle.zeros([n, H], "int8"), scale),
-                    topk_idx,
-                    topk_weights,
-                    [n],
-                    None,
-                    _BufferStub.capture(),
+                    (paddle.zeros([n, H], "int8"), scale),  # (recv_x, recv_scale)
+                    topk_idx,  # recv_topk_idx
+                    topk_weights,  # recv_topk_weights
+                    [n],  # recv_num_tokens_per_expert_list (simplified)
+                    None,  # handle
+                    _BufferStub.capture(),  # event
                 )
 
             def combine(self, out, _handle, _weights, event):
@@ -524,6 +529,7 @@ class TestApplyEpDecodeAdditive:
 
             def combine(self, ffn, *_a):
                 # Real runner returns 2D [num_tokens, hidden]
+                assert len(ffn.shape) == 3  # [num_experts, max_tokens, hidden]
                 return paddle.zeros([2, H], dtype="bfloat16")
 
         m.ep_decoder_runner = _DecodeRunner()
