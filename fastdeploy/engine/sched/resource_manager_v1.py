@@ -768,7 +768,17 @@ class ResourceManagerV1(ResourceManager):
             scheduled_reqs: list[Request] = []
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
-            token_budget = self.config.scheduler_config.max_num_batched_tokens
+            tokens_per_seq = (
+                (self.config.speculative_config.num_speculative_tokens + 1)
+                if self.config.speculative_config is not None
+                else 1
+            )
+            token_budget = (
+                self.config.scheduler_config.max_num_batched_tokens
+                - self.config.scheduler_config.max_num_seqs * tokens_per_seq
+            )
+            # temperatory solution to avoid negative token_budget
+            token_budget = max(token_budget, min(self.config.scheduler_config.max_num_batched_tokens, 512))
             need_abort_requests = []  # users trigger abortion
 
             # First, schedule the RUNNING requests.

@@ -43,12 +43,14 @@ classify_tests() {
     fi
 
     # Rule 5: high-risk OOM tests (treat as multi_gpu for sequential execution)
-    if [[ "$test_file" == "tests/entrypoints/cli/test_main.py" ||
-          "$test_file" == "tests/entrypoints/cli/test_serve.py" ||
+    if [[ "$test_file" =~ ^tests/entrypoints/cli/ ||
+          "$test_file" == "tests/layers/test_append_attention_with_output.py" ||
+          "$test_file" == "tests/operators/test_get_position_ids_and_mask_encoder_batch.py" ||
           "$test_file" == "tests/operators/test_group_swiglu_with_masked.py" ||
           "$test_file" == "tests/operators/test_hybrid_mtp_ngram.py" ||
           "$test_file" == "tests/operators/test_moe_top_k_select.py" ||
           "$test_file" == "tests/operators/test_noaux_tc.py" ||
+          "$test_file" == "tests/operators/test_qk_rmsnorm_fused.py" ||
           "$test_file" == "tests/output/test_get_save_output_v1.py" ||
           "$test_file" == "tests/output/test_process_batch_draft_tokens.py" ||
           "$test_file" == "tests/output/test_process_batch_output.py" ]]; then
@@ -344,8 +346,8 @@ if [ "$failed_count" -ne 0 ]; then
     if [ -d "${run_path}/unittest_logs" ]; then
         echo "Cleaning empty directories..."
 
-        # remove console_error.log files (cleanup logs from stopped processes)
-        find "${run_path}/unittest_logs" -name "console_error.log*" -delete || true
+        # remove *error.log* files (cleanup logs from stopped processes)
+        find "${run_path}/unittest_logs" \( -name "console_error.log*" -o -name "error.log*" \) -delete || true
 
         # perform multi-round clean until no more empty directories are found
         while true; do
