@@ -1632,22 +1632,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &GetPositionIdsAndMaskEncoderBatch,
         "get_position_ids_and_mask_encoder_batch function");
 
-  /**
-   * cutlass_scaled_mm.cu
-   * cutlass_scaled_mm
-   * cutlass_scaled_mm_azp
-   */
+#ifdef ENABLE_SM75_EXT_OPS
+  /* cutlass_scaled_mm.cu: cutlass_scaled_mm, cutlass_scaled_mm_azp */
   m.def("cutlass_scaled_mm", &CutlassScaledMm, "cutlass_scaled_mm function");
   m.def("cutlass_scaled_mm_azp",
         &CutlassScaledMmAzp,
         "cutlass_scaled_mm_azp function");
 
-  /**
-   * quantization/common.cu
-   * static_scaled_fp8_quant
-   * dynamic_scaled_fp8_quant
-   * dynamic_per_token_scaled_fp8_quant
-   */
+  /* quantization/common.cu: static/dynamic scaled fp8 quant ops */
   m.def("static_scaled_fp8_quant",
         &StaticScaledFp8Quant,
         "static_scaled_fp8_quant function",
@@ -1669,6 +1661,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("input"),
         py::arg("scales"),
         py::arg("scale_ub"));
+#endif
 #ifdef ENABLE_SM80_EXT_OPS
   m.def("decode_mla_write_cache",
         &DecodeMLAWriteCacheKernel,
@@ -1885,6 +1878,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("custom_numpy_to_tensor",
         &CustomNumpyToTensor,
         "custom_numpy_to_tensor function");
+#ifdef ENABLE_SM80_EXT_OPS
   m.def("prefill_permute_to_masked_gemm",
         &PrefillPermuteToMaskedGemm,
         py::arg("x"),
@@ -1892,7 +1886,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("topk_ids"),
         py::arg("num_local_experts"),
         py::arg("max_token_num"),
-        "Prefill permute to masked GEMM for MoE");
+        "prefill_permute_to_masked_gemm");
 
   m.def("depermute_prefill_combine",
         &DepermutePrefillCombine,
@@ -1900,7 +1894,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("indice_map"),
         py::arg("topk_weights"),
         py::arg("num_worst_tokens"),
-        "Depermute and combine expert outputs for MoE prefill");
+        "depermute_prefill_combine");
 
   m.def("radix_topk_ragged_transform",
         &RadixTopkRaggedTransform,
@@ -1919,4 +1913,5 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("per_token_group_fp8_quant",
         &PerTokenGroupQuantFp8,
         "per_token_group_quant_fp8");
+#endif
 }
