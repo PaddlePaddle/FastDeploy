@@ -18,6 +18,8 @@ import unittest
 
 import paddle
 
+paddle.set_default_dtype("bfloat16")
+
 from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
     MLAAttentionBackend,
 )
