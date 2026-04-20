@@ -221,28 +221,6 @@ def xpu_pre_process(
     len_info_cpu = xpu_forward_meta.len_info_cpu
 
     (
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
-        _,
         slot_mapping_enc,
         slot_mapping_dec,
     ) = get_infer_param(

@@ -395,30 +395,7 @@ std::vector<paddle::Tensor> GetInferParam(
               len_info_vec.data(),
               sizeof(int32_t) * len_info_vec.size());
 
-  return {encoder_batch_map,
-          decoder_batch_map,
-          encoder_batch_idx,
-          decoder_batch_idx,
-          encoder_seq_lod,
-          decoder_seq_lod,
-          encoder_kv_lod,
-          prefix_len,
-          decoder_context_len,
-          decoder_context_len_cache,
-          prefix_block_tables,
-          encoder_batch_map_cpu,
-          decoder_batch_map_cpu,
-          encoder_batch_idx_cpu,
-          decoder_batch_idx_cpu,
-          encoder_seq_lod_cpu,
-          decoder_seq_lod_cpu,
-          encoder_kv_lod_cpu,
-          prefix_len_cpu,
-          decoder_context_len_cpu,
-          decoder_context_len_cache_cpu,
-          len_info_cpu,
-          slot_mapping_enc,
-          slot_mapping_dec};
+  return {slot_mapping_enc, slot_mapping_dec};
 }
 
 std::vector<std::vector<int64_t>> GetInferParamInferShape(
@@ -426,28 +403,8 @@ std::vector<std::vector<int64_t>> GetInferParamInferShape(
     const std::vector<int64_t>& seq_lens_decoder_shape,
     const std::vector<int64_t>& seq_lens_this_time_shape,
     const std::vector<int64_t>& block_tables_shape) {
-  return {seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          {seq_lens_encoder_shape[0] + 1},
-          {seq_lens_encoder_shape[0] + 1},
-          {seq_lens_encoder_shape[0] + 1},
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          block_tables_shape,
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          {seq_lens_encoder_shape[0] + 1},
-          {seq_lens_encoder_shape[0] + 1},
-          {seq_lens_encoder_shape[0] + 1},
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          seq_lens_encoder_shape,
-          {7}};
+  // TODO: should use correct shape
+  return {seq_lens_encoder_shape, seq_lens_encoder_shape};
 }
 
 std::vector<paddle::DataType> GetInferParamInferDtype(
@@ -455,15 +412,7 @@ std::vector<paddle::DataType> GetInferParamInferDtype(
     const paddle::DataType& seq_lens_decoder_dtype,
     const paddle::DataType& seq_lens_this_time_dtype,
     const paddle::DataType& block_tables_dtype) {
-  return {
-      seq_lens_encoder_dtype, seq_lens_encoder_dtype, seq_lens_encoder_dtype,
-      seq_lens_encoder_dtype, seq_lens_encoder_dtype, seq_lens_encoder_dtype,
-      seq_lens_encoder_dtype, seq_lens_encoder_dtype, seq_lens_encoder_dtype,
-      seq_lens_encoder_dtype, block_tables_dtype,     seq_lens_encoder_dtype,
-      seq_lens_encoder_dtype, seq_lens_encoder_dtype, seq_lens_encoder_dtype,
-      seq_lens_encoder_dtype, seq_lens_encoder_dtype, seq_lens_encoder_dtype,
-      seq_lens_encoder_dtype, seq_lens_encoder_dtype, seq_lens_encoder_dtype,
-      seq_lens_encoder_dtype};
+  return {seq_lens_encoder_dtype, seq_lens_encoder_dtype};
 }
 
 PD_BUILD_OP(get_infer_param)
@@ -493,30 +442,7 @@ PD_BUILD_OP(get_infer_param)
              "decoder_context_len_cpu",
              "decoder_context_len_cache_cpu",
              "len_info_cpu"})
-    .Outputs({"encoder_batch_map_out",
-              "decoder_batch_map_out",
-              "encoder_batch_idx_out",
-              "decoder_batch_idx_out",
-              "encoder_seq_lod_out",
-              "decoder_seq_lod_out",
-              "encoder_kv_lod_out",
-              "prefix_len_out",
-              "decoder_context_len_out",
-              "decoder_context_len_cache_out",
-              "prefix_block_tables_out",
-              "encoder_batch_map_cpu_out",
-              "decoder_batch_map_cpu_out",
-              "encoder_batch_idx_cpu_out",
-              "decoder_batch_idx_cpu_out",
-              "encoder_seq_lod_cpu_out",
-              "decoder_seq_lod_cpu_out",
-              "encoder_kv_lod_cpu_out",
-              "prefix_len_cpu_out",
-              "decoder_context_len_cpu_out",
-              "decoder_context_len_cache_cpu_out",
-              "len_info_cpu_out",
-              "slot_mapping_enc",
-              "slot_mapping_dec"})
+    .Outputs({"slot_mapping_enc", "slot_mapping_dec"})
     .SetInplaceMap(
         {{"encoder_batch_map", "encoder_batch_map_out"},
          {"decoder_batch_map", "decoder_batch_map_out"},
