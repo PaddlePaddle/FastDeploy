@@ -157,7 +157,7 @@ std::vector<paddle::Tensor> GetInferParam(
   }
   // for vsl_rotary_embedding_gptj of cudagraph mode
   int prev_val = 0;
-  for (int i = 0; i < bsz; i++) {
+  for (int i = 0; i < bsz + 1; i++) {
     if (decoder_seq_lod_vec[i] > prev_val) {
       prev_val = decoder_seq_lod_vec[i];
     } else if (decoder_seq_lod_vec[i] < prev_val) {
