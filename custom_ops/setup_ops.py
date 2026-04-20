@@ -22,8 +22,47 @@ import tarfile
 from pathlib import Path
 
 import paddle
-from paddle.utils.cpp_extension import CppExtension, CUDAExtension, setup
+from paddle.utils.cpp_extension import (
+    CppExtension,
+    CUDAExtension,
+    extension_utils,
+    setup,
+)
 from setuptools import find_namespace_packages, find_packages
+
+# Workaround for Paddle PR #78704:
+# Paddle 3.5.0.dev20260418+ changed CUDAExtension behavior to auto-add gencode flags
+# based on PADDLE_CUDA_ARCH_LIST even when user provides arch flags in cflags.
+# This causes relocation overflow in large CUDA files (e.g., append_attention.cu).
+#
+# This patch suppresses Paddle's auto-gencode addition when user-provided gencode
+# flags are detected, preventing duplicate architecture specifications.
+_original_get_cuda_arch_flags = extension_utils._get_cuda_arch_flags
+
+
+def _patched_get_cuda_arch_flags(cflags=None):
+    """
+    Patched version that returns empty list when user-provided gencode flags are detected.
+
+    This prevents Paddle from auto-adding duplicate gencode flags based on
+    PADDLE_CUDA_ARCH_LIST, which would cause relocation overflow errors.
+    """
+    if cflags:
+        for flag in cflags:
+            if isinstance(flag, str) and (flag.startswith("-gencode") or "compute_" in flag or "sm_" in flag):
+                return []
+    return _original_get_cuda_arch_flags(cflags)
+
+
+extension_utils._get_cuda_arch_flags = _patched_get_cuda_arch_flags
+
+
+# Additional safeguard (important):
+# Some Paddle versions may have additional internal methods that add gencode flags.
+# This patch serves as a second line of defense by overriding such methods.
+if hasattr(extension_utils, "CUDAExtension"):
+    if hasattr(extension_utils.CUDAExtension, "_add_cuda_arch_flags"):
+        extension_utils.CUDAExtension._add_cuda_arch_flags = lambda self, flags: flags
 
 
 def load_module_from_path(module_name, path):
@@ -176,14 +215,6 @@ def get_gencode_flags(archs):
             ]
         else:
             flags += ["-gencode", f"arch=compute_{cc_val},code=sm_{cc_val}"]
-
-    # Workaround for Paddle PR #78704:
-    # Paddle 3.5.0.dev20260418+ changed CUDAExtension behavior to add
-    # PADDLE_CUDA_ARCH_LIST-based gencode flags even when user provides
-    # arch flags in cflags. Setting PADDLE_CUDA_ARCH_LIST to empty string
-    # prevents Paddle from auto-detecting GPUs and adding duplicate gencode flags.
-    os.environ["PADDLE_CUDA_ARCH_LIST"] = ""
-
     return flags
 
 
