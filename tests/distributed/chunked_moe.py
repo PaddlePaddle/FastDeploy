@@ -85,6 +85,7 @@ class MockFDConfig:
         name = "default"
         splitwise_role = "mixed"
         max_num_seqs = 2
+        max_num_batched_tokens = 2048
 
     parallel_config = ParallelConfig()
     scheduler_config = SchedulerConfig()
@@ -169,6 +170,8 @@ class TestChunkedMoE(unittest.TestCase):
         fused_moe.fd_config = mock_fd_config
         fused_moe.quant_method = MockQuantMethod()
         fused_moe.enable_routing_replay = None
+
+        fused_moe.hidden_size = mock_fd_config.model_config.hidden_size
         return fused_moe
 
     def run_model_runner(self):

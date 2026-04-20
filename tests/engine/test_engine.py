@@ -39,13 +39,20 @@ def _make_cfg(**ov):
     pc.use_internode_ll_two_stage = pc.disable_sequence_parallel_moe = False
     pc.shutdown_comm_group_if_worker_idle = False
     pc.ep_prefill_use_worst_num_tokens = False
+    pc.enable_flashinfer_allreduce_fusion = False
     sc = ns(max_num_seqs=256, max_num_batched_tokens=4096, splitwise_role="mixed", name="local")
     sc.enable_overlap_schedule = False
     cc = ns(num_gpu_blocks_override=None, gpu_memory_utilization=0.9, block_size=16, enc_dec_block_num=0)
     cc.enable_prefix_caching = cc.enable_chunked_prefill = False
     cc.kv_cache_ratio, cc.kvcache_storage_backend, cc.num_cpu_blocks, cc.max_encoder_cache = 1.0, None, 0, 0
     cc.cache_transfer_protocol, cc.total_block_num = "tcp", 100
-    lc = ns(load_strategy="auto", rsync_config={}, dynamic_load_weight=False, load_choices="auto")
+    lc = ns(
+        load_strategy="auto",
+        rsync_config={},
+        dynamic_load_weight=False,
+        load_choices="auto",
+        model_loader_extra_config={},
+    )
     soc = ns(guided_decoding_backend=None, logits_processors=None, reasoning_parser="none")
     soc.disable_any_whitespace = False
     cfg = ns(model_config=mc, parallel_config=pc, scheduler_config=sc, cache_config=cc, load_config=lc)

@@ -59,6 +59,7 @@ def create_mock_config():
 
     scheduler_config = Mock(spec=SchedulerConfig)
     scheduler_config.max_num_seqs = 10
+    scheduler_config.max_num_batched_tokens = 2048
 
     speculative_config = Mock(spec=SpeculativeConfig)
     speculative_config.method = None

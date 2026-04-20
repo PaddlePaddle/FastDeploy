@@ -38,7 +38,7 @@ from .quant_base import QuantConfigBase, QuantMethodBase, is_nvfp4_supported
 
 # Only import flashinfer on supported GPUs (B卡)
 if is_nvfp4_supported():
-    paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+    paddle.enable_compat(scope={"flashinfer"})
 
     from flashinfer import fp4_quantize, mm_fp4
     from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe
@@ -864,6 +864,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         if self.backend == "flashinfer-cutlass":
             gate_out = gate(x.cast("float32"))

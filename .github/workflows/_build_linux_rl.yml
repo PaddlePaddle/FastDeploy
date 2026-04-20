@@ -52,6 +52,7 @@ on:
       wheel_path_rl:
         description: "Output path of the generated wheel"
         value: ${{ jobs.fd-build-rl.outputs.wheel_path_rl }}
+
 jobs:
   fd-build-rl:
     runs-on: [self-hosted, GPU-Build-RL]
@@ -107,6 +108,7 @@ jobs:
             git config --global user.name "FastDeployCI"
             git config --global user.email "fastdeploy_ci@example.com"
             git log -n 3 --oneline
+
       - name: FastDeploy Build
         shell: bash
         env:
@@ -137,7 +139,8 @@ jobs:
             PARENT_DIR=$(dirname "$WORKSPACE")
             echo "PARENT_DIR:$PARENT_DIR"
             docker run --rm --net=host \
-            --cap-add=SYS_PTRACE --privileged --shm-size=64G \
+            --cap-add=SYS_PTRACE --shm-size=64G \
+            --name ${runner_name} \
             -v $(pwd):/workspace -w /workspace \
             -v "${CACHE_DIR}/gitconfig:/etc/gitconfig:ro" \
             -v "${CACHE_DIR}/.cache_rl:/root/.cache" \
@@ -203,3 +206,10 @@ jobs:
             target_path_stripped="${target_path#paddle-github-action/}"
             WHEEL_PATH=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/${fd_wheel_name}
             echo "wheel_path_rl=${WHEEL_PATH}" >> $GITHUB_OUTPUT
+
+      - name: Terminate and delete the container
+        if: always()
+        run: |
+          set +e
+          docker exec -t ${{ runner.name }} /bin/bash -c 'find /workspace -mindepth 1 -delete'
+          docker rm -f ${{ runner.name }}

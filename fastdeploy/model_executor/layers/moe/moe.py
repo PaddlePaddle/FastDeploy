@@ -153,6 +153,7 @@ class FusedMoE(nn.Layer):
     def __init__(
         self,
         fd_config,
+        hidden_size: int = -1,
         reduce_results: bool = True,
         renormalize: bool = False,
         moe_intermediate_size: int = -1,
@@ -204,7 +205,7 @@ class FusedMoE(nn.Layer):
             self.tp_size == 1 and self.ep_size > 1
         ), "MoE only support parallelism on TP or EP dimension."
 
-        self.hidden_size = fd_config.model_config.hidden_size
+        self.hidden_size = hidden_size
         self.num_experts = num_experts
 
         self.num_local_experts = self.num_experts // self.ep_size
@@ -708,7 +709,13 @@ class FusedMoE(nn.Layer):
         return out
 
     def forward(
-        self, x: paddle.Tensor, gate: nn.Layer, forward_meta: ForwardMeta = None, shared_experts: nn.Layer = None
+        self,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        forward_meta: ForwardMeta = None,
+        shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ):
         """
         Defines the forward computation of the moe layer.
@@ -761,7 +768,13 @@ class FusedMoE(nn.Layer):
             )
         else:
             out = self.forward_normal(
-                x, gate, forward_meta, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                x,
+                gate,
+                forward_meta,
+                topk_ids_hookfunc,
+                shared_experts,
+                fc1_latent_proj,
+                fc2_latent_proj,
             )
 
         if self.reduce_results and self.tp_size > 1:
@@ -788,7 +801,7 @@ class FusedMoE(nn.Layer):
         chunk_size = self.fd_config.parallel_config.chunked_moe_size
         token_num = x.shape[0]
         fake_x = paddle.empty(
-            shape=[0, self.fd_config.model_config.hidden_size],
+            shape=[0, self.hidden_size],
             dtype=paddle.get_default_dtype(),
         )
         # input size that are less than a chunk, less than the max size data or empty input
@@ -828,6 +841,8 @@ class FusedMoE(nn.Layer):
         forward_meta: ForwardMeta,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ):
         """
         Normal mode of forward.
@@ -841,7 +856,13 @@ class FusedMoE(nn.Layer):
         """
         if current_platform.is_cuda():
             out = self.quant_method.apply(
-                self, x, gate, topk_ids_hookfunc=topk_ids_hookfunc, shared_experts=shared_experts
+                self,
+                x,
+                gate,
+                topk_ids_hookfunc,
+                shared_experts,
+                fc1_latent_proj,
+                fc2_latent_proj,
             )
         else:
             out = self.quant_method.apply(self, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)

@@ -16,14 +16,13 @@
 
 import threading
 import time
-import types
 import unittest
 
 import numpy as np
 import paddle
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda **_: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda **_: None
 
 from fastdeploy import envs
 from fastdeploy.engine.request import Request

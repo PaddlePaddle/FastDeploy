@@ -274,6 +274,11 @@ class EngineArgs:
     Flag to disable the custom all-reduce kernel.
     """
 
+    enable_flashinfer_allreduce_fusion: bool = False
+    """
+    Flag to enable all reduce fusion kernel in flashinfer.
+    """
+
     use_internode_ll_two_stage: bool = False
     """
     Flag to use the internode_ll_two_stage kernel.
@@ -496,6 +501,14 @@ class EngineArgs:
         - "default": default loader.
         - "default_v1": default_v1 loader.
     """
+    model_loader_extra_config: Optional[Dict[str, Any]] = None
+    """
+    Additional configuration options for the model loader.
+    Supports:
+    - enable_multithread_load (bool): Enable multi-threaded weight loading.
+    - num_threads (int): Number of threads for loading. Defaults to 8.
+    - disable_mmap (bool): Disable memory-mapped file access.
+    """
 
     lm_head_fp32: bool = False
     """
@@ -592,10 +605,15 @@ class EngineArgs:
                 raise NotImplementedError("Only ENABLE_V1_KVCACHE_SCHEDULER=1 support max_logprobs=-1")
 
         if self.splitwise_role != "mixed":
-            if self.scheduler_name == "local" and self.router is None:
+            if self.scheduler_name == "splitwise":
                 raise ValueError(
-                    f"When using {self.splitwise_role} role and the {self.scheduler_name} "
-                    f"scheduler, please provide --router argument."
+                    "Setting scheduler_name as splitwise is not supported in pd deployment, "
+                    "please use router as scheduler."
+                )
+            if self.scheduler_name == "local" and self.router is None:
+                console_logger.warning(
+                    f"Running {self.splitwise_role} role with {self.scheduler_name} "
+                    f"scheduler without --router. Router registration and request routing will be disabled."
                 )
 
         if not (
@@ -859,11 +877,14 @@ class EngineArgs:
             "--quantization",
             type=parse_quantization,
             default=EngineArgs.quantization,
-            help="Quantization name for the model, currently support "
-            "'wint8', 'wint4',"
-            "default is None. The priority of this configuration "
-            "is lower than that of the config file. "
-            "More complex quantization methods need to be configured via the config file.",
+            help="Quantization config for the model. Can be a simple method name "
+            "(e.g. 'wint8', 'wint4') or a full JSON quantization_config string "
+            '(e.g. \'{"quantization": "mix_quant", "kv_cache_quant_type": "block_wise_fp8", '
+            '"dense_quant_type": "block_wise_fp8", "moe_quant_type": "block_wise_fp8"}\'). '
+            "When a JSON config is provided, it is processed the same way as "
+            "quantization_config in the model's config.json. "
+            "If both CLI and config.json specify quantization_config, "
+            "config.json takes higher priority. Default is None.",
         )
         model_group.add_argument(
             "--graph-optimization-config",
@@ -980,6 +1001,12 @@ class EngineArgs:
             help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
+            "--enable-flashinfer-allreduce-fusion",
+            action="store_true",
+            default=EngineArgs.enable_flashinfer_allreduce_fusion,
+            help="Flag to enable all reduce fusion kernel in flashinfer.",
+        )
+        parallel_group.add_argument(
             "--use-internode-ll-two-stage",
             action="store_true",
             default=EngineArgs.use_internode_ll_two_stage,
@@ -1086,6 +1113,14 @@ class EngineArgs:
             default=EngineArgs.load_choices,
             help="The format of the model weights to load.\
                  default/default_v1/dummy.",
+        )
+
+        load_group.add_argument(
+            "--model-loader-extra-config",
+            type=json.loads,
+            default=EngineArgs.model_loader_extra_config,
+            help="Additional configuration for model loader (JSON format). "
+            'e.g., \'{"enable_multithread_load": true, "num_threads": 8}\'',
         )
 
         # CacheConfig parameters group
@@ -1479,7 +1514,11 @@ class EngineArgs:
 
         if self.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                if current_platform.is_maca() or current_platform.is_iluvatar():
+                if (
+                    int(envs.FD_DISABLE_CHUNKED_PREFILL)
+                    or current_platform.is_maca()
+                    or current_platform.is_iluvatar()
+                ):
                     self.max_num_batched_tokens = self.max_model_len
                 else:
                     self.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM

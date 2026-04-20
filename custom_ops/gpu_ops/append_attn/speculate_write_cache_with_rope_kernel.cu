@@ -130,10 +130,11 @@ void append_speculate_cache_rope(const QKV_TYPE* qkv,
   GetNumBlocks(pack_num, &grid_size);
   if (use_neox_style) {
     if (rotary_dim < dim_head) {
-      append_speculate_cache_neox_partial_rope_kernel<T,
-                                                      PackSize,
-                                                      QKV_TYPE,
-                                                      EnforceFmulRN>
+      append_speculate_cache_neox_partial_rope_kernel<
+          T,
+          PackSize,
+          QKV_TYPE,
+          false>  // GLM use EnforceFmulRN=false
           <<<grid_size, threads_per_block, 0, stream>>>(
               qkv,  // [token_num, num_heads + 2 * gqa_group_size, head_size]
               key_cache,

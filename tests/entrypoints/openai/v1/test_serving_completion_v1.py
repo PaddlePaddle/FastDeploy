@@ -756,8 +756,8 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
                     expected_id = f"{request_id}_{i}" if request_id else f"_{i}"
                     self.assertEqual(ctx.preprocess_requests[i]["request_id"], expected_id)
 
-    @patch("fastdeploy.entrypoints.openai.v1.serving_completion.api_server_logger")
-    async def test_preprocess_exception_logging(self, mock_logger):
+    @patch("fastdeploy.entrypoints.openai.v1.serving_completion.log_request_error")
+    async def test_preprocess_exception_logging(self, mock_log_request_error):
         """Test _preprocess logs exceptions properly"""
         # Setup - create a request that will cause an exception
         request = CompletionRequest(model="test_model", prompt="dummy", max_tokens=50)
@@ -771,11 +771,10 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
 
         # Assert
         self.assertIsInstance(result, ErrorResponse)
-        mock_logger.error.assert_called_once()
-        error_log = mock_logger.error.call_args[0][0]
-        self.assertIn("OpenAIServingCompletion create_completion", error_log)
-        self.assertIn("ValueError", error_log)
-        self.assertIn("Traceback", error_log)  # Changed from "traceback" to "Traceback"
+        mock_log_request_error.assert_called_once()
+        error_msg = mock_log_request_error.call_args[1].get("message", "")
+        self.assertIn("OpenAIServingCompletion create_completion", error_msg)
+        self.assertIn("ValueError", error_msg)
 
 
 if __name__ == "__main__":

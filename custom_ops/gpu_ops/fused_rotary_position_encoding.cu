@@ -54,8 +54,8 @@ __global__ void apply_rotary_embedding_kernel(
     const int num_heads,
     const int num_kv_heads,
     const int head_size) {
-  // Each thread block is responsible for one token.
   const int token_idx = blockIdx.x;
+
   int pos = position_ids[token_idx];
   const T* cache_ptr = cos_sin_cache + pos * rot_dim;
 
@@ -99,13 +99,10 @@ void FusedRotaryPositionEncoding(
   int64_t query_stride = num_heads * head_size;
   int64_t key_stride = num_kv_heads * head_size;
 
-  if (num_tokens > 65535) {
-    PD_THROW(
-        "apply_rotary_embedding_kernel launch failed when num_tokens > 65535.");
-  }
-
+  // 1D grid：gridDim.x 最大 2^31-1，远超实际 token 数
   dim3 grid(num_tokens);
   dim3 block(std::min<int64_t>(num_heads * rot_dim / 2, 512));
+
   PD_DISPATCH_FLOATING_AND_HALF_TYPES(
       query.dtype(), "apply_rotary_embedding_kernel", [&] {
         if (is_neox) {

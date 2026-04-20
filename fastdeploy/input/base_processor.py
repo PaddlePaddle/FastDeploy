@@ -55,6 +55,7 @@ from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 
 from fastdeploy import envs
 from fastdeploy.input.utils import process_stop_token_ids
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
@@ -164,7 +165,12 @@ class BaseTextProcessor(ABC):
         req_id = request.get("request_id", None) if isinstance(request, dict) else None
         tokens = self.tokenizer.tokenize(spliced_message)
         token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
-        data_processor_logger.info(f"req_id:{req_id}, tokens:{tokens}, token_ids: {token_ids}")
+        log_request(
+            level=1,
+            message="req_id:{req_id}, token_ids: {token_ids}",
+            req_id=req_id,
+            token_ids=token_ids,
+        )
         return token_ids
 
     # ------------------------------------------------------------------
@@ -359,7 +365,7 @@ class BaseTextProcessor(ABC):
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
         """Unified request pre-processing shared by all processors."""
-        data_processor_logger.info(f"Start processing request dict: {request}")
+        log_request(RequestLogLevel.CONTENT, message="Start processing request dict: {request}", request=request)
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
@@ -435,23 +441,27 @@ class BaseTextProcessor(ABC):
             request["top_k"] = 1
 
         if self.reasoning_parser:
-            model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-            parts = request["request_id"].split("_")
-            if len(parts) > 1:
-                real_req_id = parts[0]
-                index = int(parts[1])
-                n = request.get("n", 1)
-                for idx in range(index * n, (index + 1) * n):
-                    self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
-            else:
-                self.model_status_dict[request["request_id"]] = model_status
-            request["enable_thinking"] = model_status == "think_start"
+            self._apply_reasoning_parser(request)
 
         if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
             request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 
-        data_processor_logger.info(f"Processed request dict: {request}")
+        log_request(RequestLogLevel.CONTENT, message="Processed request dict: {request}", request=request)
         return request
+
+    def _apply_reasoning_parser(self, request):
+        """Apply reasoning parser to determine model thinking status."""
+        model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
+        parts = request["request_id"].split("_")
+        if len(parts) > 1:
+            real_req_id = parts[0]
+            index = int(parts[1])
+            n = request.get("n", 1)
+            for idx in range(index * n, (index + 1) * n):
+                self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+        else:
+            self.model_status_dict[request["request_id"]] = model_status
+        request["enable_thinking"] = model_status == "think_start"
 
     def clear_request_status(self, task_id):
         """Clear all per-request decode state and return the accumulated text."""
@@ -477,7 +487,12 @@ class BaseTextProcessor(ABC):
             if seq != self.tokenizer.eos_token_id:
                 stop_seqs.append(self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(seq)))
         stop_seqs, stop_seqs_len = self.pad_batch_data(stop_seqs, pad_id=-1, return_seq_len=True, return_array=False)
-        data_processor_logger.debug(f"processed stop_seqs: {stop_seqs}, {stop_seqs_len}")
+        log_request(
+            level=3,
+            message="processed stop_seqs: {stop_seqs}, {stop_seqs_len}",
+            stop_seqs=stop_seqs,
+            stop_seqs_len=stop_seqs_len,
+        )
         return stop_seqs, stop_seqs_len
 
     # ------------------------------------------------------------------
@@ -603,14 +618,20 @@ class BaseTextProcessor(ABC):
                 prompt_token_ids = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(prompt))
                 if len(prompt_token_ids) != 1:
                     if not add_prefix_space:
-                        data_processor_logger.warning(
-                            f"bad_words: '{prompt}' tokenises to {len(prompt_token_ids)} tokens, skipping"
+                        log_request(
+                            level=1,
+                            message="bad_words: '{prompt}' tokenises to {num_tokens} tokens, skipping",
+                            prompt=prompt,
+                            num_tokens=len(prompt_token_ids),
                         )
                     continue
                 if prompt_token_ids[0] > self.tokenizer.vocab_size:
                     if not add_prefix_space:
-                        data_processor_logger.warning(
-                            f"bad_words: '{prompt}' token id {prompt_token_ids[0]} > vocab_size, skipping"
+                        log_request(
+                            level=1,
+                            message="bad_words: '{prompt}' token id {token_id} > vocab_size, skipping",
+                            prompt=prompt,
+                            token_id=prompt_token_ids[0],
                         )
                     continue
                 if prompt_token_ids not in token_ids:

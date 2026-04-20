@@ -17,6 +17,7 @@
 import numpy as np
 
 from fastdeploy.input.text_processor import DataProcessor as TextProcessor
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.utils import data_processor_logger
 
 from .process import DataProcessor
@@ -261,7 +262,7 @@ class Qwen3VLProcessor(TextProcessor):
             request["max_tokens"] = max(1, max_tokens)
         else:
             request["max_tokens"] = min(max_tokens, request["max_tokens"])
-        data_processor_logger.info(f"Processed request {request}")
+        log_request(RequestLogLevel.CONTENT, message="Processed request: {request}", request=request)
 
         return request
 

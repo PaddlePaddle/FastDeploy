@@ -148,6 +148,7 @@ class Ernie4_5_VLMoeBlock(nn.Layer):
         )
         self.experts = FusedMoE(
             fd_config=fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             reduce_results=False,
             moe_intermediate_size=moe_intermediate_size,
             num_experts=num_experts,
@@ -829,9 +830,9 @@ class Ernie4_5_VLMoeForConditionalGeneration(ModelForCasualLM):
 
         return hidden_states
 
-    def clear_grpah_opt_backend(self):
+    def clear_graph_opt_backend(self):
         """Clear graph optimization backend, the captured cuda graph will be cleaned"""
-        self.ernie.clear_grpah_opt_backend(fd_config=self.fd_config)
+        self.ernie.clear_graph_opt_backend(fd_config=self.fd_config)
 
 
 class Ernie4_5_VLPretrainedModel(PretrainedModel):

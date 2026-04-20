@@ -26,8 +26,8 @@ import pytest
 
 import fastdeploy  # noqa: F401
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = types.SimpleNamespace(enable_torch_proxy=lambda *args, **kwargs: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda *args, **kwargs: None
 
 # Optional runtime deps are intentionally stubbed for unit isolation.
 if "triton" not in sys.modules:

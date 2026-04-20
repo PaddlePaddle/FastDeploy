@@ -2543,10 +2543,10 @@ void gqa_rotary_qk_variable(
         }
         const int pack_num_new = elem_nums / PackSize;
         GetNumBlocks<128>(pack_num_new, &grid_size);
-        auto *kernelFn =
-            GQANeoxVariableLengthPartialRotaryKernel<T,
-                                                     PackSize,
-                                                     EnforceFmulRN>;
+        auto *kernelFn = GQANeoxVariableLengthPartialRotaryKernel<
+            T,
+            PackSize,
+            false>;  // GLM use EnforceFmulRN=false
         launchWithPdlWhenEnabled(kernelFn,
                                  grid_size,
                                  blocksize,

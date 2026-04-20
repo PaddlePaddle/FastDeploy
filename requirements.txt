@@ -14,7 +14,7 @@ paddleformers>=1.1.1
 redis
 etcd3
 httpx
-tool_helpers
+fast_dataindex
 cupy-cuda12x
 pybind11[global]
 tabulate
@@ -46,6 +46,6 @@ setproctitle
 aistudio_sdk
 p2pstore
 py-cpuinfo
-flashinfer-python-paddle
-flash_mask @ https://paddle-qa.bj.bcebos.com/ernie/flash_mask-4.0.post20260128-py3-none-any.whl
+flashinfer-python-paddle @ https://xly-devops.bj.bcebos.com/flashinfer/flashinfer_python_paddle-0.4.1.2-py3-none-any.whl
+flash_mask @ https://xly-devops.bj.bcebos.com/flashmask/flash_mask-4.0.0%2Bg4c84f74-py3-none-any.whl
 transformers>=4.55.1,<5.0.0

@@ -22,9 +22,14 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
+from fastdeploy.model_executor.ops.gpu import (
+    mtp_save_first_token,
+    mtp_save_first_token_with_topk,
+)
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import (
     InputBatch,
+    ProposerInputBatch,
     recover_batch_index_for_output,
     recover_batch_index_for_sampler_output,
 )
@@ -116,36 +121,33 @@ from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOu
 
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
-if current_platform.is_cuda():
 
-    def async_set_value(tgt, src):
-        if isinstance(src, (int, float, bool)):
-            src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
-        elif isinstance(src, (list, np.array)):
-            dtype_str = str(tgt.dtype).split(".")[1]
-            if isinstance(src, list):
-                src = np.array(src, dtype=dtype_str if dtype_str != "bfloat16" else "float32")
+def async_set_value(tgt, src):
+    if isinstance(src, (int, float, bool)):
+        src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
+    elif isinstance(src, (list, np.ndarray)):
+        dtype_str = str(tgt.dtype).split(".")[1]
+        if isinstance(src, list):
+            src = np.array(src, dtype=dtype_str if dtype_str != "bfloat16" else "float32")
+        if current_platform.is_cuda():
             if str(src.dtype) != dtype_str:
                 srt_tensor = paddle.empty(tgt.shape, dtype=str(src.dtype))
                 src = custom_numpy_to_tensor(src, srt_tensor)
             else:
                 return custom_numpy_to_tensor(src, tgt)
-        elif isinstance(src, paddle.Tensor):
-            pass
         else:
-            raise ValueError("async_set_value unsupported src type: {}".format(type(src)))
-        if src.shape != tgt.shape:
-            src = src.reshape(tgt.shape)
-        if src.dtype != tgt.dtype:
-            src = src.cast(tgt.dtype)
-        if src.place != tgt.place:
-            src = src.to(tgt.place)
-        tgt.copy_(src, blocking=False)
-
-else:
-
-    def async_set_value(*args, **kwargs):
-        raise RuntimeError("async_set_value is only available on CUDA")
+            src = paddle.to_tensor(src, dtype=tgt.dtype)
+    elif isinstance(src, paddle.Tensor):
+        pass
+    else:
+        raise ValueError("async_set_value unsupported src type: {}".format(type(src)))
+    if src.shape != tgt.shape:
+        src = src.reshape(tgt.shape)
+    if src.dtype != tgt.dtype:
+        src = src.cast(tgt.dtype)
+    if src.place != tgt.place:
+        src = src.to(tgt.place)
+    tgt.copy_(src, blocking=False)
 
 
 def pre_process(
@@ -525,10 +527,76 @@ def save_output_specualate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
+    proposer_share_inputs: ProposerInputBatch,
+    local_rank: int,
+    tensor_parallel_rank: int,
     save_each_rank: bool = False,
-    skip_save_output: bool = False,
+    is_mtp_prefill: bool = False,
 ):
-    if not skip_save_output:
+    if is_mtp_prefill:
+        if tensor_parallel_rank == 0:
+            skip_chunk_prefill = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
+            if sampler_output.logprobs_tensors is None:
+                recover_proposer_share_inputs_map = recover_batch_index_for_output(
+                    proposer_share_inputs,
+                    proposer_share_inputs.index_to_batch_id,
+                    proposer_share_inputs.enable_pd_reorder,
+                    [
+                        "base_model_draft_tokens",
+                        "seq_lens_decoder",
+                        "prompt_lens",
+                        "step_idx",
+                    ],
+                )
+                mtp_save_first_token(
+                    recover_proposer_share_inputs_map["base_model_draft_tokens"],
+                    proposer_share_inputs["not_need_stop"],
+                    recover_proposer_share_inputs_map["seq_lens_decoder"],
+                    recover_proposer_share_inputs_map["prompt_lens"],
+                    recover_proposer_share_inputs_map["step_idx"],
+                    local_rank,
+                    save_each_rank,
+                    skip_chunk_prefill,
+                )
+            else:
+                recover_share_inputs_map = recover_batch_index_for_output(
+                    share_inputs,
+                    model_output.index_to_batch_id,
+                    model_output.enable_pd_reorder,
+                    [
+                        "sampled_token_ids",
+                        "accept_tokens_cpu",
+                        "accept_num_cpu",
+                        "seq_lens_decoder_cpu",
+                        "prompt_lens_cpu",
+                        "last_preempted_idx",
+                    ],
+                )
+                recover_batch_index_for_sampler_output(
+                    sampler_output, model_output.index_to_batch_id, model_output.enable_pd_reorder
+                )
+                recover_proposer_share_inputs_map = recover_batch_index_for_output(
+                    proposer_share_inputs,
+                    proposer_share_inputs.index_to_batch_id,
+                    proposer_share_inputs.enable_pd_reorder,
+                    ["base_model_draft_tokens"],
+                )
+                mtp_save_first_token_with_topk(
+                    recover_proposer_share_inputs_map["base_model_draft_tokens"],
+                    sampler_output.logprobs_tensors.logprob_token_ids,
+                    sampler_output.logprobs_tensors.logprobs,
+                    sampler_output.logprobs_tensors.selected_token_ranks,
+                    recover_share_inputs_map["accept_num_cpu"],
+                    sampler_output.cu_batch_token_offset,
+                    model_output.not_need_stop,
+                    recover_share_inputs_map["seq_lens_decoder_cpu"],
+                    recover_share_inputs_map["prompt_lens_cpu"],
+                    recover_share_inputs_map["last_preempted_idx"],
+                    3,  # mtype
+                    model_output.mp_rank,
+                    save_each_rank,
+                )
+    else:
         if sampler_output.logprobs_tensors is None:
             recover_share_inputs = recover_batch_index_for_output(
                 share_inputs,
