@@ -205,7 +205,7 @@ if [[ "${SKIP_TIER2:-0}" != "1" ]] && [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER
 
     export RESPONSE
     python3 <<'PYEOF'
-import json, os
+import json, os, sys
 
 resp = json.loads(os.environ["RESPONSE"])
 if "choices" not in resp or len(resp["choices"]) == 0:

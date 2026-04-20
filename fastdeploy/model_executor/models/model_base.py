@@ -10,7 +10,6 @@
 """
 
 import importlib
-import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntFlag, auto
@@ -21,6 +20,7 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import (
     ModelConfig,
@@ -311,7 +311,7 @@ class ModelRegistry:
             cls._arch_to_model_cls[model_cls.name()] = model_cls
             if architecture:
                 if architecture in cls._arch_to_model_cls and cls._arch_to_model_cls[architecture] is not model_cls:
-                    logging.warning("Overwriting model registration for architecture '%s'", architecture)
+                    logger.warning("Overwriting model registration for architecture '%s'", architecture)
                 cls._arch_to_model_cls[architecture] = model_cls
 
             # Enhanced decorator-style registration
