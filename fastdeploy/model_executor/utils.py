@@ -117,18 +117,18 @@ def set_weight_attrs(param, param_attr_map: Optional[dict[str, Any]]):
         setattr(param, key, value)
 
 
-def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
-    if hasattr(weight_or_paramter, "get_shape"):
-        shape = weight_or_paramter.get_shape()
+def slice_fn(weight_or_parameter, output_dim, start, end, step=1):
+    if hasattr(weight_or_parameter, "get_shape"):
+        shape = weight_or_parameter.get_shape()
     else:
-        shape = weight_or_paramter.shape
+        shape = weight_or_parameter.shape
     if len(shape) == 1:
-        weight_or_paramter = weight_or_paramter[start:end]
+        weight_or_parameter = weight_or_parameter[start:end]
     elif output_dim:
-        weight_or_paramter = weight_or_paramter[..., start:end]
+        weight_or_parameter = weight_or_parameter[..., start:end]
     else:
-        weight_or_paramter = weight_or_paramter[start:end, ...]
-    return weight_or_paramter
+        weight_or_parameter = weight_or_parameter[start:end, ...]
+    return weight_or_parameter
 
 
 def process_weight_transpose(layer, weight_name):

@@ -239,7 +239,8 @@ void split_kvcache_encoder(api::Context* xpu_ctx,
                            bool use_neox_rotary_style) {
   int ret;
   int64_t real_kv_num_heads = (kv_num_heads == -1) ? q_num_heads : kv_num_heads;
-  if (FLAGS_encoder_splice) {
+  // TODO: spliced split kvcache should support rope3d
+  if (FLAGS_encoder_splice && !rope_3d) {
     if (rope_3d) {
       PD_THROW("split_kvcache_encoder does not support rope_3d == true!");
     }
@@ -545,7 +546,8 @@ void split_kvcache_decoder(api::Context* xpu_ctx,
                            bool use_neox_rotary_style) {
   int64_t real_kv_num_heads = (kv_num_heads == -1) ? q_num_heads : kv_num_heads;
   int ret;
-  if (FLAGS_decoder_splice) {
+  // TODO: spliced split kvcache should support rope3d
+  if (FLAGS_decoder_splice && !rope_3d) {
     // not yet supported
     if (rope_3d) {
       PD_THROW("split_kvcache_decoder does not support rope_3d == true!");
