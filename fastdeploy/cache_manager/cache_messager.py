@@ -733,6 +733,52 @@ class CacheMessagerV1:
                     num_requests = len(block_start_end_list)
                     total_tasks = num_layers_to_send * num_requests
 
+                    # Pre-establish all RDMA connections BEFORE concurrent writes (connections are NOT thread-safe)
+                    connection_info = {}  # Maps request_idx to (decode_ip, decode_idx, protocol)
+                    for i, (block_id_start, block_id_end) in enumerate(block_start_end_list):
+                        if block_id_start >= block_id_end:
+                            continue  # No blocks to transfer
+                        engine_index = batch_engine_signals[i][0]
+                        task = self.idx_cache_task_dict[engine_index]
+                        current_transfer_protocol = task["transfer_protocol"]
+
+                        if current_transfer_protocol == "rdma":
+                            decode_ip, decode_rdma_ports = get_decode_ip_idx(task)
+                            decode_tp_size = task.get("decode_tp_size", self.nranks)
+                            if len(decode_rdma_ports) == self.nranks:
+                                decode_idx = int(decode_rdma_ports[self.rank])
+                            elif len(decode_rdma_ports) == 1:
+                                decode_idx = decode_rdma_ports[0]
+                            else:
+                                task["status"] = "the tp_size of prefill and decode is mismatch"
+                                continue
+
+                            if "error" in task["status"]:
+                                continue
+
+                            # Establish connection once per request (serial, thread-safe)
+                            logger.debug(
+                                f"rdma, pre-connect decode, {decode_ip}:{decode_idx}, "
+                                f"prefill_tp_size:{self.nranks}, decode_tp_size:{decode_tp_size}"
+                            )
+                            status = self.messager[current_transfer_protocol].connect(
+                                decode_ip, decode_idx, decode_tp_size
+                            )
+                            if status:
+                                logger.debug(f"pre-connect to {decode_ip}:{decode_idx} success")
+                                connection_info[i] = (decode_ip, decode_idx, current_transfer_protocol)
+                            else:
+                                logger.error(f"pre-connect to {decode_ip}:{decode_idx} failed")
+                                task["status"] = "connection error"
+                                continue
+                        elif current_transfer_protocol == "ipc":
+                            decode_device_ids = (
+                                task["decode_device_ids"] if "decode_device_ids" in task else task["device_ids"]
+                            )
+                            decode_ip = "0.0.0.0"
+                            decode_idx = int(decode_device_ids[self.rank])
+                            connection_info[i] = (decode_ip, decode_idx, current_transfer_protocol)
+
                     if total_tasks > 1:
                         # Create per-task completion tracking
                         task_completion_lock = threading.Lock()
@@ -756,6 +802,7 @@ class CacheMessagerV1:
                                         completed_layers_per_request,
                                         start_layer_idx,
                                         end_layer_idx,
+                                        connection_info,
                                     )
                                     futures[future] = (layer_idx, i, engine_index)
 
@@ -779,6 +826,7 @@ class CacheMessagerV1:
                                     block_id_end,
                                     current_prefilled_token_num_list[i],
                                     i,
+                                    connection_info,
                                 )
 
                     if end_layer_idx == self.num_layers - 1:
@@ -819,10 +867,12 @@ class CacheMessagerV1:
         completed_layers_per_request,
         start_layer_idx,
         end_layer_idx,
+        connection_info,
     ):
         """
         Helper function for FULL concurrent cache writes (layer x request parallelism).
         Handles concurrent state updates safely.
+        Connection must be pre-established before calling this function.
         """
         req_id = task["request_id"]
         if block_id_start >= block_id_end:
@@ -841,39 +891,17 @@ class CacheMessagerV1:
                             task["sended_layer_id"] = -1
             return
 
-        current_transfer_protocol = task["transfer_protocol"]
-        decode_ip = None
-        decode_idx = None
-
-        if task["transfer_protocol"] == "rdma":
-            decode_ip, decode_rdma_ports = get_decode_ip_idx(task)
-            decode_tp_size = task.get("decode_tp_size", self.nranks)
-            if len(decode_rdma_ports) == self.nranks:
-                decode_idx = int(decode_rdma_ports[self.rank])
-            elif len(decode_rdma_ports) == 1:
-                decode_idx = decode_rdma_ports[0]
-            else:
-                task["status"] = "the tp_size of prefill and decode is mismatch"
-                return
-
-            if "error" in task["status"]:
-                return
-
-            logger.debug(
-                f"rdma, start connect decode, {decode_ip}:{decode_idx}, "
-                f"prefill_tp_size:{self.nranks}, decode_tp_size:{decode_tp_size}"
-            )
-            status = self.messager[current_transfer_protocol].connect(decode_ip, decode_idx, decode_tp_size)
-            if status:
-                logger.debug(f"connect to {decode_ip}:{decode_idx} success")
-            else:
-                logger.error(f"connect to {decode_ip}:{decode_idx} failed")
+        # Use pre-established connection info (connection was made serially before concurrent writes)
+        if request_idx not in connection_info:
+            # Connection failed during pre-connect phase
+            if "error" not in task["status"]:
                 task["status"] = "connection error"
-                return
-        elif task["transfer_protocol"] == "ipc":
-            decode_device_ids = task["decode_device_ids"] if "decode_device_ids" in task else task["device_ids"]
-            decode_ip = "0.0.0.0"
-            decode_idx = int(decode_device_ids[self.rank])
+            return
+
+        decode_ip, decode_idx, current_transfer_protocol = connection_info[request_idx]
+
+        if "error" in task["status"]:
+            return
 
         src_block_ids = task["src_block_ids"][block_id_start:block_id_end]
         dest_block_ids = task["dest_block_ids"][block_id_start:block_id_end]
@@ -928,10 +956,11 @@ class CacheMessagerV1:
                         task["sended_layer_id"] = -1
 
     def _write_cache_for_request_single(
-        self, task, layer_idx, block_id_start, block_id_end, prefilled_token_num, request_idx
+        self, task, layer_idx, block_id_start, block_id_end, prefilled_token_num, request_idx, connection_info
     ):
         """
         Helper function to write cache for a single request at a single layer (sequential mode).
+        Connection must be pre-established before calling this function.
         """
         req_id = task["request_id"]
         if block_id_start >= block_id_end:
@@ -945,32 +974,16 @@ class CacheMessagerV1:
                     task["sended_layer_id"] = -1
             return
 
-        current_transfer_protocol = task["transfer_protocol"]
-        decode_ip = None
-        decode_idx = None
-
-        if task["transfer_protocol"] == "rdma":
-            decode_ip, decode_rdma_ports = get_decode_ip_idx(task)
-            decode_tp_size = task.get("decode_tp_size", self.nranks)
-            if len(decode_rdma_ports) == self.nranks:
-                decode_idx = int(decode_rdma_ports[self.rank])
-            elif len(decode_rdma_ports) == 1:
-                decode_idx = decode_rdma_ports[0]
-            else:
-                task["status"] = "the tp_size of prefill and decode is mismatch"
-                return
-
-            if "error" in task["status"]:
-                return
-
-            status = self.messager[current_transfer_protocol].connect(decode_ip, decode_idx, decode_tp_size)
-            if not status:
+        # Use pre-established connection info
+        if request_idx not in connection_info:
+            if "error" not in task["status"]:
                 task["status"] = "connection error"
-                return
-        elif task["transfer_protocol"] == "ipc":
-            decode_device_ids = task["decode_device_ids"] if "decode_device_ids" in task else task["device_ids"]
-            decode_ip = "0.0.0.0"
-            decode_idx = int(decode_device_ids[self.rank])
+            return
+
+        decode_ip, decode_idx, current_transfer_protocol = connection_info[request_idx]
+
+        if "error" in task["status"]:
+            return
 
         src_block_ids = task["src_block_ids"][block_id_start:block_id_end]
         dest_block_ids = task["dest_block_ids"][block_id_start:block_id_end]
