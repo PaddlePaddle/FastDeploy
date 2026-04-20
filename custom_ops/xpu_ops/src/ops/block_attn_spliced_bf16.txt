@@ -279,7 +279,7 @@ void split_kvcache_encoder(api::Context* xpu_ctx,
           xpu_ctx,
           reinterpret_cast<const TQKV*>(q_split.data()),
           reinterpret_cast<const TQKV*>(k_split.data()),
-          reinterpret_cast<const TR*>(rotary_embs.data()),
+          reinterpret_cast<const TQKV*>(rotary_embs.data()),
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(q.data())),
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(k.data())),
           seq_lod,
@@ -294,56 +294,25 @@ void split_kvcache_encoder(api::Context* xpu_ctx,
           false);
       PD_CHECK(ret == api::SUCCESS, "vsl_rotary_embedding_gptj failed.");
     } else {
-      //   xpu_ctx->set_debug_level(0xa1);
-      // Generate positions [0, 1, ..., token_num-1] on XPU
-      auto positions_tensor =
-          paddle::empty({token_num}, paddle::DataType::INT64, qkv.place());
-      std::vector<int64_t> positions_host(token_num);
-      for (int64_t i = 0; i < token_num; i++) {
-        positions_host[i] = static_cast<int64_t>(i);
-      }
-      ret = api::do_host2device(xpu_ctx,
-                                positions_host.data(),
-                                positions_tensor.data<int64_t>(),
-                                token_num * sizeof(int64_t));
-
-      ret = api::copy<TQKV>(
+      ret = infer_ops::vsl_rotary_embedding_neox<TQKV, TR, TID>(
           xpu_ctx,
           reinterpret_cast<const TQKV*>(q_split.data()),
-          const_cast<TQKV*>(reinterpret_cast<const TQKV*>(q.data())),
-          token_num * q_num_heads * head_dim);
-      ret = api::copy<TQKV>(
-          xpu_ctx,
           reinterpret_cast<const TQKV*>(k_split.data()),
-          const_cast<TQKV*>(reinterpret_cast<const TQKV*>(k.data())),
-          token_num * real_kv_num_heads * head_dim);
-      //   xpu_memcpy(const_cast<void*>(q.data()),
-      //               q_split.data(),
-      //               token_num * q_num_heads * head_dim * sizeof(TQKV),
-      //               XPU_DEVICE_TO_DEVICE);
-      //   xpu_memcpy(const_cast<void*>(k.data()),
-      //               k_split.data(),
-      //               token_num * real_kv_num_heads * head_dim * sizeof(TQKV),
-      //               XPU_DEVICE_TO_DEVICE);
-
-      ret = infer_ops::rotary_embedding<TQKV, int64_t, TR>(
-          xpu_ctx,
-          positions_tensor.data<int64_t>(),
+          reinterpret_cast<const TQKV*>(rotary_embs.data()),
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(q.data())),
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(k.data())),
-          reinterpret_cast<const TR*>(rotary_embs.data()),
-          rope_head_dim * 2,             // rot_dim
-          q_num_heads * head_dim,        // query_stride
-          real_kv_num_heads * head_dim,  // key_stride
-          head_dim,                      // head_stride
-          q_num_heads,                   // num_heads
-          real_kv_num_heads,             // num_kv_heads
-          head_dim,                      // head_sizes
-          token_num,                     // num_tokens
-          rope_max_seqlen,               // max_position
-          true);                         // is_neox
-      PD_CHECK(ret == api::SUCCESS, "rotary_embedding failed.");
-      //   xpu_ctx->set_debug_level(0x1);
+          seq_lod,
+          1,
+          rope_max_seqlen,
+          q_num_heads,
+          head_dim,
+          rope_head_dim,
+          "BLHD",
+          start_tokens,
+          "NORMAL",
+          real_kv_num_heads,
+          false);
+      PD_CHECK(ret == api::SUCCESS, "vsl_rotary_embedding_neox failed.");
     }
 
     if (q_norm_weight) {
@@ -449,11 +418,11 @@ void split_kvcache_encoder(api::Context* xpu_ctx,
     }
   } else {
     if (use_neox_rotary_style) {
-      ret = infer_ops::split_neox_cache_kv_encoder<TQKV, float, TKV_CACHE, int>(
+      ret = infer_ops::split_neox_cache_kv_encoder<TQKV, TQKV, TKV_CACHE, int>(
           xpu_ctx,
           reinterpret_cast<const TQKV*>(qkv.data()) + qkv_offset,  // qkv
-          reinterpret_cast<const float*>(
-              rotary_embs.data<float>()),  // rotary_pos_emb
+          reinterpret_cast<const TQKV*>(
+              rotary_embs.data()),  // rotary_pos_emb
           reinterpret_cast<const int*>(
               block_tables.data<int>()),  // block_table
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(q.data())),
@@ -627,7 +596,7 @@ void split_kvcache_decoder(api::Context* xpu_ctx,
           xpu_ctx,
           reinterpret_cast<const TQKV*>(q_split.data()),
           reinterpret_cast<const TQKV*>(k_split.data()),
-          reinterpret_cast<const TR*>(rotary_embs.data()),
+          reinterpret_cast<const TQKV*>(rotary_embs.data()),
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(q.data())),
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(k.data())),
           seq_lod,
@@ -642,42 +611,25 @@ void split_kvcache_decoder(api::Context* xpu_ctx,
           false);
       PD_CHECK(ret == api::SUCCESS, "vsl_rotary_embedding_gptj failed.");
     } else {
-      auto positions_tensor =
-          paddle::empty({token_num}, paddle::DataType::INT64, qkv.place());
-      ret = api::copy<TQKV>(
+      ret = infer_ops::vsl_rotary_embedding_neox<TQKV, TR, TID>(
           xpu_ctx,
           reinterpret_cast<const TQKV*>(q_split.data()),
-          const_cast<TQKV*>(reinterpret_cast<const TQKV*>(q.data())),
-          token_num * q_num_heads * head_dim);
-      ret = api::copy<TQKV>(
-          xpu_ctx,
           reinterpret_cast<const TQKV*>(k_split.data()),
-          const_cast<TQKV*>(reinterpret_cast<const TQKV*>(k.data())),
-          token_num * real_kv_num_heads * head_dim);
-      ret = api::cast<int, int64_t>(xpu_ctx,
-                                    start_tokens.xpu,
-                                    positions_tensor.data<int64_t>(),
-                                    token_num);
-
-      // xpu_ctx->set_debug_level(0xa1);
-      ret = infer_ops::rotary_embedding<TQKV, int64_t, TR>(
-          xpu_ctx,
-          positions_tensor.data<int64_t>(),
+          reinterpret_cast<const TQKV*>(rotary_embs.data()),
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(q.data())),
           const_cast<TQKV*>(reinterpret_cast<const TQKV*>(k.data())),
-          reinterpret_cast<const TR*>(rotary_embs.data()),
-          rope_head_dim * 2,             // rot_dim
-          q_num_heads * head_dim,        // query_stride
-          real_kv_num_heads * head_dim,  // key_stride
-          head_dim,                      // head_stride
-          q_num_heads,                   // num_heads
-          real_kv_num_heads,             // num_kv_heads
-          head_dim,                      // head_sizes
-          token_num,                     // num_tokens
-          rope_max_seqlen,               // max_position
-          true);                         // is_neox
-      PD_CHECK(ret == api::SUCCESS, "rotary_embedding failed.");
-      //   xpu_ctx->set_debug_level(0x1);
+          seq_lod,
+          1,
+          rope_max_seqlen,
+          q_num_heads,
+          head_dim,
+          rope_head_dim,
+          "BLHD",
+          start_tokens,
+          "NORMAL",
+          real_kv_num_heads,
+          false);
+      PD_CHECK(ret == api::SUCCESS, "vsl_rotary_embedding_neox failed.");
     }
 
     if (q_norm_weight) {
@@ -801,11 +753,11 @@ void split_kvcache_decoder(api::Context* xpu_ctx,
   } else {
     if (use_neox_rotary_style) {
       ret = infer_ops::
-          split_neox_cache_kv_decoder<TQKV, float, TKV_CACHE, TSCALE, int>(
+          split_neox_cache_kv_decoder<TQKV, TQKV, TKV_CACHE, TSCALE, int>(
               xpu_ctx,
               reinterpret_cast<const TQKV*>(qkv.data()) + qkv_offset,  // qkv
-              reinterpret_cast<const float*>(
-                  rotary_embs.data<float>()),  // rotary_pos_emb
+              reinterpret_cast<const TQKV*>(
+                  rotary_embs.data()),  // rotary_pos_emb
               reinterpret_cast<const int*>(
                   block_tables.data<int>()),  // block_table
               const_cast<TQKV*>(reinterpret_cast<const TQKV*>(q.data())),
@@ -1590,8 +1542,9 @@ std::vector<paddle::Tensor> BlockAttn(
 
       XPU_XType* q_dec_xft_tensor_ptr = q_dec_xft_tensor.data<XPU_XType>();
       XPU_XType* decode_output_ptr = decode_output.data<XPU_XType>();
-      using TGEMM = std::
-          conditional_t<std::is_same_v<XPU_XType, XPU_CType>, float, int8_wo_t>;
+      using TGEMM = std::conditional_t<std::is_same_v<XPU_XType, XPU_CType>,
+                                       tfloat32,
+                                       int8_wo_t>;
       constexpr int quant_mode = std::is_same_v<XPU_CType, int8_t> ? 3 : 0;
       ret = baidu::xpu::xfa::speculative_attention_decoder<XPU_XType,
                                                            XPU_CType,

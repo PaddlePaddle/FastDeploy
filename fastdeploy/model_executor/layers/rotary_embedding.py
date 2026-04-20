@@ -97,16 +97,26 @@ class GlmRotaryEmbedding:
             freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
         if current_platform.is_xpu():
             # shape: [B, S, D]
-            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
-            emb = paddle.concat([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim))
+            # rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
+            # emb = paddle.concat([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim))
+
+            rot_emb = paddle.zeros((max_seq_len, self.rotary_dim), dtype="float32")
+            emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
+
         else:
             # shape: [B, S, D/2]
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
             emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
         # shape: [B, S, 1, D]
-        emb = paddle.unsqueeze(emb, 2)
-        rot_emb[0] = paddle.cos(emb)
-        rot_emb[1] = paddle.sin(emb)
+        # emb = paddle.unsqueeze(emb, 2)
+        # rot_emb[0] = paddle.cos(emb)
+        # rot_emb[1] = paddle.sin(emb)
+
+        emb_c = paddle.cos(emb)
+        emb_s = paddle.sin(emb)
+        rot_emb = paddle.concat([emb_c, emb_s], axis=-1).reshape(2, bsz, max_seq_len, 1, self.rotary_dim // 2)
+
+        rot_emb = paddle.cast(rot_emb, dtype="bfloat16")
         return rot_emb
 
 

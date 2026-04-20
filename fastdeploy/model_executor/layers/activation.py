@@ -121,6 +121,8 @@ class SiluAndMul(nn.Layer):
         Returns:
             Tensor: Output tensor.
         """
+        if current_platform.is_xpu() and self.bias is None and self.quant_scale == -1 and self.act_method == "swiglu":
+            return self._fast_swiglu_xpu(x)
         if self.bias is None and self.quant_scale == -1 and envs.FD_SiluAndMul_USE_PHI_SWIGLU:
             return paddle.nn.functional.swiglu(x)
         return fused_bias_act(
@@ -136,6 +138,13 @@ class SiluAndMul(nn.Layer):
             quant_max_bound=self.quant_max_bound,
             quant_min_bound=self.quant_min_bound,
         )
+
+    @staticmethod
+    def _fast_swiglu_xpu(x: paddle.Tensor) -> paddle.Tensor:
+        """Call XPU fast_swiglu custom op (api::fast_swiglu)."""
+        from fastdeploy.model_executor.ops.xpu import fast_swiglu_xpu
+
+        return fast_swiglu_xpu(x)
 
     def forward_gcu(self, x):
         """

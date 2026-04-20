@@ -292,7 +292,7 @@ class OpenAIServingChat:
                 if self.engine_client.check_model_weight_status():
                     raise ValueError("Engine is clearing model weight")
                 try:
-                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=1000)
                     current_waiting_time = 0
                 except asyncio.CancelledError:
                     # Client disconnected, propagate to outer handler
@@ -631,7 +631,7 @@ class OpenAIServingChat:
                         )
                     )
                 try:
-                    response = await asyncio.wait_for(response_queue.get(), timeout=10)
+                    response = await asyncio.wait_for(response_queue.get(), timeout=1000)
                     current_waiting_time = 0
                 except asyncio.TimeoutError:
                     current_waiting_time += 10

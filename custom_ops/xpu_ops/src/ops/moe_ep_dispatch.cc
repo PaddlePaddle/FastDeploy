@@ -54,9 +54,6 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
       paddle::empty({expert_num + 1}, paddle::DataType::INT32, place);
   auto expand_input_scales =
       paddle::empty({token_nums_this_rank}, paddle::DataType::FLOAT32, place);
-  const int64_t ep_size = 1;
-  const int64_t ep_rank = 0;
-
   if (std::is_same<TY, int8_t>::value && !std::is_same<TX, int8_t>::value) {
     permute_input =
         paddle::empty({token_nums_this_rank, n}, paddle::DataType::INT8, place);
@@ -78,12 +75,12 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
           topk,
           block_num,
           token_nums_this_rank);
-      PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
+      PD_CHECK(ret == 0, "moe_ffn_pre_sorted failed");
     }
   } else {
     permute_input = paddle::empty({token_nums_this_rank, n}, input_type, place);
     if (token_nums_this_rank > 0) {
-      auto ret = infer_ops::moe_ep_ffn_pre_sorted<XPU_TX, int>(
+      auto ret = infer_ops::moe_ffn_pre_sorted<XPU_TX, int>(
           xpu_ctx->x_context(),
           reinterpret_cast<const XPU_TX*>(input.data<TX>()),
           topk_ids.data<int>(),
@@ -96,15 +93,8 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
           n,
           expert_num,
           topk,
-          block_num,
-          ep_size,
-          ep_rank,
-          token_nums_this_rank,
-          std::is_same<TX, int8_t>::value
-              ? input_scales.get_ptr()->data<float>()
-              : nullptr,
-          expand_input_scales.data<float>());
-      PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
+          block_num);
+      PD_CHECK(ret == 0, "moe_ffn_pre_sorted failed");
     }
   }
   return {permute_input,

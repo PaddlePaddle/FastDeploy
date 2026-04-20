@@ -33,6 +33,8 @@ void prof_start();
 
 void prof_stop();
 
+std::vector<paddle::Tensor> FastSwiglu(const paddle::Tensor& x);
+
 std::vector<paddle::Tensor> AdjustBatch(
     const paddle::Tensor& x,  // [token_num, dim_embed]
     const paddle::Tensor& encoder_seq_lod,
@@ -1718,4 +1720,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   // 添加XPU错误信息的异常处理类
   py::register_exception<XPUError>(m, "XPUError");
+
+  m.def("fast_swiglu_xpu",
+        &FastSwiglu,
+        py::arg("x"),
+        "fast_swiglu activation in XPU");
 }
