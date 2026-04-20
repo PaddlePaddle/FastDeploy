@@ -2196,6 +2196,13 @@ class FDConfig:
         if self.speculative_config is not None and self.speculative_config.method is not None:
             num_spec_tokens = self.speculative_config.num_speculative_tokens
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
+
+            # For speculative, enlarge the threshold to trigger block preallocation earlier,
+            # since each step consumes num_spec_tokens slots at once
+            prealloc_dec_block_slot = self.cache_config.prealloc_dec_block_slot_num_threshold * num_spec_tokens
+            self.cache_config.prealloc_dec_block_slot_num_threshold = min(
+                prealloc_dec_block_slot, self.cache_config.block_size * self.cache_config.enc_dec_block_num - 1
+            )
         else:
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs
         if (
