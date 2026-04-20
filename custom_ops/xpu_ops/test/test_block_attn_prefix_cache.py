@@ -14,7 +14,7 @@
 
 import numpy as np
 import paddle
-from utils import init_tensor
+from utils import init_inplace_tensor
 
 from fastdeploy.model_executor.ops.xpu import block_attn_fused, get_infer_param
 
@@ -55,7 +55,7 @@ block_tables = block_tables.reshape((block_batch, max_block_per_seq))
     decoder_context_len_cpu,
     decoder_context_len_cache_cpu,
     len_info_cpu,
-) = init_tensor(seq_lens_encoder.shape[0], block_tables.shape)
+) = init_inplace_tensor(seq_lens_encoder.shape[0], block_tables.shape)
 (
     _,
     _,
@@ -300,7 +300,7 @@ seq_lens_decoder = paddle.to_tensor([hit_prefix_len, 0, 0, 0, 0], dtype="int32")
     decoder_context_len_cpu,
     decoder_context_len_cache_cpu,
     len_info_cpu,
-) = init_tensor(seq_lens_encoder.shape[0], block_tables.shape)
+) = init_inplace_tensor(seq_lens_encoder.shape[0], block_tables.shape)
 (
     _,
     _,

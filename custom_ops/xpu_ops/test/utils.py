@@ -1,7 +1,7 @@
 import paddle
 
 
-def init_tensor(bsz, block_tables_shape):
+def init_inplace_tensor(bsz, block_tables_shape):
     encoder_batch_map = paddle.empty(bsz, dtype="int32")
     decoder_batch_map = paddle.empty(bsz, dtype="int32")
     encoder_batch_idx = paddle.empty(bsz, dtype="int32")

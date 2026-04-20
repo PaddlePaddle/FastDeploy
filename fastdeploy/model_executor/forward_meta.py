@@ -285,7 +285,7 @@ class XPUForwardMeta(ForwardMeta):
     #
     slot_mapping_dec: Optional[paddle.Tensor] = None
 
-    def init_tensor(self, bsz, block_tables_shape):
+    def init_inplace_tensor(self, bsz, block_tables_shape):
         self.encoder_batch_map = paddle.empty(bsz, dtype="int32")
         self.decoder_batch_map = paddle.empty(bsz, dtype="int32")
         self.encoder_batch_idx = paddle.empty(bsz, dtype="int32")

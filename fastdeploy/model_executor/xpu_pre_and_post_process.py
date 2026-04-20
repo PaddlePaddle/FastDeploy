@@ -190,7 +190,7 @@ def xpu_pre_process(
             max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
             is_speculative=use_speculate_method,
         )
-        xpu_forward_meta.init_tensor(seq_lens_encoder.shape[0], share_inputs["block_tables"].shape)
+        xpu_forward_meta.init_inplace_tensor(seq_lens_encoder.shape[0], share_inputs["block_tables"].shape)
 
     block_tables = xpu_forward_meta.block_tables
 

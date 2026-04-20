@@ -16,7 +16,7 @@ import random
 
 import numpy as np
 import paddle
-from utils import init_tensor
+from utils import init_inplace_tensor
 
 # block_attn_fused is deprecated and should be removed in the future
 from fastdeploy.model_executor.ops.xpu import (
@@ -101,7 +101,7 @@ def run_prefix_cache_block_attn(
         decoder_context_len_cpu,
         decoder_context_len_cache_cpu,
         len_info_cpu,
-    ) = init_tensor(seq_lens_encoder.shape[0], block_tables.shape)
+    ) = init_inplace_tensor(seq_lens_encoder.shape[0], block_tables.shape)
     (
         _,
         _,
@@ -271,7 +271,7 @@ def run_block_attn(
         decoder_context_len_cpu,
         decoder_context_len_cache_cpu,
         len_info_cpu,
-    ) = init_tensor(seq_lens_encoder.shape[0], block_tables.shape)
+    ) = init_inplace_tensor(seq_lens_encoder.shape[0], block_tables.shape)
     (
         _,
         _,

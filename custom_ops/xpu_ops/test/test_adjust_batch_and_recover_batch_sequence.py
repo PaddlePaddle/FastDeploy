@@ -16,7 +16,7 @@ import unittest
 
 import numpy as np
 import paddle
-from utils import init_tensor
+from utils import init_inplace_tensor
 
 from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
@@ -57,7 +57,7 @@ def _run_test_base(seq_lens_this_time_data):
         decoder_context_len_cpu,
         decoder_context_len_cache_cpu,
         len_info_cpu,
-    ) = init_tensor(seq_lens_encoder.shape[0], block_table.shape)
+    ) = init_inplace_tensor(seq_lens_encoder.shape[0], block_table.shape)
     (
         _,
         _,
