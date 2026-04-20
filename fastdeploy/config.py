@@ -378,6 +378,9 @@ class ModelConfig:
             # Because the ERNIE 4.5 config.json contains two sets of keys, adaptation is required.
             self.moe_num_shared_experts = self.n_shared_experts
 
+        if hasattr(self, "num_experts_per_tok") and not hasattr(self, "moe_k"):
+            self.moe_k = self.num_experts_per_tok
+
     def read_from_env(self):
         """
         Read configuration information from environment variables and update the object's attributes.
