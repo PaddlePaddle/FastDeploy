@@ -166,8 +166,7 @@ jobs:
             cd FastDeploy
 
             python -m pip uninstall paddlepaddle-gpu -y || true
-            wget -q --no-proxy https://paddle-qa.bj.bcebos.com/paddle-pipeline/Develop-Training-Linux-Gpu-Cuda129-Cudnn99-Mkl-Avx-Gcc11-Cp310-Incubate/725b0e64a11da2a2f8bb3366730c0e2249ac49e6/paddlepaddle_gpu-3.5.0.dev20260416-cp310-cp310-linux_x86_64.whl
-            python -m pip install paddlepaddle_gpu-3.5.0.dev20260416-cp310-cp310-linux_x86_64.whl
+            python -m pip install paddlepaddle-gpu==3.5.0.dev20260417 -i https://www.paddlepaddle.org.cn/packages/nightly/cu129/
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
