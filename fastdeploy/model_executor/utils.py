@@ -555,6 +555,7 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
     return fn
 
 
+@cache
 def has_flashinfer():
     return importlib.util.find_spec("flashinfer") is not None
 

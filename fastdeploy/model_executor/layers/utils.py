@@ -552,6 +552,7 @@ def vocab_range_from_global_vocab_size(global_vocab_size: int, rank: int, world_
     return vocab_range_from_per_partition_vocab_size(per_partition_vocab_size, rank, offset=offset)
 
 
+@functools.lru_cache(maxsize=None)
 def get_sm_version():
     prop = paddle.device.cuda.get_device_properties()
     cc = prop.major * 10 + prop.minor
