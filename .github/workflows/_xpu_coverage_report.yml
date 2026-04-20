@@ -93,6 +93,7 @@ jobs:
             tar -xf FastDeploy.tar.gz
             rm -rf FastDeploy.tar.gz
             cd FastDeploy
+            git config --global --add safe.directory /workspace/FastDeploy
             git config --global user.name "FastDeployCI"
             git config --global user.email "fastdeploy_ci@example.com"
             git log -n 3 --oneline
