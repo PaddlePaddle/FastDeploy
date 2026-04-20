@@ -324,7 +324,7 @@ class PrefixCacheManager:
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
                     + f" --model_path {self.config.model_config.model}"
-                    + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+                    + f" >{log_dir}/cache_manager_{int(device_ids[i])}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
                 cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -346,9 +346,7 @@ class PrefixCacheManager:
             if exit_code is None:
                 logger.info("Launch cache transfer manager successful")
             else:
-                logger.info(
-                    "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
-                )
+                logger.info("Launch cache transfer manager failed, see cache_manager.log for more information")
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
@@ -421,7 +419,7 @@ class PrefixCacheManager:
                 + f" --ipc_suffix {ipc_suffix}"
                 + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" >{log_dir}/launch_cache_messager_{i}.log 2>&1"
+                + f" >{log_dir}/cache_messager_{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -433,7 +431,7 @@ class PrefixCacheManager:
         if exit_code is None:
             logger.info("Launch cache messager successful")
         else:
-            logger.info("Launch cache messager failed, see launch_cache_messager.log for more information")
+            logger.info("Launch cache messager failed, see cache_messager.log for more information")
             cache_messager_processes = None
         return cache_messager_processes
 

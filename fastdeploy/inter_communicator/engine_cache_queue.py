@@ -28,7 +28,7 @@ from typing import Any, List, Tuple
 
 from fastdeploy.utils import get_logger
 
-logger = get_logger("cache_queue_manager", "cache_queue_manager.log")
+logger = get_logger("cache_queue_manager", "cache_manager.log")
 
 
 class EngineCacheQueue:
@@ -185,7 +185,7 @@ class EngineCacheQueue:
             # After manager.start(), its address attribute will be updated to the actual listening address.
             # We update self.address here so that the real address can be queried later.
             self.address = self.manager.address
-            logger.info(f"EngineCacheQueue server started at {self.address}")
+            logger.debug(f"EngineCacheQueue server started at {self.address}")
         else:
             # Client-side connection setup
             assert (
@@ -239,7 +239,7 @@ class EngineCacheQueue:
         if not is_server:
             # Setup position and total_num for sync operations
             self.position: int = 1 << self.client_id
-            logger.info(f"Connected EngineCacheQueue client_id: {self.client_id}")
+            logger.debug(f"Connected EngineCacheQueue client_id: {self.client_id}")
 
     def get_server_port(self) -> int:
         """
@@ -286,7 +286,7 @@ class EngineCacheQueue:
             self.task_lock.acquire()
         self.task_sync_value.set(0)
         self.transfer_task_queue.append(item)
-        logger.info(f"put_transfer_task: put swap task {item} to queue successful")
+        logger.debug(f"put_transfer_task: put swap task {item} to queue successful")
         self.task_lock.release()
 
     def get_transfer_task(self):
@@ -304,7 +304,7 @@ class EngineCacheQueue:
             data = self.transfer_task_queue[0]
             logger.debug(f"get_transfer_task: Get {data} by {self.client_id} from queue successful")
             set_value = self.task_sync_value.get() | self.position
-            logger.info(f"get_transfer_task: rank: {self.client_id} set_value: {set_value}")
+            logger.debug(f"get_transfer_task: rank: {self.client_id} set_value: {set_value}")
             if set_value >= self.total_num:
                 self.transfer_task_queue.pop(0)
                 set_value = 0
@@ -323,7 +323,7 @@ class EngineCacheQueue:
         self.task_sync_value.set(0)
         while len(self.transfer_task_queue) > 0:
             self.transfer_task_queue.pop(0)
-        logger.info("clear_transfer_task: done")
+        logger.debug("clear_transfer_task: done")
         self.task_lock.release()
 
     def put_transfer_done_signal(self, item):
@@ -333,7 +333,7 @@ class EngineCacheQueue:
         self.task_done_lock.acquire()
         self.tansfer_done_queue.append(item)
         self.task_done_lock.release()
-        logger.info(f"put_transfer_done_signal: put swap task {item[-1]} finished signal to queue successful")
+        logger.debug(f"put_transfer_done_signal: put swap task {item[-1]} finished signal to queue successful")
 
     def get_transfer_done_signal(self):
         """
@@ -343,7 +343,7 @@ class EngineCacheQueue:
         self.task_done_lock.acquire()
         if len(self.tansfer_done_queue) > 0:
             data = self.tansfer_done_queue.pop(0)
-            logger.info(f"get_transfer_done_signal: Get swap task {data[-1]} finished signal from queue successful")
+            logger.debug(f"get_transfer_done_signal: Get swap task {data[-1]} finished signal from queue successful")
         self.task_done_lock.release()
         return data
 
