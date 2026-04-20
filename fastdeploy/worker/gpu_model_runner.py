@@ -188,6 +188,7 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 self.encoder_cache = None
 
+            # Note(Zhengshifeng) init video cache for VL model
             self.video_cache = {}
 
         #  Sampler
@@ -834,11 +835,15 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["decode_states"][idx, 0] = 0
                     inputs = request.multimodal_inputs
                     # mm attention_mask
-                    if inputs.get("attention_mask_offset", None) is None:
-                        inputs["attention_mask_offset"] = np.arange(self.model_config.max_model_len).tolist()
                     attn_offset_len = prefill_end_index - prefill_start_index
+                    if inputs.get("attention_mask_offset", None) is None:
+                        attention_mask_offset_slice = np.arange(prefill_start_index, prefill_end_index, dtype=np.int32)
+                    else:
+                        attention_mask_offset_slice = np.asarray(
+                            inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype=np.int32
+                        )
                     self.share_inputs["attn_mask_offsets_full"][idx, 0:attn_offset_len] = paddle.to_tensor(
-                        inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype="int32"
+                        attention_mask_offset_slice, dtype="int32"
                     )
 
                 if not self.is_pooling_model:
@@ -2307,8 +2312,12 @@ class GPUModelRunner(ModelRunnerBase):
             model_inputs["image_features"] = self.share_inputs["image_features"]
             model_inputs["decode_states"] = self.share_inputs["decode_states"]
             model_inputs["image_grid_thws"] = self.share_inputs.get("image_grid_thws", None)
-            model_inputs["video_features"] = self.share_inputs["video_features"]
-            model_inputs["video_grid_thws"] = self.share_inputs.get("video_grid_thws", None)
+            video_features = self.share_inputs.get("video_features", None)
+            video_grid_thws = self.share_inputs.get("video_grid_thws", None)
+            if video_features is not None:
+                model_inputs["video_features"] = video_features
+            if video_grid_thws is not None:
+                model_inputs["video_grid_thws"] = video_grid_thws
 
             # init features and grid_thws
             self.share_inputs["image_features"] = None

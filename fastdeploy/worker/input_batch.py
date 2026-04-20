@@ -692,6 +692,7 @@ class InputBatch:
                 self.video_features = None
                 self.video_grid_thws = None
                 self.video_infinity_scales = None
+                fill_paddle_tensor(self, "decode_states", -1)
                 fill_paddle_tensor(self, "attn_mask_offsets", -1)
                 fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
             else:
@@ -927,6 +928,7 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.mask_rollback, i1, i2)
         swap_data(self.recompute_token_num, i1, i2)
         if self.enable_mm:
+            swap_data(self.decode_states, i1, i2)
             swap_data(self.attn_mask_offsets, i1, i2)
             swap_data(self.attn_mask_offsets_full, i1, i2)
             swap_data(self.attn_mask_offsets_decoder, i1, i2)
