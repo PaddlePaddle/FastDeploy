@@ -402,9 +402,13 @@ std::vector<std::vector<int64_t>> GetInferParamInferShape(
     const std::vector<int64_t>& seq_lens_encoder_shape,
     const std::vector<int64_t>& seq_lens_decoder_shape,
     const std::vector<int64_t>& seq_lens_this_time_shape,
-    const std::vector<int64_t>& block_tables_shape) {
-  // TODO: should use correct shape
-  return {seq_lens_encoder_shape, seq_lens_encoder_shape};
+    const std::vector<int64_t>& block_tables_shape,
+    int num_speculative_tokens) {
+  // Return shapes for slot_mapping_enc and slot_mapping_dec
+  // slot_mapping_enc shape depends on encoder token count (unknown at shape
+  // inference time) slot_mapping_dec shape depends on batch size and
+  // speculative token count
+  return {{-1}, {seq_lens_encoder_shape[0] * (1 + num_speculative_tokens)}};
 }
 
 std::vector<paddle::DataType> GetInferParamInferDtype(
@@ -412,7 +416,8 @@ std::vector<paddle::DataType> GetInferParamInferDtype(
     const paddle::DataType& seq_lens_decoder_dtype,
     const paddle::DataType& seq_lens_this_time_dtype,
     const paddle::DataType& block_tables_dtype) {
-  return {seq_lens_encoder_dtype, seq_lens_encoder_dtype};
+  // Return dtypes for slot_mapping_enc and slot_mapping_dec (both INT32)
+  return {paddle::DataType::INT32, paddle::DataType::INT32};
 }
 
 PD_BUILD_OP(get_infer_param)
@@ -443,29 +448,6 @@ PD_BUILD_OP(get_infer_param)
              "decoder_context_len_cache_cpu",
              "len_info_cpu"})
     .Outputs({"slot_mapping_enc", "slot_mapping_dec"})
-    .SetInplaceMap(
-        {{"encoder_batch_map", "encoder_batch_map_out"},
-         {"decoder_batch_map", "decoder_batch_map_out"},
-         {"encoder_batch_idx", "encoder_batch_idx_out"},
-         {"decoder_batch_idx", "decoder_batch_idx_out"},
-         {"encoder_seq_lod", "encoder_seq_lod_out"},
-         {"decoder_seq_lod", "decoder_seq_lod_out"},
-         {"encoder_kv_lod", "encoder_kv_lod_out"},
-         {"prefix_len", "prefix_len_out"},
-         {"decoder_context_len", "decoder_context_len_out"},
-         {"decoder_context_len_cache", "decoder_context_len_cache_out"},
-         {"prefix_block_tables", "prefix_block_tables_out"},
-         {"encoder_batch_map_cpu", "encoder_batch_map_cpu_out"},
-         {"decoder_batch_map_cpu", "decoder_batch_map_cpu_out"},
-         {"encoder_batch_idx_cpu", "encoder_batch_idx_cpu_out"},
-         {"decoder_batch_idx_cpu", "decoder_batch_idx_cpu_out"},
-         {"encoder_seq_lod_cpu", "encoder_seq_lod_cpu_out"},
-         {"decoder_seq_lod_cpu", "decoder_seq_lod_cpu_out"},
-         {"encoder_kv_lod_cpu", "encoder_kv_lod_cpu_out"},
-         {"prefix_len_cpu", "prefix_len_cpu_out"},
-         {"decoder_context_len_cpu", "decoder_context_len_cpu_out"},
-         {"decoder_context_len_cache_cpu", "decoder_context_len_cache_cpu_out"},
-         {"len_info_cpu", "len_info_cpu_out"}})
     .SetKernelFn(PD_KERNEL(GetInferParam))
     .Attrs({"block_size: int", "num_speculative_tokens: int"})
     .SetInferShapeFn(PD_INFER_SHAPE(GetInferParamInferShape))
