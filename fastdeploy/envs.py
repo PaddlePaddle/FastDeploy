@@ -217,7 +217,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MIN_NEW_TOKEN_RATIO": lambda: float(os.getenv("FD_MIN_NEW_TOKEN_RATIO", "0.1")),
     "FD_NEW_TOKEN_RATIO_DECAY": lambda: float(os.getenv("FD_NEW_TOKEN_RATIO_DECAY", "0.001")),
     "FD_CLIP_MAX_NEW_TOKENS": lambda: int(os.getenv("FD_CLIP_MAX_NEW_TOKENS", "4096")),
-    "FD_RETRACT_DECODE_STEPS": lambda: int(os.getenv("FD_RETRACT_DECODE_STEPS", "1024")),
     # Legacy reserve block env vars (kept for backwards compatibility, no longer used)
     "FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL": lambda: int(
         os.getenv("FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL", "16")

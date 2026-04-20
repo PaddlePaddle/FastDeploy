@@ -45,7 +45,6 @@ einops
 setproctitle
 aistudio_sdk
 p2pstore
-mooncake-transfer-engine>=0.3.10.post1
 py-cpuinfo
 flashinfer-python-paddle @ https://xly-devops.bj.bcebos.com/flashinfer/flashinfer_python_paddle-0.4.1.2-py3-none-any.whl
 flash_mask @ https://xly-devops.bj.bcebos.com/flashmask/flash_mask-4.0.0%2Bg4c84f74-py3-none-any.whl

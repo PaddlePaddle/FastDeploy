@@ -238,7 +238,6 @@ class ResourceManagerV1(ResourceManager):
             self.min_new_token_ratio = envs.FD_MIN_NEW_TOKEN_RATIO
             self.new_token_ratio_decay = envs.FD_NEW_TOKEN_RATIO_DECAY
             self.clip_max_new_tokens = envs.FD_CLIP_MAX_NEW_TOKENS
-            self.retract_decode_steps = envs.FD_RETRACT_DECODE_STEPS
             self.new_token_ratio = self.init_new_token_ratio
         else:
             self.init_reserve_output_block_num = envs.FD_RESERVE_OUTPUT_BLOCK_NUM_FOR_DECODE_WHEN_SCHEDULE_NEW_PREFILL
@@ -346,15 +345,6 @@ class ResourceManagerV1(ResourceManager):
             llm_logger.debug(
                 f"req idx {req.idx} occupy {len(req.block_tables)} block_tables and {len(req.extend_block_tables)} extend_block_tables"
             )
-
-    def _can_preempt(self):
-        """
-        cannot preempt request which use extend block
-        """
-        for req in self.running:
-            if not req.use_extend_tables:
-                return True
-        return False
 
     def _can_preempt_with_decode_task(self):
         """
@@ -493,9 +483,10 @@ class ResourceManagerV1(ResourceManager):
             num_running_decode = sum(
                 [1 if req.num_total_tokens > req.need_prefill_tokens else 0 for req in self.running]
             )
-            new_ratio = (total_decoded_tokens + self.retract_decode_steps * num_running_decode) / (
-                total_max_new_tokens + 1
-            )
+            extra_decode_steps = (
+                16 * self.config.cache_config.block_size
+            )  # consider extra 16 blocks for each running decode request when estimating new token ratio
+            new_ratio = (total_decoded_tokens + extra_decode_steps * num_running_decode) / (total_max_new_tokens + 1)
             self.new_token_ratio = min(new_ratio, self.init_new_token_ratio)
             llm_logger.info(
                 f"Estimate new token ratio for preemption: {self.new_token_ratio}, "
