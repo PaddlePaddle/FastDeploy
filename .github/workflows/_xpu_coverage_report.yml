@@ -1,0 +1,228 @@
+name: XPU Coverage Report
+
+on:
+  workflow_call:
+    inputs:
+      FASTDEPLOY_ARCHIVE_URL:
+        description: "URL of the compressed FastDeploy code archive."
+        required: true
+        type: string
+      COVERAGE_UNIT_TEST_URL:
+        description: "URL of coverage data from unit test"
+        required: false
+        type: string
+        default: ""
+      COVERAGE_4CARDS_URL:
+        description: "URL of coverage data from 4cards case test"
+        required: false
+        type: string
+        default: ""
+      COVERAGE_8CARDS_URL:
+        description: "URL of coverage data from 8cards case test"
+        required: false
+        type: string
+        default: ""
+    secrets:
+      github-token:
+        required: true
+
+jobs:
+  check_bypass:
+    uses: ./.github/workflows/check-bypass.yml
+    secrets:
+      github-token: ${{ secrets.github-token }}
+    with:
+      workflow-name: xpu_coverage
+
+  xpu_coverage_combine:
+    runs-on: [self-hosted, XPU-P800-4Cards]
+    needs: check_bypass
+    if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
+    timeout-minutes: 30
+    outputs:
+      xpu_cov_xml_url: ${{ steps.cov_upload.outputs.xpu_cov_xml_url }}
+      diff_cov_json_url: ${{ steps.cov_upload.outputs.diff_cov_json_url }}
+    steps:
+      - name: Code Prepare
+        shell: bash
+        env:
+          fd_archive_url: ${{ inputs.FASTDEPLOY_ARCHIVE_URL }}
+        run: |
+          set -x
+          rm -rf FastDeploy FastDeploy.tar.gz
+          wget -q --no-proxy ${fd_archive_url}
+          tar -xf FastDeploy.tar.gz
+          rm -rf FastDeploy.tar.gz
+          cd FastDeploy
+          git config --global user.name "FastDeployCI"
+          git config --global user.email "fastdeploy_ci@example.com"
+          git log -n 3 --oneline
+
+      - name: Download and combine coverage data
+        shell: bash
+        env:
+          COV_UNIT_TEST_URL: ${{ inputs.COVERAGE_UNIT_TEST_URL }}
+          COV_4CARDS_URL: ${{ inputs.COVERAGE_4CARDS_URL }}
+          COV_8CARDS_URL: ${{ inputs.COVERAGE_8CARDS_URL }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+          set -x
+          cd FastDeploy
+          python -m pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+          python -m pip install coverage diff-cover
+
+          mkdir -p coveragedata
+
+          # 下载各测试Job的覆盖率数据
+          if [[ -n "${COV_UNIT_TEST_URL}" ]]; then
+            echo "下载 unit_test 覆盖率数据..."
+            wget -q --no-proxy "${COV_UNIT_TEST_URL}" -O coverage_unit_test.tar.gz
+            tar -xzf coverage_unit_test.tar.gz -C coveragedata/
+            rm -f coverage_unit_test.tar.gz
+          fi
+
+          if [[ -n "${COV_4CARDS_URL}" ]]; then
+            echo "下载 4cards 覆盖率数据..."
+            wget -q --no-proxy "${COV_4CARDS_URL}" -O coverage_4cards.tar.gz
+            tar -xzf coverage_4cards.tar.gz -C coveragedata/
+            rm -f coverage_4cards.tar.gz
+          fi
+
+          if [[ -n "${COV_8CARDS_URL}" ]]; then
+            echo "下载 8cards 覆盖率数据..."
+            wget -q --no-proxy "${COV_8CARDS_URL}" -O coverage_8cards.tar.gz
+            tar -xzf coverage_8cards.tar.gz -C coveragedata/
+            rm -f coverage_8cards.tar.gz
+          fi
+
+          echo "覆盖率数据文件:"
+          ls -la coveragedata/
+
+          # 检查是否有覆盖率数据
+          COV_FILES=$(find coveragedata/ -name '.coverage*' -type f 2>/dev/null | head -1)
+          if [[ -z "${COV_FILES}" ]]; then
+            echo "没有找到任何覆盖率数据，跳过合并和检查"
+            echo "COVERAGE_EXIT_CODE=0" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          # 合并所有覆盖率数据
+          export COVERAGE_RCFILE=$(pwd)/scripts/.coveragerc_xpu
+          export COVERAGE_FILE=$(pwd)/coveragedata/.coverage
+          python -m coverage combine --rcfile=${COVERAGE_RCFILE} coveragedata/ || true
+          python -m coverage report --rcfile=${COVERAGE_RCFILE} || true
+          python -m coverage xml --rcfile=${COVERAGE_RCFILE} -o xpu_coverage_all.xml || true
+
+          # PR增量覆盖率检查
+          COVERAGE_EXIT_CODE=0
+          if [[ "$IS_PR" == "true" ]]; then
+            echo "生成PR diff..."
+            git config --global --add safe.directory $(pwd)
+            git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
+            echo "运行增量覆盖率检查 (diff-cover, fail-under=80)..."
+            diff-cover xpu_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report xpu_diff_coverage.json || COVERAGE_EXIT_CODE=9
+          fi
+          echo "COVERAGE_EXIT_CODE=${COVERAGE_EXIT_CODE}" >> $GITHUB_ENV
+
+      - name: Upload coverage results to BOS
+        id: cov_upload
+        if: always()
+        shell: bash
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
+        run: |
+          set -x
+          cd FastDeploy
+          python -m pip install -q bce-python-sdk==0.9.29
+          wget -q --no-proxy --no-check-certificate \
+            https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py \
+            -O bos_tools.py
+          push_file=$(realpath bos_tools.py)
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]];then
+            commit_id=${{ github.event.pull_request.head.sha }}
+            pr_num=${{ github.event.pull_request.number }}
+            target_path=paddle-github-action/PR/FastDeploy/${pr_num}/${commit_id}/xpu_coverage
+          else
+            commit_id=${{ github.sha }}
+            branch_name=${{ github.ref_name }}
+            target_path=paddle-github-action/BRANCH/FastDeploy/${branch_name}/${commit_id}/xpu_coverage
+          fi
+          target_path_stripped="${target_path#paddle-github-action/}"
+
+          # 上传全量覆盖率XML
+          if [ -f xpu_coverage_all.xml ]; then
+            python ${push_file} xpu_coverage_all.xml ${target_path}/CoverageData
+            XPU_COV_XML_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/xpu_coverage_all.xml
+            echo "xpu_cov_xml_url=${XPU_COV_XML_URL}" >> $GITHUB_OUTPUT
+            echo "xpu_cov_xml_url=${XPU_COV_XML_URL}" >> $GITHUB_ENV
+          fi
+
+          # 上传增量覆盖率JSON
+          if [[ "$IS_PR" == "true" ]] && [ -f xpu_diff_coverage.json ]; then
+            python ${push_file} xpu_diff_coverage.json ${target_path}/CoverageData
+            DIFF_COV_JSON_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/CoverageData/xpu_diff_coverage.json
+            echo "diff_cov_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_OUTPUT
+            echo "diff_cov_json_url=${DIFF_COV_JSON_URL}" >> $GITHUB_ENV
+          fi
+
+      - name: Verify XPU Code Coverage Threshold (80%)
+        if: ${{ github.event_name == 'pull_request' }}
+        shell: bash
+        run: |
+          cd FastDeploy
+          if [ "$COVERAGE_EXIT_CODE" -eq 9 ]; then
+            echo "XPU覆盖率不达标 (exit code 9)"
+            if [ -f xpu_diff_coverage.json ]; then
+              echo "增量覆盖率详情:"
+              if command -v jq >/dev/null 2>&1; then
+                jq . xpu_diff_coverage.json
+              else
+                cat xpu_diff_coverage.json
+              fi
+            fi
+            exit "$COVERAGE_EXIT_CODE"
+          fi
+          echo "XPU覆盖率检查通过"
+          exit 0
+
+  xpu_codecov_upload:
+    needs: xpu_coverage_combine
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      xpu_cov_xml_url: ${{ needs.xpu_coverage_combine.outputs.xpu_cov_xml_url }}
+    steps:
+      - name: Clone FastDeploy
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.10'
+      - name: Download XPU coverage file
+        shell: bash
+        run: |
+          echo "Downloading XPU coverage file..."
+          if [ -z "${xpu_cov_xml_url}" ]; then
+            echo "No coverage file URL provided, skipping."
+            exit 0
+          fi
+          if ! wget --no-proxy "${xpu_cov_xml_url}" -O xpu_coverage_all.xml; then
+            echo "Download failed, skipping upload."
+            exit 0
+          fi
+          sed -i 's|<source>/workspace/FastDeploy/fastdeploy</source>|<source>fastdeploy</source>|' xpu_coverage_all.xml
+
+      - name: Upload XPU coverage to Codecov
+        if: always() && hashFiles('xpu_coverage_all.xml') != ''
+        uses: codecov/codecov-action@v6
+        with:
+          files: ./xpu_coverage_all.xml
+          flags: XPU
+          name: xpu diff coverage
+          fail_ci_if_error: false
+          verbose: true
+          disable_search: true

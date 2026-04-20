@@ -1,0 +1,43 @@
+[run]
+branch = True
+source = fastdeploy
+concurrency = multiprocessing
+patch = subprocess
+parallel = True
+
+[paths]
+source =
+    fastdeploy
+    */site-packages/fastdeploy
+    */lib/python3.10/site-packages/fastdeploy
+    */fastdeploy
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    @abstractmethod
+    @abc.abstractmethod
+
+ignore_errors = True
+
+omit =
+    */site-packages/*/tests/*
+    */site-packages/setuptools/*
+    */dist-packages/*
+    */fastdeploy/benchmarks/lib/endpoint_request_func.py
+    */fastdeploy/model_executor/graph_optimization/utils.py
+    */fastdeploy/model_executor/ops/gpu*
+    */fastdeploy/**/dcu/*
+    */fastdeploy/worker/dcu*.py
+    */fastdeploy/**/gcu/*
+    */fastdeploy/worker/gcu*.py
+    */fastdeploy/**/intel_hpu/*
+    */fastdeploy/worker/hpu*.py
+    */fastdeploy/**/metax/*
+    */fastdeploy/worker/metax*.py
+    */fastdeploy/**/iluvatar/*
+    */fastdeploy/worker/iluvatar*.py
+    */fastdeploy/golang_router/*
