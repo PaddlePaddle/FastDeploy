@@ -54,7 +54,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(
   if (token_num_data > 0) {
     if (draft_tokens || seq_lens_encoder) {
       // TODO(chenhuan09) : support speculate mode
-      PD_THROW("draft tokens is not supported now.");
+      PD_THROW("Draft tokens are not supported on XPU currently.");
     }
     int r =
         fastdeploy::plugin::get_padding_offset(ctx,

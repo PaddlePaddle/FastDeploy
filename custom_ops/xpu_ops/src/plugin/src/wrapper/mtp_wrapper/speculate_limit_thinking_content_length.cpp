@@ -23,7 +23,7 @@ __attribute__((global)) void speculate_limit_thinking_content_length_kernel(
     int64_t* next_tokens,
     const int* max_think_lens,
     int* max_reply_lens,
-    int64_t* step_idx,
+    const int64_t* step_idx,
     const int64_t* eos_token_ids,
     int* limit_status,
     int* accept_num,
@@ -45,7 +45,7 @@ static int cpu_wrapper(api::Context* ctx,
                        int64_t* next_tokens,
                        const int* max_think_lens,
                        int* max_reply_lens,
-                       int64_t* step_idx,
+                       const int64_t* step_idx,
                        const int64_t* eos_token_ids,
                        int* limit_status,
                        int* accept_num,
@@ -74,7 +74,7 @@ static int cpu_wrapper(api::Context* ctx,
 
     int new_accept_num = original_accept_num;
 
-    const int64_t current_base_step = step_idx[bid] - original_accept_num + 1;
+    const int64_t current_base_step = step_idx[bid] + 1;
 
     for (int token_offset = 0; token_offset < original_accept_num;
          token_offset++) {
@@ -154,11 +154,6 @@ static int cpu_wrapper(api::Context* ctx,
       }
     }
 
-    const int discarded_tokens = original_accept_num - new_accept_num;
-    if (discarded_tokens > 0) {
-      step_idx[bid] -= discarded_tokens;
-    }
-
     accept_num[bid] = new_accept_num;
     limit_status[bid] = status;
     max_reply_lens[bid] = max_reply_len;
@@ -170,7 +165,7 @@ static int xpu3_wrapper(api::Context* ctx,
                         int64_t* next_tokens,
                         const int* max_think_lens,
                         int* max_reply_lens,
-                        int64_t* step_idx,
+                        const int64_t* step_idx,
                         const int64_t* eos_token_ids,
                         int* limit_status,
                         int* accept_num,
@@ -188,7 +183,7 @@ static int xpu3_wrapper(api::Context* ctx,
       reinterpret_cast<XPU_INT64*>(next_tokens),
       max_think_lens,
       max_reply_lens,
-      reinterpret_cast<XPU_INT64*>(step_idx),
+      reinterpret_cast<const XPU_INT64*>(step_idx),
       reinterpret_cast<const XPU_INT64*>(eos_token_ids),
       limit_status,
       accept_num,
@@ -209,7 +204,7 @@ int speculate_limit_thinking_content_length_kernel(
     int64_t* next_tokens,
     const int* max_think_lens,
     int* max_reply_lens,
-    int64_t* step_idx,
+    const int64_t* step_idx,
     const int64_t* eos_token_ids,
     int* limit_status,
     int* accept_num,

@@ -39,7 +39,7 @@ __global__ void speculate_limit_thinking_content_length_kernel(
     int64_t* next_tokens,          // [bs, tokens_per_step]
     const int* max_think_lens,     // [bs]
     int* max_reply_lens,           // [bs]
-    int64_t* step_idx,             // [bs]
+    const int64_t* step_idx,       // [bs]
     const int64_t* eos_token_ids,  // [eos_len]
     int* limit_status,             // [bs]
     int* accept_num,               // [bs]
