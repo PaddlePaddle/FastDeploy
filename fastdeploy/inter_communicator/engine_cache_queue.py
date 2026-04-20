@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import queue
 import threading
 import time
 import traceback
@@ -81,6 +82,7 @@ class EngineCacheQueue:
             # Server-side initialization for shared resources
             self.transfer_task_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
             self.tansfer_done_queue_init: List[List[Any]] = [list() for _ in range(self.local_data_parallel_size)]
+            self.transfer_done_q_init = [queue.Queue() for _ in range(self.local_data_parallel_size)]
             self.cache_sync_value_init: List[Value] = [Value("i", 0) for _ in range(self.local_data_parallel_size)]
             self.transfer_task_lock_init: List[threading.Lock] = [
                 threading.Lock() for _ in range(self.local_data_parallel_size)
@@ -146,6 +148,10 @@ class EngineCacheQueue:
                 callable=lambda idx: self.transfer_task_done_lock_init[idx],
                 proxytype=AcquirerProxy,
             )
+            QueueManager.register(
+                "get_transfer_done_q",
+                callable=lambda idx: self.transfer_done_q_init[idx],
+            )
             QueueManager.register("get_barrier", callable=lambda idx: self.barrier[idx])
             QueueManager.register("get_barrier0", callable=lambda idx: self.barrier0_init[idx])
             QueueManager.register("get_barrier1", callable=lambda idx: self.barrier1_init[idx])
@@ -196,6 +202,7 @@ class EngineCacheQueue:
             QueueManager.register("get_cache_sync_value")
             QueueManager.register("get_transfer_task_lock")
             QueueManager.register("get_transfer_task_done_lock")
+            QueueManager.register("get_transfer_done_q")
             QueueManager.register("get_barrier")
             QueueManager.register("get_barrier0")
             QueueManager.register("get_barrier1")
@@ -219,6 +226,7 @@ class EngineCacheQueue:
         self.task_sync_value = self.manager.get_cache_sync_value(self.local_data_parallel_id)
         self.task_lock = self.manager.get_transfer_task_lock(self.local_data_parallel_id)
         self.task_done_lock = self.manager.get_transfer_task_done_lock(self.local_data_parallel_id)
+        self.transfer_done_q = self.manager.get_transfer_done_q(self.local_data_parallel_id)
 
         # Get barrier proxies
         self.barrier = self.manager.get_barrier(self.local_data_parallel_id)
@@ -328,24 +336,34 @@ class EngineCacheQueue:
 
     def put_transfer_done_signal(self, item):
         """
-        put swap result
+        put swap result - uses queue.Queue for blocking get support
         """
-        self.task_done_lock.acquire()
-        self.tansfer_done_queue.append(item)
-        self.task_done_lock.release()
+        self.transfer_done_q.put(item)
         logger.info(f"put_transfer_done_signal: put swap task {item[-1]} finished signal to queue successful")
 
     def get_transfer_done_signal(self):
         """
-        get swap result
+        get swap result (non-blocking, for backward compatibility)
         """
-        data = None
-        self.task_done_lock.acquire()
-        if len(self.tansfer_done_queue) > 0:
-            data = self.tansfer_done_queue.pop(0)
+        try:
+            data = self.transfer_done_q.get_nowait()
             logger.info(f"get_transfer_done_signal: Get swap task {data[-1]} finished signal from queue successful")
-        self.task_done_lock.release()
-        return data
+            return data
+        except Exception:
+            return None
+
+    def get_transfer_done_signal_blocking(self, timeout=0.1):
+        """
+        Blocking get for swap result. Blocks server-side using queue.Queue.get(),
+        which means the client GIL is released during the wait.
+        Returns None on timeout.
+        """
+        try:
+            data = self.transfer_done_q.get(block=True, timeout=timeout)
+            logger.info(f"get_transfer_done_signal_blocking: Get swap task {data[-1]} finished signal from queue successful")
+            return data
+        except Exception:
+            return None
 
     def empty(self):
         """
@@ -362,7 +380,7 @@ class EngineCacheQueue:
         check if result queue is empty
         """
         try:
-            return len(self.tansfer_done_queue) == 0
+            return self.transfer_done_q.empty()
         except Exception as e:
             logger.error(f"result_queue_empty function meets error: {e}, {str(traceback.format_exc())}")
             raise e

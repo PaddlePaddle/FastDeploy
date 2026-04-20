@@ -122,6 +122,7 @@ class PrefixCacheManager:
         self.gpu_free_task_future = None
         self.cpu_free_future = None
         self.cache_status_lock = Lock()
+        self._transfer_pending_event = Event()
 
         logger.info(
             f"Prefix cache manager is initialized with {self.num_gpu_blocks} gpu blocks "
@@ -595,6 +596,7 @@ class PrefixCacheManager:
         self.cache_task_queue.put_transfer_task(
             (event_type, transfer_task_id, swap_node_ids, gpu_block_ids, cpu_block_ids)
         )
+        self._transfer_pending_event.set()
         if is_sync:
             self.sync_swap_task(transfer_task_id)
         self._release_kvcache_lock()
@@ -1263,6 +1265,7 @@ class PrefixCacheManager:
 
         self.task_write_back_event[task.task_id] = Event()
         self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
+        self._transfer_pending_event.set()
         if is_sync:
             self.wait_write_storage_task(task.task_id)
 
@@ -1285,6 +1288,7 @@ class PrefixCacheManager:
         self.task_prefetch_event[task.task_id] = Event()
         # issue task to cache_transfer_manager
         self.cache_task_queue.put_transfer_task((CacheStatus.STORAGE2GPU, task))
+        self._transfer_pending_event.set()
         if is_sync:
             storage_block_ids = self.wait_prefetch_storage_task(task.task_id)
         return storage_block_ids
@@ -1458,8 +1462,13 @@ class PrefixCacheManager:
                         break
                     node = heapq.heappop(self.gpu_lru_leaf_heap)
                     self.gpu_lru_leaf_set.remove(node)
-                    if self.cache_config.num_cpu_blocks < need_block_num:
-                        if node.shared_count == 0 and node.is_gpu_leaf_node:  # 直接回收
+                    # Always use direct recycle: immediately free GPU blocks without
+                    # GPU→CPU DMA transfer. The synchronous DMA path causes severe GIL
+                    # contention (~10% throughput loss) due to busy-waits across 3 threads:
+                    # main scheduler, executor pool (sync_swap_task), and recv thread.
+                    # CPU cache can still be utilized via other fill paths (e.g., storage).
+                    if self.cache_config.num_cpu_blocks < need_block_num or True:
+                        if node.shared_count == 0 and node.is_gpu_leaf_node:
                             self._handle_free_gpu_node_without_cpu(node)
                             total_gpu_free_count += 1
                             cur_node = node
@@ -2159,14 +2168,43 @@ class PrefixCacheManager:
 
     def recv_data_transfer_result(self):
         """
-        recv data transfer result
+        recv data transfer result.
+        Uses a subprocess to do BaseManager RPC polling, communicating results
+        back via a multiprocessing.Queue (pipe-based, GIL-friendly).
+        This eliminates GIL contention from TCP RPC calls in the main process.
         """
+        import multiprocessing as mp
+
+        result_queue = mp.Queue()
+
+        def _rpc_poller(cache_task_queue, result_queue):
+            """Runs in a separate process - does BaseManager RPC polling without
+            affecting the main process's GIL."""
+            import time
+            while True:
+                try:
+                    data = cache_task_queue.get_transfer_done_signal()
+                    if data is not None:
+                        result_queue.put(data)
+                    else:
+                        time.sleep(0.001)
+                except Exception:
+                    time.sleep(0.01)
+
+        poller = mp.Process(target=_rpc_poller, args=(self.cache_task_queue, result_queue), daemon=True)
+        poller.start()
+
         while True:
 
             try:
-                data = self.cache_task_queue.get_transfer_done_signal()
+                # Queue.get() blocks in C code, releasing GIL while waiting.
+                # No BaseManager RPC calls in this process.
+                try:
+                    data = result_queue.get(block=True, timeout=0.1)
+                except Exception:
+                    data = None
+
                 if data is None:
-                    time.sleep(0.001)
                     continue
                 event_type = data[0]
 
