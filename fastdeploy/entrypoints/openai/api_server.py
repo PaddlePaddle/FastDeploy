@@ -64,6 +64,7 @@ from fastdeploy.entrypoints.openai.tool_parsers import ToolParserManager
 from fastdeploy.entrypoints.openai.utils import (
     UVICORN_CONFIG,
     make_arg_parser,
+    resolve_workers_and_concurrency,
     with_cancellation,
 )
 from fastdeploy.entrypoints.openai.v1.serving_chat import (
@@ -95,6 +96,7 @@ _tracing_inited = False
 
 parser = make_arg_parser(FlexibleArgumentParser())
 args = parser.parse_args()
+resolve_workers_and_concurrency(args)
 
 console_logger.info(f"Number of api-server workers: {args.workers}.")
 

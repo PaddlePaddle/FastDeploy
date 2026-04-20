@@ -17,6 +17,7 @@
 import asyncio
 import functools
 import heapq
+import math
 import os
 import random
 import time
@@ -343,7 +344,7 @@ class DealerConnectionManager:
 def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
     parser.add_argument("--port", default=8000, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-    parser.add_argument("--workers", default=1, type=int, help="number of workers")
+    parser.add_argument("--workers", default=None, type=int, help="number of workers")
     parser.add_argument("--metrics-port", default=None, type=int, help="port for metrics server")
     parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
     parser.add_argument(
@@ -352,7 +353,7 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         type=int,
         help="max waiting time for connection, if set value -1 means no waiting time limit",
     )
-    parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+    parser.add_argument("--max-concurrency", default=None, type=int, help="max concurrency")
 
     parser.add_argument(
         "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "
@@ -375,6 +376,31 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
 
     parser = EngineArgs.add_cli_args(parser)
     return parser
+
+
+def resolve_workers_and_concurrency(args):
+    """
+    Resolve default values for workers and max_concurrency based on the platform.
+
+    For NVIDIA GPU (CUDA):
+        workers defaults to ceil(max_num_seqs / 64)
+        max_concurrency defaults to workers * 512
+    For other platforms:
+        workers defaults to 1
+        max_concurrency defaults to workers * 512
+    """
+    from fastdeploy.platforms import current_platform
+
+    if current_platform.is_cuda():
+        if args.workers is None:
+            args.workers = math.ceil(args.max_num_seqs / 64)
+        if args.max_concurrency is None:
+            args.max_concurrency = args.workers * 512
+    else:
+        if args.workers is None:
+            args.workers = 1
+        if args.max_concurrency is None:
+            args.max_concurrency = args.workers * 512
 
 
 async def listen_for_disconnect(request: Request) -> None:
