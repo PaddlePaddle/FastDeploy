@@ -213,7 +213,7 @@ jobs:
           -e TZ="Asia/Shanghai" \
           -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.5.0.dev20260417 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
@@ -266,7 +266,7 @@ jobs:
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
-            -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--max-concurrency\": 5, \"--max-waiting-time\": 1 }"
+            -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--workers\": 1, \"--max-concurrency\": 5, \"--max-waiting-time\": 1 }"
           check_service 90
           python -m pytest -sv test_max_concurrency.py || TEST_EXIT_CODE=1
 

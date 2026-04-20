@@ -864,6 +864,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         if self.backend == "flashinfer-cutlass":
             gate_out = gate(x.cast("float32"))

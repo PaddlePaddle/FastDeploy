@@ -160,7 +160,8 @@ class ForwardMeta:
 
     # for mla & dsa
     position_ids: Optional[paddle.Tensor] = None
-    mask_encoder_batch: Optional[paddle.Tensor] = None
+    # for kvcache slot
+    slot_mapping: Optional[paddle.Tensor] = None
 
     real_bsz: int = 0
 
