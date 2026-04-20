@@ -428,6 +428,15 @@ async def async_request_eb_openai_chat_completions(
                 # output.generated_text = generated_text
                 # 在流式结束时，记录最后一个 chunk 收到的时间戳
                 output.end_timestamp = most_recent_timestamp
+                # 截断case也记录usage
+                usage = data.get("usage", {})
+                if usage:
+                    output.output_tokens = usage.get("completion_tokens", 0)
+                    output.prompt_tokens = usage.get("prompt_tokens", 0)
+                    if output.prompt_len == 0:
+                        prompt_details = usage.get("prompt_tokens_details", {})
+                        if prompt_details:
+                            output.prompt_len = prompt_details.get("cached_tokens", 0)
 
                 if tool_call_buffer:
                     for _, tc in tool_call_buffer.items():
