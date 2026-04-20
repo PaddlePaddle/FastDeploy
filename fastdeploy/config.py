@@ -286,6 +286,7 @@ class ModelConfig:
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
         self.think_truncate_prompt_ids = args.get("think_truncate_prompt_ids", [-1])
+        self.reasoning_allowed_token_ids = args.get("reasoning_allowed_token_ids", [])
 
         num_max_logprobs = args.get("max_logprobs", None)
         if num_max_logprobs is not None and num_max_logprobs < -1:

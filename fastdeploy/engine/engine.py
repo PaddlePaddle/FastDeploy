@@ -603,6 +603,15 @@ class LLMEngine:
             )
         llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
 
+        try:
+            reasoning_allowed_token_ids = [
+                self.data_processor.tokenizer.convert_tokens_to_ids("<tool_call>"),
+                self.data_processor.tokenizer.convert_tokens_to_ids("<response>"),
+            ]
+        except Exception:
+            reasoning_allowed_token_ids = []
+        llm_logger.info(f"Get reasoning_allowed_token_ids {reasoning_allowed_token_ids} from tokenizer.")
+
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
         if self.cfg.ips is not None:
@@ -634,6 +643,7 @@ class LLMEngine:
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
             f" --think_truncate_prompt_ids '{json.dumps(think_truncate_prompt_ids)}'"
+            f" --reasoning_allowed_token_ids '{json.dumps(reasoning_allowed_token_ids)}'"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"

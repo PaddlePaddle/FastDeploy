@@ -56,6 +56,7 @@ from fastdeploy.model_executor.ops.xpu import (
     speculate_schedule_cache,
 )
 from fastdeploy.model_executor.xpu_pre_and_post_process import (
+    async_set_value,
     step_xpu,
     xpu_post_process_normal,
     xpu_post_process_specualate,
@@ -762,6 +763,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 self.share_inputs["input_ids"][idx : idx + 1, 0] = request.prompt_token_ids[0]
                 self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["token_ids_all"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["token_ids_all"][idx : idx + 1, length:] = -1
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = length
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 1
@@ -783,6 +786,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
                 self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["token_ids_all"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["token_ids_all"][idx : idx + 1, length:] = -1
                 if self.enable_mm:
                     inputs = self._preprocess_mm_task(request.multimodal_inputs)
                     if inputs.get("images") is not None:
@@ -994,14 +999,6 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
 
-        # Initialize thinking related buffers
-        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
-        self.share_inputs["max_reply_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
-        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.share_inputs["inject_token_ids"] = paddle.to_tensor(
-            self.model_config.think_truncate_prompt_ids, dtype="int64"
-        ).reshape([-1, 1])
-
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
 
@@ -1125,6 +1122,26 @@ class XPUModelRunner(ModelRunnerBase):
         self.max_num_seqs = max_num_seqs
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
+        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> or <response>
+        # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
+        self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["reasoning_allowed_tokens"] = paddle.to_tensor(
+            self.model_config.reasoning_allowed_token_ids, dtype="int64"
+        ) if self.model_config.reasoning_allowed_token_ids else paddle.to_tensor([], dtype="int64")
+
+        # Initialize thinking related buffers
+        self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
+        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["max_reply_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["inject_token_ids"] = paddle.to_tensor(
+            self.model_config.think_truncate_prompt_ids, dtype="int64"
+        ).reshape([-1, 1])
+        self.share_inputs["token_ids_all"] = paddle.full(
+            [max_num_seqs, self.model_config.max_model_len],
+            -1,
+            dtype="int64",
+        )
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
@@ -1207,6 +1224,7 @@ class XPUModelRunner(ModelRunnerBase):
             min_p_list=self.share_inputs["min_p_list"],
             seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
+            token_ids_all=self.share_inputs["token_ids_all"],
             pre_token_ids=self.share_inputs["pre_ids"],
             prompt_ids=self.share_inputs["prompt_ids"],
             prompt_lens=self.share_inputs["prompt_lens"],
@@ -1425,6 +1443,7 @@ class XPUModelRunner(ModelRunnerBase):
             input_length = input_length_list[idx]
             max_dec_len = max_dec_len_list[idx]
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
+            self.share_inputs["token_ids_all"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
             self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
@@ -1679,6 +1698,7 @@ class XPUModelRunner(ModelRunnerBase):
                 ),
                 accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+                token_ids_all=self.share_inputs["token_ids_all"],
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 min_tokens=self.share_inputs["min_dec_len"],
