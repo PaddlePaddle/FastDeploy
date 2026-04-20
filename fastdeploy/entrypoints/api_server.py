@@ -123,7 +123,7 @@ def main():
     parser = FlexibleArgumentParser()
     parser.add_argument("--port", default=9904, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-    parser.add_argument("--workers", default=1, type=int, help="number of workers")
+    parser.add_argument("--workers", default=4, type=int, help="number of workers")
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()
     launch_api_server(args)
