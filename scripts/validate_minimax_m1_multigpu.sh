@@ -155,14 +155,12 @@ stop_server() {
 send_chat() {
     local prompt="$1"
     local max_tokens="${2:-64}"
+    local body
+    body=$(jq -n --arg model "$MODEL_PATH" --arg prompt "$prompt" --argjson mt "$max_tokens" \
+        '{model: $model, messages: [{role: "user", content: $prompt}], max_tokens: $mt, temperature: 0.0}')
     curl -s "http://localhost:${PORT}/v1/chat/completions" \
         -H "Content-Type: application/json" \
-        -d "{
-            \"model\": \"$MODEL_PATH\",
-            \"messages\": [{\"role\": \"user\", \"content\": \"$prompt\"}],
-            \"max_tokens\": $max_tokens,
-            \"temperature\": 0.0
-        }"
+        -d "$body"
 }
 
 # ═══════════════════════════════════════════════════════════════════
@@ -176,9 +174,9 @@ if [[ "${SKIP_TIER1:-0}" != "1" ]]; then
         # Verify /health and /v1/models both respond
         HEALTH=$(curl -s "http://localhost:${PORT}/health")
         MODELS=$(curl -s "http://localhost:${PORT}/v1/models")
-        python3 -c "
+        echo "$MODELS" | python3 -c "
 import json, sys
-models = json.loads('''$MODELS''')
+models = json.load(sys.stdin)
 assert 'data' in models, f'No data in /v1/models: {models}'
 names = [m['id'] for m in models['data']]
 print(f'Models served: {names}')
@@ -205,10 +203,11 @@ if [[ "${SKIP_TIER2:-0}" != "1" ]] && [[ -n "$SERVER_PID" ]] && kill -0 "$SERVER
 
     RESPONSE=$(send_chat "What is 2+3? Answer with just the number." 32)
 
-    python3 - <<'PYEOF'
-import json, sys
+    export RESPONSE
+    python3 <<'PYEOF'
+import json, os
 
-resp = json.loads(sys.stdin.read())
+resp = json.loads(os.environ["RESPONSE"])
 if "choices" not in resp or len(resp["choices"]) == 0:
     print(f"❌ Tier 2 FAIL: No choices in response: {resp}")
     sys.exit(1)

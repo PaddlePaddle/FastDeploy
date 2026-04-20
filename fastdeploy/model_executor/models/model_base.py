@@ -10,6 +10,7 @@
 """
 
 import importlib
+import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntFlag, auto
@@ -309,6 +310,8 @@ class ModelRegistry:
             # Traditional registration for ModelForCasualLM subclasses
             cls._arch_to_model_cls[model_cls.name()] = model_cls
             if architecture:
+                if architecture in cls._arch_to_model_cls and cls._arch_to_model_cls[architecture] is not model_cls:
+                    logging.warning("Overwriting model registration for architecture '%s'", architecture)
                 cls._arch_to_model_cls[architecture] = model_cls
 
             # Enhanced decorator-style registration

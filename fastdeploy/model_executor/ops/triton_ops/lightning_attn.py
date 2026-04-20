@@ -633,7 +633,7 @@ def lightning_attention(
     if arr[-1] != d:
         arr.append(d)
     n = len(arr)
-    output = 0
+    output = None
 
     # Initialize key-value history.  The Triton kernel updates kv_history
     # in-place, so we only need a contiguous view — avoid an extra copy.
@@ -649,7 +649,7 @@ def lightning_attention(
         q1 = q[..., s:end_idx]
         k1 = k[..., s:end_idx]
         o, kv_history = lightning_attention_forward(q1, k1, v, ed, kv_history, block_size=block_size)
-        output = output + o
+        output = o if output is None else output + o
     return output, kv_history
 
 
