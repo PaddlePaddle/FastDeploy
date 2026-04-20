@@ -580,6 +580,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         self.assertTrue(manager.has_resource_for_prefilled_req("prefilled"))
 
         request = _make_request(request_id="req-prefilled")
+        request.idx = 0
         request.metrics.decode_recv_req_time = 1.0
         request.metrics.decode_preallocate_req_time = 2.0
         manager.requests[request.request_id] = request

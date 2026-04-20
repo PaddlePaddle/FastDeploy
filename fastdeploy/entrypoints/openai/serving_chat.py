@@ -614,10 +614,28 @@ class OpenAIServingChat:
                     request=request,
                 )
                 async for data in generator:
-                    if data.get("error_code", 200) != 200:
-                        raise ValueError("{}".format(data["error_msg"]))
                     idx = int(data["request_id"].split("_")[-1])
-                    # api_server_logger.debug(f"Client {request_id} received: {data}")
+                    if data.get("error_code", 200) != 200:
+                        # Error response - include already-generated tokens in the response
+                        if completion_token_ids[idx]:
+                            text = self.engine_client.data_processor.tokenizer.decode(
+                                completion_token_ids[idx], skip_special_tokens=True
+                            )
+                        else:
+                            text = ""
+                        data["outputs"] = {
+                            "text": text,
+                            "completion_tokens": text,
+                            "reasoning_content": "",
+                            "tool_calls": None,
+                            "reasoning_token_num": 0,
+                            "num_image_tokens": 0,
+                            "token_ids": [],
+                            "top_logprobs": None,
+                            "draft_top_logprobs": None,
+                        }
+                        data["metrics"] = data.get("metrics") or {}
+                        data["finished"] = True
                     previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
                     completion_token_ids[idx].extend(data["outputs"]["token_ids"])
                     # The logprob for handling the response
@@ -804,6 +822,9 @@ class OpenAIServingChat:
 
         if data.get("error_msg", None) is not None and "Aborted" in data["error_msg"]:
             finish_reason = "abort"
+
+        if data.get("error_msg", None) is not None and "PD Error" in data["error_msg"]:
+            finish_reason = "pd_reschedule"
         return ChatCompletionResponseChoice(
             index=idx,
             message=message,
