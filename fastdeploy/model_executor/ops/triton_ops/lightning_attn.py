@@ -573,6 +573,10 @@ def lightning_attention_forward(q, k, v, s, kv_history, block_size=256):
     )
 
     # Step 4: Compute non-diagonal blocks of attention
+    assert NUM_FBLOCK == 1, (
+        "_fwd_none_diag_kernel uses tl.program_id(2) for feature blocks "
+        "but grid is 2D; extend grid to 3D if NUM_FBLOCK > 1 is needed"
+    )
     grid = (b * h, NUM_BLOCK * NUM_CBLOCK)
     _fwd_none_diag_kernel[grid](
         q,
