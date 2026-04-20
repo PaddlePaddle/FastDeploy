@@ -391,9 +391,11 @@ def resolve_workers_and_concurrency(args):
     """
     from fastdeploy.platforms import current_platform
 
+    max_num_seqs = getattr(args, "max_num_seqs", None) or 8
+
     if current_platform.is_cuda():
         if args.workers is None:
-            args.workers = math.ceil(args.max_num_seqs / 64)
+            args.workers = math.ceil(max_num_seqs / 64)
         if args.max_concurrency is None:
             args.max_concurrency = args.workers * 512
     else:

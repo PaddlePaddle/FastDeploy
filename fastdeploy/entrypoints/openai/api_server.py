@@ -99,6 +99,7 @@ args = parser.parse_args()
 resolve_workers_and_concurrency(args)
 
 console_logger.info(f"Number of api-server workers: {args.workers}.")
+console_logger.info(f"Max concurrency: {args.max_concurrency}.")
 
 args.model = retrive_model_from_server(args.model, args.revision)
 chat_template = load_chat_template(args.chat_template, args.model)
