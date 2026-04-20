@@ -68,6 +68,7 @@ jobs:
     if: ${{ always() && needs.clone.result == 'success' }}
     uses: ./.github/workflows/_xpu_coverage_report.yml
     with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COVERAGE_UNIT_TEST_URL: ${{ needs.xpu_unit_test.outputs.coverage_data_url }}
       COVERAGE_4CARDS_URL: ${{ needs.xpu_4cards_case_test.outputs.coverage_data_url }}
