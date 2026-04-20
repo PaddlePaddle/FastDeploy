@@ -342,7 +342,7 @@ def test_decoder_layer_forward_prenorm(mm1):
     h = paddle.randn([2, 4])
     out, residual = layer(forward_meta=meta, hidden_states=h)
     assert out.shape[-1] == 4 and out.shape[0] == 2
-    assert residual.shape[-1] == 4 and residual.shape[0] == 2
+    assert residual is None  # DeepNorm folds residual into hidden_states
 
 
 def test_decoder_layer_forward_postnorm(mm1):
@@ -353,7 +353,7 @@ def test_decoder_layer_forward_postnorm(mm1):
     h = paddle.randn([2, 4])
     out, residual = layer(forward_meta=meta, hidden_states=h)
     assert out.shape[-1] == 4 and out.shape[0] == 2
-    assert residual.shape[-1] == 4 and residual.shape[0] == 2
+    assert residual is None  # DeepNorm folds residual into hidden_states
 
 
 def test_decoder_layer_forward_full_attn(mm1):
