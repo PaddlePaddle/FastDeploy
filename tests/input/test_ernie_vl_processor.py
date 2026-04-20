@@ -361,14 +361,14 @@ class TestErnie4_5VLProcessorProcessResponseDictStreaming(unittest.TestCase):
 
             # Test with stream=True
             processor.process_response_dict_streaming = MagicMock(return_value={"text": "response"})
-            response_dict = {"ids": [1, 2, 3]}
+            response_dict = {"ids": [1, 2, 3], "outputs": [[1, 2, 3]]}
             result = processor.process_response_dict(response_dict, stream=True)
             processor.process_response_dict_streaming.assert_called_once()
             self.assertEqual(result, {"text": "response"})
 
             # Test with stream=False
             processor.process_response_dict_normal = MagicMock(return_value={"text": "response"})
-            response_dict = {"ids": [1, 2, 3]}
+            response_dict = {"ids": [1, 2, 3], "outputs": [[1, 2, 3]]}
             result = processor.process_response_dict(response_dict, stream=False)
             processor.process_response_dict_normal.assert_called_once()
             self.assertEqual(result, {"text": "response"})

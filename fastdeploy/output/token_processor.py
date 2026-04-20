@@ -577,8 +577,11 @@ class TokenProcessor:
                         self.prefill_result_status[finished_task_id[0]] = finished_task_id[1]
                 if task_id in self.prefill_result_status:
                     if self.prefill_result_status[task_id] != "finished":
-                        result.error_code = 400
-                        result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
+                        result.error_code = 501
+                        result.error_msg = (
+                            f"PD Error: prefill failed to send cache to decode, "
+                            f"{task_id}, {self.prefill_result_status[task_id]}"
+                        )
                     log_request(
                         RequestLogLevel.STAGES,
                         message="wait for sending cache, request_id: {request_id}, cost seconds: {cost_seconds}",
@@ -789,7 +792,7 @@ class TokenProcessor:
         batch_result = list()
         # reschedule
         for i in range(batch):
-            if self.resource_manager.stop_flags[i]:
+            if self.resource_manager.stop_flags[i] or self.resource_manager.tasks_list[i] is None:
                 continue
 
             recovery_stop = False

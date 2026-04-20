@@ -1380,6 +1380,7 @@ class ResourceManagerV1(ResourceManager):
                 request.metrics.storage_cache_token_num = metrics["storage_match_token_num"]
                 request.metrics.cpu_cache_prepare_time = metrics["cpu_cache_prepare_time"]
                 request.metrics.storage_cache_prepare_time = metrics["storage_cache_prepare_time"]
+                request.metrics.prompt_token_ids_len = request.prompt_token_ids_len
 
                 main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
                 main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
@@ -1506,7 +1507,6 @@ class ResourceManagerV1(ResourceManager):
             request.disaggregate_info["block_tables"] = request.block_tables
             allocated_position = self.get_available_position()
             request.idx = allocated_position
-            self.tasks_list[request.idx] = request
             self.stop_flags[request.idx] = False
             self.requests[request.request_id] = request
             self.req_dict[request.request_id] = allocated_position
@@ -1550,6 +1550,8 @@ class ResourceManagerV1(ResourceManager):
             request.metrics = copy.deepcopy(request_output.metrics)
             request.metrics.decode_inference_start_time = time.time()
             request.metrics.update_decoder_start_time()
+
+            self.tasks_list[request.idx] = request
             self.running.append(request)
 
     def _free_blocks(self, request: Request):
