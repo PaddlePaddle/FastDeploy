@@ -632,7 +632,11 @@ class GPUModelRunner(ModelRunnerBase):
                             prefill_end_index=request.prefill_end_index,
                         )
                     )
-            if inputs.get("image_feature_urls", None) is not None and len(inputs["image_feature_urls"]) > 0:
+            if (
+                inputs is not None
+                and inputs.get("image_feature_urls", None) is not None
+                and len(inputs["image_feature_urls"]) > 0
+            ):
                 multi_vision_inputs["image_grid_thws"].extend(
                     inputs["image_grid_thws"][request.image_start : request.image_end]
                 )
@@ -2314,16 +2318,20 @@ class GPUModelRunner(ModelRunnerBase):
             model_inputs["image_grid_thws"] = self.share_inputs.get("image_grid_thws", None)
             video_features = self.share_inputs.get("video_features", None)
             video_grid_thws = self.share_inputs.get("video_grid_thws", None)
+            video_infinity_scales = self.share_inputs.get("video_infinity_scales", None)
             if video_features is not None:
                 model_inputs["video_features"] = video_features
             if video_grid_thws is not None:
                 model_inputs["video_grid_thws"] = video_grid_thws
+            if video_infinity_scales is not None:
+                model_inputs["video_infinity_scales"] = video_infinity_scales
 
             # init features and grid_thws
             self.share_inputs["image_features"] = None
             self.share_inputs["image_grid_thws"] = None
             self.share_inputs["video_features"] = None
             self.share_inputs["video_grid_thws"] = None
+            self.share_inputs["video_infinity_scales"] = None
 
         return model_inputs, p_done_idxs, token_num_event
 
