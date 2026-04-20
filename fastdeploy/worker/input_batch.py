@@ -214,9 +214,11 @@ class InputBatch:
         # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> or <response>
         # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
         self.reasoning_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.reasoning_allowed_tokens = paddle.to_tensor(
-            self.model_config.reasoning_allowed_token_ids, dtype="int64"
-        ) if self.model_config.reasoning_allowed_token_ids else paddle.to_tensor([], dtype="int64")
+        self.reasoning_allowed_tokens = (
+            paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
+            if self.model_config.reasoning_allowed_token_ids
+            else paddle.to_tensor([], dtype="int64")
+        )
 
         # Initialize rotary position embedding
         if not self.enable_mm:
@@ -588,9 +590,11 @@ class InputBatch:
             # Reset reasoning buffers
             fill_paddle_tensor(self, "reasoning_status", 0)
             # reasoning_allowed_tokens is a fixed tensor derived from config, no need to reset
-            self.reasoning_allowed_tokens = paddle.to_tensor(
-                self.model_config.reasoning_allowed_token_ids, dtype="int64"
-            ) if self.model_config.reasoning_allowed_token_ids else paddle.to_tensor([], dtype="int64")
+            self.reasoning_allowed_tokens = (
+                paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
+                if self.model_config.reasoning_allowed_token_ids
+                else paddle.to_tensor([], dtype="int64")
+            )
 
             # Reset block tables
             fill_paddle_tensor(self, "block_tables", -1)

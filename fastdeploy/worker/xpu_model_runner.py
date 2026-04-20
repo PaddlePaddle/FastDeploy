@@ -56,7 +56,6 @@ from fastdeploy.model_executor.ops.xpu import (
     speculate_schedule_cache,
 )
 from fastdeploy.model_executor.xpu_pre_and_post_process import (
-    async_set_value,
     step_xpu,
     xpu_post_process_normal,
     xpu_post_process_specualate,
@@ -1125,9 +1124,11 @@ class XPUModelRunner(ModelRunnerBase):
         # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> or <response>
         # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
         self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.share_inputs["reasoning_allowed_tokens"] = paddle.to_tensor(
-            self.model_config.reasoning_allowed_token_ids, dtype="int64"
-        ) if self.model_config.reasoning_allowed_token_ids else paddle.to_tensor([], dtype="int64")
+        self.share_inputs["reasoning_allowed_tokens"] = (
+            paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
+            if self.model_config.reasoning_allowed_token_ids
+            else paddle.to_tensor([], dtype="int64")
+        )
 
         # Initialize thinking related buffers
         self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
