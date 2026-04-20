@@ -292,18 +292,39 @@ class DynamicWeightManager:
 
     def _update_ipc_async(self):
         """Update using IPC snapshot async for elastic recovery."""
+        logger.info(f"[ALLOC] check memory before _update_ipc_async: {paddle.device.cuda.memory_allocated() / (1024**3)}")
+        logger.info(f"[RESERVED] check memory before _update_ipc_async: {paddle.device.cuda.memory_reserved() / (1024**3)}")
+        context = paddle.LazyGuard()
+        architectures = f"{self.fd_config.model_config.architectures[0]}RL"
+        if self.fd_config.quant_config is not None:
+            quantization_context = multi_switch_config_context(
+                (self.fd_config.quant_config, "is_checkpoint_bf16", True),
+                (self.fd_config.load_config, "dynamic_load_weight", False),
+            )
+        else:
+            # bf16
+            quantization_context = multi_switch_config_context(
+                (self.fd_config.load_config, "dynamic_load_weight", False)
+            )
         gpu_id = self._get_gpu_id()
-        weight_iter = receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None, recv_timeout_ms=300000)
-        model = self.model_list[0] # TODO: support multi-model
-
-        t0 = time.time()
-        model.load_weights(weight_iter)
-        # self.fd_config.quant_config.is_checkpoint_bf16 = True
-        self.fd_config.load_config.dynamic_load_weight = False
-        process_final_after_loading(model, self.fd_config)
-        self.fd_config.load_config.dynamic_load_weight = True
-        elapsed = time.time() - t0
-        print(f"[Receiver] [THD DEBUG] Total time: {elapsed:.3f}s")
+        weights_iterator = receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None, recv_timeout_ms=300000)
+        with quantization_context:
+            with context:
+                model_cls = ModelRegistry.get_class(architectures)
+                tmp_model = model_cls(self.fd_config)
+            tmp_model.eval()
+            tmp_model.load_weights(weights_iterator)
+            if self.fd_config.speculative_config.model_type != "mtp":
+                process_final_after_loading(tmp_model, self.fd_config)
+        self._capture_model_state() # thd test
+        self._update_model_from_state(tmp_model.state_dict(), "raw")
+        for param in tmp_model.state_dict().values():
+            param._clear_data()
+            del param
+        tmp_model.state_dict().clear()
+        tmp_model = None
+        logger.info(f"[ALLOC] check memory after _update_ipc_async: {paddle.device.cuda.memory_allocated() / (1024**3)}")
+        logger.info(f"[RESERVED] check memory after _update_ipc_async: {paddle.device.cuda.memory_reserved() / (1024**3)}")
 
     def restart_communication_group(self):
         if not self.first_load:
@@ -446,10 +467,22 @@ class DynamicWeightManager:
                 paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
 
         paddle.device.cuda.empty_cache()
+        logger.info(f"[ALLOC] check memory before clear_param_data: {paddle.device.cuda.memory_allocated() / (1024**3)}")
+        logger.info(f"[RESERVED] check memory before clear_param_data: {paddle.device.cuda.memory_reserved() / (1024**3)}")
         # step2: release model weight
         for model in self.model_list:
             for param in model.state_dict().values():
                 param._clear_data()
+                del param
+        self.state_dict = {} # thd test
+        gc.collect()
+        import ctypes
+        try:
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception as e:
+            logger.warning(f"malloc_trim failed: {e}")
+        logger.info(f"[ALLOC] check memory after clear_param_data: {paddle.device.cuda.memory_allocated() / (1024**3)}")
+        logger.info(f"[RESERVED] check memory after clear_param_data: {paddle.device.cuda.memory_reserved() / (1024**3)}")
 
         self._verify_parameters("clearance")
 
@@ -524,7 +557,7 @@ class DynamicWeightManager:
 
     def finalize_update(self, pid: int = 0):
         """Finalize update process with verification."""
-        # self._verify_parameters("update")
+        self._verify_parameters("update")
 
         if self.parallel_config.tensor_parallel_size > 1:
             paddle.distributed.barrier(self.parallel_config.tp_group)
