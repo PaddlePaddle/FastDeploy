@@ -38,6 +38,7 @@ These models accept text input.
 |⭐QWEN2.5|BF16/WINT8/FP8|Qwen/qwen2.5-72B;<br>Qwen/qwen2.5-32B;<br>Qwen/qwen2.5-14B;<br>Qwen/qwen2.5-7B;<br>Qwen/qwen2.5-3B;<br>Qwen/qwen2.5-1.5B;<br>Qwen/qwen2.5-0.5B, etc.|
 |⭐QWEN2|BF16/WINT8/FP8|Qwen/Qwen/qwen2-72B;<br>Qwen/Qwen/qwen2-7B;<br>Qwen/qwen2-1.5B;<br>Qwen/qwen2-0.5B;<br>Qwen/QwQ-32, etc.|
 |⭐DEEPSEEK|BF16/WINT4|unsloth/DeepSeek-V3.1-BF16;<br>unsloth/DeepSeek-V3-0324-BF16;<br>unsloth/DeepSeek-R1-BF16, etc.|
+|MINIMAX-M1|BF16|[MiniMaxAI/MiniMax-Text-01](./best_practices/MiniMax-M1.md);<br>MiniMaxAI/MiniMax-Text-01-Large, etc.|
 |⭐GPT-OSS|BF16/WINT8|unsloth/gpt-oss-20b-BF16, etc.|
 |⭐GLM-4.5/4.6|BF16/wfp8afp8|zai-org/GLM-4.5-Air;<br>zai-org/GLM-4.6<br>&emsp;[最佳实践](./best_practices/GLM-4-MoE-Text.md) etc.|
 

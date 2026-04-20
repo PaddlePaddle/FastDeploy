@@ -308,6 +308,8 @@ class ModelRegistry:
         def _register(model_cls):
             # Traditional registration for ModelForCasualLM subclasses
             cls._arch_to_model_cls[model_cls.name()] = model_cls
+            if architecture:
+                cls._arch_to_model_cls[architecture] = model_cls
 
             # Enhanced decorator-style registration
             if architecture and module_name:
