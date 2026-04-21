@@ -40,10 +40,11 @@ void ReasoningPhaseTokenConstraint(
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
   baidu::xpu::api::Context* ctx = xpu_ctx->x_context();
 
+  std::unique_ptr<baidu::xpu::api::Context> cpu_ctx_guard;
   if (logits.is_cpu()) {
-    ctx = new baidu::xpu::api::Context(baidu::xpu::api::kCPU);
+    cpu_ctx_guard.reset(new baidu::xpu::api::Context(baidu::xpu::api::kCPU));
+    ctx = cpu_ctx_guard.get();
   }
-
   int bs = seq_lens_this_time.shape()[0];
   int token_num = logits.shape()[0];
   int vocab_size = logits.shape()[1];
@@ -140,9 +141,6 @@ void ReasoningPhaseTokenConstraint(
           "NOT supported data type. "
           "Only float16, bfloat16 and float32 are supported. ");
       break;
-  }
-  if (logits.is_cpu()) {
-    delete ctx;
   }
 }
 

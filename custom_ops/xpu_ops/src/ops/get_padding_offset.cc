@@ -31,8 +31,10 @@ std::vector<paddle::Tensor> GetPaddingOffset(
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
   baidu::xpu::api::Context* ctx = xpu_ctx->x_context();
 
+  std::unique_ptr<baidu::xpu::api::Context> cpu_ctx_guard;
   if (input_ids.is_cpu()) {
-    ctx = new baidu::xpu::api::Context(baidu::xpu::api::kCPU);
+    cpu_ctx_guard.reset(new baidu::xpu::api::Context(baidu::xpu::api::kCPU));
+    ctx = cpu_ctx_guard.get();
   }
 
   std::vector<int64_t> input_ids_shape = input_ids.shape();
@@ -66,9 +68,6 @@ std::vector<paddle::Tensor> GetPaddingOffset(
                                                bsz,
                                                token_num_data);
     PD_CHECK(r == 0, "fastdeploy::plugin::get_padding_offset failed.");
-  }
-  if (input_ids.is_cpu()) {
-    delete ctx;
   }
   return {x_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k};
 }
