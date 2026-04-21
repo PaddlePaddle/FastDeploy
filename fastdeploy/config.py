@@ -1764,6 +1764,9 @@ class RouterConfig:
         else:
             self.metrics_port = self.api_server_port
 
+    def __str__(self):
+        return json.dumps({key: value for key, value in self.__dict__.items()})
+
 
 class CommitConfig:
     """
@@ -1876,6 +1879,9 @@ class RoutingReplayConfig:
         Convert routing replay config to json string.
         """
         return json.dumps({key: value for key, value in self.__dict__.items()})
+
+    def __str__(self):
+        return self.to_json_string()
 
 
 class FDConfig:
