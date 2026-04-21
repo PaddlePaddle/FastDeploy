@@ -608,6 +608,9 @@ class LLMEngine:
                 self.data_processor.tokenizer.convert_tokens_to_ids("<tool_call>"),
                 self.data_processor.tokenizer.convert_tokens_to_ids("<response>"),
             ]
+            # convert_tokens_to_ids may return a list instead of int when token
+            # is not in vocabulary; keep only valid single-int ids.
+            reasoning_allowed_token_ids = [tid for tid in reasoning_allowed_token_ids if isinstance(tid, int)]
         except Exception:
             reasoning_allowed_token_ids = []
         llm_logger.info(f"Get reasoning_allowed_token_ids {reasoning_allowed_token_ids} from tokenizer.")
