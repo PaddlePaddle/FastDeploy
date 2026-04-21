@@ -17,23 +17,19 @@
 """Generic PaddleFormers modeling backend base class."""
 
 import math
-import re
 from collections.abc import Iterable
-from typing import TYPE_CHECKING
-from typing import Dict
+from typing import TYPE_CHECKING, Dict
 
 import paddle
 from paddle import nn
-
-from paddlefleet.transformer.layer import FleetLayer
 from paddlefleet.models.gpt.gpt_embedding import GPTEmbedding
 from paddlefleet.models.gpt.lm_head import GPTLMHead
+from paddlefleet.transformer.layer import FleetLayer
 from paddlefleet.transformer.transformer_config import TransformerConfig
-
+from paddleformers.trainer import set_random_seed
 from paddleformers.transformers import AutoConfig
 from paddleformers.transformers.auto.modeling import AutoModelForCausalLM
 from paddleformers.utils.log import logger
-from paddleformers.trainer import set_random_seed
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta  # noqa: F401
 from fastdeploy.model_executor.graph_optimization.decorator import (
@@ -93,9 +89,9 @@ class FastDeployAttention(FleetLayer):
         value: paddle.Tensor,
         attention_mask: paddle.Tensor,
         attn_mask_startend_row_indices: paddle.Tensor = None,
-        attn_mask_type = None,
+        attn_mask_type=None,
         attention_bias: paddle.Tensor = None,
-        packed_seq_params = None,
+        packed_seq_params=None,
         use_rr_flash_attention: bool = False,
     ):
         """
@@ -135,7 +131,9 @@ class FastDeployAttention(FleetLayer):
             def squeeze_to_3d(t: paddle.Tensor, name: str) -> paddle.Tensor:
                 if t.ndim == 4:
                     if int(t.shape[0]) != 1:
-                        raise ValueError(f"{name} batch size {int(t.shape[0])} not supported, only batch=1 is supported")
+                        raise ValueError(
+                            f"{name} batch size {int(t.shape[0])} not supported, only batch=1 is supported"
+                        )
                     return t.squeeze(0)
                 if t.ndim == 3:
                     return t
@@ -165,8 +163,8 @@ class FastDeployAttention(FleetLayer):
         finally:
             # Restore original scale
             if original_scale is None:
-                if hasattr(self.fd_attention, 'scale'):
-                    delattr(self.fd_attention, 'scale')
+                if hasattr(self.fd_attention, "scale"):
+                    delattr(self.fd_attention, "scale")
             else:
                 self.fd_attention.scale = original_scale
 
@@ -205,7 +203,7 @@ class PaddleFleetModelBase(nn.Layer):
         self._sync_config_from_text_config()
         # For convenience, keep direct access to some FD configs
         self.quant_config = self.fd_config.quant_config
- 
+
         # Load model using from_pretrained to support weight loading
         # Pass dtype, config and other options from kwargs
 
@@ -217,8 +215,8 @@ class PaddleFleetModelBase(nn.Layer):
             "load_checkpoint_format": "flex_checkpoint",
         }
         # Set random seed before model construction for reproducibility
-        set_random_seed(seed_= 42)
-        self.model: PretrainedModel = AutoModelForCausalLM.from_pretrained(
+        set_random_seed(seed_=42)
+        self.model = AutoModelForCausalLM.from_pretrained(
             self.model_config.model,
             **model_load_kwargs,
         )
@@ -245,7 +243,7 @@ class PaddleFleetModelBase(nn.Layer):
         logits[:, self.model_config.ori_vocab_size :] = -float("inf")
 
         return logits
-        
+
     def _init_paddlefleet_parallel_state(self, parallel_config) -> None:
         """
         Initialize PaddleFleet's parallel_state so that ColumnParallelLinear/RowParallelLinear
@@ -261,10 +259,7 @@ class PaddleFleetModelBase(nn.Layer):
         from paddlefleet.training import initialize_fleet
 
         # Only call initialize_fleet when the TP group has not been initialized yet
-        if (
-            get_tensor_model_parallel_group is not None
-            and get_tensor_model_parallel_group(False) is None
-        ):
+        if get_tensor_model_parallel_group is not None and get_tensor_model_parallel_group(False) is None:
             strategy = fleet.DistributedStrategy()
             strategy.hybrid_configs = {
                 "dp_degree": parallel_config.data_parallel_size,
@@ -389,12 +384,12 @@ class PaddleFleetModelBase(nn.Layer):
 
         # Also set forward_meta on each TransformerLayer's config
         # so that FastDeployAttention can retrieve it from core_attn.config
-        if hasattr(self.model, 'run_function'):
+        if hasattr(self.model, "run_function"):
             for layer in self.model.run_function:
                 if not isinstance(layer, (GPTEmbedding, GPTLMHead)):
-                    if hasattr(layer, 'self_attn') and hasattr(layer.self_attn, 'core_attention'):
+                    if hasattr(layer, "self_attn") and hasattr(layer.self_attn, "core_attention"):
                         core_attn = layer.self_attn.core_attention
-                        if hasattr(core_attn, 'config'):
+                        if hasattr(core_attn, "config"):
                             core_attn.config.forward_meta = forward_meta
 
         inputs_embeds = self.embed_input_ids(ids_remove_padding).unsqueeze(0)
@@ -413,7 +408,7 @@ class PaddleFleetModelBase(nn.Layer):
         # Iterate over run_function, skip GPTLMHead
         # Only call TransformerLayer
         for layer in self.model.run_function:
-            if isinstance(layer, ( GPTLMHead)):
+            if isinstance(layer, (GPTLMHead)):
                 # Skip Embedding and LM Head
                 continue
             model_input = layer(model_input)
@@ -431,9 +426,11 @@ class PaddleFleetModelBase(nn.Layer):
     def set_state_dict(self, state_dict):
         self.model.set_state_dict(state_dict)
 
+
 # ============================================================================
 # PaddleFleet Attention Patch Functions
 # ============================================================================
+
 
 def patch_paddlefleet_core_attention(
     model,
@@ -487,7 +484,7 @@ def patch_paddlefleet_core_attention(
         if layer_number is None:
             # Try to get from other attributes
             layer_number = getattr(layer, "layer_id", None)
-        
+
         if layer_number is None:
             logger.warning("layer_number not found, skip patching...")
             continue  # Skip layers where layer_id cannot be obtained
@@ -510,12 +507,12 @@ def patch_paddlefleet_core_attention(
         # Prefer per-partition values (values after TP sharding),
         # because PaddleFleet's QKV output is already per-partition when TP>1
         num_attention_heads = getattr(
-            core_attn, "num_attention_heads_per_partition",
-            getattr(core_attn.config, "num_attention_heads", None)
+            core_attn, "num_attention_heads_per_partition", getattr(core_attn.config, "num_attention_heads", None)
         )
         num_key_value_heads = getattr(
-            core_attn, "num_query_groups_per_partition",
-            getattr(core_attn.config, "num_key_value_heads", num_attention_heads)
+            core_attn,
+            "num_query_groups_per_partition",
+            getattr(core_attn.config, "num_key_value_heads", num_attention_heads),
         )
         hidden_size_per_attention_head = getattr(core_attn, "hidden_size_per_attention_head", None)
         if hidden_size_per_attention_head is not None:
@@ -542,11 +539,13 @@ def patch_paddlefleet_core_attention(
         fd_attn_instance.num_heads = num_attention_heads
         fd_attn_instance.kv_num_heads = num_key_value_heads
         fd_attn_instance.head_dim = hidden_size_per_attention_head
-        logger.info(f"Overriding Attention config: num_heads={num_attention_heads}, kv_num_heads={num_key_value_heads}, head_dim={hidden_size_per_attention_head}")
+        logger.info(
+            f"Overriding Attention config: num_heads={num_attention_heads}, kv_num_heads={num_key_value_heads}, head_dim={hidden_size_per_attention_head}"
+        )
 
         # Create FastDeployAttention object and directly replace core_attention
         fast_deploy_core_attn = FastDeployAttention(
-            config= core_attn.config,
+            config=core_attn.config,
             fd_attention=fd_attn_instance,
             num_attention_heads=num_attention_heads,
             num_key_value_heads=num_key_value_heads,
@@ -565,4 +564,3 @@ def patch_paddlefleet_core_attention(
     logger.info(f"Successfully replaced {patched_count} core_attention layers with FastDeployAttention")
 
     return patched_count
-

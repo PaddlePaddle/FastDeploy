@@ -36,10 +36,11 @@ __all__ = [
     module_name="paddleformers",
     category=ModelCategory.TEXT_GENERATION,
 )
-class PaddleFormersForCausalLM(PaddleFormersModelBase, ModelForCasualLM):
+class PaddleFormersForCausalLM(CausalLMMixin, PaddleFormersModelBase, ModelForCasualLM):
     @classmethod
     def name(cls):
         return "PaddleFormersForCausalLM"
+
 
 @ModelRegistry.register_model_class(
     architecture="PaddleFleetForCausalLM",
