@@ -846,8 +846,9 @@ class GPUModelRunner(ModelRunnerBase):
                         attention_mask_offset_slice = np.asarray(
                             inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype=np.int32
                         )
-                    self.share_inputs["attn_mask_offsets_full"][idx, 0:attn_offset_len] = paddle.to_tensor(
-                        attention_mask_offset_slice, dtype="int32"
+                    async_set_value(
+                        self.share_inputs["attn_mask_offsets_full"][idx : idx + 1, 0:attn_offset_len],
+                        attention_mask_offset_slice,
                     )
 
                 if not self.is_pooling_model:

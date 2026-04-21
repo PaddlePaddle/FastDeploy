@@ -475,6 +475,8 @@ class InputBatch:
                     self.image_features_list[i1],
                 )
             swap_data(self.share_inputs["rope_emb"], i1, i2)
+            swap_data(self.decode_states, i1, i2)
+            swap_data(self.attn_mask_offsets_full, i1, i2)
         # Swap mask rollback
         swap_data(self.mask_rollback, i1, i2)
 
