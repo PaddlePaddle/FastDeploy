@@ -687,7 +687,9 @@ class EPPrefillRunner(EPRunner):
         }
 
         if envs.FD_USE_PFCC_DEEP_EP:
-            combine_args["skip_x_record_stream"] = self.num_worst_tokens > 0
+            combine_parameters = inspect.signature(buffer.combine).parameters
+            if "skip_x_record_stream" in combine_parameters:
+                combine_args["skip_x_record_stream"] = self.num_worst_tokens > 0
 
         fused_moe_out, _, event = buffer.combine(**combine_args)
         return fused_moe_out, event
