@@ -139,6 +139,7 @@ class EngineArgs:
     'auto': Use native FastDeploy implementation when available, fallback to PaddleFormers.
     'fastdeploy': Use only native FastDeploy implementations.
     'paddleformers': Use PaddleFormers backend with FastDeploy optimizations.
+    'paddlefleet': Use PaddleFleet backend.
     """
     override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
     """
@@ -627,7 +628,7 @@ class EngineArgs:
                     "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
                 )
 
-        valid_model_impls = ["auto", "fastdeploy", "paddleformers"]
+        valid_model_impls = ["auto", "fastdeploy", "paddleformers", "paddlefleet"]
         if self.model_impl not in valid_model_impls:
             raise NotImplementedError(
                 f"not support model_impl: '{self.model_impl}'. " f"Must be one of: {', '.join(valid_model_impls)}"
@@ -965,13 +966,14 @@ class EngineArgs:
         model_group.add_argument(
             "--model-impl",
             type=str,
-            choices=["auto", "fastdeploy", "paddleformers"],
+            choices=["auto", "fastdeploy", "paddleformers", "paddlefleet"],
             default=EngineArgs.model_impl,
             help=(
                 "Model implementation backend. "
                 "'auto': Use native FastDeploy when available, fallback to PaddleFormers. "
                 "'fastdeploy': Use only native FastDeploy implementations. "
                 "'paddleformers': Use PaddleFormers backend with FastDeploy optimizations."
+                "'paddlefleet': Use PaddleFleet backend."
             ),
         )
 
