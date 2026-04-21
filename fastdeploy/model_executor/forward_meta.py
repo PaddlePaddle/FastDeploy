@@ -17,7 +17,7 @@
 import logging
 from dataclasses import dataclass, fields
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import paddle
 
@@ -148,6 +148,10 @@ class ForwardMeta:
     is_dummy_or_profile_run: bool = False
     # Routing Replay table buffer
     routing_replay_table: Optional[paddle.Tensor] = None
+
+    # ============ V1 KVCACHE Manager: Swap-in waiting info ============
+    # LayerDoneCounter for layer-by-layer swap waiting (set by submit_swap_tasks return value)
+    layer_done_counter: Optional[Any] = None
 
     # chunked MoE related
     moe_num_chunk: int = 1

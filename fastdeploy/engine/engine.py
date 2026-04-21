@@ -186,7 +186,7 @@ class LLMEngine:
             if not self._stop_profile():
                 return False
         elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
-            if not current_platform.is_intel_hpu():
+            if not current_platform.is_intel_hpu() and not envs.ENABLE_V1_KVCACHE_MANAGER:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -799,7 +799,7 @@ class LLMEngine:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-            if not current_platform.is_intel_hpu():
+            if not current_platform.is_intel_hpu() and not envs.ENABLE_V1_KVCACHE_MANAGER:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
         return True
