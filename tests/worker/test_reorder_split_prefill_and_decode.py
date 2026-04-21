@@ -48,6 +48,7 @@ def create_mock_config():
     }
     model_config.mm_max_tokens_per_item = None
     model_config.think_truncate_prompt_ids = [-1]
+    model_config.reasoning_allowed_token_ids = None
 
     # Create other mock configs
     cache_config = Mock(spec=CacheConfig)
