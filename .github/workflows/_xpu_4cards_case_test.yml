@@ -210,7 +210,7 @@ jobs:
 
           # 合并覆盖率数据
           cd /workspace/FastDeploy
-          COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage.4cards_combined \
+          COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage.4cards \
           python -m coverage combine --rcfile=${COVERAGE_RCFILE} coveragedata/ || true
           tar -czf /workspace/FastDeploy/coverage_4cards.tar.gz -C coveragedata .
 

@@ -218,7 +218,7 @@ jobs:
           # 合并覆盖率数据
           echo "============================合并覆盖率数据============================"
           cd /workspace/FastDeploy
-          COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage.unit_combined \
+          COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage.unit \
           python -m coverage combine --rcfile=${COVERAGE_RCFILE} coveragedata/ || true
           tar -czf /workspace/FastDeploy/coverage_unit_test.tar.gz -C coveragedata .
 
