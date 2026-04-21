@@ -2707,9 +2707,11 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
-        self.clear_cache()
+
+        # NOTE(wangyanpeng): MTP cache must be cleared before clearing the main KV cache
         if self.speculative_decoding and self.spec_method == SpecMethod.MTP:
             self.proposer.clear_mtp_cache()
+        self.clear_cache()
         paddle.device.cuda.empty_cache()
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
