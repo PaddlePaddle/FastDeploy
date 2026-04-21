@@ -94,8 +94,7 @@ int get_padding_offset(api::Context* ctx,
                        const int64_t token_num) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "get_padding_offset", int);
-  WRAPPER_DUMP_PARAM3(
-      ctx, batch_id_per_token, cu_seqlens_q, cu_seqlens_k);
+  WRAPPER_DUMP_PARAM3(ctx, batch_id_per_token, cu_seqlens_q, cu_seqlens_k);
   WRAPPER_DUMP_PARAM4(ctx, x_remove_padding, input_ids, seq_lens, max_seq_len);
   WRAPPER_DUMP_PARAM2(ctx, bs, token_num);
   WRAPPER_DUMP(ctx);
