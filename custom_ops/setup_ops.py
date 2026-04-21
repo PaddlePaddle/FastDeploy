@@ -315,6 +315,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/swap_cache_batch.cu",
         "gpu_ops/swap_cache.cu",
         "gpu_ops/swap_cache_layout.cu",
+        "gpu_ops/swap_cache_optimized.cu",  # 新增：优化的 KV cache 换入算子
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",

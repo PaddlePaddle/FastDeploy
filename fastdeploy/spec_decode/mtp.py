@@ -438,13 +438,20 @@ class MTPProposer(Proposer):
         if self.forward_meta is not None:
             del self.forward_meta.caches
 
-    def update_mtp_block_num(self, num_gpu_blocks) -> None:
+    def update_mtp_block_num(self, num_gpu_blocks, skip_cache_init: bool = False) -> None:
         """
         Update MTP block num by theoretical calculation
+
+        Args:
+            num_gpu_blocks: Main model GPU block count.
+            skip_cache_init: When True, skip internal initialize_kv_cache call.
+                Set this when the caller (e.g. gpu_model_runner with enable_cache_manager_v1)
+                has already re-created MTP cache via cache_controller.
         """
         # Reset block table and kv cache with global block num
         self.main_model_num_gpu_blocks = num_gpu_blocks
-        self.initialize_kv_cache(main_model_num_blocks=self.main_model_num_gpu_blocks)
+        if not skip_cache_init:
+            self.initialize_kv_cache(main_model_num_blocks=self.main_model_num_gpu_blocks)
 
         # Reset free list
         free_list = list(

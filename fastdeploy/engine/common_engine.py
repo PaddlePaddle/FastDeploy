@@ -236,6 +236,11 @@ class EngineService:
             self.ipc_signal_suffix = None
             self.cache_manager_processes = None
 
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            from fastdeploy.cache_manager.v1.cache_utils import get_request_block_hasher
+
+            self._block_hasher = get_request_block_hasher(block_size=self.cfg.cache_config.block_size)
+
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
     def start(self, async_llm_pid=None):
@@ -272,7 +277,11 @@ class EngineService:
         self.launch_components()
 
         # If block number is specified and model is deployed in splitwise mode, start cache manager first
-        if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
+        if (
+            not self.do_profile
+            and self.cfg.scheduler_config.splitwise_role != "mixed"
+            and not envs.ENABLE_V1_KVCACHE_MANAGER
+        ):
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -304,7 +313,11 @@ class EngineService:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
-        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
+        elif (
+            self.cfg.scheduler_config.splitwise_role == "mixed"
+            and self.cfg.cache_config.enable_prefix_caching
+            and not envs.ENABLE_V1_KVCACHE_MANAGER
+        ):
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -472,19 +485,20 @@ class EngineService:
                         self.cfg.parallel_config.local_engine_worker_queue_port,
                     )
 
-            if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-                self.llm_logger.info(
-                    f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
-                )
-                self.cache_task_queue = EngineCacheQueue(
-                    address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
-                    authkey=b"cache_queue_service",
-                    is_server=True,
-                    num_client=self.cfg.parallel_config.tensor_parallel_size,
-                    client_id=-1,
-                    local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
-                )
-                self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
+            if not envs.ENABLE_V1_KVCACHE_MANAGER:
+                if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+                    self.llm_logger.info(
+                        f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
+                    )
+                    self.cache_task_queue = EngineCacheQueue(
+                        address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
+                        authkey=b"cache_queue_service",
+                        is_server=True,
+                        num_client=self.cfg.parallel_config.tensor_parallel_size,
+                        client_id=-1,
+                        local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+                    )
+                    self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
 
         self.engine_worker_queue = EngineWorkerQueue(
             address=address,
@@ -900,6 +914,10 @@ class EngineService:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 
+                    # cache_manager_v1 set block_hasher to request
+                    if hasattr(self, "_block_hasher"):
+                        task.set_block_hasher(self._block_hasher)
+
                 if self.cfg.scheduler_config.splitwise_role == "decode":
                     # TODO: refine scheduler to remove this limitation
                     # Decode will process and schedule the request sent by prefill to engine,
@@ -1064,12 +1082,12 @@ class EngineService:
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
-                tasks, error_tasks = self.resource_manager.schedule()
+                batch_request, error_tasks = self.resource_manager.schedule()
 
                 # 3. Send to engine
-                if tasks:
+                if len(batch_request) > 0:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
-                        for task in tasks:
+                        for task in batch_request:
                             if task.task_type == RequestType.PREEMPTED:
                                 msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
                                 self.llm_logger.error(msg)
@@ -1084,7 +1102,7 @@ class EngineService:
                                     ]
                                 )
                     self.resource_manager.get_real_bsz()
-                    for task in tasks:
+                    for task in batch_request:
                         if task.task_type == RequestType.PREFILL:
                             rid = task.request_id.split("_")[0]
                             if isinstance(task, Request) and task.has_been_preempted_before:
@@ -1119,13 +1137,13 @@ class EngineService:
                                 task.metrics.decode_inference_start_time = time.time()
                             elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
-                    self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                    self.engine_worker_queue.put_tasks((batch_request, self.resource_manager.real_bsz))
                 else:
                     # When there are no actual tasks to schedule, send an empty task batch to EP workers.
                     # This helps EP workers barrier for syncing tasks not hang.
                     if self.cfg.parallel_config.enable_expert_parallel:
                         self.engine_worker_queue.put_tasks(
-                            ([], self.resource_manager.real_bsz)
+                            (batch_request, self.resource_manager.real_bsz)
                         )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
@@ -1136,7 +1154,7 @@ class EngineService:
                             continue
                         self._send_error_response(request_id, failed)
 
-                if not tasks and not error_tasks:
+                if len(batch_request) <= 0 and not error_tasks:
                     time.sleep(0.005)
 
             except RuntimeError as e:
@@ -1428,22 +1446,25 @@ class EngineService:
             self._send_error_response(req.request_id, "Request is aborted since engine is paused.")
         self.scheduler.reset()
 
-        # pause cache transfer
-        if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-            self.llm_logger.info("Start to pause cache transfer.")
-            pause_transfer_request = ControlRequest(
-                request_id=f"{control_request.request_id}_pause_transfer", method="pause"
-            )
-            self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
-            # Wait for cache_transfer responses
-            asyncio.run(
-                self._wait_for_control_responses(
-                    f"{pause_transfer_request.request_id}", 60, executors=["cache_transfer"]
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            self.resource_manager.cache_manager.reset_cache()
+        else:
+            # pause cache transfer
+            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                self.llm_logger.info("Start to pause cache transfer.")
+                pause_transfer_request = ControlRequest(
+                    request_id=f"{control_request.request_id}_pause_transfer", method="pause"
                 )
-            )
-            self.llm_logger.info("Successfully paused cache transfer.")
+                self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
+                # Wait for cache_transfer responses
+                asyncio.run(
+                    self._wait_for_control_responses(
+                        f"{pause_transfer_request.request_id}", 60, executors=["cache_transfer"]
+                    )
+                )
+                self.llm_logger.info("Successfully paused cache transfer.")
 
-        self.resource_manager.cache_manager.reset()
+            self.resource_manager.cache_manager.reset()
         self.llm_logger.info("Successfully paused request generation.")
         return None
 
@@ -1726,10 +1747,14 @@ class EngineService:
             executors.add("worker")
         if "kv_cache" in tags:
             executors.add("worker")
-            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-                executors.add("cache_transfer")
-            if self.cfg.cache_config.enable_prefix_caching:
-                self.resource_manager.cache_manager.reset()
+            if envs.ENABLE_V1_KVCACHE_MANAGER:
+                if self.cfg.cache_config.enable_prefix_caching:
+                    self.resource_manager.cache_manager.reset_cache()
+            else:
+                if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                    executors.add("cache_transfer")
+                if self.cfg.cache_config.enable_prefix_caching:
+                    self.resource_manager.cache_manager.reset()
 
         # Dispatch sleep request to executors
         self.llm_logger.info(f"Dispatch sleep request to executors: {list(executors)}")
@@ -2543,6 +2568,8 @@ class EngineService:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+            if envs.ENABLE_V1_KVCACHE_MANAGER:
+                return
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 
