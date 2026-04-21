@@ -61,7 +61,7 @@ def update_repeat_times(
         token_ids_all_now = token_ids_all[bi]
         repeat_times_now = repeat_times[token_idx]
 
-        for i in range(length_id):
+        for i in range(cur_len[bi]):
             id = token_ids_all_now[i]
             if id < 0:
                 break

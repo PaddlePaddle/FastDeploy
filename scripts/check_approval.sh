@@ -78,20 +78,24 @@ if [ "${HAS_ENV_MODIFY}" != "" ] && [ "${PR_ID}" != "" ]; then
 fi
 
 LOG_KEYWORDS=(
-    "\.info\("
-    "\.debug\("
-    "\.error\("
-    "log_request\("
-    "log_request_error"
+    "\.info[[:space:]]*\("
+    "\.debug[[:space:]]*\("
+    "\.error[[:space:]]*\("
+    "\blog_request[[:space:]]*\("
+    "\blog_request_error\b"
 )
 
+LOG_PATTERN="$(printf -- "%s|" "${LOG_KEYWORDS[@]}" | sed 's/|$//')"
+
 HAS_LOG_MODIFY=$(git diff upstream/$BRANCH \
-    -- . ':(exclude)scripts/check_approval.sh' \
+    -- . ':(exclude)scripts/check_approval.sh' ':(exclude)tests/**' \
     | grep -E "^\+" \
     | grep -vE "^\+\+\+" \
-    | grep -E $(printf -- "%s|" "${LOG_KEYWORDS[@]}" | sed 's/|$//') || true)
+    | grep -E "${LOG_PATTERN}" || true)
 
 if [ -n "${HAS_LOG_MODIFY}" ] && [ -n "${PR_ID}" ]; then
+    echo "Detected log modification in diff:"
+    echo "${HAS_LOG_MODIFY}"
     echo_line1="You must have one FastDeploy RD (xyxinyang(zhouchong), zyyzghb(zhangyongyue)) approval for modifying logging behavior (.info/.debug/.error/log_request)."
     check_approval "$echo_line1" 1 xyxinyang zyyzghb
 fi

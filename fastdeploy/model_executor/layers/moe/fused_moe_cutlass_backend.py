@@ -314,12 +314,18 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         x: paddle.Tensor,
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Paddle Cutlass compute Fused MoE.
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+
+        if fc1_latent_proj is not None:
+            x = fc1_latent_proj(x)
+
         if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
             if layer.topk_method == "noaux_tc":
                 gate_out, topk_weights, topk_idx = get_moe_scores(
@@ -470,6 +476,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             norm_topk_prob=False if layer.topk_method == "noaux_tc" else True,
             routed_scaling_factor=1.0,
         )
+
+        if fc2_latent_proj is not None:
+            fused_moe_out = fc2_latent_proj(fused_moe_out)
+
         return fused_moe_out
 
 

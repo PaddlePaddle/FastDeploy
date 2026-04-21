@@ -250,9 +250,13 @@ class EngineArgs:
     """
     The storage backend for kvcache storage. If set, it will use the kvcache storage backend.
     """
-    write_policy: str = "write_through"
+    write_policy: str = "write_through_selective"
     """
-    The policy of write cache to storage.
+    The policy of write cache to storage. Options: write_through (alias for write_through_selective with threshold=1), write_through_selective, write_back.
+    """
+    write_through_threshold: int = 2
+    """
+    The threshold of hit count for write_through_selective policy. Only effective when write_policy is write_through_selective.
     """
 
     # System configuration parameters
@@ -1168,9 +1172,16 @@ class EngineArgs:
         cache_group.add_argument(
             "--write-policy",
             type=str,
-            choices=["write_through"],
+            choices=["write_through", "write_through_selective", "write_back"],
             default=EngineArgs.write_policy,
             help="KVCache write policy",
+        )
+
+        cache_group.add_argument(
+            "--write-through-threshold",
+            type=int,
+            default=EngineArgs.write_through_threshold,
+            help="Hit count threshold for write_through_selective policy. Only effective when write_policy is write_through_selective.",
         )
 
         # Cluster system parameters group
