@@ -1931,7 +1931,6 @@ class GPUModelRunner(ModelRunnerBase):
             input_length_list=input_length_list,
             max_dec_len_list=max_dec_len_list,
             block_num=block_num,
-            in_capturing=in_capturing,
         )
         if self.spec_method == SpecMethod.MTP:
             self.proposer.dummy_prefill_inputs(
