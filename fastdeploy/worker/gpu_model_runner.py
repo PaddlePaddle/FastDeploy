@@ -798,7 +798,9 @@ class GPUModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
-        req_dicts = sorted(req_dicts, key=lambda r: r.idx)
+        if self.enable_mm:
+            # Sort by idx to ensure attention mask offsets are filled in order during mm prefill
+            req_dicts = sorted(req_dicts, key=lambda r: r.idx)
         if self.enable_cache_manager_v1:
             # submit_swap_tasks handles:
             # 1. Waiting for pending evict handlers before submitting new evict
