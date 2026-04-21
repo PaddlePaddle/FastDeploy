@@ -38,6 +38,7 @@ QUANTIZATION_METHODS: List[str] = [
     "kvcache",
     "modelopt_fp4",
     "mxfp4",
+    "compressed-tensors"
 ]
 
 
@@ -144,6 +145,8 @@ def _get_offline_quant_config_name(quantization_config, is_torch_weight, is_v1_l
                 raise ValueError("modelopt only supports NVFP4 quantization.")
         elif quant_method == "mxfp4":
             quant_config_name = "mxfp4"
+        elif quant_method == "compressed-tensors":
+            quant_config_name = "compressed-tensors"
         else:
             raise ValueError("Torch weight offline quantization only supports block-wise FP8.")
     else:
@@ -169,6 +172,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .weight_only import WeightOnlyConfig, WINT4Config, WINT8Config
     from .wfp8afp8 import WFP8AFP8Config
     from .wint2 import WINT2Config
+    from .compressed_tensors import CompressedTensorsConfig
 
     if envs.FD_MOE_MXFP4_BACKEND is not None:
         from .mxfp4 import MXFP4Config
@@ -187,6 +191,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,
         "modelopt_fp4": ModelOptNvFp4Config,
+        "compressed-tensors": CompressedTensorsConfig,
     }
     if envs.FD_MOE_MXFP4_BACKEND is not None:
         method_to_config["mxfp4"] = MXFP4Config
