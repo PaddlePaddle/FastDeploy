@@ -681,24 +681,25 @@ class SpeculativeSampler(nn.Layer):
         self,
         logits: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
+        real_bsz: int = 0,
     ) -> paddle.Tensor:
         """compute logprobs"""
         share_inputs = sampling_metadata.share_inputs
         last_logits = logits
-        real_bsz = share_inputs["seq_lens_this_time"].shape[0]
 
         # NOTE(huicongyao): temporarily used to provide a max_sized input, remove in the future
         num_tokens = real_bsz * (self.num_speculative_tokens + 1)
         padded_logits = paddle.zeros(shape=[num_tokens, last_logits.shape[1]], dtype=last_logits.dtype)
         padded_logits[: logits.shape[0]] = last_logits
+        tmp_max_bsz = share_inputs["seq_lens_this_time"].shape[0]
 
-        batch_token_num = share_inputs["accept_num"][:real_bsz]
+        batch_token_num = share_inputs["accept_num"][:tmp_max_bsz]
 
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
-        # top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
+        top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
         if temp_scaled_logprobs is not None:
-            real_bsz_temp_scaled = temp_scaled_logprobs[:real_bsz]
-            temperature = sampling_metadata.temperature[:real_bsz]
+            real_bsz_temp_scaled = temp_scaled_logprobs[:tmp_max_bsz]
+            temperature = sampling_metadata.temperature[:tmp_max_bsz]
             real_bsz_temp_scaled = build_sampling_params_logprob(
                 real_bsz_temp_scaled, batch_token_num, num_tokens, real_bsz
             )
@@ -709,23 +710,26 @@ class SpeculativeSampler(nn.Layer):
             padded_logits = padded_logits / temp_temperature
 
         last_logprobs = F.log_softmax(padded_logits, axis=-1)
-        # top_p_logprob = None
-        # top_p_token_mask = None
+        top_p_logprob = None
+        top_p_token_mask = None
+        if (
+            top_p_normalized_logprobs is not None
+            and share_inputs is not None
+            and sampling_metadata.top_p_normalized_logprobs_flag
+        ):
+            real_token_top_p = build_sampling_params_logprob(
+                sampling_metadata.top_p[:tmp_max_bsz].squeeze(1), batch_token_num, num_tokens, real_bsz
+            ).unsqueeze(1)
+            top_p_normalized_logprobs = build_sampling_params_logprob(
+                top_p_normalized_logprobs[:tmp_max_bsz].squeeze(1), batch_token_num, num_tokens, real_bsz
+            ).unsqueeze(1)
+            top_p_token_mask = paddle.logical_and(top_p_normalized_logprobs, real_token_top_p != 1.0)
 
-        # if (
-        #     top_p_normalized_logprobs is not None
-        #     and share_inputs is not None
-        #     and sampling_metadata.top_p_normalized_logprobs_flag
-        # ):
-        #     real_token_top_p = build_sampling_params_logprob(sampling_metadata.top_p[:real_bsz].squeeze(1), batch_token_num, num_tokens, real_bsz).unsqueeze(1)
-        #     top_p_normalized_logprobs = build_sampling_params_logprob(top_p_normalized_logprobs[:real_bsz].squeeze(1), batch_token_num, num_tokens, real_bsz).unsqueeze(1)
-        #     top_p_token_mask = paddle.logical_and(top_p_normalized_logprobs, real_token_top_p != 1.0)
-
-        #     probs = F.softmax(padded_logits, axis=-1)
-        #     probs = top_p_normalize_probs_paddle(probs, real_token_top_p)
-        #     top_p_logprob = paddle.log(probs)
-        # if top_p_logprob is not None:
-        #     last_logprobs = paddle.where(top_p_token_mask, top_p_logprob, last_logprobs)
+            probs = F.softmax(padded_logits, axis=-1)
+            probs = top_p_normalize_probs_paddle(probs, real_token_top_p)
+            top_p_logprob = paddle.log(probs)
+        if top_p_logprob is not None:
+            last_logprobs = paddle.where(top_p_token_mask, top_p_logprob, last_logprobs)
 
         # NOTE(huicongyao) temporarily used for slice last_logprobs to its real shape, remove in the future
         real_token_num = batch_token_num.sum().item()
@@ -948,6 +952,7 @@ class SpeculativeSampler(nn.Layer):
         increment_value: int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
+        real_bsz: int = 0,
     ) -> SamplerOutput:
         """
         Forward pass for speculative sampling.
@@ -1041,6 +1046,7 @@ class SpeculativeSampler(nn.Layer):
                 is_naive=is_naive,
                 logprobs_mode=self.logprobs_mode,
                 compute_logprobs_fn=self.compute_logprobs,
+                real_bsz=real_bsz,
             )
             sampler_output.logprobs_tensors = logprobs_tensors
             if cu_batch_token_offset is not None:
