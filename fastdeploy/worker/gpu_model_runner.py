@@ -1156,7 +1156,7 @@ class GPUModelRunner(ModelRunnerBase):
             idx = i
             input_length = input_length_list[i]
             max_dec_len = max_dec_len_list[i]
-            # When EP is enabled, input tokens may be routed to the same expert if the input idss consist entirely of 5s.
+            # When EP is enabled, input tokens may be routed to the same expert if the input ids consist entirely of 5s.
             # This can lead to OOM, so random input ids should be used instead.
             if self.fd_config.parallel_config.enable_expert_parallel:
                 input_ids = np.random.randint(5, 10000, size=input_length)
