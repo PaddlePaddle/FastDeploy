@@ -141,6 +141,9 @@ void ReasoningPhaseTokenConstraint(
           "Only float16, bfloat16 and float32 are supported. ");
       break;
   }
+  if (logits.is_cpu()) {
+    delete ctx;
+  }
 }
 
 PD_BUILD_STATIC_OP(reasoning_phase_token_constraint)
