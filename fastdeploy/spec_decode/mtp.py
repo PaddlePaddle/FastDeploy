@@ -174,7 +174,9 @@ class MTPProposer(Proposer):
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
 
-    def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int, in_capturing: bool):
+    def dummy_prefill_inputs(
+        self, num_tokens: int, batch_size: int, expected_decode_len: int, in_capturing: bool = False
+    ):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
 
