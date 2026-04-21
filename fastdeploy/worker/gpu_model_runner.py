@@ -1808,6 +1808,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.increment_value,
                 accept_all_drafts,
                 reject_all_drafts,
+                real_bsz=batch_size,
             )
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
