@@ -29,8 +29,6 @@ __global__ void BuildSamplingParamLogProbKernel(
   const int bi = blockIdx.x;
   const int tid = threadIdx.x;
 
-  if (bi >= real_bsz) return;
-
   // Compute start offset: sum of token_num_per_batch[0..bi-1]
   int start_offset = 0;
   for (int i = 0; i < bi; i++) {
@@ -38,6 +36,10 @@ __global__ void BuildSamplingParamLogProbKernel(
   }
 
   int cur_token_num = token_num_per_batch[bi];
+
+  if (cur_token_num <= 0) {
+    return;
+  }
 
   // Read per-batch param into register
   T val = input_params[bi];
@@ -85,32 +87,34 @@ std::vector<paddle::Tensor> BuildSamplingParamLogProb(
           "Only bool, int32, float32 are supported.");
   }
 
+  int32_t num_blocks = token_num_per_batch.shape()[0];
   switch (input_params.dtype()) {
     case paddle::DataType::BOOL: {
-      BuildSamplingParamLogProbKernel<bool>
-          <<<real_bsz, 256, 0, cu_stream>>>(output_params.data<bool>(),
-                                            input_params.data<bool>(),
-                                            token_num_per_batch.data<int32_t>(),
-                                            token_num_output_cpu,
-                                            real_bsz);
+      BuildSamplingParamLogProbKernel<bool><<<num_blocks, 256, 0, cu_stream>>>(
+          output_params.data<bool>(),
+          input_params.data<bool>(),
+          token_num_per_batch.data<int32_t>(),
+          token_num_output_cpu,
+          real_bsz);
       break;
     }
     case paddle::DataType::INT32: {
       BuildSamplingParamLogProbKernel<int32_t>
-          <<<real_bsz, 256, 0, cu_stream>>>(output_params.data<int32_t>(),
-                                            input_params.data<int32_t>(),
-                                            token_num_per_batch.data<int32_t>(),
-                                            token_num_output_cpu,
-                                            real_bsz);
+          <<<num_blocks, 256, 0, cu_stream>>>(
+              output_params.data<int32_t>(),
+              input_params.data<int32_t>(),
+              token_num_per_batch.data<int32_t>(),
+              token_num_output_cpu,
+              real_bsz);
       break;
     }
     case paddle::DataType::FLOAT32: {
-      BuildSamplingParamLogProbKernel<float>
-          <<<real_bsz, 256, 0, cu_stream>>>(output_params.data<float>(),
-                                            input_params.data<float>(),
-                                            token_num_per_batch.data<int32_t>(),
-                                            token_num_output_cpu,
-                                            real_bsz);
+      BuildSamplingParamLogProbKernel<float><<<num_blocks, 256, 0, cu_stream>>>(
+          output_params.data<float>(),
+          input_params.data<float>(),
+          token_num_per_batch.data<int32_t>(),
+          token_num_output_cpu,
+          real_bsz);
       break;
     }
     default: {
