@@ -22,10 +22,6 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
-from fastdeploy.model_executor.ops.gpu import (
-    mtp_save_first_token,
-    mtp_save_first_token_with_topk,
-)
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.input_batch import (
     InputBatch,
@@ -105,6 +101,8 @@ else:
         limit_thinking_content_length,
         speculate_limit_thinking_content_length,
         custom_numpy_to_tensor,
+        mtp_save_first_token,
+        mtp_save_first_token_with_topk,
     )
 
 from fastdeploy.model_executor.entropy_utils import (

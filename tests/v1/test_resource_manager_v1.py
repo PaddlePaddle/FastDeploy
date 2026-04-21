@@ -30,6 +30,7 @@ if not hasattr(paddle, "enable_compat"):
 from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig, SchedulerConfig
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.request import (
+    BatchRequest,
     CompletionOutput,
     ImagePosition,
     Request,
@@ -683,12 +684,12 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         manager.running = [request, preempted_req]
 
         preempted_reqs = []
-        scheduled_reqs = []
-        can_schedule = manager._trigger_preempt(request, 2, preempted_reqs, scheduled_reqs)
+        batch_request = BatchRequest()
+        can_schedule = manager._trigger_preempt(request, 2, preempted_reqs, batch_request)
         self.assertTrue(can_schedule)
         self.assertIn(preempted_req.request_id, manager.to_be_rescheduled_request_id_set)
         self.assertEqual(preempted_reqs[0], preempted_req)
-        self.assertEqual(scheduled_reqs[0].request_id, preempted_req.request_id)
+        self.assertEqual(batch_request.requests[0].request_id, preempted_req.request_id)
 
     def test_available_position_and_real_bsz(self):
         manager = _build_manager()

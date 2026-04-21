@@ -124,7 +124,7 @@ def _stub_metrics():
 def rm_factory():
     """Yield a factory that creates ResourceManagers with stubbed deps."""
     with (
-        patch("fastdeploy.engine.resource_manager.PrefixCacheManager", _StubCacheManager),
+        patch("fastdeploy.cache_manager.prefix_cache_manager.PrefixCacheManager", _StubCacheManager),
         patch("fastdeploy.engine.resource_manager.main_process_metrics", _stub_metrics()),
         patch("fastdeploy.engine.resource_manager.llm_logger", _noop_logger()),
     ):
