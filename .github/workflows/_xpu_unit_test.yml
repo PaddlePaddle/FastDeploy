@@ -192,7 +192,7 @@ jobs:
           echo "============================开始运行XPU自定义算子单测============================"
           set +e
           COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage.unit_ops \
-          python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short custom_ops/xpu_ops/test/test_adjust_batch_and_gather_next_token.py
+          python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short custom_ops/xpu_ops/test/test_draft_model_postprocess.py
           ops_exit_code=$?
           set -e
           if [ $ops_exit_code -ne 0 ]; then
