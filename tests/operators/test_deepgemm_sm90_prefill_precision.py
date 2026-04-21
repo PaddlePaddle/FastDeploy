@@ -89,7 +89,7 @@ class TestDeepGemmPrefill(unittest.TestCase):
 
         print(baseline_out - deepgemm_output)
 
-    def test_flashmla(self):
+    def test_main(self):
         # import paddle.profiler as profiler
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
