@@ -25,6 +25,11 @@ import crcmod
 from redis import ConnectionPool
 
 from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.scheduler import utils
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.scheduler.storage import AdaptedRedis
@@ -370,7 +375,11 @@ class GlobalScheduler:
                 rem_amount=0,
                 ttl=self.ttl,
             )
-            scheduler_logger.info(f"Scheduler has enqueued some requests: {requests}")
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Scheduler has enqueued some requests: {request_ids}",
+                request_ids=[request.request_id for request in requests],
+            )
 
         if duplicate:
             scheduler_logger.warning(
@@ -573,7 +582,9 @@ class GlobalScheduler:
                         self.stolen_requests[request.request_id] = request
                         continue
 
-                    scheduler_logger.error(f"Scheduler has received a duplicate request from others: {request}")
+                    log_request_error(
+                        message="Scheduler has received a duplicate request from others: {request}", request=request
+                    )
 
         requests: List[Request] = [request.raw for request in scheduled_requests]
         if len(remaining_request) > 0:
@@ -603,7 +614,11 @@ class GlobalScheduler:
                 )
 
         if len(requests) > 0:
-            scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Scheduler has pulled some request: {request_ids}",
+                request_ids=[request.request_id for request in requests],
+            )
         return requests
 
     def _put_results_worker(self, tasks: List[Task]):
@@ -649,7 +664,9 @@ class GlobalScheduler:
                 stolen_responses[response_queue_name].append(response.serialize())
                 continue
 
-            scheduler_logger.error(f"Scheduler has received a non-existent response from engine: {[response]}")
+            log_request_error(
+                message="Scheduler has received a non-existent response from engine: {response}", response=[response]
+            )
 
         with self.mutex:
             for request_id, responses in local_responses.items():
@@ -664,7 +681,11 @@ class GlobalScheduler:
                 self.local_response_not_empty.notify_all()
 
         if len(finished_request_ids) > 0:
-            scheduler_logger.info(f"Scheduler has received some finished responses: {finished_request_ids}")
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Scheduler has received some finished responses: {request_ids}",
+                request_ids=finished_request_ids,
+            )
 
         for response_queue_name, responses in stolen_responses.items():
             self.client.rpush(response_queue_name, *responses, ttl=self.ttl)
@@ -793,7 +814,11 @@ class GlobalScheduler:
 
                 if finished:
                     del self.local_responses[request_id]
-                    scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+                    log_request(
+                        RequestLogLevel.CONTENT,
+                        message="Scheduler has pulled a finished response: {request_ids}",
+                        request_ids=[request_id],
+                    )
             return results
 
     def reset(self):
@@ -824,7 +849,7 @@ class GlobalScheduler:
             self.client.zrem(self._load_table_name(), self.name)
             self.local_responses = dict()
             self.stolen_requests = dict()
-        scheduler_logger.info("Scheduler has been reset")
+        log_request(RequestLogLevel.LIFECYCLE, message="Scheduler has been reset")
 
     def update_config(self, load_shards_num: Optional[int], reallocate: Optional[bool]):
         """

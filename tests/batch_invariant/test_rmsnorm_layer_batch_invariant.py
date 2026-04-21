@@ -31,6 +31,7 @@ def _make_minimal_rmsnorm(hidden_size, eps=1e-5, dtype="float32"):
     layer.bias = None
     layer.split_x = False
     layer.allgather_out = False
+    layer.enable_all_reduce_fusion = False
     return layer
 
 

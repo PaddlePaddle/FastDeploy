@@ -250,9 +250,13 @@ class EngineArgs:
     """
     The storage backend for kvcache storage. If set, it will use the kvcache storage backend.
     """
-    write_policy: str = "write_through"
+    write_policy: str = "write_through_selective"
     """
-    The policy of write cache to storage.
+    The policy of write cache to storage. Options: write_through (alias for write_through_selective with threshold=1), write_through_selective, write_back.
+    """
+    write_through_threshold: int = 2
+    """
+    The threshold of hit count for write_through_selective policy. Only effective when write_policy is write_through_selective.
     """
 
     # System configuration parameters
@@ -272,6 +276,11 @@ class EngineArgs:
     disable_custom_all_reduce: bool = False
     """
     Flag to disable the custom all-reduce kernel.
+    """
+
+    enable_flashinfer_allreduce_fusion: bool = False
+    """
+    Flag to enable all reduce fusion kernel in flashinfer.
     """
 
     use_internode_ll_two_stage: bool = False
@@ -996,6 +1005,12 @@ class EngineArgs:
             help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
+            "--enable-flashinfer-allreduce-fusion",
+            action="store_true",
+            default=EngineArgs.enable_flashinfer_allreduce_fusion,
+            help="Flag to enable all reduce fusion kernel in flashinfer.",
+        )
+        parallel_group.add_argument(
             "--use-internode-ll-two-stage",
             action="store_true",
             default=EngineArgs.use_internode_ll_two_stage,
@@ -1157,9 +1172,16 @@ class EngineArgs:
         cache_group.add_argument(
             "--write-policy",
             type=str,
-            choices=["write_through"],
+            choices=["write_through", "write_through_selective", "write_back"],
             default=EngineArgs.write_policy,
             help="KVCache write policy",
+        )
+
+        cache_group.add_argument(
+            "--write-through-threshold",
+            type=int,
+            default=EngineArgs.write_through_threshold,
+            help="Hit count threshold for write_through_selective policy. Only effective when write_policy is write_through_selective.",
         )
 
         # Cluster system parameters group

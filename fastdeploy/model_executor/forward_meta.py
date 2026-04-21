@@ -17,7 +17,7 @@
 import logging
 from dataclasses import dataclass, fields
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import paddle
 
@@ -149,6 +149,10 @@ class ForwardMeta:
     # Routing Replay table buffer
     routing_replay_table: Optional[paddle.Tensor] = None
 
+    # ============ V1 KVCACHE Manager: Swap-in waiting info ============
+    # LayerDoneCounter for layer-by-layer swap waiting (set by submit_swap_tasks return value)
+    layer_done_counter: Optional[Any] = None
+
     # chunked MoE related
     moe_num_chunk: int = 1
     max_moe_num_chunk: int = 1
@@ -160,7 +164,8 @@ class ForwardMeta:
 
     # for mla & dsa
     position_ids: Optional[paddle.Tensor] = None
-    mask_encoder_batch: Optional[paddle.Tensor] = None
+    # for kvcache slot
+    slot_mapping: Optional[paddle.Tensor] = None
 
     real_bsz: int = 0
 
@@ -275,8 +280,14 @@ class XPUForwardMeta(ForwardMeta):
     hidden_states: Optional[paddle.Tensor] = None
 
     is_draft: bool = False
+    is_speculative: bool = False
     # max bs
     max_num_seqs: int = 0
+
+    # for spliced block_attn
+    slot_mapping_enc: Optional[paddle.Tensor] = None
+    #
+    slot_mapping_dec: Optional[paddle.Tensor] = None
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """

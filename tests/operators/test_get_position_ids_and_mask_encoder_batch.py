@@ -33,24 +33,17 @@ class TestGetPositionIdsAndMaskEncoderBatch(unittest.TestCase):
 
         total_len = int(seq_lens_encoder.numpy().sum() + seq_lens_this_time.numpy().sum())
         position_ids = paddle.zeros([total_len], dtype="int32")
-        mask_encoder_batch = paddle.zeros([total_len], dtype="int32")
 
         # Call the custom operator
-        get_position_ids_and_mask_encoder_batch(
-            seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, position_ids, mask_encoder_batch
-        )
+        get_position_ids_and_mask_encoder_batch(seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, position_ids)
 
         expected_position_ids = np.array([0, 1, 2, 1, 0, 1, 2, 3], dtype=np.int32)
 
-        expected_mask = np.array([1, 1, 1, 0, 1, 1, 0, 0], dtype=np.int32)
-
         # Convert to numpy for comparison
         position_ids_np = position_ids.numpy()
-        mask_encoder_batch_np = mask_encoder_batch.numpy()
 
         # Assert equality
         np.testing.assert_array_equal(position_ids_np, expected_position_ids)
-        np.testing.assert_array_equal(mask_encoder_batch_np, expected_mask)
 
     def test_empty_decoder(self):
         # Test case where decoder length is 0
@@ -59,17 +52,12 @@ class TestGetPositionIdsAndMaskEncoderBatch(unittest.TestCase):
         seq_lens_this_time = paddle.to_tensor([0], dtype="int32")
 
         position_ids = paddle.zeros([2], dtype="int32")
-        mask_encoder_batch = paddle.zeros([2], dtype="int32")
 
-        get_position_ids_and_mask_encoder_batch(
-            seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, position_ids, mask_encoder_batch
-        )
+        get_position_ids_and_mask_encoder_batch(seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, position_ids)
 
         expected_position_ids = np.array([0, 1], dtype=np.int32)
-        expected_mask = np.array([1, 1], dtype=np.int32)
 
         np.testing.assert_array_equal(position_ids.numpy(), expected_position_ids)
-        np.testing.assert_array_equal(mask_encoder_batch.numpy(), expected_mask)
 
 
 if __name__ == "__main__":

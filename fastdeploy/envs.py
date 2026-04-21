@@ -43,7 +43,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Request logging master switch. Set to 0 to disable request logging.
     "FD_LOG_REQUESTS": lambda: int(os.getenv("FD_LOG_REQUESTS", "1")),
     # Request logging detail level (0-3). Higher level means more verbose output.
-    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "0")),
+    "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "2")),
     # Max field length for request logging truncation.
     "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
     # Unified trace mode: off, local, otel, all.
@@ -253,6 +253,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Suspend rollouting routing replay
+    "FD_SUSPEND_ROUTING_REPLAY": lambda: bool(int(os.getenv("FD_SUSPEND_ROUTING_REPLAY", "0"))),
     # train-infer consistency, used in RL
     # Whether to align RoPE and moe gate precision with training
     "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),
@@ -269,6 +271,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Whether to enable FP8 quantization with pow2scale.
     "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
+    # enable kv cache manager v1
+    "ENABLE_V1_KVCACHE_MANAGER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_MANAGER", "0")),
 }
 
 

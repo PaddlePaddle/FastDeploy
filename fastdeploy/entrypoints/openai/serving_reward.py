@@ -28,7 +28,7 @@ from fastdeploy.entrypoints.openai.protocol import (
     UsageInfo,
 )
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext, ZmqOpenAIServing
-from fastdeploy.utils import api_server_logger
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 
 
 class OpenAIServingReward(ZmqOpenAIServing):
@@ -77,7 +77,7 @@ class OpenAIServingReward(ZmqOpenAIServing):
         response: ChatRewardResponse = None
         generators: AsyncGenerator[ChatRewardResponse, None] = self.handle(ctx)
         async for r in generators:
-            api_server_logger.info(f"engine pooling result:{r}")
+            log_request(RequestLogLevel.CONTENT, message="engine pooling result: {result}", result=r)
             r.data[0].index = idx
             idx += 1
             if response is None or isinstance(r, ErrorResponse):
@@ -93,7 +93,12 @@ class OpenAIServingReward(ZmqOpenAIServing):
     @override
     def _build_response(self, ctx: ServeContext, request_output: dict):
         """Generate final reward response"""
-        api_server_logger.info(f"[{ctx.request_id}] Reward RequestOutput received:{request_output}")
+        log_request(
+            level=RequestLogLevel.CONTENT,
+            message="Reward RequestOutput received: request_id={request_id}, output={request_output}",
+            request_id=ctx.request_id,
+            request_output=request_output,
+        )
 
         base = PoolingRequestOutput.from_dict(request_output)
         reward_res = RewardRequestOutput.from_base(base)

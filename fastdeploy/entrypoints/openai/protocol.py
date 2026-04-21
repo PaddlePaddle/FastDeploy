@@ -31,6 +31,7 @@ from pydantic import (
 )
 
 from fastdeploy.engine.pooling_params import PoolingParams
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.worker.output import PromptLogprobs, SpeculateMetrics
 
 
@@ -758,9 +759,7 @@ class ChatCompletionRequest(BaseModel):
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in self.metadata.items():
                 req_dict[key] = value
-            from fastdeploy.utils import api_server_logger
-
-            api_server_logger.warning("The parameter metadata is obsolete.")
+            log_request(RequestLogLevel.STAGES, message="The parameter metadata is obsolete.")
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value

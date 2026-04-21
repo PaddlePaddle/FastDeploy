@@ -23,6 +23,11 @@ from fastapi.responses import Response, StreamingResponse
 
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.engine import LLMEngine
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.utils import (
     FlexibleArgumentParser,
     api_server_logger,
@@ -61,7 +66,7 @@ async def generate(request: dict):
     """
     generate stream api
     """
-    api_server_logger.info(f"Receive request: {request}")
+    log_request(RequestLogLevel.FULL, message="Receive request: {request}", request=request)
     stream = request.get("stream", 0)
 
     if not stream:
@@ -72,7 +77,11 @@ async def generate(request: dict):
                 output = result
         except Exception as e:
             # 记录完整的异常堆栈信息
-            api_server_logger.error(f"Error during generation: {e!s}", exc_info=True)
+            log_request_error(
+                message="request[{request_id}] Error during generation: {error}",
+                request_id=request.get("request_id"),
+                error=str(e),
+            )
             # 返回结构化的错误消息并终止流
             output = {"error": str(e), "error_type": e.__class__.__name__}
         return output
@@ -84,7 +93,11 @@ async def generate(request: dict):
                 yield f"data: {json.dumps(result)}\n\n"
         except Exception as e:
             # 记录完整的异常堆栈信息
-            api_server_logger.error(f"Error during generation: {e!s}", exc_info=True)
+            log_request_error(
+                message="request[{request_id}] Error during generation: {error}",
+                request_id=request.get("request_id"),
+                error=str(e),
+            )
             # 返回结构化的错误消息并终止流
             error_msg = {"error": str(e), "error_type": e.__class__.__name__}
             yield f"data: {json.dumps(error_msg)}\n\n"
@@ -123,7 +136,7 @@ def main():
     parser = FlexibleArgumentParser()
     parser.add_argument("--port", default=9904, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-    parser.add_argument("--workers", default=1, type=int, help="number of workers")
+    parser.add_argument("--workers", default=4, type=int, help="number of workers")
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()
     launch_api_server(args)

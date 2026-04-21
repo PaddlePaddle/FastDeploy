@@ -272,6 +272,11 @@ class Attention(nn.Layer):
             compressed_kv: optional compressed key-value cache (for MLA)
             k_pe: optional key positional encoding (for MLA)
         """
+        # ============ V1 KVCACHE Manager: Layer-by-layer swap wait ============
+        # Wait for swap-in of current layer before using cache
+        if forward_meta.layer_done_counter is not None:
+            forward_meta.layer_done_counter.wait_for_layer(self.layer_id)
+
         return forward_meta.attn_backend.forward(
             q,
             k,

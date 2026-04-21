@@ -24,7 +24,8 @@ from fastdeploy.entrypoints.openai.protocol import (
     ModelList,
     ModelPermission,
 )
-from fastdeploy.utils import ErrorType, api_server_logger, get_host_ip
+from fastdeploy.logger.request_logger import log_request_error
+from fastdeploy.utils import ErrorType, get_host_ip
 
 
 @dataclass
@@ -86,7 +87,7 @@ class OpenAIServingModels:
             err_msg = (
                 f"Only master node can accept models request, please send request to master node: {self.master_ip}"
             )
-            api_server_logger.error(err_msg)
+            log_request_error(message=err_msg)
             return ErrorResponse(error=ErrorInfo(message=err_msg, type=ErrorType.INTERNAL_ERROR))
         model_infos = [
             ModelInfo(
