@@ -194,6 +194,8 @@ class ModelRegistry:
         elif model_impl == "auto" and is_fallback:
             # Auto mode fallback when no native implementation exists
             backend_arch = "PaddleFormersForCausalLM"
+        elif model_impl == "paddlefleet":
+            backend_arch = "PaddleFleetForCausalLM"
         elif model_impl == "fastdeploy":
             return None
         else:

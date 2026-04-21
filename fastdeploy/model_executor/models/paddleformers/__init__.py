@@ -21,10 +21,12 @@ from fastdeploy.model_executor.models.model_base import (
 )
 
 from .base import PaddleFormersModelBase
+from .base_fleet import PaddleFleetModelBase
 from .causallm import CausalLMMixin
 
 __all__ = [
     "PaddleFormersForCausalLM",
+    "PaddleFleetForCausalLM",
 ]
 
 
@@ -34,7 +36,17 @@ __all__ = [
     module_name="paddleformers",
     category=ModelCategory.TEXT_GENERATION,
 )
-class PaddleFormersForCausalLM(CausalLMMixin, PaddleFormersModelBase, ModelForCasualLM):
+class PaddleFormersForCausalLM(PaddleFormersModelBase, ModelForCasualLM):
     @classmethod
     def name(cls):
         return "PaddleFormersForCausalLM"
+
+@ModelRegistry.register_model_class(
+    architecture="PaddleFleetForCausalLM",
+    module_name="paddleformers",
+    category=ModelCategory.TEXT_GENERATION,
+)
+class PaddleFleetForCausalLM(PaddleFleetModelBase, ModelForCasualLM):
+    @classmethod
+    def name(cls):
+        return "PaddleFleetForCausalLM"
