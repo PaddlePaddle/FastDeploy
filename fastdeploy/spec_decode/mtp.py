@@ -174,18 +174,17 @@ class MTPProposer(Proposer):
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
 
-    def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
+    def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int, in_capturing: bool):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
 
-        input_length = min(
-            num_tokens // batch_size,
-            self.model_config.max_model_len - max_dec_len,
-        )
-
-        # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
-        if self.fd_config.parallel_config.enable_expert_parallel:
-            input_length = min(input_length, 32)
+        if in_capturing:
+            input_length = self.fd_config.speculative_config.num_speculative_tokens + 1
+        else:
+            input_length = min(
+                num_tokens // batch_size,
+                self.model_config.max_model_len - max_dec_len,
+            )
 
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -193,7 +192,15 @@ class MTPProposer(Proposer):
 
         for i in range(batch_size):
             idx = i
-            self.model_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
+
+            # When EP is enabled, input tokens may be routed to the same expert if the input idss consist entirely of 5s.
+            # This can lead to OOM, so random input ids should be used instead.
+            if self.fd_config.parallel_config.enable_expert_parallel:
+                input_ids = np.random.randint(5, 10000, size=input_length)
+            else:
+                input_ids = np.array([5] * input_length)
+
+            self.model_inputs["input_ids"][idx : idx + 1, :input_length] = input_ids
             self.model_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
             self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = input_length
             self.model_inputs["seq_lens_encoder"][idx : idx + 1] = input_length
