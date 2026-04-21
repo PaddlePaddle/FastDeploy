@@ -145,8 +145,8 @@ class GPUModelRunner(ModelRunnerBase):
                 if fd_config.model_config.max_logprobs == -1
                 else fd_config.model_config.max_logprobs
             )
-        self.temp_scaled_logprobs = True
-        self.top_p_normalized_logprobs = True
+        self.temp_scaled_logprobs = False
+        self.top_p_normalized_logprobs = False
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
         self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
@@ -1202,6 +1202,12 @@ class GPUModelRunner(ModelRunnerBase):
             for req in self.forward_batch_reqs_list
             if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
         ]
+        self.temp_scaled_logprobs = bool(logprobs_reqs) and any(
+            req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs
+        )
+        self.top_p_normalized_logprobs = bool(logprobs_reqs) and any(
+            req.sampling_params.top_p_normalized_logprobs and req.sampling_params.top_p != 1.0 for req in logprobs_reqs
+        )
         if len(logprobs_reqs):
             self.max_logprobs = (
                 max(
@@ -1212,10 +1218,6 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 if not self.speculative_decoding
                 else 20
-            )
-            self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
-            self.top_p_normalized_logprobs = any(
-                req.sampling_params.top_p_normalized_logprobs for req in logprobs_reqs
             )
         elif self.enable_logprob:
             self.max_logprobs = None if not self.speculative_decoding else 0
@@ -2592,7 +2594,6 @@ class GPUModelRunner(ModelRunnerBase):
         sampler_output,
     ):
         if self.speculative_decoding:
-            skip_save_output = self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
             save_output_speculate(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
