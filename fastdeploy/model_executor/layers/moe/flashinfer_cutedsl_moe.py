@@ -78,6 +78,7 @@ def flashinfer_cutedsl_moe_masked(
     down_sm_count: Optional[int] = None,
     down_signals: Optional[paddle.Tensor] = None,
     down_start_event: Optional[Any] = None,
+    pre_permuted: bool = False,
 ):
     """
     Perform masked Mixture-of-Experts computation with FlashInfer's CuteDSL kernels.
@@ -113,7 +114,12 @@ def flashinfer_cutedsl_moe_masked(
     assert len(hidden_states) == 2, f"hidden_states must be a tuple of length 2, got {len(hidden_states)}"
 
     # intermediate_size derived from w2 last dimension
-    n = w2.shape[-1] * 2
+    # - normal:        w2 [E, k, n//2]          -> n = shape[-1] * 2
+    # - pre_permuted:  w2 [k, n//2, E]          -> n = shape[-2] * 2
+    if pre_permuted:
+        n = w2.shape[-2] * 2
+    else:
+        n = w2.shape[-1] * 2
 
     if hidden_states[1] is not None:
         # Pre-quantized path: tokens already FP4-packed by dispatch
@@ -140,14 +146,26 @@ def flashinfer_cutedsl_moe_masked(
             input_global_scale,
         )
 
-    assert w1.shape[-2] == 2 * n, f"w1 last-2 dim must be 2*n={2*n}, got {w1.shape[-2]}"
-    assert w1.shape[-1] * 2 == k, f"w1 last dim * 2 must equal k={k}, got {w1.shape[-1] * 2}"
-    assert (
-        w2.shape[-2] == k and w2.shape[-1] == n // 2
-    ), f"w2 shape mismatch, got {list(w2.shape[-2:])}, expected [{k}, {n // 2}]"
-    assert list(w1_alpha.shape) == [num_experts], f"w1_alpha must be (l,), got {w1_alpha.shape}"
+    if pre_permuted:
+        # w1 [2n, k//2, E], w2 [k, n//2, E]
+        assert w1.shape[0] == 2 * n, f"w1 dim0 must be 2*n={2*n}, got {w1.shape[0]}"
+        assert w1.shape[1] * 2 == k, f"w1 dim1 * 2 must equal k={k}, got {w1.shape[1] * 2}"
+        assert (
+            w2.shape[0] == k and w2.shape[1] == n // 2
+        ), f"w2 shape mismatch, got {list(w2.shape[:2])}, expected [{k}, {n // 2}]"
+    else:
+        assert w1.shape[-2] == 2 * n, f"w1 last-2 dim must be 2*n={2*n}, got {w1.shape[-2]}"
+        assert w1.shape[-1] * 2 == k, f"w1 last dim * 2 must equal k={k}, got {w1.shape[-1] * 2}"
+        assert (
+            w2.shape[-2] == k and w2.shape[-1] == n // 2
+        ), f"w2 shape mismatch, got {list(w2.shape[-2:])}, expected [{k}, {n // 2}]"
+    if pre_permuted:
+        assert list(w1_alpha.shape) == [1, 1, num_experts], f"w1_alpha must be (1,1,l), got {w1_alpha.shape}"
+        assert list(w2_alpha.shape) == [1, 1, num_experts], f"w2_alpha must be (1,1,l), got {w2_alpha.shape}"
+    else:
+        assert list(w1_alpha.shape) == [num_experts], f"w1_alpha must be (l,), got {w1_alpha.shape}"
+        assert list(w2_alpha.shape) == [num_experts], f"w2_alpha must be (l,), got {w2_alpha.shape}"
     assert list(a2_global_scale.shape) == [num_experts], f"a2_global_scale must be (l,), got {a2_global_scale.shape}"
-    assert list(w2_alpha.shape) == [num_experts], f"w2_alpha must be (l,), got {w2_alpha.shape}"
 
     assert _is_dtype(a_q, "uint8")
     assert _is_dtype(a_q_sf, "float8_e4m3fn")
@@ -165,16 +183,24 @@ def flashinfer_cutedsl_moe_masked(
     # w1:           [E, 2*n, k//2]  → _perm(., 1, 2, 0) → [2*n, k//2, E]
     # w1_blockscale:[E, 2*n, k//G]  → _perm(., 1, 2, 0) → [2*n, k//G, E]
     # Both must share the same expert-last layout for grouped_gemm_nt_masked.
+    if pre_permuted:
+        w1_p = w1
+        w1_bs_p = w1_blockscale
+        w1_alpha_r = w1_alpha
+    else:
+        w1_p = _perm(w1, 1, 2, 0)
+        w1_bs_p = _perm(w1_blockscale, 1, 2, 0)
+        w1_alpha_r = w1_alpha.reshape([1, 1, num_experts])
     grouped_gemm_nt_masked(
         (a_q, a_q_sf),
-        (_perm(w1, 1, 2, 0), _perm(w1_blockscale, 1, 2, 0)),
+        (w1_p, w1_bs_p),
         gateup_output,
         masked_m,
         ab_dtype=ab_dtype,
         sf_dtype=sf_dtype,
         c_dtype=c_dtype,
         sf_vec_size=sf_vec_size,
-        alpha=w1_alpha.reshape([1, 1, num_experts]),
+        alpha=w1_alpha_r,
         alpha_dtype=get_cute_dtype(w1_alpha),
     )  # fills gateup_output in logical [m, 2*n, l]
 
@@ -197,16 +223,24 @@ def flashinfer_cutedsl_moe_masked(
     # w2:           [E, k, n//2]  → _perm(., 1, 2, 0) → [k, n//2, E]
     # w2_blockscale:[E, k, n//G]  → _perm(., 1, 2, 0) → [k, n//G, E]
     # Both must share the same expert-last layout for grouped_gemm_nt_masked.
+    if pre_permuted:
+        w2_p = w2
+        w2_bs_p = w2_blockscale
+        w2_alpha_r = w2_alpha
+    else:
+        w2_p = _perm(w2, 1, 2, 0)
+        w2_bs_p = _perm(w2_blockscale, 1, 2, 0)
+        w2_alpha_r = w2_alpha.reshape([1, 1, num_experts])
     grouped_gemm_nt_masked(
         (diq, diq_sf),
-        (_perm(w2, 1, 2, 0), _perm(w2_blockscale, 1, 2, 0)),
+        (w2_p, w2_bs_p),
         out,
         masked_m,
         ab_dtype=ab_dtype,
         sf_dtype=sf_dtype,
         c_dtype=c_dtype,
         sf_vec_size=sf_vec_size,
-        alpha=w2_alpha.reshape([1, 1, num_experts]),
+        alpha=w2_alpha_r,
         alpha_dtype=get_cute_dtype(w2_alpha),
         **(
             dict(
