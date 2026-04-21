@@ -510,6 +510,7 @@ class TestSleepWakeupBehavior(unittest.TestCase):
             initialize_kv_cache=Mock(),
             model_inputs=Mock(reset_model_inputs=Mock()),
         )
+        runner.enable_cache_manager_v1 = False
         return runner
 
     @patch("fastdeploy.worker.gpu_model_runner.print_gpu_memory_use")
@@ -676,6 +677,7 @@ class TestInsertTasksV1SplitwiseSuffix(unittest.TestCase):
         fd_config.routing_replay_config.enable_routing_replay = False
         runner.fd_config = fd_config
         runner.scheduler_config = fd_config.scheduler_config
+        runner.enable_cache_manager_v1 = False
         return runner
 
     def _make_prefill_request(self, idx, draft_token_ids):

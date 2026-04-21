@@ -378,6 +378,9 @@ class ModelConfig:
             # Because the ERNIE 4.5 config.json contains two sets of keys, adaptation is required.
             self.moe_num_shared_experts = self.n_shared_experts
 
+        if hasattr(self, "num_experts_per_tok") and not hasattr(self, "moe_k"):
+            self.moe_k = self.num_experts_per_tok
+
     def read_from_env(self):
         """
         Read configuration information from environment variables and update the object's attributes.
@@ -1610,13 +1613,18 @@ class CacheConfig:
         self.enable_output_caching = False
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
-        self.write_policy = None
+        self.write_policy = "write_through_selective"
+        self.write_through_threshold = 2
         self.num_cpu_blocks = None
         self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
 
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+        # ENABLE_V1_KVCACHE_MANAGER=0 uses the old cache_transfer_manager subprocess which only supports write_through.
+        if not envs.ENABLE_V1_KVCACHE_MANAGER:
+            self.write_policy = "write_through"
 
         self.cache_queue_port = parse_ports(self.cache_queue_port)
         self.rdma_comm_ports = parse_ports(self.rdma_comm_ports)
@@ -1672,6 +1680,15 @@ class CacheConfig:
             raise ValueError("GPU memory utilization must be less than 1.0. Got " f"{self.gpu_memory_utilization}.")
         if self.kv_cache_ratio > 1.0:
             raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
+
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            allowed_write_policies = ["write_through_selective", "write_back", "write_through"]
+        else:
+            allowed_write_policies = ["write_through"]
+        if self.write_policy not in allowed_write_policies:
+            raise ValueError(
+                f"Invalid write_policy: {self.write_policy!r}. " f"Expected one of {allowed_write_policies}."
+            )
 
     def postprocess(self, num_total_tokens, number_of_tasks):
         """
@@ -1746,6 +1763,9 @@ class RouterConfig:
             self.metrics_port = args["metrics_port"]
         else:
             self.metrics_port = self.api_server_port
+
+    def __str__(self):
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class CommitConfig:
@@ -1859,6 +1879,9 @@ class RoutingReplayConfig:
         Convert routing replay config to json string.
         """
         return json.dumps({key: value for key, value in self.__dict__.items()})
+
+    def __str__(self):
+        return self.to_json_string()
 
 
 class FDConfig:
@@ -2141,6 +2164,21 @@ class FDConfig:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
+            )
+
+        # Layer-by-layer swap (H2D) is always incompatible with CUDA Graph prefill capture.
+        # Force only decode to use CUDA Graph when host cache is configured.
+        if (
+            self.cache_config is not None
+            and self.cache_config.num_cpu_blocks
+            and self.graph_opt_config.cudagraph_only_prefill
+        ):
+            original_value = self.graph_opt_config.cudagraph_only_prefill
+            self.graph_opt_config.cudagraph_only_prefill = False
+            logger.warning(
+                f"[CacheConfig] Layer-by-layer swap-in is incompatible "
+                f"with CUDA Graph prefill capture. Forcing cudagraph_only_prefill=False "
+                f"(only decode will use CUDA Graph). Original cudagraph_only_prefill={original_value}"
             )
 
         if (
