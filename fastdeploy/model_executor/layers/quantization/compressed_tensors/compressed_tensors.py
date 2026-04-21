@@ -1,7 +1,7 @@
 from ..quant_base import QuantConfigBase
 from ...linear import LinearBase, UnquantizedLinearMethod
 from ...moe import FusedMoE
-from .compressed_tensors_moe import CompreesedTensorsMoEMethod
+from .compressed_tensors_moe import CompressedTensorsMoEMethod
 
 class CompressedTensorsConfig(QuantConfigBase):
     def __init__(self):
@@ -20,6 +20,6 @@ class CompressedTensorsConfig(QuantConfigBase):
         if isinstance(layer, LinearBase):
             return UnquantizedLinearMethod()
         elif isinstance(layer, FusedMoE):
-            return CompreesedTensorsMoEMethod()
+            return CompressedTensorsMoEMethod()
         else:
             return None

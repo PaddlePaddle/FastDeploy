@@ -1,6 +1,9 @@
 from ...linear import QuantMethodBase
 
-class CompreesedTensorsMoEMethod(QuantMethodBase):
+class CompressedTensorsMoEMethod(QuantMethodBase):
+    
+    def name(self) -> str:
+        return "compressed-tensors"
     
     def create_weights():
         pass
