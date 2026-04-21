@@ -254,9 +254,11 @@ jobs:
           wget -q --no-proxy --no-check-certificate https://paddle-qa.bj.bcebos.com/CodeSync/develop/PaddlePaddle/PaddleTest/tools/bos_tools.py
           push_file=$(realpath bos_tools.py)
           python3 -m pip install -q bce-python-sdk==0.9.29
-          COV_FILE="FastDeploy/coverage_4cards.tar.gz"
-          if [ -f "${COV_FILE}" ]; then
+          COV_FILE="coverage_4cards.tar.gz"
+          if [ -f "FastDeploy/${COV_FILE}" ]; then
+            cd FastDeploy
             python3 ${push_file} ${COV_FILE} ${target_path}
+            cd ..
             target_path_stripped="${target_path#paddle-github-action/}"
             COV_URL=https://paddle-github-action.bj.bcebos.com/${target_path_stripped}/coverage_4cards.tar.gz
             echo "coverage_data_url=${COV_URL}" >> $GITHUB_OUTPUT
