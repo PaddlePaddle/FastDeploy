@@ -8,7 +8,6 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.models.model_base import (ModelCategory, ModelRegistry)
-from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.models.deepseek_v3 import DeepseekV3ForCausalLM
 
 
@@ -30,6 +29,7 @@ class KimiK25ForConditionalGeneration(DeepseekV3ForCausalLM):
     def load_weights(self, weights_iterator) -> None:
         from fastdeploy.model_executor.utils import (
             default_weight_loader,
+            get_tensor,
             process_weights_after_loading,
         )
         
@@ -42,14 +42,6 @@ class KimiK25ForConditionalGeneration(DeepseekV3ForCausalLM):
             ("qkv_a_proj_with_mqa",             "q_a_proj",                     "q_a"),
             ("qkv_a_proj_with_mqa",             "kv_a_proj_with_mqa",           "kv_a"),
         ]
-        expert_params_mapping = FusedMoE.make_expert_params_mapping(
-            num_experts=self.fd_config.model_config.n_routed_experts,
-            ckpt_gate_proj_name="gate_proj",
-            ckpt_down_proj_name="down_proj",
-            ckpt_up_proj_name="up_proj",
-            param_gate_up_proj_name="experts.up_gate_proj_",
-            param_down_proj_name="experts.down_proj_",
-        )
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
@@ -76,23 +68,36 @@ class KimiK25ForConditionalGeneration(DeepseekV3ForCausalLM):
                 handled = True
                 break
 
-            # 第二层：expert_params_mapping
-            if not handled:
-                for param_name, weight_name, expert_id, shard_id in expert_params_mapping:
-                    if weight_name not in loaded_weight_name:
-                        continue
+            # 第二层：直接写入 experts 下的 stacked parameter
+            if not handled and ".experts." in loaded_weight_name:
+                for proj_name in ("gate_proj", "up_proj", "down_proj"):
+                    for suffix in ("weight_packed", "weight_scale"):
+                        proj_match = re.match(
+                            rf"^(.*\.experts\.)(\d+)\.{proj_name}\.{suffix}$",
+                            loaded_weight_name,
+                        )
+                        if not proj_match:
+                            continue
 
-                    model_param_name = loaded_weight_name.replace(weight_name, param_name)
+                        model_param_name = f"{proj_match.group(1)}{proj_name}_{suffix}"
+                        expert_id = int(proj_match.group(2))
 
-                    if model_param_name not in params_dict:
-                        continue
-
-                    param = params_dict[model_param_name]
-                    weight_loader = param.weight_loader
-                    weight_loader(param, loaded_weight, shard_id=shard_id, expert_id=expert_id)
-
-                    handled = True
-                    break
+                        if model_param_name in params_dict:
+                            param = params_dict[model_param_name]
+                            if not param._is_initialized():
+                                param.initialize()
+                            weight = get_tensor(loaded_weight)
+                            expert_param = param[expert_id]
+                            if expert_param.shape != weight.shape:
+                                raise ValueError(
+                                    f"Shape mismatch when loading {loaded_weight_name}: "
+                                    f"loaded={weight.shape}, param={expert_param.shape}"
+                                )
+                            if expert_param.dtype != weight.dtype:
+                                weight = weight.cast(expert_param.dtype)
+                            expert_param.set_value(weight)
+                            handled = True
+                        break
 
             # 第三层：默认逻辑
             if not handled:
