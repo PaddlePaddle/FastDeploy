@@ -283,7 +283,7 @@ jobs:
             echo "Download failed, skipping upload."
             exit 0
           fi
-          sed -i 's||<source>/workspace/FastDeploy/fastdeploy</source>|>|<source>fastdeploy</source>|' xpu_coverage_all.xml
+          sed -i 's|<source>/workspace/FastDeploy/fastdeploy</source>|<source>fastdeploy</source>|' xpu_coverage_all.xml
 
       - name: Upload XPU coverage to Codecov
         if: always() && hashFiles('xpu_coverage_all.xml') != ''
