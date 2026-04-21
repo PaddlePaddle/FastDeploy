@@ -687,7 +687,7 @@ class SpeculativeSampler(nn.Layer):
         last_logits = logits
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
 
-        # NOTE(huicongyao): temperaly used to provide a max_sized input, remove in the future
+        # NOTE(huicongyao): temporarily used to provide a max_sized input, remove in the future
         num_tokens = real_bsz * (self.num_speculative_tokens + 1)
         padded_logits = paddle.zeros(shape=[num_tokens, last_logits.shape[1]], dtype=last_logits.dtype)
         padded_logits[: logits.shape[0]] = last_logits
@@ -727,7 +727,7 @@ class SpeculativeSampler(nn.Layer):
         # if top_p_logprob is not None:
         #     last_logprobs = paddle.where(top_p_token_mask, top_p_logprob, last_logprobs)
 
-        # NOTE(huicongyao) temperary used for slice last_logprobs to its real shape, remove in the future
+        # NOTE(huicongyao) temporarily used for slice last_logprobs to its real shape, remove in the future
         real_token_num = batch_token_num.sum().item()
         return last_logprobs[:real_token_num]
 
