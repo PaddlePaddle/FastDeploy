@@ -349,7 +349,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
-        if fc1_latent_proj is not None:
+        if fc1_latent_proj:
             x = fc1_latent_proj(x)
 
         # 2. Dynamic compute blockwise quantization scales
@@ -648,7 +648,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if shared_experts is not None:
             tmp_ffn_out += s_x
 
-        if fc2_latent_proj is not None:
+        if fc2_latent_proj:
             tmp_ffn_out = fc2_latent_proj(tmp_ffn_out)
 
         return tmp_ffn_out
