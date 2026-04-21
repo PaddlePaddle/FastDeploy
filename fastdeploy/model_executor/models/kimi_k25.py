@@ -8,6 +8,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.models.model_base import (ModelCategory, ModelRegistry)
+from fastdeploy.model_executor.layers.moe.moe import FusedMoE
 from fastdeploy.model_executor.models.deepseek_v3 import DeepseekV3ForCausalLM
 
 
