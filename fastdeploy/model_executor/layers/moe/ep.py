@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import inspect
 import traceback
 from abc import abstractmethod
 from types import ModuleType
@@ -656,8 +657,11 @@ class EPPrefillRunner(EPRunner):
         }
 
         if envs.FD_USE_PFCC_DEEP_EP:
-            dispatch_args["num_worst_tokens"] = self.num_worst_tokens
-            dispatch_args["skip_x_record_stream"] = self.num_worst_tokens > 0
+            dispatch_parameters = inspect.signature(buffer.dispatch).parameters
+            if "num_worst_tokens" in dispatch_parameters:
+                dispatch_args["num_worst_tokens"] = self.num_worst_tokens
+            if "skip_x_record_stream" in dispatch_parameters:
+                dispatch_args["skip_x_record_stream"] = self.num_worst_tokens > 0
 
         return buffer.dispatch(**dispatch_args)
 
