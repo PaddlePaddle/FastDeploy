@@ -506,7 +506,7 @@ class ResourceManagerV1(ResourceManager):
         then ceil-divided by block_size. The ratio decays each scheduling step so that
         the reservation gradually relaxes; on preemption it resets to the initial value.
         """
-        max_tokens = request.sampling_params.max_tokens
+        max_tokens = getattr(request.sampling_params, "max_tokens", None)
         if max_tokens is None:
             max_tokens = self.config.model_config.max_model_len - request.prompt_token_ids_len
         remaining_tokens = max_tokens - len(request.output_token_ids)
