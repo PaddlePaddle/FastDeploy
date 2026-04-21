@@ -41,7 +41,6 @@ class TestDeepGemmPrefill(unittest.TestCase):
 
         baseline_out = paddle.empty([total_m, N], dtype="bfloat16")
         for i in range(num_experts):
-            break
             start = sum(token_num_in_eatch_batch[:i])
             end = start + token_num_in_eatch_batch[i]
 
