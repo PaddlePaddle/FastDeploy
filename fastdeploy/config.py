@@ -2202,10 +2202,18 @@ class FDConfig:
 
             # For speculative, enlarge the threshold to trigger block preallocation earlier,
             # since each step consumes num_spec_tokens slots at once
-            prealloc_dec_block_slot = self.cache_config.prealloc_dec_block_slot_num_threshold * num_spec_tokens
+            old_prealloc_threshold = self.cache_config.prealloc_dec_block_slot_num_threshold
+            prealloc_dec_block_slot = self.cache_config.prealloc_dec_block_slot_num_threshold * (num_spec_tokens + 1)
             self.cache_config.prealloc_dec_block_slot_num_threshold = min(
                 prealloc_dec_block_slot, self.cache_config.block_size * self.cache_config.enc_dec_block_num - 1
             )
+            logger.info(
+                f"prealloc_dec_block_slot_num_threshold updated: {old_prealloc_threshold} -> "
+                f"{self.cache_config.prealloc_dec_block_slot_num_threshold} "
+                f"(num_spec_tokens={num_spec_tokens}, block_size={self.cache_config.block_size}, "
+                f"enc_dec_block_num={self.cache_config.enc_dec_block_num})"
+            )
+
         else:
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs
         if (
