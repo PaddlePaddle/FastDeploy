@@ -92,7 +92,7 @@ DEFAULT_CONDA_PATTERNS = {
     "transformers",
     "zmq",
     "nvidia",
-    "nvidia-ml-py",
+    "pynvml",
 }
 
 DEFAULT_PIP_PATTERNS = {
@@ -107,7 +107,7 @@ DEFAULT_PIP_PATTERNS = {
     "transformers",
     "zmq",
     "nvidia",
-    "nvidia-ml-py",
+    "pynvml",
 }
 
 
