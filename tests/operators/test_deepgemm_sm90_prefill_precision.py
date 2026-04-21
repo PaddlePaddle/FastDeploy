@@ -39,6 +39,8 @@ class TestDeepGemmPrefill(unittest.TestCase):
         raw_w = paddle.randn([num_experts, N, K], dtype="bfloat16").cast(paddle.float8_e4m3fn)
         raw_w_scale = paddle.randn([num_experts, N // block_size, K // block_size], dtype="float32")
 
+        m_indices = np.zeros([total_m], dtype="int32")
+
         baseline_out = paddle.empty([total_m, N], dtype="bfloat16")
         for i in range(num_experts):
             start = sum(token_num_in_eatch_batch[:i])
@@ -69,13 +71,10 @@ class TestDeepGemmPrefill(unittest.TestCase):
             out = paddle.matmul(tmp0, tmp1, False, True)
             baseline_out[start:end] = out
 
+            m_indices[start:end] = i
+
         deepgemm_output = paddle.zeros_like(baseline_out)
 
-        m_indices = np.zeros([total_m], dtype="int32")
-        for i in range(num_experts):
-            start = sum(token_num_in_eatch_batch[:i])
-            end = start + token_num_in_eatch_batch[i]
-            m_indices[start:end] = i
         m_indices = paddle.to_tensor(m_indices, dtype="int32")
 
         for i in range(10):
