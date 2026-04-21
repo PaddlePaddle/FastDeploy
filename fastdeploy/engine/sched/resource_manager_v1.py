@@ -1011,11 +1011,9 @@ class ResourceManagerV1(ResourceManager):
                     can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(num_new_block)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
-                        request.block_tables.extend(
-                            self.cache_manager.allocate_gpu_blocks(num_new_block, request.request_id)
-                        )
+                        request.block_tables.extend(self._allocate_gpu_blocks(request.request_id, num_new_block))
                         # Prepare prefill task
-                        batch_request.append(self._prepare_prefill_task(request, num_new_tokens))
+                        batch_request.add_request(self._prepare_prefill_task(request, num_new_tokens))
                     else:  # Not enough blocks to allocate
                         chunk_prefill_in_running_not_satisfied = True
                         break  # For chunk prefill request, if not satisfy condition for prefill, just break
