@@ -44,8 +44,6 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       {token_num_data}, 2, paddle::DataType::INT64, input_ids.place());
   auto batch_id_per_token = paddle::full(
       {token_num_data}, -1, paddle::DataType::INT32, input_ids.place());
-  auto cum_offsets_out =
-      paddle::full({bsz}, 0, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_q =
       paddle::full({bsz + 1}, 0, paddle::DataType::INT32, input_ids.place());
   auto cu_seqlens_k =
@@ -59,7 +57,6 @@ std::vector<paddle::Tensor> GetPaddingOffset(
     int r =
         fastdeploy::plugin::get_padding_offset(ctx,
                                                batch_id_per_token.data<int>(),
-                                               cum_offsets_out.data<int>(),
                                                cu_seqlens_q.data<int>(),
                                                cu_seqlens_k.data<int>(),
                                                x_remove_padding.data<int64_t>(),

@@ -42,7 +42,6 @@ inline __device__ int primitive_reduce_sum_sm(__shared_ptr__ const int* x,
 
 __global__ void get_padding_offset(int64_t* ids_remove_padding,
                                    int* batch_id_per_token,
-                                   int* cum_offsets_out,
                                    int* cu_seqlens_q,
                                    int* cu_seqlens_k,
                                    const int64_t* input_data,
@@ -78,10 +77,7 @@ __global__ void get_padding_offset(int64_t* ids_remove_padding,
 
       LM2GM_ASYNC(&cum_seq_len, cu_seqlens_q + bi + 1, sizeof(int));
       LM2GM_ASYNC(&cum_seq_len, cu_seqlens_k + bi + 1, sizeof(int));
-
-      int cum_offset = bi * max_seq_len - (cum_seq_len - sm_seq_lens[bi]);
-      LM2GM(&cum_offset, cum_offsets_out + bi, sizeof(int));
-
+      mfence();
       sm_cum_seq_len = cum_seq_len;
     }
     mfence();
