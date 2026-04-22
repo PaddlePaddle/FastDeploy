@@ -18,6 +18,7 @@
 #include <sys/ipc.h>
 #include <sys/msg.h>
 #include <sys/types.h>
+#include "../custom_ftok.h"
 #include "paddle/extension.h"
 #include "xpu/plugin.h"
 
@@ -60,7 +61,7 @@ void SpeculateSaveWithOutputMsg(const paddle::Tensor& accept_tokens,
     msg_queue_id = inference_msg_queue_id_from_env;
   }
   static struct msgdata msg_sed;
-  static key_t key = ftok("./", msg_queue_id);
+  static key_t key = custom_ftok("./", msg_queue_id);
   static int msgid = msgget(key, IPC_CREAT | 0666);
 
   msg_sed.mtype = 1;
