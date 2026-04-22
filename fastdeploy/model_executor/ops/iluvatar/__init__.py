@@ -26,3 +26,4 @@ from .attention_ops import (  # noqa: F401
     prefill_fused_paged_attention,
 )
 from .moe_ops import iluvatar_moe_expert_ffn as moe_expert_ffn  # noqa: F401
+from .special_ops import update_attn_mask_offsets  # noqa: F401
