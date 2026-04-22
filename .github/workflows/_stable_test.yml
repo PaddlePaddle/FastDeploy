@@ -193,7 +193,7 @@ jobs:
           -e TZ="Asia/Shanghai" \
           -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-          python -m pip install paddlepaddle-gpu==3.5.0.dev20260417 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install https://paddle-qa.bj.bcebos.com/paddle-pipeline/Release-TagBuild-Training-Linux-Gpu-Cuda12.6-Cudnn9.5-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/2b9f8b689bc8988f97a5ede056c8c81bfa0332c2/paddlepaddle_gpu-3.3.1.post20260420+2b9f8b689bc-cp310-cp310-linux_x86_64.whl --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
