@@ -1044,6 +1044,7 @@ class TokenProcessor:
                         envs.ENABLE_V1_KVCACHE_SCHEDULER
                         and self.cfg.cache_config.enable_prefix_caching
                         and self.cfg.cache_config.enable_output_caching
+                        and not envs.ENABLE_V1_KVCACHE_MANAGER
                     ):
                         self.resource_manager.cache_output_tokens(
                             task

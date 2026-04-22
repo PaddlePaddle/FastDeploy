@@ -49,7 +49,12 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
-from fastdeploy.engine.request import ControlRequest, ControlResponse, RequestType
+from fastdeploy.engine.request import (
+    BatchRequest,
+    ControlRequest,
+    ControlResponse,
+    RequestType,
+)
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -549,39 +554,27 @@ class PaddleDisWorkerProc:
                 if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
                     paddle.distributed.barrier(self.parallel_config.ep_group)
 
-                req_dicts, control_reqs = [], []
                 assert (
                     len(tasks) > 0
                 ), f"task_queue.get_tasks() should contain at least one tuple, [([req1, ...] ,real_bsz)], but got len(tasks)={len(tasks)}"
-                # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
-                # tasks[0] contains two part, ([req1, ...] ,real_bsz)
-                # tasks[0][0] is [req1, ...]
-                # if empty batch is delived, eval(tasks[0][0]) should be False ([]),
-                # if batch with requests is delived, eval(tasks[0][0]) should be True, then to be processed as below.
-                if tasks[0][0]:
-                    for req_dict, bsz in tasks:
-                        if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
-                            control_reqs.append(req_dict[0])
+
+                batch_request, control_reqs, max_occupied_batch_index = BatchRequest.from_tasks(tasks)
+
+                if len(control_reqs) > 0:
+                    logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
+                    for control_req in control_reqs:
+                        if self.parallel_config.use_ep:
+                            self.cached_control_reqs.append(control_req)
+                            logger.info(f"Rank: {self.local_rank} cached ep control request: {control_req}")
                         else:
-                            max_occupied_batch_index = int(bsz)
-                            req_dicts.extend(req_dict)
+                            self.run_control_method(control_req)
+                            self._tp_barrier_wait() if tp_size > 1 else None
 
-                    # todo: run control request async
-                    if len(control_reqs) > 0:
-                        logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
-                        for control_req in control_reqs:
-                            if self.parallel_config.use_ep:
-                                self.cached_control_reqs.append(control_req)
-                                logger.info(f"Rank: {self.local_rank} cached ep control request: {control_req}")
-                            else:
-                                self.run_control_method(control_req)
-                                self._tp_barrier_wait() if tp_size > 1 else None
-
-                if len(req_dicts) > 0:
+                if len(batch_request) > 0:
                     # Count prefill requests in current batch
-                    num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
-                    num_scheduled_requests = len(req_dicts)
-                    scheduled_request_ids = [req.request_id for req in req_dicts]
+                    num_prefill_requests = sum(1 for req in batch_request if req.task_type == RequestType.PREFILL)
+                    num_scheduled_requests = len(batch_request)
+                    scheduled_request_ids = [req.request_id for req in batch_request]
                     logger.info(
                         f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
                         f"max_occupied_batch_index: {max_occupied_batch_index}, "
@@ -590,7 +583,7 @@ class PaddleDisWorkerProc:
                     )
 
                     # Process prefill inputs
-                    self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+                    self.worker.preprocess_new_task(batch_request, max_occupied_batch_index)
             else:
                 if self.scheduler_config.splitwise_role == "prefill":
                     if tp_size > 1:
