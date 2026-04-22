@@ -48,7 +48,6 @@ class TestRedundantExpertManager(unittest.TestCase):
 
         cache_cfg = CacheConfig(args)
         model_cfg = SimpleNamespace(enable_mm=True)  # Enable multimodal for feature testing
-        speculative_cfg = SimpleNamespace(method=None)
         model_cfg.print = print
         model_cfg.max_model_len = 5120
         model_cfg.num_hidden_layers = 3
@@ -80,7 +79,7 @@ class TestRedundantExpertManager(unittest.TestCase):
             cache_config=cache_cfg,
             parallel_config=parallel_cfg,
             graph_opt_config=graph_opt_cfg,
-            speculative_config=speculative_cfg,
+            speculative_config=None,
             scheduler_config=scheduler_cfg,
             eplb_config=eplb_config,
         )

@@ -31,7 +31,6 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
     model_cfg = SimpleNamespace(enable_mm=enable_mm, max_model_len=4196)
-    speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     model_cfg.architectures = ["test_model"]
     model_cfg.mm_max_tokens_per_item = None
@@ -46,7 +45,7 @@ def make_prefix_cache_manager(max_num_seqs, enable_mm=False, num_gpu_blocks_over
         cache_config=cache_cfg,
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
-        speculative_config=speculative_cfg,
+        speculative_config=None,
         scheduler_config=scheduler_cfg,
     )
     return PrefixCacheManager(config=fd_config, tensor_parallel_size=8, splitwise_role="mixed")
