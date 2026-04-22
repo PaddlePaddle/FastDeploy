@@ -20,6 +20,7 @@ import tempfile
 import unittest
 from unittest.mock import patch
 
+import fastdeploy.utils as utils
 from fastdeploy.logger.handlers import LazyFileHandler
 from fastdeploy.logger.logger import FastDeployLogger
 
@@ -219,6 +220,103 @@ class LoggerExtraTests(unittest.TestCase):
         logger = self.logger._get_legacy_logger("nofmt", "n.log", without_formater=True)
         for h in logger.handlers:
             self.assertIsNone(h.formatter)
+
+    def test_ensure_workerlog_alias_creates_aliases(self):
+        """Test ensure_workerlog_alias creates symlinks for workerlog files"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            paddle_log_dir = os.path.join(temp_dir, "paddle")
+            os.makedirs(paddle_log_dir, exist_ok=True)
+
+            workerlog_zero = os.path.join(paddle_log_dir, "workerlog.0")
+            workerlog_one = os.path.join(paddle_log_dir, "workerlog.1")
+            with open(workerlog_zero, "w", encoding="utf-8") as fp:
+                fp.write("zero")
+            with open(workerlog_one, "w", encoding="utf-8") as fp:
+                fp.write("one")
+
+            utils.ensure_workerlog_alias(temp_dir, paddle_log_dir)
+
+            alias_zero = os.path.join(temp_dir, "workerlog.0")
+            alias_one = os.path.join(temp_dir, "workerlog.1")
+            self.assertTrue(os.path.islink(alias_zero))
+            self.assertTrue(os.path.islink(alias_one))
+            self.assertEqual(os.path.realpath(alias_zero), os.path.realpath(workerlog_zero))
+            self.assertEqual(os.path.realpath(alias_one), os.path.realpath(workerlog_one))
+
+    def test_ensure_workerlog_alias_skips_empty_target(self):
+        """Test ensure_workerlog_alias skips empty target path"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            paddle_log_dir = os.path.join(temp_dir, "paddle")
+            os.makedirs(paddle_log_dir, exist_ok=True)
+            # No workerlog files exist, should not raise
+            utils.ensure_workerlog_alias(temp_dir, paddle_log_dir)
+
+    def test_ensure_workerlog_alias_updates_stale_symlink(self):
+        """Test ensure_workerlog_alias updates symlink when target changes"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            paddle_log_dir = os.path.join(temp_dir, "paddle")
+            os.makedirs(paddle_log_dir, exist_ok=True)
+
+            workerlog = os.path.join(paddle_log_dir, "workerlog.0")
+            with open(workerlog, "w", encoding="utf-8") as fp:
+                fp.write("content")
+
+            # Create a stale symlink pointing elsewhere
+            alias = os.path.join(temp_dir, "workerlog.0")
+            stale_target = os.path.join(temp_dir, "stale")
+            with open(stale_target, "w", encoding="utf-8") as fp:
+                fp.write("stale")
+            os.symlink(stale_target, alias)
+
+            utils.ensure_workerlog_alias(temp_dir, paddle_log_dir)
+
+            # Should now point to the correct target
+            self.assertEqual(os.path.realpath(alias), os.path.realpath(workerlog))
+
+    def test_ensure_workerlog_alias_replaces_regular_file(self):
+        """Test ensure_workerlog_alias replaces regular file with symlink"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            paddle_log_dir = os.path.join(temp_dir, "paddle")
+            os.makedirs(paddle_log_dir, exist_ok=True)
+
+            workerlog = os.path.join(paddle_log_dir, "workerlog.0")
+            with open(workerlog, "w", encoding="utf-8") as fp:
+                fp.write("content")
+
+            # Create a regular file at alias location
+            alias = os.path.join(temp_dir, "workerlog.0")
+            with open(alias, "w", encoding="utf-8") as fp:
+                fp.write("old content")
+
+            utils.ensure_workerlog_alias(temp_dir, paddle_log_dir)
+
+            self.assertTrue(os.path.islink(alias))
+            self.assertEqual(os.path.realpath(alias), os.path.realpath(workerlog))
+
+    def test_ensure_workerlog_alias_skips_directory_conflict(self):
+        """Test ensure_workerlog_alias skips when alias path is a directory"""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            paddle_log_dir = os.path.join(temp_dir, "paddle")
+            os.makedirs(paddle_log_dir, exist_ok=True)
+
+            workerlog = os.path.join(paddle_log_dir, "workerlog.0")
+            with open(workerlog, "w", encoding="utf-8") as fp:
+                fp.write("content")
+
+            # Create a directory at alias location
+            alias = os.path.join(temp_dir, "workerlog.0")
+            os.makedirs(alias, exist_ok=True)
+
+            utils.ensure_workerlog_alias(temp_dir, paddle_log_dir)
+
+            # Should remain a directory (not replaced)
+            self.assertTrue(os.path.isdir(alias))
+
+    def test_ensure_workerlog_alias_handles_oserror(self):
+        """Test ensure_workerlog_alias handles OSError gracefully"""
+        with patch("fastdeploy.utils.glob.glob", side_effect=OSError("mocked error")):
+            # Should not raise, just pass
+            utils.ensure_workerlog_alias("/nonexistent", "/also_nonexistent")
 
 
 if __name__ == "__main__":
