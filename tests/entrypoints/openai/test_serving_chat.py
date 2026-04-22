@@ -361,7 +361,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         response_processor = MagicMock()
         response_processor.enable_multimodal_content.return_value = True
         data = {
-            "request_id": "req_0",
+            "request_id": "req::n::0",
             "metrics": {"request_start_time": 1.0},
             "error_msg": "Recover by flag",
             "num_cached_tokens": 0,

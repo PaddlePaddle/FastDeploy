@@ -1331,8 +1331,8 @@ class TestGetTraceInfoForRequest:
             root_span_context=None,
         )
 
-        # Request with _idx suffix should fallback to orig_rid (split on _ takes first part)
-        result = trace.get_trace_info_for_request("testrid_0")
+        # Request with ::n:: suffix should fallback to orig_rid via get_base_request_id
+        result = trace.get_trace_info_for_request("testrid::n::0")
 
         # Should find the request and return trace info
         assert result is not None

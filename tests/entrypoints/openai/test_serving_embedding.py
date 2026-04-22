@@ -91,14 +91,19 @@ class TestOpenAIServingEmbedding(unittest.IsolatedAsyncioTestCase):
 
     def test_request_to_batch_dicts(self):
         test_cases = [
-            ("string input", EmbeddingCompletionRequest(input="hello"), ["hello"], ["req-1_0"]),
-            ("list of ints", EmbeddingCompletionRequest(input=[1, 2, 3]), [[1, 2, 3]], ["req-1_0"]),
-            ("list of strings", EmbeddingCompletionRequest(input=["a", "b"]), ["a", "b"], ["req-1_0", "req-1_1"]),
+            ("string input", EmbeddingCompletionRequest(input="hello"), ["hello"], ["req-1::n::0"]),
+            ("list of ints", EmbeddingCompletionRequest(input=[1, 2, 3]), [[1, 2, 3]], ["req-1::n::0"]),
+            (
+                "list of strings",
+                EmbeddingCompletionRequest(input=["a", "b"]),
+                ["a", "b"],
+                ["req-1::n::0", "req-1::n::1"],
+            ),
             (
                 "list of list of ints",
                 EmbeddingCompletionRequest(input=[[1, 2], [3, 4]]),
                 [[1, 2], [3, 4]],
-                ["req-1_0", "req-1_1"],
+                ["req-1::n::0", "req-1::n::1"],
             ),
         ]
 

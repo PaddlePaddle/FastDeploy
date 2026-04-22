@@ -2678,8 +2678,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                         # Verify trace_set_proc_propagate_context was called with correct args (lines 1165-1167)
                         mock_trace_set.assert_called_once()
                         call_args = mock_trace_set.call_args
-                        # request_id should be "test" (first part after split on "_") and trace_carrier
-                        self.assertEqual(call_args[0][0], "test")
+                        # request_id should be "test_req_123" (no ::n:: separator, so base is the full id)
+                        self.assertEqual(call_args[0][0], "test_req_123")
                         self.assertEqual(call_args[0][1], trace_carrier_data)
 
         # Reset and test without trace_carrier - should not call trace_set_proc_propagate_context
@@ -3607,10 +3607,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_control_abort_requests_by_req_ids_with_suffix_match(self):
-        """req_ids match both exact and _0 suffix."""
+        """req_ids match both exact and ::n::0 suffix."""
         eng = self._make_abort_engine()
         eng.resource_manager.requests = {
-            "req-A_0": self._make_fake_request([1, 2, 3]),
+            "req-A::n::0": self._make_fake_request([1, 2, 3]),
             "req-B": self._make_fake_request([4, 5]),
         }
 
@@ -3632,7 +3632,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             result = eng._control_abort_requests(control_req)
 
         aborted_ids = {a["request_id"] for a in result["aborted"]}
-        self.assertIn("req-A_0", aborted_ids)  # matched via _0 suffix
+        self.assertIn("req-A::n::0", aborted_ids)  # matched via ::n::0 suffix
         self.assertIn("req-B", aborted_ids)  # exact match
         self.assertEqual(result["not_found"], ["req-C"])
         self._detach_finalizer(eng)
