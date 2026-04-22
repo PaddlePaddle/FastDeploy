@@ -1587,13 +1587,14 @@ class EngineService:
                 engine_recv_first_token_time=request.metrics.engine_recv_first_token_time if request.metrics else now,
                 request_start_time=request.metrics.arrival_time if request.metrics else now,
             )
+            eos_token_ids = getattr(request, "eos_token_ids", [0])
             result = RequestOutput(
                 request_id=req_id,
                 finished=True,
                 outputs=CompletionOutput(
                     index=0,
                     send_idx=len(partial_token_ids),
-                    token_ids=[self.data_processor.eos_token_ids[0]],
+                    token_ids=[eos_token_ids[0]],
                 ),
                 metrics=abort_metrics,
                 error_code=200,
@@ -1637,10 +1638,19 @@ class EngineService:
           reset progress state if any, then continue monitoring
         """
         target_set = set(target_req_ids)
+        target_set = target_set & (set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys()))
         prev_remaining_count = len(target_set)
         last_progress_time = time.time()
         remaining = target_set & self.resource_manager.get_reqs_in_aborting()
         while remaining:
+            alive_reqs = set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys())
+            finished_reqs = target_set - alive_reqs
+            if finished_reqs:
+                self.llm_logger.info(f"abort targets already finished, skip: {finished_reqs}")
+                for req_id in finished_reqs:
+                    self.resource_manager.waiting_abort_req_id_set.discard(req_id)
+                    self.resource_manager.to_be_aborted_req_id_set.discard(req_id)
+                target_set -= finished_reqs
             remaining = target_set & self.resource_manager.get_reqs_in_aborting()
             if not remaining:
                 self.llm_logger.info(f"all {len(target_set)} abort reqs cleaned")

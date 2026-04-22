@@ -412,6 +412,9 @@ class BaseTextProcessor(ABC):
         if len(request["prompt_token_ids"]) == 0:
             raise ValueError("Invalid input: prompt_token_ids must be a non-empty sequence of token IDs")
 
+        if request.get("completion_token_ids"):
+            request["prompt_token_ids"].extend(request["completion_token_ids"])
+
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
