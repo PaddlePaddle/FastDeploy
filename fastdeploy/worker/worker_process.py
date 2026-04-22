@@ -548,6 +548,8 @@ class PaddleDisWorkerProc:
                         self.task_queue.read_finish_flag.set(0)
                     else:
                         self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+                self._tp_barrier_wait() if tp_size > 1 else None
+
                 # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
                 # Only EP + DP prefill should barrier for data arrival.
                 # In mixed mode and decoder in D, we should not barrier to influence decoding.
