@@ -43,17 +43,31 @@ classify_tests() {
     fi
 
     # Rule 5: high-risk OOM tests (treat as multi_gpu for sequential execution)
+    # Note: Flash Attention / operators requiring more pinned memory
     if [[ "$test_file" =~ ^tests/entrypoints/cli/ ||
-          "$test_file" == "tests/layers/test_append_attention_with_output.py" ||
-          "$test_file" == "tests/operators/test_get_position_ids_and_mask_encoder_batch.py" ||
-          "$test_file" == "tests/operators/test_group_swiglu_with_masked.py" ||
-          "$test_file" == "tests/operators/test_hybrid_mtp_ngram.py" ||
-          "$test_file" == "tests/operators/test_moe_top_k_select.py" ||
-          "$test_file" == "tests/operators/test_noaux_tc.py" ||
-          "$test_file" == "tests/operators/test_qk_rmsnorm_fused.py" ||
-          "$test_file" == "tests/output/test_get_save_output_v1.py" ||
-          "$test_file" == "tests/output/test_process_batch_draft_tokens.py" ||
-          "$test_file" == "tests/output/test_process_batch_output.py" ]]; then
+        "$test_file" == "tests/deterministic/test_penalty_kernel_determinism.py" ||
+        "$test_file" == "tests/deterministic/test_flash_attn_determinism.py" ||
+        "$test_file" == "tests/entrypoints/test_vllm_run_engine.py" ||
+        "$test_file" == "tests/input/test_preprocess.py" ||
+        "$test_file" == "tests/input/test_qwen3_vl_processor.py" ||
+        "$test_file" == "tests/layers/test_append_attention_with_output.py" ||
+        "$test_file" == "tests/layers/test_flash_attn_func.py" ||
+        "$test_file" == "tests/layers/test_native_paddle_backend.py" ||
+        "$test_file" == "tests/model_executor/test_ernie_tokenizer.py" ||
+        "$test_file" == "tests/operators/test_fused_get_rotary_embedding.py" ||
+        "$test_file" == "tests/operators/test_get_position_ids_and_mask_encoder_batch.py" ||
+        "$test_file" == "tests/operators/test_group_swiglu_with_masked.py" ||
+        "$test_file" == "tests/operators/test_hybrid_mtp_ngram.py" ||
+        "$test_file" == "tests/operators/test_moe_top_k_select.py" ||
+        "$test_file" == "tests/operators/test_naive_update_model_status.py" ||
+        "$test_file" == "tests/operators/test_noaux_tc.py" ||
+        "$test_file" == "tests/operators/test_qk_rmsnorm_fused.py" ||
+        "$test_file" == "tests/operators/test_tree_mask.py" ||
+        "$test_file" == "tests/operators/test_flash_mask_attn.py" ||
+        "$test_file" == "tests/output/test_get_save_output_v1.py" ||
+        "$test_file" == "tests/output/test_process_batch_draft_tokens.py" ||
+        "$test_file" == "tests/output/test_process_batch_output.py" ||
+        "$test_file" == "tests/reasoning/test_qwen3_reasoning_parser.py" ]]; then
         echo "multi_gpu"
         return
     fi
