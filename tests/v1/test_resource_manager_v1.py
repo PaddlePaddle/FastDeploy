@@ -679,6 +679,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         preempted_req = _make_request(request_id="req-preempted")
         preempted_req.idx = 0
         preempted_req.use_extend_tables = False
+        preempted_req.status = RequestStatus.RUNNING_DECODE
         request = _make_request(request_id="req-target")
         request.idx = 1
         manager.running = [request, preempted_req]

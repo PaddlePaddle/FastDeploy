@@ -389,41 +389,49 @@ class ResourceManagerV1(ResourceManager):
                 f"still {len(self.to_be_rescheduled_request_id_set)} requests running"
             )
 
+    def _select_preempt_candidate(self):
+        # Scan from back to front to find the last preemptable request
+        preempted_req = None
+        i = len(self.running) - 1
+        while i >= 0:
+            candidate = self.running[i]
+            # Skip requests that are not in decode status
+            if candidate.status != RequestStatus.RUNNING_DECODE:
+                i -= 1
+                continue
+            # Skip requests using extend tables
+            if candidate.use_extend_tables:
+                i -= 1
+                continue
+            # Found a valid preempt target
+            preempted_req = candidate
+            break
+        return preempted_req, i
+
     def _trigger_preempt(self, request, num_new_blocks, preempted_reqs, batch_request):
         """
         If the request cannot be scheduled, preempt the running request one by one until it can be scheduled. Last in, first out.
         Only requests that is in decode status can be preempted.
         """
         can_schedule = False
-        while self._can_preempt_with_decode_task():
+        while True:
             if self.cache_manager.can_allocate_gpu_blocks(num_new_blocks):
                 # The request can be scheduled.
                 can_schedule = True
                 break
             else:
-                # Scan from back to front to find the last preemptable request
-                preempted_req = None
-                i = len(self.running) - 1
-                while i >= 0:
-                    candidate = self.running[i]
-                    # Skip requests that are not in decode status
-                    if candidate.status != RequestStatus.RUNNING_DECODE:
-                        i -= 1
-                        continue
-                    # Skip requests using extend tables
-                    if candidate.use_extend_tables:
-                        i -= 1
-                        continue
-                    # Found a valid preempt target
-                    preempted_req = candidate
+                # Try to find a candidate request to preempt.
+                preempted_req, preempted_idx = self._select_preempt_candidate()
+                if preempted_req is None:
+                    can_schedule = False
+                    llm_logger.warning(
+                        f"Preemption is triggered while no preemptable request can be found, scheduler may be hung! "
+                        f"Running requests: {self.running}"
+                    )
                     break
 
-                if preempted_req is None:
-                    # No preemptable request found (all have no output tokens or use extend tables)
-                    return False
-
                 # Remove the preempted request from the running list
-                self.running.pop(i)
+                self.running.pop(preempted_idx)
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
                 if self.config.scheduler_config.splitwise_role == "decode":
