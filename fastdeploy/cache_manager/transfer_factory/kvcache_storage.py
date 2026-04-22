@@ -21,7 +21,7 @@ import paddle
 
 from fastdeploy.utils import get_logger
 
-logger = get_logger("cache_storage", "cache_storage.log")
+logger = get_logger("cache_storage", "cache_manager.log")
 
 
 class KVCacheStorage(ABC):
