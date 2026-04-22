@@ -1338,6 +1338,8 @@ class ResourceManagerV1(ResourceManager):
         Match and fetch cache for a task.
         """
         try:
+            trace_print(LoggingEventName.PREPARE_PREFIX_CACHE_START, request.request_id, getattr(request, "user", ""))
+
             (common_block_ids, matched_token_num, metrics) = self._request_match_blocks(
                 request  # skip_storage 使用默认值 True
             )
@@ -1382,6 +1384,8 @@ class ResourceManagerV1(ResourceManager):
                 main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
                 main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
                 main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
+
+            trace_print(LoggingEventName.PREPARE_PREFIX_CACHE_END, request.request_id, getattr(request, "user", ""))
 
             return True
         except Exception as e:
