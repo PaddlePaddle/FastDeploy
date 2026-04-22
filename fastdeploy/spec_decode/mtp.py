@@ -180,7 +180,7 @@ class MTPProposer(Proposer):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
 
-        if in_capturing:
+        if in_capturing and current_platform.is_cuda():
             input_length = self.fd_config.speculative_config.num_speculative_tokens + 1
         else:
             input_length = min(
