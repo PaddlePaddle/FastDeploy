@@ -37,6 +37,7 @@ class DummyQuantConfig:
         self.weight_block_size = weight_block_size
         self._name_value = name_value
         self.deepgemm_scale_ue8m0 = False
+        self.moe_blockwise_gemm_scale_ue8m0 = False
 
     def name(self):
         return self._name_value
