@@ -590,6 +590,38 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(processed["prompt_token_ids"], [1, 2, 3])
         self.assertEqual(processed["max_tokens"], 3)
 
+    def test_process_request_dict_completion_token_ids_extends_prompt(self):
+        """completion_token_ids should be appended to prompt_token_ids."""
+        request = {
+            "prompt_token_ids": [1, 2, 3],
+            "completion_token_ids": [10, 11],
+            "temperature": 0.5,
+            "top_p": 0.5,
+        }
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        self.assertEqual(processed["prompt_token_ids"], [1, 2, 3, 10, 11])
+
+    def test_process_request_dict_no_completion_token_ids(self):
+        """Without completion_token_ids, prompt_token_ids should remain unchanged."""
+        request = {
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.5,
+            "top_p": 0.5,
+        }
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        self.assertEqual(processed["prompt_token_ids"], [1, 2, 3])
+
+    def test_process_request_dict_empty_completion_token_ids(self):
+        """Empty completion_token_ids should not modify prompt_token_ids."""
+        request = {
+            "prompt_token_ids": [1, 2, 3],
+            "completion_token_ids": [],
+            "temperature": 0.5,
+            "top_p": 0.5,
+        }
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        self.assertEqual(processed["prompt_token_ids"], [1, 2, 3])
+
     def test_process_request_dict_requires_chat_template(self):
         original_template = self.processor.tokenizer.chat_template
         self.processor.tokenizer.chat_template = None
