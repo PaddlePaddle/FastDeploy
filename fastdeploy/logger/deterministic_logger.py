@@ -20,6 +20,8 @@ import time
 import numpy as np
 import paddle
 
+from fastdeploy.utils import parse_choice_id
+
 det_logger = logging.getLogger("fastdeploy.deterministic")
 
 # ---------------------------------------------------------------------------
@@ -128,9 +130,9 @@ class DeterministicLogger:
         current_run_id = None
         for req in model_forward_batch or []:
             if req is not None:
-                parts = req.request_id.split("_")
-                if len(parts) > 1:
-                    current_run_id = parts[-1]
+                _, index = parse_choice_id(req.request_id)
+                if index is not None:
+                    current_run_id = str(index)
                     break
         if current_run_id is not None and current_run_id != self._current_run_id:
             self._current_run_id = current_run_id

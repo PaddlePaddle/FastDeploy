@@ -58,7 +58,9 @@ from fastdeploy.utils import (
     ParameterError,
     api_server_logger,
     clamp_prompt_logprobs,
+    get_choice_index,
     get_host_ip,
+    make_choice_id,
 )
 from fastdeploy.worker.output import (
     Logprob,
@@ -160,7 +162,7 @@ class OpenAIServingChat:
             prompt_tokens = None
             max_tokens = None
             try:
-                current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
+                current_req_dict = request.to_dict_for_infer(make_choice_id(request_id, 0))
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["metrics"]["arrival_time"] = time.time()
@@ -201,8 +203,8 @@ class OpenAIServingChat:
                     log_request_error(message=error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
         except asyncio.CancelledError as e:
-            await self.engine_client.abort(f"{request_id}_0", 1 if request.n is None else request.n)
-            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            await self.engine_client.abort(make_choice_id(request_id, 0), 1 if request.n is None else request.n)
+            error_msg = f"request[{make_choice_id(request_id, 0)}] client disconnected: {str(e)}, {str(traceback.format_exc())}"
             log_request_error(message=error_msg)
             return ErrorResponse(
                 error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
@@ -278,7 +280,7 @@ class OpenAIServingChat:
                 request_id, num_choices
             )
             if not envs.ZMQ_SEND_BATCH_DATA:
-                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                request_ids = [make_choice_id(request_id, i) for i in range(num_choices)]
                 for rid in request_ids:
                     dealer.write([b"", rid.encode("utf-8")])
             choices = []
@@ -321,7 +323,7 @@ class OpenAIServingChat:
                 )
 
                 async for res in generator:
-                    idx = int(res["request_id"].split("_")[-1])
+                    idx = get_choice_index(res["request_id"])
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
@@ -557,8 +559,8 @@ class OpenAIServingChat:
                 yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
 
         except asyncio.CancelledError as e:
-            await self.engine_client.abort(f"{request_id}_0", 1 if request.n is None else request.n)
-            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            await self.engine_client.abort(make_choice_id(request_id, 0), 1 if request.n is None else request.n)
+            error_msg = f"request[{make_choice_id(request_id, 0)}] client disconnected: {str(e)}, {str(traceback.format_exc())}"
             log_request_error(message=error_msg)
         except Exception as e:
             error_data = self._create_streaming_error_response(
@@ -599,7 +601,7 @@ class OpenAIServingChat:
                 request_id, num_choices
             )
             if not envs.ZMQ_SEND_BATCH_DATA:
-                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                request_ids = [make_choice_id(request_id, i) for i in range(num_choices)]
                 for rid in request_ids:
                     dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * num_choices
@@ -655,7 +657,7 @@ class OpenAIServingChat:
                 async for data in generator:
                     if data.get("error_code", 200) != 200:
                         raise ValueError("{}".format(data["error_msg"]))
-                    idx = int(data["request_id"].split("_")[-1])
+                    idx = get_choice_index(data["request_id"])
                     # api_server_logger.debug(f"Client {request_id} received: {data}")
                     previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
                     completion_token_ids[idx].extend(data["outputs"]["token_ids"])
@@ -794,7 +796,7 @@ class OpenAIServingChat:
         max_tokens: int,
         speculate_metrics: SpeculateMetrics | None,
     ) -> ChatCompletionResponseChoice:
-        idx = int(data["request_id"].split("_")[-1])
+        idx = get_choice_index(data["request_id"])
         output = data["outputs"]
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):

@@ -753,7 +753,9 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
                 self.assertEqual(len(ctx.preprocess_requests), expected_requests)
 
                 for i in range(expected_requests):
-                    expected_id = f"{request_id}_{i}" if request_id else f"_{i}"
+                    from fastdeploy.utils import make_choice_id
+
+                    expected_id = make_choice_id(request_id, i) if request_id else make_choice_id("", i)
                     self.assertEqual(ctx.preprocess_requests[i]["request_id"], expected_id)
 
     @patch("fastdeploy.entrypoints.openai.v1.serving_completion.log_request_error")

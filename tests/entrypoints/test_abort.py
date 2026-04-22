@@ -70,7 +70,7 @@ class TestEngineClientAbort(unittest.TestCase):
 
         # Verify _send_task was called with correct data
         expected_data = {
-            "request_id": "test_request_0",
+            "request_id": "test_request::n::0",
             "status": RequestStatus.ABORT.value,
         }
         mock_send_task.assert_called_once_with(expected_data)
@@ -90,9 +90,9 @@ class TestEngineClientAbort(unittest.TestCase):
 
         # Verify each call had correct request_id
         expected_calls = [
-            ({"request_id": "test_request_0", "status": RequestStatus.ABORT.value},),
-            ({"request_id": "test_request_1", "status": RequestStatus.ABORT.value},),
-            ({"request_id": "test_request_2", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request::n::0", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request::n::1", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request::n::2", "status": RequestStatus.ABORT.value},),
         ]
 
         actual_calls = [call.args for call in mock_send_task.call_args_list]
@@ -101,8 +101,8 @@ class TestEngineClientAbort(unittest.TestCase):
     @patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True)
     @patch.object(EngineClient, "_send_task")
     def test_abort_with_existing_suffix(self, mock_send_task):
-        """Test aborting request that already has _number suffix"""
-        request_id = "test_request_123_2"
+        """Test aborting request that already has choice index suffix"""
+        request_id = "test_request_123::n::2"
         n = 2
 
         # Run the abort method
@@ -113,8 +113,8 @@ class TestEngineClientAbort(unittest.TestCase):
 
         # Verify each call had correct request_id (should use prefix before existing suffix)
         expected_calls = [
-            ({"request_id": "test_request_123_0", "status": RequestStatus.ABORT.value},),
-            ({"request_id": "test_request_123_1", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request_123::n::0", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request_123::n::1", "status": RequestStatus.ABORT.value},),
         ]
 
         actual_calls = [call.args for call in mock_send_task.call_args_list]
