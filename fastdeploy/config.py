@@ -2292,7 +2292,9 @@ class FDConfig:
             self.scheduler_config.max_num_seqs >= 1
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
         tokens_per_seq = (
-            (self.speculative_config.num_speculative_tokens + 1) if self.speculative_config is not None else 1
+            (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
+            if self.speculative_config is not None
+            else 1
         )
         assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs * tokens_per_seq, (
             f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
