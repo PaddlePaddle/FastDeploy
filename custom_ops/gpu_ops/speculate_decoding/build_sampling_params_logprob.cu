@@ -24,8 +24,7 @@ __global__ void BuildSamplingParamLogProbKernel(
     T* output_params,
     const T* input_params,
     const int32_t* token_num_per_batch,
-    const int64_t token_num_output_cpu,
-    int64_t real_bsz) {
+    const int64_t token_num_output_cpu) {
   const int bi = blockIdx.x;
   const int tid = threadIdx.x;
 
@@ -56,8 +55,7 @@ __global__ void BuildSamplingParamLogProbKernel(
 std::vector<paddle::Tensor> BuildSamplingParamLogProb(
     const paddle::Tensor& input_params,
     const paddle::Tensor& token_num_per_batch,
-    const int64_t token_num_output_cpu,
-    const int64_t real_bsz) {
+    const int64_t token_num_output_cpu) {
   auto cu_stream = input_params.stream();
   // Initialize output to safe defaults for use as divisors:
   // int32/float32 -> 1, bool -> false
@@ -94,8 +92,7 @@ std::vector<paddle::Tensor> BuildSamplingParamLogProb(
           output_params.data<bool>(),
           input_params.data<bool>(),
           token_num_per_batch.data<int32_t>(),
-          token_num_output_cpu,
-          real_bsz);
+          token_num_output_cpu);
       break;
     }
     case paddle::DataType::INT32: {
@@ -104,8 +101,7 @@ std::vector<paddle::Tensor> BuildSamplingParamLogProb(
               output_params.data<int32_t>(),
               input_params.data<int32_t>(),
               token_num_per_batch.data<int32_t>(),
-              token_num_output_cpu,
-              real_bsz);
+              token_num_output_cpu);
       break;
     }
     case paddle::DataType::FLOAT32: {
@@ -113,8 +109,7 @@ std::vector<paddle::Tensor> BuildSamplingParamLogProb(
           output_params.data<float>(),
           input_params.data<float>(),
           token_num_per_batch.data<int32_t>(),
-          token_num_output_cpu,
-          real_bsz);
+          token_num_output_cpu);
       break;
     }
     default: {
@@ -130,5 +125,5 @@ std::vector<paddle::Tensor> BuildSamplingParamLogProb(
 PD_BUILD_STATIC_OP(build_sampling_params_logprob)
     .Inputs({"input_params", "token_num_per_batch"})
     .Outputs({"output_params"})
-    .Attrs({"token_num_output_cpu: int64_t", "real_bsz: int64_t"})
+    .Attrs({"token_num_output_cpu: int64_t"})
     .SetKernelFn(PD_KERNEL(BuildSamplingParamLogProb));

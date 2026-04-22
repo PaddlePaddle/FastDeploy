@@ -784,8 +784,7 @@ std::vector<paddle::Tensor> BuildSamplingParams(
 std::vector<paddle::Tensor> BuildSamplingParamLogProb(
     const paddle::Tensor& input_params,
     const paddle::Tensor& token_num_per_batch,
-    int64_t token_num_output_cpu,
-    int64_t real_bsz);
+    int64_t token_num_output_cpu);
 
 void SpecTokenPenaltyMultiScores(
     const paddle::Tensor& token_ids_all,

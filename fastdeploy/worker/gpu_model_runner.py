@@ -1202,13 +1202,11 @@ class GPUModelRunner(ModelRunnerBase):
             for req in self.forward_batch_reqs_list
             if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
         ]
-        self.temp_scaled_logprobs = bool(logprobs_reqs) and any(
-            req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs
-        )
-        self.top_p_normalized_logprobs = bool(logprobs_reqs) and any(
+        self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
+        self.top_p_normalized_logprobs = any(
             req.sampling_params.top_p_normalized_logprobs and req.sampling_params.top_p != 1.0 for req in logprobs_reqs
         )
-        if len(logprobs_reqs):
+        if logprobs_reqs:
             self.max_logprobs = (
                 max(
                     [

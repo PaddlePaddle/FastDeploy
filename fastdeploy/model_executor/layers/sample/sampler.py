@@ -700,10 +700,8 @@ class SpeculativeSampler(nn.Layer):
         if temp_scaled_logprobs is not None:
             real_bsz_temp_scaled = temp_scaled_logprobs[:max_occupied_slots]
             temperature = sampling_metadata.temperature[:max_occupied_slots]
-            real_bsz_temp_scaled = build_sampling_params_logprob(
-                real_bsz_temp_scaled, batch_token_num, num_tokens, real_bsz
-            )
-            temperature = build_sampling_params_logprob(temperature, batch_token_num, num_tokens, real_bsz)
+            real_bsz_temp_scaled = build_sampling_params_logprob(real_bsz_temp_scaled, batch_token_num, num_tokens)
+            temperature = build_sampling_params_logprob(temperature, batch_token_num, num_tokens)
             temp_temperature = paddle.where(
                 real_bsz_temp_scaled, temperature, paddle.ones_like(temperature)
             ).unsqueeze(1)
@@ -718,10 +716,10 @@ class SpeculativeSampler(nn.Layer):
             and sampling_metadata.top_p_normalized_logprobs_flag
         ):
             real_token_top_p = build_sampling_params_logprob(
-                sampling_metadata.top_p[:max_occupied_slots].squeeze(1), batch_token_num, num_tokens, real_bsz
+                sampling_metadata.top_p[:max_occupied_slots].squeeze(1), batch_token_num, num_tokens
             ).unsqueeze(1)
             top_p_normalized_logprobs = build_sampling_params_logprob(
-                top_p_normalized_logprobs[:max_occupied_slots].squeeze(1), batch_token_num, num_tokens, real_bsz
+                top_p_normalized_logprobs[:max_occupied_slots].squeeze(1), batch_token_num, num_tokens
             ).unsqueeze(1)
             top_p_token_mask = paddle.logical_and(top_p_normalized_logprobs, real_token_top_p != 1.0)
 
