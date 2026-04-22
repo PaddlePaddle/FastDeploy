@@ -33,7 +33,6 @@ from fastdeploy.cache_manager.multimodal_cache_manager import (
     ProcessorCacheManager,
 )
 from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
-from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.request import (
     BatchRequest,
     ImagePosition,
@@ -785,13 +784,6 @@ class ResourceManagerV1(ResourceManager):
         Try to pull a batch of requests from the waiting queue and schedule them.
         """
 
-        def get_enough_request(request, batch_request):
-            return (
-                ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
-                and self._is_mm_request(request)
-                and self.exist_mm_prefill(batch_request)
-            )
-
         with self.lock:
             preempted_reqs: list[Request] = []
             error_reqs: list[tuple[str, str]] = []
@@ -930,9 +922,6 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         req_index += 1
                         continue
-                    if get_enough_request(request, batch_request):
-                        req_index += 1
-                        continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     if num_new_tokens == 0:
                         req_index += 1
@@ -981,8 +970,6 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if get_enough_request(request, batch_request):
-                        break
                     if request.status == RequestStatus.WAITING:
                         result = self.waiting_async_process(request)
                         if result is None:
