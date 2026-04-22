@@ -248,6 +248,16 @@ class GPUModelRunner(ModelRunnerBase):
             self.sampling_mask_zmq_client.connect()
             logger.info(f"create send zmq sampling_mask_output_rank_{rank_id}_{port}")
 
+        self.sampling_mask_async_queue = None
+        if self.sampling_mask_zmq_client is not None:
+            self.sampling_mask_async_queue = queue.Queue()
+            self._sampling_mask_send_thread = Thread(
+                target=self._async_sampling_mask_send_loop,
+                daemon=True,
+                name="WorkerAsyncSamplingMaskSend",
+            )
+            self._sampling_mask_send_thread.start()
+
         self.zmq_client = None
         self.async_output_queue = None
         if envs.FD_USE_GET_SAVE_OUTPUT_V1:
@@ -297,6 +307,27 @@ class GPUModelRunner(ModelRunnerBase):
                 self.zmq_client.send_pyobj(output)
             except Exception as e:
                 logger.exception("Exception in async output loop: %s", e)
+
+    def _async_sampling_mask_send_loop(self):
+        """Background thread: serialize and send sampling_mask over ZMQ."""
+        while True:
+            try:
+                mask_list, accept_nums = self.sampling_mask_async_queue.get()
+                if accept_nums is None:
+                    # Normal (non-speculative) path
+                    mask_dict = {i: arr.tolist() for i, arr in enumerate(mask_list)}
+                else:
+                    # Speculative path: group by accept_num
+                    mask_dict = {}
+                    offset = 0
+                    for i, n in enumerate(accept_nums):
+                        n = int(n)
+                        if n > 0:
+                            mask_dict[i] = [arr.tolist() for arr in mask_list[offset : offset + n]]
+                        offset += n
+                self.sampling_mask_zmq_client.send_pyobj(mask_dict)
+            except Exception as e:
+                logger.exception("Exception in async sampling_mask send loop: %s", e)
 
     def exist_prefill(self):
         """
@@ -2499,7 +2530,7 @@ class GPUModelRunner(ModelRunnerBase):
                 local_rank=self.local_rank,
                 tensor_parallel_rank=self.parallel_config.tensor_parallel_rank,
                 save_each_rank=self.parallel_config.use_ep,
-                sampling_mask_zmq_client=self.sampling_mask_zmq_client,
+                sampling_mask_async_queue=self.sampling_mask_async_queue,
                 is_mtp_prefill=(
                     self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
                 ),
@@ -2511,7 +2542,7 @@ class GPUModelRunner(ModelRunnerBase):
                 share_inputs=self.share_inputs,
                 async_output_queue=self.async_output_queue,
                 save_each_rank=self.parallel_config.use_ep,
-                sampling_mask_zmq_client=self.sampling_mask_zmq_client,
+                sampling_mask_async_queue=self.sampling_mask_async_queue,
             )
 
     def _pool(self, hidden_states: paddle.Tensor, num_running_requests: int) -> Optional[ModelRunnerOutput]:

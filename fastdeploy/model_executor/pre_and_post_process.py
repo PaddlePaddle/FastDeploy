@@ -22,7 +22,6 @@ import paddle
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
-from fastdeploy.inter_communicator import ZmqIpcClient
 from fastdeploy.model_executor.ops.gpu import (
     mtp_save_first_token,
     mtp_save_first_token_with_topk,
@@ -119,6 +118,7 @@ from fastdeploy.model_executor.layers.sample.logprobs import (
     logprobs_renormalize_with_logz,
 )
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
+from fastdeploy.model_executor.layers.sample.sampler import _extract_sparse_indices
 from fastdeploy.output.pooler import PoolerOutput, PoolingSequenceGroupOutput
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOutput
@@ -382,13 +382,8 @@ def post_process_normal(
                 model_output.is_block_step,
             )
 
-    # Renormalize logprobs to match truncated sampling distribution (when enabled).
-    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
-        sampler_output.logprobs_tensors = logprobs_renormalize_with_logz(
-            sampler_output.logprobs_tensors.logprobs,
-            sampler_output.logz_per_batch,
-            sampler_output.logprobs_tensors,
-        )
+    # logprobs renormalization with logz is deferred to save_output,
+    # so that async D2H of logz_per_batch has more time to complete.
 
 
 def save_output_normal(
@@ -397,8 +392,28 @@ def save_output_normal(
     share_inputs: Dict[str, paddle.Tensor],
     async_output_queue: queue.Queue = None,
     save_each_rank: bool = False,
-    sampling_mask_zmq_client: Optional[ZmqIpcClient] = None,
+    sampling_mask_async_queue: Optional[queue.Queue] = None,
 ):
+    # Resolve deferred async D2H: sync event once at the top so all paths below
+    # can safely read sampling_mask and logz_per_batch.
+    if sampler_output.sampling_mask_event is not None:
+        sampler_output.sampling_mask_event.synchronize()
+        # Extract sparse indices from pinned CPU buffers
+        if sampler_output.sampling_mask is not None:
+            indices_window_cpu, mask_window_cpu, mask_bsz = sampler_output.sampling_mask
+            sampler_output.sampling_mask = _extract_sparse_indices(
+                indices_window_cpu.numpy(), mask_window_cpu.numpy(), mask_bsz
+            )
+        sampler_output.sampling_mask_event = None
+
+    # Renormalize logprobs with logz (deferred from post_process for better overlap).
+    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
+        sampler_output.logprobs_tensors = logprobs_renormalize_with_logz(
+            sampler_output.logprobs_tensors.logprobs,
+            sampler_output.logz_per_batch,
+            sampler_output.logprobs_tensors,
+        )
+
     # Transmit the model's output and stop generation signal via message queue.
     # In the future, we will abandon this approach.
     if envs.FD_USE_GET_SAVE_OUTPUT_V1:
@@ -453,12 +468,13 @@ def save_output_normal(
                 recover_share_inputs_map["last_preempted_idx"],
                 model_output.mp_rank,
             )
-        # Send sampling_mask via ZMQ side-channel when enabled.
+        # Send sampling_mask via ZMQ side-channel when enabled (async via background thread).
         if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
-            # sampling_mask is List[np.ndarray] of sparse int indices, one array per request.
-            mask_dict = {i: arr.tolist() for i, arr in enumerate(sampler_output.sampling_mask)}
-
-            sampling_mask_zmq_client.send_pyobj(mask_dict)
+            # sampling_mask already resolved at function entry.
+            assert (
+                sampling_mask_async_queue is not None
+            ), "sampling_mask_async_queue must not be None when sampling_mask is enabled"
+            sampling_mask_async_queue.put((sampler_output.sampling_mask, None))
     share_inputs["last_preempted_idx"][:] = 0
 
 
@@ -550,13 +566,8 @@ def post_process_specualate(
         model_output.max_dec_len,  # max_dec_len
     )
 
-    # Renormalize logprobs to match truncated sampling distribution (when enabled).
-    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
-        sampler_output.logprobs_tensors = logprobs_renormalize_with_logz(
-            sampler_output.logprobs_tensors.logprobs,
-            sampler_output.logz_per_batch,
-            sampler_output.logprobs_tensors,
-        )
+    # logprobs renormalization with logz is deferred to save_output,
+    # so that async D2H of logz_per_batch has more time to complete.
 
 
 def save_output_specualate(
@@ -567,9 +578,28 @@ def save_output_specualate(
     local_rank: int,
     tensor_parallel_rank: int,
     save_each_rank: bool = False,
-    sampling_mask_zmq_client: ZmqIpcClient = None,
+    sampling_mask_async_queue: Optional[queue.Queue] = None,
     is_mtp_prefill: bool = False,
 ):
+    # Resolve deferred async D2H: sync event once at the top so all paths below
+    # can safely read sampling_mask and logz_per_batch.
+    if sampler_output.sampling_mask_event is not None:
+        sampler_output.sampling_mask_event.synchronize()
+        if sampler_output.sampling_mask is not None:
+            indices_window_cpu, mask_window_cpu, mask_bsz = sampler_output.sampling_mask
+            sampler_output.sampling_mask = _extract_sparse_indices(
+                indices_window_cpu.numpy(), mask_window_cpu.numpy(), mask_bsz
+            )
+        sampler_output.sampling_mask_event = None
+
+    # Renormalize logprobs with logz (deferred from post_process for better overlap).
+    if sampler_output.logprobs_tensors is not None and sampler_output.logz_per_batch is not None:
+        sampler_output.logprobs_tensors = logprobs_renormalize_with_logz(
+            sampler_output.logprobs_tensors.logprobs,
+            sampler_output.logz_per_batch,
+            sampler_output.logprobs_tensors,
+        )
+
     if is_mtp_prefill:
         if tensor_parallel_rank == 0:
             skip_chunk_prefill = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
@@ -690,24 +720,16 @@ def save_output_specualate(
                 model_output.mp_rank,
                 save_each_rank,
             )
-        # Send sampling_mask via ZMQ side-channel when enabled.
+        # Send sampling_mask via ZMQ side-channel when enabled (async via background thread).
         if sampler_output.sampling_mask is not None and model_output.mp_rank == 0:
-            # sampling_mask is List[np.ndarray] of sparse int indices, length = total_accepted_tokens.
+            # sampling_mask already resolved at function entry.
             # Group by request using accept_num so each entry is List[np.ndarray] (n arrays per req).
             real_bsz = model_output.accept_num.shape[0]
             accept_nums = model_output.accept_num[:real_bsz].flatten().tolist()
-            mask_dict = {}
-            offset = 0
-            total_masks = len(sampler_output.sampling_mask)
-            for i, n in enumerate(accept_nums):
-                n = max(int(n), 0)
-                if n > 0:
-                    # List of n sparse index arrays, one per accepted token
-                    mask_dict[i] = [arr.tolist() for arr in sampler_output.sampling_mask[offset : offset + n]]
-                offset += n
-            if offset != total_masks:
-                raise ValueError(f"sampling_mask length mismatch: expected {offset}, got {total_masks}")
-            sampling_mask_zmq_client.send_pyobj(mask_dict)
+            assert (
+                sampling_mask_async_queue is not None
+            ), "sampling_mask_async_queue must not be None when sampling_mask is enabled"
+            sampling_mask_async_queue.put((sampler_output.sampling_mask, accept_nums))
     share_inputs["last_preempted_idx"][:] = 0
 
 

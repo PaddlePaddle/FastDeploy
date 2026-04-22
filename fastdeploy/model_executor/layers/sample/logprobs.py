@@ -16,7 +16,6 @@
 
 from typing import Callable, List, Optional, Tuple
 
-import numpy as np
 import paddle
 import paddle.nn.functional as F
 import triton
@@ -223,15 +222,19 @@ def build_output_logprobs(
     return logprobs_tensors, cu_batch_token_offset, output_logits
 
 
-def logprobs_renormalize_with_logz(logprobs: paddle.Tensor, logz: np.ndarray, logprobs_tensors: LogprobsTensors):
+def logprobs_renormalize_with_logz(logprobs: paddle.Tensor, logz, logprobs_tensors: LogprobsTensors):
     """
     Renormalize logprobs to match truncated sampling distribution.
     Args:
         logprobs: tensor [B, max_num_logprobs + 1]
-        logz: [B], log(sum(probs in candidate set K)) for each request
+        logz: [B], log(sum(probs in candidate set K)) for each request.
+              Can be np.ndarray or paddle.Tensor (CPU pinned memory).
         logprobs_tensors: LogprobsTensors
     """
-    logz = paddle.to_tensor(logz, dtype=logprobs.dtype)
+    if isinstance(logz, paddle.Tensor):
+        logz = logz.astype(logprobs.dtype)
+    else:
+        logz = paddle.to_tensor(logz, dtype=logprobs.dtype)
     # Renormalize: log π_masked = log π_full - log Z_K
     # Only normalize valid candidates; padding positions use -inf
     valid_mask = paddle.isfinite(logprobs)
