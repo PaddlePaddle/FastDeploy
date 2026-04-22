@@ -164,6 +164,8 @@ class ForwardMeta:
 
     real_bsz: int = 0
 
+    seq_lens_kv: paddle.Tensor = None
+
     def clear_caches(self):
         """Safely clean up the caches"""
         if self.caches:
