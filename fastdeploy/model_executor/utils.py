@@ -180,6 +180,16 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
         if fd_config.quant_config and not fd_config.quant_config.is_checkpoint_bf16:
             # skip for offline quantization
             return
+        # Hybrid mix_quant case: the global quant_config may be bf16-checkpoint
+        # (for dense online quant), but individual sublayers (e.g. MoE with
+        # offline NVFP4) have an offline sub-config. Their per-weight-load
+        # hook would fire before all sibling tensors (weight_scale_2, etc.)
+        # are loaded and crash. Defer those to process_final_after_loading.
+        _sub_qm = getattr(model_sublayer, "quant_method", None)
+        if _sub_qm is not None:
+            _sub_qc = getattr(_sub_qm, "quant_config", None)
+            if _sub_qc is not None and getattr(_sub_qc, "is_checkpoint_bf16", True) is False:
+                return
         if hasattr(model_sublayer, "quant_method"):
             quant_method = getattr(model_sublayer, "quant_method", None)
             unquant_moe_layer = get_moe_method()
@@ -267,7 +277,13 @@ def process_final_after_loading(model, fd_config: FDConfig):
                 unquant_moe_cls = type(unquant_moe_layer)
             is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls
             is_offline_quantized_ckpt = not (fd_config.quant_config and fd_config.quant_config.is_checkpoint_bf16)
-            if is_unquant_cls or is_offline_quantized_ckpt:
+            # Hybrid mix_quant case: individual sublayer's sub-config may be
+            # offline even when global quant_config is bf16-checkpoint. Those
+            # sublayers were skipped by the incremental hook on purpose and
+            # need their final post-load here.
+            _sub_qc = getattr(quant_method, "quant_config", None)
+            sublayer_is_offline = _sub_qc is not None and getattr(_sub_qc, "is_checkpoint_bf16", True) is False
+            if is_unquant_cls or is_offline_quantized_ckpt or sublayer_is_offline:
                 if hasattr(quant_method, "process_weights_after_loading"):
                     quant_method.process_weights_after_loading(sublayer)
                 continue
