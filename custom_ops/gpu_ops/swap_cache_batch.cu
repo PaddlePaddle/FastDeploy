@@ -127,7 +127,6 @@ void SwapCacheAllLayers(
     const std::vector<int64_t>& swap_block_ids_cpu,
     int rank,
     int mode) {
-  checkCudaErrors(cudaSetDevice(rank));  // used for distributed launch
   assert(cache_gpu_tensors.size() > 0 &&
          cache_gpu_tensors.size() == cache_cpu_ptrs.size());
   switch (cache_gpu_tensors[0].dtype()) {

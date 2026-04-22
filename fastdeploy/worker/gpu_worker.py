@@ -24,7 +24,7 @@ from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import Request
+from fastdeploy.engine.request import BatchRequest, Request
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
@@ -209,7 +209,7 @@ class GpuWorker(WorkerBase):
         output = self.model_runner.execute_model(model_forward_batch, num_running_request)
         return output
 
-    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
+    def preprocess_new_task(self, req_dicts: BatchRequest, num_running_requests: int) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.

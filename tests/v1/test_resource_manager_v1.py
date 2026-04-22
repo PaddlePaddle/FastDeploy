@@ -30,6 +30,7 @@ if not hasattr(paddle, "enable_compat"):
 from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig, SchedulerConfig
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.request import (
+    BatchRequest,
     CompletionOutput,
     ImagePosition,
     Request,
@@ -138,7 +139,6 @@ class TestResourceManagerV1(unittest.TestCase):
 
         cache_cfg = CacheConfig(args)
         model_cfg = SimpleNamespace(enable_mm=True)  # Enable multimodal for feature testing
-        speculative_cfg = SimpleNamespace(method=None)
         model_cfg.print = print
         model_cfg.max_model_len = 3200
         model_cfg.architectures = ["test_model"]
@@ -155,7 +155,7 @@ class TestResourceManagerV1(unittest.TestCase):
             cache_config=cache_cfg,
             parallel_config=parallel_cfg,
             graph_opt_config=graph_opt_cfg,
-            speculative_config=speculative_cfg,
+            speculative_config=None,
             scheduler_config=scheduler_cfg,
         )
         self.manager = ResourceManagerV1(
@@ -683,12 +683,12 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         manager.running = [request, preempted_req]
 
         preempted_reqs = []
-        scheduled_reqs = []
-        can_schedule = manager._trigger_preempt(request, 2, preempted_reqs, scheduled_reqs)
+        batch_request = BatchRequest()
+        can_schedule = manager._trigger_preempt(request, 2, preempted_reqs, batch_request)
         self.assertTrue(can_schedule)
         self.assertIn(preempted_req.request_id, manager.to_be_rescheduled_request_id_set)
         self.assertEqual(preempted_reqs[0], preempted_req)
-        self.assertEqual(scheduled_reqs[0].request_id, preempted_req.request_id)
+        self.assertEqual(batch_request.requests[0].request_id, preempted_req.request_id)
 
     def test_available_position_and_real_bsz(self):
         manager = _build_manager()
