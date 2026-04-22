@@ -1108,7 +1108,7 @@ class GPUModelRunner(ModelRunnerBase):
             input_length = self.fd_config.speculative_config.num_speculative_tokens + 1
         else:
             input_length = min(
-                num_tokens // batch_size,
+                num_tokens // (1 if capture_prefill else batch_size),
                 self.model_config.max_model_len - max_dec_len,
             )
 
