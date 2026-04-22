@@ -1068,7 +1068,6 @@ class MetaxModelRunner(ModelRunnerBase):
             idx = i
             input_length = input_length_list[i]
             max_dec_len = max_dec_len_list[i]
-
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["token_ids_all"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array(
