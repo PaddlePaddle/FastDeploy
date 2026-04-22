@@ -102,8 +102,11 @@ def test_compare_top_logprobs():
             {"role": "user", "content": "牛顿的三大运动定律是什么？"},
         ],
     }
-
-    compare_top_logprobs(data, top_logprobs_values=[5, 10])
+    # Using [5, 7] instead of larger gaps (e.g., [5, 10]) due to behavior changes
+    # introduced in https://github.com/PaddlePaddle/Paddle/pull/78659.
+    # After this PR, top_logprobs across different k are no longer guaranteed
+    # to be strict prefixes of each other. When k increases, slight variations
+    compare_top_logprobs(data, top_logprobs_values=[5, 7])
 
 
 if __name__ == "__main__":
