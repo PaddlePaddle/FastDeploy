@@ -691,15 +691,15 @@ class SpeculativeSampler(nn.Layer):
         num_tokens = real_bsz * (self.num_speculative_tokens + 1)
         padded_logits = paddle.zeros(shape=[num_tokens, last_logits.shape[1]], dtype=last_logits.dtype)
         padded_logits[: logits.shape[0]] = last_logits
-        tmp_max_bsz = share_inputs["seq_lens_this_time"].shape[0]
+        max_occupied_slots = share_inputs["seq_lens_this_time"].shape[0]
 
-        batch_token_num = share_inputs["accept_num"][:tmp_max_bsz]
+        batch_token_num = share_inputs["accept_num"][:max_occupied_slots]
 
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
         if temp_scaled_logprobs is not None:
-            real_bsz_temp_scaled = temp_scaled_logprobs[:tmp_max_bsz]
-            temperature = sampling_metadata.temperature[:tmp_max_bsz]
+            real_bsz_temp_scaled = temp_scaled_logprobs[:max_occupied_slots]
+            temperature = sampling_metadata.temperature[:max_occupied_slots]
             real_bsz_temp_scaled = build_sampling_params_logprob(
                 real_bsz_temp_scaled, batch_token_num, num_tokens, real_bsz
             )
@@ -718,10 +718,10 @@ class SpeculativeSampler(nn.Layer):
             and sampling_metadata.top_p_normalized_logprobs_flag
         ):
             real_token_top_p = build_sampling_params_logprob(
-                sampling_metadata.top_p[:tmp_max_bsz].squeeze(1), batch_token_num, num_tokens, real_bsz
+                sampling_metadata.top_p[:max_occupied_slots].squeeze(1), batch_token_num, num_tokens, real_bsz
             ).unsqueeze(1)
             top_p_normalized_logprobs = build_sampling_params_logprob(
-                top_p_normalized_logprobs[:tmp_max_bsz].squeeze(1), batch_token_num, num_tokens, real_bsz
+                top_p_normalized_logprobs[:max_occupied_slots].squeeze(1), batch_token_num, num_tokens, real_bsz
             ).unsqueeze(1)
             top_p_token_mask = paddle.logical_and(top_p_normalized_logprobs, real_token_top_p != 1.0)
 

@@ -164,12 +164,12 @@ def build_output_logprobs(
         return logprobs_tensors, cu_batch_token_offset
 
     # NOTE(huicongyao) real_bsz is passed from _postprocess, remove this in future
-    tmp_max_bsz = share_inputs["seq_lens_this_time"].shape[0]
+    max_occupied_slots = share_inputs["seq_lens_this_time"].shape[0]
 
     if is_naive:
         # NAIVE mode: one token per request, logits are already correct
         output_logits = logits
-        token_ids = share_inputs["accept_tokens"][:tmp_max_bsz, 0]
+        token_ids = share_inputs["accept_tokens"][:max_occupied_slots, 0]
     else:
         # Speculative mode: extract target logits for accepted positions
         from fastdeploy.model_executor.layers.sample.ops import (
@@ -177,8 +177,8 @@ def build_output_logprobs(
         )
 
         batch_token_num = paddle.where(
-            share_inputs["seq_lens_encoder"][:tmp_max_bsz] != 0,
-            paddle.ones_like(share_inputs["seq_lens_encoder"][:tmp_max_bsz]),
+            share_inputs["seq_lens_encoder"][:max_occupied_slots] != 0,
+            paddle.ones_like(share_inputs["seq_lens_encoder"][:max_occupied_slots]),
             share_inputs["seq_lens_this_time"],
         ).flatten()
 
@@ -188,12 +188,12 @@ def build_output_logprobs(
             "int32"
         )
         cu_batch_token_offset = paddle.concat(
-            [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:tmp_max_bsz])]
+            [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:max_occupied_slots])]
         ).astype("int32")
         share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
 
         output_logits = paddle.empty(
-            [share_inputs["accept_num"][:tmp_max_bsz].sum(), logits.shape[1]],
+            [share_inputs["accept_num"][:max_occupied_slots].sum(), logits.shape[1]],
             dtype=logits.dtype,
         )
         speculate_get_target_logits(
