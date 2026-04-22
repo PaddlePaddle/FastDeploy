@@ -197,7 +197,7 @@ class MTPProposer(Proposer):
 
             # When EP is enabled, input tokens may be routed to the same expert if the input ids consist entirely of 5s.
             # This can lead to OOM, so random input ids should be used instead.
-            if self.fd_config.parallel_config.enable_expert_parallel:
+            if self.fd_config.parallel_config.enable_expert_parallel and current_platform.is_cuda():
                 input_ids = np.random.randint(5, 10000, size=input_length)
             else:
                 input_ids = np.array([5] * input_length)
