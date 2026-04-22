@@ -203,7 +203,7 @@ class ModelRegistry:
 
         architectures = getattr(model_config, "architectures", None) or []
         if not architectures:
-            if model_impl == "paddleformers":
+            if model_impl == "paddleformers" or model_impl == "paddlefleet":
                 raise ValueError(
                     f"{model_impl} backend requested but no architectures were found in the pretrained configuration."
                 )

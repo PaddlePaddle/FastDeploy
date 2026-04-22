@@ -222,7 +222,6 @@ class PaddleFleetModelBase(nn.Layer):
         )
 
         self.model.eval()
-        print("self.model= ", self.model)
         # Patch PaddleFleet core_attention with FastDeploy attention
         patched_count = patch_paddlefleet_core_attention(
             model=self.model,
@@ -375,11 +374,6 @@ class PaddleFleetModelBase(nn.Layer):
             if seq_lens_decoder is not None:
                 position_ids = position_ids + seq_lens_decoder[0, 0].astype("int64")
 
-        if getattr(self.paddleformers_config, "uses_mrope", False):
-            position_ids = position_ids.unsqueeze(1)
-        else:
-            position_ids = position_ids.unsqueeze(0)
-
         forward_meta.rope_already_applied = True
 
         # Also set forward_meta on each TransformerLayer's config
@@ -409,7 +403,7 @@ class PaddleFleetModelBase(nn.Layer):
         # Only call TransformerLayer
         for layer in self.model.run_function:
             if isinstance(layer, (GPTLMHead)):
-                # Skip Embedding and LM Head
+                # Skip LM Head
                 continue
             model_input = layer(model_input)
 
@@ -421,6 +415,7 @@ class PaddleFleetModelBase(nn.Layer):
 
     @paddle.no_grad()
     def load_weights(self, weights: Iterable[tuple[str, paddle.Tensor]]):
+        # use model.from_pretrained to load weight
         pass
 
     def set_state_dict(self, state_dict):
