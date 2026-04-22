@@ -208,9 +208,12 @@ class CacheTransferManager:
         self.tansfer_done_queue = queue.Queue()  # 用来告知任务执行完毕
         self.ctrl_output_queue = None
 
-        address = (args.pod_ip, args.cache_queue_port)
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            engine_cache_queue_address = (args.pod_ip, args.cache_queue_port)
+        else:
+            engine_cache_queue_address = f"/dev/shm/fd_task_queue_{args.cache_queue_port}.sock"
         self.cache_task_queue = EngineCacheQueue(
-            address=address,
+            address=engine_cache_queue_address,
             is_server=False,
             num_client=args.mp_num,
             client_id=self.rank,
