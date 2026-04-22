@@ -312,6 +312,41 @@ class TestErnie4_5Processor(unittest.TestCase):
         self.assertIn("prompt_token_ids", result)
         self.assertEqual(result["A"], "B")
 
+    def test_process_request_dict_completion_token_ids_extends_prompt(self):
+        """completion_token_ids should be appended to prompt_token_ids."""
+        proc = self._make_processor()
+        req = {
+            "prompt_token_ids": [1, 2, 3],
+            "completion_token_ids": [10, 11],
+            "temperature": 0.5,
+            "top_p": 0.5,
+        }
+        processed = proc.process_request_dict(req, max_model_len=20)
+        self.assertEqual(processed["prompt_token_ids"], [1, 2, 3, 10, 11])
+
+    def test_process_request_dict_no_completion_token_ids(self):
+        """Without completion_token_ids, prompt_token_ids should remain unchanged."""
+        proc = self._make_processor()
+        req = {
+            "prompt_token_ids": [1, 2, 3],
+            "temperature": 0.5,
+            "top_p": 0.5,
+        }
+        processed = proc.process_request_dict(req, max_model_len=20)
+        self.assertEqual(processed["prompt_token_ids"], [1, 2, 3])
+
+    def test_process_request_dict_empty_completion_token_ids(self):
+        """Empty completion_token_ids should not modify prompt_token_ids."""
+        proc = self._make_processor()
+        req = {
+            "prompt_token_ids": [1, 2, 3],
+            "completion_token_ids": [],
+            "temperature": 0.5,
+            "top_p": 0.5,
+        }
+        processed = proc.process_request_dict(req, max_model_len=20)
+        self.assertEqual(processed["prompt_token_ids"], [1, 2, 3])
+
     def test_init_generation_config_exception(self):
         """Test fallback behavior when GenerationConfig loading fails."""
         with patch(f"{MODULE_PATH}.GenerationConfig.from_pretrained", side_effect=Exception("fail")):
