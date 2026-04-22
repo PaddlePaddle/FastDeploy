@@ -77,6 +77,9 @@ try:
         def swap_cache_per_layer_async(*args, **kwargs):  # 单层 KV cache 换入算子（异步）
             raise RuntimeError("Metax swap_cache_per_layer_async UNIMPLEMENTED")
 
+        def swap_cache_layout(*args, **kwargs):
+            raise RuntimeError("Metax swap_cache_layout UNIMPLEMENTED")
+
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.ops.xpu import (
             cuda_host_alloc,
