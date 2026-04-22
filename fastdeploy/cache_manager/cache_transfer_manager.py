@@ -1540,9 +1540,9 @@ if __name__ == "__main__":
     args = parse_args()
     rank_id = args.rank + args.local_data_parallel_id * args.mp_num
     if args.mp_num > 1:
-        logger = get_logger("cache_transfer", f"cache_transfer_{rank_id}.log")
+        logger = get_logger("cache_transfer", f"cache_manager_{rank_id}.log")
     else:
-        logger = get_logger("cache_transfer", "cache_transfer.log")
+        logger = get_logger("cache_transfer", "cache_manager.log")
 
     logger.info(f"args: {vars(args)}")
     set_device(args.device_id)
