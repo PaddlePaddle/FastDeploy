@@ -1063,7 +1063,6 @@ class GPUModelRunner(ModelRunnerBase):
         num_tokens: int,
         batch_size: int,
         expected_decode_len: int,
-        in_capturing: bool,
         capture_prefill: bool = False,
     ):
         """
@@ -1103,14 +1102,10 @@ class GPUModelRunner(ModelRunnerBase):
         """
         # NOTE(gongshaotian): The maximum decoding length is equal to the expected decoded tokens plus the eos token
         max_dec_len = expected_decode_len + 1
-
-        if in_capturing:
-            input_length = self.fd_config.speculative_config.num_speculative_tokens + 1
-        else:
-            input_length = min(
-                num_tokens // (1 if capture_prefill else batch_size),
-                self.model_config.max_model_len - max_dec_len,
-            )
+        input_length = min(
+            num_tokens // (1 if capture_prefill else batch_size),
+            self.model_config.max_model_len - max_dec_len,
+        )
 
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -1924,7 +1919,6 @@ class GPUModelRunner(ModelRunnerBase):
             num_tokens=num_tokens,
             batch_size=batch_size,
             expected_decode_len=expected_decode_len,
-            in_capturing=in_capturing,
             capture_prefill=capture_prefill,
         )
         self._dummy_prefill_inputs(
@@ -1937,7 +1931,6 @@ class GPUModelRunner(ModelRunnerBase):
                 num_tokens=num_tokens,
                 batch_size=batch_size,
                 expected_decode_len=expected_decode_len,
-                in_capturing=in_capturing,
             )
 
         while True:

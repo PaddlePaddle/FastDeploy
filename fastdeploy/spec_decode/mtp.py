@@ -174,20 +174,15 @@ class MTPProposer(Proposer):
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
 
-    def dummy_prefill_inputs(
-        self, num_tokens: int, batch_size: int, expected_decode_len: int, in_capturing: bool = False
-    ):
+    def dummy_prefill_inputs(self, num_tokens: int, batch_size: int, expected_decode_len: int):
         """Set dummy prefill inputs to model_inputs"""
         max_dec_len = expected_decode_len + 1
 
         if current_platform.is_cuda():
-            if in_capturing:
-                input_length = self.fd_config.speculative_config.num_speculative_tokens + 1
-            else:
-                input_length = min(
-                    num_tokens // batch_size,
-                    self.model_config.max_model_len - max_dec_len,
-                )
+            input_length = min(
+                num_tokens // batch_size,
+                self.model_config.max_model_len - max_dec_len,
+            )
         else:
             input_length = min(
                 num_tokens // batch_size,
