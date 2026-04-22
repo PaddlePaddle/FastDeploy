@@ -22,8 +22,7 @@ from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.input.multimodal_processor import (
     MultiModalProcessor as ErnieVLDataProcessor,
 )
-from fastdeploy.input.text_processor import DataProcessor as TextDataProcessor
-from fastdeploy.input.text_processor import TextProcessor as ErnieTextDataProcessor
+from fastdeploy.input.text_processor import TextProcessor
 from fastdeploy.model_executor.logits_processor import ThinkingBudgetLogitsProcessor
 from fastdeploy.scheduler import SchedulerConfig
 
@@ -703,7 +702,7 @@ class DummyCfgRaiseParallel:
 
 class TestThinkingBudgetSupplemental(unittest.TestCase):
     def test_update_thinking_prompt_state_from_text_processor(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor._think_token_ids = None
         processor.tokenizer = DummyTokenizerForTextProcessor()
         prompt_ids = [1, THINKING_START_TOKEN_ID, 2, THINKING_END_TOKEN_ID, 3]
@@ -743,7 +742,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             common_engine_module.EngineService._start_worker_service(engine)
 
     def test_ernie_encode_literal_text_with_cache(self):
-        processor = ErnieTextDataProcessor.__new__(ErnieTextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor.tokenizer = SimpleNamespace(
             tokenize=lambda text: ["token_a", "token_b"],
             convert_tokens_to_ids=lambda tokens: [71, 72],
@@ -753,7 +752,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         self.assertEqual(processor._encode_literal_text_with_cache("fallback"), [71, 72])
 
     def test_text_update_thinking_prompt_state_branches(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor._think_token_ids = None
         processor.tokenizer = DummyTokenizerForTextProcessor()
 
@@ -794,7 +793,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         self.assertEqual(processor._get_think_token_ids(), (THINKING_START_TOKEN_ID, THINKING_END_TOKEN_ID))
 
     def test_text_process_request_dict_think_stop_sentence(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor._apply_default_parameters = lambda request: request
         processor.eos_token_ids = [1]
         processor.update_stop_seq = lambda *args, **kwargs: None
@@ -825,7 +824,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         self.assertNotIn("think_stop_sentence", processed["logits_processors_args"])
 
     def test_ernie_process_request_dict_prepares_thinking_budget_args(self):
-        processor = ErnieTextDataProcessor.__new__(ErnieTextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor._apply_default_parameters = lambda request: request
         processor.eos_token_ids = [1]
         processor.update_stop_seq = lambda *args, **kwargs: None
