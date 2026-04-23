@@ -705,9 +705,8 @@ std::vector<paddle::Tensor> BlockAttnKernel(
       std::vector<int> lody_vec(dec_batch + 1);
       std::vector<int> offset_vec(dec_batch, 0);
       std::vector<int> lod_ref_vec(dec_batch + 1, 0);
-      using TGEMM = std::conditional_t<std::is_same_v<XPU_XType, XPU_CType>,
-                                       tfloat32,
-                                       int8_wo_t>;
+      using TGEMM = std::
+          conditional_t<std::is_same_v<XPU_XType, XPU_CType>, float, int8_wo_t>;
       constexpr int quant_mode = std::is_same_v<XPU_CType, int8_t> ? 3 : 0;
       ret = baidu::xpu::xfa::speculative_attention_decoder<XPU_XType,
                                                            XPU_CType,
