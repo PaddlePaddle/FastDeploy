@@ -87,7 +87,7 @@ class BlockWiseFP8Config(QuantConfigBase):
         # ZKK add this code!
         if self.deepgemm_scale_ue8m0:
             # triton backend only used float32 scale!!!!
-            if not self.quant_config.use_deep_gemm and not self.quant_config.use_blackwell_gemm:
+            if not (self.use_deep_gemm or self.use_blackwell_gemm):
                 self.moe_blockwise_gemm_scale_ue8m0 = False
 
     def name(self) -> str:
