@@ -38,8 +38,20 @@ class TestDeepGemmPrefill(unittest.TestCase):
         raw_x = paddle.randn([M, K], dtype="bfloat16").cast(paddle.float8_e4m3fn)
         raw_x_scale = paddle.randn([M, K // block_size], dtype="float32")
 
-        raw_x_scale = paddle.zeros([M, K // block_size], dtype="int32") + 128
+        raw_x_scale = paddle.randn([M, K // block_size], dtype="float32") * 10 + 127
+        raw_x_scale = paddle.clip(raw_x_scale, 0, 127)
+        raw_x_scale = raw_x_scale.cast("int32")
         raw_x_scale = raw_x_scale.cast("uint8").view("int32")
+
+        float32_x_scale = raw_x_scale.view("uint8").cast("int32").flatten().numpy().tolist()
+        for i in range(len(float32_x_scale)):
+            float32_x_scale[i] = 2.0 ** (float32_x_scale[i] - 127)
+        float32_x_scale = (
+            paddle.to_tensor(float32_x_scale, dtype="float32")
+            .reshape([M, K // block_size, 1])
+            .tile([1, 1, block_size])
+            .reshape([M, K])
+        )
 
         raw_w = paddle.randn([N, K], dtype="bfloat16").cast(paddle.float8_e4m3fn)
         raw_w_scale = paddle.randn([N // block_size, K // block_size], dtype="float32")
@@ -48,7 +60,7 @@ class TestDeepGemmPrefill(unittest.TestCase):
         raw_w_scale = raw_w_scale.cast("uint8").view("int32")
 
         baseline_out = paddle.empty([M, N], dtype="bfloat16")
-        tmp0 = raw_x.cast("float32") * 2
+        tmp0 = raw_x.cast("float32") * float32_x_scale
 
         this_expert_weight = raw_w.contiguous().cast("float32")
         tmp1 = this_expert_weight * 2
