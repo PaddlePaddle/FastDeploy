@@ -62,8 +62,7 @@ class TestDeepGemmPrefill(unittest.TestCase):
         baseline_out = paddle.empty([M, N], dtype="bfloat16")
         tmp0 = raw_x.cast("float32") * float32_x_scale
 
-        this_expert_weight = raw_w.contiguous().cast("float32")
-        tmp1 = this_expert_weight * 2
+        tmp1 = raw_w.cast("float32") * 2
 
         baseline_out = paddle.matmul(tmp0, tmp1, False, True)
 
