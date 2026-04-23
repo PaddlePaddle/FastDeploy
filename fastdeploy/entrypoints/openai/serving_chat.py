@@ -227,6 +227,9 @@ class OpenAIServingChat:
         num_cached_tokens = 0
         num_image_tokens = [0] * num_choices
         tool_called = [False] * num_choices
+        pending_sampling_masks: list[list] = [[] for _ in range(num_choices)]
+        pending_logprobs: list[list] = [[] for _ in range(num_choices)]
+        pending_draft_logprobs: list[list] = [[] for _ in range(num_choices)]
         inference_start_time = [0] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
@@ -407,8 +410,31 @@ class OpenAIServingChat:
                     if output["tool_calls"] is not None:
                         tool_called[idx] = True
 
+                    # Accumulate per-token metadata before the skip check so
+                    # that data from buffered (skipped) steps is not lost.
+                    if output.get("sampling_mask") is not None:
+                        pending_sampling_masks[idx].extend(
+                            self._make_sampling_mask_list(output["sampling_mask"])
+                        )
+                    if logprobs_res is not None and logprobs_res.content:
+                        pending_logprobs[idx].extend(logprobs_res.content)
+                    if draft_logprobs_res is not None and draft_logprobs_res.content:
+                        pending_draft_logprobs[idx].extend(draft_logprobs_res.content)
+
                     if output["skipped"] and not request.return_token_ids:
                         continue
+
+                    # Flush accumulated per-token metadata into the current chunk.
+                    flushed_sampling_mask = pending_sampling_masks[idx] or None
+                    pending_sampling_masks[idx] = []
+
+                    flushed_logprobs = LogProbs(content=pending_logprobs[idx]) if pending_logprobs[idx] else logprobs_res
+                    pending_logprobs[idx] = []
+
+                    flushed_draft_logprobs = (
+                        LogProbs(content=pending_draft_logprobs[idx]) if pending_draft_logprobs[idx] else draft_logprobs_res
+                    )
+                    pending_draft_logprobs[idx] = []
 
                     delta_message = DeltaMessage(
                         reasoning_content=output["reasoning_content"],
@@ -430,13 +456,9 @@ class OpenAIServingChat:
                     choice = ChatCompletionResponseStreamChoice(
                         index=idx,
                         delta=delta_message,
-                        logprobs=logprobs_res,
-                        draft_logprobs=draft_logprobs_res,
-                        sampling_mask=(
-                            self._make_sampling_mask_list(output["sampling_mask"])
-                            if output.get("sampling_mask") is not None
-                            else None
-                        ),
+                        logprobs=flushed_logprobs,
+                        draft_logprobs=flushed_draft_logprobs,
+                        sampling_mask=flushed_sampling_mask,
                         arrival_time=arrival_time,
                         speculate_metrics=output_speculate_metrics,
                     )
