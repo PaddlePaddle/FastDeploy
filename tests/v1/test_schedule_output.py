@@ -29,7 +29,6 @@ def test_normal_schedule():
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
     model_cfg = SimpleNamespace(enable_mm=False)
-    speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     model_cfg.max_model_len = 5120
     model_cfg.mm_max_tokens_per_item = None
@@ -41,7 +40,7 @@ def test_normal_schedule():
         model_config=model_cfg,
         cache_config=cache_cfg,
         parallel_config=parallel_cfg,
-        speculative_config=speculative_cfg,
+        speculative_config=None,
         graph_opt_config=graph_opt_cfg,
         scheduler_config=scheduler_cfg,
     )
@@ -95,7 +94,6 @@ def test_preempted_request():
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
     model_cfg = SimpleNamespace(enable_mm=False)
-    speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     model_cfg.max_model_len = 5120
     model_cfg.mm_max_tokens_per_item = None
@@ -108,7 +106,7 @@ def test_preempted_request():
         cache_config=cache_cfg,
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
-        speculative_config=speculative_cfg,
+        speculative_config=None,
         scheduler_config=scheduler_cfg,
     )
     resource_manager_v1 = ResourceManagerV1(
@@ -162,7 +160,6 @@ def test_caching_output():
     args = asdict(engine_args)
     cache_cfg = CacheConfig(args)
     model_cfg = SimpleNamespace(enable_mm=False)
-    speculative_cfg = SimpleNamespace(method=None)
     model_cfg.print = print
     model_cfg.max_model_len = 5120
     model_cfg.mm_max_tokens_per_item = None
@@ -175,7 +172,7 @@ def test_caching_output():
         cache_config=cache_cfg,
         parallel_config=parallel_cfg,
         graph_opt_config=graph_opt_cfg,
-        speculative_config=speculative_cfg,
+        speculative_config=None,
         scheduler_config=scheduler_cfg,
     )
     resource_manager_v1 = ResourceManagerV1(

@@ -17,7 +17,7 @@
 import logging
 from dataclasses import dataclass, fields
 from enum import IntEnum, auto
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import paddle
 
@@ -148,6 +148,10 @@ class ForwardMeta:
     is_dummy_or_profile_run: bool = False
     # Routing Replay table buffer
     routing_replay_table: Optional[paddle.Tensor] = None
+
+    # ============ V1 KVCACHE Manager: Swap-in waiting info ============
+    # LayerDoneCounter for layer-by-layer swap waiting (set by submit_swap_tasks return value)
+    layer_done_counter: Optional[Any] = None
 
     # chunked MoE related
     moe_num_chunk: int = 1
@@ -284,6 +288,33 @@ class XPUForwardMeta(ForwardMeta):
     slot_mapping_enc: Optional[paddle.Tensor] = None
     #
     slot_mapping_dec: Optional[paddle.Tensor] = None
+
+    def init_inplace_tensor(self, bsz, block_tables_shape):
+        self.encoder_batch_map = paddle.empty(bsz, dtype="int32")
+        self.decoder_batch_map = paddle.empty(bsz, dtype="int32")
+        self.encoder_batch_idx = paddle.empty(bsz, dtype="int32")
+        self.decoder_batch_idx = paddle.empty(bsz, dtype="int32")
+        self.encoder_seq_lod = paddle.empty(bsz + 1, dtype="int32")
+        self.decoder_seq_lod = paddle.empty(bsz + 1, dtype="int32")
+        self.encoder_kv_lod = paddle.empty(bsz + 1, dtype="int32")
+        self.prefix_len = paddle.empty(bsz, dtype="int32")
+        self.decoder_context_len = paddle.empty(bsz, dtype="int32")
+        self.decoder_context_len_cache = paddle.empty(bsz, dtype="int32")
+
+        self.prefix_block_tables = paddle.empty(block_tables_shape, dtype="int32")
+
+        self.encoder_batch_map_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.decoder_batch_map_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.encoder_batch_idx_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.decoder_batch_idx_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.encoder_seq_lod_cpu = paddle.empty(bsz + 1, dtype="int32", device="cpu")
+        self.decoder_seq_lod_cpu = paddle.empty(bsz + 1, dtype="int32", device="cpu")
+        self.encoder_kv_lod_cpu = paddle.empty(bsz + 1, dtype="int32", device="cpu")
+        self.prefix_len_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.decoder_context_len_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+        self.decoder_context_len_cache_cpu = paddle.empty(bsz, dtype="int32", device="cpu")
+
+        self.len_info_cpu = paddle.empty(7, dtype="int32", device="cpu")
 
     def copy_from(self, other: "XPUForwardMeta", skip_keys: Optional[list] = None):
         """

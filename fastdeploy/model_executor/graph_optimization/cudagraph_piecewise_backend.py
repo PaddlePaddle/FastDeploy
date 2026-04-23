@@ -32,7 +32,7 @@ from fastdeploy.distributed.communication import (
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_logger
 
-logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
+logger = get_logger("cudagrpah_piecewise_backend", "worker_process.log")
 
 
 @dataclass

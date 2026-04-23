@@ -46,28 +46,20 @@ Default level is 2 (CONTENT), which logs request parameters, scheduling info, an
 * `request.log` : Request log file, records user request lifecycle and processing details
 * `console.log` : Console log, records model startup time and other information. This log is also printed to the console.
 * `error.log` : Error log file, records all ERROR and above level logs
-* `backup_env.*.json` : Records environment variables set during instance startup. The number of files matches the number of GPU cards.
-* `workerlog.*` : Tracks model loading progress and inference operator errors. Each GPU card has a corresponding file.
-* `worker_process.log` : Logs engine inference data for each iteration.
-* `cache_manager.log` : Records KV Cache logical index allocation for each request and cache hit status.
-* `launch_worker.log` : Logs model startup information and error messages.
-* `gpu_worker.log` : Records KV Cache block count information during profiling.
-* `gpu_model_runner.log` : Contains model details and loading time.
-
-## Scheduler Logs
-* `scheduler.log` : Records scheduler information, including node status and request allocation details.
+* `workerlog.*` : Symlinks to paddle workerlog files in `paddle/` subdirectory. Tracks model loading progress and inference operator errors. Each GPU card has a corresponding file.
+* `worker_process.log` : Consolidated worker logs including engine inference data, model runner info, GPU worker profiling, and CudaGraph status.
+* `cache_manager.log` : Consolidated cache logs including KV Cache allocation, cache hit status, and cache transfer manager info.
 
 ## Speculative Decoding Logs
 * `speculate.log` : Contains speculative decoding-related information.
 
 ## Prefix Caching Logs
-* `cache_queue_manager.log` : Logs startup parameters and received request information.
-* `cache_transfer_manager.log` : Logs startup parameters and received request information.
-* `launch_cache_manager.log` : Records cache transfer startup parameters and error messages.
+* `cache_manager_*.log` : Logs cache transfer manager startup parameters and received request information (one file per GPU).
 
 ## PD Disaggregation Logs
-* `cache_messager.log` : Logs transmission protocols and messages used by the P instance.
+* `cache_messager_*.log` : Logs transmission protocols and messages used by the P instance (one file per GPU).
 * `splitwise_connector.log` : Records data received from P/D instances and connection establishment details.
 
-## CudaGraph Logs
-* `cudagraph_piecewise_backend.log` : Logs CudaGraph startup and error information.
+## Paddle Logs
+* `paddle/workerlog.*` : Paddle distributed launch logs, one file per GPU card. Symlinks are created in the main log directory for convenience.
+* `paddle/backup_env.*.json` : Records environment variables set during instance startup. The number of files matches the number of GPU cards.

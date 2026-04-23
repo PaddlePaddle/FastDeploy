@@ -315,6 +315,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/swap_cache_batch.cu",
         "gpu_ops/swap_cache.cu",
         "gpu_ops/swap_cache_layout.cu",
+        "gpu_ops/swap_cache_optimized.cu",  # 新增：优化的 KV cache 换入算子
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/cpp_extensions.cc",
         "gpu_ops/share_external_data.cu",
@@ -616,6 +617,7 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "gpu_ops/get_img_boundaries.cc",
                 "gpu_ops/fused_neox_rope_embedding.cu",
                 "gpu_ops/get_output_ep.cc",
+                "gpu_ops/update_attn_mask_offsets.cu",
                 "iluvatar_ops/moe_dispatch.cu",
                 "iluvatar_ops/moe_reduce.cu",
                 "iluvatar_ops/flash_attn_unpadded.cu",

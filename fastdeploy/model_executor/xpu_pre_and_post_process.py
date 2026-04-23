@@ -34,12 +34,12 @@ if current_platform.is_xpu():
         gather_next_token,
         get_infer_param,
         get_padding_offset,
-        limit_thinking_content_length_v1,
-        limit_thinking_content_length_v2,
+        limit_thinking_content_length,
         save_output,
         save_output_topk,
         set_stop_value_multi_ends,
         speculate_clear_accept_nums,
+        speculate_limit_thinking_content_length,
         speculate_pre_process,
         speculate_save_output,
         speculate_set_stop_value_multi_seqs,
@@ -148,80 +148,122 @@ def xpu_pre_process(
     else:
         (
             ids_remove_padding,
-            cum_offsets,
             batch_id_per_token,
             cu_seqlens_q,
             cu_seqlens_k,
-        ) = get_padding_offset(input_ids, seq_lens_this_time, token_num_cpu)
+        ) = get_padding_offset(input_ids, seq_lens_this_time, None, None, token_num_cpu)
 
     share_inputs["batch_id_per_token"] = batch_id_per_token
     share_inputs["cu_seqlens_q"] = cu_seqlens_q
     share_inputs["cu_seqlens_k"] = cu_seqlens_k
 
-    xpu_forward_meta = XPUForwardMeta(
-        ids_remove_padding=share_inputs["ids_remove_padding"],
-        rotary_embs=share_inputs["rope_emb"],
-        attn_backend=None,
-        seq_lens_encoder=share_inputs["seq_lens_encoder"],
-        seq_lens_decoder=share_inputs["seq_lens_decoder"],
-        seq_lens_this_time=share_inputs["seq_lens_this_time"],
-        batch_id_per_token=share_inputs["batch_id_per_token"],
-        cu_seqlens_q=share_inputs["cu_seqlens_q"],
-        cu_seqlens_k=share_inputs["cu_seqlens_k"],
-        block_tables=share_inputs["block_tables"],
-        caches=share_inputs["caches"],
-        max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
-        is_speculative=use_speculate_method,
-    )
+    if use_cudagraph and forward_meta is not None:
+        forward_meta.ids_remove_padding.copy_(share_inputs["ids_remove_padding"], False)
+        forward_meta.rotary_embs.copy_(share_inputs["rope_emb"], False)
+        forward_meta.attn_backend = None
+        forward_meta.seq_lens_encoder.copy_(share_inputs["seq_lens_encoder"], False)
+        forward_meta.seq_lens_decoder.copy_(share_inputs["seq_lens_decoder"], False)
+        forward_meta.seq_lens_this_time.copy_(share_inputs["seq_lens_this_time"], False)
+        forward_meta.batch_id_per_token.copy_(share_inputs["batch_id_per_token"], False)
+        forward_meta.cu_seqlens_q.copy_(share_inputs["cu_seqlens_q"], False)
+        forward_meta.cu_seqlens_k.copy_(share_inputs["cu_seqlens_k"], False)
+        forward_meta.block_tables.copy_(share_inputs["block_tables"], False)
+        forward_meta.caches = share_inputs["caches"]
+        forward_meta.max_num_seqs = share_inputs["seq_lens_this_time"].shape[0]
+        forward_meta.is_speculative = use_speculate_method
+
+        xpu_forward_meta = forward_meta
+    else:
+        xpu_forward_meta = XPUForwardMeta(
+            ids_remove_padding=share_inputs["ids_remove_padding"],
+            rotary_embs=share_inputs["rope_emb"],
+            attn_backend=None,
+            seq_lens_encoder=share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=share_inputs["seq_lens_decoder"],
+            seq_lens_this_time=share_inputs["seq_lens_this_time"],
+            batch_id_per_token=share_inputs["batch_id_per_token"],
+            cu_seqlens_q=share_inputs["cu_seqlens_q"],
+            cu_seqlens_k=share_inputs["cu_seqlens_k"],
+            block_tables=share_inputs["block_tables"],
+            caches=share_inputs["caches"],
+            max_num_seqs=share_inputs["seq_lens_this_time"].shape[0],
+            is_speculative=use_speculate_method,
+        )
+        xpu_forward_meta.init_inplace_tensor(seq_lens_encoder.shape[0], share_inputs["block_tables"].shape)
+
+    block_tables = xpu_forward_meta.block_tables
+
+    encoder_batch_map = xpu_forward_meta.encoder_batch_map
+    decoder_batch_map = xpu_forward_meta.decoder_batch_map
+    encoder_batch_idx = xpu_forward_meta.encoder_batch_idx
+    decoder_batch_idx = xpu_forward_meta.decoder_batch_idx
+    encoder_seq_lod = xpu_forward_meta.encoder_seq_lod
+    decoder_seq_lod = xpu_forward_meta.decoder_seq_lod
+    encoder_kv_lod = xpu_forward_meta.encoder_kv_lod
+    prefix_len = xpu_forward_meta.prefix_len
+    decoder_context_len = xpu_forward_meta.decoder_context_len
+    decoder_context_len_cache = xpu_forward_meta.decoder_context_len_cache
+
+    prefix_block_tables = xpu_forward_meta.prefix_block_tables
+
+    encoder_batch_map_cpu = xpu_forward_meta.encoder_batch_map_cpu
+    decoder_batch_map_cpu = xpu_forward_meta.decoder_batch_map_cpu
+    encoder_batch_idx_cpu = xpu_forward_meta.encoder_batch_idx_cpu
+    decoder_batch_idx_cpu = xpu_forward_meta.decoder_batch_idx_cpu
+    encoder_seq_lod_cpu = xpu_forward_meta.encoder_seq_lod_cpu
+    decoder_seq_lod_cpu = xpu_forward_meta.decoder_seq_lod_cpu
+    encoder_kv_lod_cpu = xpu_forward_meta.encoder_kv_lod_cpu
+    prefix_len_cpu = xpu_forward_meta.prefix_len_cpu
+    decoder_context_len_cpu = xpu_forward_meta.decoder_context_len_cpu
+    decoder_context_len_cache_cpu = xpu_forward_meta.decoder_context_len_cache_cpu
+
+    len_info_cpu = xpu_forward_meta.len_info_cpu
 
     (
-        xpu_forward_meta.encoder_batch_map,
-        xpu_forward_meta.decoder_batch_map,
-        xpu_forward_meta.encoder_batch_idx,
-        xpu_forward_meta.decoder_batch_idx,
-        xpu_forward_meta.encoder_seq_lod,
-        xpu_forward_meta.decoder_seq_lod,
-        xpu_forward_meta.encoder_kv_lod,
-        xpu_forward_meta.prefix_len,
-        xpu_forward_meta.decoder_context_len,
-        xpu_forward_meta.decoder_context_len_cache,
-        xpu_forward_meta.prefix_block_tables,
-        xpu_forward_meta.encoder_batch_map_cpu,
-        xpu_forward_meta.decoder_batch_map_cpu,
-        xpu_forward_meta.encoder_batch_idx_cpu,
-        xpu_forward_meta.decoder_batch_idx_cpu,
-        xpu_forward_meta.encoder_seq_lod_cpu,
-        xpu_forward_meta.decoder_seq_lod_cpu,
-        xpu_forward_meta.encoder_kv_lod_cpu,
-        xpu_forward_meta.prefix_len_cpu,
-        xpu_forward_meta.decoder_context_len_cpu,
-        xpu_forward_meta.decoder_context_len_cache_cpu,
-        xpu_forward_meta.len_info_cpu,
-        xpu_forward_meta.slot_mapping_enc,
-        xpu_forward_meta.slot_mapping_dec,
+        slot_mapping_enc,
+        slot_mapping_dec,
     ) = get_infer_param(
         seq_lens_encoder,
         seq_lens_decoder,
         seq_lens_this_time,
-        xpu_forward_meta.block_tables,
+        block_tables,
+        encoder_batch_map,
+        decoder_batch_map,
+        encoder_batch_idx,
+        decoder_batch_idx,
+        encoder_seq_lod,
+        decoder_seq_lod,
+        encoder_kv_lod,
+        prefix_len,
+        decoder_context_len,
+        decoder_context_len_cache,
+        prefix_block_tables,
+        encoder_batch_map_cpu,
+        decoder_batch_map_cpu,
+        encoder_batch_idx_cpu,
+        decoder_batch_idx_cpu,
+        encoder_seq_lod_cpu,
+        decoder_seq_lod_cpu,
+        encoder_kv_lod_cpu,
+        prefix_len_cpu,
+        decoder_context_len_cpu,
+        decoder_context_len_cache_cpu,
+        len_info_cpu,
         block_size,
         num_speculative_tokens,
     )
-    xpu_forward_meta.enc_batch = xpu_forward_meta.len_info_cpu[0]
-    xpu_forward_meta.dec_batch = xpu_forward_meta.len_info_cpu[1]
-    xpu_forward_meta.total_enc_len = xpu_forward_meta.len_info_cpu[2]
 
     adjusted_input = adjust_batch(
         ids_remove_padding.reshape([-1, 1]),
-        xpu_forward_meta.encoder_seq_lod,
-        xpu_forward_meta.decoder_seq_lod,
-        xpu_forward_meta.encoder_batch_idx,
-        xpu_forward_meta.decoder_batch_idx,
-        xpu_forward_meta.encoder_seq_lod_cpu,
-        xpu_forward_meta.decoder_seq_lod_cpu,
-        xpu_forward_meta.encoder_batch_idx_cpu,
-        xpu_forward_meta.decoder_batch_idx_cpu,
-        xpu_forward_meta.len_info_cpu,
+        encoder_seq_lod,
+        decoder_seq_lod,
+        encoder_batch_idx,
+        decoder_batch_idx,
+        encoder_seq_lod_cpu,
+        decoder_seq_lod_cpu,
+        encoder_batch_idx_cpu,
+        decoder_batch_idx_cpu,
+        len_info_cpu,
         None,  # output_padding_offset
         -1,  # max bs
     )
@@ -229,17 +271,22 @@ def xpu_pre_process(
     adjusted_input = adjusted_input.squeeze(1)
 
     share_inputs["ids_remove_padding"].copy_(adjusted_input, False)
+
+    xpu_forward_meta.enc_batch = len_info_cpu[0]
+    xpu_forward_meta.dec_batch = len_info_cpu[1]
+    xpu_forward_meta.total_enc_len = len_info_cpu[2]
     xpu_forward_meta.ids_remove_padding = adjusted_input
-    # Set forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
+    # Set xpu_forward_meta.is_profiling to True to skip init_kv_signal_per_query for attention backends
     xpu_forward_meta.is_profiling = is_profiling
-    if use_cudagraph:
-        if forward_meta is None:
-            return xpu_forward_meta
-        else:
-            forward_meta.copy_from(xpu_forward_meta)
-            return forward_meta
+
+    # prefill does not use cudagraph, inplace copy is not needed
+    xpu_forward_meta.slot_mapping_enc = slot_mapping_enc
+    if use_cudagraph and forward_meta is not None:
+        xpu_forward_meta.slot_mapping_dec.copy_(slot_mapping_dec, False)
     else:
-        return xpu_forward_meta
+        xpu_forward_meta.slot_mapping_dec = slot_mapping_dec
+
+    return xpu_forward_meta
 
 
 def xpu_process_output(
@@ -275,44 +322,25 @@ def xpu_post_process_normal(
     save_each_rank: bool = False,
     async_output_queue: queue.Queue = None,
     think_end_id: int = None,
-    line_break_id: int = None,
+    splitwise_role_is_decode: bool = False,
 ) -> None:
     """ """
 
     sampled_token_ids = sampler_output.sampled_token_ids
 
     if think_end_id > 0:
-        limit_strategy = envs.FD_LIMIT_THINKING_CONTENT_TRUNCATE_STR
-        max_think_lens = share_inputs["max_think_lens"]
-        step_idx = share_inputs["step_idx"]
-        limit_think_status = share_inputs["limit_think_status"]
-        stop_flags = share_inputs["stop_flags"]
-        eos_token_ids = share_inputs["eos_token_id"]
-        if limit_strategy == "</think>":
-            # for ernie-45-vl
-            limit_thinking_content_length_v1(
-                sampled_token_ids,
-                max_think_lens,
-                step_idx,
-                limit_think_status,
-                stop_flags,
-                eos_token_ids,  # 处理由于模型效果问题导致思考过程中输出eos token的问题
-                think_end_id,
-            )
-        elif limit_strategy == "\n</think>\n\n":
-            # for ernie-x1
-            assert line_break_id > 0
-            limit_thinking_content_length_v2(
-                sampled_token_ids,
-                max_think_lens,
-                step_idx,
-                limit_think_status,
-                stop_flags,
-                think_end_id,
-                line_break_id,
-            )
-        else:
-            raise NotImplementedError(f"Not support {limit_strategy=} for limit thinking content length.")
+        limit_thinking_content_length(
+            sampled_token_ids,
+            share_inputs["max_think_lens"],
+            share_inputs["max_reply_lens"],
+            share_inputs["step_idx"],
+            share_inputs["limit_think_status"],
+            share_inputs["stop_flags"],
+            share_inputs["eos_token_id"],
+            share_inputs["inject_token_ids"],
+            think_end_id,
+            splitwise_role_is_decode,
+        )
 
     # 1. Set stop value
     paddle.assign(
@@ -405,7 +433,7 @@ def xpu_post_process_normal(
     share_inputs["preempted_idx"][:] = 0
 
 
-def xpu_post_process_specualate(
+def xpu_post_process_speculate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],
@@ -413,8 +441,25 @@ def xpu_post_process_specualate(
     skip_save_output: bool = False,
     is_naive_mode: bool = False,
     prefill_one_step_stop: bool = False,
+    think_end_id: int = -1,
+    splitwise_role_is_decode: bool = False,
 ):
     """"""
+
+    if think_end_id > 0:
+        speculate_limit_thinking_content_length(
+            share_inputs["accept_tokens"],
+            share_inputs["max_think_lens"],
+            share_inputs["max_reply_lens"],
+            share_inputs["step_idx"],
+            share_inputs["limit_think_status"],
+            share_inputs["accept_num"],
+            share_inputs["stop_flags"],
+            share_inputs["eos_token_id"],
+            share_inputs["inject_token_ids"],
+            think_end_id,
+            splitwise_role_is_decode,
+        )
 
     speculate_set_stop_value_multi_seqs(
         model_output.accept_tokens,
@@ -467,6 +512,7 @@ def xpu_post_process_specualate(
             raise NotImplementedError("Not support speculate_save_output_topk now.")
 
     speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
+    share_inputs["preempted_idx"][:] = 0
 
 
 def step_xpu(

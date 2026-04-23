@@ -97,12 +97,12 @@ def _create_default_sampling_metadata(
     return fake_sampling_metadata
 
 
-def _create_fd_config(max_model_len, method=None):
+def _create_fd_config(max_model_len, method=None, verify_strategy="topp"):
     model_config: Mock = Mock()
     model_config.max_model_len = max_model_len
     model_config.architectures = ["test_model"]
     model_config.mm_max_tokens_per_item = None
-    speculative_config = SpeculativeConfig({"method": method} if method else {})
+    speculative_config = SpeculativeConfig({"method": method, "verify_strategy": verify_strategy})
     graph_opt_config = GraphOptimizationConfig({})
     scheduler_config = SchedulerConfig({})
     parallel_config = ParallelConfig({})
@@ -187,7 +187,7 @@ def test_speculative_sampler():
     max_draft_token_num = 1
 
     # Use ngram method for speculative decoding
-    fd_config = _create_fd_config(max_model_len, method="ngram")
+    fd_config = _create_fd_config(max_model_len, method="ngram", verify_strategy="topp")
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len)
     logits = _create_fake_logits(batch_size * (max_draft_token_num + 1), vocab_size)
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
@@ -208,7 +208,7 @@ def test_speculative_sampler_logprobs():
     max_draft_token_num = 1
 
     # Use ngram method for speculative decoding
-    fd_config = _create_fd_config(max_model_len, method="ngram")
+    fd_config = _create_fd_config(max_model_len, method="ngram", verify_strategy="topp")
     share_inputs = _create_share_inputs(batch_size, max_draft_token_num, max_model_len, vocab_size)
     sampling_metadata = _create_default_sampling_metadata(batch_size, min_seq_len, max_seq_len, max_num_logprobs=0)
     sampling_metadata.share_inputs = share_inputs
@@ -221,7 +221,15 @@ def test_speculative_sampler_logprobs():
     for logprobs_mode in logprobs_mode_list:
         fd_config.model_config.logprobs_mode = logprobs_mode
         sampler = SpeculativeSampler(fd_config)
-        sampler(logits, sampling_metadata, max_model_len, share_inputs, token_num_output_cpu, increment_value)
+        sampler(
+            logits,
+            sampling_metadata,
+            max_model_len,
+            share_inputs,
+            token_num_output_cpu,
+            increment_value,
+            real_bsz=batch_size,
+        )
 
 
 def test_mtp_sampler():

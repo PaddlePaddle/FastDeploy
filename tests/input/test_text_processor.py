@@ -418,6 +418,31 @@ class DataProcessorTestCase(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "chat_template_kwargs must be a dict"):
             self.processor.process_request_dict(request)
 
+    def test_process_request_dict_completion_token_ids_extend(self):
+        request = {"prompt": "hi", "completion_token_ids": [10, 11, 12], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # prompt "hi" is tokenized to [2] by DummyTokenizer, then extended with completion_token_ids
+        self.assertEqual(processed["prompt_token_ids"], [2, 10, 11, 12])
+
+    def test_process_request_dict_no_completion_token_ids(self):
+        request = {"prompt": "hi", "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # without completion_token_ids, prompt_token_ids should remain as tokenized result
+        self.assertEqual(processed["prompt_token_ids"], [2])
+
+    def test_process_request_dict_empty_completion_token_ids(self):
+        request = {"prompt": "hi", "completion_token_ids": [], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # empty list is falsy, should not extend prompt_token_ids
+        self.assertEqual(processed["prompt_token_ids"], [2])
+
+    def test_process_request_dict_completion_token_ids_truncated(self):
+        # prompt "hi" -> [2], extend [10,11,12] -> [2,10,11,12] (len=4)
+        # max_model_len=3, 4 > 3 triggers truncation: [:3-1] = [:2] -> [2, 10]
+        request = {"prompt": "hi", "completion_token_ids": [10, 11, 12], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=3)
+        self.assertEqual(processed["prompt_token_ids"], [2, 10])
+
     def test_ids2tokens_and_clear_request_status(self):
         delta, _, _ = self.processor.ids2tokens([3], "task-1")
         self.assertEqual(delta, "3")

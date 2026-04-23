@@ -69,7 +69,6 @@ DLL_EXPORT int token_penalty_multi_scores(api::Context* ctx,
 
 DLL_EXPORT int get_padding_offset(api::Context* ctx,
                                   int* batch_id_per_token,
-                                  int* cum_offsets_out,
                                   int* cu_seqlens_q,
                                   int* cu_seqlens_k,
                                   int64_t* x_remove_padding,
@@ -347,6 +346,22 @@ DLL_EXPORT int text_image_gather_scatter(api::Context* ctx,
                                          int64_t image_token_num,
                                          int64_t hidden_size,
                                          bool is_scatter);
+
+DLL_EXPORT int limit_thinking_content_length_kernel(
+    api::Context* ctx,
+    int64_t* next_tokens,
+    const int* max_think_lens,
+    int* max_reply_lens,
+    const int64_t* step_idx,
+    const int64_t* eos_token_ids,
+    int* limit_status,
+    const bool* stop_flags,
+    const int64_t think_end_id,
+    const int64_t* inject_token_ids,
+    const int bs,
+    const int eos_token_id_len,
+    const int inject_len,
+    const bool splitwise_role_is_decode);
 
 DLL_EXPORT int limit_thinking_content_length_kernel_v1(
     api::Context* ctx,
@@ -754,7 +769,7 @@ DLL_EXPORT int speculate_limit_thinking_content_length_kernel(
     int64_t* next_tokens,
     const int* max_think_lens,
     int* max_reply_lens,
-    int64_t* step_idx,
+    const int64_t* step_idx,
     const int64_t* eos_token_ids,
     int* limit_status,
     int* accept_num,
@@ -804,6 +819,29 @@ DLL_EXPORT int verify_draft_tokens(
     const int verify_strategy,  // 0=TOPP, 1=GREEDY, 2=TARGET_MATCH
     const bool reject_all,
     const bool accept_all);
+template <typename T>
+DLL_EXPORT int reasoning_phase_token_constraint(
+    api::Context* ctx,
+    const T* logits_src,
+    T* logits_dst,
+    const int64_t* token_ids_all,
+    const int64_t* prompt_lens,
+    const bool* stop_flags,
+    const int* seq_lens_encoder,
+    const int64_t* step_idx,
+    const int64_t* allowed_tokens,
+    int* reasoning_status,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
+    const bool* enable_thinking,
+    int64_t think_end_id,
+    int64_t line_break_id,
+    int bs,
+    int token_num,
+    int vocab_size,
+    int max_seq_len,
+    int allowed_tokens_len);
+
 /*--------------------------------------- MTP end
  * --------------------------------------------*/
 
