@@ -244,7 +244,22 @@ class MiniMaxM1Attention(nn.Layer):
 
 
 class MiniMaxM1LinearAttention(nn.Layer):
-    """Linear attention (Lightning Attention)."""
+    """Linear attention (Lightning Attention).
+
+    .. warning::
+        **Offline / single-request use only.**
+        ``_kv_history`` is a per-layer recurrent state stored as a module attribute,
+        keyed implicitly by ``batch_size``. Under continuous batching where requests
+        within a batch shuffle (insertion / eviction at arbitrary slots) the cached
+        state will silently leak across requests and produce wrong outputs even when
+        ``batch_size`` is unchanged.
+
+        Production serving must migrate this state into
+        ``ForwardMeta.caches`` / slot-based cache management with explicit per-slot
+        reset on request boundaries. The current implementation is intended for
+        accuracy validation, single-request inference and the integration tests in
+        ``tests/model_executor/test_minimax_m1*``.
+    """
 
     def __init__(
         self,
@@ -396,7 +411,11 @@ class MiniMaxM1LinearAttention(nn.Layer):
         attn_output = attn_output.transpose([0, 2, 1, 3])
         attn_output = attn_output.reshape([batch_size, -1, self.num_attention_heads * self.head_dim])
 
-        # Norm → gate → output projection (matches vLLM/HF forward)
+        # Norm → gate → output projection (matches vLLM/HF forward).
+        # Note: ``RMSNorm.forward`` always returns ``(out, residual_out)`` regardless
+        # of whether ``residual_input`` is supplied (see
+        # ``fastdeploy/model_executor/layers/normalization.py``). When called without
+        # a residual we discard the second element — it equals the input ``x``.
         attn_output = self.norm(attn_output)[0]
         gate = self.output_gate(hidden_states)
         attn_output = paddle.nn.functional.sigmoid(gate) * attn_output.astype(hidden_states.dtype)
@@ -409,9 +428,22 @@ class MiniMaxM1DecoderLayer(nn.Layer):
 
     @staticmethod
     def _build_attn_type_list(num_layers: int):
-        """Build attention type list: 70 linear + 10 full (at indices 7,15,23,...)."""
+        """Fallback attention-type schedule for MiniMax-Text-01 / MiniMax-M1 80-layer variants.
+
+        The authoritative schedule must come from ``model_config.attn_type_list`` in
+        the HuggingFace config. Both call sites in this module read the config first
+        via ``getattr(model_config, "attn_type_list", _build_attn_type_list(...))``
+        and only fall back here when the config field is missing.
+
+        The hardcoded ``full_attn_indices = [7, 15, ..., 79]`` matches MiniMax-Text-01
+        and MiniMax-M1 (80 hidden layers, full attention every 8 layers starting at
+        layer 7). For models with a different ``num_layers`` the indices that exceed
+        the layer count are simply ignored, which yields a degraded "all linear"
+        schedule — fine for smoke tests but not for accuracy. Always prefer the
+        config-driven path for non-MiniMax-Text-01 layer counts.
+        """
         attn_type_list = [0] * num_layers  # Default: all linear
-        # Full attention every 8 layers starting at layer 7
+        # Full attention every 8 layers starting at layer 7 (MiniMax-Text-01 / M1).
         full_attn_indices = [7, 15, 23, 31, 39, 47, 55, 63, 71, 79]
         for idx in full_attn_indices:
             if idx < num_layers:
@@ -885,9 +917,9 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
         logits = logits.astype(paddle.float32)
         return logits
 
-    def clear_grpah_opt_backend(self):
+    def clear_graph_opt_backend(self):
         """Clear graph optimization backend, the captured cuda graph will be cleaned"""
-        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+        self.model.clear_graph_opt_backend(fd_config=self.fd_config)
 
     def forward(
         self,
