@@ -316,10 +316,9 @@ class PaddleDisWorkerProc:
         self.experts_manager.tensor_infos = None
 
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
-        model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
-        paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
-        value = model_weights_signal_tensor.numpy()[0]
-        return int(value)
+        signal_list = [self.model_weights_signal[0]]
+        paddle.distributed.broadcast_object_list(signal_list, src=src, group=group)
+        return int(signal_list[0])
 
     def _tp_barrier_wait(self):
         if current_platform.is_xpu() or self.enable_overlap_schedule:
@@ -507,9 +506,9 @@ class PaddleDisWorkerProc:
             self._tp_barrier_wait() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
-                if self.ranks > 1:
-                    paddle.distributed.barrier()
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
+                    if self.ranks > 1:
+                        paddle.distributed.barrier()
                     logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
                     )
