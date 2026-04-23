@@ -56,7 +56,6 @@ from fastdeploy.model_executor.ops.xpu import (
     speculate_schedule_cache,
 )
 from fastdeploy.model_executor.xpu_pre_and_post_process import (
-    step_xpu,
     xpu_post_process_normal,
     xpu_post_process_speculate,
     xpu_pre_process,
@@ -745,168 +744,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
-        """Process inputs for prefill tasks and update share_inputs buffer"""
-        # NOTE(luotingdan): Set environment variable of prefill node
-        if req_dicts[-1].disaggregate_info is not None and req_dicts[-1].disaggregate_info["role"] == "prefill":
-            os.environ["PREFILL_NODE_ONE_STEP_STOP"] = "1"
-
-        req_len = len(req_dicts)
-        for i in range(req_len):
-            request = req_dicts[i]
-            idx = request.idx
-            length = len(request.prompt_token_ids)
-            assert length > 0, "The prompt requested must not be empty."
-
-            # Is Decode Node
-            if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
-                self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
-                self.share_inputs["input_ids"][idx : idx + 1, 0] = request.prompt_token_ids[0]
-                self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
-                self.share_inputs["token_ids_all"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
-                self.share_inputs["token_ids_all"][idx : idx + 1, length:] = -1
-                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
-                self.share_inputs["seq_lens_decoder"][idx : idx + 1] = length
-                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 1
-                self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = 0
-                self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = length
-                self.share_inputs["prompt_lens"][idx : idx + 1] = length
-                self.share_inputs["step_idx"][idx : idx + 1] = 1
-
-                # TODO support MTP
-                # if self.speculative_decoding:
-                #     num_prefill_send_token = self.speculative_config.num_speculative_tokens + 1
-                #     self.share_inputs["draft_tokens"][idx : idx + 1, 0:num_prefill_send_token] = paddle.to_tensor(
-                #         request.draft_token_ids[0:num_prefill_send_token],
-                #         dtype="int64",
-                #     )
-                #     self.seq_lens_this_time_buffer[idx : idx + 1] = num_prefill_send_token
-            else:
-                self.share_inputs["pre_ids"][idx : idx + 1] = -1
-                self.share_inputs["step_idx"][idx : idx + 1] = 0
-                self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
-                self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
-                self.share_inputs["token_ids_all"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
-                self.share_inputs["token_ids_all"][idx : idx + 1, length:] = -1
-                if self.enable_mm:
-                    inputs = self._preprocess_mm_task(request.multimodal_inputs)
-                    if inputs.get("images") is not None:
-                        self.share_inputs["image_features"] = self.extract_vision_features(inputs)
-                    else:
-                        # Compatible with the situation that lacks images and videos
-                        self.share_inputs["image_features"] = None
-                    position_ids = inputs["position_ids"]
-                    length = inputs["input_ids"].shape[1]
-                    self.share_inputs["input_ids"][idx : idx + 1, :length] = inputs["input_ids"]
-                else:
-                    self.share_inputs["seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
-                    self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = request.get("seq_lens_decoder", 0)
-                self.share_inputs["seq_lens_this_time"][idx : idx + 1] = length
-                self.share_inputs["step_seq_lens_encoder"][idx : idx + 1] = length
-                self.share_inputs["seq_lens_encoder"][idx : idx + 1] = length
-                self.share_inputs["prompt_lens"][idx : idx + 1] = length
-
-                if self.enable_mm:
-                    self.share_inputs["rope_emb"][idx : idx + 1, :] = self.prepare_rope3d(
-                        position_ids, [request.get("max_tokens", 2048)], [0, position_ids.shape[0]]
-                    )[0]
-                    self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
-
-                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                    # Enable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-                    if request.get("response_max_tokens") is not None:
-                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get("response_max_tokens")
-                    else:
-                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
-                else:
-                    # Disable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                    self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-
-            def get_attr_from_request(request, attr, default_value=None):
-                res = request.get(attr, default_value)
-                if res is not None:
-                    return res
-                else:
-                    return default_value
-
-            assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
-            self.share_inputs["eos_token_id"][:] = np.array(request.eos_token_ids, dtype="int64").reshape(-1, 1)
-            self.share_inputs["top_p"][idx : idx + 1] = get_attr_from_request(request, "top_p", 0.7)
-            self.share_inputs["top_k"][idx : idx + 1] = request.get("top_k", 0)
-            self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
-            self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
-            self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
-
-            self.share_inputs["temperature"][idx : idx + 1] = get_attr_from_request(request, "temperature", 0.95)
-            self.share_inputs["penalty_score"][idx : idx + 1] = get_attr_from_request(
-                request, "repetition_penalty", 1.0
-            )
-            self.share_inputs["frequency_score"][idx : idx + 1] = get_attr_from_request(
-                request, "frequency_penalty", 0.0
-            )
-            self.share_inputs["presence_score"][idx : idx + 1] = get_attr_from_request(
-                request, "presence_penalty", 0.0
-            )
-            self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
-                request, "temp_scaled_logprobs", False
-            )
-            self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = get_attr_from_request(
-                request, "top_p_normalized_logprobs", False
-            )
-            self.share_inputs["min_dec_len"][idx : idx + 1] = request.get("min_tokens", 1)
-            self.share_inputs["max_dec_len"][idx : idx + 1] = request.get(
-                "max_tokens", self.model_config.max_model_len
-            )
-            self.share_inputs["stop_flags"][idx : idx + 1] = False
-
-            self.share_inputs["first_token_ids"][idx : idx + 1] = self.share_inputs["input_ids"][idx : idx + 1, :1]
-            self.share_inputs["ori_seq_lens_encoder"][idx : idx + 1] = length
-
-            if request.get("seed") is not None:
-                self.share_inputs["infer_seed"][idx : idx + 1] = request.get("seed")
-            encoder_block_num = len(request.get("block_tables"))
-            self.share_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
-            self.share_inputs["block_tables"][idx : idx + 1, :] = -1
-            self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
-                request.block_tables, dtype="int32"
-            )
-
-            if request.get("bad_words_token_ids") is not None and len(request.get("bad_words_token_ids")) > 0:
-                bad_words_len = len(request.get("bad_words_token_ids"))
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = bad_words_len
-                self.share_inputs["bad_tokens"][idx : idx + 1, :bad_words_len] = np.array(
-                    request.get("bad_words_token_ids"), dtype="int64"
-                )
-            else:
-                self.share_inputs["bad_tokens_len"][idx : idx + 1] = 1
-                self.share_inputs["bad_tokens"][idx : idx + 1, :] = np.array([-1], dtype="int64")
-
-            if request.get("stop_token_ids") is not None and request.get("stop_seqs_len") is not None:
-                stop_seqs_num = len(request.get("stop_seqs_len"))
-                for i in range(stop_seqs_num, self.model_config.max_stop_seqs_num):
-                    request.sampling_params.stop_seqs_len.append(0)
-                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = np.array(
-                    request.sampling_params.stop_seqs_len, dtype="int32"
-                )
-                self.share_inputs["stop_seqs"][
-                    idx : idx + 1, :stop_seqs_num, : len(request.get("stop_token_ids")[0])
-                ] = np.array(request.get("stop_token_ids"), dtype="int64")
-            else:
-                self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
-
-        self.share_inputs["not_need_stop"][0] = True
-
-        if self.spec_method == SpecMethod.MTP:
-            self.share_inputs["temp_scaled_logprobs"][idx : idx + 1] = get_attr_from_request(
-                request, "temp_scaled_logprobs", False
-            )
-            self.share_inputs["top_p_normalized_logprobs"][idx : idx + 1] = get_attr_from_request(
-                request, "top_p_normalized_logprobs", False
-            )
-            self.proposer.insert_prefill_inputs(req_dicts, num_running_requests)
+        raise NotImplementedError("XPU only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
 
     def _init_share_inputs(self, max_num_seqs: int):
         """Initialize all share buffers for model inputs.
@@ -1146,7 +984,7 @@ class XPUModelRunner(ModelRunnerBase):
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER and not is_dummy_run:
+        if not is_dummy_run:
             recover_decode_task(
                 self.share_inputs["stop_flags"],
                 self.share_inputs["seq_lens_this_time"],
@@ -1162,7 +1000,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.speculative_config.num_speculative_tokens if self.speculative_decoding else 0,
             )
 
-        # TODO(chenhuan): support cached_token_num
         self.forward_meta = xpu_pre_process(
             self.share_inputs["input_ids"],
             self.share_inputs["seq_lens_this_time"],
@@ -1750,15 +1587,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
             self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
 
-            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                step_xpu(
-                    self.share_inputs,
-                    self.cache_config.block_size,
-                    self.cache_config.enc_dec_block_num,
-                    self.fd_config.speculative_config,
-                    self.fd_config.cache_config.enable_prefix_caching,
-                )
-            elif self.speculative_decoding:
+            if self.speculative_decoding:
                 speculate_schedule_cache(
                     self.share_inputs["draft_tokens"],
                     self.share_inputs["block_tables"],
