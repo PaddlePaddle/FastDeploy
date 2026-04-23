@@ -79,6 +79,7 @@ else:
         speculate_schedule_cache,
         set_data_ipc,
         unset_data_ipc,
+        update_attn_mask_offsets,
     )
 
 import zmq
@@ -179,6 +180,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.encoder_cache: dict[str, paddle.Tensor] = {}
             else:
                 self.encoder_cache = None
+
+            # Note(Zhengshifeng) init video cache for VL model
+            self.video_cache = {}
 
         #  Sampler
         if not self.speculative_decoding:
@@ -498,6 +502,8 @@ class GPUModelRunner(ModelRunnerBase):
             "feature_position_list": [],
             "grid_thw_lst_batches": [],
             "feature_position_list_batches": [],
+            "image_features": [],
+            "image_grid_thws": [],
         }
         for request in request_list:
             if request.task_type.value != RequestType.PREFILL.value:
@@ -510,10 +516,10 @@ class GPUModelRunner(ModelRunnerBase):
                         self.encoder_cache.pop(mm_hash, None)
             idx = self.share_inputs.get_index_by_batch_id(request.idx)
             req_idx_img_index_map[idx] = -1
+            inputs = request.multimodal_inputs
             if request.with_image:
                 req_idx_img_index_map[idx] = img_index
                 img_index = img_index + 1
-                inputs = request.multimodal_inputs
                 if self.encoder_cache is not None:
                     if envs.FD_ENABLE_MAX_PREFILL:
                         if "vit_seqlen" in inputs:
@@ -619,6 +625,43 @@ class GPUModelRunner(ModelRunnerBase):
                             prefill_end_index=request.prefill_end_index,
                         )
                     )
+
+            if (
+                inputs is not None
+                and inputs.get("image_feature_urls", None) is not None
+                and len(inputs["image_feature_urls"]) > 0
+            ):
+                multi_vision_inputs["image_grid_thws"].extend(
+                    inputs["image_grid_thws"][request.image_start : request.image_end]
+                )
+                image_feature = inputs["image_features"][request.image_start : request.image_end]
+
+                if len(image_feature) > 0:
+                    if isinstance(image_feature[0], paddle.Tensor) and len(image_feature[0].shape) == 2:
+                        # Enable encode vision_embedding
+                        for image_feature_tensor in image_feature:
+                            if image_feature_tensor.shape[1] != self.fd_config.model_config.hidden_size:
+                                logger.error(
+                                    f"Shape mismatch: expected shape={self.fd_config.model_config.hidden_size}, \
+                                        but got {image_feature_tensor.shape}"
+                                )
+                        image_features_gpu = [vf.cuda() for vf in image_feature]
+                        image_embeds = paddle.concat(image_features_gpu, axis=0)
+                        multi_vision_inputs["image_features"].append(image_embeds)
+                        logger.info("Enable Encode image embedding.")
+                    else:
+                        multi_vision_inputs["image_features"].extend(image_feature)
+                        logger.info("Disable Encode image embedding.")
+
+        self.share_inputs["image_features"] = multi_vision_inputs["image_features"]
+        if len(multi_vision_inputs["image_features"]) > 0:
+            if (
+                isinstance(multi_vision_inputs["image_features"][0], paddle.Tensor)
+                and len(multi_vision_inputs["image_features"][0].shape) == 2
+            ):
+                self.share_inputs["image_features"] = paddle.concat(multi_vision_inputs["image_features"], axis=0)
+        self.share_inputs["image_grid_thws"] = multi_vision_inputs["image_grid_thws"]
+
         if self.encoder_cache is not None:
             if len(multi_vision_inputs["images_lst"]) > 0 or len(multi_vision_inputs["encoder_cache_info"]) > 0:
                 image_features_output = None
@@ -735,6 +778,9 @@ class GPUModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
+        if self.enable_mm:
+            # Sort by idx to ensure attention mask offsets are filled in order during mm prefill
+            req_dicts = sorted(req_dicts, key=lambda r: r.idx)
         for i in range(req_len):
             request = req_dicts[i]
             idx = self.share_inputs.get_index_by_batch_id(request.idx)
@@ -784,6 +830,20 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
+                if self.enable_mm:
+                    self.share_inputs["decode_states"][idx, 0] = 0
+                    inputs = request.multimodal_inputs
+                    # mm attention_mask
+                    attn_offset_len = prefill_end_index - prefill_start_index
+                    if inputs.get("attention_mask_offset", None) is None:
+                        attention_mask_offset_slice = np.arange(prefill_start_index, prefill_end_index, dtype=np.int32)
+                    else:
+                        attention_mask_offset_slice = np.asarray(
+                            inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype=np.int32
+                        )
+                    self.share_inputs["attn_mask_offsets_full"][idx, 0:attn_offset_len] = paddle.to_tensor(
+                        attention_mask_offset_slice, dtype="int32"
+                    )
                 if not self.is_pooling_model:
                     if request.get("enable_thinking") is not None:
                         enable_thinking = bool(request.get("enable_thinking"))
@@ -1202,6 +1262,19 @@ class GPUModelRunner(ModelRunnerBase):
             self._real_output_token_num_host.copy_(real_output_token_num, False)
             self.output_token_num_event.record()
 
+        if self.enable_mm:
+            attn_mask_offsets = update_attn_mask_offsets(
+                self.share_inputs["ids_remove_padding"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_encoder"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["cu_seqlens_q"],
+                self.share_inputs["attn_mask_offsets_full"],
+                self.share_inputs["is_block_step"],
+                self.share_inputs["decode_states"],
+            )
+            self.share_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
+
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
         self.forward_meta.real_bsz = real_bsz
@@ -1311,6 +1384,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
+            attn_mask_offsets=self.share_inputs["attn_mask_offsets"] if self.enable_mm else None,
             routing_replay_table=routing_replay_table,
         )
 
@@ -2173,6 +2247,24 @@ class GPUModelRunner(ModelRunnerBase):
         model_inputs["generated_modality"] = self.share_inputs["generated_modality"]
         if self.enable_mm:
             model_inputs["image_features"] = self.share_inputs["image_features"]
+            model_inputs["decode_states"] = self.share_inputs["decode_states"]
+            model_inputs["image_grid_thws"] = self.share_inputs.get("image_grid_thws", None)
+            video_features = self.share_inputs.get("video_features", None)
+            video_grid_thws = self.share_inputs.get("video_grid_thws", None)
+            video_infinity_scales = self.share_inputs.get("video_infinity_scales", None)
+            if video_features is not None:
+                model_inputs["video_features"] = video_features
+            if video_grid_thws is not None:
+                model_inputs["video_grid_thws"] = video_grid_thws
+            if video_infinity_scales is not None:
+                model_inputs["video_infinity_scales"] = video_infinity_scales
+
+            # init features and grid_thws
+            self.share_inputs["image_features"] = None
+            self.share_inputs["image_grid_thws"] = None
+            self.share_inputs["video_features"] = None
+            self.share_inputs["video_grid_thws"] = None
+            self.share_inputs["video_infinity_scales"] = None
 
         return model_inputs, p_done_idxs, token_num_event
 
