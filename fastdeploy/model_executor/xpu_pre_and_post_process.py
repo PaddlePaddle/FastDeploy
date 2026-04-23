@@ -43,7 +43,6 @@ if current_platform.is_xpu():
         speculate_save_output,
         speculate_set_stop_value_multi_seqs,
         unified_update_model_status,
-        update_inputs,
         update_inputs_v1,
     )
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
@@ -362,33 +361,22 @@ def xpu_post_process_normal(
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            update_inputs_v1(
-                model_output.stop_flags,
-                model_output.not_need_stop,
-                model_output.seq_lens_this_time,
-                model_output.seq_lens_encoder,
-                model_output.seq_lens_decoder,
-                share_inputs["step_seq_lens_decoder"],
-                share_inputs["prompt_lens"],
-                sampled_token_ids,
-                model_output.input_ids,
-                share_inputs["block_tables"],
-                model_output.next_tokens,
-                model_output.is_block_step,
-                block_size,
-            )
-        else:
-            update_inputs(
-                model_output.stop_flags,
-                model_output.not_need_stop,
-                model_output.seq_lens_this_time,
-                model_output.seq_lens_encoder,
-                model_output.seq_lens_decoder,
-                model_output.input_ids,
-                sampled_token_ids,
-                model_output.is_block_step,
-            )
+        update_inputs_v1(
+            model_output.stop_flags,
+            model_output.not_need_stop,
+            model_output.seq_lens_this_time,
+            model_output.seq_lens_encoder,
+            model_output.seq_lens_decoder,
+            share_inputs["step_seq_lens_decoder"],
+            share_inputs["prompt_lens"],
+            sampled_token_ids,
+            model_output.input_ids,
+            share_inputs["block_tables"],
+            model_output.next_tokens,
+            model_output.is_block_step,
+            block_size,
+        )
+
     # 3. Transmit the model's output and stop generation signal via message queue.
     #    In the future, we will abandon this approach.
     if not skip_save_output:
