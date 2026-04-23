@@ -1149,13 +1149,16 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
                                const paddle::Tensor& seq_lens_this_time,
                                const paddle::Tensor& seq_lens_encoder);
 
-void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
-                              const paddle::Tensor& logits,
-                              const paddle::Tensor& cu_batch_token_offset,
-                              const paddle::Tensor& ori_cu_batch_token_offset,
-                              const paddle::Tensor& seq_lens_this_time,
-                              const paddle::Tensor& seq_lens_encoder,
-                              const paddle::Tensor& accept_num);
+void SpeculateGetAcceptTokensAndLogits(
+    const paddle::Tensor& token_ids,
+    const paddle::Tensor& target_logits,
+    const paddle::Tensor& logits,
+    const paddle::Tensor& cu_batch_token_offset,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& accept_tokens);
 
 std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& ids_remove_padding,
@@ -1890,9 +1893,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SpeculateInsertFirstToken,
         "speculate_insert_first_token function");
 
-  m.def("speculate_get_target_logits",
-        &SpeculateGetTargetLogits,
-        "speculate_get_target_logits function");
+  m.def("speculate_get_accept_tokens_and_logits",
+        &SpeculateGetAcceptTokensAndLogits,
+        "speculate_get_accept_tokens_and_logits function");
 #endif
 
   m.def("update_attn_mask_offsets",
