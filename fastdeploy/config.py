@@ -286,6 +286,7 @@ class ModelConfig:
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
         self.think_truncate_prompt_ids = args.get("think_truncate_prompt_ids", [-1])
+        self.reasoning_allowed_token_ids = args.get("reasoning_allowed_token_ids", [])
 
         num_max_logprobs = args.get("max_logprobs", None)
         if num_max_logprobs is not None and num_max_logprobs < -1:
@@ -1099,7 +1100,7 @@ class GraphOptimizationConfig:
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
-        self.draft_model_use_cudagraph: bool = False
+        self.draft_model_use_cudagraph: bool = True
         """ Maximum CUDA Graph capture size for static graph mode.
         Recommend 512 for small models (e.g., ERNIE45T 0.3B) and 128 for massive models (e.g., 300B).
         """
@@ -2291,9 +2292,15 @@ class FDConfig:
         assert (
             self.scheduler_config.max_num_seqs >= 1
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
-        assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs, (
+        tokens_per_seq = (
+            (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
+            if self.speculative_config is not None
+            else 1
+        )
+        assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs * tokens_per_seq, (
             f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
-            f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs}"
+            f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} "
+            f"* tokens_per_seq: {tokens_per_seq}"
         )
         assert (
             self.scheduler_config.max_num_batched_tokens

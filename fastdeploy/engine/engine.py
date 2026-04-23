@@ -51,7 +51,13 @@ from fastdeploy.logger.request_logger import (
 )
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    console_logger,
+    ensure_workerlog_alias,
+    envs,
+    llm_logger,
+)
 
 
 class LLMEngine:
@@ -546,14 +552,16 @@ class LLMEngine:
 
         """
         console_logger.debug("Start worker process...")
-        log_dir = os.getenv("FD_LOG_DIR", default="log")
+        self.log_dir = os.getenv("FD_LOG_DIR", default="log")
+        self.paddle_log_dir = os.path.join(self.log_dir, "paddle")
+        os.makedirs(self.paddle_log_dir, exist_ok=True)
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
         current_dir_path = os.path.split(current_file_path)[0]
         # TODO
         uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == 1 else "-u"
         pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
-        pd_cmd = pd_cmd + f" --log_dir {log_dir}"
+        pd_cmd = pd_cmd + f" --log_dir {self.paddle_log_dir}"
 
         worker_path = "../worker/worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
@@ -603,6 +611,18 @@ class LLMEngine:
             )
         llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
 
+        try:
+            reasoning_allowed_token_ids = [
+                self.data_processor.tokenizer.convert_tokens_to_ids("<tool_call>"),
+                self.data_processor.tokenizer.convert_tokens_to_ids("<response>"),
+            ]
+            # convert_tokens_to_ids may return a list instead of int when token
+            # is not in vocabulary; keep only valid single-int ids.
+            reasoning_allowed_token_ids = [tid for tid in reasoning_allowed_token_ids if isinstance(tid, int)]
+        except Exception:
+            reasoning_allowed_token_ids = []
+        llm_logger.info(f"Get reasoning_allowed_token_ids {reasoning_allowed_token_ids} from tokenizer.")
+
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
         if self.cfg.ips is not None:
@@ -634,6 +654,7 @@ class LLMEngine:
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
             f" --think_truncate_prompt_ids '{json.dumps(think_truncate_prompt_ids)}'"
+            f" --reasoning_allowed_token_ids '{json.dumps(reasoning_allowed_token_ids)}'"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
@@ -701,7 +722,7 @@ class LLMEngine:
 
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
-        pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
+        pd_cmd = pd_cmd + arguments + f" 2>>{self.log_dir}/worker_process.log"
         llm_logger.info(f"Launch worker service command: {pd_cmd}")
         p = subprocess.Popen(
             pd_cmd,
@@ -942,4 +963,7 @@ class LLMEngine:
             self.checking_worker_status_thread.join(timeout=1)
         except Exception:
             pass
+        # Create symlinks for paddle workerlog files after workers are ready
+        if hasattr(self, "log_dir") and hasattr(self, "paddle_log_dir"):
+            ensure_workerlog_alias(self.log_dir, self.paddle_log_dir)
         return True

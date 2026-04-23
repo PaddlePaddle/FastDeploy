@@ -118,7 +118,7 @@ class Proposer(ABC):
 
         stop = share_inputs["stop_flags"][0].item()
         if not stop:
-            share_inputs["draft_tokens"][:batch_size, :max_fake_drafts] = 5
+            share_inputs["draft_tokens"][:batch_size, : max_fake_drafts + 1] = 5
             share_inputs["seq_lens_this_time"][:batch_size] = max_fake_drafts + 1
         else:
             share_inputs["seq_lens_this_time"][:batch_size] = 0

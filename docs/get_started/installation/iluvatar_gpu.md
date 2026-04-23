@@ -496,7 +496,7 @@ client:
 **simple demo**
 
 ```bash
-paddleocr doc_parser -i https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/paddleocr_vl_demo.png --vl_rec_backend fastdeploy-server --vl_rec_server_url http://127.0.0.1:8180/v1
+paddleocr doc_parser -i https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/paddleocr_vl_demo.png --vl_rec_backend fastdeploy-server --vl_rec_server_url http://127.0.0.1:8180/v1 --device iluvatar_gpu
 ```
 
 The output is:

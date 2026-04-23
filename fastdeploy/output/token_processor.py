@@ -283,7 +283,7 @@ class TokenProcessor:
                 )
 
                 main_process_metrics.request_token_ratio.observe(token_ratio)
-                llm_logger.info(f"{self.resource_manager.info()}")
+                llm_logger.info(self.resource_manager.info())
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
                 if not is_prefill:
@@ -327,6 +327,7 @@ class TokenProcessor:
                             request_id=task_id,
                         )
                         self.resource_manager.reschedule_preempt_task(task_id)
+                    llm_logger.info(self.resource_manager.info())
                 continue
             if self.cfg.scheduler_config.splitwise_role == "decode":
                 # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
@@ -1030,7 +1031,6 @@ class TokenProcessor:
                     )
 
                     main_process_metrics.request_token_ratio.observe(token_ratio)
-                    llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status(result)
                     if not is_prefill:
@@ -1055,6 +1055,7 @@ class TokenProcessor:
                         message="eos token {request_id} Recycle end.",
                         request_id=task_id,
                     )
+                    llm_logger.info(f"{self.resource_manager.info()}")
                     break
 
             llm_logger.debug(f"get response from infer: {result}")

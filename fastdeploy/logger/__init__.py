@@ -70,7 +70,7 @@ _LOGGER_CONFIGS = {
     "router_logger": ("router", "comm.log", False, False, None),
     "fmq_logger": ("fmq", "comm.log", False, False, None),
     "obj_logger": ("obj", "obj.log", False, False, None),
-    "register_manager_logger": ("register_manager", "register_manager.log", False, False, None),
+    "register_manager_logger": ("register_manager", None, False, False, "main"),
     "_request_logger": ("request", None, False, False, "request"),
 }
 

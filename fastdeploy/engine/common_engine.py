@@ -74,7 +74,14 @@ from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import EngineError, console_logger, envs, get_logger, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    console_logger,
+    ensure_workerlog_alias,
+    envs,
+    get_logger,
+    llm_logger,
+)
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -462,15 +469,19 @@ class EngineService:
         start queue service for engine worker communication
         """
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-            address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
+            engine_worker_queue_address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
+            engine_cache_queue_address = (self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port)
         else:
-            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
+            engine_worker_queue_address = (
+                f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
+            )
+            engine_cache_queue_address = f"/dev/shm/fd_task_queue_{self.cfg.cache_config.local_cache_queue_port}.sock"
 
         if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
             if start_queue:
-                self.llm_logger.info(f"Starting engine worker queue server service at {address}")
+                self.llm_logger.info(f"Starting engine worker queue server service at {engine_worker_queue_address}")
                 self.engine_worker_queue_server = EngineWorkerQueue(
-                    address=address,
+                    address=engine_worker_queue_address,
                     is_server=True,
                     num_client=self.cfg.parallel_config.tensor_parallel_size,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
@@ -480,7 +491,7 @@ class EngineService:
                     self.cfg.parallel_config.local_engine_worker_queue_port = (
                         self.engine_worker_queue_server.get_server_port()
                     )
-                    address = (
+                    engine_worker_queue_address = (
                         self.cfg.master_ip,
                         self.cfg.parallel_config.local_engine_worker_queue_port,
                     )
@@ -491,17 +502,18 @@ class EngineService:
                         f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
                     )
                     self.cache_task_queue = EngineCacheQueue(
-                        address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
+                        address=engine_cache_queue_address,
                         authkey=b"cache_queue_service",
                         is_server=True,
                         num_client=self.cfg.parallel_config.tensor_parallel_size,
                         client_id=-1,
                         local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                     )
-                    self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
+                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
 
         self.engine_worker_queue = EngineWorkerQueue(
-            address=address,
+            address=engine_worker_queue_address,
             is_server=False,
             num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
@@ -2419,14 +2431,16 @@ class EngineService:
         start gpu worker service
 
         """
-        log_dir = os.getenv("FD_LOG_DIR", default="log")
+        self.log_dir = os.getenv("FD_LOG_DIR", default="log")
+        self.paddle_log_dir = os.path.join(self.log_dir, "paddle")
+        os.makedirs(self.paddle_log_dir, exist_ok=True)
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
         current_dir_path = os.path.split(current_file_path)[0]
         # TODO
         uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == "1" else "-u"
         pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
-        pd_cmd = pd_cmd + f" --log_dir {log_dir}"
+        pd_cmd = pd_cmd + f" --log_dir {self.paddle_log_dir}"
 
         worker_path = "../worker/worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
@@ -2554,7 +2568,7 @@ class EngineService:
 
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
-        pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
+        pd_cmd = pd_cmd + arguments + f" 2>>{self.log_dir}/worker_process.log"
         self.llm_logger.info(f"Launch worker service command: {pd_cmd}")
         p = subprocess.Popen(
             pd_cmd,
@@ -2715,4 +2729,7 @@ class EngineService:
             self.checking_worker_status_thread.join(timeout=1)
         except Exception:
             pass
+        # Create symlinks for paddle workerlog files after workers are ready
+        if hasattr(self, "log_dir") and hasattr(self, "paddle_log_dir"):
+            ensure_workerlog_alias(self.log_dir, self.paddle_log_dir)
         return True

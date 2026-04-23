@@ -32,7 +32,7 @@ from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
 
-logger = get_logger("gpu_worker", "gpu_worker.log")
+logger = get_logger("gpu_worker", "worker_process.log")
 
 try:
     ModelRunner = load_model_runner_plugins()

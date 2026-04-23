@@ -268,7 +268,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = True
+    enable_output_caching: bool = False
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
@@ -588,11 +588,7 @@ class EngineArgs:
             and not current_platform.is_maca()
         ):
             self.enable_prefix_caching = False
-        if (
-            not current_platform.is_cuda()
-            or (self.speculative_config is not None and self.enable_logprob)
-            or self.splitwise_role == "prefill"
-        ):
+        if not current_platform.is_cuda() or self.splitwise_role == "prefill":
             self.enable_overlap_schedule = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
