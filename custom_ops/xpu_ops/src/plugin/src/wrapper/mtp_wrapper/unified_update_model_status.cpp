@@ -182,6 +182,7 @@ static int cpu_wrapper(api::Context *ctx,
       // Stopped or paused slot (batch_id < real_bsz)
       stop_flag_int += 1;
       stop_flags[batch_id] = true;
+      seq_lens_encoder[batch_id] = 0;
       seq_lens_decoder[batch_id] = 0;
       seq_lens_this_time[batch_id] = 0;
       step_output_len[batch_id] = 0;

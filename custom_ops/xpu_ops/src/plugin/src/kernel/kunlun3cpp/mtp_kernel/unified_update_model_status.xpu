@@ -199,6 +199,7 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
       // Stopped or paused slot (batch_id < real_bsz)
       buffer_stop_flag_int[cid] += 1;
       stop_flags[batch_id] = true;
+      seq_lens_encoder[batch_id] = 0;
       seq_lens_decoder[batch_id] = 0;
       seq_lens_this_time[batch_id] = 0;
       step_output_len[batch_id] = 0;
