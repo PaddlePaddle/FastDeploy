@@ -69,6 +69,7 @@ if current_platform.is_iluvatar():
         recover_decode_task,
         set_data_ipc,
         set_value_by_flags_and_idx,
+        update_attn_mask_offsets,
     )
 
     share_external_data = None
