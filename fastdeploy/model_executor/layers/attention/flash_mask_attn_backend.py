@@ -49,8 +49,10 @@ from fastdeploy.spec_decode import SpecMethod
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import merge_prefill_decode_output
+    from fastdeploy.model_executor.ops.gpu import send_cache
 else:
     merge_prefill_decode_output = None
+    send_cache = None
 
 from fastdeploy.model_executor.utils import get_sm_version
 if current_platform.is_cuda() and get_sm_version() >= 100:
@@ -171,6 +173,7 @@ class FlashMaskAttentionBackend(AttentionBackend):
         self.max_dec_len = max_token_num[1]
         self.q_token_num = max_token_num[2]
         self.kv_token_num = max_token_num[3]
+
         if self.max_enc_len > 0:
             self.q_input_encoder = paddle.zeros([self.q_token_num, self.num_heads, self.head_dim], dtype=paddle.bfloat16)
             self.k_input_encoder = paddle.zeros([self.kv_token_num, self.kv_num_heads, self.head_dim], dtype=paddle.bfloat16)
@@ -180,7 +183,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         if blackwell_ops is not None:
             self.init_blackwell_attention_metadata(forward_meta)
-            return
         metadata = FlashMaskAttentionMetadata()
         # metadata only save pd_disaggregation info.
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -212,21 +214,15 @@ class FlashMaskAttentionBackend(AttentionBackend):
         qkv: paddle.Tensor,
         layer: Attention,
         forward_meta: ForwardMeta,
+        cache_k : paddle.Tensor,
+        cache_v : paddle.Tensor,
+        cache_k_scales : paddle.Tensor,
+        q_norm_weight : paddle.Tensor,
+        k_norm_weight: paddle.Tensor,
+        kv_signal_data : paddle.Tensor
     ):
-        q_norm_weight = getattr(layer, "q_norm_weight", None)
-        k_norm_weight = getattr(layer, "k_norm_weight", None)
         attn_out = paddle.zeros([qkv.shape[0], self.num_heads * self.head_dim], qkv.dtype)
         cache_quant_type_str = getattr(layer, "cache_quant_type_str", "none")
-        if cache_quant_type_str == "block_wise_fp8":
-            cache_k = forward_meta.caches[4 * layer.layer_id]
-            cache_v = forward_meta.caches[4 * layer.layer_id + 1]
-            cache_k_scales = forward_meta.caches[4 * layer.layer_id + 2]
-            cache_v_scales = forward_meta.caches[4 * layer.layer_id + 3]
-        else:
-            cache_k = forward_meta.caches[2 * layer.layer_id]
-            cache_v = forward_meta.caches[2 * layer.layer_id + 1]
-            cache_k_scales = getattr(layer, "cache_k_scale", None)
-            cache_v_scales = getattr(layer, "cache_v_scale", None)
         
         if self.max_enc_len > 0:
             blackwell_ops.flash_attn_write_cache_kv_encoder(
@@ -253,6 +249,8 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 self.max_seq_len,
                 cache_quant_type_str
             )
+
+            send_cache(qkv, kv_signal_data)
             blackwell_ops.flash_encoder_attn_fwd(
                 self.q_input_encoder, 
                 self.k_input_encoder, 
@@ -261,7 +259,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
                 self.actual_cu_seq_k, 
                 attn_out, 
                 None)
-
         if self.max_dec_len > 0:
             q_output, q_dequant_scale = blackwell_ops.flash_attn_write_cache_kv_decoder(
                 qkv,
@@ -312,12 +309,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ):
-        if blackwell_ops is not None:
-            return self.forward_mixed_blackwell(
-                qkv,
-                layer,
-                forward_meta
-            )
         metadata = self.attention_metadata
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
@@ -340,6 +331,18 @@ class FlashMaskAttentionBackend(AttentionBackend):
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
+            )
+        if blackwell_ops is not None:
+            return self.forward_mixed_blackwell(
+                qkv,
+                layer,
+                forward_meta,
+                cache_k,
+                cache_v,
+                cache_k_scales,
+                q_norm_weight,
+                k_norm_weight,
+                metadata.kv_signal_data_list[layer.layer_id]
             )
         if int(os.getenv("USE_TBO", "0")) == 1:
             if hasattr(forward_meta, "tbo_microbatch_id"):
@@ -510,7 +513,6 @@ class FlashMaskAttentionBackend(AttentionBackend):
             self.causal,
             self.speculative_method is not None,
         )
-
         if use_fa_do_prefill:
             merge_prefill_decode_output(
                 res_encoder,
