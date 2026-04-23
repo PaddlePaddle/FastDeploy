@@ -59,6 +59,7 @@ class Args:
     kvcache_storage_backend = None
     write_policy = "write_through"
     model_path = "test_model"
+    splitwise_role = "mixed"
 
 
 # ==========================
@@ -717,6 +718,7 @@ class TestCacheTransferManager(unittest.TestCase):
             * manager.cache_item_bytes,
             device_id=manager.device,
             dp_id=manager.local_data_parallel_id,
+            splitwise_role=LocalArgs.splitwise_role,
         )
 
     def test_invalid_write_policy_raises(self):

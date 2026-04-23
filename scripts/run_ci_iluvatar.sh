@@ -311,26 +311,22 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   "chat_template_kwargs":{"enable_thinking": false}
 }' >& $result_file
 
-echo -e "\nfull response:"
-cat $result_file
-
 exit_code=$?
 echo -e "\n\nexit_code is ${exit_code}"
+
+echo -e "\nfull response:"
+cat $result_file
 
 echo -e "\nStop server..."
 stop_processes
 echo -e "\nStop server done."
-
-if [ ${exit_code} -ne 0 ]; then
-    print_error_message
-    exit 1
-fi
 
 expected_strings="Buddhist"
 if grep -q "$expected_strings" "$result_file"; then
     echo -e "\nPASSED"
 else
     echo -e "\nExit with Accucary error: '$expected_strings' is not existed in generate response."
+    print_error_message
     exit 1
 fi
 
@@ -356,27 +352,23 @@ echo "Start inference..."
 result_file="full_response.log"
 
 paddleocr doc_parser -i https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/paddleocr_vl_demo.png \
-       --vl_rec_backend fastdeploy-server --vl_rec_server_url http://127.0.0.1:8180/v1 >& $result_file
-
-echo -e "\nfull response:"
-cat $result_file
+       --vl_rec_backend fastdeploy-server --vl_rec_server_url http://127.0.0.1:8180/v1 --device iluvatar_gpu >& $result_file
 
 exit_code=$?
 echo -e "\n\nexit_code is ${exit_code}"
 
+echo -e "\nfull response:"
+cat $result_file
+
 echo -e "\nStop server..."
 stop_processes
 echo -e "\nStop server done."
-
-if [ ${exit_code} -ne 0 ]; then
-    print_error_message
-    exit 1
-fi
 
 expected_strings="本报记者 沈小晓 任彦 黄培昭"
 if grep -q "$expected_strings" "$result_file"; then
     echo -e "\nPASSED"
 else
     echo -e "\nExit with Accucary error: '$expected_strings' is not existed in generate response."
+    print_error_message
     exit 1
 fi

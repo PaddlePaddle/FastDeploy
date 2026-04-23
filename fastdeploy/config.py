@@ -286,6 +286,7 @@ class ModelConfig:
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
         self.think_truncate_prompt_ids = args.get("think_truncate_prompt_ids", [-1])
+        self.reasoning_allowed_token_ids = args.get("reasoning_allowed_token_ids", [])
 
         num_max_logprobs = args.get("max_logprobs", None)
         if num_max_logprobs is not None and num_max_logprobs < -1:
@@ -1099,7 +1100,7 @@ class GraphOptimizationConfig:
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
-        self.draft_model_use_cudagraph: bool = False
+        self.draft_model_use_cudagraph: bool = True
         """ Maximum CUDA Graph capture size for static graph mode.
         Recommend 512 for small models (e.g., ERNIE45T 0.3B) and 128 for massive models (e.g., 300B).
         """

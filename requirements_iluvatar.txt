@@ -1,4 +1,4 @@
-setuptools>=62.3.0,<80.0
+setuptools
 pre-commit
 yapf
 flake8
@@ -10,7 +10,7 @@ tqdm
 pynvml
 uvicorn>=0.38.0
 fastapi
-paddleformers==1.0.0
+paddleformers>=1.1.1
 redis
 etcd3
 httpx
@@ -24,12 +24,12 @@ setuptools-scm>=8
 prometheus-client
 decord
 moviepy
-wheel
 triton
-use-triton-in-paddle
 crcmod
 msgpack
 gunicorn
+modelscope
+safetensors>=0.7.0
 opentelemetry-api>=1.24.0
 opentelemetry-sdk>=1.24.0
 opentelemetry-instrumentation-redis
@@ -40,7 +40,10 @@ opentelemetry-instrumentation-fastapi
 opentelemetry-instrumentation-logging>=0.57b0
 partial_json_parser
 msgspec
-safetensors>=0.7.0
+einops
+setproctitle
+aistudio_sdk
+p2pstore
 py-cpuinfo
 transformers>=4.55.1,<5.0.0
 paddleocr[doc-parser]==3.3.2
