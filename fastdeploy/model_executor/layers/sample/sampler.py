@@ -525,7 +525,6 @@ class Sampler(nn.Layer):
 
         for proc in sampling_metadata.logits_processors or []:
             logits = proc.apply(logits)
-
         logits = apply_penalty_multi_scores(
             sampling_metadata.token_ids_all,
             logits,
@@ -1185,6 +1184,7 @@ class SpeculativeSampler(nn.Layer):
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
+
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.token_ids_all,
             sampling_metadata.prompt_lens,
@@ -1202,7 +1202,6 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["batch_id_per_token_output"],
             share_inputs["cu_seqlens_q_output"],
             max_model_len,
-            sampling_metadata.pre_token_ids,
         )
 
         if self.enf_gen_phase_tag:
@@ -1458,7 +1457,6 @@ class MTPSampler(nn.Layer):
             share_inputs["batch_id_per_token_output"],
             share_inputs["cu_seqlens_q_output"],
             max_model_len,
-            sampling_metadata.pre_token_ids,
         )
         probs = F.softmax(logits)
         next_tokens = paddle.argmax(probs, axis=-1)

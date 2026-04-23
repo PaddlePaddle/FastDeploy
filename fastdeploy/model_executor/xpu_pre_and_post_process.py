@@ -470,7 +470,7 @@ def xpu_post_process_speculate(
         model_output.seq_lens_this_time,
         model_output.is_block_step,
         model_output.mask_rollback,
-        model_output.pre_ids,
+        model_output.token_ids_all,
         model_output.prompt_lens,
         model_output.step_idx,
         model_output.eos_token_id,

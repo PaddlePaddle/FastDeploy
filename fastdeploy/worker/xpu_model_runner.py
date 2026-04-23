@@ -42,7 +42,7 @@ from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
-from fastdeploy.model_executor.layers.rotary_embedding import get_rope, get_rope_3d
+from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
@@ -165,7 +165,6 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs = InputBatch(self.fd_config)
         self.share_inputs.init_share_inputs()
         self.max_num_seqs = self.fd_config.scheduler_config.max_num_seqs
-
 
         self.infer_seed_increment = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, 1],
@@ -1208,7 +1207,6 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)
-
             if is_dummy_run:
                 self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             # 2. Padding inputs for cuda grph
@@ -1238,6 +1236,7 @@ class XPUModelRunner(ModelRunnerBase):
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
             sampler_output = None
+
             if not self.speculative_decoding:
                 sampler_output = self.sampler(logits, self.sampling_metadata)
                 if self.parallel_config.tensor_parallel_size > 1:
