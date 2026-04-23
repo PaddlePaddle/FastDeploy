@@ -53,9 +53,6 @@ class InternalAdapter:
         available_batch_size = min(self.cfg.max_prefill_batch, self.engine.resource_manager.available_batch())
 
         available_block_num = self.engine.resource_manager.available_block_num()
-        unhandled_request_num = self.engine.scheduler.get_unhandled_request_num()
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            unhandled_request_num = max(unhandled_request_num, len(self.engine.resource_manager.waiting))
         server_info = {
             "splitwise_role": self.cfg.scheduler_config.splitwise_role,
             "block_size": int(self.cfg.cache_config.block_size),
@@ -65,7 +62,7 @@ class InternalAdapter:
             "available_resource": float(1.0 * available_block_num / self.cfg.cache_config.total_block_num),
             "max_batch_size": int(available_batch_size),
             "max_input_token_num": self.cfg.model_config.max_model_len,
-            "unhandled_request_num": unhandled_request_num,
+            "unhandled_request_num": self.engine.scheduler.get_unhandled_request_num(),
             "available_batch": int(self.engine.resource_manager.available_batch()),
         }
         return server_info
