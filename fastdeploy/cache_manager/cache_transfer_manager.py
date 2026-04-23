@@ -547,7 +547,6 @@ class CacheTransferManager:
                 self.gpu_cache_scales_k_tensors.clear()
             if hasattr(self, "gpu_cache_scales_v_tensors"):
                 self.gpu_cache_scales_v_tensors.clear()
-            paddle.set_device(f"gpu:{self.device}")
             paddle.set_flags({"FLAGS_selected_gpus": f"{self.device}"})
             paddle.device.cuda.empty_cache()
         else:
