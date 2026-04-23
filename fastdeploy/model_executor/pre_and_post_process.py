@@ -478,7 +478,7 @@ def save_output_normal(
     share_inputs["last_preempted_idx"][:] = 0
 
 
-def post_process_specualate(
+def post_process_speculate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
@@ -570,7 +570,7 @@ def post_process_specualate(
     # so that async D2H of logz_per_batch has more time to complete.
 
 
-def save_output_specualate(
+def save_output_speculate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
@@ -764,7 +764,7 @@ def post_process(
         )
     else:
         if speculative_decoding:
-            post_process_specualate(
+            post_process_speculate(
                 sampler_or_pooler_output,
                 model_output,
                 share_inputs,

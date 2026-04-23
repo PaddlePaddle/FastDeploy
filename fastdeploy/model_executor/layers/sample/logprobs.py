@@ -144,7 +144,8 @@ def build_output_logprobs(
     is_naive: bool = False,
     logprobs_mode: str = "default",
     compute_logprobs_fn: Optional[Callable] = None,
-) -> Tuple[Optional[LogprobsTensors], Optional[paddle.Tensor], Optional[paddle.Tensor]]:
+    real_bsz: int = 0,
+) -> Tuple[Optional[LogprobsTensors], Optional[paddle.Tensor]]:
     """
     Build logprobs output for both NAIVE and speculative (MTP/Ngram) modes.
 
@@ -170,12 +171,16 @@ def build_output_logprobs(
     logprobs_tensors = None
     cu_batch_token_offset = None
 
-    real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+    if num_logprobs is None:
+        return logprobs_tensors, cu_batch_token_offset
+
+    # NOTE(huicongyao) real_bsz is passed from _postprocess, remove this in future
+    max_occupied_slots = share_inputs["seq_lens_this_time"].shape[0]
 
     if is_naive:
         # NAIVE mode: one token per request, logits are already correct
         output_logits = logits
-        token_ids = share_inputs["accept_tokens"][:real_bsz, 0]
+        token_ids = share_inputs["accept_tokens"][:max_occupied_slots, 0]
     else:
         # Speculative mode: extract target logits for accepted positions
         from fastdeploy.model_executor.layers.sample.ops import (
@@ -183,8 +188,8 @@ def build_output_logprobs(
         )
 
         batch_token_num = paddle.where(
-            share_inputs["seq_lens_encoder"][:real_bsz] != 0,
-            paddle.ones_like(share_inputs["seq_lens_encoder"][:real_bsz]),
+            share_inputs["seq_lens_encoder"][:max_occupied_slots] != 0,
+            paddle.ones_like(share_inputs["seq_lens_encoder"][:max_occupied_slots]),
             share_inputs["seq_lens_this_time"],
         ).flatten()
 
@@ -194,12 +199,12 @@ def build_output_logprobs(
             "int32"
         )
         cu_batch_token_offset = paddle.concat(
-            [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:real_bsz])]
+            [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:max_occupied_slots])]
         ).astype("int32")
         share_inputs["cu_batch_token_offset"] = cu_batch_token_offset
 
         output_logits = paddle.empty(
-            [share_inputs["accept_num"][:real_bsz].sum(), logits.shape[1]],
+            [share_inputs["accept_num"][:max_occupied_slots].sum(), logits.shape[1]],
             dtype=logits.dtype,
         )
         speculate_get_target_logits(
@@ -222,7 +227,7 @@ def build_output_logprobs(
 
     # Compute logprobs with temperature scaling and top_p normalization
     if logprobs_mode == "raw_logprobs":
-        raw_logprobs = compute_logprobs_fn(output_logits, sampling_metadata)
+        raw_logprobs = compute_logprobs_fn(output_logits, sampling_metadata, real_bsz)
     elif logprobs_mode == "raw_logits":
         raw_logprobs = output_logits.clone()
     else:

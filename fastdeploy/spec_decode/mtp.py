@@ -882,7 +882,7 @@ class MTPProposer(Proposer):
                 token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
             else:
                 if substep == 0:
-                    token_num_cpu = real_bsz * (self.max_draft_token_num + 1)
+                    token_num_cpu = self.model_inputs["target_hidden_states"].shape[0]
                 else:
                     token_num_cpu = real_bsz
             if token_num_cpu > 0:
