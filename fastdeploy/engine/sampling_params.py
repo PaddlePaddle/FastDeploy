@@ -98,6 +98,7 @@ class SamplingParams:
     stop: Optional[Union[str, List[str]]] = None
     stop_token_ids: Optional[List[int]] = None
     stop_seqs_len: Optional[int] = None
+    include_stop_str_in_output: bool = False
     max_tokens: Optional[int] = None
     reasoning_max_tokens: Optional[int] = None
     response_max_tokens: Optional[int] = None
@@ -162,6 +163,11 @@ class SamplingParams:
             min_p=getattr(req, "min_p", None) if getattr(req, "min_p", None) is not None else cls.min_p,
             seed=getattr(req, "seed", None) if getattr(req, "seed", None) is not None else cls.seed,
             stop=getattr(req, "stop", None) if getattr(req, "stop", None) is not None else cls.stop,
+            include_stop_str_in_output=(
+                getattr(req, "include_stop_str_in_output", None)
+                if getattr(req, "include_stop_str_in_output", None) is not None
+                else cls.include_stop_str_in_output
+            ),
             stop_token_ids=(
                 getattr(req, "stop_token_ids", None)
                 if getattr(req, "stop_token_ids", None) is not None
@@ -237,6 +243,7 @@ class SamplingParams:
         seed=None,
         stop=None,
         stop_token_ids=None,
+        include_stop_str_in_output=False,
         max_tokens=None,
         reasoning_max_tokens=None,
         response_max_tokens=None,
@@ -262,6 +269,7 @@ class SamplingParams:
             seed=seed,
             stop=stop,
             stop_token_ids=stop_token_ids,
+            include_stop_str_in_output=include_stop_str_in_output,
             max_tokens=max_tokens if max_tokens is not None else 8192,
             reasoning_max_tokens=reasoning_max_tokens,
             response_max_tokens=response_max_tokens,
