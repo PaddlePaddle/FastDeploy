@@ -312,6 +312,29 @@ void SpeculateUpdateV3(const paddle::Tensor& seq_lens_encoder,
                        const paddle::Tensor& is_block_step,
                        const paddle::Tensor& stop_nums);
 
+void SpeculateLimitThinkingContentLength(const paddle::Tensor& next_tokens,
+                                         const paddle::Tensor& max_think_lens,
+                                         const paddle::Tensor& max_reply_lens,
+                                         const paddle::Tensor& step_idx,
+                                         const paddle::Tensor& limit_status,
+                                         const paddle::Tensor& accept_num,
+                                         const paddle::Tensor& stop_flags,
+                                         const paddle::Tensor& eos_token_ids,
+                                         const paddle::Tensor& inject_token_ids,
+                                         const int64_t think_end_id,
+                                         const bool splitwise_role_is_decode);
+
+void LimitThinkingContentLength(const paddle::Tensor& next_tokens,
+                                const paddle::Tensor& max_think_lens,
+                                const paddle::Tensor& max_reply_lens,
+                                const paddle::Tensor& step_idx,
+                                const paddle::Tensor& limit_status,
+                                const paddle::Tensor& stop_flags,
+                                const paddle::Tensor& eos_token_ids,
+                                const paddle::Tensor& inject_token_ids,
+                                const int64_t think_end_id,
+                                const bool splitwise_role_is_decode);
+
 std::vector<paddle::Tensor> TopPCandidates(
     const paddle::Tensor& probs,
     const paddle::Tensor& top_p,
@@ -366,6 +389,22 @@ void SpeculateSetValueByFlagsAndIdx(const paddle::Tensor& pre_ids_all,
                                     const paddle::Tensor& seq_lens_encoder,
                                     const paddle::Tensor& seq_lens_decoder,
                                     const paddle::Tensor& step_idx);
+
+void ReasoningPhaseTokenConstraint(
+    const paddle::Tensor& logits,
+    const paddle::Tensor& token_ids_all,
+    const paddle::Tensor& prompt_lens,
+    const paddle::Tensor& stop_flags,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& step_idx,
+    const paddle::Tensor& allowed_tokens,
+    const paddle::Tensor& reasoning_status,
+    const paddle::Tensor& batch_id_per_token_output,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& enable_thinking,
+    int64_t think_end_id,
+    int64_t line_break_id);
 
 void SpeculateSaveWithOutputMsgStatic(const paddle::Tensor& accept_tokens,
                                       const paddle::Tensor& accept_num,
@@ -519,9 +558,12 @@ void GetOutputEPDynamic(const paddle::Tensor& x,
                         bool wait_flag,
                         int msg_queue_id);
 
-std::vector<paddle::Tensor> GetPaddingOffset(const paddle::Tensor& input_ids,
-                                             const paddle::Tensor& seq_len,
-                                             const int64_t cpu_token_num);
+std::vector<paddle::Tensor> GetPaddingOffset(
+    const paddle::Tensor& input_ids,
+    const paddle::Tensor& seq_len,
+    const paddle::optional<paddle::Tensor>& draft_tokens,
+    const paddle::optional<paddle::Tensor>& seq_lens_encoder,
+    const int64_t cpu_token_num);
 
 void GetStopFlagsMulti(const paddle::Tensor& topk_ids,
                        const paddle::Tensor& stop_flags,
@@ -1161,6 +1203,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &GetPaddingOffset,
         py::arg("input_ids"),
         py::arg("seq_len"),
+        py::arg("draft_tokens"),
+        py::arg("seq_lens_encoder"),
         py::arg("cpu_token_num"),
         "get padding offset function");
 
@@ -1425,6 +1469,35 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("accept_all_drafts"),
         "Perform speculative verification for decoding");
 
+  m.def("limit_thinking_content_length",
+        &LimitThinkingContentLength,
+        py::arg("next_tokens"),
+        py::arg("max_think_lens"),
+        py::arg("max_reply_lens"),
+        py::arg("step_idx"),
+        py::arg("limit_status"),
+        py::arg("stop_flags"),
+        py::arg("eos_token_ids"),
+        py::arg("inject_token_ids"),
+        py::arg("think_end_id"),
+        py::arg("splitwise_role_is_decode"),
+        "Perform limit content for decoding");
+
+  m.def("speculate_limit_thinking_content_length",
+        &SpeculateLimitThinkingContentLength,
+        py::arg("next_tokens"),
+        py::arg("max_think_lens"),
+        py::arg("max_reply_lens"),
+        py::arg("step_idx"),
+        py::arg("limit_status"),
+        py::arg("accept_num"),
+        py::arg("stop_flags"),
+        py::arg("eos_token_ids"),
+        py::arg("inject_token_ids"),
+        py::arg("think_end_id"),
+        py::arg("splitwise_role_is_decode"),
+        "Perform speculative limit content for decoding");
+
   m.def("verify_draft_tokens",
         &VerifyDraftTokens,
         py::arg("step_output_ids"),
@@ -1495,6 +1568,24 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("seq_lens_decoder"),
         py::arg("step_idx"),
         "Set values based on flags and indices in speculative decoding");
+
+  m.def("reasoning_phase_token_constraint",
+        &ReasoningPhaseTokenConstraint,
+        py::arg("logits"),
+        py::arg("token_ids_all"),
+        py::arg("prompt_lens"),
+        py::arg("stop_flags"),
+        py::arg("seq_lens_this_time"),
+        py::arg("seq_lens_encoder"),
+        py::arg("step_idx"),
+        py::arg("allowed_tokens"),
+        py::arg("reasoning_status"),
+        py::arg("batch_id_per_token_output"),
+        py::arg("cu_seqlens_q_output"),
+        py::arg("enable_thinking"),
+        py::arg("think_end_id"),
+        py::arg("line_break_id"),
+        "Apply reasoning phase token constraint for generation");
 
   m.def("speculate_get_output_padding_offset",
         &SpeculateGetOutputPaddingOffset,

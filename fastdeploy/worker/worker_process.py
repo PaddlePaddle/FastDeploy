@@ -892,6 +892,7 @@ def parse_args():
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
     parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])
+    parser.add_argument("--reasoning_allowed_token_ids", type=json.loads, default=[])
 
     parser.add_argument(
         "--quantization",
