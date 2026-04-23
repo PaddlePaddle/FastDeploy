@@ -367,7 +367,19 @@ class MiniMaxM1LinearAttention(nn.Layer):
         # Retrieve or initialize KV history for recurrent state persistence.
         # TODO: Migrate to ForwardMeta.caches / slot-based cache management for
         #       proper multi-request isolation in production serving scenarios.
-        if not hasattr(self, "_kv_history") or self._kv_history is None or self._kv_history.shape[0] != batch_size:
+        needs_init = (
+            not hasattr(self, "_kv_history") or self._kv_history is None or self._kv_history.shape[0] != batch_size
+        )
+        if needs_init:
+            if getattr(self, "_kv_history", None) is not None and self._kv_history.shape[0] != batch_size:
+                logger.warning(
+                    "MiniMaxM1LinearAttention: batch_size changed from %d to %d; "
+                    "resetting _kv_history. This will discard accumulated linear-attention "
+                    "state and may degrade generation quality under continuous/dynamic batching. "
+                    "Pending migration to slot-based cache (see TODO above).",
+                    self._kv_history.shape[0],
+                    batch_size,
+                )
             self._kv_history = paddle.zeros(
                 [batch_size, self.num_attention_heads, self.head_dim, self.head_dim],
                 dtype=q.dtype,
@@ -930,6 +942,10 @@ class MiniMaxM1PretrainedModel(PretrainedModel):
                 # Row Linear
                 "embed_tokens.weight": partial(fn, is_column=False),
                 "layers.0.self_attn.o_proj.weight": partial(fn, is_column=False),
+                # MiniMaxM1 linear-attention specific (only present on linear-attn layers;
+                # missing keys are silently ignored by paddleformers for full-attn layers)
+                "layers.0.self_attn.out_proj.weight": partial(fn, is_column=False),
+                "layers.0.self_attn.output_gate.weight": partial(fn, is_column=True),
             }
 
             # Column Linear
