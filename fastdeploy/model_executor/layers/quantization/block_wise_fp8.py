@@ -83,6 +83,13 @@ class BlockWiseFP8Config(QuantConfigBase):
         self.is_checkpoint_bf16 = is_checkpoint_bf16
         self.deepgemm_scale_ue8m0 = True if get_sm_version() >= 100 else False
 
+        self.moe_blockwise_gemm_scale_ue8m0 = self.deepgemm_scale_ue8m0
+        # ZKK add this code!
+        if self.deepgemm_scale_ue8m0:
+            # triton backend only used float32 scale!!!!
+            if not (self.use_deep_gemm or self.use_blackwell_gemm):
+                self.moe_blockwise_gemm_scale_ue8m0 = False
+
     def name(self) -> str:
         return "block_wise_fp8"
 
