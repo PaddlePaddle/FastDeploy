@@ -37,6 +37,8 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import get_hash_str, get_logger
 
 logger = get_logger("prefix_cache_manager", "cache_manager.log")
@@ -211,8 +213,12 @@ class PrefixCacheManager:
             create=True,
         )
 
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            engine_cache_queue_address = (pod_ip, cache_config.local_cache_queue_port)
+        else:
+            engine_cache_queue_address = f"/dev/shm/fd_task_queue_{cache_config.local_cache_queue_port}.sock"
         self.cache_task_queue = EngineCacheQueue(
-            address=(pod_ip, cache_config.local_cache_queue_port),
+            address=engine_cache_queue_address,
             authkey=b"cache_queue_service",
             is_server=False,
             num_client=tensor_parallel_size,
@@ -1157,6 +1163,7 @@ class PrefixCacheManager:
         if not keys:
             return
 
+        trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_START, request.request_id, getattr(request, "user", ""))
         gpu_block_ids = request.block_tables[: len(keys)]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
         write_storage_task = WriteStorageTask(
@@ -1170,6 +1177,7 @@ class PrefixCacheManager:
         self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+        trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_END, request.request_id, getattr(request, "user", ""))
 
     def write_cache_to_storage_decode(self, request: Request):
         """

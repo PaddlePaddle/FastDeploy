@@ -24,7 +24,7 @@ from multiprocessing.managers import (
     Value,
     ValueProxy,
 )
-from typing import Any, List, Tuple
+from typing import Any, List, Tuple, Union
 
 from fastdeploy.utils import get_logger
 
@@ -39,7 +39,7 @@ class EngineCacheQueue:
 
     def __init__(
         self,
-        address: Tuple[str, int] = ("127.0.0.1", 56666),
+        address: Union[Tuple[str, int], str] = ("127.0.0.1", 56666),
         authkey: bytes = b"cache_queue_service",
         is_server: bool = False,
         num_client: int = 1,  # tensor parallel size
@@ -62,7 +62,7 @@ class EngineCacheQueue:
         TODO(liyonghua): Remove multi-DP initialization. Each DP will have its own cache queue.
 
         """
-        self.address: Tuple[str, int] = address
+        self.address: Union[Tuple[str, int], str] = address
         self.authkey: bytes = authkey
         self.is_server: bool = is_server
         self.num_client: int = num_client
@@ -210,8 +210,10 @@ class EngineCacheQueue:
             QueueManager.register("get_swap_storage_to_gpu_barrier")
             QueueManager.register("get_swap_to_storage_barrier")
 
+            logger.info(f"Try to connect QueueManager, address: {self.address}")
             self.manager = QueueManager(address=self.address, authkey=self.authkey)
             self._connect_with_retry()
+            logger.info(f"Connected to QueueManager, address: {self.address}")
 
         # Get proxy objects for shared resources
         self.transfer_task_queue = self.manager.get_transfer_task_queue(self.local_data_parallel_id)
@@ -246,7 +248,7 @@ class EngineCacheQueue:
         Returns the actual port that the server instance is listening on.
         Calling this method only makes sense on instances where is_server=True.
         """
-        if not self.is_server:
+        if not self.is_server or isinstance(self.address, str):
             raise RuntimeError("Only the server instance can provide the port.")
         return self.address[1]
 
