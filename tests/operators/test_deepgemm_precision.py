@@ -24,7 +24,7 @@ paddle.enable_compat(scope={"deep_gemm"})
 paddle.set_default_dtype("bfloat16")
 
 
-class TestDeepGemmPrefill(unittest.TestCase):
+class TestDeepDenseGemm(unittest.TestCase):
     def setUp(self):
         pass
 
