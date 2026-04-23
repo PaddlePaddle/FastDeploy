@@ -23,7 +23,8 @@ __attribute__((global)) void speculate_set_stop_value_multi_seqs(
     bool* stop_flags,
     int64_t* accept_tokens,
     int* accept_nums,
-    const int64_t* pre_ids,
+    const int64_t* token_ids_all,
+    const int64_t* prompt_lens,
     const int64_t* step_idx,
     const int64_t* stop_seqs,
     const int* stop_seqs_len,
@@ -34,7 +35,7 @@ __attribute__((global)) void speculate_set_stop_value_multi_seqs(
     const int accept_tokens_len,
     const int stop_seqs_bs,
     const int stop_seqs_max_len,
-    const int pre_ids_len);
+    const int max_model_len);
 }  // namespace fd_xpu3
 
 namespace fastdeploy {
@@ -44,7 +45,8 @@ static int cpu_wrapper(api::Context* ctx,
                        bool* stop_flags,
                        int64_t* accept_tokens,
                        int* accept_nums,
-                       const int64_t* pre_ids,
+                       const int64_t* token_ids_all,
+                       const int64_t* prompt_lens,
                        const int64_t* step_idx,
                        const int64_t* stop_seqs,
                        const int* stop_seqs_len,
@@ -55,9 +57,11 @@ static int cpu_wrapper(api::Context* ctx,
                        const int accept_tokens_len,
                        const int stop_seqs_bs,
                        const int stop_seqs_max_len,
-                       const int pre_ids_len) {
+                       const int max_model_len) {
   for (int bid = 0; bid < bs; ++bid) {
-    const int64_t* pre_ids_now = pre_ids + bid * pre_ids_len;
+    // Align with GPU: pre_ids_now = token_ids_all + bid * max_model_len + prompt_lens[bid]
+    const int64_t* pre_ids_now =
+        token_ids_all + bid * max_model_len + prompt_lens[bid];
     int64_t* accept_tokens_now = accept_tokens + bid * accept_tokens_len;
     const int accept_num = accept_nums[bid];
     const int64_t step_idx_now = step_idx[bid];
@@ -131,7 +135,8 @@ static int xpu3_wrapper(api::Context* ctx,
                         bool* stop_flags,
                         int64_t* accept_tokens,
                         int* accept_nums,
-                        const int64_t* pre_ids,
+                        const int64_t* token_ids_all,
+                        const int64_t* prompt_lens,
                         const int64_t* step_idx,
                         const int64_t* stop_seqs,
                         const int* stop_seqs_len,
@@ -142,7 +147,7 @@ static int xpu3_wrapper(api::Context* ctx,
                         const int accept_tokens_len,
                         const int stop_seqs_bs,
                         const int stop_seqs_max_len,
-                        const int pre_ids_len) {
+                        const int max_model_len) {
   using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
   int32_t ret_xre =
       fd_xpu3::speculate_set_stop_value_multi_seqs<<<ctx->ncluster(),
@@ -151,7 +156,8 @@ static int xpu3_wrapper(api::Context* ctx,
           stop_flags,
           reinterpret_cast<XPU_INT64*>(accept_tokens),
           accept_nums,
-          reinterpret_cast<const XPU_INT64*>(pre_ids),
+          reinterpret_cast<const XPU_INT64*>(token_ids_all),
+          reinterpret_cast<const XPU_INT64*>(prompt_lens),
           reinterpret_cast<const XPU_INT64*>(step_idx),
           reinterpret_cast<const XPU_INT64*>(stop_seqs),
           stop_seqs_len,
@@ -162,7 +168,7 @@ static int xpu3_wrapper(api::Context* ctx,
           accept_tokens_len,
           stop_seqs_bs,
           stop_seqs_max_len,
-          pre_ids_len);
+          max_model_len);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
@@ -171,7 +177,8 @@ int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                                         bool* stop_flags,
                                         int64_t* accept_tokens,
                                         int* accept_nums,
-                                        const int64_t* pre_ids,
+                                        const int64_t* token_ids_all,
+                                        const int64_t* prompt_lens,
                                         const int64_t* step_idx,
                                         const int64_t* stop_seqs,
                                         const int* stop_seqs_len,
@@ -182,18 +189,19 @@ int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                                         const int accept_tokens_len,
                                         const int stop_seqs_bs,
                                         const int stop_seqs_max_len,
-                                        const int pre_ids_len) {
+                                        const int max_model_len) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_set_stop_value_multi_seqs", int64_t);
   WRAPPER_DUMP_PARAM3(ctx, stop_flags, accept_tokens, accept_nums);
   WRAPPER_DUMP_PARAM6(
-      ctx, pre_ids, step_idx, stop_seqs, stop_seqs_len, seq_lens, end_ids);
+      ctx, token_ids_all, prompt_lens, step_idx, stop_seqs, stop_seqs_len, seq_lens);
+  WRAPPER_DUMP_PARAM2(ctx, end_ids, min_tokens);
   WRAPPER_DUMP_PARAM5(ctx,
                       bs_now,
                       accept_tokens_len,
                       stop_seqs_bs,
                       stop_seqs_max_len,
-                      pre_ids_len);
+                      max_model_len);
   WRAPPER_DUMP(ctx);
   WRAPPER_CHECK_PTR(ctx, int64_t, bs_now * accept_tokens_len, accept_tokens);
   WRAPPER_CHECK_PTR(
@@ -205,7 +213,8 @@ int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                        stop_flags,
                        accept_tokens,
                        accept_nums,
-                       pre_ids,
+                       token_ids_all,
+                       prompt_lens,
                        step_idx,
                        stop_seqs,
                        stop_seqs_len,
@@ -216,14 +225,15 @@ int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                        accept_tokens_len,
                        stop_seqs_bs,
                        stop_seqs_max_len,
-                       pre_ids_len);
+                       max_model_len);
   }
   if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
                         stop_flags,
                         accept_tokens,
                         accept_nums,
-                        pre_ids,
+                        token_ids_all,
+                        prompt_lens,
                         step_idx,
                         stop_seqs,
                         stop_seqs_len,
@@ -234,7 +244,7 @@ int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                         accept_tokens_len,
                         stop_seqs_bs,
                         stop_seqs_max_len,
-                        pre_ids_len);
+                        max_model_len);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }

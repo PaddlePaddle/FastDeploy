@@ -43,11 +43,12 @@ def to_paddle_inputs(inputs: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def run_kernel(paddle_inputs):
-    """Call the XPU kernel. Note: XPU signature has no prompt_lens."""
+    """Call the CUDA kernel."""
     speculate_set_stop_value_multi_seqs(
         paddle_inputs["accept_tokens"],
         paddle_inputs["accept_num"],
         paddle_inputs["token_ids_all"],
+        paddle_inputs["prompt_lens"],
         paddle_inputs["step_idx"],
         paddle_inputs["stop_flags"],
         paddle_inputs["seq_lens"],
@@ -152,6 +153,7 @@ def reference_spec_set_stop_value_multi_seqs(inputs: Dict[str, Any]) -> Dict[str
     accept_num = inputs["accept_num"].copy()
     stop_flags = inputs["stop_flags"].copy()
     token_ids_all = inputs["token_ids_all"]
+    prompt_lens = inputs["prompt_lens"]
     step_idx = inputs["step_idx"]
     stop_seqs = inputs["stop_seqs"]
     stop_seqs_len = inputs["stop_seqs_len"]
@@ -168,8 +170,8 @@ def reference_spec_set_stop_value_multi_seqs(inputs: Dict[str, Any]) -> Dict[str
                 continue
 
             stop_seq_now = stop_seqs[bid, tid, :]
-            # XPU kernel uses pre_ids (token_ids_all) directly without prompt_lens offset.
-            pre_ids_now = token_ids_all[bid, :]
+            pre_ids_now_offset = int(prompt_lens[bid, 0]) if prompt_lens.ndim > 1 else int(prompt_lens[bid])
+            pre_ids_now = token_ids_all[bid, pre_ids_now_offset:]
             accept_tokens_now = accept_tokens[bid, :]
             an = int(accept_num[bid])
             step_idx_now = int(step_idx[bid])
@@ -466,7 +468,7 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
         self.assertEqual(outputs["accept_tokens"][0, 2], -1)  # eos appended after stop_seq
 
     def test_nonzero_prompt_lens(self):
-        """XPU kernel does not apply prompt_lens offset; pre_ids (token_ids_all) is used directly."""
+        """Verify prompt_lens offset is applied correctly."""
         inputs = gen_inputs(
             real_bsz=1,
             accept_tokens_len=5,
@@ -475,15 +477,19 @@ class TestSpeculateSetStopValueMultiSeqs(unittest.TestCase):
             stop_seqs_max_len=2,
             seed=80,
         )
-        inputs["prompt_lens"][:] = 10  # not used by XPU kernel
+        prompt_len = 10
+        inputs["prompt_lens"][:] = prompt_len
         inputs["step_idx"][:] = 5
         inputs["accept_num"][:] = 2
         inputs["accept_tokens"][0, :2] = [55, 66]
-        # stop_seq = [X, 55] where X = pre_ids[step_idx - 1] = token_ids_all[0, 4]
+        # pre_ids_now starts at token_ids_all[0, prompt_len:]
+        # pre_ids_now[k] = 第 k 个 output token (k >= 0)
+        # 新索引公式: pre_ids_idx = step_idx_now + accept_tokens_idx
+        # stop_seq = [X, 55] where X = pre_ids_now[5 + (-1)] = pre_ids_now[4]
         # At accept_idx=0 (window ends at accept_tokens[0]=55):
         #   i=1: offset=0, accept_tokens_idx=0 -> accept_tokens[0]=55 vs stop_seq[1]=55 ✓
-        #   i=0: offset=1, accept_tokens_idx=-1 -> pre_ids_idx=5+(-1)=4 -> token_ids_all[0, 4]
-        target_val = int(inputs["token_ids_all"][0, 4])
+        #   i=0: offset=1, accept_tokens_idx=-1 -> pre_ids_idx=5+(-1)=4 -> pre_ids[4]=token_ids_all[0, prompt_len+4]
+        target_val = int(inputs["token_ids_all"][0, prompt_len + 4])
         inputs["stop_seqs"][0, 0, :2] = [target_val, 55]
         inputs["stop_seqs_len"][0, 0] = 2
         inputs["stop_flags"][:] = False

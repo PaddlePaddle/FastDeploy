@@ -24,7 +24,8 @@
 namespace api = baidu::xpu::api;
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
                                const paddle::Tensor &accept_num,
-                               const paddle::Tensor &pre_ids,
+                               const paddle::Tensor &token_ids_all,
+                               const paddle::Tensor &prompt_lens,
                                const paddle::Tensor &step_idx,
                                const paddle::Tensor &stop_flags,
                                const paddle::Tensor &seq_lens,
@@ -48,7 +49,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
   // Align with GPU: stop_seqs shape is [bs, stop_seqs_bs, stop_seqs_max_len]
   int stop_seqs_bs = stop_seqs_shape[1];
   int stop_seqs_max_len = stop_seqs_shape[2];
-  int pre_ids_len = pre_ids.shape()[1];
+  int max_model_len = token_ids_all.shape()[1];
   int accept_tokens_len = accept_tokens.shape()[1];
 
   int r = fastdeploy::plugin::speculate_set_stop_value_multi_seqs(
@@ -56,7 +57,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int64_t *>(accept_tokens.data<int64_t>()),
       const_cast<int *>(accept_num.data<int>()),
-      pre_ids.data<int64_t>(),
+      token_ids_all.data<int64_t>(),
+      prompt_lens.data<int64_t>(),
       step_idx.data<int64_t>(),
       stop_seqs.data<int64_t>(),
       stop_seqs_len.data<int>(),
@@ -67,7 +69,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
       accept_tokens_len,
       stop_seqs_bs,
       stop_seqs_max_len,
-      pre_ids_len);
+      max_model_len);
   PD_CHECK(r == 0,
            "fastdeploy::plugin::speculate_set_stop_value_multi_seqs failed.");
 }
@@ -75,7 +77,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
 PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
     .Inputs({"accept_tokens",
              "accept_num",
-             "pre_ids",
+             "token_ids_all",
+             "prompt_lens",
              "step_idx",
              "stop_flags",
              "seq_lens",

@@ -9,7 +9,8 @@ namespace fd_xpu3 {
 __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
                                                     int64_t *accept_tokens,
                                                     int *accept_nums,
-                                                    const int64_t *pre_ids,
+                                                    const int64_t *token_ids_all,
+                                                    const int64_t *prompt_lens,
                                                     const int64_t *step_idx,
                                                     const int64_t *stop_seqs,
                                                     const int *stop_seqs_len,
@@ -20,7 +21,7 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
                                                     const int accept_tokens_len,
                                                     const int stop_seqs_bs,
                                                     const int stop_seqs_max_len,
-                                                    const int pre_ids_len) {
+                                                    const int max_model_len) {
   int cls_id = cluster_id();
   int cid = core_id();
   int ncores = core_num();
@@ -31,11 +32,13 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
   int64_t min_token_limit = 0;
   bool stop_flags_now = false;
   int stop_seq_len = 0;
+  int64_t prompt_len = 0;
 
   for (int bid = cls_id; bid < bs; bid += nclusters) {
     GM2LM_ASYNC(accept_nums + bid, &accept_num, sizeof(int));
     GM2LM_ASYNC(step_idx + bid, &step_idx_now, sizeof(int64_t));
     GM2LM_ASYNC(min_tokens + bid, &min_token_limit, sizeof(int64_t));
+    GM2LM_ASYNC(prompt_lens + bid, &prompt_len, sizeof(int64_t));
     GM2LM(stop_flags + bid, &stop_flags_now, sizeof(bool));
 
     // Align with GPU: can_stop = (step_idx_now + accept_num >= min_token_limit)
@@ -44,6 +47,7 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
     if (stop_flags_now) {
       continue;
     }
+
     for (int tid = cid; tid < stop_seqs_bs; tid += ncores) {
       // Align with GPU: per-batch stop_seqs_len
       GM2LM(
@@ -86,7 +90,8 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
             if (pre_ids_idx < 0) {
               break;
             }
-            GM2LM(pre_ids + bid * pre_ids_len + pre_ids_idx,
+            // Align with GPU: pre_ids_now = token_ids_all + bid * max_model_len + prompt_lens[bid]
+            GM2LM(token_ids_all + bid * max_model_len + prompt_len + pre_ids_idx,
                   &cur_token_idx,
                   sizeof(int64_t));
           }
