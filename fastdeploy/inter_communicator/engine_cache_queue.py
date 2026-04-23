@@ -248,7 +248,7 @@ class EngineCacheQueue:
         Returns the actual port that the server instance is listening on.
         Calling this method only makes sense on instances where is_server=True.
         """
-        if not self.is_server:
+        if not self.is_server or isinstance(self.address, str):
             raise RuntimeError("Only the server instance can provide the port.")
         return self.address[1]
 

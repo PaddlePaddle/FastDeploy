@@ -502,8 +502,8 @@ class EngineService:
                         client_id=-1,
                         local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                     )
-                if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-                    self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
+                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
 
         self.engine_worker_queue = EngineWorkerQueue(
             address=engine_worker_queue_address,
