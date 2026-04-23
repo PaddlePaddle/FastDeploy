@@ -59,7 +59,8 @@ static int cpu_wrapper(api::Context* ctx,
                        const int stop_seqs_max_len,
                        const int max_model_len) {
   for (int bid = 0; bid < bs; ++bid) {
-    // Align with GPU: pre_ids_now = token_ids_all + bid * max_model_len + prompt_lens[bid]
+    // Align with GPU: pre_ids_now = token_ids_all + bid * max_model_len +
+    // prompt_lens[bid]
     const int64_t* pre_ids_now =
         token_ids_all + bid * max_model_len + prompt_lens[bid];
     int64_t* accept_tokens_now = accept_tokens + bid * accept_tokens_len;
@@ -193,8 +194,13 @@ int speculate_set_stop_value_multi_seqs(api::Context* ctx,
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "speculate_set_stop_value_multi_seqs", int64_t);
   WRAPPER_DUMP_PARAM3(ctx, stop_flags, accept_tokens, accept_nums);
-  WRAPPER_DUMP_PARAM6(
-      ctx, token_ids_all, prompt_lens, step_idx, stop_seqs, stop_seqs_len, seq_lens);
+  WRAPPER_DUMP_PARAM6(ctx,
+                      token_ids_all,
+                      prompt_lens,
+                      step_idx,
+                      stop_seqs,
+                      stop_seqs_len,
+                      seq_lens);
   WRAPPER_DUMP_PARAM2(ctx, end_ids, min_tokens);
   WRAPPER_DUMP_PARAM5(ctx,
                       bs_now,

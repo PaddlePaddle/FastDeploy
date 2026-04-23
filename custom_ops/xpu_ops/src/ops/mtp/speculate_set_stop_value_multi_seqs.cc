@@ -22,6 +22,22 @@
 #endif
 
 namespace api = baidu::xpu::api;
+
+/**
+ * @brief Stop-sequence detection for speculative decoding.
+ *
+ * for bid in [0, bs):
+ *   if step_idx[bid] + accept_num[bid] < min_tokens[bid]: skip
+ *   if stop_flags[bid]: skip
+ *   tokens = token_ids_all[bid][prompt_len:] ++ accept_tokens[bid]
+ *   for each stop_seq in stop_seqs[bid]:
+ *     for accept_idx in [-1, accept_num-2]:  // -1 = delayed match from prev round
+ *       if tokens[..accept_idx] ends with stop_seq:
+ *         accept_nums[bid] = accept_idx + 1
+ *         accept_tokens[bid][accept_idx] = end_id
+ *         break
+ *   // stop_flags is NOT set here; handled by downstream operators.
+ */
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
                                const paddle::Tensor &accept_num,
                                const paddle::Tensor &token_ids_all,
@@ -86,8 +102,7 @@ PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
              "stop_seqs_len",
              "end_ids",
              "min_tokens"})
-    .Outputs({"accept_tokens_out", "accept_num_out", "stop_flags_out"})
+    .Outputs({"accept_tokens_out", "stop_flags_out"})
     .SetInplaceMap({{"accept_tokens", "accept_tokens_out"},
-                    {"accept_num", "accept_num_out"},
                     {"stop_flags", "stop_flags_out"}})
     .SetKernelFn(PD_KERNEL(SpecGetStopFlagsMultiSeqs));

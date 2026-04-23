@@ -20,7 +20,7 @@ import paddle
 
 from fastdeploy.model_executor.ops.xpu import speculate_set_stop_value_multi_seqs
 
-CUDA_PLACE = paddle.XPUPlace(0) 
+CUDA_PLACE = paddle.XPUPlace(0)
 CPU_PLACE = paddle.CPUPlace()
 
 
