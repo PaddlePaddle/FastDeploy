@@ -433,7 +433,7 @@ def xpu_post_process_normal(
     share_inputs["preempted_idx"][:] = 0
 
 
-def xpu_post_process_specualate(
+def xpu_post_process_speculate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: Dict[str, paddle.Tensor],

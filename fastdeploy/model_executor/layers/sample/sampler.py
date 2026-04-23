@@ -53,6 +53,7 @@ from fastdeploy.worker.output import LogprobsTensors, SamplerOutput
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         build_sampling_params,
+        build_sampling_params_logprob,
         naive_update_model_status,
     )
 
@@ -654,6 +655,7 @@ class SpeculativeSampler(nn.Layer):
         self.spec_method = spec_config.method
         self.verify_strategy = spec_config.verify_strategy
         self.prefill_one_step_stop = fd_config.parallel_config.prefill_one_step_stop
+        self.num_speculative_tokens = spec_config.num_speculative_tokens
 
         # Accept policy from config (can be overridden by function parameters)
         self.config_accept_all = spec_config.accept_policy == "accept_all"
@@ -679,55 +681,57 @@ class SpeculativeSampler(nn.Layer):
         self,
         logits: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
+        real_bsz: int = 0,
     ) -> paddle.Tensor:
         """compute logprobs"""
         share_inputs = sampling_metadata.share_inputs
         last_logits = logits
-        real_bsz = share_inputs["seq_lens_this_time"].shape[0]
-        batch_token_num = share_inputs["accept_num"][:real_bsz]
+
+        # NOTE(huicongyao): temporarily used to provide a max_sized input, remove in the future
+        num_tokens = real_bsz * (self.num_speculative_tokens + 1)
+        padded_logits = paddle.zeros(shape=[num_tokens, last_logits.shape[1]], dtype=last_logits.dtype)
+        padded_logits[: logits.shape[0]] = last_logits
+        max_occupied_slots = share_inputs["seq_lens_this_time"].shape[0]
+
+        batch_token_num = share_inputs["accept_num"][:max_occupied_slots]
 
         temp_scaled_logprobs = sampling_metadata.temp_scaled_logprobs
         top_p_normalized_logprobs = sampling_metadata.top_p_normalized_logprobs
         if temp_scaled_logprobs is not None:
-            real_bsz_temp_scaled = temp_scaled_logprobs[:real_bsz]
-            temperature = sampling_metadata.temperature[:real_bsz]
-            real_bsz_temp_scaled = (
-                real_bsz_temp_scaled.astype("int32").squeeze(1).repeat_interleave(batch_token_num).astype("bool")
-            )
-            temperature = temperature.squeeze(1).repeat_interleave(batch_token_num)
+            real_bsz_temp_scaled = temp_scaled_logprobs[:max_occupied_slots]
+            temperature = sampling_metadata.temperature[:max_occupied_slots]
+            real_bsz_temp_scaled = build_sampling_params_logprob(real_bsz_temp_scaled, batch_token_num, num_tokens)
+            temperature = build_sampling_params_logprob(temperature, batch_token_num, num_tokens)
             temp_temperature = paddle.where(
                 real_bsz_temp_scaled, temperature, paddle.ones_like(temperature)
             ).unsqueeze(1)
-            last_logits = last_logits / temp_temperature
+            padded_logits = padded_logits / temp_temperature
 
-        last_logprobs = F.log_softmax(last_logits, axis=-1)
+        last_logprobs = F.log_softmax(padded_logits, axis=-1)
         top_p_logprob = None
         top_p_token_mask = None
-
         if (
             top_p_normalized_logprobs is not None
             and share_inputs is not None
             and sampling_metadata.top_p_normalized_logprobs_flag
         ):
-            real_token_top_p = (
-                sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(batch_token_num).unsqueeze(1)
-            )
-            top_p_normalized_logprobs = (
-                top_p_normalized_logprobs[:real_bsz]
-                .astype("int32")
-                .squeeze(1)
-                .repeat_interleave(batch_token_num)
-                .astype("bool")
-                .unsqueeze(1)
-            )
+            real_token_top_p = build_sampling_params_logprob(
+                sampling_metadata.top_p[:max_occupied_slots].squeeze(1), batch_token_num, num_tokens
+            ).unsqueeze(1)
+            top_p_normalized_logprobs = build_sampling_params_logprob(
+                top_p_normalized_logprobs[:max_occupied_slots].squeeze(1), batch_token_num, num_tokens
+            ).unsqueeze(1)
             top_p_token_mask = paddle.logical_and(top_p_normalized_logprobs, real_token_top_p != 1.0)
-            if top_p_token_mask.any():
-                probs = F.softmax(last_logits, axis=-1)
-                probs = top_p_normalize_probs_paddle(probs, real_token_top_p)
-                top_p_logprob = paddle.log(probs)
+
+            probs = F.softmax(padded_logits, axis=-1)
+            probs = top_p_normalize_probs_paddle(probs, real_token_top_p)
+            top_p_logprob = paddle.log(probs)
         if top_p_logprob is not None:
             last_logprobs = paddle.where(top_p_token_mask, top_p_logprob, last_logprobs)
-        return last_logprobs
+
+        # NOTE(huicongyao) temporarily used for slice last_logprobs to its real shape, remove in the future
+        real_token_num = batch_token_num.sum().item()
+        return last_logprobs[:real_token_num]
 
     def gather_logprobs(
         self,
@@ -946,6 +950,7 @@ class SpeculativeSampler(nn.Layer):
         increment_value: int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
+        real_bsz: int = 0,
     ) -> SamplerOutput:
         """
         Forward pass for speculative sampling.
@@ -1039,6 +1044,7 @@ class SpeculativeSampler(nn.Layer):
                 is_naive=is_naive,
                 logprobs_mode=self.logprobs_mode,
                 compute_logprobs_fn=self.compute_logprobs,
+                real_bsz=real_bsz,
             )
             sampler_output.logprobs_tensors = logprobs_tensors
             if cu_batch_token_offset is not None:
