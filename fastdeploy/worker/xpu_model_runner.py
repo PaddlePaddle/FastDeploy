@@ -58,7 +58,7 @@ from fastdeploy.model_executor.ops.xpu import (
 from fastdeploy.model_executor.xpu_pre_and_post_process import (
     step_xpu,
     xpu_post_process_normal,
-    xpu_post_process_specualate,
+    xpu_post_process_speculate,
     xpu_pre_process,
     xpu_process_output,
 )
@@ -1714,7 +1714,7 @@ class XPUModelRunner(ModelRunnerBase):
 
             if self.speculative_decoding:
                 # base model post process
-                xpu_post_process_specualate(
+                xpu_post_process_speculate(
                     sampler_output,
                     model_output_data,
                     self.share_inputs,
