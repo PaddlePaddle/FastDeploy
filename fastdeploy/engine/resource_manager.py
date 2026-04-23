@@ -378,6 +378,12 @@ class ResourceManager:
         total_block_number = self.total_block_number()
         available_block_num = self.available_block_num()
         used_block_num = total_block_number - available_block_num
+        blocks_used_by_tasks = set()
+        for task in self.tasks_list:
+            if task is not None:
+                blocks_used_by_tasks.update(getattr(task, "block_tables", []))
+                blocks_used_by_tasks.update(getattr(task, "extend_block_tables", []))
+        evictable_block_num = used_block_num - len(blocks_used_by_tasks)
         block_usage = used_block_num / total_block_number * 100
         total_batch_number = len(self.stop_flags)
         available_batch_num = self.available_batch()
@@ -385,8 +391,8 @@ class ResourceManager:
         batch_usage = used_batch_num / total_batch_number * 100
         info = (
             f"ResourceManager info, "
-            f"total_block_number: {total_block_number}, total_batch_number: {total_batch_number}, "
-            f"available_block_num: {available_block_num}, available_batch: {available_batch_num},"
+            f"total_block_number: {total_block_number}, available_block_num: {available_block_num}, evictable_block_num: {evictable_block_num}, "
+            f"total_batch_number: {total_batch_number}, available_batch: {available_batch_num},"
             f"running_reqs: {used_batch_num}, block_usage: {block_usage:.2f}%, batch_usage: {batch_usage:.2f}%"
         )
         return info
