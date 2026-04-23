@@ -19,7 +19,7 @@ import unittest
 import paddle
 
 paddle.enable_compat(scope={"deep_gemm"})
-import deep_gemm
+
 
 paddle.set_default_dtype("bfloat16")
 
@@ -32,6 +32,8 @@ class TestDeepGemmPrefill(unittest.TestCase):
         prop = paddle.device.cuda.get_device_properties()
         if prop.major != 10:
             return
+
+        import deep_gemm
 
         block_size = 128
 
