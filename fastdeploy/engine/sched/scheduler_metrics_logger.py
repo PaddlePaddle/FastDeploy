@@ -72,6 +72,8 @@ class SchedulerMetricsLogger:
         queue_cnt: int,
         tokens_used: int,
         token_usage: float,
+        free_blocks: int = 0,
+        evictable_blocks: int = 0,
     ) -> None:
         if not self.enabled:
             return
@@ -95,6 +97,8 @@ class SchedulerMetricsLogger:
             f"#new-token: {new_tokens}, "
             f"#cached-token: {cached_tokens}, "
             f"token usage: {token_usage:.2f}, "
+            f"#free-block: {free_blocks}, "
+            f"#evictable-block: {evictable_blocks}, "
             f"#running-req: {running_cnt}, "
             f"#queue-req: {queue_cnt}, "
         )
@@ -107,6 +111,8 @@ class SchedulerMetricsLogger:
         tokens_used: int,
         token_usage: float,
         use_cudagraph: bool,
+        free_blocks: int = 0,
+        evictable_blocks: int = 0,
     ) -> None:
         if not self.enabled:
             return
@@ -129,6 +135,8 @@ class SchedulerMetricsLogger:
             f"#running-req: {running_cnt}, "
             f"#token: {tokens_used}, "
             f"token usage: {token_usage:.2f}, "
+            f"#free-block: {free_blocks}, "
+            f"#evictable-block: {evictable_blocks}, "
             f"cuda graph: {use_cudagraph}, "
             f"gen throughput (token/s): {throughput:.2f}, "
             f"#queue-req: {queue_cnt}, "
