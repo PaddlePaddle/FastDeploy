@@ -258,6 +258,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # train-infer consistency, used in RL
     # Whether to align RoPE and moe gate precision with training
     "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),
+    # Whether to enable FP4 communication quantization for DeepEP prefill dispatch
+    "FD_USE_NVFP4_COMM_QUANT": lambda: bool(int(os.getenv("FD_USE_NVFP4_COMM_QUANT", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
     # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,

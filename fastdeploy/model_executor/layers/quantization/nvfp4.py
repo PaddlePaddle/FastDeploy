@@ -366,7 +366,7 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         )
 
     def process_weights_after_loading(self, layer) -> None:
-
+        logger.info("跑了Nvfp4")
         input_scale_2 = layer.input_scale.max().to(paddle.float32)
         weight_scale_2 = layer.weight_scale_2.max().to(paddle.float32)
         alpha = input_scale_2 * weight_scale_2
@@ -606,7 +606,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
     def process_weights_after_loading(self, layer):
         """ """
         # FlashInfer CUTLASS kernel assumes [Up, Gate] Proj as W13
-
+        # logger.info(f"跑了fp4 moe了")
         if self.backend == "flashinfer-cutlass":
             [a, b] = layer.up_gate_proj_weight.split(2, axis=1)
             layer.up_gate_proj_weight.set_value(paddle.concat([b, a], axis=1))
@@ -667,8 +667,9 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
-
         # 1. top experts and weights
+        # logger.info(f"prefill的nvfp4")
+        # logger.info(f"layer.up_gate_proj_input_scale_quant:{layer.up_gate_proj_input_scale_quant}")
         gate_out = gate(x.cast("float32"))
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         hidden_size = x.shape[1]
@@ -735,7 +736,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
             use_tbo = os.getenv("USE_TBO", "0")
-            token_split_factor = 2 if int(use_tbo) == 1 else 1
+            token_split_factor = 8 if int(use_tbo) == 1 else 1
             max_tokens_per_rank = (
                 layer.fd_config.scheduler_config.max_num_batched_tokens
                 // layer.fd_config.parallel_config.tensor_parallel_size

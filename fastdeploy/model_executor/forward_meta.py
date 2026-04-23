@@ -162,6 +162,8 @@ class ForwardMeta:
     # for prefill
     exist_prefill: bool = False
 
+    audio_token_num: int = 0
+
     # for mla & dsa
     position_ids: Optional[paddle.Tensor] = None
     # for kvcache slot
