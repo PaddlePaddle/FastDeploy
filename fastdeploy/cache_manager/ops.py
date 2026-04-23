@@ -49,12 +49,6 @@ try:
             raise RuntimeError("CUDA no need of get_peer_mem_addr!")
 
     elif current_platform.is_maca():
-        from fastdeploy.model_executor.ops.gpu import (
-            swap_cache_per_layer,  # 单层 KV cache 换入算子（同步）
-        )
-        from fastdeploy.model_executor.ops.gpu import (
-            swap_cache_per_layer_async,  # 单层 KV cache 换入算子（异步，无强制 sync）
-        )
         from fastdeploy.model_executor.ops.gpu import (  # get_output_kv_signal,; ipc_sent_key_value_cache_by_remote_ptr_block_sync,
             cuda_host_alloc,
             cuda_host_free,
@@ -72,10 +66,19 @@ try:
             raise RuntimeError("CUDA no need of get_peer_mem_addr!")
 
         def get_output_kv_signal(*args, **kwargs):
-            raise RuntimeError("Metax get_output_kv_signal UNIMPLENENTED!")
+            raise RuntimeError("Metax get_output_kv_signal UNIMPLEMENTED!")
 
         def ipc_sent_key_value_cache_by_remote_ptr_block_sync(*args, **kwargs):
-            raise RuntimeError("Metax ipc_sent_key_value_cache_by_remote_ptr_block_sync UNIMPLENENTED!")
+            raise RuntimeError("Metax ipc_sent_key_value_cache_by_remote_ptr_block_sync UNIMPLEMENTED!")
+
+        def swap_cache_per_layer(*args, **kwargs):  # 单层 KV cache 换入算子（同步）
+            raise RuntimeError("Metax swap_cache_per_layer UNIMPLEMENTED")
+
+        def swap_cache_per_layer_async(*args, **kwargs):  # 单层 KV cache 换入算子（异步）
+            raise RuntimeError("Metax swap_cache_per_layer_async UNIMPLEMENTED")
+
+        def swap_cache_layout(*args, **kwargs):
+            raise RuntimeError("Metax swap_cache_layout UNIMPLEMENTED")
 
     elif current_platform.is_xpu():
         from fastdeploy.model_executor.ops.xpu import (
@@ -93,19 +96,19 @@ try:
         memory_allocated = paddle.device.xpu.memory_allocated
 
         def get_data_ptr_ipc(*args, **kwargs):
-            raise RuntimeError("XPU get_data_ptr_ipc UNIMPLENENTED!")
+            raise RuntimeError("XPU get_data_ptr_ipc UNIMPLEMENTED!")
 
         def ipc_sent_key_value_cache_by_remote_ptr(*args, **kwargs):
-            raise RuntimeError("XPU ipc_sent_key_value_cache_by_remote_ptr UNIMPLENENTED")
+            raise RuntimeError("XPU ipc_sent_key_value_cache_by_remote_ptr UNIMPLEMENTED")
 
         def ipc_sent_key_value_cache_by_remote_ptr_block_sync(*args, **kwargs):
-            raise RuntimeError("XPU No ipc_sent_key_value_cache_by_remote_ptr UNIMPLENENTED")
+            raise RuntimeError("XPU No ipc_sent_key_value_cache_by_remote_ptr UNIMPLEMENTED")
 
         def swap_cache_per_layer(*args, **kwargs):  # 单层 KV cache 换入算子（同步）
-            raise RuntimeError("XPU swap_cache_per_layer UNIMPLENENTED")
+            raise RuntimeError("XPU swap_cache_per_layer UNIMPLEMENTED")
 
         def swap_cache_per_layer_async(*args, **kwargs):  # 单层 KV cache 换入算子（异步）
-            raise RuntimeError("XPU swap_cache_per_layer_async UNIMPLENENTED")
+            raise RuntimeError("XPU swap_cache_per_layer_async UNIMPLEMENTED")
 
     else:
         raise RuntimeError("Prefix cache ops only supported CUDA nor XPU platform ")
