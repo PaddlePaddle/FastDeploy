@@ -14,10 +14,14 @@
 """fastdeploy gpu ops"""
 
 import sys
+import warnings
 
 from fastdeploy.import_ops import import_custom_ops
 
 PACKAGE = "fastdeploy.model_executor.ops.gpu"
+
+# Track whether ops loaded successfully
+_ops_loaded = False
 
 
 def decide_module():
@@ -27,7 +31,10 @@ def decide_module():
 
     # Use paddle.device.get_device_properties() instead of paddle.device.cuda.get_device_properties()
     # to support all hardware platforms (NVIDIA, ILUVATAR, HPU, etc.)
-    prop = paddle.device.get_device_properties()
+    try:
+        prop = paddle.device.get_device_properties()
+    except AttributeError:
+        prop = paddle.device.cuda.get_device_properties()
     sm_version = prop.major * 10 + prop.minor
     print(f"current sm_version={sm_version}")
 
@@ -46,6 +53,18 @@ except Exception as e:
     pass
 import_custom_ops(PACKAGE, module_path, globals())
 
+# Check if any ops were actually loaded
+_ops_loaded = any(
+    not k.startswith("_") and k not in ("sys", "warnings", "import_custom_ops", "PACKAGE", "decide_module", "module_path", "tolerant_import_error")
+    for k in globals()
+)
+
+if not _ops_loaded:
+    warnings.warn(
+        "Custom GPU ops could not be loaded. Some features will not work. "
+        "Ensure custom ops are compiled for your platform (run: cd custom_ops && python setup_ops.py build)."
+    )
+
 
 def tolerant_import_error():
     class NoneModule:
@@ -53,3 +72,10 @@ def tolerant_import_error():
             return None
 
     sys.modules[__name__] = NoneModule()
+
+
+def __getattr__(name):
+    """Return None for any missing op when ops failed to load."""
+    if name.startswith("_"):
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return None

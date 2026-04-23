@@ -911,9 +911,10 @@ class LLMEngine:
                 elif (match := re.search(r"Start load layer (\d+)", line)) or (
                     match := re.search(r"set state for layer (\d+)", line)
                 ):
-                    progress = eval(match.group(1)) * 1.0 / self.cfg.model_config.num_hidden_layers
+                    layer_idx = int(match.group(1))
+                    progress = (layer_idx + 1) * 1.0 / self.cfg.model_config.num_hidden_layers
                     self.worker_init_status["layer_loadding"] = progress
-                    if self.worker_init_status["layer_loadding"] == self.cfg.model_config.num_hidden_layers - 1:
+                    if layer_idx >= self.cfg.model_config.num_hidden_layers - 1:
                         self.worker_init_status["finished"] = True
 
         self.checking_worker_status_thread = threading.Thread(target=detect_thread, daemon=True)

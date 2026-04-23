@@ -53,6 +53,14 @@ def load_deep_ep() -> ModuleType:
                 logger.info("FD use PFCCLab/DeepEP now.")
                 return deep_ep
         else:
+            # DeepEP requires SM90+ (Hopper), check before importing
+            cap = paddle.device.cuda.get_device_capability()
+            major = cap[0] if isinstance(cap, (list, tuple)) else cap
+            if major < 9:
+                logger.warning(
+                    "DeepEP requires SM90+ (Hopper). Current SM version too low. EP will use NCCL fallback."
+                )
+                return None
             from paddle.distributed.communication import deep_ep  # type: ignore
 
             logger.info("FD use Paddle/DeepEP now.")
@@ -121,6 +129,8 @@ class DeepEPBuffer:
         self._compute_buffer_sizes()
 
     def _compute_buffer_sizes(self, param_bytes: int = 2):
+        if deep_ep is None:
+            return
         hidden_bytes = self.hidden_size * param_bytes  # bf16 or fp16
 
         for config in (
@@ -161,6 +171,9 @@ class DeepEPBuffer:
 
     def create_buffer(self):
         """Create or recreate buffer based on role and phase."""
+        if deep_ep is None:
+            logger.info("DeepEP not available, skipping buffer creation (using NCCL fallback).")
+            return
         if self.deepep_buffer is not None:
             self.clear_buffer()
 

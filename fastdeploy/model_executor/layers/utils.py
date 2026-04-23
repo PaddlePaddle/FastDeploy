@@ -31,10 +31,12 @@ if current_platform.is_cuda() and current_platform.available():
     try:
         from fastdeploy.model_executor.ops.gpu import get_padding_offset
     except Exception:
-        raise ImportError(
-            "Verify environment consistency between compilation and FastDeploy installation. "
-            "And ensure the Paddle version supports FastDeploy's custom operators"
+        import warnings
+        warnings.warn(
+            "Custom ops not available. Some features may not work. "
+            "Ensure custom ops are compiled for your platform."
         )
+        get_padding_offset = None
 
 
 from fastdeploy import envs

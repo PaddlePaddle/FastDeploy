@@ -38,6 +38,10 @@ class ErnieRotaryEmbedding:
         self.rotary_dim = rotary_dim
         self.base = base
         self.partial_rotary_factor = partial_rotary_factor
+        # For partial RoPE (e.g. MiniMax-M2.5 with rotary_dim=64, head_dim=128),
+        # shrink rotary_dim so the embedding matches the kernel's expectation.
+        if partial_rotary_factor < 1.0:
+            self.rotary_dim = int(self.rotary_dim * partial_rotary_factor)
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]

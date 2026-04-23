@@ -753,8 +753,16 @@ class FusedMoE(nn.Layer):
             return out
 
         token_num = x.shape[0]
+        # SM80: skip forward_split_allgather — MoE backends on SM80
+        # (BF16 workaround, WINT4 cutlass) need all tokens on all ranks
+        # (they do their own per-expert routing internally).
+        _is_sm80 = current_platform.is_cuda()
+        if _is_sm80:
+            from fastdeploy.model_executor.utils import get_sm_version
+            _is_sm80 = get_sm_version() < 90
         if (
-            self.ep_size > 1
+            not _is_sm80
+            and self.ep_size > 1
             and self.attn_tp_size > 1
             and (not self.fd_config.parallel_config.use_sequence_parallel_moe)
             and token_num >= self.attn_tp_size

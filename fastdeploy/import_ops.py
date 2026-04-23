@@ -15,10 +15,38 @@
 import functools
 import importlib
 import inspect
+import os
+import ctypes
 
 import paddle
 
 from fastdeploy.utils import llm_logger as logger
+
+
+def _preload_so_with_lazy_binding(package, module_name):
+    """
+    Pre-load the shared library with RTLD_LAZY to allow undefined symbols
+    at load time. This works around PaddlePaddle's RTLD_NOW loading which
+    fails on template symbols for unused code paths.
+    """
+    try:
+        # Find the .so path
+        pkg_path = package.replace('.', '/')
+        curdir = os.path.dirname(os.path.abspath(__file__))
+        pkg_dir = os.path.join(curdir, '..', pkg_path)
+
+        # Check for versioned ops directory (e.g., fastdeploy_ops_80)
+        for entry in os.listdir(pkg_dir):
+            entry_path = os.path.join(pkg_dir, entry)
+            if os.path.isdir(entry_path) and entry.startswith('fastdeploy_ops'):
+                so_path = os.path.join(entry_path, 'fastdeploy_ops.so')
+                if os.path.exists(so_path):
+                    # Pre-load with RTLD_LAZY | RTLD_GLOBAL
+                    ctypes.CDLL(so_path, mode=ctypes.RTLD_GLOBAL | 1)
+                    logger.debug(f"Pre-loaded {so_path} with lazy binding")
+                    return
+    except Exception as e:
+        logger.debug(f"Pre-load failed (non-critical): {e}")
 
 
 def import_custom_ops(package, module_name, global_ns):
@@ -30,6 +58,9 @@ def import_custom_ops(package, module_name, global_ns):
         module_name (str): The name of the module within the package.
         global_ns (dict): The global namespace to add the imported functions to.
     """
+    # Pre-load .so with lazy binding to handle undefined symbols
+    _preload_so_with_lazy_binding(package, module_name)
+
     try:
         module = importlib.import_module(module_name, package=package)
         functions = inspect.getmembers(module)

@@ -14,6 +14,17 @@
 # limitations under the License.
 """
 
+# Force lazy binding for shared library loading to allow undefined symbols
+# at load time (resolved only when actually called). This is needed for
+# custom ops .so files that may have template symbols for unused code paths.
+# Must use RTLD_LAZY (1) | RTLD_GLOBAL (256) as a replacement, not OR with
+# Python's default RTLD_NOW (2), since RTLD_NOW takes precedence.
+import sys
+try:
+    sys.setdlopenflags(1 | 256)  # RTLD_LAZY | RTLD_GLOBAL
+except Exception:
+    pass
+
 # Configure root logger first to unify log formats
 # This must be done before importing any modules that may use the logger
 import logging
@@ -106,7 +117,10 @@ from fastdeploy.utils import console_logger, current_package_version, get_versio
 # cause some unexpected issues in triton kernels. We use enable_compat_on_triton_kernel
 # for these cases.
 if not _is_package_installed("torch"):
-    paddle.enable_compat(scope={"triton"})
+    try:
+        paddle.enable_compat(scope={"triton"})
+    except AttributeError:
+        pass
 
 if envs.FD_DEBUG != 1:
     # Log level has been configured above
