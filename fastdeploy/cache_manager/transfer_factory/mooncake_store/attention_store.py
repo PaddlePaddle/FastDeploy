@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import time
 import traceback
 from dataclasses import dataclass
@@ -51,6 +52,7 @@ class AttentionStoreConfig:
     bytes_per_shard_layer_per_block: int = 1024
     device_id: int = 0
     dp_id: int = 0
+    splitwise_role: str = "mixed"
 
 
 class AttentionStore(KVCacheStorage):
@@ -62,6 +64,13 @@ class AttentionStore(KVCacheStorage):
         self.config = AttentionStoreConfig(**args)
 
         try:
+            self.config.namespace = os.getenv("AS_NAMESPACE", self.config.namespace)
+            self.config.pod_name = os.getenv("AS_POD_NAME", self.config.pod_name)
+            if int(os.getenv("ENABLE_EP_DP_IN_FD", "1")):
+                self.config.pod_name = (
+                    self.config.pod_name + "_" + self.config.splitwise_role + "_" + str(self.config.dp_id)
+                )
+            self.config.model_version = os.getenv("AS_MODEL_VERSION", self.config.model_version)
             logger.info(f"[INIT] Start initializing AttentionStoreSDK with config: {self.config}")
             self.sdk = AttentionStoreSDK(
                 self.config.namespace,

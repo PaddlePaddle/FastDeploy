@@ -351,6 +351,7 @@ class CacheTransferManager:
                     * self.cache_item_bytes,
                     device_id=self.device,
                     dp_id=self.local_data_parallel_id,
+                    splitwise_role=getattr(args, "splitwise_role", "mixed"),
                 )
                 logger.info("Initialized attention store successfully!")
             elif args.kvcache_storage_backend == "file":
