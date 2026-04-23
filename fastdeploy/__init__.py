@@ -25,6 +25,19 @@ try:
 except Exception:
     pass
 
+# Block tensorflow import: TensorFlow and PaddlePaddle cannot coexist in the
+# same process due to conflicting CUDA context initialization. If tensorflow
+# is installed, its import (triggered by transitive dependencies) causes a
+# segfault when PaddlePaddle has already initialized CUDA.
+if 'tensorflow' not in sys.modules:
+    import importlib.util as _iu
+    _orig_find_spec = _iu.find_spec
+    def _block_tf(name, package=None):
+        if name == 'tensorflow' or (isinstance(name, str) and name.startswith('tensorflow.')):
+            return None
+        return _orig_find_spec(name, package)
+    _iu.find_spec = _block_tf
+
 # Configure root logger first to unify log formats
 # This must be done before importing any modules that may use the logger
 import logging
