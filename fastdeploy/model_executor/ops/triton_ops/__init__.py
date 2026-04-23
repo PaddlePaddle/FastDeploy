@@ -15,6 +15,7 @@
 """
 
 try:
+    from .indexer_update_attn_mask_offsets import update_indexer_attn_mask_offsets
     from .pre_token_quant_fp8_kernel import _per_token_group_quant_fp8
     from .qk_rmsnorm_fused_kernel import qk_rmsnorm_fused
     from .repetition_early_stop_kernel import repetition_early_stopper_kernel
@@ -27,6 +28,7 @@ try:
         "repetition_early_stopper_kernel",
         "qk_rmsnorm_fused",
         "_per_token_group_quant_fp8",
+        "update_indexer_attn_mask_offsets",
     ]
 except:
     _TRITON_AVAILABLE = False

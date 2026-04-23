@@ -88,6 +88,9 @@ else:
         get_position_ids_and_mask_encoder_batch,
         update_attn_mask_offsets,
     )
+    from fastdeploy.model_executor.ops.triton_ops import (
+        update_indexer_attn_mask_offsets,
+    )
 
 import zmq
 
@@ -1335,6 +1338,15 @@ class GPUModelRunner(ModelRunnerBase):
             )
             self.share_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
 
+        if self.use_dsa:
+            indexer_attn_mask_offsets = update_indexer_attn_mask_offsets(
+                self.share_inputs["ids_remove_padding"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_encoder"],
+                self.share_inputs["cu_seqlens_k"],
+            )
+            self.share_inputs["indexer_attn_mask_offsets"] = indexer_attn_mask_offsets
+
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
         self.forward_meta.real_bsz = real_bsz
@@ -1472,6 +1484,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             attn_mask_offsets=self.share_inputs["attn_mask_offsets"] if self.enable_mm else None,
+            indexer_attn_mask_offsets=self.share_inputs["indexer_attn_mask_offsets"] if self.use_dsa else None,
             routing_replay_table=routing_replay_table,
         )
 
@@ -1737,7 +1750,7 @@ class GPUModelRunner(ModelRunnerBase):
             encoder_block_shape_q=encoder_block_shape_q,
             decoder_block_shape_q=decoder_block_shape_q,
         )
-
+        self.use_dsa = True if isinstance(attn_backend, DSAAttentionBackend) else False
         self.attn_backends.append(attn_backend)
 
     def _dummy_pooler_run_task(

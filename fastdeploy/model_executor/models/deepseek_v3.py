@@ -70,6 +70,8 @@ if current_platform.is_cuda():
         radix_topk_ragged_transform,
     )
 
+    paddle.enable_compat(scope={"deep_gemm": True})
+
 
 class DeepSeekV3MLP(nn.Layer):
     """
@@ -659,7 +661,8 @@ class Indexer(nn.Layer):
             k, self.indexer_cache, forward_meta.slot_mapping, self.quant_block_size, self.scale_fmt
         )
 
-        from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
+        # from fastdeploy.model_executor.layers.quantization.fp8_utils import deep_gemm
+        import deep_gemm
 
         if forward_meta.max_len_tensor_cpu[1]:
 
@@ -687,6 +690,14 @@ class Indexer(nn.Layer):
                     ks[token_start_k:token_end_k] = forward_meta.cu_seqlens_k[i]
                     ke[token_start_k:token_end_k] = paddle.arange(token_start_k, token_end_k, dtype=paddle.int32) + 1
 
+            if forward_meta.indexer_attn_mask_offsets is not None:
+                if self.layer_id == 60:
+                    print("using indexer_attn_mask_offsets")
+                assert forward_meta.indexer_attn_mask_offsets.shape[0] == num_tokens * 2
+                ks_tmp = forward_meta.indexer_attn_mask_offsets[::2].contiguous()
+                ke_tmp = forward_meta.indexer_attn_mask_offsets[1::2].contiguous()
+                assert (ks_tmp == ks).all(), ks_tmp - ks
+                assert (ke_tmp == ke).all(), ke_tmp - ke
             max_seqlen_k = (ke - ks).max().item()
 
             logits = deep_gemm.fp8_mqa_logits(

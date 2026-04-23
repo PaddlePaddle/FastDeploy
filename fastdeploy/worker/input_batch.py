@@ -206,6 +206,7 @@ class InputBatch:
         self.kv_batch_ids = None
         self.kv_tile_ids_per_batch = None
         self.kv_num_blocks_x_cpu = None  # CPU
+        self.indexer_attn_mask_offsets = None  # For Indexer in DSA Backend
 
         # Initialize thinking related buffers
         self.enable_thinking = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
