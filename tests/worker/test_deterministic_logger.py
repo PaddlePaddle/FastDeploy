@@ -42,6 +42,26 @@ for _pkg, _rel_path in [
         _mod.__package__ = _pkg
         sys.modules[_pkg] = _mod
 
+# Provide a lightweight fastdeploy.utils stub so that
+# ``from fastdeploy.utils import parse_choice_id`` inside
+# deterministic_logger.py does NOT trigger the real utils.py
+# (which re-exports from fastdeploy.logger and causes a circular import
+# against the bare namespace package above).
+_CHOICE_SEPARATOR = "::n::"
+
+
+def _parse_choice_id(compound_id: str) -> tuple:
+    if _CHOICE_SEPARATOR in compound_id:
+        base, idx = compound_id.rsplit(_CHOICE_SEPARATOR, 1)
+        return base, int(idx)
+    return compound_id, None
+
+
+_utils_stub = types.ModuleType("fastdeploy.utils")
+_utils_stub.parse_choice_id = _parse_choice_id
+_utils_stub.CHOICE_SEPARATOR = _CHOICE_SEPARATOR
+sys.modules["fastdeploy.utils"] = _utils_stub
+
 import fastdeploy.logger.deterministic_logger as _det_mod  # noqa: E402
 from fastdeploy.logger.deterministic_logger import (  # noqa: E402
     DeterministicLogger,
@@ -310,7 +330,7 @@ class TestLogBatchStart(unittest.TestCase):
 
     def test_logs_batch_start(self):
         logger = self._make_logger()
-        batch = [self._make_req("prompt_0")]
+        batch = [self._make_req("prompt::n::0")]
         with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
             logger.log_batch_start(batch)
         output = "\n".join(cm.output)
@@ -320,7 +340,7 @@ class TestLogBatchStart(unittest.TestCase):
 
     def test_batch_counter_increments(self):
         logger = self._make_logger()
-        batch = [self._make_req("prompt_0")]
+        batch = [self._make_req("prompt::n::0")]
         with self.assertLogs("fastdeploy.deterministic", level="INFO"):
             logger.log_batch_start(batch)
         with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
@@ -330,8 +350,8 @@ class TestLogBatchStart(unittest.TestCase):
 
     def test_run_id_change_resets_counter(self):
         logger = self._make_logger()
-        batch_0 = [self._make_req("prompt_0")]
-        batch_1 = [self._make_req("prompt_1")]
+        batch_0 = [self._make_req("prompt::n::0")]
+        batch_1 = [self._make_req("prompt::n::1")]
         with self.assertLogs("fastdeploy.deterministic", level="INFO"):
             logger.log_batch_start(batch_0)
             logger.log_batch_start(batch_0)  # Batch_2
@@ -344,7 +364,7 @@ class TestLogBatchStart(unittest.TestCase):
 
     def test_skips_none_requests(self):
         logger = self._make_logger()
-        batch = [None, self._make_req("req_5")]
+        batch = [None, self._make_req("req::n::5")]
         with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
             logger.log_batch_start(batch)
         output = "\n".join(cm.output)
