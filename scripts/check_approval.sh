@@ -95,6 +95,7 @@ HAS_LOG_MODIFY=$(git diff upstream/$BRANCH \
 
 if [ -n "${HAS_LOG_MODIFY}" ] && [ -n "${PR_ID}" ]; then
     echo "Detected log modification in diff:"
+    echo "Debug:"
     echo "${HAS_LOG_MODIFY}"
     echo_line1="You must have one FastDeploy RD (xyxinyang(zhouchong), zyyzghb(zhangyongyue)) approval for modifying logging behavior (.info/.debug/.error/log_request)."
     check_approval "$echo_line1" 1 xyxinyang zyyzghb
