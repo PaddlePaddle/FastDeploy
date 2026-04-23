@@ -286,13 +286,6 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
-        # gpu_cache_lock: file-based lock for mutual exclusion between worker
-        # and CPU transfer when accessing GPU KV cache.
-        self.gpu_cache_lock = IPCLock(
-            name="gpu_cache_lock",
-            suffix=self.parallel_config.local_engine_worker_queue_port,
-            create=False,
-        )
 
     def update_weights_from_tensor(self, mmap_infos):
         """
