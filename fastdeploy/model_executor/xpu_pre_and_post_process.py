@@ -512,6 +512,7 @@ def xpu_post_process_speculate(
             raise NotImplementedError("Not support speculate_save_output_topk now.")
 
     speculate_clear_accept_nums(model_output.accept_num, model_output.seq_lens_decoder)
+    share_inputs["preempted_idx"][:] = 0
 
 
 def step_xpu(
