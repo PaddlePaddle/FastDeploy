@@ -19,7 +19,8 @@ import paddle
 from fastdeploy.platforms import current_platform
 
 
-def speculate_get_target_logits(
+def speculate_get_accept_tokens_and_logits(
+    token_ids: paddle.Tensor,
     target_logits: paddle.Tensor,
     logits: paddle.Tensor,
     cu_batch_token_offset: paddle.Tensor,
@@ -27,14 +28,18 @@ def speculate_get_target_logits(
     seq_lens_this_time: paddle.Tensor,
     seq_lens_encoder: paddle.Tensor,
     accept_num: paddle.Tensor,
+    accept_tokens: paddle.Tensor,
 ):
     """
-    speculate_get_target_logits
+    speculate_get_accept_tokens_and_logits
     """
     if current_platform.is_cuda():
-        from fastdeploy.model_executor.ops.gpu import speculate_get_target_logits
+        from fastdeploy.model_executor.ops.gpu import (
+            speculate_get_accept_tokens_and_logits,
+        )
 
-        speculate_get_target_logits(
+        speculate_get_accept_tokens_and_logits(
+            token_ids,
             target_logits,
             logits,
             cu_batch_token_offset,
@@ -42,6 +47,7 @@ def speculate_get_target_logits(
             seq_lens_this_time,
             seq_lens_encoder,
             accept_num,
+            accept_tokens,
         )
     else:
         raise NotImplementedError
