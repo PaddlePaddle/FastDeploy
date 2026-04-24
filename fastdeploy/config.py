@@ -1832,6 +1832,10 @@ class FDConfig:
             self.graph_opt_config.use_cudagraph = False
             logger.info("CUDAGraph currently only support on GPU!")
 
+        # Adjustment RoutingReplayConfig
+        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
+            assert self.cache_config.swap_space is None, "RolloutRoutingReplay can not enable with cpu cache!"
+
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
             self.model_config.moe_phase = MoEPhase(phase="prefill")
