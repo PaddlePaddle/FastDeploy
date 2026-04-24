@@ -1141,23 +1141,7 @@ class XPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             # Update Batch type for cuda graph for only_decode_batch
             if_only_decode = self.only_decode()
-
-            only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
-            # Update config about moe for better performance
-            # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
-            if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
-                self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
-                if self.speculative_decoding:
-                    self.proposer.fd_config.parallel_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
-
-            # Update Batch type for cuda graph for only_prefill_batch
-            only_prefill_use_cudagraph = self.use_cudagraph and self.cudagraph_only_prefill and self.only_prefill()
-
-            self.forward_meta.step_use_cudagraph = (
-                only_prefill_use_cudagraph
-                if self.cudagraph_only_prefill
-                else only_decode_use_cudagraph and self.forward_meta.ids_remove_padding.shape[0] > 0
-            )
+            self.forward_meta.step_use_cudagraph = self.use_cudagraph and if_only_decode and self.forward_meta.ids_remove_padding.shape[0] > 0
 
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
@@ -1169,8 +1153,8 @@ class XPUModelRunner(ModelRunnerBase):
             self.forward_meta.kv_signal_sender = self.share_inputs["kv_signal_sender"]
 
         if (
-            self.fd_config.scheduler_config.splitwise_role == "mixed" and envs.FD_XPU_ENABLE_MIXED_EP_MODE
-        ):  # Centralized scenario: the phase is initialized as "prefill" by default. During inference runtime, different types of batches can achieve phase switching at this point.
+            self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed"
+        ): 
             if_only_decode = self.only_decode()
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
@@ -1576,11 +1560,12 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
             self._prepare_inputs(is_dummy_run=is_dummy_run)
-
+            # 2. Padding inputs for cuda graph
+            self.padding_cudagraph_inputs()
             if is_dummy_run:
                 self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
-            # 2. Padding inputs for cuda grph
-            self.padding_cudagraph_inputs()
+            else:
+                self.forward_meta.step_use_cudagraph = self.forward_meta.step_use_cudagraph and self.real_token_num <= self.fd_config.graph_opt_config.max_capture_size
 
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
             # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
@@ -1588,8 +1573,6 @@ class XPUModelRunner(ModelRunnerBase):
             if not self.not_need_stop() and not is_dummy_run:
                 self._execute_empty_input(self.forward_meta)
                 return None
-
-            # 2. Padding inputs for cuda grph
 
             model_inputs = {}
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
