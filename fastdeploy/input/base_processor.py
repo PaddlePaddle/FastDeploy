@@ -253,6 +253,17 @@ class BaseTextProcessor(ABC):
 
         ``stream`` is read from ``kwargs`` (default: True).
         """
+        # Error responses (e.g., preemption) have outputs=None or error_code!=200.
+        # Skip token decoding and return as-is to let upstream error handling take over.
+        if isinstance(response_dict, dict):
+            outputs = response_dict.get("outputs")
+            error_code = response_dict.get("error_code", 200)
+        else:
+            outputs = getattr(response_dict, "outputs", None)
+            error_code = getattr(response_dict, "error_code", 200)
+        if outputs is None or error_code != 200:
+            return response_dict
+
         stream = kwargs.get("stream", True)
         if stream:
             return self.process_response_dict_streaming(response_dict, **kwargs)
