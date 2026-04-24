@@ -18,7 +18,7 @@ import paddle
 from fastdeploy.model_executor.ops.xpu import eagle_get_self_hidden_states
 
 
-def computeOrder(last_seq_lens_this_time, seq_lens_this_time, step_idx, src_map, bsz):
+def computeOrder(last_seq_lens_encoder, last_seq_lens_this_time, seq_lens_this_time, step_idx, src_map, bsz):
     in_offset = 0
     out_offset = 0
     for i in range(bsz):
@@ -59,13 +59,17 @@ def rebuildSelfHiddenStatesKernel(input, src_map, out, dim_embed, elem_cnt):
     return out
 
 
-def ref_eagle_get_self_hidden_states(input, last_seq_lens_this_time, seq_lens_this_time, step_idx):
+def ref_eagle_get_self_hidden_states(
+    input, last_seq_lens_encoder, last_seq_lens_this_time, seq_lens_this_time, step_idx
+):
     input_token_num = input.shape[0]
     dim_embed = input.shape[1]
     bsz = seq_lens_this_time.shape[0]
     src_map = np.full(input_token_num, -1, seq_lens_this_time.dtype)
 
-    output_token_num, src_map = computeOrder(last_seq_lens_this_time, seq_lens_this_time, step_idx, src_map, bsz)
+    output_token_num, src_map = computeOrder(
+        last_seq_lens_encoder, last_seq_lens_this_time, seq_lens_this_time, step_idx, src_map, bsz
+    )
 
     out = np.full([output_token_num * dim_embed], -1, input.dtype)
 
@@ -82,10 +86,12 @@ def test_eagle_get_self_hidden_states():
     input_token_num = np.random.randint(2 * 1024, 4 * 1024 + 1, dtype=np.int32)
     dim_embed = np.random.randint(1, 4 * 1024 + 1, dtype=np.int32)
 
+    last_seq_lens_encoder = np.random.randint(0, input_token_num // bs, bs, dtype=np.int32)
     last_seq_lens_this_time = np.random.randint(0, input_token_num // bs, bs, dtype=np.int32)
     seq_lens_this_time = np.random.randint(0, input_token_num // bs, bs, dtype=np.int32)
     step_idx = np.arange(0, bs, dtype=np.int32)
 
+    last_seq_lens_encoder_tensor = paddle.to_tensor(last_seq_lens_encoder, dtype=paddle.int32)
     last_seq_lens_this_time_tensor = paddle.to_tensor(last_seq_lens_this_time, dtype=paddle.int32)
     seq_lens_this_time_tensor = paddle.to_tensor(seq_lens_this_time, dtype=paddle.int32)
     step_idx_tensor = paddle.to_tensor(step_idx, dtype=paddle.int64)
@@ -95,12 +101,14 @@ def test_eagle_get_self_hidden_states():
     input_tensor = paddle.to_tensor(input, dtype=paddle.float32)
     cpu_out = eagle_get_self_hidden_states(
         input_tensor.cpu(),
+        last_seq_lens_encoder_tensor.cpu(),
         last_seq_lens_this_time_tensor.cpu(),
         seq_lens_this_time_tensor.cpu(),
         step_idx_tensor.cpu(),
     )
     xpu_out = eagle_get_self_hidden_states(
         input_tensor,
+        last_seq_lens_encoder_tensor,
         last_seq_lens_this_time_tensor,
         seq_lens_this_time_tensor,
         step_idx_tensor,
@@ -113,12 +121,14 @@ def test_eagle_get_self_hidden_states():
         input_tensor = paddle.to_tensor(input, dtype=dtype)
         cpu_out = eagle_get_self_hidden_states(
             input_tensor.cpu(),
+            last_seq_lens_encoder_tensor.cpu(),
             last_seq_lens_this_time_tensor.cpu(),
             seq_lens_this_time_tensor.cpu(),
             step_idx_tensor.cpu(),
         )
         xpu_out = eagle_get_self_hidden_states(
             input_tensor,
+            last_seq_lens_encoder_tensor,
             last_seq_lens_this_time_tensor,
             seq_lens_this_time_tensor,
             step_idx_tensor,
