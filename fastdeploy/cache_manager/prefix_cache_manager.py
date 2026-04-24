@@ -37,6 +37,8 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import get_hash_str, get_logger
 
 logger = get_logger("prefix_cache_manager", "cache_manager.log")
@@ -211,8 +213,12 @@ class PrefixCacheManager:
             create=True,
         )
 
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            engine_cache_queue_address = (pod_ip, cache_config.local_cache_queue_port)
+        else:
+            engine_cache_queue_address = f"/dev/shm/fd_task_queue_{cache_config.local_cache_queue_port}.sock"
         self.cache_task_queue = EngineCacheQueue(
-            address=(pod_ip, cache_config.local_cache_queue_port),
+            address=engine_cache_queue_address,
             authkey=b"cache_queue_service",
             is_server=False,
             num_client=tensor_parallel_size,
@@ -324,7 +330,7 @@ class PrefixCacheManager:
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
                     + f" --model_path {self.config.model_config.model}"
-                    + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+                    + f" >{log_dir}/cache_manager_{int(device_ids[i])}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
                 cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -346,9 +352,7 @@ class PrefixCacheManager:
             if exit_code is None:
                 logger.info("Launch cache transfer manager successful")
             else:
-                logger.info(
-                    "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
-                )
+                logger.info("Launch cache transfer manager failed, see cache_manager.log for more information")
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
@@ -421,7 +425,7 @@ class PrefixCacheManager:
                 + f" --ipc_suffix {ipc_suffix}"
                 + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" >{log_dir}/launch_cache_messager_{i}.log 2>&1"
+                + f" >{log_dir}/cache_messager_{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -433,7 +437,7 @@ class PrefixCacheManager:
         if exit_code is None:
             logger.info("Launch cache messager successful")
         else:
-            logger.info("Launch cache messager failed, see launch_cache_messager.log for more information")
+            logger.info("Launch cache messager failed, see cache_messager.log for more information")
             cache_messager_processes = None
         return cache_messager_processes
 
@@ -1137,6 +1141,7 @@ class PrefixCacheManager:
         if not keys:
             return
 
+        trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_START, request.request_id, getattr(request, "user", ""))
         gpu_block_ids = request.block_tables[: len(keys)]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
         write_storage_task = WriteStorageTask(
@@ -1150,6 +1155,7 @@ class PrefixCacheManager:
         self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+        trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_END, request.request_id, getattr(request, "user", ""))
 
     def write_cache_to_storage_decode(self, request: Request):
         """

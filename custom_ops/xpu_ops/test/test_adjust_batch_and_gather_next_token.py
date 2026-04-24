@@ -16,6 +16,7 @@ import unittest  # 导入 unittest
 
 import numpy as np
 import paddle
+from utils import init_inplace_tensor
 
 from fastdeploy.model_executor.ops.xpu import (
     adjust_batch,
@@ -33,10 +34,7 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
     seq_lens_this_time = paddle.to_tensor(seq_lens_this_time_data, dtype="int32")
 
     bsz = seq_lens_this_time.shape[0]
-    cum_offsets = paddle.zeros(bsz, dtype="int32")
     block_table = paddle.arange(0, 56, dtype="int32").reshape((bsz, 8))
-
-    infer_params = get_infer_param(seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_table, 64)
 
     (
         encoder_batch_map,
@@ -45,23 +43,56 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
         decoder_batch_idx,
         encoder_seq_lod,
         decoder_seq_lod,
-        _,
-        _,
-        _,
-        _,
-        _,
+        encoder_kv_lod,
+        prefix_len,
+        decoder_context_len,
+        decoder_context_len_cache,
+        prefix_block_tables,
         encoder_batch_map_cpu,
         decoder_batch_map_cpu,
         encoder_batch_idx_cpu,
         decoder_batch_idx_cpu,
         encoder_seq_lod_cpu,
         decoder_seq_lod_cpu,
-        _,
-        _,
-        _,
-        _,
+        encoder_kv_lod_cpu,
+        prefix_len_cpu,
+        decoder_context_len_cpu,
+        decoder_context_len_cache_cpu,
         len_info_cpu,
-    ) = infer_params
+    ) = init_inplace_tensor(seq_lens_encoder.shape[0], block_table.shape)
+    (
+        slot_mapping_enc,
+        slot_mapping_dec,
+    ) = get_infer_param(
+        seq_lens_encoder,
+        seq_lens_decoder,
+        seq_lens_this_time,
+        block_table,
+        encoder_batch_map,
+        decoder_batch_map,
+        encoder_batch_idx,
+        decoder_batch_idx,
+        encoder_seq_lod,
+        decoder_seq_lod,
+        encoder_kv_lod,
+        prefix_len,
+        decoder_context_len,
+        decoder_context_len_cache,
+        prefix_block_tables,
+        encoder_batch_map_cpu,
+        decoder_batch_map_cpu,
+        encoder_batch_idx_cpu,
+        decoder_batch_idx_cpu,
+        encoder_seq_lod_cpu,
+        decoder_seq_lod_cpu,
+        encoder_kv_lod_cpu,
+        prefix_len_cpu,
+        decoder_context_len_cpu,
+        decoder_context_len_cache_cpu,
+        len_info_cpu,
+        64,
+        0,
+    )
 
     token_num = seq_lens_this_time.sum().cpu().item()
     hidden_dim = 8192
@@ -72,7 +103,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
     # 测试 adjust_batch
     adjusted_output = adjust_batch(
         input_tensor,
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_idx,
@@ -88,7 +118,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
 
     adjusted_output_cpu = adjust_batch(
         input_tensor.cpu(),
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_idx,
@@ -110,7 +139,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
     # 测试 gather_next_token
     gather_out = gather_next_token(
         adjusted_output,
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_map,
@@ -126,7 +154,6 @@ def _run_test_base(seq_lens_this_time_data, is_speculative):
 
     gather_out_cpu = gather_next_token(
         adjusted_output.cpu(),
-        cum_offsets,
         encoder_seq_lod,
         decoder_seq_lod,
         encoder_batch_map,

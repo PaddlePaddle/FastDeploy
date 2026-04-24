@@ -49,7 +49,12 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
-from fastdeploy.engine.request import ControlRequest, ControlResponse, RequestType
+from fastdeploy.engine.request import (
+    BatchRequest,
+    ControlRequest,
+    ControlResponse,
+    RequestType,
+)
 from fastdeploy.eplb.async_expert_loader import (
     MODEL_MAIN_NAME,
     REARRANGE_EXPERT_MAGIC_NUM,
@@ -321,10 +326,21 @@ class PaddleDisWorkerProc:
         self.experts_manager.tensor_infos = None
 
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
-        model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
-        paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
-        value = model_weights_signal_tensor.numpy()[0]
-        return int(value)
+        signal_list = [self.model_weights_signal[0]]
+        paddle.distributed.broadcast_object_list(signal_list, src=src, group=group)
+        return int(signal_list[0])
+
+    def _get_exist_task_flag(self) -> bool:
+        if self.nnode > 1:
+            return self.task_queue.read_finish_flag.get() == 1
+        else:
+            return self.exist_task_signal.value[0] == ExistTaskStatus.EXIST
+
+    def _update_exist_task_flag(self, flag: bool) -> None:
+        if self.nnode > 1:
+            self.task_queue.read_finish_flag.set(1 if flag else 0)
+        else:
+            self.exist_task_signal.value[0] = ExistTaskStatus.EXIST if flag else ExistTaskStatus.EMPTY
 
     def _tp_barrier_wait(self):
         if current_platform.is_xpu() or self.enable_overlap_schedule:
@@ -471,18 +487,17 @@ class PaddleDisWorkerProc:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.enable_mm_runtime and self.worker.exist_prefill()
                     ):
-                        if self.nnode > 1:
-                            self.task_queue.read_finish_flag.set(1)
-                        else:
-                            self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
+                        self._update_exist_task_flag(True)
+                else:
+                    self._update_exist_task_flag(False)
 
             # Synchronize the signal set by tp_rank0 visiable to other workers
             self._tp_barrier_wait() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
-                if self.ranks > 1:
-                    paddle.distributed.barrier()
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
+                    if self.ranks > 1:
+                        paddle.distributed.barrier()
                     logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
                     )
@@ -532,56 +547,42 @@ class PaddleDisWorkerProc:
                             )  # 所有 Rank 已同步唤醒，启动权重更新流程
                     continue
 
-            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
+            if self._get_exist_task_flag():
                 logger.debug(f"Rank: {self.local_rank} Detected new requests.")
                 self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
-                    # Reset the two signal.
-                    if self.nnode > 1:
-                        self.task_queue.read_finish_flag.set(0)
-                    else:
-                        self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
+                    self._update_exist_task_flag(False)
+                self._tp_barrier_wait() if tp_size > 1 else None
+
                 # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
                 # Only EP + DP prefill should barrier for data arrival.
                 # In mixed mode and decoder in D, we should not barrier to influence decoding.
                 if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
                     paddle.distributed.barrier(self.parallel_config.ep_group)
 
-                req_dicts, control_reqs = [], []
                 assert (
                     len(tasks) > 0
                 ), f"task_queue.get_tasks() should contain at least one tuple, [([req1, ...] ,real_bsz)], but got len(tasks)={len(tasks)}"
-                # In EP + DP prefill, empty task ([]) is delived in worker to barrier. For empty task, just skip and continue.
-                # tasks[0] contains two part, ([req1, ...] ,real_bsz)
-                # tasks[0][0] is [req1, ...]
-                # if empty batch is delived, eval(tasks[0][0]) should be False ([]),
-                # if batch with requests is delived, eval(tasks[0][0]) should be True, then to be processed as below.
-                if tasks[0][0]:
-                    for req_dict, bsz in tasks:
-                        if len(req_dict) > 0 and isinstance(req_dict[0], ControlRequest):
-                            control_reqs.append(req_dict[0])
+
+                batch_request, control_reqs, max_occupied_batch_index = BatchRequest.from_tasks(tasks)
+
+                if len(control_reqs) > 0:
+                    logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
+                    for control_req in control_reqs:
+                        if self.parallel_config.use_ep:
+                            self.cached_control_reqs.append(control_req)
+                            logger.info(f"Rank: {self.local_rank} cached ep control request: {control_req}")
                         else:
-                            max_occupied_batch_index = int(bsz)
-                            req_dicts.extend(req_dict)
+                            self.run_control_method(control_req)
+                            self._tp_barrier_wait() if tp_size > 1 else None
 
-                    # todo: run control request async
-                    if len(control_reqs) > 0:
-                        logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
-                        for control_req in control_reqs:
-                            if self.parallel_config.use_ep:
-                                self.cached_control_reqs.append(control_req)
-                                logger.info(f"Rank: {self.local_rank} cached ep control request: {control_req}")
-                            else:
-                                self.run_control_method(control_req)
-                                self._tp_barrier_wait() if tp_size > 1 else None
-
-                if len(req_dicts) > 0:
+                if len(batch_request) > 0:
                     # Count prefill requests in current batch
-                    num_prefill_requests = sum(1 for req in req_dicts if req.task_type == RequestType.PREFILL)
-                    num_scheduled_requests = len(req_dicts)
-                    scheduled_request_ids = [req.request_id for req in req_dicts]
+                    num_prefill_requests = sum(1 for req in batch_request if req.task_type == RequestType.PREFILL)
+                    num_scheduled_requests = len(batch_request)
+                    scheduled_request_ids = [req.request_id for req in batch_request]
                     logger.info(
                         f"Rank: {self.local_rank}, num_prefill_requests: {num_prefill_requests}, "
                         f"max_occupied_batch_index: {max_occupied_batch_index}, "
@@ -590,7 +591,7 @@ class PaddleDisWorkerProc:
                     )
 
                     # Process prefill inputs
-                    self.worker.preprocess_new_task(req_dicts, max_occupied_batch_index)
+                    self.worker.preprocess_new_task(batch_request, max_occupied_batch_index)
             else:
                 if self.scheduler_config.splitwise_role == "prefill":
                     if tp_size > 1:
@@ -899,6 +900,7 @@ def parse_args():
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
     parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])
+    parser.add_argument("--reasoning_allowed_token_ids", type=json.loads, default=[])
 
     parser.add_argument(
         "--quantization",

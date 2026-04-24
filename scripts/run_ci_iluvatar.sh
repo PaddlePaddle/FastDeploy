@@ -77,17 +77,17 @@ function print_error_message() {
         echo "------------------- log/launch_worker.log -----------------"
         cat log/launch_worker.log
     fi
-    if [ -f "log/workerlog.0" ]; then
-        echo "------------------- log/workerlog.0 -----------------"
-        cat log/workerlog.0
+    if [ -f "log/paddle/workerlog.0" ]; then
+        echo "------------------- log/paddle/workerlog.0 -----------------"
+        cat log/paddle/workerlog.0
     fi
-    if [ -f "log/workerlog.1" ]; then
-        echo "------------------- log/workerlog.1 -----------------"
-        cat log/workerlog.1
+    if [ -f "log/paddle/workerlog.1" ]; then
+        echo "------------------- log/paddle/workerlog.1 -----------------"
+        cat log/paddle/workerlog.1
     fi
-    if [ -f "log/fastdeploy_error.log" ]; then
-        echo "------------------- log/fastdeploy_error.log -----------------"
-        cat log/fastdeploy_error.log
+    if [ -f "log/error.log" ]; then
+        echo "------------------- log/error.log -----------------"
+        cat log/error.log
     fi
 }
 
@@ -128,8 +128,12 @@ function clear_message() {
 }
 
 function stop_processes() {
-    ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    # kill server
     ps -efww | grep -E '8180' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    # kill client
+    ps -efww | grep -E 'block_size 16' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    # check
+    ps -efww | grep -E "fastdeploy" || true
 }
 
 function check_server_status() {
@@ -140,7 +144,7 @@ function check_server_status() {
         echo "Failed to launch worker processes..."
         stop_processes
         cat server.log
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         exit 1
     fi
 
@@ -148,7 +152,7 @@ function check_server_status() {
         echo "Some errors occurred..."
         stop_processes
         cat server.log
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         exit 1
     fi
 
@@ -168,7 +172,7 @@ function check_server_status() {
             echo -e "\nServer start timeout: After $((TIMEOUT/60)) minutes, the service still doesn't start!"
             stop_processes
             cat server.log
-            cat log/workerlog.0
+            cat log/paddle/workerlog.0
             exit 1
         fi
 
@@ -311,26 +315,22 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
   "chat_template_kwargs":{"enable_thinking": false}
 }' >& $result_file
 
-echo -e "\nfull response:"
-cat $result_file
-
 exit_code=$?
 echo -e "\n\nexit_code is ${exit_code}"
+
+echo -e "\nfull response:"
+cat $result_file
 
 echo -e "\nStop server..."
 stop_processes
 echo -e "\nStop server done."
-
-if [ ${exit_code} -ne 0 ]; then
-    print_error_message
-    exit 1
-fi
 
 expected_strings="Buddhist"
 if grep -q "$expected_strings" "$result_file"; then
     echo -e "\nPASSED"
 else
     echo -e "\nExit with Accucary error: '$expected_strings' is not existed in generate response."
+    print_error_message
     exit 1
 fi
 
@@ -358,25 +358,21 @@ result_file="full_response.log"
 paddleocr doc_parser -i https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/paddleocr_vl_demo.png \
        --vl_rec_backend fastdeploy-server --vl_rec_server_url http://127.0.0.1:8180/v1 >& $result_file
 
-echo -e "\nfull response:"
-cat $result_file
-
 exit_code=$?
 echo -e "\n\nexit_code is ${exit_code}"
+
+echo -e "\nfull response:"
+cat $result_file
 
 echo -e "\nStop server..."
 stop_processes
 echo -e "\nStop server done."
-
-if [ ${exit_code} -ne 0 ]; then
-    print_error_message
-    exit 1
-fi
 
 expected_strings="本报记者 沈小晓 任彦 黄培昭"
 if grep -q "$expected_strings" "$result_file"; then
     echo -e "\nPASSED"
 else
     echo -e "\nExit with Accucary error: '$expected_strings' is not existed in generate response."
+    print_error_message
     exit 1
 fi

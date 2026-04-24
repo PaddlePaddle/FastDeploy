@@ -326,7 +326,15 @@ class OpenAIServingCompletion:
                 for data in response:
                     rid = int(data["request_id"].split("_")[-1])
                     if data.get("error_code", 200) != 200:
-                        raise ValueError("{}".format(data["error_msg"]))
+                        data["outputs"] = {
+                            "text": "",
+                            "completion_tokens": "",
+                            "token_ids": [],
+                            "top_logprobs": None,
+                            "draft_top_logprobs": None,
+                        }
+                        data["metrics"] = data.get("metrics") or {}
+                        data["finished"] = True
 
                     output = data["outputs"]
                     output_top_logprobs = output.get("top_logprobs") or None
@@ -772,13 +780,19 @@ class OpenAIServingCompletion:
             )
             if final_res.get("error_msg", None) is not None and "Aborted" in final_res["error_msg"]:
                 finish_reason = "abort"
+            if final_res.get("error_msg", None) is not None and "PD Error" in final_res["error_msg"]:
+                finish_reason = "pd_reschedule"
+
+            return_completion_token_ids = False
+            if request.return_token_ids or finish_reason == "pd_reschedule":
+                return_completion_token_ids = True
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
                 index=len(choices),
                 text=output_text,
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-                completion_token_ids=completion_token_ids if request.return_token_ids else None,
+                completion_token_ids=completion_token_ids if return_completion_token_ids else None,
                 completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
                 prompt_tokens=(
                     prompt_tokens_list[idx // (1 if request.n is None else request.n)]

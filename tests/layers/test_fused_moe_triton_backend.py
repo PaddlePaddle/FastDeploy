@@ -37,6 +37,7 @@ class DummyQuantConfig:
         self.weight_block_size = weight_block_size
         self._name_value = name_value
         self.deepgemm_scale_ue8m0 = False
+        self.moe_blockwise_gemm_scale_ue8m0 = False
 
     def name(self):
         return self._name_value
@@ -648,6 +649,7 @@ class TestFusedMoeTritonBackend:
         """Test the quant_weight_ue8m0 branch in BlockWiseFP8MoEMethod.process_weights_after_loading."""
         quant_config = DummyQuantConfig(is_checkpoint_bf16=True, weight_block_size=(128, 128))
         quant_config.deepgemm_scale_ue8m0 = True
+        quant_config.moe_blockwise_gemm_scale_ue8m0 = True
         layer = DummyLayer(quant_config, weight_dtype="bfloat16")
         method = backend.BlockWiseFP8MoEMethod(quant_config)
         method.create_weights(layer, model_format="torch")

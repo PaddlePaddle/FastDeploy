@@ -176,9 +176,9 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
               &token_ids_all[batch_id * max_model_len + prompt_lens[batch_id]];
           __global_ptr__ int64_t *output_ids =
               &step_output_ids[batch_id * max_step_tokens];
+          int64_t base = cur_step_idx - output_len;
           for (int i = 0; i < output_len; i++) {
-            token_ids_all_now[cur_step_idx - i] =
-                output_ids[output_len - 1 - i];
+            token_ids_all_now[base + i] = output_ids[i];
           }
         }
       }
@@ -199,6 +199,7 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
       // Stopped or paused slot (batch_id < real_bsz)
       buffer_stop_flag_int[cid] += 1;
       stop_flags[batch_id] = true;
+      seq_lens_encoder[batch_id] = 0;
       seq_lens_decoder[batch_id] = 0;
       seq_lens_this_time[batch_id] = 0;
       step_output_len[batch_id] = 0;
@@ -211,7 +212,7 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
     for (int i = 0; i < ncores; i++) {
       stop_flag_int += buffer_stop_flag_int[i];
     }
+    has_running_seqs[0] = stop_flag_int < max_bsz;
   }
-  has_running_seqs[0] = stop_flag_int < max_bsz;
 }
 }  // namespace fd_xpu3

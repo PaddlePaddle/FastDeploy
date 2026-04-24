@@ -332,6 +332,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Apply the EP prefill method.
@@ -339,13 +341,16 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
 
-        hidden_size = x.shape[1]
+        hidden_size = layer.hidden_size
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
+
+        if fc1_latent_proj:
+            x = fc1_latent_proj(x)
 
         # 2. Dynamic compute blockwise quantization scales
         if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
@@ -643,6 +648,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         if shared_experts is not None:
             tmp_ffn_out += s_x
 
+        if fc2_latent_proj:
+            tmp_ffn_out = fc2_latent_proj(tmp_ffn_out)
+
         return tmp_ffn_out
 
     def apply_ep_decode(
@@ -652,6 +660,8 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate: nn.Layer,
         topk_ids_hookfunc: Callable = None,
         shared_experts: nn.Layer = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
     ) -> paddle.Tensor:
         """
         Apply the EP decoder method.
@@ -665,6 +675,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
             topk_ids_hookfunc(topk_ids=topk_idx)
 
         # 2. EP Dispatch
+        if fc1_latent_proj:
+            x = fc1_latent_proj(x)
+
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
             x, topk_idx, topk_weights, use_fp8=True, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
         )
@@ -728,6 +741,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
         if shared_experts is not None:
             out += s_x
+
+        if fc2_latent_proj:
+            out = fc2_latent_proj(out)
+
         return out
 
     def apply_tp(

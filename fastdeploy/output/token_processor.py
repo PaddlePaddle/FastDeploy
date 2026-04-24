@@ -283,7 +283,7 @@ class TokenProcessor:
                 )
 
                 main_process_metrics.request_token_ratio.observe(token_ratio)
-                llm_logger.info(f"{self.resource_manager.info()}")
+                llm_logger.info(self.resource_manager.info())
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
                 if not is_prefill:
@@ -327,6 +327,7 @@ class TokenProcessor:
                             request_id=task_id,
                         )
                         self.resource_manager.reschedule_preempt_task(task_id)
+                    llm_logger.info(self.resource_manager.info())
                 continue
             if self.cfg.scheduler_config.splitwise_role == "decode":
                 # In D instance, if preempted, error has been reported and resource recycled, tokens generated async not need to be handled
@@ -576,8 +577,11 @@ class TokenProcessor:
                         self.prefill_result_status[finished_task_id[0]] = finished_task_id[1]
                 if task_id in self.prefill_result_status:
                     if self.prefill_result_status[task_id] != "finished":
-                        result.error_code = 400
-                        result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
+                        result.error_code = 501
+                        result.error_msg = (
+                            f"PD Error: prefill failed to send cache to decode, "
+                            f"{task_id}, {self.prefill_result_status[task_id]}"
+                        )
                     log_request(
                         RequestLogLevel.STAGES,
                         message="wait for sending cache, request_id: {request_id}, cost seconds: {cost_seconds}",
@@ -788,7 +792,7 @@ class TokenProcessor:
         batch_result = list()
         # reschedule
         for i in range(batch):
-            if self.resource_manager.stop_flags[i]:
+            if self.resource_manager.stop_flags[i] or self.resource_manager.tasks_list[i] is None:
                 continue
 
             recovery_stop = False
@@ -1030,7 +1034,6 @@ class TokenProcessor:
                     )
 
                     main_process_metrics.request_token_ratio.observe(token_ratio)
-                    llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status(result)
                     if not is_prefill:
@@ -1044,6 +1047,7 @@ class TokenProcessor:
                         envs.ENABLE_V1_KVCACHE_SCHEDULER
                         and self.cfg.cache_config.enable_prefix_caching
                         and self.cfg.cache_config.enable_output_caching
+                        and not envs.ENABLE_V1_KVCACHE_MANAGER
                     ):
                         self.resource_manager.cache_output_tokens(
                             task
@@ -1054,6 +1058,7 @@ class TokenProcessor:
                         message="eos token {request_id} Recycle end.",
                         request_id=task_id,
                     )
+                    llm_logger.info(f"{self.resource_manager.info()}")
                     break
 
             llm_logger.debug(f"get response from infer: {result}")

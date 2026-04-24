@@ -16,6 +16,7 @@
 
 import argparse
 import asyncio
+import glob
 import hashlib
 import importlib
 import json
@@ -151,6 +152,44 @@ def _output_with_pager(text: str):
 
     # No pager worked, fall back to normal print
     print(text)
+
+
+def ensure_workerlog_alias(log_dir: str, paddle_log_dir: str) -> None:
+    """
+    Create symlinks in log_dir pointing to paddle workerlog files.
+
+    This consolidates paddle distributed launch logs (workerlog.*) into the main log directory
+    for easier access while keeping the original files in paddle_log_dir.
+
+    Args:
+        log_dir: Main log directory (e.g., "log/")
+        paddle_log_dir: Paddle log directory (e.g., "log/paddle/")
+    """
+    try:
+
+        def ensure_alias_for_target(target_path: str) -> None:
+            if not target_path:
+                return
+            link_path = os.path.join(log_dir, os.path.basename(target_path))
+            abs_target_path = os.path.abspath(target_path)
+            if os.path.islink(link_path):
+                current_target = os.readlink(link_path)
+                abs_current_target = os.path.abspath(os.path.join(os.path.dirname(link_path), current_target))
+                if abs_current_target == abs_target_path:
+                    return
+                os.remove(link_path)
+            elif os.path.isfile(link_path):
+                os.remove(link_path)
+            elif os.path.exists(link_path):
+                return
+            os.symlink(abs_target_path, link_path)
+
+        ensure_alias_for_target(os.path.join(paddle_log_dir, "workerlog.0"))
+        for target_path in glob.glob(os.path.join(paddle_log_dir, "workerlog.*")):
+            if os.path.isfile(target_path):
+                ensure_alias_for_target(target_path)
+    except OSError:
+        pass
 
 
 class EngineError(Exception):
