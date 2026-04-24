@@ -1095,7 +1095,8 @@ class MTPProposer(Proposer):
                     self.model_inputs["draft_tokens"],
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["seq_lens_decoder"],
-                    num_speculative_tokens=self.speculative_config.num_speculative_tokens,
+                    # num_speculative_tokens=self.speculative_config.num_speculative_tokens,
+                    num_speculative_tokens=0,
                 )
 
                 if self.enable_mm:

@@ -1506,14 +1506,28 @@ class XPUModelRunner(ModelRunnerBase):
         capture_sizes = self.cudagraph_capture_sizes.copy()
 
         try:
-            for batch_size in sorted(capture_sizes, reverse=True):
-                self._dummy_run(
-                    num_tokens=self.scheduler_config.max_num_batched_tokens,
-                    batch_size=batch_size,
-                    expected_decode_len=expected_decode_len,
-                    in_capturing=True,
-                )
-                logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
+            if self.speculative_decoding and self.spec_method in [SpecMethod.MTP, SpecMethod.SUFFIX]:
+                for capture_size in sorted(capture_sizes, reverse=True):
+                    expected_decode_len = (self.speculative_config.num_speculative_tokens + 1) * 2
+                    self._dummy_run(
+                        num_tokens=self.fd_config.get_max_chunk_tokens(),
+                        batch_size=int(capture_size / (self.speculative_config.num_speculative_tokens + 1)),
+                        in_capturing=True,
+                        expected_decode_len=expected_decode_len,
+                        # accept_all_drafts=True,
+                    )
+                    logger.info(
+                        f"Warm up the model with the num_tokens:{capture_size}, expected_decode_len:{expected_decode_len}"
+                    )
+            else:
+                for batch_size in sorted(capture_sizes, reverse=True):
+                    self._dummy_run(
+                        num_tokens=self.scheduler_config.max_num_batched_tokens,
+                        batch_size=batch_size,
+                        expected_decode_len=expected_decode_len,
+                        in_capturing=True,
+                    )
+                    logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
         except RuntimeError as e:
             if "out of memory" in str(e):
                 raise RuntimeError(
@@ -1699,6 +1713,7 @@ class XPUModelRunner(ModelRunnerBase):
                     self.proposer.run(
                         full_hidden_states=model_output,
                         step_use_cudagraph=self.forward_meta.step_use_cudagraph,
+                        # tep_use_cudagraph=False,
                         is_dummy_run=is_dummy_run,
                     )
                 else:
