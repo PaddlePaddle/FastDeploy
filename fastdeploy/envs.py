@@ -195,6 +195,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Whether to collect user information
     "DO_NOT_TRACK": lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
+    # Whether to always return metrics in response regardless of request-level collect_metrics
+    "FD_COLLECT_METRICS": lambda: (os.getenv("FD_COLLECT_METRICS", "0")) == "1",
+    # Whether to always include usage in response regardless of stream_options.include_usage
+    "FD_RESPONSE_INCLUDE_USAGE": lambda: (os.getenv("FD_RESPONSE_INCLUDE_USAGE", "0")) == "1",
     # Usage stats server url
     "FD_USAGE_STATS_SERVER": lambda: os.getenv(
         "FD_USAGE_STATS_SERVER", "http://10.169.17.184:8089/fd/report/periodic"

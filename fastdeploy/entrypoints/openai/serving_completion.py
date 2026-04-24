@@ -611,7 +611,7 @@ class OpenAIServingCompletion:
                             created=created_time,
                             model=model_name,
                             choices=choices,
-                            metrics=res["metrics"] if request.collect_metrics else None,
+                            metrics=res["metrics"] if request.collect_metrics or envs.FD_COLLECT_METRICS else None,
                         )
                         yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
                         choices = []
@@ -631,7 +631,11 @@ class OpenAIServingCompletion:
                             if "trace_carrier" in res:
                                 del res["trace_carrier"]
                         num_choices -= 1
-                        if getattr(request, "stream_options", None) and request.stream_options.include_usage:
+                        if (
+                            getattr(request, "stream_options", None)
+                            and request.stream_options.include_usage
+                            or envs.FD_RESPONSE_INCLUDE_USAGE
+                        ):
                             usage_chunk = CompletionStreamResponse(
                                 id=request_id,
                                 created=created_time,
@@ -651,7 +655,7 @@ class OpenAIServingCompletion:
                                         image_tokens=num_image_tokens[idx], reasoning_tokens=reasoning_tokens[idx]
                                     ),
                                 ),
-                                metrics=res["metrics"] if request.collect_metrics else None,
+                                metrics=res["metrics"] if request.collect_metrics or envs.FD_COLLECT_METRICS else None,
                             )
                             yield f"data: {usage_chunk.model_dump_json(exclude_unset=True)}\n\n"
                         api_server_logger.info(f"Completion Streaming response last send: {chunk.model_dump_json()}")
@@ -774,6 +778,7 @@ class OpenAIServingCompletion:
 
             num_reasoning_tokens += output.get("reasoning_token_num", 0)
 
+        collect_metrics = request.collect_metrics or envs.FD_COLLECT_METRICS
         num_prompt_tokens = num_prompt_tokens // (1 if request.n is None else request.n)
         usage = UsageInfo(
             prompt_tokens=num_prompt_tokens,
@@ -792,6 +797,7 @@ class OpenAIServingCompletion:
             model=model_name,
             choices=choices,
             usage=usage,
+            metrics=final_res_batch[0]["metrics"] if collect_metrics else None,
         )
 
     async def _call_process_response_dict(self, res, request, stream):

@@ -285,6 +285,7 @@ class ChatCompletionResponse(BaseModel):
     model: str
     choices: List[ChatCompletionResponseChoice]
     usage: UsageInfo
+    metrics: Optional[Dict] = None
 
 
 class LogProbEntry(BaseModel):
@@ -390,6 +391,7 @@ class CompletionResponse(BaseModel):
     model: str
     choices: List[CompletionResponseChoice]
     usage: UsageInfo
+    metrics: Optional[Dict] = None
 
 
 class CompletionLogprobs(BaseModel):

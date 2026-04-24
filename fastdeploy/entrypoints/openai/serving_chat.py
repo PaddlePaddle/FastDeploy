@@ -237,10 +237,10 @@ class OpenAIServingChat:
 
         stream_options = request.stream_options
         if stream_options is None:
-            include_usage = False
+            include_usage = envs.FD_RESPONSE_INCLUDE_USAGE
             include_continuous_usage = False
         else:
-            include_usage = stream_options.include_usage
+            include_usage = stream_options.include_usage or envs.FD_RESPONSE_INCLUDE_USAGE
             include_continuous_usage = stream_options.continuous_usage_stats
         chunk = ChatCompletionStreamResponse(
             id=request_id,
@@ -476,7 +476,7 @@ class OpenAIServingChat:
 
                         inference_start_time[idx] = 0
 
-                    if request.collect_metrics:
+                    if request.collect_metrics or envs.FD_COLLECT_METRICS:
                         chunk.metrics = res["metrics"]
 
                     if request.return_token_ids:
@@ -587,6 +587,7 @@ class OpenAIServingChat:
             prompt_logprobs_res_list = [[] for _ in range(num_choices)]
             sampling_mask_list = [[] for _ in range(num_choices)]
             speculate_metrics = [None for _ in range(num_choices)]
+            last_metrics = [None for _ in range(num_choices)]
             choices = []
             while num_choices > 0:
                 if self.engine_client.check_model_weight_status():
@@ -682,6 +683,7 @@ class OpenAIServingChat:
                     if output_sampling_mask is not None:
                         sampling_mask_list[idx].append(self._make_sampling_mask_list(output_sampling_mask))
                     speculate_metrics[idx] = data["metrics"].get("speculate_metrics", None)
+                    last_metrics[idx] = data["metrics"]
                     if data["finished"]:
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
@@ -752,6 +754,7 @@ class OpenAIServingChat:
             model=model_name,
             choices=choices,
             usage=usage,
+            metrics=last_metrics[0] if request.collect_metrics or envs.FD_COLLECT_METRICS else None,
         )
         api_server_logger.info(f"Chat response: {res.model_dump_json()}")
         return res

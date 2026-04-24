@@ -252,6 +252,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 控制是否收集用户信息，默认 0（收集）；1（不收集）
     "DO_NOT_TRACK" : lambda: (os.getenv("DO_NOT_TRACK", "0")) == "1",
 
+    # 是否始终在响应中返回 metrics 信息，不受请求级别 collect_metrics 参数影响（0 或 1）
+    "FD_COLLECT_METRICS": lambda: (os.getenv("FD_COLLECT_METRICS", "0")) == "1",
+
+    # 是否始终在响应中包含 usage 信息，不受 stream_options.include_usage 参数影响（0 或 1）
+    "FD_RESPONSE_INCLUDE_USAGE": lambda: (os.getenv("FD_RESPONSE_INCLUDE_USAGE", "0")) == "1",
+
     # 使用情况统计报告服务地址
     "FD_USAGE_STATS_SERVER": lambda: os.getenv(
         "FD_USAGE_STATS_SERVER", "http://fd-stats.baidu-int.com/fd/report/periodic"
