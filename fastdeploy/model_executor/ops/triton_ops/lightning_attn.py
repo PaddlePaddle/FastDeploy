@@ -654,6 +654,12 @@ def lightning_attention(
         k1 = k[..., s:end_idx]
         o, kv_history = lightning_attention_forward(q1, k1, v, ed, kv_history, block_size=block_size)
         output = o if output is None else output + o
+    # Guard: if d < m the loop body never executes and output stays None.
+    # With the d % m == 0 assert above this should never happen for valid head
+    # dimensions (64, 128, …), but be explicit to aid debugging.
+    assert output is not None, (
+        f"lightning_attention produced no output (d={d}, m={m}). " "head_dim must be >= m and divisible by m."
+    )
     return output, kv_history
 
 

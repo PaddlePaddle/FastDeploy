@@ -326,7 +326,10 @@ class MiniMaxM1LinearAttention(nn.Layer):
         # Register as buffer (not trainable)
         self.register_buffer("slope_rate", slope_tensor)
 
-        # KV cache shape: [heads, head_dim, head_dim]
+        # Per-slot KV cache shape (no batch dim): [heads, head_dim, head_dim].
+        # Note: _kv_history at runtime is 4-D [batch, heads, head_dim, head_dim];
+        # this field records the *per-slot* shape for future slot-based cache
+        # allocation and must NOT include the batch dimension.
         self.kv_cache_shape = (self.num_attention_heads, self.head_dim, self.head_dim)
 
     def load_state_dict(self, state_dict):
@@ -400,9 +403,13 @@ class MiniMaxM1LinearAttention(nn.Layer):
                 dtype=q.dtype,
             )
 
-        # Apply lightning attention (returns 4D kv_history, not 5D concat)
+        # Apply lightning attention (returns 4D kv_history, not 5D concat).
+        # Use .reshape([-1]) not .squeeze(-1): slope_rate is [heads, 1, 1] and
+        # .squeeze(-1) would yield [heads, 1] (ndim=2), which is NOT reshaped by
+        # lightning_attention's `if ed.ndim == 1` guard and would reach the Triton
+        # kernel with an incorrect shape.  .reshape([-1]) always produces 1-D [heads].
         attn_output, new_kv_history = lightning_attention(
-            q, k, v, self.slope_rate.squeeze(-1), block_size=256, kv_history=self._kv_history
+            q, k, v, self.slope_rate.reshape([-1]), block_size=256, kv_history=self._kv_history
         )
         # Update persisted KV state for next token generation
         self._kv_history = new_kv_history
