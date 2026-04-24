@@ -1544,6 +1544,46 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         manager.reset()
         self.assertEqual(manager.cpu_free_block_list, [])
 
+    @patch("fastdeploy.cache_manager.prefix_cache_manager.envs")
+    def test_free_gpu_block_ids_flushes_cache_gone_with_as_only_flush(self, mock_envs):
+        """Verify GPU-only eviction sends flush(flush_cache_exists=False) with correct start_write_block_idx."""
+        mock_envs.FD_AS_ONLY_FLUSH = True
+        manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=0)
+        manager.kvcache_storage_backend = "attention_store"
+
+        gpu_hash = get_hash_str([9, 10])
+        node = BlockNode(
+            91,
+            [9, 10],
+            gpu_hash,
+            3,
+            0,
+            2,
+            gpu_hash,
+            0,
+            parent=manager.radix_tree_root,
+            cache_status=CacheStatus.GPU,
+        )
+        node.shared_count = 0
+        node.block_id = 12
+        manager.radix_tree_root.children[gpu_hash] = node
+        manager.node_map[node.node_id] = node
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.gpu_lru_leaf_set.add(node)
+
+        captured_tasks = []
+        manager.issue_write_back_storage_task = lambda task, is_sync=True: captured_tasks.append(task)
+
+        manager.free_block_ids_async(1)
+
+        self.assertEqual(len(captured_tasks), 1)
+        flush_task = captured_tasks[0]
+        self.assertFalse(flush_task.flush_cache_exists)
+        self.assertEqual(flush_task.keys, [gpu_hash])
+        self.assertEqual(flush_task.token_ids, [9, 10])
+        self.assertEqual(flush_task.gpu_block_ids, [])
+        self.assertEqual(flush_task.start_write_block_idx, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
