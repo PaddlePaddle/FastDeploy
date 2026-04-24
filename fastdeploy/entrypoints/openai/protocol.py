@@ -230,7 +230,7 @@ class FunctionDefinition(BaseModel):
     name: str
     description: Optional[str] = None
     parameters: Optional[dict[str, Any]] = None
-    strict: Optional[bool] = None
+    strict: bool = False
 
 
 class ChatCompletionToolsParam(BaseModel):
