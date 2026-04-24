@@ -213,7 +213,7 @@ jobs:
           -e TZ="Asia/Shanghai" \
           -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-          python -m pip install paddlepaddle-gpu==3.5.0.dev20260417 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
