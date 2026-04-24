@@ -246,8 +246,7 @@ class FastDeployLogger:
             logger.addHandler(console_handler)
             console_handler.propagate = False
 
-        # Set propagate (maintain original logic)
-        # logger.propagate = False
+        logger.propagate = False
 
         return logger
 
@@ -311,8 +310,7 @@ class FastDeployLogger:
             logger.addHandler(console_handler)
             console_handler.propagate = False
 
-        # Set propagate (maintain original logic)
-        # logger.propagate = False
+        logger.propagate = False
 
         return logger
 
