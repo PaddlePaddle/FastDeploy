@@ -31,7 +31,8 @@ from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
 
 """ -------------------------------------------------------- """
-from fastdeploy.model_executor.utils import process_final_after_loading
+from fastdeploy.model_executor.models.model_base import ModelRegistry
+from fastdeploy.model_executor.utils import process_final_after_loading, multi_switch_config_context
 import json
 from paddle.base import core as paddle_core
 import zmq
@@ -48,7 +49,12 @@ _DTYPE_MAP = {
 
 
 def receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None, recv_timeout_ms=300_000):
-    """Connect to a ReshardWorkerThread and receive all buckets.
+    """Connect to a ReshardWorkerThread and receive all weight buckets via CUDA IPC.
+
+    The sender uses dual-buffer ping-pong: while we read from buffer A, it packs
+    into buffer B.  This allows zero-clone receiving — we yield params as views
+    directly into the sender's IPC-shared GPU buffer, and only ACK (release the
+    buffer back to the sender) after all params in the bucket have been consumed.
 
     Args:
         gpu_id: The training-side GPU id (determines the IPC socket path).
@@ -71,10 +77,12 @@ def receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None,
     print(f"[Receiver] Connected to {ipc_addr}")
 
     bucket_count = 0
+    total_cost = 0
 
     try:
         while True:
             raw = sock.recv()
+            start_time = time.time()
 
             # --- Termination sentinel ---
             if raw == b"END":
@@ -90,34 +98,45 @@ def receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None,
             buffer_meta[0] = buffer_meta[0].encode("latin-1")
             buffer_meta[6] = int(os.getenv("FLAGS_selected_gpus", "0"))
             lod_tensor = paddle_core.LoDTensor._new_shared_cuda(tuple(buffer_meta))
-            flat_buf = paddle.to_tensor(lod_tensor)
+            flat_buf_ori = paddle.to_tensor(lod_tensor)
 
+            flat_buf = flat_buf_ori.clone()
+            flat_buf_ori._clear_data()
+            flat_buf_ori = None
+            del flat_buf_ori
+            sock.send(b"OK")
+
+            # Synchronize after IPC handle init to ensure data is accessible
             paddle.device.synchronize()
 
-            # --- Slice and reconstruct individual tensors ---
+            # Zero-clone: yield params as views directly from the IPC buffer.
+            # The sender has a second buffer and won't overwrite this one until we ACK.
             n_params = len(layout)
             for name, dtype_key, byte_offset, n_bytes, shape in layout:
-                # param_bytes = flat_buf[byte_offset : byte_offset + n_bytes]
-                # .clone() ensures zero storage offset so that .view(dtype) reads from the correct position.
-                # Without it, Paddle's view(dtype) may ignore the slice offset and start from byte 0,
-                # which makes the first param (offset=0) correct but all subsequent ones wrong.
-                param_bytes = flat_buf[byte_offset : byte_offset + n_bytes].clone()
                 target_dtype = _DTYPE_MAP[dtype_key]
-                param = param_bytes.view(target_dtype).reshape(shape)
-                # Clone to own memory so we can release the IPC flat buffer
-                print(">>>>>>>>>> ori param_key", name, param, param._md5sum())
-                yield name, param.clone()
+                param = flat_buf[byte_offset : byte_offset + n_bytes].clone().view(target_dtype).reshape(shape)
+                yield name, param
+
+            # All params consumed — ensure async GPU copies (param.copy_ in load_weights)
+            # have completed before releasing the IPC buffer back to the sender.
+            paddle.device.synchronize()
+
+            elapsed_time = time.time() - start_time
+            total_cost += elapsed_time
 
             bucket_count += 1
-
             print(
                 f"[Receiver] Bucket {bucket_count}: {n_params} params, "
-                f"flat_buf size={flat_buf.numel()} bytes"
+                f"buf size={flat_buf.numel()} bytes, "
+                f"elapsed_time={elapsed_time:.2f} s"
             )
 
-            # --- Release IPC buffer reference, then ack ---
+            # Release IPC buffer reference and ACK — sender can now reuse this buffer
+            flat_buf._clear_data()
             del flat_buf, lod_tensor
-            sock.send(b"OK")
+            # sock.send(b"OK")
+
+        print(f"[Receiver] total cost time: {total_cost:.2f} s")
 
     except zmq.Again:
         print(f"[Receiver] Timeout waiting for data (timeout={recv_timeout_ms}ms)")
