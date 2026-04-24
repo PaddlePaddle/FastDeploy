@@ -184,7 +184,7 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
       real_bsz);
 }
 
-template <int BLOCK_DIM>
+template <int BLOCK_DIM, int ITEMS_PER_THREAD>
 __global__ void compute_cu_batch_offset_kernel(int* cu_batch_token_offset,
                                                const int* accept_num,
                                                const int real_bsz) {
@@ -192,14 +192,25 @@ __global__ void compute_cu_batch_offset_kernel(int* cu_batch_token_offset,
   __shared__ typename BlockScan::TempStorage temp_storage;
 
   int tid = threadIdx.x;
-  int val = (tid < real_bsz) ? accept_num[tid] : 0;
+  if (tid == 0) cu_batch_token_offset[0] = 0;
+
+  int thread_data[ITEMS_PER_THREAD];
+
+  for (int i = 0; i < ITEMS_PER_THREAD; i++) {
+    int batch_id = tid * ITEMS_PER_THREAD + i;
+    thread_data[i] =
+        batch_id < real_bsz ? accept_num[tid * ITEMS_PER_THREAD + i] : 0;
+  }
 
   int scan_result;
-  BlockScan(temp_storage).InclusiveSum(val, scan_result);
+  BlockScan(temp_storage).InclusiveSum(thread_data, thread_data);
   __syncthreads();
 
-  if (tid < real_bsz) {
-    cu_batch_token_offset[tid + 1] = scan_result;
+  for (int i = 0; i < ITEMS_PER_THREAD; i++) {
+    int batch_id = tid * ITEMS_PER_THREAD + i;
+    if (batch_id < real_bsz) {
+      cu_batch_token_offset[batch_id + 1] = thread_data[i];
+    }
   }
 }
 
@@ -263,10 +274,26 @@ void SpeculateGetAcceptTokensAndLogits(
   const int max_occupied_slots = seq_lens_this_time.shape()[0];
   const int max_draft_tokens = accept_tokens.shape()[1];
 
-  compute_cu_batch_offset_kernel<512><<<1, 512, 0, cu_stream>>>(
-      const_cast<int*>(cu_batch_token_offset.data<int>()),
-      accept_num.data<int>(),
-      max_occupied_slots);
+  const int BLOCK_DIM = 512;
+  if (max_occupied_slots <= 512) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 1>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            max_occupied_slots);
+  } else if (max_occupied_slots <= 1024) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 2>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            max_occupied_slots);
+  } else if (max_occupied_slots <= 2048) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 4>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            max_occupied_slots);
+  }
 
   constexpr int PackSize = VEC_16B / sizeof(float);
   dim3 grid_dim(max_occupied_slots);
