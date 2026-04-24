@@ -653,10 +653,22 @@ class OpenAIServingChat:
                     request=request,
                 )
                 async for data in generator:
-                    if data.get("error_code", 200) != 200:
-                        raise ValueError("{}".format(data["error_msg"]))
                     idx = int(data["request_id"].split("_")[-1])
-                    # api_server_logger.debug(f"Client {request_id} received: {data}")
+                    if data.get("error_code", 200) != 200:
+                        # Error response - include already-generated tokens in the response
+                        data["outputs"] = {
+                            "text": "",
+                            "completion_tokens": "",
+                            "reasoning_content": "",
+                            "tool_calls": None,
+                            "reasoning_token_num": 0,
+                            "num_image_tokens": 0,
+                            "token_ids": [],
+                            "top_logprobs": None,
+                            "draft_top_logprobs": None,
+                        }
+                        data["metrics"] = data.get("metrics") or {}
+                        data["finished"] = True
                     previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
                     completion_token_ids[idx].extend(data["outputs"]["token_ids"])
                     # The logprob for handling the response
@@ -797,6 +809,26 @@ class OpenAIServingChat:
         idx = int(data["request_id"].split("_")[-1])
         output = data["outputs"]
 
+        finish_reason = "stop"
+        if previous_num_tokens != max_tokens:
+            finish_reason = "stop"
+            if output.get("tool_calls"):
+                finish_reason = "tool_calls"
+        else:
+            finish_reason = "length"
+        if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
+            finish_reason = "recover_stop"
+
+        if data.get("error_msg", None) is not None and "Aborted" in data["error_msg"]:
+            finish_reason = "abort"
+
+        if data.get("error_msg", None) is not None and "PD Error" in data["error_msg"]:
+            finish_reason = "pd_reschedule"
+
+        return_completion_token_ids = False
+        if request.return_token_ids or finish_reason == "pd_reschedule":
+            return_completion_token_ids = True
+
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
             main_process_metrics.e2e_request_latency.observe(
                 time.time() - data.get("metrics").get("request_start_time")
@@ -806,7 +838,7 @@ class OpenAIServingChat:
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_calls"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-            completion_token_ids=completion_token_ids if request.return_token_ids else None,
+            completion_token_ids=completion_token_ids if return_completion_token_ids else None,
             prompt_tokens=prompt_tokens if request.return_token_ids else None,
             completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
         )
@@ -833,18 +865,6 @@ class OpenAIServingChat:
         num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
         num_image_tokens[idx] = output.get("num_image_tokens", 0) or 0
 
-        finish_reason = "stop"
-        if previous_num_tokens != max_tokens:
-            finish_reason = "stop"
-            if output.get("tool_calls"):
-                finish_reason = "tool_calls"
-        else:
-            finish_reason = "length"
-        if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
-            finish_reason = "recover_stop"
-
-        if data.get("error_msg", None) is not None and "Aborted" in data["error_msg"]:
-            finish_reason = "abort"
         return ChatCompletionResponseChoice(
             index=idx,
             message=message,

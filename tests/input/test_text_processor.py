@@ -77,6 +77,9 @@ class DummyTokenizer:
     def convert_tokens_to_ids(self, tokens):
         return [self._value(token) for token in tokens]
 
+    def encode(self, text, add_special_tokens=True, **kwargs):
+        return self.convert_tokens_to_ids(self.tokenize(text))
+
     def decode(self, token_ids, **kwargs):
         return " ".join(str(t) for t in token_ids)
 
@@ -360,6 +363,89 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertTrue(processed["enable_thinking"])
         self.assertEqual(processed["prompt_tokens"], "system prompt hello")
 
+    def test_process_request_dict_messages_template_batch_encoding(self):
+        """encode() 返回 BatchEncoding-like 对象时，messages2ids 应正确提取 input_ids"""
+
+        class BatchEncodingLike:
+            """模拟 HuggingFace BatchEncoding (UserDict 子类，hasattr input_ids = True)"""
+
+            def __init__(self, ids):
+                self.input_ids = ids
+
+            def __getitem__(self, key):
+                return getattr(self, key)
+
+        class BatchEncodingTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return BatchEncodingLike([len(text)])
+
+        module = self.text_processor_module
+        processor = module.DataProcessor("stub-model")
+        processor.tokenizer = BatchEncodingTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+
+    def test_process_request_dict_messages_template_tensor(self):
+        """encode() 返回带 tolist() 的 tensor-like 对象时，messages2ids 应正确转换为 list"""
+
+        class TensorLike:
+            """模拟 numpy/paddle/torch tensor，有 tolist() 方法"""
+
+            def __init__(self, ids):
+                self._ids = ids
+
+            def tolist(self):
+                return self._ids
+
+        class TensorTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return TensorLike([len(text)])
+
+        module = self.text_processor_module
+        processor = module.DataProcessor("stub-model")
+        processor.tokenizer = TensorTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+
+    def test_process_request_dict_messages_template_plain_dict(self):
+        """encode() 返回 plain dict 时，messages2ids 应正确提取 input_ids 而非返回 key 列表"""
+
+        class PlainDictTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return {"input_ids": [len(text)], "attention_mask": [1]}
+
+        module = self.text_processor_module
+        processor = module.DataProcessor("stub-model")
+        processor.tokenizer = PlainDictTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+        # 确保不是 key 列表 ['input_ids', 'attention_mask']
+        self.assertNotIn("input_ids", token_ids)
+
     def test_process_request_dict_handles_sequences(self):
         request = {
             "prompt": [1, 2, 3, 4, 5, 6],
@@ -390,6 +476,31 @@ class DataProcessorTestCase(unittest.TestCase):
         }
         with self.assertRaisesRegex(ValueError, "chat_template_kwargs must be a dict"):
             self.processor.process_request_dict(request)
+
+    def test_process_request_dict_completion_token_ids_extend(self):
+        request = {"prompt": "hi", "completion_token_ids": [10, 11, 12], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # prompt "hi" is tokenized to [2] by DummyTokenizer, then extended with completion_token_ids
+        self.assertEqual(processed["prompt_token_ids"], [2, 10, 11, 12])
+
+    def test_process_request_dict_no_completion_token_ids(self):
+        request = {"prompt": "hi", "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # without completion_token_ids, prompt_token_ids should remain as tokenized result
+        self.assertEqual(processed["prompt_token_ids"], [2])
+
+    def test_process_request_dict_empty_completion_token_ids(self):
+        request = {"prompt": "hi", "completion_token_ids": [], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # empty list is falsy, should not extend prompt_token_ids
+        self.assertEqual(processed["prompt_token_ids"], [2])
+
+    def test_process_request_dict_completion_token_ids_truncated(self):
+        # prompt "hi" -> [2], extend [10,11,12] -> [2,10,11,12] (len=4)
+        # max_model_len=3, 4 > 3 triggers truncation: [:3-1] = [:2] -> [2, 10]
+        request = {"prompt": "hi", "completion_token_ids": [10, 11, 12], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=3)
+        self.assertEqual(processed["prompt_token_ids"], [2, 10])
 
     def test_ids2tokens_and_clear_request_status(self):
         delta, _, _ = self.processor.ids2tokens([3], "task-1")

@@ -713,3 +713,33 @@ class MLAAttentionBackend(AttentionBackend):
                 )
 
                 return final_res
+
+    @staticmethod
+    def flashmla_baseline(decoder_q, latent_cache, block_table, cache_seqlens, attn_softmax_scale):
+        page_size = 64
+        q_num_heads = decoder_q.shape[2]
+        assert decoder_q.shape[1:] == [1, q_num_heads, 576]
+        assert latent_cache.shape[1:] == [1, page_size, 576]
+
+        res_baseline = paddle.zeros([decoder_q.shape[0], 1, q_num_heads, 512])
+        for batch_id in range(decoder_q.shape[0]):
+            kv_len = cache_seqlens[batch_id].item()
+            extract_k = paddle.zeros([kv_len, 576], dtype=decoder_q.dtype)
+            extract_v = paddle.zeros([kv_len, 512], dtype=decoder_q.dtype)
+
+            for local_seq_id in range(0, kv_len, page_size):
+                start = local_seq_id
+                end = min(local_seq_id + page_size, kv_len)
+                physical_id = block_table[batch_id, local_seq_id // page_size].item()
+
+                page_end = page_size if end % page_size == 0 else end % page_size
+                extract_k[start:end, :] = latent_cache[physical_id, 0, :page_end, :]
+                extract_v[start:end, :] = latent_cache[physical_id, 0, :page_end, :512]
+
+            this_batch_q = decoder_q[batch_id, 0, :, :]
+            p = paddle.matmul(this_batch_q, extract_k.transpose([1, 0]).contiguous())
+            p = p * attn_softmax_scale
+            p = paddle.nn.functional.softmax(p, -1)
+            res_baseline[batch_id, 0, :, :] = paddle.matmul(p, extract_v).contiguous()
+
+        return res_baseline

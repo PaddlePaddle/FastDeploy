@@ -601,8 +601,8 @@ def test_recycle_resources_prefill_failure_sets_error():
     with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
         processor._recycle_resources(task_id, 0, task, result, is_prefill=True)
 
-    assert result.error_code == 400
-    assert "failed" in result.error_message
+    assert result.error_code == 501
+    assert "failed" in result.error_msg
     assert connector.calls and connector.calls[0][1][0] is result
 
 

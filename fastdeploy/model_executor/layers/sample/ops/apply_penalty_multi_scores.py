@@ -257,24 +257,26 @@ def reasoning_phase_token_constraint(
     """
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import reasoning_phase_token_constraint
-
-        reasoning_phase_token_constraint(
-            logits,
-            token_ids_all,
-            prompt_lens,
-            stop_flags,
-            seq_lens_this_time,
-            seq_lens_encoder,
-            step_idx,
-            reasoning_allowed_tokens,
-            reasoning_status,
-            batch_id_per_token_output,
-            cu_seqlens_q_output,
-            enable_thinking,
-            think_end_id,
-            line_break_id,
-        )
+    elif current_platform.is_xpu():
+        from fastdeploy.model_executor.ops.xpu import reasoning_phase_token_constraint
     else:
         raise NotImplementedError
+
+    reasoning_phase_token_constraint(
+        logits,
+        token_ids_all,
+        prompt_lens,
+        stop_flags,
+        seq_lens_this_time,
+        seq_lens_encoder,
+        step_idx,
+        reasoning_allowed_tokens,
+        reasoning_status,
+        batch_id_per_token_output,
+        cu_seqlens_q_output,
+        enable_thinking,
+        think_end_id,
+        line_break_id,
+    )
     # inplace
     return logits

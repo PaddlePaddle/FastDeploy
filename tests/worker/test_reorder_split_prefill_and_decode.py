@@ -48,6 +48,7 @@ def create_mock_config():
     }
     model_config.mm_max_tokens_per_item = None
     model_config.think_truncate_prompt_ids = [-1]
+    model_config.reasoning_allowed_token_ids = None
 
     # Create other mock configs
     cache_config = Mock(spec=CacheConfig)
@@ -59,6 +60,7 @@ def create_mock_config():
 
     scheduler_config = Mock(spec=SchedulerConfig)
     scheduler_config.max_num_seqs = 10
+    scheduler_config.max_num_batched_tokens = 2048
 
     speculative_config = Mock(spec=SpeculativeConfig)
     speculative_config.method = None
