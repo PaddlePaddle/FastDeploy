@@ -1881,9 +1881,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs,
                 int(self._real_output_token_num_host),
                 self.increment_value,
-                batch_size,
                 accept_all_drafts,
                 reject_all_drafts,
+                real_bsz=batch_size,
             )
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
@@ -2536,7 +2536,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                     real_output_token_num,
                     self.increment_value,
-                    real_bsz,
+                    real_bsz=real_bsz,
                 )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
