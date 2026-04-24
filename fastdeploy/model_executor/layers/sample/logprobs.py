@@ -141,10 +141,10 @@ def build_output_logprobs(
     logits: paddle.Tensor,
     sampling_metadata,
     share_inputs: List[paddle.Tensor],
-    real_bsz: int,
     is_naive: bool = False,
     logprobs_mode: str = "default",
     compute_logprobs_fn: Optional[Callable] = None,
+    real_bsz: int = 0,
 ) -> Tuple[Optional[LogprobsTensors], Optional[paddle.Tensor]]:
     """
     Build logprobs output for both NAIVE and speculative (MTP/Ngram) modes.

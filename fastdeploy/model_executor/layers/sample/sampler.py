@@ -1136,9 +1136,9 @@ class SpeculativeSampler(nn.Layer):
         share_inputs: List[paddle.Tensor],
         token_num_output_cpu: int,
         increment_value: int,
-        real_bsz: int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
+        real_bsz: int = 0,
     ) -> SamplerOutput:
         """
         Forward pass for speculative sampling.
@@ -1229,10 +1229,10 @@ class SpeculativeSampler(nn.Layer):
                 logits,
                 sampling_metadata,
                 share_inputs,
-                real_bsz,
                 is_naive=is_naive,
                 logprobs_mode=self.logprobs_mode,
                 compute_logprobs_fn=self.compute_logprobs,
+                real_bsz=real_bsz,
             )
             sampler_output.logprobs_tensors = logprobs_tensors
             if cu_batch_token_offset is not None:
