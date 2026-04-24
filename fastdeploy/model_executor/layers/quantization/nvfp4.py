@@ -668,9 +668,8 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         shared_experts: nn.Layer = None,
     ) -> paddle.Tensor:
         # 1. top experts and weights
-        # logger.info(f"prefill的nvfp4")
-        # logger.info(f"layer.up_gate_proj_input_scale_quant:{layer.up_gate_proj_input_scale_quant}")
         gate_out = gate(x.cast("float32"))
+        # gate_out = paddle.randn(gate_out.shape,dtype="float32")
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
         hidden_size = x.shape[1]
 

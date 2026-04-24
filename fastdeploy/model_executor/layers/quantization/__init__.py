@@ -83,10 +83,9 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     model_quantization_config = model_config.quantization_config
     quantization_config = model_quantization_config
 
-    # Special case: user wants to override an offline NVFP4 (modelopt)
-    # checkpoint with a top-level mix_quant config so that MoE continues
+    # override an offline NVFP4 (modelopt) checkpoint with a top-level mix_quant config so that MoE continues
     # to load NVFP4 weights while dense layers fall back to another online
-    # quantization (e.g. block_wise_fp8).
+    # quantization (e.g. block_wise_fp8). For example, eb5-800B-fp4
     mix_quant_overrides_nvfp4 = (
         cli_is_full_config
         and isinstance(cli_quantization, dict)
@@ -113,32 +112,10 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
         merged["is_quantized"] = False
         merged["is_moe_quantized"] = True
         quantization_config = merged
-        # Only MoE weights are offline-quantized in the checkpoint. Do NOT
-        # set model_config.is_quantized=True here; if we did, every dense
-        # Linear would switch to using ".quant_weight/.weight_scale" keys
-        # (see linear.py self.is_quantized logic) and silently fail to
-        # load the bf16 attention / shared_experts weights, producing
-        # garbage output. MoE routing uses model_config.is_moe_quantized.
+        # MoE routing uses model_config.is_moe_quantized.
         model_config.is_moe_quantized = True
-        # Prune ignore patterns that must now be covered by dense online
-        # quantization (attention / shared_experts). Keep embed / lm_head /
-        # mtp patterns as bf16 (they don't go through mix_quant dense path
-        # as expected quantized linears).
-        if isinstance(model_quantization_config.get("ignore"), list):
-            keep_patterns = []
-            for p in model_quantization_config["ignore"]:
-                if any(kw in p for kw in ("self_attn", "shared_experts")):
-                    continue
-                keep_patterns.append(p)
-            # Rewrite model_config.quantization_config so modules_to_convert
-            # no longer excludes attention / shared_experts Linear layers.
-            pruned = dict(model_quantization_config)
-            pruned["ignore"] = keep_patterns
-            model_config.quantization_config = pruned
-            # Important: stop treating this as an "offline" config for the
-            # downstream dispatch below; we want to go through the normal
-            # mix_quant cls path instead of _get_offline_quant_config_name.
-            model_quantization_config = None
+        # Skip _get_offline_quant_config_name; use mix_quant cls instead.
+        model_quantization_config = None
     elif cli_is_full_config:
         if model_quantization_config is not None:
             if model_quantization_config != cli_quantization:

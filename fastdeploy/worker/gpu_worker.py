@@ -245,6 +245,9 @@ class GpuWorker(WorkerBase):
         # Capture CUDAGraph for decode phase (all modes)
         self.model_runner.capture_model()
 
+        # Block-wise CUDA graph capture (independent loop)
+        self.model_runner.capture_block_wise_graphs()
+
         # Deterministic mode: reset RNG and share_inputs after warmup.
         # Warmup _dummy_run() calls consume CUDA RNG state and leave stale
         # data (infer_seed, stop_flags, seq_lens, etc.) in share_inputs.
