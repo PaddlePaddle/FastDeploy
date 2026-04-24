@@ -84,6 +84,7 @@ __global__ void speculate_verify(const int64_t *sampled_token_ids,
                                  const bool *is_block_step,
                                  const int *output_cum_offsets,
                                  const int *actual_candidate_len,
+                                 const int *reasoning_status,
                                  const int real_bsz,
                                  const int max_draft_tokens,
                                  const int end_length,
@@ -116,10 +117,8 @@ __global__ void speculate_verify(const int64_t *sampled_token_ids,
       // printf("seq_lens_this_time[%d]-1: %d \n",bid,
       // seq_lens_this_time[bid]-1);
       for (; i < seq_lens_this_time[bid] - 1; i++) {
-        if (benchmark_mode) {
-          break;
-        }
-        if (seq_lens_encoder[bid] != 0) {
+        if (benchmark_mode || seq_lens_encoder[bid] != 0 ||
+            reasoning_status[bid] == 1) {
           break;
         }
         if (accept_all_drafts) {
@@ -317,6 +316,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
                      const paddle::Tensor &actual_candidate_len,
                      const paddle::Tensor &actual_draft_token_nums,
                      const paddle::Tensor &topp,
+                     const paddle::Tensor &reasoning_status,
                      int max_seq_len,
                      int verify_window,
                      bool enable_topp,
@@ -376,6 +376,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
           is_block_step.data<bool>(),
           output_cum_offsets.data<int>(),
           actual_candidate_len.data<int>(),
+          reasoning_status.data<int>(),
           real_bsz,
           max_draft_tokens,
           end_length,
@@ -408,6 +409,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
               is_block_step.data<bool>(),
               output_cum_offsets.data<int>(),
               actual_candidate_len.data<int>(),
+              reasoning_status.data<int>(),
               real_bsz,
               max_draft_tokens,
               end_length,
@@ -442,6 +444,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
               is_block_step.data<bool>(),
               output_cum_offsets.data<int>(),
               actual_candidate_len.data<int>(),
+              reasoning_status.data<int>(),
               real_bsz,
               max_draft_tokens,
               end_length,
@@ -474,6 +477,7 @@ void SpeculateVerify(const paddle::Tensor &sampled_token_ids,
               is_block_step.data<bool>(),
               output_cum_offsets.data<int>(),
               actual_candidate_len.data<int>(),
+              reasoning_status.data<int>(),
               real_bsz,
               max_draft_tokens,
               end_length,
@@ -508,7 +512,8 @@ PD_BUILD_STATIC_OP(speculate_verify)
              "output_cum_offsets",
              "actual_candidate_len",
              "actual_draft_token_nums",
-             "topp"})
+             "topp",
+             "reasoning_status"})
     .Outputs({"accept_tokens_out",
               "accept_num_out",
               "step_idx_out",
