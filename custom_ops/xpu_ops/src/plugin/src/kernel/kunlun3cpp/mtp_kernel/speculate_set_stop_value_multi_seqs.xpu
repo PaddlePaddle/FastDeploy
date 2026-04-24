@@ -35,7 +35,7 @@ __global__ void speculate_set_stop_value_multi_seqs(
   int stop_seq_len = 0;
   int64_t prompt_len = 0;
 
-  for (int bid = cls_id; bid < bs; bid += nclusters) {
+  for (int bid = cid; bid < bs; bid += ncores) {
     GM2LM_ASYNC(accept_nums + bid, &accept_num, sizeof(int));
     GM2LM_ASYNC(step_idx + bid, &step_idx_now, sizeof(int64_t));
     GM2LM_ASYNC(min_tokens + bid, &min_token_limit, sizeof(int64_t));
@@ -49,7 +49,7 @@ __global__ void speculate_set_stop_value_multi_seqs(
       continue;
     }
 
-    for (int tid = cid; tid < stop_seqs_bs; tid += ncores) {
+    for (int tid = 0; tid < stop_seqs_bs; tid += 1) {
       // Align with GPU: per-batch stop_seqs_len
       GM2LM(
           stop_seqs_len + bid * stop_seqs_bs + tid, &stop_seq_len, sizeof(int));

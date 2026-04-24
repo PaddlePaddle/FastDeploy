@@ -151,9 +151,7 @@ static int xpu3_wrapper(api::Context* ctx,
                         const int max_model_len) {
   using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
   int32_t ret_xre =
-      fd_xpu3::speculate_set_stop_value_multi_seqs<<<ctx->ncluster(),
-                                                     64,
-                                                     ctx->xpu_stream>>>(
+      fd_xpu3::speculate_set_stop_value_multi_seqs<<<1, 64, ctx->xpu_stream>>>(
           stop_flags,
           reinterpret_cast<XPU_INT64*>(accept_tokens),
           accept_nums,
