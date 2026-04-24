@@ -470,58 +470,59 @@ elif paddle.is_compiled_with_cuda():
         # This script seems general enough for different SM versions, specific templates are chosen by CUTLASS.
         os.system("python utils/auto_gen_visitor_fp8_gemm_fused_kernels.py")
 
-        if cc >= 90:  # Hopper and newer
-            # SM90 (Hopper) specific auto-generation and flags
-            if cc == 90:  # Only for SM90
-                nvcc_compile_args += [
-                    # The gencode for 90a is added in get_gencode_flags now
-                    # "-gencode",
-                    # "arch=compute_90a,code=compute_90a",
-                    "-O3",
-                    "-DNDEBUG",  # NDEBUG is common, consider moving if not specific to 90a
-                ]
-                print("SM90: Running SM90-specific FP8 kernel auto-generation.")
-                os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm90.py")
-                os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm90.py")
-                os.system("python utils/auto_gen_fp8_fp8_block_gemm_fused_kernels_sm90.py")
+        # Use non-exclusive checks against sm_versions so that building for
+        # multiple architectures (e.g. [80,90,100]) compiles kernels for ALL
+        # of them instead of only the highest one.
+        has_sm90 = 90 in sm_versions
+        has_sm100 = 100 in sm_versions and nvcc_version >= 12.9
+        has_generic_fp8 = not has_sm90 and not has_sm100  # SM89 or other
 
-                nvcc_compile_args += [
-                    "-DENABLE_SCALED_MM_SM90=1",
-                ]
-                sources += [
-                    "gpu_ops/fp8_gemm_with_cutlass/fp8_fp8_half_block_gemm.cu",
-                    "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c3x_sm90.cu",
-                    "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_fp8.cu",
-                    "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_int8.cu",
-                    "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
-                ]
-            elif cc == 100 and nvcc_version >= 12.9:  # Blackwell SM100 specifics
-                print("SM100 (Blackwell): Applying SM100 configurations.")
-                nvcc_compile_args += [
-                    # The gencode for 100a is added in get_gencode_flags
-                    # "-gencode",
-                    # "arch=compute_100a,code=compute_100a",
-                    "-O3",  # Common optimization flag
-                    "-DNDEBUG",  # Common debug flag
-                    # Potentially add -DENABLE_SM100_FEATURES if specific macros are identified
-                ]
-                # Placeholder for SM100-specific kernel auto-generation scripts
-                # These might be needed if Blackwell has new FP8 hardware features
-                # not covered by existing generic CUTLASS templates or SM90 scripts.
-                # print("SM100: Running SM100-specific FP8 kernel auto-generation (if any).")
-                # os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm100.py") # Example
-                # os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm100.py") # Example
+        if has_sm90 or has_sm100:
+            nvcc_compile_args += [
+                "-O3",
+                "-DNDEBUG",
+            ]
 
-                # Add SM100 specific sources if any, e.g., for new hardware intrinsics
-                # sources += ["gpu_ops/cutlass_kernels/w8a8/c4x_sm100.cu"] # Example
-                pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
-            else:  # For cc >= 89 but not 90 or 100 (e.g. SM89)
-                print(f"SM{cc}: Running generic FP8 kernel auto-generation.")
-                os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")
-                os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
+        if has_sm90:
+            print("SM90: Running SM90-specific FP8 kernel auto-generation.")
+            os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm90.py")
+            os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm90.py")
+            os.system("python utils/auto_gen_fp8_fp8_block_gemm_fused_kernels_sm90.py")
 
-        else:  # For cc == 89 (Ada)
-            print("SM89: Running generic FP8 kernel auto-generation.")
+            nvcc_compile_args += [
+                "-DENABLE_SCALED_MM_SM90=1",
+            ]
+            sources += [
+                "gpu_ops/fp8_gemm_with_cutlass/fp8_fp8_half_block_gemm.cu",
+                "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c3x_sm90.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_fp8.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_int8.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
+            ]
+
+        if has_sm100:
+            print("SM100 (Blackwell): Applying SM100 configurations.")
+            # Placeholder for SM100-specific kernel auto-generation scripts
+            # These might be needed if Blackwell has new FP8 hardware features
+            # not covered by existing generic CUTLASS templates or SM90 scripts.
+            # print("SM100: Running SM100-specific FP8 kernel auto-generation (if any).")
+            # os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm100.py") # Example
+            # os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm100.py") # Example
+
+            # Add SM100 specific sources if any, e.g., for new hardware intrinsics
+            # sources += ["gpu_ops/cutlass_kernels/w8a8/c4x_sm100.cu"] # Example
+            pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
+
+        if has_generic_fp8:
+            # For SM89 (Ada) or other architectures without dedicated paths
+            print(f"SM{cc}: Running generic FP8 kernel auto-generation.")
+            os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")
+            os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
+
+        if not has_sm90 and cc >= 90:
+            # When cc >= 90 but SM90 is not in the target list (e.g. only [80,100]),
+            # still run generic FP8 auto-generation for non-SM90 paths.
+            print(f"SM{cc}: Running generic FP8 kernel auto-generation (no SM90 target).")
             os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")
             os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
 
