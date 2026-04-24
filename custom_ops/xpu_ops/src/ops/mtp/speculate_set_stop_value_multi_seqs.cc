@@ -31,11 +31,9 @@ namespace api = baidu::xpu::api;
  *   if stop_flags[bid]: skip
  *   tokens = token_ids_all[bid][prompt_len:] ++ accept_tokens[bid]
  *   for each stop_seq in stop_seqs[bid]:
- *     for accept_idx in [-1, accept_num-2]:  // -1 = delayed match from prev round
- *       if tokens[..accept_idx] ends with stop_seq:
- *         accept_nums[bid] = accept_idx + 1
- *         accept_tokens[bid][accept_idx] = end_id
- *         break
+ *     for accept_idx in [-1, accept_num-2]:  // -1 = delayed match from prev
+ * round if tokens[..accept_idx] ends with stop_seq: accept_nums[bid] =
+ * accept_idx + 1 accept_tokens[bid][accept_idx] = end_id break
  *   // stop_flags is NOT set here; handled by downstream operators.
  */
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
