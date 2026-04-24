@@ -127,7 +127,11 @@ class SiglipAttention(nn.Layer):
         cos_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
         sin_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
     ):
-        B, seq_length, D = hidden_states.shape
+        if hidden_states.dim() == 3:
+            assert hidden_states.shape[0] == 1, f"SiglipAttention only supports batch=1, got {hidden_states.shape}"
+            hidden_states = hidden_states[0]
+
+        seq_length, D = hidden_states.shape
         qkv = self.qkv_proj(hidden_states)
         q, k, v = neox_rope_embedding(qkv, cos_emb, sin_emb, self.num_heads, self.head_dim)
         attn_output = self.flash_attn_func(
@@ -255,25 +259,26 @@ class SiglipVisionEmbeddings(nn.Layer):
                 flatten_image_grid_thw = self.flatten_list(image_grid_thw)
                 flatten_image_grid_thw = np.array(flatten_image_grid_thw)
                 assert batch_size == 1
-                start = 0
 
                 assert sum([np.prod(x) for x in flatten_image_grid_thw]) == embeddings.shape[1], (
                     flatten_image_grid_thw,
                     embeddings.shape,
                 )
                 embeddings = embeddings.squeeze(0)
-                tmp_embeddings = list()
-                for image_grid in image_grid_thw:
-                    t, h, w = image_grid
-                    end = start + t * h * w
-                    image_embeddings = embeddings[int(start) : int(end), :]
-                    position_embedding = (
-                        self.interpolate_pos_encoding(image_embeddings, h, w, True).squeeze(0).tile((t, 1))
-                    ).astype(image_embeddings.dtype)
-                    image_embeddings = image_embeddings + position_embedding
-                    tmp_embeddings.append(image_embeddings)
-                    start = end
-                embeddings = paddle.concat(tmp_embeddings, axis=0).unsqueeze(0)
+                packed_position_embeddings = []
+                for t, h, w in flatten_image_grid_thw:
+                    t, h, w = map(int, (t, h, w))
+                    position_embedding = self.fetch_position_embedding_lfu_cache(embeddings, h, w).squeeze(0)
+                    if t > 1:
+                        position_embedding = position_embedding.tile((t, 1))
+                    if position_embedding.dtype != embeddings.dtype:
+                        position_embedding = position_embedding.astype(embeddings.dtype)
+                    packed_position_embeddings.append(position_embedding)
+                if len(packed_position_embeddings) == 1:
+                    packed_position_embeddings = packed_position_embeddings[0]
+                else:
+                    packed_position_embeddings = paddle.concat(packed_position_embeddings, axis=0)
+                embeddings = (embeddings + packed_position_embeddings).unsqueeze(0)
             else:
                 embeddings = embeddings + self.packing_position_embedding(position_ids)
             return embeddings
@@ -307,7 +312,7 @@ class SiglipMLP(nn.Layer):
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
-        hidden_states = get_activation_fn(self.config.hidden_act)(hidden_states[0])
+        hidden_states = get_activation_fn(self.config.hidden_act)(hidden_states)
         hidden_states = self.fc2(hidden_states)
         return hidden_states
 
@@ -331,6 +336,32 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         cos_emb=None,
         sin_emb=None,
     ):
+        if hidden_states.dim() == 3 and hidden_states.shape[0] == 1:
+            hidden_states = hidden_states[0]
+
+            residual = hidden_states
+            ln1_out = self.layer_norm1(hidden_states)
+
+            x = self.self_attn(
+                hidden_states=ln1_out,
+                attention_mask=attention_mask,
+                output_attentions=output_attentions,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                cos_emb=cos_emb,
+                sin_emb=sin_emb,
+            )
+
+            hs_post_attn = residual + x
+
+            residual = hs_post_attn
+            ln2_out = self.layer_norm2(residual)
+
+            mlp_out = self.mlp(ln2_out)
+
+            hidden_states_out = residual + mlp_out
+
+            return (hidden_states_out.unsqueeze(0),)
 
         residual = hidden_states
         ############################
@@ -677,7 +708,6 @@ class SiglipVisionTransformer(nn.Layer):
             end = cu_seqlens[i + 1]
             tensor = last_hidden_state[:, start:end, :].squeeze(0)
             sample_hidden_state.append(tensor)
-
         return sample_hidden_state
 
 

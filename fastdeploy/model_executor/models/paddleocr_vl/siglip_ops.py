@@ -37,27 +37,33 @@ def rotate_half(x):
 
 
 def apply_rotary_pos_emb_vision(x, cos, sin):
-    orig_dtype = x.dtype
-    x = x.astype("float32")
     x_embed = (x * cos) + (rotate_half(x) * sin)
-    return x_embed.astype(orig_dtype)
+    return x_embed
 
 
 def native_neox_rope_embedding(qkv, cos, sin, num_heads):
-    B, seq_length, D = qkv.shape
-    if seq_length == -1:
-        _, seq_length, _ = paddle.shape(qkv)
-    qkv = qkv.reshape(
-        [
-            seq_length,
-            3,
-            num_heads,
-            -1,
-        ]
-    ).transpose(perm=[1, 0, 2, 3])
-    q, k, v = qkv.unbind(axis=0)
+    if qkv.dim() == 3:
+        B, seq_length, D = qkv.shape
+        if seq_length == -1:
+            _, seq_length, _ = paddle.shape(qkv)
+        token_count = B * seq_length
+    else:
+        token_count, D = qkv.shape
+        if token_count == -1:
+            token_count, _ = paddle.shape(qkv)
+    qkv = qkv.reshape([token_count, 3, num_heads, -1])
+    q_dtype = qkv.dtype
+    if q_dtype != paddle.float32:
+        qk = qkv[:, :2].astype("float32")
+        q, k = qk[:, 0], qk[:, 1]
+    else:
+        q, k = qkv[:, 0], qkv[:, 1]
+    v = qkv[:, 2]
     q = apply_rotary_pos_emb_vision(q, cos, sin)
     k = apply_rotary_pos_emb_vision(k, cos, sin)
+    if q.dtype != q_dtype:
+        q = q.astype(q_dtype)
+        k = k.astype(q_dtype)
     return q, k, v
 
 
