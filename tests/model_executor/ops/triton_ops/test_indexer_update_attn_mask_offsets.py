@@ -239,6 +239,90 @@ class TestIndexerUpdateAttnMaskOffsets(unittest.TestCase):
         k_lens = seq_lens_this_time  # cu_seqlens_k = cumsum(seq_lens_this_time)
         self._run_and_compare(seq_lens_this_time, seq_lens_encoder, k_lens)
 
+    # ------------------------------------------------------------------
+    # Extreme scenario stress test cases
+    # ------------------------------------------------------------------
+
+    def test_very_large_seq_len(self):
+        """Single sequence with 4096 tokens to stress-test multi-block tiling."""
+        seq_len = 4096
+        self._run_and_compare(
+            seq_lens_this_time_list=[seq_len],
+            seq_lens_encoder_list=[seq_len],
+            k_lens_list=[seq_len],
+        )
+
+    def test_very_large_batch_size(self):
+        """Batch size of 256 with short sequences to stress-test grid-level parallelism."""
+        bsz = 256
+        seq_lens = [4] * bsz
+        self._run_and_compare(
+            seq_lens_this_time_list=seq_lens,
+            seq_lens_encoder_list=seq_lens,
+            k_lens_list=seq_lens,
+        )
+
+    def test_large_batch_long_seq(self):
+        """Large batch (bsz=64) each with long sequences (len=256) to stress both dimensions."""
+        bsz = 64
+        seq_lens = [256] * bsz
+        self._run_and_compare(
+            seq_lens_this_time_list=seq_lens,
+            seq_lens_encoder_list=seq_lens,
+            k_lens_list=seq_lens,
+        )
+
+    def test_highly_variable_seq_lens(self):
+        """Batch with highly variable sequence lengths spanning 1 to 512 tokens.
+        Tests correctness when per-batch token counts differ by orders of magnitude.
+        """
+        import random
+
+        random.seed(42)
+        bsz = 32
+        seq_lens = [random.choice([1, 2, 8, 64, 128, 256, 512]) for _ in range(bsz)]
+        seq_lens_encoder = [s if random.random() > 0.3 else 0 for s in seq_lens]
+        # For decode slots, use q_len=1 as k_len; for prefill slots keep original length.
+        k_lens = [seq_lens[i] if seq_lens_encoder[i] > 0 else 1 for i in range(bsz)]
+        # Align seq_lens_this_time with k_lens so cu_seqlens_k stays consistent.
+        seq_lens_this_time = k_lens
+        self._run_and_compare(seq_lens_this_time, seq_lens_encoder, k_lens)
+
+    def test_large_batch_all_decode(self):
+        """Large all-decode batch (bsz=128); every output position must be zero."""
+        bsz = 128
+        seq_lens_this_time = [1] * bsz
+        seq_lens_encoder = [0] * bsz
+        k_lens = [1] * bsz
+        self._run_and_compare(seq_lens_this_time, seq_lens_encoder, k_lens)
+
+    def test_single_extreme_long_seq(self):
+        """Single prefill sequence with 8192 tokens to cover large BLOCK_M tile boundaries."""
+        seq_len = 8192
+        self._run_and_compare(
+            seq_lens_this_time_list=[seq_len],
+            seq_lens_encoder_list=[seq_len],
+            k_lens_list=[seq_len],
+        )
+
+    def test_large_mixed_uneven_lens(self):
+        """Large mixed batch (bsz=64) where prefill sequences have uneven lengths.
+        Decode slots are scattered at every third position.
+        """
+        bsz = 64
+        seq_lens_this_time = []
+        seq_lens_encoder = []
+        for i in range(bsz):
+            if i % 3 == 0:
+                seq_lens_this_time.append(1)
+                seq_lens_encoder.append(0)
+            else:
+                length = (i % 16) + 1  # lengths cycle 1..16 for prefill slots
+                seq_lens_this_time.append(length)
+                seq_lens_encoder.append(length)
+        k_lens = seq_lens_this_time
+        self._run_and_compare(seq_lens_this_time, seq_lens_encoder, k_lens)
+
 
 if __name__ == "__main__":
     unittest.main()
