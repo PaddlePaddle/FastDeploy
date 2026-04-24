@@ -13,7 +13,7 @@ RUN apt-get update && apt-get install -y libibverbs-dev librdmacm-dev cmake pybi
 # uninstall existing package
 RUN python -m pip uninstall paddlepaddle-gpu paddlepaddle-xpu fastdeploy-xpu -y
 RUN python -m pip uninstall -y Pillow && rm -rf /usr/local/lib/python3.10/dist-packages/Pillow* && rm -rf /usr/local/lib/python3.10/dist-packages/pillow* && python -m pip install Pillow==11.3.0
-
+RUN rm -rf /usr/local/lib/python3.10/dist-packages/protobuf-*.dist-info && rm -rf /usr/local/lib/python3.10/dist-packages/google/protobuf && python -m pip install --no-cache-dir "protobuf==6.33.5"
 # install paddlepaddle-xpu
 ARG PADDLE_VERSION=nightly
 
