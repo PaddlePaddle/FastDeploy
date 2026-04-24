@@ -274,6 +274,11 @@ void SpeculateGetAcceptTokensAndLogits(
   const int max_draft_tokens = accept_tokens.shape()[1];
 
   const int BLOCK_DIM = 512;
+  PADDLE_ENFORCE_LE(max_occupied_slots,
+                    2048,
+                    phi::errors::InvalidArgument(
+                        "Only support bsz <= 2048, but received bsz is ",
+                        max_occupied_slots));
   if (max_occupied_slots <= 512) {
     compute_cu_batch_offset_kernel<BLOCK_DIM, 1>
         <<<1, BLOCK_DIM, 0, cu_stream>>>(
