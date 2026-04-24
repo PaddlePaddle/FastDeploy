@@ -695,7 +695,7 @@ class MTPProposer(Proposer):
             step_use_cudagraph and self.draft_model_use_cudagraph and not (substep > 0 and is_dummy_run)
         )
 
-    def _initialize_forward_meta_xpu(self):
+    def _initialize_forward_meta_xpu(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, substep: int = 0):
 
         self.forward_meta.decoder_batch_ids = (self.model_inputs["decoder_batch_ids"],)
         self.forward_meta.decoder_tile_ids_per_batch = (self.model_inputs["decoder_tile_ids_per_batch"],)
@@ -719,6 +719,14 @@ class MTPProposer(Proposer):
         # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
+        
+        # Notes(liuzichang):
+        # 1. CUDA Graph capture sizes must be recorded in descending order (large → small).
+        # 2. In multi-step execution, only the first step should be captured.
+        self.forward_meta.step_use_cudagraph = (
+            step_use_cudagraph and self.draft_model_use_cudagraph and not (substep > 0 and is_dummy_run)
+        )
+
 
     def exist_prefill(self):
         """
@@ -1107,7 +1115,10 @@ class MTPProposer(Proposer):
                     )
                     self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
 
-                self._initialize_forward_meta_xpu()
+                self._initialize_forward_meta_xpu(step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, substep=substep)
+
+                # Padding inputs for cuda graph
+                self.padding_cudagraph_inputs()
                 # Get sampling metadata
                 self.sampling_metadata = SamplingMetadata(
                     temperature=self.model_inputs["temperature"],
@@ -1136,6 +1147,9 @@ class MTPProposer(Proposer):
                     previous_hidden_states=self.model_inputs["target_hidden_states"],
                     forward_meta=self.forward_meta,
                 )
+
+                if self.forward_meta.step_use_cudagraph:
+                    model_output = model_output[: self.real_token_num]
                 hidden_states = xpu_process_output(model_output, self.forward_meta, self.model_inputs)
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
