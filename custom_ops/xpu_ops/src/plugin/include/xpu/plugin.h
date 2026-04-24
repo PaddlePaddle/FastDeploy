@@ -498,7 +498,8 @@ DLL_EXPORT int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                                                    bool* stop_flags,
                                                    int64_t* accept_tokens,
                                                    int* accept_nums,
-                                                   const int64_t* pre_ids,
+                                                   const int64_t* token_ids_all,
+                                                   const int64_t* prompt_lens,
                                                    const int64_t* step_idx,
                                                    const int64_t* stop_seqs,
                                                    const int* stop_seqs_len,
@@ -509,7 +510,7 @@ DLL_EXPORT int speculate_set_stop_value_multi_seqs(api::Context* ctx,
                                                    const int accept_tokens_len,
                                                    const int stop_seqs_bs,
                                                    const int stop_seqs_max_len,
-                                                   const int pre_ids_len);
+                                                   const int max_model_len);
 template <typename T>
 DLL_EXPORT int speculate_rebuild_append_padding(api::Context* ctx,
                                                 T* full_hidden_states,
