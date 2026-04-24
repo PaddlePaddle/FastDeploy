@@ -202,7 +202,6 @@ __global__ void compute_cu_batch_offset_kernel(int* cu_batch_token_offset,
         batch_id < real_bsz ? accept_num[tid * ITEMS_PER_THREAD + i] : 0;
   }
 
-  int scan_result;
   BlockScan(temp_storage).InclusiveSum(thread_data, thread_data);
   __syncthreads();
 
