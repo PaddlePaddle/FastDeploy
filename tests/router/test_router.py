@@ -28,7 +28,14 @@ from fastdeploy.router.router import Router, RouterArgs
 
 
 def _make_args(**kwargs):
-    defaults = {"host": "0.0.0.0", "port": 9000, "splitwise": False, "request_timeout_secs": 30}
+    defaults = {
+        "host": "0.0.0.0",
+        "port": 9000,
+        "splitwise": False,
+        "request_timeout_secs": 30,
+        "preempt_retry_count": 3,
+        "preempt_retry_exclude_decode": False,
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
