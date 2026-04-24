@@ -23,6 +23,7 @@ from fastdeploy.output.token_processor import TokenProcessor
 class TestTokenProcessorMetrics:
     def setup_method(self):
         self.mock_cfg = MagicMock()
+        self.mock_cfg.scheduler_config.splitwise_role = "decode"
         self.mock_cached_tokens = MagicMock()
         self.mock_engine_queue = MagicMock()
         self.mock_split_connector = MagicMock()
@@ -74,9 +75,10 @@ class TestTokenProcessorMetrics:
         with caplog.at_level(logging.INFO):
             self.processor._record_completion_metrics(self.task, current_time)
 
-        assert len(caplog.records) == 2
+        assert len(caplog.records) == 3
         assert "[request_id=test123]" in caplog.text
         assert "[event=INFERENCE_END]" in caplog.text
+        assert "[event=DECODE_INFERENCE_END]" in caplog.text
         assert "[event=POSTPROCESSING_START]" in caplog.text
 
         # Verify metrics are updated
