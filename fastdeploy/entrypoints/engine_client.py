@@ -1046,6 +1046,18 @@ class EngineClient:
 
             api_server_logger.info("Aborted request(s) %s.", ",".join(request_ids))
 
+    async def abort_reqs(self, req_ids=None, abort_all=False):
+        """
+        Fire-and-forget: abort multiple requests in one ZMQ message.
+        Used by /v1/abort_requests API.
+        """
+        data = {
+            "status": RequestStatus.ABORT.value,
+            "abort_all": abort_all,
+            "req_ids": req_ids or [],
+        }
+        self._send_task(data)
+
     def process_messages(self, messages):
         for message in messages:
             if message["role"] == "assistant" and "tool_calls" in message:

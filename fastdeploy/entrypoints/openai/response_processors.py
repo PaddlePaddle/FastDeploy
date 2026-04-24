@@ -89,7 +89,7 @@ class ChatResponseProcessor:
                     decode_type = request_output["outputs"].get("decode_type", 0) or 0
                     if decode_type == 0:  # text
                         tts = req_id in self._audio_buffer
-                        if token_ids[-1] == self.eos_token_id:
+                        if token_ids and token_ids[-1] == self.eos_token_id:
                             all_audio_tokens = self._audio_buffer.pop(req_id, [])
                         else:
                             all_audio_tokens = None
@@ -186,7 +186,7 @@ class ChatResponseProcessor:
             else:
                 self.accumulate_token_ids(request_output)
                 token_ids = request_output["outputs"]["token_ids"]
-                if token_ids[-1] == self.eos_token_id:
+                if token_ids and token_ids[-1] == self.eos_token_id:
                     multipart = []
                     num_image_tokens = 0
                     for part in self._multipart_buffer:
