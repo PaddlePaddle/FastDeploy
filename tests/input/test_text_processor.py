@@ -275,7 +275,7 @@ class DummyRequest:
         self.set(key, value)
 
 
-class DataProcessorTestCase(unittest.TestCase):
+class TextProcessorTestCase(unittest.TestCase):
     @staticmethod
     def create_dummy_reasoning(tokenizer, reasoning_content="think", content="content"):
         class DummyReasoning:
@@ -380,7 +380,7 @@ class DataProcessorTestCase(unittest.TestCase):
                 return BatchEncodingLike([len(text)])
 
         module = self.text_processor_module
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.tokenizer = BatchEncodingTokenizer()
 
         request = {
@@ -410,7 +410,7 @@ class DataProcessorTestCase(unittest.TestCase):
                 return TensorLike([len(text)])
 
         module = self.text_processor_module
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.tokenizer = TensorTokenizer()
 
         request = {
@@ -431,7 +431,7 @@ class DataProcessorTestCase(unittest.TestCase):
                 return {"input_ids": [len(text)], "attention_mask": [1]}
 
         module = self.text_processor_module
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.tokenizer = PlainDictTokenizer()
 
         request = {

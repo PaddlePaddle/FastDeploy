@@ -1295,21 +1295,21 @@ class TestProcessResponseDictDispatch(unittest.TestCase):
     def test_stream_true_dispatches_to_streaming(self):
         proc = _make_processor(QWEN_VL)
         proc.process_response_dict_streaming = MagicMock(return_value={"text": "ok"})
-        result = proc.process_response_dict({"data": 1}, stream=True)
+        result = proc.process_response_dict({"data": 1, "outputs": {"token_ids": [1]}}, stream=True)
         proc.process_response_dict_streaming.assert_called_once()
         self.assertEqual(result, {"text": "ok"})
 
     def test_stream_false_dispatches_to_normal(self):
         proc = _make_processor(ERNIE4_5_VL)
         proc.process_response_dict_normal = MagicMock(return_value={"text": "ok"})
-        result = proc.process_response_dict({"data": 1}, stream=False)
+        result = proc.process_response_dict({"data": 1, "outputs": {"token_ids": [1]}}, stream=False)
         proc.process_response_dict_normal.assert_called_once()
         self.assertEqual(result, {"text": "ok"})
 
     def test_default_stream_is_true(self):
         proc = _make_processor(QWEN3_VL)
         proc.process_response_dict_streaming = MagicMock(return_value={})
-        proc.process_response_dict({})
+        proc.process_response_dict({"outputs": {"token_ids": [1]}})
         proc.process_response_dict_streaming.assert_called_once()
 
 
