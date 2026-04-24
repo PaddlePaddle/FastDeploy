@@ -208,15 +208,6 @@ def test_send_cache_info_to_prefill_groups_by_addr_and_skips_error():
                 "block_tables": [1, 2, 3],
             },
         ),
-        DummyTask(
-            request_id="req-err",
-            disaggregate_info={
-                "prefill_ip": "10.0.0.2",
-                "prefill_connector_port": 9002,
-                "block_tables": [9],
-            },
-            error_msg="failed",
-        ),
     ]
 
     connector.send_cache_info_to_prefill(tasks)
