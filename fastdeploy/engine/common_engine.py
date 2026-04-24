@@ -985,14 +985,18 @@ class EngineService:
                             status, msg = self.split_connector.check_decode_allocated(task)
                             task.metrics.ask_decode_resource_finish_time = time.time()
                             if not status:
-                                self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                error_msg = (
+                                    f"PD Error: prefill failed to apply for resource from decode, "
+                                    f"req: {task.request_id}, msg:{msg}."
+                                )
+                                self.llm_logger.error(error_msg)
                                 self.scheduler.put_results(
                                     [
                                         RequestOutput(
                                             request_id=task.request_id,
                                             finished=True,
                                             error_code=500,
-                                            error_msg=msg,
+                                            error_msg=error_msg,
                                         )
                                     ]
                                 )
@@ -1101,14 +1105,17 @@ class EngineService:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
                         for task in batch_request:
                             if task.task_type == RequestType.PREEMPTED:
-                                msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
+                                msg = (
+                                    f"PD Error: decode does not have enough blocks for "
+                                    f"preallocated request. req:{task.request_id} "
+                                )
                                 self.llm_logger.error(msg)
                                 self.scheduler.put_results(
                                     [
                                         RequestOutput(
                                             request_id=task.request_id,
                                             finished=True,
-                                            error_code=500,
+                                            error_code=502,
                                             error_msg=msg,
                                         )
                                     ]
