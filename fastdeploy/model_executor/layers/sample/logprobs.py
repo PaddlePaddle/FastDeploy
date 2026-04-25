@@ -171,9 +171,6 @@ def build_output_logprobs(
     logprobs_tensors = None
     cu_batch_token_offset = None
 
-    if num_logprobs is None:
-        return logprobs_tensors, cu_batch_token_offset
-
     # NOTE(huicongyao) real_bsz is passed from _postprocess, remove this in future
     max_occupied_slots = share_inputs["seq_lens_this_time"].shape[0]
 
