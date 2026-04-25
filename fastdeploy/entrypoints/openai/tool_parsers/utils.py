@@ -35,14 +35,11 @@ def find_common_prefix(s1: str, s2: str) -> str:
     e.g. find_common_prefix('{"fruit": "ap"}', '{"fruit": "apple"}') ->
     '{"fruit": "ap'
     """
-    prefix = ""
     min_length = min(len(s1), len(s2))
-    for i in range(0, min_length):
-        if s1[i] == s2[i]:
-            prefix += s1[i]
-        else:
-            break
-    return prefix
+    for i in range(min_length):
+        if s1[i] != s2[i]:
+            return s1[:i]
+    return s1[:min_length]
 
 
 def find_common_suffix(s1: str, s2: str) -> str:
@@ -53,14 +50,11 @@ def find_common_suffix(s1: str, s2: str) -> str:
 
     e.g. find_common_suffix('{"fruit": "ap"}', '{"fruit": "apple"}') -> '"}'
     """
-    suffix = ""
     min_length = min(len(s1), len(s2))
     for i in range(1, min_length + 1):
-        if s1[-i] == s2[-i] and not s1[-i].isalnum():
-            suffix = s1[-i] + suffix
-        else:
-            break
-    return suffix
+        if s1[-i] != s2[-i] or s1[-i].isalnum():
+            return s1[len(s1) - i + 1:] if i > 1 else ""
+    return s1[-min_length:] if min_length > 0 and not s1[-min_length].isalnum() else ""
 
 
 def extract_intermediate_diff(curr: str, old: str) -> str:
@@ -83,15 +77,26 @@ def extract_intermediate_diff(curr: str, old: str) -> str:
     """
     suffix = find_common_suffix(curr, old)
 
-    old = old[::-1].replace(suffix[::-1], "", 1)[::-1]
+    if suffix:
+        if old.endswith(suffix):
+            old = old[:-len(suffix)]
+        else:
+            old = old[::-1].replace(suffix[::-1], "", 1)[::-1]
+
     prefix = find_common_prefix(curr, old)
     diff = curr
-    if len(suffix):
-        diff = diff[::-1].replace(suffix[::-1], "", 1)[::-1]
 
-    if len(prefix):
-        # replace the prefix only once in case it's mirrored
-        diff = diff.replace(prefix, "", 1)
+    if suffix:
+        if diff.endswith(suffix):
+            diff = diff[:-len(suffix)]
+        else:
+            diff = diff[::-1].replace(suffix[::-1], "", 1)[::-1]
+
+    if prefix:
+        if diff.startswith(prefix):
+            diff = diff[len(prefix):]
+        else:
+            diff = diff.replace(prefix, "", 1)
 
     return diff
 
