@@ -60,6 +60,7 @@ class MockModelConfig:
     architectures = ["mock"]
     mm_max_tokens_per_item = None
     think_truncate_prompt_ids = [-1]
+    reasoning_allowed_token_ids = None
 
 
 class MockCacheConfig:

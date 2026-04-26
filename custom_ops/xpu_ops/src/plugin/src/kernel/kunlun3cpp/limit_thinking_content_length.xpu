@@ -1,0 +1,155 @@
+// Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+
+#include "xpu/kernel/xtdk.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace fd_xpu3 {
+
+template <typename T>
+static inline __device__ bool is_in_end(const T id,
+                                        const T* end_ids,
+                                        const int length) {
+  for (int i = 0; i < length; i++) {
+    if (id == end_ids[i]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+__global__ void limit_thinking_content_length_kernel(
+    int64_t* next_tokens,
+    const int* max_think_lens,
+    int* max_reply_lens,
+    const int64_t* step_idx,
+    const int64_t* eos_token_ids,
+    int* limit_status,
+    const bool* stop_flags,
+    const int64_t think_end_id,
+    const int64_t* inject_token_ids,
+    const int bs,
+    const int eos_token_id_len,
+    const int inject_len,
+    const bool splitwise_role_is_decode) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  int nclusters = cluster_num();
+  if (clusterid != 0) return;
+
+  __simd__ __local__ int64_t eos_token_ids_lm[64];
+
+  for (int i = cid; i < bs; i += ncores) {
+    int max_think_len_lm;
+    int max_reply_len_lm;
+    int64_t next_token_lm;
+    int64_t step_lm;
+    int status_lm;
+    bool stop_flag_lm;
+
+    GM2LM_ASYNC(next_tokens + i, &next_token_lm, sizeof(int64_t));
+    GM2LM_ASYNC(step_idx + i, &step_lm, sizeof(int64_t));
+    GM2LM_ASYNC(max_think_lens + i, &max_think_len_lm, sizeof(int));
+    GM2LM_ASYNC(max_reply_lens + i, &max_reply_len_lm, sizeof(int));
+    GM2LM_ASYNC(stop_flags + i, &stop_flag_lm, sizeof(bool));
+    GM2LM_ASYNC(
+        eos_token_ids, eos_token_ids_lm, sizeof(int64_t) * eos_token_id_len);
+    GM2LM(limit_status + i, &status_lm, sizeof(int));
+
+    if (stop_flag_lm) continue;
+    if (max_think_len_lm < 0 && max_reply_len_lm < 0) continue;
+
+    const int done_status = (inject_len > 0) ? (inject_len + 1) : 1;
+    const int reply_base = done_status + 1;
+
+    if (status_lm < 0) status_lm = 0;
+    const int prev_status = status_lm;
+
+    // ======================= 1) Think phase: always monitor think_end_id
+    // =======================
+    if (status_lm == 0 && next_token_lm == think_end_id) {
+      status_lm = done_status;
+      if (max_reply_len_lm >= 0) {
+        max_reply_len_lm += 2;
+      }
+    }
+
+    // ======================= 2) Only when thinking truncation is enabled
+    // (max_think_len >= 0) =======================
+    if (max_think_len_lm >= 0 && status_lm < reply_base) {
+      // A) Timeout trigger: start injection when reaching max_think_len
+      if (max_think_len_lm > 0) {
+        if (status_lm == 0 && step_lm == max_think_len_lm) {
+          status_lm = (inject_len > 0) ? 1 : done_status;
+        }
+      } else if (max_think_len_lm == 0) {
+        if (status_lm == 0 && !splitwise_role_is_decode) {
+          status_lm = (inject_len > 0) ? 1 : done_status;
+        } else if (status_lm == 0 && splitwise_role_is_decode) {
+          status_lm = (inject_len > 0) ? 2 : done_status + 1;
+        }
+      }
+
+      // B) Early EOS in thinking phase: start injection (override eos)
+      if (status_lm == 0 && inject_len > 0) {
+        if (is_in_end(next_token_lm, eos_token_ids_lm, eos_token_id_len)) {
+          status_lm = 1;
+        }
+      }
+
+      // Injection sequence
+      if (inject_len > 0 && status_lm >= 1 && status_lm <= inject_len) {
+        next_token_lm = inject_token_ids[status_lm - 1];
+        status_lm += 1;
+        if (status_lm > done_status) status_lm = done_status;
+      }
+    }
+
+    // Whether this step "just entered done_status"
+    const bool became_done_this_step = (status_lm == done_status) &&
+                                       (prev_status != done_status) &&
+                                       (prev_status < reply_base);
+
+    // ======================= 3) Reply length limiting
+    // =======================
+    if (max_reply_len_lm >= 0) {
+      if (!became_done_this_step) {
+        if (status_lm == done_status) {
+          status_lm = reply_base;
+        }
+
+        if (status_lm >= reply_base) {
+          int reply_len = status_lm - reply_base;
+          if (reply_len >= max_reply_len_lm) {
+            if (eos_token_id_len > 0) next_token_lm = eos_token_ids_lm[0];
+            status_lm = reply_base + max_reply_len_lm;
+          } else {
+            status_lm = reply_base + (reply_len + 1);
+          }
+        }
+      }
+    }
+
+    LM2GM_ASYNC(&next_token_lm, next_tokens + i, sizeof(int64_t));
+    LM2GM_ASYNC(&status_lm, limit_status + i, sizeof(int));
+    LM2GM(&max_reply_len_lm, max_reply_lens + i, sizeof(int));
+  }
+}
+
+}  // namespace fd_xpu3

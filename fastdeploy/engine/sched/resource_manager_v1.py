@@ -33,7 +33,6 @@ from fastdeploy.cache_manager.multimodal_cache_manager import (
     ProcessorCacheManager,
 )
 from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
-from fastdeploy.config import ErnieArchitectures
 from fastdeploy.engine.request import (
     BatchRequest,
     ImagePosition,
@@ -263,6 +262,10 @@ class ResourceManagerV1(ResourceManager):
 
         return block_num
 
+    def _is_decoding(self, request) -> bool:
+        """Return True if the request has finished prefill and is in the decoding phase."""
+        return request.num_computed_tokens >= request.need_prefill_tokens
+
     def _prepare_prefill_task(self, request, new_token_num):
         request.prefill_start_index = request.num_computed_tokens
         request.prefill_end_index = request.num_computed_tokens + new_token_num
@@ -315,7 +318,7 @@ class ResourceManagerV1(ResourceManager):
                 self.stop_flags[request.idx] = True  # 设置停止标志
                 del self.requests[request_id]
                 del self.req_dict[request_id]
-                self.to_be_aborted_req_id_set.remove(request_id)
+                self.to_be_aborted_req_id_set.discard(request_id)
         self.update_metrics()
 
     def _trigger_abort(self, request_id, batch_request):
@@ -327,7 +330,7 @@ class ResourceManagerV1(ResourceManager):
             abort_request.cached_block_num = 0
             batch_request.add_request(self._prepare_abort_task(abort_request))
             self.to_be_aborted_req_id_set.add(request_id)
-            self.waiting_abort_req_id_set.remove(request_id)
+            self.waiting_abort_req_id_set.discard(request_id)
 
     def _info_each_block(self):
         """
@@ -777,20 +780,13 @@ class ResourceManagerV1(ResourceManager):
             and self.config.scheduler_config.splitwise_role != "decode"
         ):
             with self.lock:
-                if request.num_computed_tokens >= request.need_prefill_tokens:  # request is decoding
+                if self._is_decoding(request):  # request is decoding
                     self.cache_manager.cache_output_blocks(request, self.config.cache_config.block_size)
 
     def schedule(self):
         """
         Try to pull a batch of requests from the waiting queue and schedule them.
         """
-
-        def get_enough_request(request, batch_request):
-            return (
-                ErnieArchitectures.is_ernie5_arch(self.config.model_config.architectures)
-                and self._is_mm_request(request)
-                and self.exist_mm_prefill(batch_request)
-            )
 
         with self.lock:
             preempted_reqs: list[Request] = []
@@ -800,12 +796,10 @@ class ResourceManagerV1(ResourceManager):
                 if self.config.speculative_config is not None
                 else 1
             )
+            num_running_decode_reqs = sum(1 for req in self.running if self._is_decoding(req))
             token_budget = (
-                self.config.scheduler_config.max_num_batched_tokens
-                - self.config.scheduler_config.max_num_seqs * tokens_per_seq
+                self.config.scheduler_config.max_num_batched_tokens - num_running_decode_reqs * tokens_per_seq
             )
-            # temperatory solution to avoid negative token_budget
-            token_budget = max(token_budget, min(self.config.scheduler_config.max_num_batched_tokens, 512))
             need_abort_requests = []  # users trigger abortion
             batch_request = BatchRequest()
 
@@ -819,7 +813,7 @@ class ResourceManagerV1(ResourceManager):
                     self.need_block_num_map[request.request_id] = SignalConsumer(need_block_num, 1)
                     self.need_block_num_signal.value[request.idx] = 0
 
-                if request.num_computed_tokens >= request.need_prefill_tokens:  # to be decoding
+                if self._is_decoding(request):  # to be decoding
                     if (
                         self.config.scheduler_config.splitwise_role == "prefill"
                     ):  # do not need to schedule for decoding
@@ -862,7 +856,7 @@ class ResourceManagerV1(ResourceManager):
                             # Prepare decoding task
                             batch_request.add_request(self._prepare_decode_task(request))
                         num_decoding_req_nums += 1
-                    token_budget -= 1
+                    # Decode token cost has been pre-deducted upfront (num_running_decode_reqs * tokens_per_seq).
                     if (
                         request.use_extend_tables
                         and request.request_id not in self.using_extend_tables_req_id
@@ -930,9 +924,6 @@ class ResourceManagerV1(ResourceManager):
                     ):
                         req_index += 1
                         continue
-                    if get_enough_request(request, batch_request):
-                        req_index += 1
-                        continue
                     num_new_tokens = self._get_num_new_tokens(request, token_budget)
                     if num_new_tokens == 0:
                         req_index += 1
@@ -981,8 +972,6 @@ class ResourceManagerV1(ResourceManager):
                         break
 
                     request = self.waiting[0]
-                    if get_enough_request(request, batch_request):
-                        break
                     if request.status == RequestStatus.WAITING:
                         result = self.waiting_async_process(request)
                         if result is None:
@@ -1349,6 +1338,8 @@ class ResourceManagerV1(ResourceManager):
         Match and fetch cache for a task.
         """
         try:
+            trace_print(LoggingEventName.PREPARE_PREFIX_CACHE_START, request.request_id, getattr(request, "user", ""))
+
             (common_block_ids, matched_token_num, metrics) = self._request_match_blocks(
                 request  # skip_storage 使用默认值 True
             )
@@ -1389,10 +1380,13 @@ class ResourceManagerV1(ResourceManager):
                 request.metrics.storage_cache_token_num = metrics["storage_match_token_num"]
                 request.metrics.cpu_cache_prepare_time = metrics["cpu_cache_prepare_time"]
                 request.metrics.storage_cache_prepare_time = metrics["storage_cache_prepare_time"]
+                request.metrics.prompt_token_ids_len = request.prompt_token_ids_len
 
                 main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
                 main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
                 main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
+
+            trace_print(LoggingEventName.PREPARE_PREFIX_CACHE_END, request.request_id, getattr(request, "user", ""))
 
             return True
         except Exception as e:
@@ -1513,7 +1507,6 @@ class ResourceManagerV1(ResourceManager):
             request.disaggregate_info["block_tables"] = request.block_tables
             allocated_position = self.get_available_position()
             request.idx = allocated_position
-            self.tasks_list[request.idx] = request
             self.stop_flags[request.idx] = False
             self.requests[request.request_id] = request
             self.req_dict[request.request_id] = allocated_position
@@ -1557,6 +1550,8 @@ class ResourceManagerV1(ResourceManager):
             request.metrics = copy.deepcopy(request_output.metrics)
             request.metrics.decode_inference_start_time = time.time()
             request.metrics.update_decoder_start_time()
+
+            self.tasks_list[request.idx] = request
             self.running.append(request)
 
     def _free_blocks(self, request: Request):
@@ -1622,6 +1617,8 @@ class ResourceManagerV1(ResourceManager):
                     del self.requests[req_id]
                     if req_id in self.req_dict:
                         del self.req_dict[req_id]
+                    self.waiting_abort_req_id_set.discard(req_id)
+                    self.to_be_aborted_req_id_set.discard(req_id)
 
             # Do not block the main thread here
             # Write cache to storage if kvcache_storage_backend is enabled
@@ -1656,7 +1653,8 @@ class ResourceManagerV1(ResourceManager):
         blocks_used_by_tasks = set()
         for task in self.tasks_list:
             if task is not None:
-                blocks_used_by_tasks.update(task.block_tables)
+                blocks_used_by_tasks.update(getattr(task, "block_tables", []))
+                blocks_used_by_tasks.update(getattr(task, "extend_block_tables", []))
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
@@ -1689,6 +1687,13 @@ class ResourceManagerV1(ResourceManager):
         total_blocks = self.total_block_number()
         free_blocks = self.available_block_num()
         used_blocks = max(total_blocks - free_blocks, 0)
+        # Evictable = used blocks not held by any running task
+        blocks_used_by_tasks = set()
+        for task in self.tasks_list:
+            if task is not None:
+                blocks_used_by_tasks.update(getattr(task, "block_tables", []))
+                blocks_used_by_tasks.update(getattr(task, "extend_block_tables", []))
+        evictable_blocks = used_blocks - len(blocks_used_by_tasks)
         tokens_used = used_blocks * self.config.cache_config.block_size
         token_usage = used_blocks / total_blocks if total_blocks > 0 else 0.0
         running_cnt = len(self.running)
@@ -1704,6 +1709,8 @@ class ResourceManagerV1(ResourceManager):
             queue_cnt=queue_cnt,
             tokens_used=tokens_used,
             token_usage=token_usage,
+            free_blocks=free_blocks,
+            evictable_blocks=evictable_blocks,
         )
         if has_decode:
             has_prefill = len(prefill_reqs) > 0
@@ -1729,4 +1736,6 @@ class ResourceManagerV1(ResourceManager):
                 tokens_used=tokens_used,
                 token_usage=token_usage,
                 use_cudagraph=use_decode_cudagraph,
+                free_blocks=free_blocks,
+                evictable_blocks=evictable_blocks,
             )

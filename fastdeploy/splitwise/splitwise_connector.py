@@ -277,23 +277,15 @@ class SplitwiseConnector:
                     "request_id": tasks[i].request_id,
                     "error_msg": tasks[i].get("error_msg"),
                 }
-                if (
-                    envs.ENABLE_V1_KVCACHE_SCHEDULER
-                    and tasks[i].request_id in self.resource_manager.waiting_abort_req_id_set
-                ):
-                    addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
-                    if addr not in cache_info:
-                        cache_info[addr] = []
-                    cache_info[addr].append(info)
             else:
-                addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
                 info = {
                     "request_id": tasks[i].request_id,
                     "dest_block_ids": dsg_info["block_tables"],
                 }
-                if addr not in cache_info:
-                    cache_info[addr] = []
-                cache_info[addr].append(info)
+            addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
+            if addr not in cache_info:
+                cache_info[addr] = []
+            cache_info[addr].append(info)
 
         self.logger.debug(f"send cache info to prefill, {cache_info}")
         if len(cache_info):

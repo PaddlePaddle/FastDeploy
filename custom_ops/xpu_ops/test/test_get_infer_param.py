@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import paddle
+from utils import init_inplace_tensor
 
 from fastdeploy.model_executor.ops.xpu import get_infer_param
 
@@ -21,6 +22,7 @@ seq_lens_decoder = paddle.to_tensor([0, 5, 0, 25, 64], dtype="int32")
 seq_lens_this_time = paddle.to_tensor([100, 1, 0, 1, 300], dtype="int32")
 block_table = paddle.arange(0, 40, dtype="int32")
 block_table = block_table.reshape((5, 8))
+
 (
     encoder_batch_map,
     decoder_batch_map,
@@ -44,9 +46,40 @@ block_table = block_table.reshape((5, 8))
     decoder_context_len_cpu,
     decoder_context_len_cache_cpu,
     len_info_cpu,
+) = init_inplace_tensor(seq_lens_encoder.shape[0], block_table.shape)
+(
+    slot_mapping_enc,
+    slot_mapping_dec,
 ) = get_infer_param(
-    seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, block_table, 64
-)  # block_size
+    seq_lens_encoder,
+    seq_lens_decoder,
+    seq_lens_this_time,
+    block_table,
+    encoder_batch_map,
+    decoder_batch_map,
+    encoder_batch_idx,
+    decoder_batch_idx,
+    encoder_seq_lod,
+    decoder_seq_lod,
+    encoder_kv_lod,
+    prefix_len,
+    decoder_context_len,
+    decoder_context_len_cache,
+    prefix_block_tables,
+    encoder_batch_map_cpu,
+    decoder_batch_map_cpu,
+    encoder_batch_idx_cpu,
+    decoder_batch_idx_cpu,
+    encoder_seq_lod_cpu,
+    decoder_seq_lod_cpu,
+    encoder_kv_lod_cpu,
+    prefix_len_cpu,
+    decoder_context_len_cpu,
+    decoder_context_len_cache_cpu,
+    len_info_cpu,
+    64,
+    0,
+)
 
 print("block_table", block_table)
 print("encoder_batch_map", encoder_batch_map)  # [0, 4, 0, 0, 0]

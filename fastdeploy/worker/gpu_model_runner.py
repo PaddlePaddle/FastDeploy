@@ -69,6 +69,7 @@ if current_platform.is_iluvatar():
         recover_decode_task,
         set_data_ipc,
         set_value_by_flags_and_idx,
+        update_attn_mask_offsets,
     )
 
     share_external_data = None
@@ -86,6 +87,7 @@ else:
         set_data_ipc,
         unset_data_ipc,
         get_position_ids_and_mask_encoder_batch,
+        update_attn_mask_offsets,
     )
 
 import zmq
@@ -106,7 +108,7 @@ from fastdeploy.model_executor.pre_and_post_process import (
     pre_process,
     rebuild_padding,
     save_output_normal,
-    save_output_specualate,
+    save_output_speculate,
 )
 from fastdeploy.output.pooler import PoolerOutput
 from fastdeploy.worker.model_runner_base import (
@@ -145,8 +147,8 @@ class GPUModelRunner(ModelRunnerBase):
                 if fd_config.model_config.max_logprobs == -1
                 else fd_config.model_config.max_logprobs
             )
-        self.temp_scaled_logprobs = True
-        self.top_p_normalized_logprobs = True
+        self.temp_scaled_logprobs = False
+        self.top_p_normalized_logprobs = False
         self.prompt_logprobs_reqs: dict[str, Request] = {}
         self.in_progress_prompt_logprobs: dict[str, LogprobsTensors] = {}
         self.forward_batch_reqs_list: list[Request] = [None for _ in range(self.scheduler_config.max_num_seqs)]
@@ -187,6 +189,9 @@ class GPUModelRunner(ModelRunnerBase):
                 self.encoder_cache: dict[str, paddle.Tensor] = {}
             else:
                 self.encoder_cache = None
+
+            # Note(Zhengshifeng) init video cache for VL model
+            self.video_cache = {}
 
         #  Sampler
         if not self.speculative_decoding:
@@ -519,6 +524,8 @@ class GPUModelRunner(ModelRunnerBase):
             "feature_position_list": [],
             "grid_thw_lst_batches": [],
             "feature_position_list_batches": [],
+            "image_features": [],
+            "image_grid_thws": [],
         }
         for request in request_list:
             if request.task_type.value != RequestType.PREFILL.value:
@@ -531,10 +538,10 @@ class GPUModelRunner(ModelRunnerBase):
                         self.encoder_cache.pop(mm_hash, None)
             idx = self.share_inputs.get_index_by_batch_id(request.idx)
             req_idx_img_index_map[idx] = -1
+            inputs = request.multimodal_inputs
             if request.with_image:
                 req_idx_img_index_map[idx] = img_index
                 img_index = img_index + 1
-                inputs = request.multimodal_inputs
                 if self.encoder_cache is not None:
                     if envs.FD_ENABLE_MAX_PREFILL:
                         if "vit_seqlen" in inputs:
@@ -640,6 +647,42 @@ class GPUModelRunner(ModelRunnerBase):
                             prefill_end_index=request.prefill_end_index,
                         )
                     )
+            if (
+                inputs is not None
+                and inputs.get("image_feature_urls", None) is not None
+                and len(inputs["image_feature_urls"]) > 0
+            ):
+                multi_vision_inputs["image_grid_thws"].extend(
+                    inputs["image_grid_thws"][request.image_start : request.image_end]
+                )
+                image_feature = inputs["image_features"][request.image_start : request.image_end]
+
+                if len(image_feature) > 0:
+                    if isinstance(image_feature[0], paddle.Tensor) and len(image_feature[0].shape) == 2:
+                        # Enable encode vision_embedding
+                        for image_feature_tensor in image_feature:
+                            if image_feature_tensor.shape[1] != self.fd_config.model_config.hidden_size:
+                                logger.error(
+                                    f"Shape mismatch: expected shape={self.fd_config.model_config.hidden_size}, \
+                                        but got {image_feature_tensor.shape}"
+                                )
+                        image_features_gpu = [vf.cuda() for vf in image_feature]
+                        image_embeds = paddle.concat(image_features_gpu, axis=0)
+                        multi_vision_inputs["image_features"].append(image_embeds)
+                        logger.info("Enable Encode image embedding.")
+                    else:
+                        multi_vision_inputs["image_features"].extend(image_feature)
+                        logger.info("Disable Encode image embedding.")
+
+        self.share_inputs["image_features"] = multi_vision_inputs["image_features"]
+        if len(multi_vision_inputs["image_features"]) > 0:
+            if (
+                isinstance(multi_vision_inputs["image_features"][0], paddle.Tensor)
+                and len(multi_vision_inputs["image_features"][0].shape) == 2
+            ):
+                self.share_inputs["image_features"] = paddle.concat(multi_vision_inputs["image_features"], axis=0)
+        self.share_inputs["image_grid_thws"] = multi_vision_inputs["image_grid_thws"]
+
         if self.encoder_cache is not None:
             if len(multi_vision_inputs["images_lst"]) > 0 or len(multi_vision_inputs["encoder_cache_info"]) > 0:
                 image_features_output = None
@@ -756,6 +799,9 @@ class GPUModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
+        if self.enable_mm:
+            # Sort by idx to ensure attention mask offsets are filled in order during mm prefill
+            req_dicts = sorted(req_dicts, key=lambda r: r.idx)
         if self.enable_cache_manager_v1:
             # submit_swap_tasks handles:
             # 1. Waiting for pending evict handlers before submitting new evict
@@ -812,6 +858,23 @@ class GPUModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
+
+                if self.enable_mm:
+                    self.share_inputs["decode_states"][idx, 0] = 0
+                    inputs = request.multimodal_inputs
+                    # mm attention_mask
+                    attn_offset_len = prefill_end_index - prefill_start_index
+                    if inputs.get("attention_mask_offset", None) is None:
+                        attention_mask_offset_slice = np.arange(prefill_start_index, prefill_end_index, dtype=np.int32)
+                    else:
+                        attention_mask_offset_slice = np.asarray(
+                            inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype=np.int32
+                        )
+                    async_set_value(
+                        self.share_inputs["attn_mask_offsets_full"][idx : idx + 1, 0:attn_offset_len],
+                        attention_mask_offset_slice,
+                    )
+
                 if not self.is_pooling_model:
                     if request.get("enable_thinking") is not None:
                         enable_thinking = bool(request.get("enable_thinking"))
@@ -1202,7 +1265,11 @@ class GPUModelRunner(ModelRunnerBase):
             for req in self.forward_batch_reqs_list
             if req is not None and req.sampling_params is not None and req.sampling_params.logprobs is not None
         ]
-        if len(logprobs_reqs):
+        self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
+        self.top_p_normalized_logprobs = any(
+            req.sampling_params.top_p_normalized_logprobs and req.sampling_params.top_p != 1.0 for req in logprobs_reqs
+        )
+        if logprobs_reqs:
             self.max_logprobs = (
                 max(
                     [
@@ -1212,10 +1279,6 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 if not self.speculative_decoding
                 else 20
-            )
-            self.temp_scaled_logprobs = any(req.sampling_params.temp_scaled_logprobs for req in logprobs_reqs)
-            self.top_p_normalized_logprobs = any(
-                req.sampling_params.top_p_normalized_logprobs for req in logprobs_reqs
             )
         elif self.enable_logprob:
             self.max_logprobs = None if not self.speculative_decoding else 0
@@ -1259,6 +1322,19 @@ class GPUModelRunner(ModelRunnerBase):
 
             self._real_output_token_num_host.copy_(real_output_token_num, False)
             self.output_token_num_event.record()
+
+        if self.enable_mm:
+            attn_mask_offsets = update_attn_mask_offsets(
+                self.share_inputs["ids_remove_padding"],
+                self.share_inputs["seq_lens_this_time"],
+                self.share_inputs["seq_lens_encoder"],
+                self.share_inputs["seq_lens_decoder"],
+                self.share_inputs["cu_seqlens_q"],
+                self.share_inputs["attn_mask_offsets_full"],
+                self.share_inputs["is_block_step"],
+                self.share_inputs["decode_states"],
+            )
+            self.share_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
 
         # Initialize forward meta data
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
@@ -1396,6 +1472,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_batch_ids=self.share_inputs["kv_batch_ids"],
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
+            attn_mask_offsets=self.share_inputs["attn_mask_offsets"] if self.enable_mm else None,
             routing_replay_table=routing_replay_table,
         )
 
@@ -1806,6 +1883,7 @@ class GPUModelRunner(ModelRunnerBase):
                 self.increment_value,
                 accept_all_drafts,
                 reject_all_drafts,
+                real_bsz=batch_size,
             )
             if self.parallel_config.tensor_parallel_size > 1:
                 paddle.distributed.broadcast(
@@ -2280,6 +2358,24 @@ class GPUModelRunner(ModelRunnerBase):
         model_inputs["generated_modality"] = self.share_inputs["generated_modality"]
         if self.enable_mm:
             model_inputs["image_features"] = self.share_inputs["image_features"]
+            model_inputs["decode_states"] = self.share_inputs["decode_states"]
+            model_inputs["image_grid_thws"] = self.share_inputs.get("image_grid_thws", None)
+            video_features = self.share_inputs.get("video_features", None)
+            video_grid_thws = self.share_inputs.get("video_grid_thws", None)
+            video_infinity_scales = self.share_inputs.get("video_infinity_scales", None)
+            if video_features is not None:
+                model_inputs["video_features"] = video_features
+            if video_grid_thws is not None:
+                model_inputs["video_grid_thws"] = video_grid_thws
+            if video_infinity_scales is not None:
+                model_inputs["video_infinity_scales"] = video_infinity_scales
+
+            # init features and grid_thws
+            self.share_inputs["image_features"] = None
+            self.share_inputs["image_grid_thws"] = None
+            self.share_inputs["video_features"] = None
+            self.share_inputs["video_grid_thws"] = None
+            self.share_inputs["video_infinity_scales"] = None
 
         return model_inputs, p_done_idxs, token_num_event
 
@@ -2440,6 +2536,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs,
                     real_output_token_num,
                     self.increment_value,
+                    real_bsz=real_bsz,
                 )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -2592,17 +2689,17 @@ class GPUModelRunner(ModelRunnerBase):
         sampler_output,
     ):
         if self.speculative_decoding:
-            save_output_specualate(
+            save_output_speculate(
                 sampler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
-                proposer_share_inputs=self.proposer.model_inputs,
                 local_rank=self.local_rank,
                 tensor_parallel_rank=self.parallel_config.tensor_parallel_rank,
                 save_each_rank=self.parallel_config.use_ep,
                 is_mtp_prefill=(
                     self.spec_method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
                 ),
+                proposer_share_inputs=self.proposer.model_inputs if self.spec_method == SpecMethod.MTP else None,
             )
         else:
             save_output_normal(
@@ -2816,12 +2913,19 @@ class GPUModelRunner(ModelRunnerBase):
         # Clear CUDAGraph
         if self.use_cudagraph:
             self.model.clear_graph_opt_backend()
+            if (
+                self.speculative_decoding
+                and self.spec_method == SpecMethod.MTP
+                and self.graph_opt_config.draft_model_use_cudagraph
+            ):
+                self.proposer.model.clear_graph_opt_backend()
         # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
         )
-        if self.spec_method == SpecMethod.MTP:
-            self.proposer.model.clear_graph_opt_backend()
+
+        # NOTE(wangyanpeng): MTP cache must be cleared before clearing the main KV cache
+        if self.speculative_decoding and self.spec_method == SpecMethod.MTP:
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
