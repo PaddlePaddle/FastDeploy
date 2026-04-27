@@ -290,7 +290,11 @@ class MTPProposerCUDA(MTPProposer):
                     and sampler_output.logprobs_tensors is not None
                 ):
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-                    recover_batch_index_for_sampler_output(sampler_output, self.model_inputs.index_to_batch_id)
+                    recover_batch_index_for_sampler_output(
+                        sampler_output,
+                        self.model_inputs.index_to_batch_id,
+                        self.model_inputs.enable_pd_reorder,
+                    )
                     recover_model_output_map = recover_batch_index_for_output(
                         self.model_inputs,
                         self.model_inputs.index_to_batch_id,
