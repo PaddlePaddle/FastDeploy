@@ -2099,8 +2099,11 @@ class GPUModelRunner(ModelRunnerBase):
                     )
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
+                    # Cap num_tokens to avoid OOM with MoE models during CUDA graph capture
+                    # For SM80 BF16 MoE, one-hot matmul is very memory-intensive, use 1 token
+                    capture_num_tokens = 1
                     self._dummy_run(
-                        num_tokens=self.fd_config.get_max_chunk_tokens(),
+                        num_tokens=capture_num_tokens,
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -2783,6 +2786,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 2. Dummy run
         num_tokens = self.fd_config.get_max_chunk_tokens()
+        # Cap dummy run tokens to avoid OOM with large models
+        num_tokens = min(num_tokens, 256)
         logger.info(
             f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
         )
