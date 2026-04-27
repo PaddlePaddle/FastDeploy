@@ -830,58 +830,71 @@ class PrefixCacheManager:
 
                 if self.kvcache_storage_backend and no_match_token_num >= block_size:
                     if not self.can_allocate_gpu_blocks(num_blocks=no_match_block_num, try_free_gpu_blocks=False):
-                        raise Exception(
-                            "request_match_blocks: Not enough GPU memory to allocate cache for matched Storage Cache"
+                        logger.warning(
+                            "request_match_blocks: skip storage cache prefetch because GPU blocks are insufficient, "
+                            f"req_id {req_id}, need {no_match_block_num}, free {len(self.gpu_free_block_list)}"
                         )
-
-                    logger.debug(
-                        f"request_match_blocks: req_id {req_id}, allocate {no_match_block_num} block to receive storage cache"
-                    )
-                    gpu_recv_storage_block_ids = self.allocate_gpu_blocks(no_match_block_num)
-
-                    prefix_block_key = [] if match_block_node.hash_value is None else [match_block_node.hash_value]
-                    cur_token_idx = match_token_num
-                    no_match_block_keys = []
-                    mm_idx = 0
-                    while cur_token_idx <= input_token_num - block_size:
-                        cur_block_token_ids = input_token_ids[cur_token_idx : cur_token_idx + block_size]
-                        # Get extra hash keys for multimodal content (images, videos, etc.)
-                        mm_idx, extra_keys = self.get_block_hash_extra_keys(
-                            request=task,
-                            start_idx=cur_token_idx,
-                            end_idx=cur_token_idx + block_size,
-                            mm_idx=mm_idx,
+                    else:
+                        logger.debug(
+                            f"request_match_blocks: req_id {req_id}, allocate {no_match_block_num} block to receive storage cache"
                         )
-                        prefix_block_key.extend(extra_keys)
-                        cur_block_key = get_hash_str(cur_block_token_ids, prefix_block_key)
-                        no_match_block_keys.append(cur_block_key)
-                        cur_token_idx += block_size
-                        prefix_block_key = [cur_block_key]
+                        gpu_recv_storage_block_ids = self.allocate_gpu_blocks(no_match_block_num)
 
-                    logger.info(
-                        f"start prefetch cache from storage, req_id: {req_id}, block num: {len(no_match_block_keys)}"
-                    )
-                    start_time = time.time()
-                    read_storage_task = ReadStorageTask(
-                        task_id=req_id,
-                        keys=no_match_block_keys,
-                        token_ids=input_token_ids if self.kvcache_storage_backend == "attention_store" else None,
-                        gpu_block_ids=gpu_recv_storage_block_ids,
-                        start_read_block_idx=match_token_num // block_size,
-                    )
-                    logger.debug(f"issue read storage task: {read_storage_task}")
-                    storage_matched_block_ids = self.issue_prefetch_storage_task(read_storage_task)
-                    storage_matched_block_num = len(storage_matched_block_ids)
-                    storage_match_token_num = storage_matched_block_num * block_size
-                    cost_time = time.time() - start_time
-                    metrics["storage_cache_prepare_time"] = cost_time
-                    logger.info(
-                        f"finish prefetch cache from storage, req_id: {req_id}, "
-                        f"matched block num: {storage_matched_block_num}, cost_time:{cost_time:.6f}s"
-                    )
+                        prefix_block_key = [] if match_block_node.hash_value is None else [match_block_node.hash_value]
+                        cur_token_idx = match_token_num
+                        no_match_block_keys = []
+                        mm_idx = 0
+                        while cur_token_idx <= input_token_num - block_size:
+                            cur_block_token_ids = input_token_ids[cur_token_idx : cur_token_idx + block_size]
+                            # Get extra hash keys for multimodal content (images, videos, etc.)
+                            mm_idx, extra_keys = self.get_block_hash_extra_keys(
+                                request=task,
+                                start_idx=cur_token_idx,
+                                end_idx=cur_token_idx + block_size,
+                                mm_idx=mm_idx,
+                            )
+                            prefix_block_key.extend(extra_keys)
+                            cur_block_key = get_hash_str(cur_block_token_ids, prefix_block_key)
+                            no_match_block_keys.append(cur_block_key)
+                            cur_token_idx += block_size
+                            prefix_block_key = [cur_block_key]
 
-                    match_storage_block_ids = gpu_recv_storage_block_ids[:storage_matched_block_num]
-                    self.recycle_gpu_blocks(gpu_recv_storage_block_ids[storage_matched_block_num:])
+                        try:
+                            logger.info(
+                                f"start prefetch cache from storage, req_id: {req_id}, block num: {len(no_match_block_keys)}"
+                            )
+                            start_time = time.time()
+                            read_storage_task = ReadStorageTask(
+                                task_id=req_id,
+                                keys=no_match_block_keys,
+                                token_ids=(
+                                    input_token_ids if self.kvcache_storage_backend == "attention_store" else None
+                                ),
+                                gpu_block_ids=gpu_recv_storage_block_ids,
+                                start_read_block_idx=match_token_num // block_size,
+                            )
+                            logger.debug(f"issue read storage task: {read_storage_task}")
+                            storage_matched_block_ids = self.issue_prefetch_storage_task(read_storage_task)
+                            storage_matched_block_num = len(storage_matched_block_ids)
+                            storage_match_token_num = storage_matched_block_num * block_size
+                            cost_time = time.time() - start_time
+                            metrics["storage_cache_prepare_time"] = cost_time
+                            logger.info(
+                                f"finish prefetch cache from storage, req_id: {req_id}, "
+                                f"matched block num: {storage_matched_block_num}, cost_time:{cost_time:.6f}s"
+                            )
+
+                            match_storage_block_ids = gpu_recv_storage_block_ids[:storage_matched_block_num]
+                            self.recycle_gpu_blocks(gpu_recv_storage_block_ids[storage_matched_block_num:])
+                        except Exception as e:
+                            logger.warning(
+                                "request_match_blocks: storage cache prefetch failed, fallback to cache miss, "
+                                f"req_id {req_id}, error: {type(e)} {e}"
+                            )
+                            self.recycle_gpu_blocks(gpu_recv_storage_block_ids, req_id)
+                            gpu_recv_storage_block_ids = []
+                            storage_match_token_num = 0
+                            match_storage_block_ids = []
 
                 # 4. update metrics
                 match_token_num = gpu_match_token_num + cpu_match_token_num + storage_match_token_num
