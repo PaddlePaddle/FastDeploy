@@ -105,7 +105,12 @@ from fastdeploy.worker.model_runner_base import (
     DistributedStatus,
     ModelRunnerBase,
 )
-from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
+from fastdeploy.worker.output import (
+    LogprobsTensors,
+    ModelOutputData,
+    ModelRunnerOutput,
+    SamplerOutput,
+)
 
 
 class GPUModelRunner(ModelRunnerBase):
@@ -2088,6 +2093,80 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             self.execute_model_overlap(model_forward_batch, num_running_requests)
 
+    def _make_preempted_batch_output(self):
+
+        bsz = int(getattr(self.share_inputs, "num_running_requests", 0))
+        fill_value = PREEMPTED_TOKEN_ID  # if envs.FD_USE_GET_SAVE_OUTPUT_V1 else 0
+        fake_sampled_token_ids = paddle.full([bsz, 1], fill_value=fill_value, dtype="int64", device="cpu")
+        self.share_inputs["sampled_token_ids"][:bsz].copy_(fake_sampled_token_ids, False)
+
+        fake_logprobs_tensors = None
+        if self.enable_logprob:
+            fake_logprobs_tensors = LogprobsTensors(
+                logprob_token_ids=paddle.zeros([bsz, 1], dtype="int64", device="cpu"),
+                logprobs=paddle.zeros([bsz, 1], dtype="float32", device="cpu"),
+                selected_token_ranks=paddle.zeros([bsz], dtype="int64", device="cpu"),
+            )
+
+        if self.speculative_decoding:
+            self.share_inputs["accept_tokens_cpu"][:bsz].fill_(0)
+            self.share_inputs["accept_num_cpu"][:bsz].fill_(0)
+            self.share_inputs["seq_lens_decoder_cpu"][:bsz].copy_(self.share_inputs["seq_lens_decoder"][:bsz], False)
+            self.share_inputs["prompt_lens_cpu"][:bsz].copy_(self.share_inputs["prompt_lens"][:bsz], False)
+            sampler_output = SamplerOutput(
+                sampled_token_ids=fake_sampled_token_ids,
+                logprobs_tensors=fake_logprobs_tensors,
+                token_num_per_batch=(self.share_inputs["accept_num_cpu"][:bsz] if self.enable_logprob else None),
+                cu_batch_token_offset=(
+                    paddle.zeros([bsz + 1], dtype="int32", device="cpu") if self.enable_logprob else None
+                ),
+            )
+        else:
+            sampler_output = SamplerOutput(
+                sampled_token_ids=fake_sampled_token_ids,
+                logprobs_tensors=fake_logprobs_tensors,
+            )
+
+        index_to_batch_id = {
+            i: self.share_inputs["index_to_batch_id"][i]
+            for i in range(bsz)
+            if i in self.share_inputs["index_to_batch_id"]
+        }
+        model_output_data = ModelOutputData(
+            next_tokens=self.share_inputs["next_tokens"],
+            stop_flags=self.share_inputs["stop_flags"],
+            step_idx=self.share_inputs["step_idx"],
+            max_dec_len=self.share_inputs["max_dec_len"],
+            seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
+            eos_token_id=self.share_inputs["eos_token_id"],
+            not_need_stop=self.share_inputs["not_need_stop"],
+            not_need_stop_device=self.share_inputs["not_need_stop_device"],
+            input_ids=self.share_inputs["input_ids"],
+            seq_lens_encoder=self.share_inputs["seq_lens_encoder"],
+            seq_lens_decoder=self.share_inputs["seq_lens_decoder"],
+            is_block_step=self.share_inputs["is_block_step"],
+            full_hidden_states=None,
+            msg_queue_id=self.parallel_config.msg_queue_id,
+            mp_rank=self.parallel_config.tensor_parallel_rank,
+            use_ep=self.parallel_config.use_ep,
+            draft_tokens=(self.share_inputs["draft_tokens"] if self.speculative_decoding else None),
+            actual_draft_token_num=(
+                self.share_inputs["actual_draft_token_num"] if self.speculative_decoding else None
+            ),
+            token_ids_all=self.share_inputs["token_ids_all"],
+            accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
+            accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+            stop_token_ids=self.share_inputs["stop_seqs"],
+            stop_seqs_len=self.share_inputs["stop_seqs_len"],
+            min_tokens=self.share_inputs["min_dec_len"],
+            prompt_lens=self.share_inputs["prompt_lens"],
+            mask_rollback=self.share_inputs["mask_rollback"],
+            prompt_logprobs_list=None,
+            index_to_batch_id=index_to_batch_id,
+            enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
+        )
+        return model_output_data, sampler_output
+
     def execute_model_normal(
         self,
         model_forward_batch: Optional[List[Request]] = None,
@@ -2103,6 +2182,14 @@ class GPUModelRunner(ModelRunnerBase):
                 and self.parallel_config.use_ep
             ):
                 self._execute_empty_mtp_input(self.forward_meta)
+            if paddle.sum(self.share_inputs["preempted_idx"]) > 0:
+                logger.info(
+                    f"All requests in batch are preempted, real_bsz: {real_bsz} preempted: {paddle.sum(self.share_inputs['preempted_idx'])}"
+                )
+                model_output_data, sampler_output = self._make_preempted_batch_output()
+                self.share_inputs["last_preempted_idx"].copy_(self.share_inputs["preempted_idx"])
+                self.share_inputs["preempted_idx"][:] = 0
+                self._save_model_output(model_output_data, sampler_output)
             return
         model_output_data, sampler_output, post_process_event = self._postprocess(
             model_output, p_done_idxs, model_forward_batch, num_running_requests, real_bsz
@@ -2151,6 +2238,16 @@ class GPUModelRunner(ModelRunnerBase):
                 and self.parallel_config.use_ep
             ):
                 self._execute_empty_mtp_input(self.forward_meta)
+
+            if paddle.sum(self.share_inputs["preempted_idx"]) > 0:
+                logger.info(
+                    f"All requests in batch are preempted, real_bsz: {real_bsz} preempted: {paddle.sum(self.share_inputs['preempted_idx'])}"
+                )
+                model_output_data, sampler_output = self._make_preempted_batch_output()
+                self.share_inputs["last_preempted_idx"].copy_(self.share_inputs["preempted_idx"])
+                self.share_inputs["preempted_idx"][:] = 0
+                self._save_model_output(model_output_data, sampler_output)
+
             self._cached_model_output_data = None
             self._cached_sampler_output = None
             self._cached_post_process_event = None
