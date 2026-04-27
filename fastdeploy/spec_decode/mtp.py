@@ -637,7 +637,6 @@ class MTPProposer(Proposer):
         """
         return self.exist_prefill_flag
 
-
     def update_task_chunk_prefill(self, task):
         """
         Update single task's chunk_prefill info
