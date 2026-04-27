@@ -244,7 +244,6 @@ class FastDeployLogger:
             if not without_formater:
                 console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
-            console_handler.propagate = False
 
         logger.propagate = False
 
@@ -308,7 +307,6 @@ class FastDeployLogger:
             if not without_formater:
                 console_handler.setFormatter(formatter)
             logger.addHandler(console_handler)
-            console_handler.propagate = False
 
         logger.propagate = False
 

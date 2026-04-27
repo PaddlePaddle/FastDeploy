@@ -17,6 +17,7 @@ import asyncio
 import json
 import os
 import signal
+import sys
 import threading
 import time
 import traceback
@@ -194,7 +195,7 @@ async def lifespan(app: FastAPI):
         "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
     )
 
-    handler = logging.StreamHandler()
+    handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)
     uvicorn_access.addHandler(handler)
     uvicorn_access.propagate = False

@@ -82,6 +82,9 @@ class LoggerTests(unittest.TestCase):
         """Test log propagation settings"""
         legacy_logger = self.logger._get_legacy_logger("test", "test.log")
         self.assertFalse(legacy_logger.propagate)
+        # Also verify get_trace_logger
+        trace_logger = self.logger.get_trace_logger("test_trace", "test_trace.log")
+        self.assertFalse(trace_logger.propagate)
 
     def test_get_trace_logger_basic(self):
         """Test basic functionality of get_trace_logger"""

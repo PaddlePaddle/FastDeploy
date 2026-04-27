@@ -15,6 +15,7 @@
 """
 
 import logging
+import sys
 import threading
 import time
 from typing import Iterable
@@ -47,7 +48,7 @@ class SchedulerMetricsLogger:
         if not getattr(logger, "_fd_scheduler_metrics_configured", False):
             logger.setLevel(logging.INFO)
             logger.propagate = False
-            handler = logging.StreamHandler()
+            handler = logging.StreamHandler(sys.stdout)
             formatter = logging.Formatter(
                 "[%(asctime)s] [%(process)d] [%(levelname)s] %(message)s",
                 "%Y-%m-%d %H:%M:%S",

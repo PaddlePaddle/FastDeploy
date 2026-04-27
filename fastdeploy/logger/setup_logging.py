@@ -181,6 +181,12 @@ def setup_logging(log_dir=None, config_file=None):
     # Ensure log directory exists
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 
+    # Prevent implicit basicConfig() from adding a stderr handler when
+    # module-level logging.info/warning() is called with no root handlers.
+    # A NullHandler on root satisfies Python's "has handlers" check.
+    if not logging.root.handlers:
+        logging.root.addHandler(logging.NullHandler())
+
     # Store log_dir for later use
     setup_logging._log_dir = log_dir
 

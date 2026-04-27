@@ -52,28 +52,35 @@ UVICORN_CONFIG = {
         }
     },
     "handlers": {
+        # INFO/DEBUG logs go to stdout
         "default": {
             "class": "colorlog.StreamHandler",
+            "stream": "ext://sys.stdout",
+            "formatter": "custom",
+        },
+        # ERROR+ logs go to stderr
+        "error": {
+            "class": "colorlog.StreamHandler",
             "stream": "ext://sys.stderr",
+            "level": "ERROR",
             "formatter": "custom",
         },
     },
     "loggers": {
         "uvicorn": {
             "level": "INFO",
-            "handlers": ["default"],
+            "handlers": ["default", "error"],
             "propagate": False,
         },
         "uvicorn.error": {
             "level": "INFO",
-            "handlers": ["default"],
+            "handlers": ["default", "error"],
             "propagate": False,
         },
         "uvicorn.access": {
             "level": "INFO",
             "handlers": ["default"],
             "propagate": False,
-            "formatter": "custom",
         },
     },
 }
