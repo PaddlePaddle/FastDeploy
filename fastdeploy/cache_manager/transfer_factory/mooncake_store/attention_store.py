@@ -187,13 +187,10 @@ class AttentionStore(KVCacheStorage):
             slice_token_ids = token_ids[: (start_write_block_idx + slice_end) * block_token_size]
             slice_tokens = Tokens(slice_token_ids, block_token_size)
 
-            effective_timeout = (
-                remaining_timeout if total_blocks <= slice_block_num else min(slice_timeout, remaining_timeout)
-            )
             logger.debug(
                 f"[WRITE SLICE BEGIN] task_id: {task_id} slice [{slice_start}:{slice_end}] "
                 f"block_idx={slice_write_block_idx}, blocks={len(slice_gpu_block_ids)}, "
-                f"token_ids_len={len(slice_token_ids)}, timeout={effective_timeout:.2f}s"
+                f"token_ids_len={len(slice_token_ids)}, timeout={slice_timeout:.2f}s"
             )
             slice_start_time = time.time()
             try:
@@ -204,7 +201,7 @@ class AttentionStore(KVCacheStorage):
                     k_data_ptrs,
                     v_data_ptrs,
                     slice_gpu_block_ids,
-                    effective_timeout,
+                    slice_timeout,
                 )
             except AttentionStoreSDKError:
                 logger.error(
@@ -217,7 +214,7 @@ class AttentionStore(KVCacheStorage):
 
             if written < len(slice_gpu_block_ids):
                 logger.warning(
-                    f"[WRITE INCOMPLETE] task_id: {task_id} slice [{slice_start}:{slice_end}] "
+                    f"[WRITE SLILCE INCOMPLETE] task_id: {task_id} slice [{slice_start}:{slice_end}] "
                     f"({written}/{len(slice_gpu_block_ids)}), cost={slice_cost:.6f}s, "
                     f"total written {total_written}/{total_blocks}, "
                     f"prefix cache continuity broken, skip remaining slices"
@@ -225,7 +222,7 @@ class AttentionStore(KVCacheStorage):
                 break
 
             logger.debug(
-                f"[WRITE SLICE] task_id: {task_id} slice [{slice_start}:{slice_end}] "
+                f"[WRITE SLICE END] task_id: {task_id} slice [{slice_start}:{slice_end}] "
                 f"written={written}, cost={slice_cost:.6f}s"
             )
 
