@@ -37,6 +37,7 @@ from fastdeploy.entrypoints.openai.utils import DealerConnectionManager
 from fastdeploy.input.preprocess import InputPreprocessor
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.inter_communicator.zmq_client import ZmqIpcClient
+from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import EngineError, envs, llm_logger
 
@@ -294,6 +295,7 @@ class AsyncLLM(EngineServiceClient):
             cfg.limit_mm_per_prompt,
             cfg.mm_processor_kwargs,
             cfg.tool_parser,
+            enable_mm_runtime=cfg.enable_mm_runtime,
         )
         # Create data processor
         self.data_processor = self.input_processor.create_processor()
@@ -446,7 +448,7 @@ class AsyncLLM(EngineServiceClient):
                 )
             if envs.ZMQ_SEND_BATCH_DATA and self.connection_manager is not None:
                 request["zmq_worker_pid"] = self.connection_manager.worker_pid
-            if self.cfg.model_config.enable_mm:
+            if self.cfg.enable_mm_runtime:
                 self.request_client.send_pyobj(request)
             else:
                 self.request_client.send_json(request)
@@ -561,7 +563,7 @@ class AsyncLLM(EngineServiceClient):
             llm_logger.info(f"Request {conn_request_id} generator exit (outer)")
             return
         except Exception as e:
-            llm_logger.error(f"Request {conn_request_id} failed: {e}")
+            log_request_error(message="Request {request_id} failed: {error}", request_id=conn_request_id, error=e)
             raise EngineError(str(e), error_code=500) from e
         finally:
             # Ensure request_map/request_num are cleaned up
@@ -583,7 +585,7 @@ class AsyncLLM(EngineServiceClient):
                 await self.connection_manager.cleanup_request(request_id)
             llm_logger.info(f"Aborted request {request_id}")
         except Exception as e:
-            llm_logger.error(f"Failed to abort request {request_id}: {e}")
+            log_request_error(message="Failed to abort request {request_id}: {error}", request_id=request_id, error=e)
 
     async def shutdown(self):
         """

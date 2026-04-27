@@ -31,7 +31,7 @@ from conftest import get_model_path, get_port_num, print_logs_on_failure, start_
 def test_mtp_mode(xpu_env):
     """mtp模式测试"""
 
-    print("\n============================开始mtp + CudaGraph 模式测试!============================")
+    print("\n============================开始mtp + CudaGraph模式测试!============================")
 
     # 获取配置
     port_num = get_port_num()
@@ -94,9 +94,9 @@ def test_mtp_mode(xpu_env):
         print("\nmtp + CudaGraph模式测试通过!")
 
     except Exception as e:
-        print(f"\nmtp + CudaGraph模式测试失败: {str(e)}")
+        print(f"\nmtp模式测试失败: {str(e)}")
         print_logs_on_failure()
-        pytest.fail(f"mtp + CudaGraph模式测试失败: {str(e)}")
+        pytest.fail(f"mtp模式测试失败: {str(e)}")
 
 
 if __name__ == "__main__":

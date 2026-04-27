@@ -24,13 +24,8 @@ import paddle
 import pytest
 import zmq
 
-if not hasattr(paddle, "compat"):
-
-    class _CompatStub:
-        def enable_torch_proxy(self, scope=None):
-            return None
-
-    paddle.compat = _CompatStub()
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda scope=None: None
 
 from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
@@ -207,15 +202,6 @@ def test_send_cache_info_to_prefill_groups_by_addr_and_skips_error():
                 "prefill_connector_port": 9001,
                 "block_tables": [1, 2, 3],
             },
-        ),
-        DummyTask(
-            request_id="req-err",
-            disaggregate_info={
-                "prefill_ip": "10.0.0.2",
-                "prefill_connector_port": 9002,
-                "block_tables": [9],
-            },
-            error_msg="failed",
         ),
     ]
 

@@ -36,7 +36,7 @@ from fastdeploy.model_executor.graph_optimization.utils import (
 )
 from fastdeploy.utils import get_logger
 
-logger = get_logger("cudagrpah_piecewise_backend", "cudagraph_piecewise_backend.log")
+logger = get_logger("cudagrpah_piecewise_backend", "worker_process.log")
 
 
 P = ParamSpec("P")

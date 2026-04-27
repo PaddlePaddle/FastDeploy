@@ -31,6 +31,7 @@ from pydantic import (
 )
 
 from fastdeploy.engine.pooling_params import PoolingParams
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.worker.output import PromptLogprobs, SpeculateMetrics
 
 
@@ -229,6 +230,7 @@ class FunctionDefinition(BaseModel):
     name: str
     description: Optional[str] = None
     parameters: Optional[dict[str, Any]] = None
+    strict: Optional[bool] = None
 
 
 class ChatCompletionToolsParam(BaseModel):
@@ -268,7 +270,7 @@ class ChatCompletionResponseChoice(BaseModel):
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]]
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop", "abort", "pd_reschedule"]]
     speculate_metrics: Optional[SpeculateMetrics] = None
 
 
@@ -333,7 +335,7 @@ class ChatCompletionResponseStreamChoice(BaseModel):
     logprobs: Optional[LogProbs] = None
     draft_logprobs: Optional[LogProbs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]] = None
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop", "abort", "pd_reschedule"]] = None
     arrival_time: Optional[float] = None
     speculate_metrics: Optional[SpeculateMetrics] = None
 
@@ -369,7 +371,7 @@ class CompletionResponseChoice(BaseModel):
     draft_logprobs: Optional[CompletionLogprobs] = None
     prompt_logprobs: Optional[PromptLogprobs] = None
     reasoning_content: Optional[str] = None
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]] = None
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop", "abort", "pd_reschedule"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     speculate_metrics: Optional[SpeculateMetrics] = None
 
@@ -415,7 +417,7 @@ class CompletionResponseStreamChoice(BaseModel):
     prompt_tokens: Optional[str] = None
     completion_tokens: Optional[str] = None
     reasoning_content: Optional[str] = None
-    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop"]] = None
+    finish_reason: Optional[Literal["stop", "length", "tool_calls", "recover_stop", "abort", "pd_reschedule"]] = None
     tool_calls: Optional[List[DeltaToolCall | ToolCall]] = None
     speculate_metrics: Optional[SpeculateMetrics] = None
 
@@ -547,9 +549,6 @@ class CompletionRequest(BaseModel):
     trace_context: Optional[str] = None
 
     collect_metrics: Optional[bool] = False
-
-    # NOTE(Wanglongzhi2001): temporary parameter for video understanding benchmark
-    video_fps: Optional[float] = None
 
     def to_dict_for_infer(self, request_id=None, prompt=None):
         """
@@ -737,9 +736,6 @@ class ChatCompletionRequest(BaseModel):
 
     collect_metrics: Optional[bool] = False
 
-    # NOTE(Wanglongzhi2001): temporary parameter for video understanding benchmark
-    video_fps: Optional[float] = None
-
     def to_dict_for_infer(self, request_id=None):
         """
         Convert the request parameters into a dictionary
@@ -763,9 +759,7 @@ class ChatCompletionRequest(BaseModel):
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in self.metadata.items():
                 req_dict[key] = value
-            from fastdeploy.utils import api_server_logger
-
-            api_server_logger.warning("The parameter metadata is obsolete.")
+            log_request(RequestLogLevel.STAGES, message="The parameter metadata is obsolete.")
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value

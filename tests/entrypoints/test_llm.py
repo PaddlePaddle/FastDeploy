@@ -148,7 +148,9 @@ def test_receive_output_merges():
     assert first.added is True
 
 
-def test_receive_output_logs_exception(caplog):
+def test_receive_output_logs_exception():
+    from unittest.mock import patch
+
     llm = _make_llm(_make_engine())
     calls = iter([RuntimeError("boom"), SystemExit()])
 
@@ -159,9 +161,14 @@ def test_receive_output_logs_exception(caplog):
         return nxt
 
     llm.llm_engine._get_generated_result = _get_generated_result
-    with pytest.raises(SystemExit):
-        llm._receive_output()
-    assert "Unexcepted error happened" in caplog.text
+    with patch("fastdeploy.entrypoints.llm.log_request_error") as mock_log:
+        with pytest.raises(SystemExit):
+            llm._receive_output()
+        mock_log.assert_called_once()
+        call_kwargs = mock_log.call_args[1]
+        assert "Unexpected error happened" in call_kwargs.get(
+            "message", mock_log.call_args[0][0] if mock_log.call_args[0] else ""
+        )
 
 
 def test_generate_and_chat_branches():

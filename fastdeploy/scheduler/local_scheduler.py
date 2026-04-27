@@ -19,6 +19,7 @@ import time
 from typing import Dict, List, Optional, Tuple
 
 from fastdeploy.engine.request import Request, RequestOutput
+from fastdeploy.logger.request_logger import RequestLogLevel, log_request
 from fastdeploy.scheduler.data import ScheduledRequest, ScheduledResponse
 from fastdeploy.utils import envs, scheduler_logger
 
@@ -116,7 +117,7 @@ class LocalScheduler:
             self.ids = list()
             self.requests = dict()
             self.responses = dict()
-        scheduler_logger.info("Scheduler has been reset")
+        log_request(RequestLogLevel.LIFECYCLE, message="Scheduler has been reset")
 
     def _recycle(self, request_id: Optional[str] = None):
         """
@@ -191,7 +192,12 @@ class LocalScheduler:
 
             self.ids += valid_ids
             self.requests_not_empty.notify_all()
-        scheduler_logger.info(f"Scheduler has enqueued some requests: {valid_ids}")
+        if len(valid_ids) > 0:
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Scheduler has enqueued some requests: {request_ids}",
+                request_ids=valid_ids,
+            )
 
         if len(duplicated_ids) > 0:
             scheduler_logger.warning(f"Scheduler has received some duplicated requests: {duplicated_ids}")
@@ -300,7 +306,11 @@ class LocalScheduler:
             scheduler_logger.debug(f"Scheduler has put all just-pulled request into the queue: {len(batch_ids)}")
 
         if len(requests) > 0:
-            scheduler_logger.info(f"Scheduler has pulled some request: {[request.request_id for request in requests]}")
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Scheduler has pulled some request: {request_ids}",
+                request_ids=[request.request_id for request in requests],
+            )
 
         return requests
 
@@ -316,7 +326,11 @@ class LocalScheduler:
 
         finished_responses = [response.request_id for response in responses if response.finished]
         if len(finished_responses) > 0:
-            scheduler_logger.info(f"Scheduler has received some finished responses: {finished_responses}")
+            log_request(
+                RequestLogLevel.CONTENT,
+                message="Scheduler has received some finished responses: {request_ids}",
+                request_ids=finished_responses,
+            )
 
         with self.mutex:
             self.batch_responses_per_step.append([response.raw for response in responses])
@@ -381,7 +395,11 @@ class LocalScheduler:
 
                 if finished:
                     self._recycle(request_id)
-                    scheduler_logger.info(f"Scheduler has pulled a finished response: {[request_id]}")
+                    log_request(
+                        RequestLogLevel.CONTENT,
+                        message="Scheduler has pulled a finished response: {request_ids}",
+                        request_ids=[request_id],
+                    )
 
             if results:
                 scheduler_logger.debug(f"get responses, {results}")

@@ -21,15 +21,9 @@ from unittest.mock import MagicMock, Mock, patch
 
 import paddle
 
-# Ensure paddle exposes compat.enable_torch_proxy for fastdeploy import compatibility.
-if not hasattr(paddle, "compat"):
-
-    class _DummyCompat:
-        @staticmethod
-        def enable_torch_proxy(scope=None):
-            return None
-
-    paddle.compat = _DummyCompat()
+# Ensure paddle exposes enable_compat for fastdeploy import compatibility.
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda scope=None: None
 
 # Add the root directory to Python path so we can import fastdeploy
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
@@ -65,6 +59,7 @@ class Args:
     kvcache_storage_backend = None
     write_policy = "write_through"
     model_path = "test_model"
+    splitwise_role = "mixed"
 
 
 # ==========================
@@ -723,6 +718,7 @@ class TestCacheTransferManager(unittest.TestCase):
             * manager.cache_item_bytes,
             device_id=manager.device,
             dp_id=manager.local_data_parallel_id,
+            splitwise_role=LocalArgs.splitwise_role,
         )
 
     def test_invalid_write_policy_raises(self):

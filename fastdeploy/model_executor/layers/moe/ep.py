@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import inspect
 import traceback
 from abc import abstractmethod
 from types import ModuleType
@@ -39,8 +40,8 @@ def load_deep_ep() -> ModuleType:
 
     try:
         if envs.FD_USE_PFCC_DEEP_EP:
-            # Enable torch proxy before importing deep_ep (required by PFCC/PaddleFleet variants)
-            paddle.compat.enable_torch_proxy(scope={"deep_ep"})
+            # Enable paddle.enable_compat before importing deep_ep (required by PFCC/PaddleFleet variants)
+            paddle.enable_compat(scope={"deep_ep"})
             try:
                 import paddlefleet.ops.deep_ep as deep_ep  # type: ignore
 
@@ -509,6 +510,7 @@ class EPRunner:
                     expert_in_rank_num_list=expert_in_rank_num_list,
                     tokens_per_expert_stats_list=tokens_per_expert_stats_list,
                     redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
+                    topk_reduce_func=getattr(layer, "topk_reduce_func", None),
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
@@ -534,6 +536,7 @@ class EPRunner:
                     layer.routed_scaling_factor,
                     layer.gate_correction_bias,
                     getattr(layer, "renormalize", True),
+                    topk_reduce_func=getattr(layer, "topk_reduce_func", None),
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
@@ -600,6 +603,8 @@ class EPPrefillRunner(EPRunner):
             use_internode_ll_two_stage=use_internode_ll_two_stage,
         )
         self.num_worst_tokens = prefill_num_worst_tokens
+        self._dispatch_parameters: Optional[set] = None
+        self._combine_parameters: Optional[set] = None
         logger.info(f"prefill_num_worst_tokens {prefill_num_worst_tokens}")
 
     def set_allocate_on_comm_stream(allocate_on_comm_stream: bool = False):
@@ -654,8 +659,12 @@ class EPPrefillRunner(EPRunner):
         }
 
         if envs.FD_USE_PFCC_DEEP_EP:
-            dispatch_args["num_worst_tokens"] = self.num_worst_tokens
-            dispatch_args["skip_x_record_stream"] = self.num_worst_tokens > 0
+            if self._dispatch_parameters is None:
+                self._dispatch_parameters = set(inspect.signature(buffer.dispatch).parameters)
+            if "num_worst_tokens" in self._dispatch_parameters:
+                dispatch_args["num_worst_tokens"] = self.num_worst_tokens
+            if "skip_x_record_stream" in self._dispatch_parameters:
+                dispatch_args["skip_x_record_stream"] = self.num_worst_tokens > 0
 
         return buffer.dispatch(**dispatch_args)
 
@@ -681,7 +690,10 @@ class EPPrefillRunner(EPRunner):
         }
 
         if envs.FD_USE_PFCC_DEEP_EP:
-            combine_args["skip_x_record_stream"] = self.num_worst_tokens > 0
+            if self._combine_parameters is None:
+                self._combine_parameters = set(inspect.signature(buffer.combine).parameters)
+            if "skip_x_record_stream" in self._combine_parameters:
+                combine_args["skip_x_record_stream"] = self.num_worst_tokens > 0
 
         fused_moe_out, _, event = buffer.combine(**combine_args)
         return fused_moe_out, event

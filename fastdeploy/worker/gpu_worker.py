@@ -24,7 +24,7 @@ from paddle import nn
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.engine.request import Request
+from fastdeploy.engine.request import BatchRequest, Request
 from fastdeploy.plugins.model_runner import load_model_runner_plugins
 from fastdeploy.usage.usage_lib import report_usage_stats
 from fastdeploy.utils import get_logger, set_random_seed
@@ -32,7 +32,7 @@ from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import ModelRunnerOutput
 from fastdeploy.worker.worker_base import WorkerBase
 
-logger = get_logger("gpu_worker", "gpu_worker.log")
+logger = get_logger("gpu_worker", "worker_process.log")
 
 try:
     ModelRunner = load_model_runner_plugins()
@@ -126,14 +126,12 @@ class GpuWorker(WorkerBase):
         before_run_meminfo = pynvml.nvmlDeviceGetMemoryInfo(handle)
 
         logger.info(
-            (
-                "Before running the profile, the memory usage info is as follows:",
-                f"\nDevice Total memory: {before_run_meminfo.total / Gb}",
-                f"\nDevice used memory: {before_run_meminfo.used / Gb}",
-                f"\nDevice free memory: {before_run_meminfo.free / Gb}",
-                f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}",
-                f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}",
-            )
+            "Before running the profile, the memory usage info is as follows:"
+            f"\nDevice Total memory: {before_run_meminfo.total / Gb}"
+            f"\nDevice used memory: {before_run_meminfo.used / Gb}"
+            f"\nDevice free memory: {before_run_meminfo.free / Gb}"
+            f"\nPaddle reserved memory: {paddle_reserved_mem_before_run / Gb}"
+            f"\nPaddle allocated memory: {paddle_allocated_mem_before_run / Gb}"
         )
 
         # 2. Profile run
@@ -161,16 +159,14 @@ class GpuWorker(WorkerBase):
 
         end_time = time.perf_counter()
         logger.info(
-            (
-                "After running the profile, the memory usage info is as follows:",
-                f"\nDevice Total memory: {after_run_meminfo.total / Gb}",
-                f"\nDevice used memory: {after_run_meminfo.used / Gb}",
-                f"\nDevice free memory: {after_run_meminfo.free / Gb}",
-                f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}",
-                f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}",
-                f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}",
-                f"Profile time: {end_time - start_time}",
-            )
+            "After running the profile, the memory usage info is as follows:"
+            f"\nDevice Total memory: {after_run_meminfo.total / Gb}"
+            f"\nDevice used memory: {after_run_meminfo.used / Gb}"
+            f"\nDevice free memory: {after_run_meminfo.free / Gb}"
+            f"\nPaddle reserved memory: {paddle_reserved_mem_after_run / Gb}"
+            f"\nPaddle allocated memory: {paddle_allocated_mem_after_run / Gb}"
+            f"\nAvailable KV Cache meomory: {available_kv_cache_memory / Gb}"
+            f"Profile time: {end_time - start_time}"
         )
 
         return available_kv_cache_memory  # return to calculate the block num in this device
@@ -213,7 +209,7 @@ class GpuWorker(WorkerBase):
         output = self.model_runner.execute_model(model_forward_batch, num_running_request)
         return output
 
-    def preprocess_new_task(self, req_dicts: List[Request], num_running_requests: int) -> None:
+    def preprocess_new_task(self, req_dicts: BatchRequest, num_running_requests: int) -> None:
         """Process new requests and then start the decode loop
         TODO(gongshaotian):The scheduler should schedule the handling of prefill,
         and workers and modelrunners should not perceive it.

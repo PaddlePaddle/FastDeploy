@@ -73,6 +73,11 @@ from fastdeploy.entrypoints.openai.v1.serving_completion import (
     OpenAIServingCompletion as OpenAIServingCompletionV1,
 )
 from fastdeploy.envs import environment_variables
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import get_filtered_metrics
 from fastdeploy.utils import (
     ExceptionHandler,
@@ -80,6 +85,7 @@ from fastdeploy.utils import (
     StatefulSemaphore,
     api_server_logger,
     console_logger,
+    get_host_ip,
     get_version_info,
     is_port_available,
     retrive_model_from_server,
@@ -324,7 +330,11 @@ async def connection_manager():
         await asyncio.wait_for(connection_semaphore.acquire(), timeout=0.001)
         yield
     except asyncio.TimeoutError:
-        api_server_logger.info(f"Reach max request concurrency, semaphore status: {connection_semaphore.status()}")
+        log_request(
+            level=RequestLogLevel.LIFECYCLE,
+            message="Reach max request concurrency, semaphore status: {status}",
+            status=connection_semaphore.status(),
+        )
         raise HTTPException(
             status_code=429, detail=f"Too many requests,current max concurrency is {args.max_concurrency}"
         )
@@ -544,7 +554,7 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     """
     Create a chat completion for the provided prompt and parameters.
     """
-    api_server_logger.debug(f"Chat Received request: {request.model_dump_json()}")
+    log_request(RequestLogLevel.FULL, message="Chat Received request: {request}", request=request.model_dump_json())
     if envs.TRACES_ENABLE:
         if req.headers:
             headers = dict(req.headers)
@@ -571,7 +581,11 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
                 return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
 
     except HTTPException as e:
-        api_server_logger.error(f"Error in chat completion: {str(e)}")
+        log_request_error(
+            message="request[{request_id}] Error in chat completion: {error}",
+            request_id=getattr(request, "request_id", None),
+            error=str(e),
+        )
         return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
 
 
@@ -581,7 +595,9 @@ async def create_completion(request: CompletionRequest, req: Request):
     """
     Create a completion for the provided prompt and parameters.
     """
-    api_server_logger.info(f"Completion Received request: {request.model_dump_json()}")
+    log_request(
+        RequestLogLevel.FULL, message="Completion Received request: {request}", request=request.model_dump_json()
+    )
     if envs.TRACES_ENABLE:
         if req.headers:
             headers = dict(req.headers)
@@ -964,6 +980,11 @@ def launch_worker_monitor():
 
 def main():
     """main函数"""
+
+    if args.ips and get_host_ip() not in args.ips:
+        api_server_logger.error(f"Worker IP {get_host_ip()} not in the list of allowed IPs {args.ips}.")
+        return
+
     if args.local_data_parallel_id == 0:
         if not load_engine():
             return

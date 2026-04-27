@@ -30,14 +30,8 @@ import numpy as np
 import paddle
 from e2e.utils.serving_utils import clean_ports
 
-if not hasattr(paddle, "compat"):
-
-    class _PaddleCompat:
-        @staticmethod
-        def enable_torch_proxy(scope=None):
-            return None
-
-    paddle.compat = _PaddleCompat()
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda scope=None: None
 
 from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.engine.args_utils import EngineArgs
@@ -3706,6 +3700,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         """_wait_abort_complete exits when background thread cleans up."""
         eng = self._make_abort_engine()
         eng.resource_manager.waiting_abort_req_id_set = {"req-1_0"}
+        # Add the request to requests dict so it won't be filtered out
+        eng.resource_manager.requests = {"req-1_0": self._make_fake_request()}
 
         call_count = [0]
 
@@ -3724,6 +3720,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         """Stall timeout triggers force cleanup for requests in to_be_aborted_req_id_set."""
         eng = self._make_abort_engine()
         eng.resource_manager.to_be_aborted_req_id_set = {"req-1_0"}
+        # Add the request to requests dict so it won't be filtered out
+        eng.resource_manager.requests = {"req-1_0": self._make_fake_request()}
 
         def mock_recycle(req_id):
             eng.resource_manager.to_be_aborted_req_id_set.discard(req_id)

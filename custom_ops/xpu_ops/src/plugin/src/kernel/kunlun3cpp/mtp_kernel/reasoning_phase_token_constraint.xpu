@@ -1,0 +1,214 @@
+// Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+#include "xpu/kernel/xtdk_io.h"
+
+namespace fd_xpu3 {
+
+// ================================================================
+// Kernel 1: Update reasoning status
+// State machine: 0 -> 1 -> 2 -> 3
+// ================================================================
+__global__ void update_reasoning_status(const bool* stop_flags,
+                                        const int* seq_lens_encoder,
+                                        const int64_t* step_idx,
+                                        const int64_t* token_ids_all,
+                                        const int64_t* prompt_lens,
+                                        const bool* enable_thinking,
+                                        int* reasoning_status,
+                                        int bs,
+                                        int max_seq_len,
+                                        int64_t think_end_id,
+                                        int64_t line_break_id) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  if (clusterid != 0) return;
+
+  bool stop_flags_lm;
+  int seq_lens_encoder_lm;
+  int64_t step_idx_lm;
+  int64_t prompt_lens_lm;
+  bool enable_thinking_lm;
+  int reasoning_status_lm;
+
+  for (int i = cid; i < bs; i += ncores) {
+    GM2LM_ASYNC(stop_flags + i, &stop_flags_lm, sizeof(bool));
+    GM2LM_ASYNC(seq_lens_encoder + i, &seq_lens_encoder_lm, sizeof(int));
+    GM2LM_ASYNC(step_idx + i, &step_idx_lm, sizeof(int64_t));
+    GM2LM_ASYNC(prompt_lens + i, &prompt_lens_lm, sizeof(int64_t));
+    GM2LM_ASYNC(enable_thinking + i, &enable_thinking_lm, sizeof(bool));
+    GM2LM_ASYNC(reasoning_status + i, &reasoning_status_lm, sizeof(int));
+    mfence_lm();
+
+    if (stop_flags_lm || reasoning_status_lm == 3) continue;
+
+    int64_t cur_step = step_idx_lm;
+    // Compute offset for pre_ids_now base pointer
+    int pre_ids_offset = i * max_seq_len + prompt_lens_lm;
+
+    int64_t t0 = -1, t1 = -1, t2 = -1, t3 = -1;
+    if (cur_step >= 1) {
+      GM2LM(
+          token_ids_all + pre_ids_offset + cur_step - 1, &t0, sizeof(int64_t));
+    }
+    if (cur_step >= 2) {
+      GM2LM(
+          token_ids_all + pre_ids_offset + cur_step - 2, &t1, sizeof(int64_t));
+    }
+    if (cur_step >= 3) {
+      GM2LM(
+          token_ids_all + pre_ids_offset + cur_step - 3, &t2, sizeof(int64_t));
+    }
+    if (cur_step >= 4) {
+      GM2LM(
+          token_ids_all + pre_ids_offset + cur_step - 4, &t3, sizeof(int64_t));
+    }
+
+    int new_status = reasoning_status_lm;
+
+    // x = 0 -> x = 1 or x = 2
+    if (reasoning_status_lm == 0) {
+      if (!enable_thinking_lm && seq_lens_encoder_lm > 0 && cur_step == 0) {
+        new_status = 2;
+      } else if (t0 == think_end_id || t1 == think_end_id ||
+                 t2 == think_end_id || t3 == think_end_id) {
+        new_status = 1;
+      }
+    }
+
+    // x = 1 -> x = 2 or x = 3
+    if (new_status == 1 && cur_step >= 4) {
+      if (t3 == line_break_id && t2 == think_end_id && t1 == line_break_id &&
+          t0 == line_break_id) {
+        new_status = 2;
+      } else if (t3 != think_end_id && t2 != think_end_id &&
+                 t1 != think_end_id && t0 != think_end_id) {
+        new_status = 3;
+      }
+    } else if (reasoning_status_lm == 2) {
+      // x = 2 -> x = 3
+      new_status = 3;
+    }
+
+    if (new_status != reasoning_status_lm) {
+      LM2GM(&new_status, reasoning_status + i, sizeof(int));
+    }
+  }
+}
+
+// ================================================================
+// Kernel 2: Apply token enforce generation scores
+// For tokens where reasoning_status[batch] == 2 and it's the first
+// token of the batch, mask logits to only allow predefined tokens.
+// ================================================================
+template <typename T>
+__global__ void apply_token_enforce_generation_scores(
+    const T* logits_src,            // backup logits (read-only)
+    T* logits_dst,                  // output logits (inplace)
+    const int64_t* allowed_tokens,  // [allowed_tokens_len]
+    const int* reasoning_status,
+    const int* batch_id_per_token_output,
+    const int* cu_seqlens_q_output,
+    int max_bsz,
+    int vocab_size,
+    int allowed_tokens_len,
+    int token_num) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  if (clusterid != 0) return;
+
+  // Prepare fill value for clearing logits
+  float fill_val_f = std::is_same<T, float16>::value ? -1e4f : -1e10f;
+  __simd__ float fill_tmp_f[2];
+  fill_tmp_f[0] = fill_val_f;
+  __simd__ T fill_val_arr[2];
+  primitive_cast<float, T>(fill_tmp_f, fill_val_arr, 1);
+  T fill_val_t = fill_val_arr[0];
+
+  __simd__ T fill_buffer[64];
+  for (int k = 0; k < 64; k++) fill_buffer[k] = fill_val_t;
+  mfence_lm();
+
+  for (int i = cid; i < token_num; i += ncores) {
+    int bs_idx;
+    GM2LM(batch_id_per_token_output + i, &bs_idx, sizeof(int));
+    if (bs_idx < 0 || bs_idx >= max_bsz) continue;
+
+    int query_start;
+    GM2LM(cu_seqlens_q_output + bs_idx, &query_start, sizeof(int));
+    bool is_first = (i == query_start);
+
+    if (!is_first || allowed_tokens_len == 0) continue;
+
+    int status;
+    GM2LM(reasoning_status + bs_idx, &status, sizeof(int));
+    if (status != 2) continue;
+
+    // Compute base offset for this token's logits
+    int logits_offset = i * vocab_size;
+
+    // Phase 1: Clear all logits to fill value
+    for (int v = 0; v < vocab_size; v += 64) {
+      int chunk = (vocab_size - v < 64) ? (vocab_size - v) : 64;
+      if (chunk == 64) {
+        LM2GM_ASYNC(
+            fill_buffer, logits_dst + logits_offset + v, 64 * sizeof(T));
+      } else {
+        __simd__ T rem_buffer[64];
+        for (int k = 0; k < chunk; k++) rem_buffer[k] = fill_val_t;
+        mfence_lm();
+        LM2GM_ASYNC(
+            rem_buffer, logits_dst + logits_offset + v, chunk * sizeof(T));
+      }
+    }
+    mfence();
+
+    // Phase 2: Restore allowed tokens from backup
+    for (int j = 0; j < allowed_tokens_len; j++) {
+      int64_t token_id;
+      GM2LM(allowed_tokens + j, &token_id, sizeof(int64_t));
+      if ((unsigned)token_id < (unsigned)vocab_size) {
+        T val;
+        GM2LM_ASYNC(logits_src + logits_offset + token_id, &val, sizeof(T));
+        mfence_lm();
+        LM2GM_ASYNC(&val, logits_dst + logits_offset + token_id, sizeof(T));
+      }
+    }
+    mfence();
+  }
+}
+
+// Template instantiations
+#define _XPU_DEF__APPLY_TOKEN_ENFORCE_(DATA_TYPE)                            \
+  template __global__ void apply_token_enforce_generation_scores<DATA_TYPE>( \
+      const DATA_TYPE* logits_src,                                           \
+      DATA_TYPE* logits_dst,                                                 \
+      const int64_t* allowed_tokens,                                         \
+      const int* reasoning_status,                                           \
+      const int* batch_id_per_token_output,                                  \
+      const int* cu_seqlens_q_output,                                        \
+      int max_bsz,                                                           \
+      int vocab_size,                                                        \
+      int allowed_tokens_len,                                                \
+      int token_num);
+_XPU_DEF__APPLY_TOKEN_ENFORCE_(float);
+_XPU_DEF__APPLY_TOKEN_ENFORCE_(float16);
+_XPU_DEF__APPLY_TOKEN_ENFORCE_(bfloat16);
+
+}  // namespace fd_xpu3

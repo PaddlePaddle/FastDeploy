@@ -41,16 +41,16 @@ class TestValidateModelPath(unittest.TestCase):
 
     def _patch_console_logger(self):
         """Patch console_logger.warning to capture warnings."""
-        import fastdeploy.input.utils as utils_mod
+        import fastdeploy.input.utils.common as common_mod
 
-        self._orig_warning = utils_mod.console_logger.warning
-        utils_mod.console_logger.warning = self._capture_warning
+        self._orig_warning = common_mod.console_logger.warning
+        common_mod.console_logger.warning = self._capture_warning
 
     def _unpatch_console_logger(self):
-        import fastdeploy.input.utils as utils_mod
+        import fastdeploy.input.utils.common as common_mod
 
         if self._orig_warning is not None:
-            utils_mod.console_logger.warning = self._orig_warning
+            common_mod.console_logger.warning = self._orig_warning
 
     def tearDown(self):
         self._unpatch_console_logger()

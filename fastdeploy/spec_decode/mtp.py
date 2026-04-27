@@ -49,7 +49,10 @@ if current_platform.is_xpu():
         share_external_data,
         update_attn_mask_offsets,
     )
+
+    # temporary solution
     from fastdeploy.model_executor.xpu_pre_and_post_process import (
+        async_set_value,
         xpu_pre_process,
         xpu_process_output,
     )
@@ -62,7 +65,6 @@ else:
         eagle_get_self_hidden_states,
         eagle_gather_hidden_states,
         hybrid_mtp_ngram,
-        mtp_save_first_token,
         mtp_step_paddle,
         share_external_data,
         speculate_get_logits,
@@ -103,7 +105,7 @@ class MTPProposer(Proposer):
         self.num_main_model_layers = self.model_config.num_hidden_layers
         self.local_rank = local_rank
         self.device_id = device_id
-        self.use_attn_mask_offset = self.enable_mm and self.fd_config.deploy_modality != "text"
+        self.use_attn_mask_offset = self.enable_mm
 
         self._update_mtp_config(main_model)
         self._load_model()
@@ -436,13 +438,20 @@ class MTPProposer(Proposer):
         if self.forward_meta is not None:
             del self.forward_meta.caches
 
-    def update_mtp_block_num(self, num_gpu_blocks) -> None:
+    def update_mtp_block_num(self, num_gpu_blocks, skip_cache_init: bool = False) -> None:
         """
         Update MTP block num by theoretical calculation
+
+        Args:
+            num_gpu_blocks: Main model GPU block count.
+            skip_cache_init: When True, skip internal initialize_kv_cache call.
+                Set this when the caller (e.g. gpu_model_runner with enable_cache_manager_v1)
+                has already re-created MTP cache via cache_controller.
         """
         # Reset block table and kv cache with global block num
         self.main_model_num_gpu_blocks = num_gpu_blocks
-        self.initialize_kv_cache(main_model_num_blocks=self.main_model_num_gpu_blocks)
+        if not skip_cache_init:
+            self.initialize_kv_cache(main_model_num_blocks=self.main_model_num_gpu_blocks)
 
         # Reset free list
         free_list = list(
@@ -483,28 +492,32 @@ class MTPProposer(Proposer):
                 input_ids = request.prompt_token_ids + request.output_token_ids
 
                 self.model_inputs["input_ids_len"][idx] = length - 1
-                self.model_inputs["pre_ids"][idx : idx + 1] = -1
+                async_set_value(self.model_inputs["pre_ids"][idx : idx + 1], -1)
                 self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs["input_ids"][
                     idx : idx + 1, 1:length
                 ]
-                self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = self.target_model_inputs[
-                    "input_ids"
-                ][idx : idx + 1, 1:length].cpu()
+                # TODO: use token_all_ids replace with input_ids_cpu
+                if getattr(self, "hybrid_mode", False) and "input_ids_cpu" in self.model_inputs:
+                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = self.target_model_inputs[
+                        "input_ids"
+                    ][idx : idx + 1, 1:length].cpu()
                 encoder_block_num = len(request.block_tables)
-                self.model_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
-                self.model_inputs["block_tables"][idx : idx + 1, :] = -1
-                self.model_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
-                    request.block_tables, dtype="int32"
+                async_set_value(self.model_inputs["encoder_block_lens"][idx : idx + 1], encoder_block_num)
+                async_set_value(self.model_inputs["block_tables"][idx : idx + 1, :], -1)
+                async_set_value(
+                    self.model_inputs["block_tables"][idx : idx + 1, :encoder_block_num], request.block_tables
                 )
-                self.model_inputs["stop_flags"][idx : idx + 1] = False
-                self.model_inputs["batch_drop"][idx : idx + 1] = False
 
-                self.model_inputs["seq_lens_encoder"][idx : idx + 1] = length
+                async_set_value(self.model_inputs["stop_flags"][idx : idx + 1], False)
+                async_set_value(self.model_inputs["batch_drop"][idx : idx + 1], False)
+
+                async_set_value(self.model_inputs["seq_lens_encoder"][idx : idx + 1], length)
                 self.exist_prefill_flag = True
-                self.model_inputs["seq_lens_decoder"][idx : idx + 1] = prefill_start_index
-                self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length
-                self.model_inputs["step_idx"][idx : idx + 1] = (
-                    len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
+                async_set_value(self.model_inputs["seq_lens_decoder"][idx : idx + 1], prefill_start_index)
+                async_set_value(self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1], length)
+                async_set_value(
+                    self.model_inputs["step_idx"][idx : idx + 1],
+                    len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0,
                 )
                 if self.use_attn_mask_offset:
                     inputs = request.multimodal_inputs
@@ -522,18 +535,19 @@ class MTPProposer(Proposer):
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generates first token
-                    self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
+                    async_set_value(self.model_inputs["seq_lens_encoder"][idx : idx + 1], 0)
                     self.exist_prefill_flag = False
-                    self.model_inputs["recompute_token_num"][idx : idx + 1] = 0
-                    self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = length + 1
+                    async_set_value(self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1], length + 1)
                     # NOTE(liuzichang):
                     # extra 1 : P-D split need rollback one step
-                    self.model_inputs["mask_rollback"][idx : idx + 1] = 1
+
+                    async_set_value(self.model_inputs["recompute_token_num"][idx : idx + 1], 0)
+                    async_set_value(self.model_inputs["mask_rollback"][idx : idx + 1], 1)
                 # has_prefill_task = True
             elif request.task_type.value == RequestType.DECODE.value:  # decode task
                 encoder_block_num = len(request.block_tables)
-                self.model_inputs["encoder_block_lens"][idx : idx + 1] = encoder_block_num
-                self.model_inputs["block_tables"][idx : idx + 1, :] = -1
+                async_set_value(self.model_inputs["encoder_block_lens"][idx : idx + 1], encoder_block_num)
+                async_set_value(self.model_inputs["block_tables"][idx : idx + 1, :], -1)
                 if current_platform.is_cuda():
                     async_set_value(
                         self.model_inputs["block_tables"][idx : idx + 1, :encoder_block_num], request.block_tables
@@ -542,16 +556,13 @@ class MTPProposer(Proposer):
                     self.model_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                         request.block_tables, dtype="int32"
                     )
-                # if self.model_inputs["is_block_step"][idx]:  # has tasks to continue to decode
-                #     has_decode_task = True
-                # continue
             else:
-                self.model_inputs["block_tables"][idx : idx + 1, :] = -1
-                self.model_inputs["stop_flags"][idx : idx + 1] = True
-                self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1] = 0
-                self.model_inputs["seq_lens_decoder"][idx : idx + 1] = 0
-                self.model_inputs["seq_lens_encoder"][idx : idx + 1] = 0
-                self.model_inputs["is_block_step"][idx : idx + 1] = False
+                async_set_value(self.model_inputs["block_tables"][idx : idx + 1, :], -1)
+                async_set_value(self.model_inputs["stop_flags"][idx : idx + 1], True)
+                async_set_value(self.model_inputs["seq_lens_this_time_buffer"][idx : idx + 1], 0)
+                async_set_value(self.model_inputs["seq_lens_decoder"][idx : idx + 1], 0)
+                async_set_value(self.model_inputs["seq_lens_encoder"][idx : idx + 1], 0)
+                async_set_value(self.model_inputs["is_block_step"][idx : idx + 1], False)
                 continue
 
         # TODO(liuzichang): Solve splitewise-p bug to restore
@@ -673,7 +684,7 @@ class MTPProposer(Proposer):
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
         )
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
@@ -705,7 +716,7 @@ class MTPProposer(Proposer):
 
         self.forward_meta.is_draft = True
 
-        # Initialzie attention meta data
+        # Initialize attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
@@ -835,23 +846,26 @@ class MTPProposer(Proposer):
         )
 
         if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
-            skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
-            recover_model_output_map = recover_batch_index_for_output(
-                self.model_inputs,
-                self.model_inputs.index_to_batch_id,
-                self.model_inputs.enable_pd_reorder,
-                ["base_model_draft_tokens", "seq_lens_decoder", "prompt_lens", "step_idx"],
-            )
-            mtp_save_first_token(
-                recover_model_output_map["base_model_draft_tokens"],
-                self.model_inputs["not_need_stop"],
-                recover_model_output_map["seq_lens_decoder"],
-                recover_model_output_map["prompt_lens"],
-                recover_model_output_map["step_idx"],
-                self.local_rank,
-                self.parallel_config.use_ep,
-                skip_save,
-            )
+            if current_platform.is_xpu():
+                # Note(wangyanpeng): mtp_save_first_token for GPU platforms has been moved to model_runner.
+                # Only XPU platform is retained here.
+                skip_save = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
+                recover_model_output_map = recover_batch_index_for_output(
+                    self.model_inputs,
+                    self.model_inputs.index_to_batch_id,
+                    self.model_inputs.enable_pd_reorder,
+                    ["base_model_draft_tokens", "seq_lens_decoder", "prompt_lens", "step_idx"],
+                )
+                mtp_save_first_token(
+                    recover_model_output_map["base_model_draft_tokens"],
+                    self.model_inputs["not_need_stop"],
+                    recover_model_output_map["seq_lens_decoder"],
+                    recover_model_output_map["prompt_lens"],
+                    recover_model_output_map["step_idx"],
+                    self.local_rank,
+                    self.parallel_config.use_ep,
+                    skip_save,
+                )
             # Ensure only save first token once.
             paddle.assign(
                 paddle.where(
@@ -880,7 +894,7 @@ class MTPProposer(Proposer):
                 token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
             else:
                 if substep == 0:
-                    token_num_cpu = real_bsz * (self.max_draft_token_num + 1)
+                    token_num_cpu = self.model_inputs["target_hidden_states"].shape[0]
                 else:
                     token_num_cpu = real_bsz
             if token_num_cpu > 0:
@@ -1073,6 +1087,7 @@ class MTPProposer(Proposer):
                     self.model_inputs["draft_tokens"],
                     self.model_inputs["seq_lens_encoder"],
                     self.model_inputs["seq_lens_decoder"],
+                    num_speculative_tokens=self.speculative_config.num_speculative_tokens,
                 )
 
                 if self.enable_mm:
@@ -1233,28 +1248,21 @@ class MTPProposer(Proposer):
             )
 
     def _extend_draft_token_with_ngram_match(self):
-        # TODO(liuzichang): Optimize this Kernel to CUDA Kernel to reduce lantency
-        device = paddle.CUDAPinnedPlace()
-
-        draft_tokens = self.target_model_inputs["draft_tokens"].cpu()
-        seq_lens_this_time = self.target_model_inputs["seq_lens_this_time"].cpu()
-        seq_lens_decoder = self.model_inputs["seq_lens_decoder"].cpu()
+        # TODO: replace with gpu tensor
         hybrid_mtp_ngram(
-            self.model_inputs["input_ids_cpu"],
-            self.model_inputs["input_ids_len"],
-            self.model_inputs["pre_ids"]._copy_to(device, True),
-            self.model_inputs["step_idx"].cpu(),
-            self.target_model_inputs["actual_draft_token_num"].cpu(),
-            draft_tokens,
-            seq_lens_this_time,
-            seq_lens_decoder,
-            self.model_inputs["max_dec_len"].cpu(),
+            self.model_inputs["input_ids_cpu"].cuda(),
+            self.model_inputs["input_ids_len"].cuda(),
+            self.model_inputs["pre_ids"],
+            self.model_inputs["step_idx"],
+            self.target_model_inputs["actual_draft_token_num"],
+            self.target_model_inputs["draft_tokens"],
+            self.target_model_inputs["seq_lens_this_time"],
+            self.model_inputs["seq_lens_decoder"],
+            self.model_inputs["max_dec_len"],
             self.max_ngram_size,
             self.min_ngram_size,
             self.max_draft_token_num,
         )
-        self.target_model_inputs["draft_tokens"][:] = draft_tokens.cuda()
-        self.target_model_inputs["seq_lens_this_time"][:] = seq_lens_this_time.cuda()
 
     def _run_impl(
         self,

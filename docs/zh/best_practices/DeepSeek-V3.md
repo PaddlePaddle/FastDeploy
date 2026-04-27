@@ -18,7 +18,7 @@ DeepSeek-V3/V3.1 各量化精度，在下列硬件上部署所需要的最小卡
 ### 2.1 基础：启动服务
  **示例1：** H800上八卡部署wint4模型16K上下文的服务
 ```shell
-MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
+MODEL_PATH=/models/DeepSeek/DeepSeek-V3.1-Terminus-BF16
 
 export FD_DISABLE_CHUNKED_PREFILL=1
 export FD_ATTENTION_BACKEND="MLA_ATTN"
@@ -38,10 +38,10 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 ```
 
-**示例2：** H800上16卡部署 blockwise_fp8 模型16K上下文的服务
+**示例2：** H800上16卡部署 block_wise_fp8 模型16K上下文的服务
 
 ```shell
-MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
+MODEL_PATH=models/DeepSeek/DeepSeek-V3.1-Terminus-BF16
 
 export FD_DISABLE_CHUNKED_PREFILL=1
 export FD_ATTENTION_BACKEND="MLA_ATTN"
@@ -55,7 +55,7 @@ export FD_ENABLE_MULTI_API_SERVER=1
 python -m fastdeploy.entrypoints.openai.multi_api_server \
        --ports "9811" \
        --num-servers 1 \
-       --args --model "$model_path" \
+       --args --model "$MODEL_PATH" \
        --ips "10.95.247.24,10.95.244.147" \
        --no-enable-prefix-caching \
        --quantization block_wise_fp8 \
@@ -70,13 +70,12 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 
 ```
 
-**示例3：** H800上16卡部署 blockwise_fp8 模型16K上下文的服务
+**示例3：** H800上16卡部署 block_wise_fp8 模型16K上下文的服务
 
 这个例子中支持使用FlashMLA算子做MLA的计算
 
 ```shell
-MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
-
+MODEL_PATH=models/DeepSeek/DeepSeek-V3.1-Terminus-BF16
 export FD_DISABLE_CHUNKED_PREFILL=1
 export FD_ATTENTION_BACKEND="MLA_ATTN"
 export FLAGS_flash_attn_version=3
@@ -87,7 +86,7 @@ export FD_ENABLE_MULTI_API_SERVER=1
 python -m fastdeploy.entrypoints.openai.multi_api_server \
        --ports "9811,9812,9813,9814,9815,9816,9817,9818" \
        --num-servers 8 \
-       --args --model "$model_path" \
+       --args --model "$MODEL_PATH" \
        --ips "10.95.246.220,10.95.230.91" \
        --no-enable-prefix-caching \
        --quantization block_wise_fp8 \
@@ -99,4 +98,47 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
        --enable-expert-parallel \
        --max-num-seqs 20 \
        --graph-optimization-config '{"use_cudagraph":true}' \
+```
+
+# DeepSeek-V3.2 Model
+## 一、环境准备
+### 1.1 支持情况
+DeepSeek-V3.2 模型在block_wise_fp8在现量化下，在下列硬件上部署所需要的最小卡数如下：
+
+|     | block_wise_fp8 |
+|-----|-----|
+|H800 80GB| 16 |
+
+### 1.2 安装fastdeploy
+
+安装流程参考文档 [FastDeploy GPU 安装](../get_started/installation/nvidia_gpu.md)
+
+## 二、如何使用
+### 2.1 基础：启动服务
+ **示例1：** H800上十六卡部署block_wise_fp8模型8K上下文的服务
+
+```shell
+MODEL_PATH=/models/DeepSeek-V3.2-Exp-BF16
+export FD_DISABLE_CHUNKED_PREFILL=1
+export FD_ATTENTION_BACKEND="DSA_ATTN"
+export FD_ENABLE_MULTI_API_SERVER=1
+
+python -m fastdeploy.entrypoints.openai.multi_api_server \
+       --ports "8091,8092,8093,8094,8095,8096,8097,8098" \
+       --num-servers 8 \
+       --args --model "$MODEL_PATH" \
+       --ips "10.95.246.79,10.95.239.17" \
+       --no-enable-prefix-caching \
+       --quantization block_wise_fp8 \
+       --disable-sequence-parallel-moe \
+       --tensor-parallel-size 1 \
+       --gpu-memory-utilization 0.85 \
+       --max-num-batched-tokens 8192 \
+       --data-parallel-size 16 \
+       --max-model-len 8192 \
+       --enable-expert-parallel \
+       --max-num-seqs 20 \
+       --num-gpu-blocks-override 2048 \
+       --graph-optimization-config '{"use_cudagraph":false}' \
+       --no-enable-overlap-schedule
 ```

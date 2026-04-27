@@ -537,13 +537,13 @@ std::vector<paddle::Tensor> TextImageGatherScatter(
     const bool is_scatter);
 
 std::vector<paddle::Tensor> count_tokens_per_expert_func(
-    const paddle::Tensor& topk_ids, int64_t num_experts);
-void GetPositionIdsAndMaskEncoderBatch(
-    const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& seq_lens_decoder,
-    const paddle::Tensor& seq_lens_this_time,
-    const paddle::Tensor& position_ids,
-    const paddle::Tensor& mask_encoder_batch);
+    const paddle::Tensor& topk_ids,
+    int64_t num_experts,
+    bool compute_padded_cumsum = false);
+void GetPositionIdsAndMaskEncoderBatch(const paddle::Tensor& seq_lens_encoder,
+                                       const paddle::Tensor& seq_lens_decoder,
+                                       const paddle::Tensor& seq_lens_this_time,
+                                       const paddle::Tensor& position_ids);
 
 std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const paddle::Tensor& kv_nope,
@@ -780,6 +780,11 @@ std::vector<paddle::Tensor> BuildSamplingParams(
     const paddle::Tensor& cu_seqlens_q_output,
     const int64_t token_num_output_cpu,
     const int64_t increment_value);
+
+std::vector<paddle::Tensor> BuildSamplingParamLogProb(
+    const paddle::Tensor& input_params,
+    const paddle::Tensor& token_num_per_batch,
+    int64_t token_num_output_cpu);
 
 void SpecTokenPenaltyMultiScores(
     const paddle::Tensor& token_ids_all,
@@ -1768,6 +1773,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("build_sampling_params",
         &BuildSamplingParams,
         "build_sampling_params function");
+
+  m.def("build_sampling_params_logprob",
+        &BuildSamplingParamLogProb,
+        "build_sampling_params_logprob function");
 
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,

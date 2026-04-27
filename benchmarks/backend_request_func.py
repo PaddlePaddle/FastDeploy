@@ -269,6 +269,15 @@ async def async_request_eb_openai_chat_completions(
     if request_func_input.response_format:
         payload["response_format"] = request_func_input.response_format
 
+    # 随机输入开关
+    if request_func_input.random_flag:
+        payload["max_tokens"] = request_func_input.output_len
+        payload["min_tokens"] = request_func_input.output_len
+        # 随机token_ids场景
+        if isinstance(request_func_input.prompt, list):
+            request_func_input.prompt_token_ids = request_func_input.prompt
+            request_func_input.prompt = ""
+
     # 支持传入prompt_token_ids
     if request_func_input.prompt_token_ids:
         # 不走messages
@@ -419,6 +428,15 @@ async def async_request_eb_openai_chat_completions(
                 # output.generated_text = generated_text
                 # 在流式结束时，记录最后一个 chunk 收到的时间戳
                 output.end_timestamp = most_recent_timestamp
+                # 截断case也记录usage
+                usage = data.get("usage", {})
+                if usage:
+                    output.output_tokens = usage.get("completion_tokens", 0)
+                    output.prompt_tokens = usage.get("prompt_tokens", 0)
+                    if output.prompt_len == 0:
+                        prompt_details = usage.get("prompt_tokens_details", {})
+                        if prompt_details:
+                            output.prompt_len = prompt_details.get("cached_tokens", 0)
 
                 if tool_call_buffer:
                     for _, tc in tool_call_buffer.items():

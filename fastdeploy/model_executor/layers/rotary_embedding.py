@@ -20,6 +20,7 @@ from typing import Optional, Tuple
 import paddle
 from paddle import nn
 
+from fastdeploy import envs
 from fastdeploy.config import ModelConfig
 from fastdeploy.platforms import current_platform
 
@@ -43,7 +44,7 @@ class ErnieRotaryEmbedding:
         inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
         partial_rotary_position_ids = position_ids / self.partial_rotary_factor
         freqs = paddle.einsum("ij,k->ijk", partial_rotary_position_ids.cast("float32"), inv_freq)
-        if paddle.is_compiled_with_xpu() or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
+        if current_platform.is_xpu() or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
             # shape: [B, S, D]
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
             emb = paddle.stack([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim))
@@ -87,11 +88,21 @@ class GlmRotaryEmbedding:
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
-        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
-        freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
-        # shape: [B, S, D/2]
-        rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
-        emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
+        if envs.FD_ENABLE_RL == 1:
+            idx = paddle.arange(0, self.rotary_dim, 2, dtype=paddle.int64).astype(paddle.float32)
+            inv_freq = 1.0 / (self.base ** (idx / self.rotary_dim))
+            freqs = paddle.outer(position_ids.astype(inv_freq.dtype), inv_freq)
+        else:
+            inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+            freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
+        if current_platform.is_xpu():
+            # shape: [B, S, D]
+            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
+            emb = paddle.concat([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim))
+        else:
+            # shape: [B, S, D/2]
+            rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim // 2), dtype="float32")
+            emb = paddle.stack([freqs], axis=-1).reshape((bsz, max_seq_len, self.rotary_dim // 2))
         # shape: [B, S, 1, D]
         emb = paddle.unsqueeze(emb, 2)
         rot_emb[0] = paddle.cos(emb)
@@ -447,12 +458,12 @@ class ErnieVlRotaryEmbedding3D:
 
         # Build position_ids_3d: [bsz, max_position, 3]
         position_ids_3d = paddle.tile(
-            paddle.arange(self.max_position, dtype="int64").unsqueeze(0).unsqueeze(-1),
+            paddle.arange(self.max_position, dtype="float32").unsqueeze(0).unsqueeze(-1),
             [bsz, 1, 3],
         )
         for i in range(bsz):
             position_ids_cur = position_ids[cumsum_seqlens[i] : cumsum_seqlens[i + 1]]
-            prefix_max_position_ids = paddle.max(position_ids_cur) + 1
+            prefix_max_position_ids = paddle.max(position_ids_cur[..., 0]) + 1
             dec_pos_ids = paddle.tile(
                 paddle.arange(max_len_lst[i], dtype="int64").unsqueeze(-1),
                 [1, 3],
@@ -519,12 +530,12 @@ class QwenVlRotaryEmbedding3D:
         bsz = len(cumsum_seqlens) - 1
         # position_ids_3d: [bsz, seq_len, 3]
         position_ids_3d = paddle.tile(
-            paddle.arange(self.max_position, dtype="int64").unsqueeze(0).unsqueeze(-1),
+            paddle.arange(self.max_position, dtype="float32").unsqueeze(0).unsqueeze(-1),
             [bsz, 1, 3],
         )
         for i in range(bsz):
             position_ids_cur = position_ids[cumsum_seqlens[i] : cumsum_seqlens[i + 1]]
-            prefix_max_position_ids = paddle.max(position_ids_cur) + 1
+            prefix_max_position_ids = paddle.max(position_ids_cur[..., 0]) + 1
             dec_pos_ids = paddle.tile(
                 paddle.arange(max_len_lst[i], dtype="int64").unsqueeze(-1),
                 [1, 3],

@@ -63,6 +63,7 @@ class Qwen3MoeBlock(nn.Layer):
         }
         self.experts = FusedMoE(
             fd_config,
+            hidden_size=fd_config.model_config.hidden_size,
             moe_intermediate_size=fd_config.model_config.moe_intermediate_size,
             num_experts=fd_config.model_config.num_experts,
             top_k=fd_config.model_config.num_experts_per_tok,
@@ -77,9 +78,7 @@ class Qwen3MoeBlock(nn.Layer):
             output_size=fd_config.model_config.num_experts,
             with_bias=False,
             skip_quant=True,
-            weight_dtype=(
-                "float32" if fd_config.load_config.dynamic_load_weight or fd_config.model_config.moe_gate_fp32 else ""
-            ),
+            weight_dtype=("float32" if fd_config.model_config.moe_gate_fp32 else ""),
         )
 
     def forward(self, x, forward_meta):
@@ -453,9 +452,9 @@ class Qwen3MoeForCausalLM(ModelForCasualLM):
 
         return hidden_states
 
-    def clear_grpah_opt_backend(self):
+    def clear_graph_opt_backend(self):
         """Clear graph optimization backend, the captured cuda graph will be cleaned"""
-        self.model.clear_grpah_opt_backend(fd_config=self.fd_config)
+        self.model.clear_graph_opt_backend(fd_config=self.fd_config)
 
 
 class Qwen3MoePretrainedModel(PretrainedModel):

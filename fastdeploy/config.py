@@ -286,6 +286,7 @@ class ModelConfig:
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
         self.think_truncate_prompt_ids = args.get("think_truncate_prompt_ids", [-1])
+        self.reasoning_allowed_token_ids = args.get("reasoning_allowed_token_ids", [])
 
         num_max_logprobs = args.get("max_logprobs", None)
         if num_max_logprobs is not None and num_max_logprobs < -1:
@@ -377,6 +378,9 @@ class ModelConfig:
         if hasattr(self, "n_shared_experts") and getattr(self, "moe_num_shared_experts") is None:
             # Because the ERNIE 4.5 config.json contains two sets of keys, adaptation is required.
             self.moe_num_shared_experts = self.n_shared_experts
+
+        if hasattr(self, "num_experts_per_tok") and not hasattr(self, "moe_k"):
+            self.moe_k = self.num_experts_per_tok
 
     def read_from_env(self):
         """
@@ -671,6 +675,7 @@ class ParallelConfig:
         self.pod_ip: str = None
         # enable the custom all-reduce kernel and fall back to NCCL(dist.all_reduce).
         self.disable_custom_all_reduce: bool = False
+        self.enable_flashinfer_allreduce_fusion: bool = False
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -774,7 +779,7 @@ class SpeculativeConfig:
         "benchmark_mode": False,
         "enf_gen_phase_tag": False,
         "enable_draft_logprob": False,
-        "verify_strategy": "topp",
+        "verify_strategy": "target_match",
         "accept_policy": "normal",
     }
 
@@ -1058,6 +1063,7 @@ class GraphOptimizationConfig:
         - None (default): capture sizes are inferred from llm config.
         - list[int]: capture sizes are specified as given."""
         self.cudagraph_capture_sizes: Optional[list[int]] = None
+        self.flag_cudagraph_capture_sizes_initlized = False
         self.cudagraph_capture_sizes_prefill: list[int] = [1, 2, 4, 8]
         """ Number of warmup runs for cudagraph. """
         self.cudagraph_num_of_warmups: int = 2
@@ -1094,7 +1100,7 @@ class GraphOptimizationConfig:
         """ Whether to use shared memory pool for multi capture_size """
         self.use_unique_memory_pool: bool = True
         """ Whether to use cudagraph for draft model."""
-        self.draft_model_use_cudagraph: bool = False
+        self.draft_model_use_cudagraph: bool = True
         """ Maximum CUDA Graph capture size for static graph mode.
         Recommend 512 for small models (e.g., ERNIE45T 0.3B) and 128 for massive models (e.g., 300B).
         """
@@ -1108,13 +1114,27 @@ class GraphOptimizationConfig:
 
         self.check_legality_parameters()
 
-    def init_with_cudagrpah_size(self, max_capture_size: int = 0, max_capture_shape_prefill: int = 0) -> None:
+    def init_with_cudagrpah_size(
+        self,
+        max_capture_size: int = 0,
+        max_capture_shape_prefill: int = 0,
+        num_speculative_tokens: int = 0,
+    ) -> None:
         """
         Initialize cuda graph capture sizes and
         pre-compute the mapping from batch size to padded graph size
         """
         # Regular capture sizes
-        self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
+        if num_speculative_tokens != 0:
+            max_capture_size = max_capture_size * (num_speculative_tokens + 1)
+        if not self.flag_cudagraph_capture_sizes_initlized and num_speculative_tokens != 0:
+            self.cudagraph_capture_sizes = [
+                size * (num_speculative_tokens + 1)
+                for size in self.cudagraph_capture_sizes
+                if (size * (num_speculative_tokens + 1)) <= max_capture_size
+            ]
+        else:
+            self.cudagraph_capture_sizes = [size for size in self.cudagraph_capture_sizes if size <= max_capture_size]
         self.cudagraph_capture_sizes_prefill = [
             size for size in self.cudagraph_capture_sizes_prefill if size <= max_capture_shape_prefill
         ]
@@ -1154,24 +1174,41 @@ class GraphOptimizationConfig:
                     self.real_shape_to_captured_size_prefill[bs] = end
         self.real_shape_to_captured_size_prefill[self.max_capture_size_prefill] = self.max_capture_size_prefill
 
+        if num_speculative_tokens != 0:
+            real_bsz_to_captured_size = {}
+            for capture_size in self.cudagraph_capture_sizes:
+                dummy_batch_size = int(capture_size / (num_speculative_tokens + 1))
+                real_bsz_to_captured_size[dummy_batch_size] = capture_size
+
+            def expand_bsz_map(real_bsz_to_captured_size):
+                sorted_items = sorted(real_bsz_to_captured_size.items())
+                result = {}
+                prev_bsz = 0
+                for curr_bsz, cap in sorted_items:
+                    for bsz in range(prev_bsz + 1, curr_bsz + 1):
+                        result[bsz] = cap
+                    prev_bsz = curr_bsz
+                return result
+
+            self.real_bsz_to_captured_size = expand_bsz_map(real_bsz_to_captured_size)
+
+        self.flag_cudagraph_capture_sizes_initlized = True
+
     def _set_cudagraph_sizes(
         self,
         max_capture_size: int = 0,
         max_capture_shape_prefill: int = 0,
-        dec_token_per_query_per_step: int = 1,
     ):
         """
         Calculate a series of candidate capture sizes,
         and then extract a portion of them as the capture list for the CUDA graph based on user input.
         """
-        # Shape [1, 2, 4, 8, 16, ... 120, 128] * dec_token_per_query_per_step
-        draft_capture_sizes = [i * dec_token_per_query_per_step for i in [1, 2, 4]] + [
-            8 * i * dec_token_per_query_per_step for i in range(1, 17)
-        ]
-        # Shape [128, 144, ... 240, 256] * dec_token_per_query_per_step
-        draft_capture_sizes += [16 * i * dec_token_per_query_per_step for i in range(9, 17)]
-        # Shape [256, 288, ... 992, 1024] * dec_token_per_query_per_step
-        draft_capture_sizes += [32 * i * dec_token_per_query_per_step for i in range(9, 33)]
+        # Shape [1, 2, 4, 8, 16, ... 120, 128]
+        draft_capture_sizes = [i for i in [1, 2, 4]] + [8 * i for i in range(1, 17)]
+        # Shape [128, 144, ... 240, 256]
+        draft_capture_sizes += [16 * i for i in range(9, 17)]
+        # Shape [256, 288, ... 992, 1024]
+        draft_capture_sizes += [32 * i for i in range(9, 33)]
 
         draft_capture_sizes_prefill = draft_capture_sizes.copy()
         draft_capture_sizes.append(max_capture_size)
@@ -1415,6 +1452,7 @@ class LoadConfig:
         self.dynamic_load_weight: bool = False
         self.load_strategy: Optional[Literal["ipc", "ipc_snapshot", "meta", "normal", "rsync"]] = "normal"
         self.rsync_config: Optional[Dict[str, Any]] = None
+        self.model_loader_extra_config: Optional[Dict[str, Any]] = None
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
@@ -1576,13 +1614,18 @@ class CacheConfig:
         self.enable_output_caching = False
         self.disable_chunked_mm_input = False
         self.kvcache_storage_backend = None
-        self.write_policy = None
+        self.write_policy = "write_through_selective"
+        self.write_through_threshold = 2
         self.num_cpu_blocks = None
         self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
 
         for key, value in args.items():
             if hasattr(self, key):
                 setattr(self, key, value)
+
+        # ENABLE_V1_KVCACHE_MANAGER=0 uses the old cache_transfer_manager subprocess which only supports write_through.
+        if not envs.ENABLE_V1_KVCACHE_MANAGER:
+            self.write_policy = "write_through"
 
         self.cache_queue_port = parse_ports(self.cache_queue_port)
         self.rdma_comm_ports = parse_ports(self.rdma_comm_ports)
@@ -1638,6 +1681,15 @@ class CacheConfig:
             raise ValueError("GPU memory utilization must be less than 1.0. Got " f"{self.gpu_memory_utilization}.")
         if self.kv_cache_ratio > 1.0:
             raise ValueError("KV cache ratio must be less than 1.0. Got " f"{self.kv_cache_ratio}.")
+
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            allowed_write_policies = ["write_through_selective", "write_back", "write_through"]
+        else:
+            allowed_write_policies = ["write_through"]
+        if self.write_policy not in allowed_write_policies:
+            raise ValueError(
+                f"Invalid write_policy: {self.write_policy!r}. " f"Expected one of {allowed_write_policies}."
+            )
 
     def postprocess(self, num_total_tokens, number_of_tasks):
         """
@@ -1712,6 +1764,9 @@ class RouterConfig:
             self.metrics_port = args["metrics_port"]
         else:
             self.metrics_port = self.api_server_port
+
+    def __str__(self):
+        return json.dumps({key: value for key, value in self.__dict__.items()})
 
 
 class CommitConfig:
@@ -1826,6 +1881,9 @@ class RoutingReplayConfig:
         """
         return json.dumps({key: value for key, value in self.__dict__.items()})
 
+    def __str__(self):
+        return self.to_json_string()
+
 
 class FDConfig:
     """
@@ -1881,65 +1939,34 @@ class FDConfig:
         self.deploy_modality: DeployModality = deploy_modality
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
-        if self.speculative_config is not None and self.speculative_config.method in [
-            SpecMethod.MTP,
-            SpecMethod.SUFFIX,
-        ]:
-            max_capture_shape = self.scheduler_config.max_num_seqs * (
-                self.speculative_config.num_speculative_tokens + 1
-            )
-            assert max_capture_shape % 2 == 0, "CUDAGraph only supports capturing even token nums in MTP scenarios."
-            self.graph_opt_config.real_bsz_to_captured_size = {
-                k: 0 for k in range(1, self.scheduler_config.max_num_seqs + 1)
-            }
         if self.graph_opt_config.cudagraph_only_prefill:
             max_capture_shape = 512
         else:
-            max_capture_shape = (
-                max_capture_shape if self.speculative_config is not None else min(512, max_capture_shape)
-            )
+            max_capture_shape = min(512, max_capture_shape)
 
         max_capture_shape_prefill = graph_opt_config.max_capture_shape_prefill
 
         if self.graph_opt_config.cudagraph_capture_sizes is None:
-            dec_token_per_query_per_step = (
-                self.speculative_config.num_speculative_tokens + 1
-                if self.speculative_config is not None and self.speculative_config.method is not None
-                else 1
-            )
             self.graph_opt_config._set_cudagraph_sizes(
                 max_capture_size=max_capture_shape,
                 max_capture_shape_prefill=max_capture_shape_prefill,
-                dec_token_per_query_per_step=dec_token_per_query_per_step,
             )
-        if self.speculative_config is not None and self.speculative_config.method is not None:
-            real_bsz_to_captured_size = {}
-            for capture_size in self.graph_opt_config.cudagraph_capture_sizes:
-                dummy_batch_size = int(capture_size / (self.speculative_config.num_speculative_tokens + 1))
-                real_bsz_to_captured_size[dummy_batch_size] = capture_size
 
-            def expand_bsz_map(real_bsz_to_captured_size):
-                """
-                Expand a sparse batch size mapping into a dense one.
-
-                Args:
-                    real_bsz_to_captured_size (dict): Sparse batch size to capture size mapping.
-                Returns:
-                    dict: Dense batch size to capture size mapping.
-                """
-                sorted_items = sorted(real_bsz_to_captured_size.items())
-                result = {}
-                prev_bsz = 0
-                for curr_bsz, cap in sorted_items:
-                    for bsz in range(prev_bsz + 1, curr_bsz + 1):
-                        result[bsz] = cap
-                    prev_bsz = curr_bsz
-                return result
-
-            self.graph_opt_config.real_bsz_to_captured_size = expand_bsz_map(real_bsz_to_captured_size)
         self.graph_opt_config.init_with_cudagrpah_size(
             max_capture_size=max_capture_shape,
             max_capture_shape_prefill=max_capture_shape_prefill,
+            num_speculative_tokens=(
+                self.speculative_config.num_speculative_tokens
+                if (
+                    self.speculative_config is not None
+                    and self.speculative_config.method
+                    in [
+                        SpecMethod.MTP,
+                        SpecMethod.SUFFIX,
+                    ]
+                )
+                else 0
+            ),
         )
 
         self.tokenizer = tokenizer
@@ -1980,6 +2007,7 @@ class FDConfig:
                 int(envs.ENABLE_V1_KVCACHE_SCHEDULER) == 0
                 and self.model_config is not None
                 and self.model_config.enable_mm
+                and self.deploy_modality != DeployModality.TEXT
             ):
                 self.max_prefill_batch = 1  # TODO:当前V0多模prefill阶段只支持并行度为1,待优化
         else:
@@ -2007,17 +2035,31 @@ class FDConfig:
             and self.router_config
             and self.router_config.router
         ):
-            # For RL scenario: version.yaml will be required for models in future releases.
+            # For RL scenario, version.yaml is required for models
             # Temporarily enforce use router to be enabled.
             self.model_config.read_model_version()
 
         self.read_from_config()
         self.postprocess()
-        self.init_cache_info()
+        self.init_pd_info()
         if test_mode:
             return
         self.check()
         # self.print()    # NOTE: it's better to explicitly call .print() when FDConfig is initialized
+
+    @property
+    def enable_mm_runtime(self) -> bool:
+        return (
+            self.model_config is not None
+            and self.model_config.enable_mm
+            and self.deploy_modality != DeployModality.TEXT
+        )
+
+    @property
+    def enable_rope_3d_runtime(self) -> bool:
+        return self.enable_mm_runtime and (
+            getattr(self.model_config, "rope_3d", False) or getattr(self.model_config, "use_3d_rope", False)
+        )
 
     def _disable_sequence_parallel_moe_if_needed(self, mode_name):
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
@@ -2047,7 +2089,10 @@ class FDConfig:
 
         if self.scheduler_config.max_num_batched_tokens is None:
             if int(envs.ENABLE_V1_KVCACHE_SCHEDULER):
-                self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
+                if int(envs.FD_DISABLE_CHUNKED_PREFILL):
+                    self.scheduler_config.max_num_batched_tokens = self.model_config.max_model_len
+                else:
+                    self.scheduler_config.max_num_batched_tokens = 8192  # if set to max_model_len, it's easy to be OOM
             else:
                 if self.cache_config.enable_chunked_prefill:
                     self.scheduler_config.max_num_batched_tokens = 2048
@@ -2057,9 +2102,21 @@ class FDConfig:
         if self.long_prefill_token_threshold == 0:
             self.long_prefill_token_threshold = int(self.model_config.max_model_len * 0.04)
 
+        if (
+            self.model_config is not None
+            and self.model_config.enable_mm
+            and self.deploy_modality == DeployModality.TEXT
+        ):
+            if getattr(self.model_config, "rope_3d", False) or getattr(self.model_config, "use_3d_rope", False):
+                logger.info(
+                    "Deploy modality is text; forcing the multimodal-capable model onto the 2D RoPE runtime path."
+                )
+            setattr(self.model_config, "rope_3d", False)
+            setattr(self.model_config, "use_3d_rope", False)
+
         self.cache_config.max_block_num_per_seq = int(self.model_config.max_model_len // self.cache_config.block_size)
         self.cache_config.postprocess(self.get_max_chunk_tokens(), self.scheduler_config.max_num_seqs)
-        if self.model_config is not None and self.model_config.enable_mm and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+        if self.model_config is not None and self.enable_mm_runtime and not envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.cache_config.enable_prefix_caching = False
         if (
             self.structured_outputs_config is not None
@@ -2085,7 +2142,7 @@ class FDConfig:
                     f"Guided decoding backend '{self.structured_outputs_config.guided_decoding_backend}' is not implemented. [auto, xgrammar, guidance, off]"
                 )
 
-        if self.model_config.enable_mm:
+        if self.enable_mm_runtime:
             if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
                 self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
             elif self.cache_config.max_encoder_cache != 0:
@@ -2110,6 +2167,21 @@ class FDConfig:
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
 
+        # Layer-by-layer swap (H2D) is always incompatible with CUDA Graph prefill capture.
+        # Force only decode to use CUDA Graph when host cache is configured.
+        if (
+            self.cache_config is not None
+            and self.cache_config.num_cpu_blocks
+            and self.graph_opt_config.cudagraph_only_prefill
+        ):
+            original_value = self.graph_opt_config.cudagraph_only_prefill
+            self.graph_opt_config.cudagraph_only_prefill = False
+            logger.warning(
+                f"[CacheConfig] Layer-by-layer swap-in is incompatible "
+                f"with CUDA Graph prefill capture. Forcing cudagraph_only_prefill=False "
+                f"(only decode will use CUDA Graph). Original cudagraph_only_prefill={original_value}"
+            )
+
         if (
             not current_platform.is_cuda()
             and not current_platform.is_maca()
@@ -2126,6 +2198,25 @@ class FDConfig:
             if self.scheduler_config.splitwise_role == "prefill":
                 self.speculative_config.num_speculative_tokens = 1
                 self.speculative_config.num_model_steps = 1
+
+        # Auto-compute num_max_dispatch_tokens_per_rank from max_num_seqs and num_speculative_tokens
+        if self.speculative_config is not None and self.speculative_config.method is not None:
+            num_spec_tokens = self.speculative_config.num_speculative_tokens
+            auto_dispatch_tokens = self.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
+        else:
+            auto_dispatch_tokens = self.scheduler_config.max_num_seqs
+        if (
+            getattr(self.model_config, "num_max_dispatch_tokens_per_rank", None)
+            and self.model_config.num_max_dispatch_tokens_per_rank != auto_dispatch_tokens
+        ):
+            logger.info(
+                f"Auto-setting num_max_dispatch_tokens_per_rank from "
+                f"{self.model_config.num_max_dispatch_tokens_per_rank} to {auto_dispatch_tokens} "
+                f"(max_num_seqs={self.scheduler_config.max_num_seqs}"
+                f"{f', num_speculative_tokens={num_spec_tokens}' if self.speculative_config is not None and self.speculative_config.method is not None else ''})."
+            )
+
+            self.model_config.num_max_dispatch_tokens_per_rank = auto_dispatch_tokens
 
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
@@ -2201,9 +2292,15 @@ class FDConfig:
         assert (
             self.scheduler_config.max_num_seqs >= 1
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
-        assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs, (
+        tokens_per_seq = (
+            (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
+            if self.speculative_config is not None
+            else 1
+        )
+        assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs * tokens_per_seq, (
             f"max_num_batched_tokens: {self.scheduler_config.max_num_batched_tokens} "
-            f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs}"
+            f"should be larger than or equal to max_num_seqs: {self.scheduler_config.max_num_seqs} "
+            f"* tokens_per_seq: {tokens_per_seq}"
         )
         assert (
             self.scheduler_config.max_num_batched_tokens
@@ -2320,18 +2417,17 @@ class FDConfig:
                 logger.info("{:<20}:{:<6}{}".format(k, "", v))
         logger.info("=============================================================")
 
-    def init_cache_info(self):
+    def init_pd_info(self):
         """
-        initialize cache info
+        initialize info for pd deployment
         """
-        # TODO: group the splitiwse params
         # There are two methods for splitwise deployment:
         # 1. v0 splitwise_scheduler or dp_scheduler
-        # 2. v1 local_scheduler + router
+        # 2. v1 local_scheduler + router (optional)
         self.splitwise_version = None
         if self.scheduler_config.name in ("splitwise", "dp"):
             self.splitwise_version = "v0"
-        elif self.scheduler_config.name == "local" and self.router_config and self.router_config.router:
+        elif self.scheduler_config.name == "local":
             self.splitwise_version = "v1"
 
         # the information for registering this server to router or splitwise_scheduler
@@ -2392,7 +2488,7 @@ class FDConfig:
                 num_tokens = self.scheduler_config.max_num_seqs
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
-            if mm_max_tokens_per_item is not None and self.deploy_modality != DeployModality.TEXT:
+            if self.enable_mm_runtime and mm_max_tokens_per_item is not None:
                 max_mm_tokens = max(
                     mm_max_tokens_per_item.get("image", 0),
                     mm_max_tokens_per_item.get("video", 0),

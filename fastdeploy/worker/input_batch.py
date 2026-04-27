@@ -17,13 +17,7 @@
 import paddle
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import (
-    CacheConfig,
-    DeployModality,
-    FDConfig,
-    ModelConfig,
-    SpeculativeConfig,
-)
+from fastdeploy.config import CacheConfig, FDConfig, ModelConfig, SpeculativeConfig
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.logits_processor import build_logits_processors
 from fastdeploy.platforms import current_platform
@@ -101,7 +95,8 @@ class InputBatch:
         self.scheduler_config = fd_config.scheduler_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
         self.speculative_decoding = self.speculative_config.method is not None
-        self.enable_mm = self.model_config.enable_mm
+        self.is_mm_model = self.model_config.enable_mm
+        self.enable_mm = fd_config.enable_mm_runtime
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
         self.enable_pd_reorder = False
@@ -193,6 +188,11 @@ class InputBatch:
         self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
         self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
 
+        # Initialize addressing buffers
+        _max_batched_tokens = self.scheduler_config.max_num_batched_tokens
+        self.position_ids_buffer = paddle.zeros([_max_batched_tokens], dtype=paddle.int32)
+        self.slot_mapping_buffer = paddle.zeros([_max_batched_tokens], dtype=paddle.int64)
+
         # Declare AttentionBackend buffers
         self.decoder_batch_ids = None
         self.decoder_tile_ids_per_batch = None
@@ -216,11 +216,14 @@ class InputBatch:
             [-1, 1]
         )
 
-        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
-        # It is a hard code to cover up model's performance
+        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> or <response>
         # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
         self.reasoning_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
+        self.reasoning_allowed_tokens = (
+            paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
+            if self.model_config.reasoning_allowed_token_ids
+            else paddle.to_tensor([], dtype="int64")
+        )
 
         # Initialize rotary position embedding
         if not self.enable_mm:
@@ -231,6 +234,13 @@ class InputBatch:
                 model_config=self.model_config,
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
+            if self.is_mm_model:
+                self.image_features = None
+                self.image_grid_thws = None
+                self.image_features_list = None
+                self.video_features = None
+                self.video_grid_thws = None
+                self.video_infinity_scales = None
 
         # Set block tables
         pre_max_block_num = (
@@ -288,20 +298,12 @@ class InputBatch:
                 fill_value=max_draft_token_num,
                 dtype="int32",
             )
-            if current_platform.is_cuda():
-                self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
-                self.batch_id_per_token_output = paddle.full(
-                    shape=[max_num_seqs * (max_draft_token_num + 1)],
-                    fill_value=0,
-                    dtype="int32",
-                )
-            else:
-                self.output_cum_offsets = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-                self.output_padding_offset = paddle.full(
-                    shape=[max_num_seqs * (max_draft_token_num + 1)],
-                    fill_value=0,
-                    dtype="int32",
-                )
+            self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+            self.batch_id_per_token_output = paddle.full(
+                shape=[max_num_seqs * (max_draft_token_num + 1)],
+                fill_value=0,
+                dtype="int32",
+            )
             # For V1_KVCACHE_SCHEDULER
             self.step_draft_tokens = paddle.full(
                 shape=[max_num_seqs, max_draft_token_num + 1],
@@ -347,7 +349,26 @@ class InputBatch:
                 dtype="float32",
             )
             self.image_features = None  # Built before the forward
+            self.image_grid_thws = None
             self.image_features_list = None
+            self.video_features = None
+            self.video_grid_thws = None
+            self.video_infinity_scales = None
+
+            decode_states_len = self.speculative_config.num_speculative_tokens + 1 if self.speculative_decoding else 1
+            self.decode_states = paddle.full(
+                [self.scheduler_config.max_num_seqs, decode_states_len],
+                -1,
+                dtype="int32",
+            )
+            self.attn_mask_offsets = paddle.full(
+                shape=[self.scheduler_config.max_num_seqs * self.model_config.max_model_len],
+                fill_value=-1,
+                dtype="int32",
+            )
+            self.attn_mask_offsets_full = paddle.full(
+                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
+            )
 
         # For logits processors
         self.logits_processors = build_logits_processors(self.fd_config)
@@ -414,6 +435,7 @@ class InputBatch:
         swap_data(self.ori_seq_lens_encoder, i1, i2)
         swap_data(self.system_lens, i1, i2)
         swap_data(self.system_ids, i1, i2)
+        swap_data(self.generated_modality, i1, i2)
         swap_data(self.enable_thinking, i1, i2)
         swap_data(self.max_think_lens, i1, i2)
         swap_data(self.limit_think_status, i1, i2)
@@ -439,7 +461,7 @@ class InputBatch:
             if current_platform.is_cuda():
                 swap_data(self.cu_seqlens_q_output, i1, i2)
             else:
-                swap_data(self.output_cum_offsets, i1, i2)
+                swap_data(self.cu_seqlens_q_output, i1, i2)
             swap_data(self.step_draft_tokens, i1, i2)
             swap_data(self.step_seq_lens_this_time, i1, i2)
             swap_data(self.draft_logits, i1, i2)
@@ -456,6 +478,8 @@ class InputBatch:
                     self.image_features_list[i1],
                 )
             swap_data(self.share_inputs["rope_emb"], i1, i2)
+            swap_data(self.decode_states, i1, i2)
+            swap_data(self.attn_mask_offsets_full, i1, i2)
         # Swap mask rollback
         swap_data(self.mask_rollback, i1, i2)
 
@@ -583,6 +607,7 @@ class InputBatch:
             fill_paddle_tensor(self, "ori_seq_lens_encoder", 0)
             fill_paddle_tensor(self, "system_lens", 0)
             fill_paddle_tensor(self, "system_ids", -1)
+            fill_paddle_tensor(self, "generated_modality", -1)
 
             fill_paddle_tensor(self, "ids_remove_padding", 0)
             fill_paddle_tensor(self, "batch_id_per_token", 0)
@@ -596,8 +621,12 @@ class InputBatch:
 
             # Reset reasoning buffers
             fill_paddle_tensor(self, "reasoning_status", 0)
-            # Reset reasoning allowed tokens (not using fill_paddle_tensor since it's a fixed tensor)
-            self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
+            # reasoning_allowed_tokens is a fixed tensor derived from config, no need to reset
+            self.reasoning_allowed_tokens = (
+                paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
+                if self.model_config.reasoning_allowed_token_ids
+                else paddle.to_tensor([], dtype="int64")
+            )
 
             # Reset block tables
             fill_paddle_tensor(self, "block_tables", -1)
@@ -630,8 +659,8 @@ class InputBatch:
                 fill_paddle_tensor(self, "accept_num", 0)
                 fill_paddle_tensor(self, "draft_tokens", -1)
                 fill_paddle_tensor(self, "actual_draft_token_num", max_draft_token_num)
-                fill_paddle_tensor(self, "output_cum_offsets", 0)
-                fill_paddle_tensor(self, "output_padding_offset", 0)
+                fill_paddle_tensor(self, "cu_seqlens_q_output", 0)
+                fill_paddle_tensor(self, "batch_id_per_token_output", 0)
                 fill_paddle_tensor(self, "step_draft_tokens", 0)
                 fill_paddle_tensor(self, "step_seq_lens_this_time", 0)
                 fill_paddle_tensor(self, "draft_logits", -1)
@@ -667,7 +696,14 @@ class InputBatch:
                     dtype="float32",
                 )
                 self.image_features = None
+                self.image_grid_thws = None
                 self.image_features_list = None
+                self.video_features = None
+                self.video_grid_thws = None
+                self.video_infinity_scales = None
+                fill_paddle_tensor(self, "decode_states", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
             else:
                 # Reset non-multimodal rope_emb
                 self.rope_emb = get_rope(
@@ -677,6 +713,13 @@ class InputBatch:
                     model_config=self.model_config,
                     partial_rotary_factor=self.model_config.partial_rotary_factor,
                 )
+                if self.is_mm_model:
+                    self.image_features = None
+                    self.image_grid_thws = None
+                    self.image_features_list = None
+                    self.video_features = None
+                    self.video_grid_thws = None
+                    self.video_infinity_scales = None
 
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
@@ -689,7 +732,7 @@ class InputBatch:
 
 class ProposerInputBatch(InputBatch):
     def __init__(self, fd_config: FDConfig, target_model_input_batch: InputBatch) -> None:
-        self.enable_mm = fd_config.model_config.enable_mm
+        self.enable_mm = fd_config.enable_mm_runtime
         self.num_model_steps = fd_config.speculative_config.num_model_steps
         self.index_to_batch_id = {}
         self.target_model_input_batch = target_model_input_batch
@@ -741,8 +784,8 @@ class ProposerInputBatch(InputBatch):
                 self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
                 self.token_ids_all = None
         else:
-            self.output_cum_offsets = paddle.clone(self.target_model_input_batch["output_cum_offsets"])
-            self.output_padding_offset = paddle.clone(self.target_model_input_batch["output_padding_offset"])
+            self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
+            self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
@@ -863,18 +906,15 @@ class ProposerInputBatch(InputBatch):
                 -1,
                 dtype="int32",
             )
-            if self.fd_config.deploy_modality != DeployModality.TEXT:
-                self.attn_mask_offsets = paddle.full(
-                    shape=[self.scheduler_config.max_num_seqs * self.model_config.max_model_len],
-                    fill_value=-1,
-                    dtype="int32",
-                )
-                self.attn_mask_offsets_full = paddle.full(
-                    [self.scheduler_config.max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
-                )
-                self.attn_mask_offsets_decoder = paddle.full(
-                    [self.scheduler_config.max_num_seqs, 1], -1, dtype="int32"
-                )
+            self.attn_mask_offsets = paddle.full(
+                shape=[self.scheduler_config.max_num_seqs * self.model_config.max_model_len],
+                fill_value=-1,
+                dtype="int32",
+            )
+            self.attn_mask_offsets_full = paddle.full(
+                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
+            )
+            self.attn_mask_offsets_decoder = paddle.full([self.scheduler_config.max_num_seqs, 1], -1, dtype="int32")
 
     def swap_states(self, i1, i2) -> None:
         def swap_data(tensor, idx1, idx2):
@@ -896,7 +936,9 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.input_ids_len, i1, i2)
         swap_data(self.mask_rollback, i1, i2)
         swap_data(self.recompute_token_num, i1, i2)
-        if self.enable_mm and self.fd_config.deploy_modality != DeployModality.TEXT:
+        if self.enable_mm:
+            swap_data(self.decode_states, i1, i2)
+            swap_data(self.attn_mask_offsets, i1, i2)
             swap_data(self.attn_mask_offsets_full, i1, i2)
             swap_data(self.attn_mask_offsets_decoder, i1, i2)
 
@@ -1030,10 +1072,9 @@ class ProposerInputBatch(InputBatch):
             # Reset multimodal tensors if enabled
             if self.enable_mm:
                 fill_paddle_tensor(self, "decode_states", -1)
-                if self.fd_config.deploy_modality != DeployModality.TEXT:
-                    fill_paddle_tensor(self, "attn_mask_offsets", -1)
-                    fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
-                    fill_paddle_tensor(self, "attn_mask_offsets_decoder", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets_decoder", -1)
 
             logger.info("model_inputs reset completed")
         except Exception as e:

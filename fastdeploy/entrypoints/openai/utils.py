@@ -341,9 +341,10 @@ class DealerConnectionManager:
 
 
 def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
+    _is_multi_server = os.environ.get("FD_ENABLE_MULTI_API_SERVER") == "1"
     parser.add_argument("--port", default=8000, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-    parser.add_argument("--workers", default=1, type=int, help="number of workers")
+    parser.add_argument("--workers", default=1 if _is_multi_server else 4, type=int, help="number of workers")
     parser.add_argument("--metrics-port", default=None, type=int, help="port for metrics server")
     parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
     parser.add_argument(
@@ -352,7 +353,9 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         type=int,
         help="max waiting time for connection, if set value -1 means no waiting time limit",
     )
-    parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+    parser.add_argument(
+        "--max-concurrency", default=512 if _is_multi_server else 2048, type=int, help="max concurrency"
+    )
 
     parser.add_argument(
         "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "

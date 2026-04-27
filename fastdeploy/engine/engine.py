@@ -44,9 +44,20 @@ from fastdeploy.engine.common_engine import (
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    console_logger,
+    ensure_workerlog_alias,
+    envs,
+    llm_logger,
+)
 
 
 class LLMEngine:
@@ -181,7 +192,7 @@ class LLMEngine:
             if not self._stop_profile():
                 return False
         elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
-            if not current_platform.is_intel_hpu():
+            if not current_platform.is_intel_hpu() and not envs.ENABLE_V1_KVCACHE_MANAGER:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -285,7 +296,7 @@ class LLMEngine:
         # Create Request struct after processing
         request = Request.from_dict(task)
         request.metrics.scheduler_recv_req_time = time.time()
-        llm_logger.info(f"Receive request {request}")
+        log_request(RequestLogLevel.CONTENT, message="Receive request {request}", request=request)
         request.metrics.preprocess_start_time = time.time()
 
         request.prompt_token_ids_len = len(request.prompt_token_ids)
@@ -304,12 +315,20 @@ class LLMEngine:
                 f"Input text is too long, length of prompt token({input_ids_len}) "
                 f"+ min_dec_len ({min_tokens}) >= max_model_len "
             )
-            llm_logger.error(error_msg)
+            log_request_error(
+                message="request[{request_id}] error: {error}",
+                request_id=request.get("request_id"),
+                error=error_msg,
+            )
             raise EngineError(error_msg, error_code=400)
 
         if input_ids_len > self.cfg.model_config.max_model_len:
             error_msg = f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.cfg.model_config.max_model_len})."
-            llm_logger.error(error_msg)
+            log_request_error(
+                message="request[{request_id}] error: {error}",
+                request_id=request.get("request_id"),
+                error=error_msg,
+            )
             raise EngineError(error_msg, error_code=400)
 
         if request.get("stop_seqs_len") is not None:
@@ -320,7 +339,11 @@ class LLMEngine:
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
                     "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
                 )
-                llm_logger.error(error_msg)
+                log_request_error(
+                    message="request[{request_id}] error: {error}",
+                    request_id=request.get("request_id"),
+                    error=error_msg,
+                )
                 raise EngineError(error_msg, error_code=400)
             stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
@@ -329,7 +352,11 @@ class LLMEngine:
                         f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
                         "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
                     )
-                    llm_logger.error(error_msg)
+                    log_request_error(
+                        message="request[{request_id}] error: {error}",
+                        request_id=request.get("request_id"),
+                        error=error_msg,
+                    )
                     raise EngineError(error_msg, error_code=400)
 
         if self._has_guided_input(request):
@@ -342,14 +369,22 @@ class LLMEngine:
                 request, err_msg = self.guided_decoding_checker.schema_format(request)
 
             if err_msg is not None:
-                llm_logger.error(err_msg)
+                log_request_error(
+                    message="request[{request_id}] error: {error}",
+                    request_id=request.get("request_id"),
+                    error=err_msg,
+                )
                 raise EngineError(err_msg, error_code=400)
 
         request.metrics.preprocess_end_time = time.time()
         request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
-        llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
-        llm_logger.debug(f"cache task: {request}")
+        log_request(
+            RequestLogLevel.STAGES,
+            message="Cache task with request_id ({request_id})",
+            request_id=request.get("request_id"),
+        )
+        log_request(RequestLogLevel.FULL, message="cache task: {request}", request=request)
 
     def _worker_processes_ready(self):
         """
@@ -517,14 +552,16 @@ class LLMEngine:
 
         """
         console_logger.debug("Start worker process...")
-        log_dir = os.getenv("FD_LOG_DIR", default="log")
+        self.log_dir = os.getenv("FD_LOG_DIR", default="log")
+        self.paddle_log_dir = os.path.join(self.log_dir, "paddle")
+        os.makedirs(self.paddle_log_dir, exist_ok=True)
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
         current_dir_path = os.path.split(current_file_path)[0]
         # TODO
         uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == 1 else "-u"
         pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
-        pd_cmd = pd_cmd + f" --log_dir {log_dir}"
+        pd_cmd = pd_cmd + f" --log_dir {self.paddle_log_dir}"
 
         worker_path = "../worker/worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
@@ -574,6 +611,18 @@ class LLMEngine:
             )
         llm_logger.info(f"Get think_truncate_prompt_ids {think_truncate_prompt_ids} from tokenizer.")
 
+        try:
+            reasoning_allowed_token_ids = [
+                self.data_processor.tokenizer.convert_tokens_to_ids("<tool_call>"),
+                self.data_processor.tokenizer.convert_tokens_to_ids("<response>"),
+            ]
+            # convert_tokens_to_ids may return a list instead of int when token
+            # is not in vocabulary; keep only valid single-int ids.
+            reasoning_allowed_token_ids = [tid for tid in reasoning_allowed_token_ids if isinstance(tid, int)]
+        except Exception:
+            reasoning_allowed_token_ids = []
+        llm_logger.info(f"Get reasoning_allowed_token_ids {reasoning_allowed_token_ids} from tokenizer.")
+
         ports = ",".join(map(str, self.cfg.parallel_config.engine_worker_queue_port))
         ips = None
         if self.cfg.ips is not None:
@@ -605,6 +654,7 @@ class LLMEngine:
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
             f" --think_truncate_prompt_ids '{json.dumps(think_truncate_prompt_ids)}'"
+            f" --reasoning_allowed_token_ids '{json.dumps(reasoning_allowed_token_ids)}'"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"
             f" --graph_optimization_config '{self.cfg.graph_opt_config.to_json_string()}'"
             f" --guided_decoding_backend {self.cfg.structured_outputs_config.guided_decoding_backend}"
@@ -613,6 +663,7 @@ class LLMEngine:
             f" --early_stop_config '{self.cfg.early_stop_config.to_json_string()}'"
             f" --reasoning_parser {self.cfg.structured_outputs_config.reasoning_parser}"
             f" --load_choices {self.cfg.load_config.load_choices}"
+            f" --model_loader_extra_config '{json.dumps(self.cfg.load_config.model_loader_extra_config)}'"
             f" --plas_attention_config '{self.cfg.plas_attention_config.to_json_string()}'"
             f" --ips {ips}"
             f" --max_encoder_cache {self.cfg.cache_config.max_encoder_cache}"
@@ -655,6 +706,7 @@ class LLMEngine:
             "enable_entropy": self.cfg.model_config.enable_entropy,
             "ep_prefill_use_worst_num_tokens": self.cfg.parallel_config.ep_prefill_use_worst_num_tokens,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
+            "enable_flashinfer_allreduce_fusion": self.cfg.parallel_config.enable_flashinfer_allreduce_fusion,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -670,7 +722,7 @@ class LLMEngine:
 
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
-        pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
+        pd_cmd = pd_cmd + arguments + f" 2>>{self.log_dir}/worker_process.log"
         llm_logger.info(f"Launch worker service command: {pd_cmd}")
         p = subprocess.Popen(
             pd_cmd,
@@ -715,11 +767,16 @@ class LLMEngine:
         Yields:
             dict: The generated response.
         """
-        llm_logger.info(f"Starting generation for prompt: {prompts}")
+        log_request(RequestLogLevel.CONTENT, message="Starting generation for prompt: {prompts}", prompts=prompts)
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            llm_logger.error(f"Error happened while adding request, details={e}, {str(traceback.format_exc())}")
+            log_request_error(
+                message="request[{request_id}] error while adding request: {error}, {traceback}",
+                request_id=prompts.get("request_id"),
+                error=str(e),
+                traceback=traceback.format_exc(),
+            )
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request
@@ -738,7 +795,7 @@ class LLMEngine:
                 output = self.engine.data_processor.process_response_dict(
                     result.to_dict(), stream=False, include_stop_str_in_output=False, direct_decode=not stream
                 )
-                llm_logger.debug(f"Generate result: {output}")
+                log_request(RequestLogLevel.FULL, message="Generate result: {output}", output=output)
                 if not stream:
                     yield output
                 else:
@@ -763,7 +820,7 @@ class LLMEngine:
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.engine.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-            if not current_platform.is_intel_hpu():
+            if not current_platform.is_intel_hpu() and not envs.ENABLE_V1_KVCACHE_MANAGER:
                 device_ids = self.cfg.parallel_config.device_ids.split(",")
                 self.cache_manager_processes = self.engine.start_cache_service(device_ids, self.ipc_signal_suffix)
         return True
@@ -840,8 +897,14 @@ class LLMEngine:
                         + f" data parallel id {i}"
                     )
                     self.dp_processed[-1].start()
+
+                for i in range(
+                    1,
+                    self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
+                ):
+
                     while self.launched_expert_service_signal.value[i] == 0:
-                        time.sleep(1)
+                        time.sleep(0.1)
 
     def check_worker_initialize_status(self):
         """
@@ -900,4 +963,7 @@ class LLMEngine:
             self.checking_worker_status_thread.join(timeout=1)
         except Exception:
             pass
+        # Create symlinks for paddle workerlog files after workers are ready
+        if hasattr(self, "log_dir") and hasattr(self, "paddle_log_dir"):
+            ensure_workerlog_alias(self.log_dir, self.paddle_log_dir)
         return True

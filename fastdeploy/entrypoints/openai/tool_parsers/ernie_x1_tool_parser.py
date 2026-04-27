@@ -20,14 +20,13 @@ import uuid
 from collections.abc import Sequence
 
 import partial_json_parser
+from partial_json_parser.core.options import Allow
 
 
 def random_tool_call_id() -> str:
     """Generate a random tool call ID"""
     return f"chatcmpl-tool-{str(uuid.uuid4().hex)}"
 
-
-from partial_json_parser.core.options import Allow
 
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
@@ -42,6 +41,7 @@ from fastdeploy.entrypoints.openai.tool_parsers.abstract_tool_parser import (
     ToolParser,
     ToolParserManager,
 )
+from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.utils import data_processor_logger as logger
 
 
@@ -92,29 +92,32 @@ class ErnieX1ToolParser(ToolParser):
         3. Only name and arguments field without content: {"name": "get_weather", "argume
         """
 
-        try:
-            tool_call_json_list = self.tool_call_regex.findall(model_output)
-            tool_calls = []
-            for tool_call_json in tool_call_json_list:
-                tool_call_dict = json.loads(tool_call_json)
-                args_str = json.dumps(tool_call_dict.get("arguments", {}), ensure_ascii=False)
-                tool_calls.append(
-                    ToolCall(
-                        type="function",
-                        id=random_tool_call_id(),
-                        function=FunctionCall(
-                            name=tool_call_dict.get("name", ""),
-                            arguments=args_str,
-                        ),
-                    )
-                )
-            return ExtractedToolCallInformation(
-                tools_called=True,
-                tool_calls=tool_calls,
-            )
-        except Exception:
-            logger.warning("Error in extracting tool call from response.")
+        if self.tool_call_start_token not in model_output:
             return ExtractedToolCallInformation(tools_called=False, tool_calls=[], content=model_output)
+        else:
+            try:
+                tool_call_json_list = self.tool_call_regex.findall(model_output)
+                tool_calls = []
+                for tool_call_json in tool_call_json_list:
+                    tool_call_dict = json.loads(tool_call_json)
+                    args_str = json.dumps(tool_call_dict.get("arguments", {}), ensure_ascii=False)
+                    tool_calls.append(
+                        ToolCall(
+                            type="function",
+                            id=random_tool_call_id(),
+                            function=FunctionCall(
+                                name=tool_call_dict.get("name", ""),
+                                arguments=args_str,
+                            ),
+                        )
+                    )
+                return ExtractedToolCallInformation(
+                    tools_called=len(tool_calls) > 0,
+                    tool_calls=tool_calls,
+                )
+            except Exception:
+                logger.warning("Error in extracting tool call from response.")
+                return ExtractedToolCallInformation(tools_called=False, tool_calls=[], content=model_output)
 
     def extract_tool_calls_streaming(
         self,
@@ -180,11 +183,13 @@ class ErnieX1ToolParser(ToolParser):
                     logger.debug("attempting to close tool call, but no tool call")
                     return None
                 diff = self.prev_tool_call_arr[self.current_tool_id].get("arguments")
-                if diff:
-                    if '"}' not in delta_text:
+                if diff is not None:
+                    if "}" not in delta_text:
                         return None
-                    end_loc = delta_text.rindex('"}')
-                    diff = delta_text[:end_loc] + '"}'
+                    end_loc = delta_text.rindex("}")
+                    diff = delta_text[:end_loc]
+                    if not diff:
+                        return None
                     logger.debug(
                         "Finishing tool and found diff that had not " "been streamed yet: %s",
                         diff,
@@ -246,15 +251,18 @@ class ErnieX1ToolParser(ToolParser):
             prev_arguments = self.prev_tool_call_arr[self.current_tool_id].get("arguments")
             cur_arguments = current_tool_call.get("arguments")
 
-            if not cur_arguments and not prev_arguments:
+            if cur_arguments is None and prev_arguments is None:
                 logger.debug("Skipping text %s - no arguments", delta_text)
                 delta = None
 
             elif not cur_arguments and prev_arguments:
-                logger.error("should be impossible to have arguments reset " "mid-call. skipping streaming anything.")
+                log_request_error(
+                    message="request[{request_id}] should be impossible to have arguments reset mid-call. skipping streaming anything.",
+                    request_id=request.request_id,
+                )
                 delta = None
 
-            elif cur_arguments and not prev_arguments:
+            elif cur_arguments is not None and prev_arguments is None:
                 function_name = current_tool_call.get("name")
                 match = re.search(
                     r'\{"name":\s*"' + re.escape(function_name) + r'"\s*,\s*"arguments":\s*(.*)',
@@ -263,6 +271,19 @@ class ErnieX1ToolParser(ToolParser):
                 )
                 if match:
                     cur_arguments_json = match.group(1)
+                    # When tool_call_portion is complete JSON, the regex
+                    # (.*) over-captures the outer closing brace of the
+                    # tool call object. Strip it from both
+                    # cur_arguments_json and delta_text, consistent with
+                    # the both-have-arguments branch handling.
+                    try:
+                        json.loads(tool_call_portion)
+                        if cur_arguments_json.endswith("}"):
+                            cur_arguments_json = cur_arguments_json[:-1]
+                        if delta_text.rstrip().endswith("}"):
+                            delta_text = delta_text.rstrip()[:-1]
+                    except Exception:
+                        pass
                 else:
                     cur_arguments_json = json.dumps(cur_arguments, ensure_ascii=False)
 
@@ -285,7 +306,7 @@ class ErnieX1ToolParser(ToolParser):
                 )
                 self.streamed_args_for_tool[self.current_tool_id] += arguments_delta
 
-            elif cur_arguments and prev_arguments:
+            elif cur_arguments is not None and prev_arguments is not None:
                 try:
                     json.loads(tool_call_portion)
                     is_complete_json = True
