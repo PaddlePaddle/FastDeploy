@@ -140,6 +140,114 @@ class DataProcessor(MMBaseDataProcessor):
 
         return calc_one(grid_thw)
 
+    @staticmethod
+    def _closest_factor_pair(n: int):
+        """Return (small, large) factor pair of n closest to a square.
+
+        Mirrors vllm's ``closest_factor_pair`` in Qwen2VLProcessingInfo.
+        """
+        import math
+
+        for d in range(math.isqrt(n), 0, -1):
+            if n % d == 0:
+                return d, n // d
+        return 1, n
+
+    @staticmethod
+    def _max_tokens_for_pixels(max_pixels: int, patch_size: int, merge_size: int) -> int:
+        """Compute the maximum post-merge token count achievable under *max_pixels*.
+
+        Aligns with vllm's ``get_image_size_with_most_features``:
+        1. ``max_seq_len = max_pixels // unit^2``  where ``unit = patch * merge``
+           is the number of *merged* tokens that can fit.
+        2. Find the largest ``seq_len <= max_seq_len`` whose factor pair has
+           aspect ratio <= 200 (the Qwen2-VL processor rejects extreme ratios).
+        3. Token count = ``height_factor * width_factor`` = ``seq_len``.
+
+        Using ``closest_factor_pair`` guarantees we never undercount when
+        ``max_pixels`` is not a perfect square of ``unit``.
+        """
+        unit = patch_size * merge_size
+        max_seq_len = max_pixels // (unit * unit)
+        for n in range(max_seq_len, 0, -1):
+            h, w = DataProcessor._closest_factor_pair(n)
+            if w / h <= 200:
+                return n
+        return 1
+
+    def get_max_image_tokens(self, seq_len: int = None) -> int:
+        """Return the maximum number of tokens a single image can produce.
+
+        Uses the same algorithm as vllm's ``get_max_image_tokens`` in
+        ``Qwen2VLProcessingInfo``: factorises the token budget from
+        ``max_pixels`` and finds the best non-extreme aspect ratio.
+
+        Args:
+            seq_len: Optional upper cap (model's max_model_len).
+
+        Returns:
+            Maximum number of image tokens per item.
+        """
+        num_tokens = self._max_tokens_for_pixels(
+            self.image_processor.max_pixels,
+            self.image_processor.patch_size,
+            self.image_processor.merge_size,
+        )
+        if seq_len is not None:
+            num_tokens = min(num_tokens, seq_len)
+        return num_tokens
+
+    def get_max_video_tokens(self, seq_len: int = None) -> int:
+        """Return the maximum number of tokens a single video item can produce.
+
+        Mirrors vllm's ``get_max_video_tokens``:
+        - Spatial token budget same as image (``_max_tokens_for_pixels``).
+        - Temporal dimension: frames are *padded up* to the next multiple of
+          ``temporal_patch_size`` (matching the processor behaviour in
+          qwen2_vl/image_processing_qwen2_vl.py line 294).
+
+        Args:
+            seq_len: Optional upper cap (model's max_model_len).
+
+        Returns:
+            Maximum number of video tokens per item.
+        """
+        temporal_patch_size = self.image_processor.temporal_patch_size
+
+        spatial_tokens = self._max_tokens_for_pixels(
+            self.image_processor.max_pixels,
+            self.image_processor.patch_size,
+            self.image_processor.merge_size,
+        )
+
+        # Pad frames UP to next multiple of temporal_patch_size (vllm line 868):
+        #   padded_num_frames = num_frames + num_frames % temporal_patch_size
+        padded_frames = self.max_frames + self.max_frames % temporal_patch_size
+        grid_t = max(padded_frames // temporal_patch_size, 1)
+
+        num_tokens = grid_t * spatial_tokens
+        if seq_len is not None:
+            num_tokens = min(num_tokens, seq_len)
+        return num_tokens
+
+    def get_mm_max_tokens_per_item(self, seq_len: int = None):
+        """Return max tokens per item for each active modality.
+
+        Aligns with vllm's ``get_mm_max_tokens_per_item`` interface so that
+        FastDeploy can compute encoder budgets without running dummy inputs.
+
+        Args:
+            seq_len: Model's maximum sequence length (used as an upper cap).
+
+        Returns:
+            Dict mapping modality name to max tokens, e.g.
+            ``{"image": 1280, "video": 8192}``.
+        """
+        return {
+            "image": self.get_max_image_tokens(seq_len),
+            "video": self.get_max_video_tokens(seq_len),
+        }
+
     def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """
         Convert text with image/video placeholders into model inputs.

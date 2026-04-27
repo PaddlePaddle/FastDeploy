@@ -15,6 +15,7 @@
 # limitations under the License.
 """
 
+import math
 import pickle
 from typing import Any, Dict, List, Optional, Tuple, Union
 
@@ -142,6 +143,103 @@ class DataProcessor(MMBaseDataProcessor):
             return [calc_one(x) for x in grid_thw]
 
         return calc_one(grid_thw)
+
+    @staticmethod
+    def _closest_factor_pair(n: int):
+        """Return (small, large) factor pair of n closest to a square.
+
+        Mirrors vllm's ``closest_factor_pair`` in Qwen2VLProcessingInfo.
+        """
+        for d in range(math.isqrt(n), 0, -1):
+            if n % d == 0:
+                return d, n // d
+        return 1, n
+
+    @staticmethod
+    def _max_tokens_for_pixels(max_pixels: int, patch_size: int, merge_size: int) -> int:
+        """Compute the maximum post-merge token count achievable under *max_pixels*.
+
+        Aligns with vllm's ``get_image_size_with_most_features``.
+        See qwen_vl_processor/process.py for full description.
+        """
+        unit = patch_size * merge_size
+        max_seq_len = max_pixels // (unit * unit)
+        for n in range(max_seq_len, 0, -1):
+            h, w = DataProcessor._closest_factor_pair(n)
+            if w / h <= 200:
+                return n
+        return 1
+
+    def get_max_image_tokens(self, seq_len: int = None) -> int:
+        """Return the maximum number of tokens a single image can produce.
+
+        Uses the same algorithm as vllm's ``get_max_image_tokens`` in
+        ``Qwen2VLProcessingInfo``.
+
+        Args:
+            seq_len: Optional upper cap (model's max_model_len).
+
+        Returns:
+            Maximum number of image tokens per item.
+        """
+        num_tokens = self._max_tokens_for_pixels(
+            self.image_processor.max_pixels,
+            self.image_processor.patch_size,
+            self.image_processor.merge_size,
+        )
+        if seq_len is not None:
+            num_tokens = min(num_tokens, seq_len)
+        return num_tokens
+
+    def get_max_video_tokens(self, seq_len: int = None) -> int:
+        """Return the maximum number of tokens a single video item can produce.
+
+        For Qwen3-VL, video frames are constrained by VIDEO_MAX_PIXELS
+        (128*28*28 ~ 768*28*28) rather than the image max_pixels.
+        Temporal padding follows the processor: frames are padded *up* to the
+        next multiple of ``temporal_patch_size`` (same as vllm line 868).
+
+        Args:
+            seq_len: Optional sequence length cap.
+
+        Returns:
+            Maximum number of video tokens per item.
+        """
+        temporal_patch_size = self.image_processor.temporal_patch_size
+
+        # Video uses its own (tighter) pixel bounds
+        spatial_tokens = self._max_tokens_for_pixels(
+            VIDEO_MAX_PIXELS,
+            self.image_processor.patch_size,
+            self.image_processor.merge_size,
+        )
+
+        # Pad frames UP (vllm: padded = frames + frames % temporal_patch_size)
+        padded_frames = self.max_frames + self.max_frames % temporal_patch_size
+        grid_t = max(padded_frames // temporal_patch_size, 1)
+
+        num_tokens = grid_t * spatial_tokens
+        if seq_len is not None:
+            num_tokens = min(num_tokens, seq_len)
+        return num_tokens
+
+    def get_mm_max_tokens_per_item(self, seq_len: int = None):
+        """Return max tokens per item for each active modality.
+
+        Aligns with vllm's ``get_mm_max_tokens_per_item`` interface so that
+        FastDeploy can compute encoder budgets without running dummy inputs.
+
+        Args:
+            seq_len: Model's maximum sequence length (used as an upper cap).
+
+        Returns:
+            Dict mapping modality name to max tokens, e.g.
+            ``{"image": 1280, "video": 8192}``.
+        """
+        return {
+            "image": self.get_max_image_tokens(seq_len),
+            "video": self.get_max_video_tokens(seq_len),
+        }
 
     def text2ids(self, text, images=None, videos=None, image_uuid=None, video_uuid=None):
         """

@@ -742,6 +742,7 @@ class ProposerInputBatch(InputBatch):
         self.cache_config: CacheConfig = fd_config.cache_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
         self.enable_pd_reorder: bool = False
+        self.max_chunk_tokens = fd_config.get_max_chunk_tokens(self.model_config.mm_max_tokens_per_item)
 
     def init_share_inputs(self):
         # share with targe model
@@ -794,7 +795,7 @@ class ProposerInputBatch(InputBatch):
 
         self.target_hidden_states = paddle.full(
             [
-                self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens,
+                self.max_chunk_tokens,
                 self.model_config.hidden_size,
             ],
             0,
