@@ -25,6 +25,7 @@ import pytest
 
 from fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias import (
     fused_cast_sigmoid_bias,
+    is_available,
 )
 
 DTYPE_MAP = {
@@ -383,6 +384,20 @@ def test_performance():
     print("  Performance benchmark complete.\n")
 
 
+def test_is_available():
+    """Test is_available() function returns True when GPU ops are available."""
+    print("=" * 60)
+    print("Test: is_available()")
+    print("=" * 60)
+
+    # In normal GPU test environment, is_available should return True
+    result = is_available()
+    assert isinstance(result, bool), f"is_available() should return bool, got {type(result)}"
+    assert result is True, f"is_available() should return True when GPU ops are compiled, got {result}"
+    print(f"  [PASS] is_available() returned {result}")
+    print("  is_available() test passed.\n")
+
+
 def test_import_error():
     """Test that ImportError is raised when GPU ops are not available."""
     print("=" * 60)
@@ -424,9 +439,46 @@ def test_import_error():
     print("  Import error handling test passed.\n")
 
 
+def test_is_available_when_ops_unavailable():
+    """Test is_available() returns False when GPU ops are not available."""
+    print("=" * 60)
+    print("Test: is_available() when ops unavailable")
+    print("=" * 60)
+
+    module_name = "fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias"
+    gpu_ops_module = "fastdeploy.model_executor.ops.gpu"
+
+    # Save original module references
+    original_module = sys.modules.pop(module_name, None)
+    original_gpu_ops = sys.modules.get(gpu_ops_module)
+
+    try:
+        # Mock the GPU ops module to raise ImportError on import
+        with mock.patch.dict(sys.modules, {gpu_ops_module: None}):
+            # Re-import the module so it picks up the mocked (missing) GPU ops
+            reloaded = importlib.import_module(module_name)
+            importlib.reload(reloaded)
+
+            # is_available should return False when ops are not available
+            result = reloaded.is_available()
+            assert isinstance(result, bool), f"is_available() should return bool, got {type(result)}"
+            assert result is False, f"is_available() should return False when GPU ops are unavailable, got {result}"
+            print(f"  [PASS] is_available() returned {result} when ops unavailable")
+    finally:
+        # Restore original modules
+        sys.modules.pop(module_name, None)
+        if original_module is not None:
+            sys.modules[module_name] = original_module
+        if original_gpu_ops is not None:
+            sys.modules[gpu_ops_module] = original_gpu_ops
+
+    print("  is_available() when ops unavailable test passed.\n")
+
+
 if __name__ == "__main__":
     print("Running fused_cast_sigmoid_bias tests...\n")
 
+    test_is_available()
     test_functionality()
     test_functionality_cast_types()
     test_accuracy()
@@ -434,6 +486,7 @@ if __name__ == "__main__":
     test_accuracy_extreme_values()
     test_accuracy_extreme_values_cast_types()
     test_import_error()
+    test_is_available_when_ops_unavailable()
     if os.getenv("RUN_PERFORMANCE_TESTS") == "1":
         test_performance()
     else:

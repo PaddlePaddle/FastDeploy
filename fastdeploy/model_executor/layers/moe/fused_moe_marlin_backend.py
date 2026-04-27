@@ -24,7 +24,6 @@ from fastdeploy.model_executor.ops.gpu import (
     MoeWna16MarlinGemmApi,
     tritonmoe_preprocess_func,
 )
-from fastdeploy.platforms import current_platform
 
 from ..quantization.quant_base import QuantMethodBase
 
@@ -249,6 +248,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         Marlin compute Fused MoE.
         """
         gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
         token_num = x.shape[0]
         top_k = layer.top_k
         top_k = layer.top_k
@@ -260,9 +260,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         if topk_method == "noaux_tc":
             from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
-            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
-            if not use_fused:
-                gate_out = gate_out.cast("float32")
             _, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -271,10 +268,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
-                use_fused_cast=use_fused,
             )
         else:
-            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,
