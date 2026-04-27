@@ -346,15 +346,6 @@ class ResourceManagerV1(ResourceManager):
                 f"req idx {req.idx} occupy {len(req.block_tables)} block_tables and {len(req.extend_block_tables)} extend_block_tables"
             )
 
-    def _can_preempt_with_decode_task(self):
-        """
-        A request is preemptable if it does NOT use extend tables AND is in decode status.
-        """
-        for req in self.running:
-            if not req.use_extend_tables and req.status == RequestStatus.RUNNING_DECODE:
-                return True
-        return False
-
     def preempted_all(self):
         with self.lock:
             preempted_reqs = []
