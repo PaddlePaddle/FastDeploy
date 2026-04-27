@@ -30,6 +30,7 @@ import threading
 import time
 import traceback
 import weakref
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
@@ -895,6 +896,7 @@ class EngineService:
         Insert tasks to worker with scheduler v1 (ENABLE_V1_KVCACHE_SCHEDULER=1).
         """
         tracing.trace_set_thread_info("Scheduler Task to Work")
+        get_request_pool = ThreadPoolExecutor(max_workers=1)
         is_fetching = False
 
         def _fetch_request():
@@ -902,6 +904,10 @@ class EngineService:
                 with self._pause_cond:
                     self._pause_cond.wait_for(lambda: not self.is_paused)
                 nonlocal is_fetching
+                num_prefill_batch = min(
+                    int(self.resource_manager.available_batch()),
+                    self.cfg.max_prefill_batch,
+                )
 
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     max_num_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
@@ -909,14 +915,12 @@ class EngineService:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
                 available_blocks = self.cfg.cache_config.max_block_num_per_seq
-                # NOTE(liyonghua): let _fetch_request() only pull one request at a time.
-                # Instead, we pull requests out of scheduler queue in a busy-running loop thread.
                 tasks = self.scheduler.get_requests(
                     available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
                     reserved_output_blocks=0,  # self.cfg.cache_config.enc_dec_block_num
                     max_num_batched_tokens=max_num_batched_tokens,
-                    batch=1,
+                    batch=num_prefill_batch,
                 )
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
@@ -1063,17 +1067,21 @@ class EngineService:
                 self.llm_logger.error(f"fetching request error {e} {str(traceback.format_exc())}")
                 is_fetching = False
 
-        def _fetch_request_loop():
-            while True:
-                _fetch_request()
-                time.sleep(0.001)
-
-        threading.Thread(target=_fetch_request_loop, daemon=True).start()
-
         while self.running:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
+                if not is_fetching:
+                    # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                    try:
+                        is_fetching = True
+                        get_request_pool.submit(_fetch_request)
+                    except RuntimeError as e:
+                        if "shutdown" in str(e):
+                            self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                            break
+                        else:
+                            raise
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
                     # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
@@ -1083,20 +1091,14 @@ class EngineService:
                         continue
                 else:
                     # In mixed, todo: optimze cache swap, to decouple swap from scheduler
-                    if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-                        if self.engine_worker_queue.exist_tasks():
-                            time.sleep(0.001)
-                            continue
-                    else:
-                        if self.engine_worker_queue.exist_tasks() or self.engine_forward_signal.value[0] != 0:
-                            time.sleep(0.001)
-                            continue
+                    if self.engine_worker_queue.exist_tasks():
+                        time.sleep(0.001)
+                        continue
 
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
                 batch_request, error_tasks = self.resource_manager.schedule()
-                self.engine_forward_signal.value[0] = 1
 
                 # 3. Send to engine
                 if len(batch_request) > 0:

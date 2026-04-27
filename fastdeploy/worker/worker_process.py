@@ -549,6 +549,7 @@ class PaddleDisWorkerProc:
 
             if self._get_exist_task_flag():
                 logger.debug(f"Rank: {self.local_rank} Detected new requests.")
+                self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
