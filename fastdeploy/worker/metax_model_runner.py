@@ -493,7 +493,9 @@ class MetaxModelRunner(ModelRunnerBase):
                                 pending_mm_grid_thw[mm_hash] = grid_thw_key
                                 if envs.FD_ENABLE_MAX_PREFILL:
                                     multi_vision_inputs["images_lst"].append(
-                                        inputs["images"][image_start_idx : image_start_idx + image_offset].to(self.device)
+                                        inputs["images"][image_start_idx : image_start_idx + image_offset].to(
+                                            self.device
+                                        )
                                     )
                                     multi_vision_inputs["grid_thw_lst"].append(grid_thw_key)
                                     grid_thw_lst_per_req.append(grid_thw_key)
@@ -540,11 +542,15 @@ class MetaxModelRunner(ModelRunnerBase):
                                 pending_mm_grid_thw[mm_hash] = grid_thw_key
                                 if envs.FD_ENABLE_MAX_PREFILL:
                                     multi_vision_inputs["images_lst"].append(
-                                        inputs["images"][image_start_idx : image_start_idx + image_offset].to(self.device)
+                                        inputs["images"][image_start_idx : image_start_idx + image_offset].to(
+                                            self.device
+                                        )
                                     )
                                     multi_vision_inputs["grid_thw_lst"].append(grid_thw_key)
                                     grid_thw_lst_per_req.append(grid_thw_key)
-                                    multi_vision_inputs["cu_seqlens"].append(inputs["vit_seqlen"][request.num_image_start + i])
+                                    multi_vision_inputs["cu_seqlens"].append(
+                                        inputs["vit_seqlen"][request.num_image_start + i]
+                                    )
                                     multi_vision_inputs["vit_position_ids_lst"].append(
                                         inputs["vit_position_ids"][request.num_image_start + i]
                                     )
@@ -630,7 +636,9 @@ class MetaxModelRunner(ModelRunnerBase):
                             assert mm_hash in self.encoder_cache, f"{mm_hash} not in encoder cache"
                             mm_feature = self.encoder_cache[mm_hash].to(self.device)
                         else:
-                            assert mm_hash in fresh_mm_feature_cache, f"{mm_hash} not in fresh multimodal feature cache"
+                            assert (
+                                mm_hash in fresh_mm_feature_cache
+                            ), f"{mm_hash} not in fresh multimodal feature cache"
                             mm_feature = fresh_mm_feature_cache[mm_hash]
 
                         feature_start = feature_position.offset
@@ -665,7 +673,9 @@ class MetaxModelRunner(ModelRunnerBase):
                 feature_idx = 0
                 for index, feature_position_item in enumerate(multi_vision_inputs["feature_position_list_batches"]):
                     grid_thw_lst = multi_vision_inputs["grid_thw_lst_batches"][index]
-                    assert len(feature_position_item) == len(grid_thw_lst), f"{feature_position_item} != {grid_thw_lst}"
+                    assert len(feature_position_item) == len(
+                        grid_thw_lst
+                    ), f"{feature_position_item} != {grid_thw_lst}"
                     merge_image_features, thw_idx = [], 0
                     for feature_position in feature_position_item:
                         grid_thw = grid_thw_lst[thw_idx]

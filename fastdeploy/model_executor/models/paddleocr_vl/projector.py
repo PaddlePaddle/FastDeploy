@@ -87,7 +87,9 @@ class Projector(nn.Layer):
 
     def forward(self, image_features, image_grid_thw, return_packed: bool = False):
         if isinstance(image_features, (list, tuple)):
-            packed_image_features = image_features[0] if len(image_features) == 1 else paddle.concat(image_features, axis=0)
+            packed_image_features = (
+                image_features[0] if len(image_features) == 1 else paddle.concat(image_features, axis=0)
+            )
             packed_image_features = self.pre_norm(packed_image_features)
             merge_indices, merge_lengths = self._build_merge_permutation(image_grid_thw)
             merge_indices = paddle.to_tensor(merge_indices, dtype="int64", place=packed_image_features.place)
