@@ -248,7 +248,7 @@ NSYS_CMD="nsys profile -c cudaProfilerApi \
 1. 用户明确提供了测试请求脚本 → 使用用户的
 2. 未提供 → 使用 skill 内置默认脚本：
    ```bash
-   python3 ~/.claude/skills/ernie5-nsys-capture/nsys_default_client.py <HOST> <PORT>
+   python3 ~/.claude/skills/nsys-capture/nsys_default_client.py <HOST> <PORT>
    ```
 
 ---

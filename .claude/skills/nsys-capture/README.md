@@ -17,12 +17,12 @@
 ## 文件结构
 
 ```
-~/.claude/skills/ernie5-nsys-capture/
-├── SKILL.md                    # Skill 定义文件（完整工作流规范）
-├── ernie5_nsys_capture.sh      # 辅助执行脚本（timeit 等工具）
-├── nsys_capture.sh             # 核心函数（wait_service / wait_and_rename_file）
-├── nsys_default_client.py      # 默认测试请求客户端
-└── README.md                   # 本文档
+~/.claude/skills/nsys-capture/
+├── SKILL.md                # Skill 定义文件（完整工作流规范）
+├── nsys_utils.sh           # 辅助执行脚本（timeit 等工具）
+├── nsys_capture.sh          # 核心函数（wait_service / wait_and_rename_file）
+├── nsys_default_client.py   # 默认测试请求客户端
+└── README.md               # 本文档
 ```
 
 ## 环境变量
