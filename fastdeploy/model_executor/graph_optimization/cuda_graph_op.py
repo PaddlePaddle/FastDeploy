@@ -19,6 +19,7 @@ import inspect
 from typing import Callable, Optional, Sequence
 
 import paddle
+from paddleformers.utils.log import logger as _LOGGER
 
 import fastdeploy
 
@@ -30,6 +31,33 @@ _BLOCK_WISE_CAPTURING: bool = False
 
 # Registry of all shared-mode graph caches, for bulk clearing.
 _ALL_SHARED_CACHES: list = []
+
+# Global counter / registry of all captured block-wise graphs (for logging).
+# Each entry: (qualname, key, shared_mode)
+_CAPTURED_GRAPH_LOG: list = []
+
+
+def get_captured_graph_log():
+    """Return the list of all captured (qualname, key, shared) triples."""
+    return list(_CAPTURED_GRAPH_LOG)
+
+
+def dump_captured_graph_summary():
+    """Print a summary of all captured block-wise CUDA graphs."""
+    from collections import Counter
+
+    if not fastdeploy.envs.FD_BLOCK_WISE_DEBUG:
+        return
+    if not _CAPTURED_GRAPH_LOG:
+        _LOGGER.info("[block_wise_cuda_graph] no graph captured")
+        return
+    counter = Counter(q for q, _, _ in _CAPTURED_GRAPH_LOG)
+    _LOGGER.info(
+        f"[block_wise_cuda_graph] total captured graphs={len(_CAPTURED_GRAPH_LOG)} "
+        f"across {len(counter)} distinct methods:"
+    )
+    for qname, cnt in sorted(counter.items(), key=lambda x: -x[1]):
+        _LOGGER.info(f"  - {qname} : {cnt} graph(s)")
 
 
 def set_block_wise_capturing(capturing: bool):
@@ -100,6 +128,7 @@ def block_wise_cuda_graph_wrap(
     def decorator(method: Callable) -> Callable:
         sig = inspect.signature(method)
         params = list(sig.parameters.keys())  # ["self", "x", "residual_input", ...]
+        _qualname = method.__qualname__
 
         for name in inputs:
             if name not in params or name == "self":
@@ -221,7 +250,6 @@ def block_wise_cuda_graph_wrap(
                 # === Capture ===
                 graph = paddle.device.cuda.graphs.CUDAGraph(enable_replace=True)
                 graphs[key] = graph
-
                 ci = {}
                 for name, aidx in _input_info:
                     v = kwargs[name] if name in kwargs else (args[aidx] if aidx < nargs else None)
@@ -239,6 +267,14 @@ def block_wise_cuda_graph_wrap(
                 graph.capture_begin()
                 result = method(self, *args, **kwargs)
                 graph.capture_end()
+
+                # --- Log which op just entered the CUDA graph ---
+                _CAPTURED_GRAPH_LOG.append((_qualname, key, _shared))
+                if fastdeploy.envs.FD_BLOCK_WISE_DEBUG:
+                    _LOGGER.info(
+                        f"[block_wise_cuda_graph] captured #{len(_CAPTURED_GRAPH_LOG)} "
+                        f"op={_qualname} shared={_shared} key={key}"
+                    )
 
                 graph.replay()
 
