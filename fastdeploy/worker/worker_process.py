@@ -304,6 +304,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
+        self.worker.model_runner.set_engine_signal(self.engine_forward_signal)
 
     def update_weights_from_tensor(self, mmap_infos):
         """
