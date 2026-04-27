@@ -353,6 +353,8 @@ class MTPProposerCUDA(MTPProposer):
         )
 
         if self.role == "prefill" and self.parallel_config.tensor_parallel_rank == 0:
+            # Note(wangyanpeng): mtp_save_first_token for GPU has been moved to model_runner
+            # (pre_and_post_process.py). Calling it here would result in a duplicate save.
             # Ensure only save first token once.
             paddle.assign(
                 paddle.where(
