@@ -179,8 +179,11 @@ if envs.FD_METAX_ENABLE_FA_SPLIT:
             request_seq_lens_this_time = seq_lens_this_time[request_batch_ids].squeeze(-1)
             request_seq_lens_decoder = seq_lens_decoder[request_batch_ids].squeeze(-1)
             request_seq_lens = request_seq_lens_decoder + request_seq_lens_this_time
-
+            
             request_block_tables.copy_(block_tables[request_batch_ids])
+
+            if num_requests < self.max_num_seqs:
+                self.block_tables_buffer[num_requests:] = self.block_tables_buffer[num_requests - 1]
 
             if num_prefills > 0:
                 prefill_query_start_loc[1:].copy_(
@@ -188,11 +191,18 @@ if envs.FD_METAX_ENABLE_FA_SPLIT:
                 )
                 prefill_prefix_kv_lens[1:].copy_(request_seq_lens[num_decodes:].cumsum(axis=0, dtype=paddle.int32))
 
+            if num_prefills < self.max_num_seqs:
+                self.prefill_query_start_loc_buffer[num_prefills + 1 :] = prefill_query_start_loc[num_prefills]
+                self.prefill_prefix_kv_lens_buffer[num_prefills + 1 :] = prefill_prefix_kv_lens[num_prefills]
+
             if num_decodes > 0:
                 if not self.rope_3d:
                     decode_cache_seq_lens.copy_(request_seq_lens_decoder[:num_decodes])
                 else:
                     decode_cache_seq_lens.copy_(request_seq_lens[:num_decodes])
+
+            if num_decodes < self.max_num_seqs:
+                self.decode_cache_seq_lens_buffer[num_decodes:] = self.decode_cache_seq_lens_buffer[num_decodes - 1]
 
             if envs.FD_DEBUG:
                 print(f"num_requests: {num_requests} = {num_prefills} + {num_decodes}")
@@ -499,10 +509,12 @@ else:
             request_kv_start_loc = self.kv_start_loc_buffer[: num_requests + 1]
 
             request_block_tables.copy_(block_tables[request_batch_ids])
+
             request_query_start_loc[1:].copy_(request_seq_lens_this_time.cumsum(axis=0, dtype=paddle.int32))
             request_kv_start_loc[1:].copy_(request_seq_lens.cumsum(axis=0, dtype=paddle.int32))
             
             if num_requests < self.max_num_seqs:
+                self.block_tables_buffer[num_requests:] = self.block_tables_buffer[num_requests - 1]
                 self.query_start_loc_buffer[num_requests + 1 :] = self.query_start_loc_buffer[num_requests]
                 self.kv_start_loc_buffer[num_requests + 1 :] = self.kv_start_loc_buffer[num_requests]
 
