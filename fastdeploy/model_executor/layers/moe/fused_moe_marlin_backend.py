@@ -39,14 +39,20 @@ if MoeWna16MarlinGemmApi is None:
     )
 
 # Optional: tritonmoe_preprocess_with_map_func for EP mode
-from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_with_map_func
-
 from ..quantization.quant_base import QuantMethodBase
 
+try:
+    from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_with_map_func
+except ImportError:
+    tritonmoe_preprocess_with_map_func = None
+
 if tritonmoe_preprocess_with_map_func is None:
-    from fastdeploy.model_executor.ops.gpu import (
-        tritonmoe_preprocess_with_map as tritonmoe_preprocess_with_map_func,
-    )
+    try:
+        from fastdeploy.model_executor.ops.gpu import (
+            tritonmoe_preprocess_with_map as tritonmoe_preprocess_with_map_func,
+        )
+    except ImportError:
+        tritonmoe_preprocess_with_map_func = None
 
 
 def _swiglu(x):
@@ -349,8 +355,15 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         return marlin_scale
 
     def init_ep(self, layer):
-        """Initialize EP - no-op for Marlin MoE (uses no-all-to-all approach)."""
-        pass
+        """Initialize EP - pre-compute expert_map for CUDA graph compatibility."""
+        num_experts = layer.num_experts
+        num_local_experts = layer.num_local_experts
+        ep_rank = layer.fd_config.parallel_config.expert_parallel_rank
+        local_start = ep_rank * num_local_experts
+        expert_map_list = [-1] * num_experts
+        for i in range(num_local_experts):
+            expert_map_list[local_start + i] = i
+        layer._ep_expert_map = paddle.to_tensor(expert_map_list, dtype="int32")
 
     def set_fp8_scales(self, layer, up_gate_scale, down_scale):
         """Set FP8 scales for Marlin kernel."""
@@ -617,9 +630,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         M, hidden_size = x.shape
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
-        num_experts = layer.num_experts
         fd_config = layer.fd_config
-        ep_rank = fd_config.parallel_config.expert_parallel_rank
         ep_group = fd_config.parallel_config.ep_group
 
         # Early return for M=0 (empty input, e.g. dummy run)
@@ -641,12 +652,9 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_ids)
 
-        # Step 2: Build expert_map
-        local_start = ep_rank * num_local_experts
-        expert_map_list = [-1] * num_experts
-        for i in range(num_local_experts):
-            expert_map_list[local_start + i] = i
-        expert_map = paddle.to_tensor(expert_map_list, dtype="int32")
+        # Step 2: Use pre-computed expert_map (created in init_ep to avoid
+        # paddle.to_tensor during CUDA graph capture)
+        expert_map = layer._ep_expert_map
 
         # Step 3: Triton preprocess with expert_map filtering
         # On SM80, skip preprocess and go directly to _apply_ep_sm80_bf16
@@ -689,9 +697,15 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         up_gate_weight = layer.up_gate_proj_weight
         down_weight = layer.down_proj_weight
         actual_size_k_up = up_gate_weight.shape[1] * 16
-        actual_size_n_up = up_gate_weight.shape[2] // 4
         actual_size_k_down = down_weight.shape[1] * 16
-        actual_size_n_down = down_weight.shape[2] // 4
+        if self.weight_type == "fp8":
+            # FP8: Marlin repack packs 4 FP8 per int32, shape[2] = N*4
+            actual_size_n_up = up_gate_weight.shape[2] // 4
+            actual_size_n_down = down_weight.shape[2] // 4
+        else:
+            # INT4: Marlin repack packs 8 per int32, shape[2] = N
+            actual_size_n_up = up_gate_weight.shape[2]
+            actual_size_n_down = down_weight.shape[2]
 
         ffn_out_up = paddle.zeros([M * top_k, actual_size_n_up], dtype=x.dtype)
         ffn_out = MoeWna16MarlinGemmApi(
@@ -817,7 +831,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             u = paddle.bmm(tok, up_w.transpose([0, 2, 1]))
             del tok, gate_w, up_w
 
-            sw = paddle.nn.functional.swiglu(paddle.concat([g, u], -1))
+            sw = _swiglu(paddle.concat([g, u], -1))
             del g, u
 
             o = paddle.bmm(sw, down_w.transpose([0, 2, 1]))  # [M, 1, hidden]

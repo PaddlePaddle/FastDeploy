@@ -418,7 +418,10 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
                     sc_exp = sc_exp.reshape([scale.shape[0] * BLOCK, scale.shape[1] * BLOCK])[:out_d, :in_d]
                     weight_bf16 = (weight_f32 * sc_exp).cast("bfloat16")
                     linear_out = F.linear(x.cast("bfloat16"), weight_bf16)
-                except Exception:
+                except Exception as e:
+                    fastdeploy.utils.console_logger.warning(
+                        f"SM80 FP8 dequant scale expand failed: {e}, fallback to raw cast"
+                    )
                     linear_out = F.linear(x.cast("bfloat16"), layer.weight.cast("bfloat16"))
             if layer.with_bias:
                 linear_out = paddle.add(linear_out, layer.bias)
