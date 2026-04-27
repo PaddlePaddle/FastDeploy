@@ -35,6 +35,30 @@ from fastdeploy.logger.setup_logging import setup_logging
 _LOG_FORMAT = "%(levelname)-8s %(asctime)s %(process)-5s %(filename)s[line:%(lineno)d] %(message)s"
 
 
+class _MaxLevelFilter(logging.Filter):
+    def __init__(self, level):
+        super().__init__()
+        self.level = level
+
+    def filter(self, record):
+        return record.levelno < self.level
+
+
+def _add_console_handlers(logger, formatter=None):
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.addFilter(_MaxLevelFilter(logging.ERROR))
+    if formatter is not None:
+        stdout_handler.setFormatter(formatter)
+    logger.addHandler(stdout_handler)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.ERROR)
+    if formatter is not None:
+        stderr_handler.setFormatter(formatter)
+    logger.addHandler(stderr_handler)
+
+
 class FastDeployLogger:
     _instance = None
     _initialized = False
@@ -238,12 +262,9 @@ class FastDeployLogger:
         logger.addHandler(handler)
         logger.addHandler(error_handler)
 
-        # Console handler
+        # Console handlers: route INFO/DEBUG to stdout and ERROR/CRITICAL to stderr
         if print_to_console:
-            console_handler = logging.StreamHandler()
-            if not without_formater:
-                console_handler.setFormatter(formatter)
-            logger.addHandler(console_handler)
+            _add_console_handlers(logger, None if without_formater else formatter)
 
         logger.propagate = False
 
@@ -301,12 +322,9 @@ class FastDeployLogger:
         logger.addHandler(handler)
         logger.addHandler(error_handler)
 
-        # Console handler
+        # Console handlers: route INFO/DEBUG to stdout and ERROR/CRITICAL to stderr
         if print_to_console:
-            console_handler = logging.StreamHandler()
-            if not without_formater:
-                console_handler.setFormatter(formatter)
-            logger.addHandler(console_handler)
+            _add_console_handlers(logger, None if without_formater else formatter)
 
         logger.propagate = False
 
@@ -327,9 +345,7 @@ def intercept_paddle_loggers():
             logger.setLevel(logging.DEBUG if envs.FD_DEBUG else logging.INFO)
             for handler in logger.handlers[:]:
                 logger.removeHandler(handler)
-            stream_handler = logging.StreamHandler()
-            stream_handler.setFormatter(formatter)
-            logger.addHandler(stream_handler)
+            _add_console_handlers(logger, formatter)
             logger.propagate = False
         return logger
 

@@ -21,6 +21,7 @@ import time
 from typing import Iterable
 
 from fastdeploy import envs
+from fastdeploy.logger.logger import _LOG_FORMAT
 
 
 class SchedulerMetricsLogger:
@@ -49,11 +50,7 @@ class SchedulerMetricsLogger:
             logger.setLevel(logging.INFO)
             logger.propagate = False
             handler = logging.StreamHandler(sys.stdout)
-            formatter = logging.Formatter(
-                "[%(asctime)s] [%(process)d] [%(levelname)s] %(message)s",
-                "%Y-%m-%d %H:%M:%S",
-            )
-            handler.setFormatter(formatter)
+            handler.setFormatter(logging.Formatter(_LOG_FORMAT))
             logger.addHandler(handler)
             logger._fd_scheduler_metrics_configured = True
         return logger
