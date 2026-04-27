@@ -350,6 +350,28 @@ class ResourceManagerV1(ResourceManager):
                 return True
         return False
 
+    def _select_preempted_request(self):
+        """
+        Select a request to preempt from back to front.
+        Prefer preempting decode requests; if none available, fall back to
+        chunked prefill requests to avoid deadlock.
+        """
+        for i in range(len(self.running) - 1, -1, -1):
+            req = self.running[i]
+            if req.use_extend_tables:
+                continue
+            if req.num_total_tokens <= req.need_prefill_tokens:
+                continue
+            return self.running.pop(i)
+
+        # If there is no decoding request, preempt chunked prefill requests
+        for i in range(len(self.running) - 1, -1, -1):
+            req = self.running[i]
+            if req.use_extend_tables:
+                continue
+            return self.running.pop(i)
+        return None
+
     def preempted_all(self):
         with self.lock:
             preempted_reqs = []
@@ -391,10 +413,10 @@ class ResourceManagerV1(ResourceManager):
         can_schedule = False
         while self._can_preempt():
             if not self.cache_manager.can_allocate_gpu_blocks(num_new_blocks):
-                preempted_req = self.running.pop()
-                if preempted_req.use_extend_tables:
-                    self.running.insert(0, preempted_req)
-                    continue
+                preempted_req = self._select_preempted_request()
+                if preempted_req is None:
+                    llm_logger.error("Preemption failed! cannot find any request to preempt.")
+                    break
                 preempted_req.status = RequestStatus.PREEMPTED
                 preempted_req.num_computed_tokens = 0
                 if self.config.scheduler_config.splitwise_role == "decode":
