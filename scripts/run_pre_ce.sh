@@ -13,6 +13,9 @@ python -m pip install  \
   https://paddle-qa.bj.bcebos.com/FastDeploy/triton-3.2.0-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl \
   https://paddle-qa.bj.bcebos.com/FastDeploy/xgrammar-0.1.19-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl
 
+# fix tests/ci_use/Prefix_Caching_Swap/test_vl_prefix_caching_swap.py (requires new pyarrow memory behavior)
+python -m pip install pyarrow==24.0.0
+
 failed_files=()
 run_path="$DIR/../tests/ci_use/"
 
