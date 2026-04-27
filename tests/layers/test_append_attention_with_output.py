@@ -23,8 +23,9 @@ paddle.seed(10)
 
 
 class RopeEmbedding:
-    def __init__(self, use_neox_rotary_style=False):
+    def __init__(self, use_neox_rotary_style=False, partial_rotary_factor=1.0):
         self.use_neox_rotary_style = use_neox_rotary_style
+        self.partial_rotary_factor = partial_rotary_factor
         self.base = 10000
 
     def get_neox_style_position_embedding(self, position_ids, head_dim):
@@ -67,7 +68,7 @@ class RopeEmbedding:
         sin = paddle.squeeze(sin, axis=0).transpose([0, 2, 1, 3])[:, :, :seq, :]
         # sin [θ0,θ1,θ2......θd/2-1] -> sin_pos [θ0,θ0,θ1,θ1,θ2,θ2......θd/2-1,θd/2-1]
 
-        if self.use_neox_rotary_style:
+        if self.use_neox_rotary_style and self.partial_rotary_factor >= 1.0:
             sin_pos = sin
             cos_pos = cos
             # NeoX Stype：前后半部分分块旋转
@@ -91,6 +92,32 @@ class RopeEmbedding:
                 ),
                 paddle.shape(k),
             )
+        elif self.use_neox_rotary_style and self.partial_rotary_factor < 1.0:
+            rotary_dim = int(head_dim * self.partial_rotary_factor)
+            sin_pos = paddle.reshape(paddle.stack([sin, sin], axis=-1), [1, 1, seq, rotary_dim])
+            cos_pos = paddle.reshape(paddle.stack([cos, cos], axis=-1), [1, 1, seq, rotary_dim])
+            # NeoX Stype：前后半部分分块旋转
+            rotate_half_q = paddle.reshape(
+                paddle.stack(
+                    [
+                        -q[:, :, :, rotary_dim // 2 : rotary_dim],
+                        q[:, :, :, : rotary_dim // 2],
+                    ],
+                    axis=-1,
+                ),
+                [*(paddle.shape(q)[:-1]), rotary_dim],
+            )
+            rotate_half_k = paddle.reshape(
+                paddle.stack(
+                    [
+                        -k[:, :, :, rotary_dim // 2 : rotary_dim],
+                        k[:, :, :, : rotary_dim // 2],
+                    ],
+                    axis=-1,
+                ),
+                [*(paddle.shape(k)[:-1]), rotary_dim],
+            )
+
         else:
             # import pdb;pdb.set_trace()
             sin_pos = paddle.reshape(paddle.stack([sin, sin], axis=-1), [1, 1, seq, head_dim])
@@ -106,9 +133,25 @@ class RopeEmbedding:
                 paddle.shape(k),
             )
 
-        query = paddle.add(paddle.multiply(q, cos_pos), paddle.multiply(rotate_half_q, sin_pos))
-
-        key = paddle.add(paddle.multiply(k, cos_pos), paddle.multiply(rotate_half_k, sin_pos))
+        if self.use_neox_rotary_style and self.partial_rotary_factor < 1.0:
+            rotary_dim = int(head_dim * self.partial_rotary_factor)
+            query = paddle.concat(
+                [
+                    paddle.add(paddle.multiply(q[..., :rotary_dim], cos_pos), paddle.multiply(rotate_half_q, sin_pos)),
+                    q[..., rotary_dim:].cast("float32"),
+                ],
+                axis=-1,
+            )
+            key = paddle.concat(
+                [
+                    paddle.add(paddle.multiply(k[..., :rotary_dim], cos_pos), paddle.multiply(rotate_half_k, sin_pos)),
+                    k[..., rotary_dim:].cast("float32"),
+                ],
+                axis=-1,
+            )
+        else:
+            query = paddle.add(paddle.multiply(q, cos_pos), paddle.multiply(rotate_half_q, sin_pos))
+            key = paddle.add(paddle.multiply(k, cos_pos), paddle.multiply(rotate_half_k, sin_pos))
 
         return paddle.cast(query, q.dtype), paddle.cast(key, k.dtype)
 
@@ -343,6 +386,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         self.kv_hid_dim = self.kv_num_head * self.dim_head
         self.blocksize = 64
         self.use_neox_rotary_style = False
+        self.partial_rotary_factor = 1.0
         # max_seq_len = self.seq_len + self.max_dec_len
         self.max_seq_len = self.seq_len + self.max_dec_len
         self.softmax_scale = self.dim_head**-0.5
@@ -354,7 +398,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
 
     def init_tensor(self):
         self.block_num_per_seq = (self.seq_len + self.max_dec_len + self.blocksize - 1) // self.blocksize
-        self.rope = RopeEmbedding(self.use_neox_rotary_style)
+        self.rope = RopeEmbedding(self.use_neox_rotary_style, self.partial_rotary_factor)
         self.max_block_num = self.block_num_per_seq * self.batch_size
         self.free_list = list(range(self.max_block_num - 1, -1, -1))
 
@@ -566,7 +610,12 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
         tmp_position_ids = paddle.arange(self.seq_len + self.max_dec_len).reshape((1, -1))
         # appendattn 传的是最大maxseq
         if self.use_neox_rotary_style:
-            self.rope_emb = self.rope.get_neox_style_position_embedding(tmp_position_ids, self.dim_head)
+            if self.partial_rotary_factor != 1.0:
+                self.rope_emb = self.rope.get_rotary_position_embedding(
+                    tmp_position_ids, int(self.dim_head * self.partial_rotary_factor)
+                )
+            else:
+                self.rope_emb = self.rope.get_neox_style_position_embedding(tmp_position_ids, self.dim_head)
         else:
             self.rope_emb = self.rope.get_rotary_position_embedding(tmp_position_ids, self.dim_head)
         self.attention_mask = create_attn_mask(
@@ -636,6 +685,7 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.kv_hid_dim = self.kv_num_head * self.dim_head
         self.blocksize = 64
         self.use_neox_rotary_style = True
+        self.partial_rotary_factor = 1.0
         # max_seq_len = self.seq_len + self.max_dec_len
         self.max_seq_len = self.seq_len + self.max_dec_len
         self.softmax_scale = self.dim_head**-0.5
@@ -643,6 +693,32 @@ class TestAppendGroupQueryAttnWithNeoXRope(TestAppendGroupQueryAttnWithRope):
         self.dtype = "float16"
         self.use_qk_norm = False
         self.use_mask_offset = True
+        self.init_tensor()
+
+
+class TestAppendGroupQueryAttnWithPartialDimHead256NeoXRope(TestAppendGroupQueryAttnWithRope):
+    def setUp(self):
+        paddle.disable_static()
+        self.name = "TestAppendGroupQueryAttnWithPartialDimHead256NeoXRope"
+        self.place = paddle.CUDAPlace(0)
+        self.batch_size = 1
+        self.q_num_head = 12
+        self.kv_num_head = 2
+        self.seq_len = 64
+        self.max_dec_len = 64
+        self.dim_head = 256
+        self.q_hid_dim = self.q_num_head * self.dim_head
+        self.kv_hid_dim = self.kv_num_head * self.dim_head
+        self.blocksize = 64
+        self.use_neox_rotary_style = True
+        self.partial_rotary_factor = 0.25
+        # max_seq_len = self.seq_len + self.max_dec_len
+        self.max_seq_len = self.seq_len + self.max_dec_len
+        self.softmax_scale = self.dim_head**-0.5
+        self.rope_theta = 10000
+        self.dtype = "float16"
+        self.use_qk_norm = False
+        self.use_mask_offset = False
         self.init_tensor()
 
 

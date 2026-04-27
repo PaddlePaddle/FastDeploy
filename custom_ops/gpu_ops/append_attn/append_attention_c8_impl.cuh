@@ -71,6 +71,11 @@ void CascadeAppendAttentionC8Kernel(
   const auto head_dim = meta_data.head_dims;
   bool is_dynamic_cfp8 = cache_quant_type_str == "block_wise_fp8";
 
+  // For HEAD_DIM=256, BLOCK_SHAPE_Q=128 would require ~98KB shared memory,
+  // exceeding A100's 96KB configurable limit. Cap to 64 to stay within bounds.
+  const int effective_block_shape_q =
+      (head_dim == 256 && block_shape_q > 64) ? 64 : block_shape_q;
+
   DISPATCH_CAUSAL(
       causal,
       CAUSAL,
@@ -87,7 +92,7 @@ void CascadeAppendAttentionC8Kernel(
                       block_size,
                       BLOCK_SIZE,
                       {DISPATCH_BLOCKSHAPE_Q(
-                          block_shape_q,
+                          effective_block_shape_q,
                           BLOCK_SHAPE_Q,
                           NUM_WARP_Q,
                           {DISPATCH_DyCfp8(is_dynamic_cfp8, IsDynamicC8, {

@@ -315,6 +315,11 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
       __VA_ARGS__                                  \
       break;                                       \
     }                                              \
+    case 256: {                                    \
+      constexpr size_t HEAD_DIM = 256;             \
+      __VA_ARGS__                                  \
+      break;                                       \
+    }                                              \
     default: {                                     \
       PD_THROW("not support the head_dim");        \
     }                                              \
