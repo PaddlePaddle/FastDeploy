@@ -163,19 +163,8 @@ class BaseTextProcessor(ABC):
         )
         request["prompt_tokens"] = spliced_message
         req_id = request.get("request_id", None) if isinstance(request, dict) else None
-        if self.tokenizer_type == "ernie4_5":
-            # NOTE: ernie4_5 tokenizer will hang when meet long input when use .encode()
-            token_ids = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(spliced_message))
-        else:
-            token_ids = self.tokenizer.encode(spliced_message, add_special_tokens=False)
-            if hasattr(token_ids, "input_ids") or (isinstance(token_ids, dict) and "input_ids" in token_ids):
-                token_ids = token_ids["input_ids"]
-                if hasattr(token_ids, "ndim") and token_ids.ndim > 1:
-                    token_ids = token_ids[0]
-            if hasattr(token_ids, "tolist"):
-                token_ids = token_ids.tolist()
-            if not isinstance(token_ids, list):
-                token_ids = list(token_ids)
+        tokens = self.tokenizer.tokenize(spliced_message)
+        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
         log_request(
             level=1,
             message="req_id:{req_id}, token_ids: {token_ids}",
