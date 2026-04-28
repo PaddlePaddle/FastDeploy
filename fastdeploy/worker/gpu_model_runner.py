@@ -2918,6 +2918,8 @@ class GPUModelRunner(ModelRunnerBase):
                 from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
                     clear_all_block_wise_graphs,
                 )
+
+                clear_all_block_wise_graphs()
             if (
                 self.speculative_decoding
                 and self.spec_method == SpecMethod.MTP
@@ -3361,7 +3363,7 @@ class GPUModelRunner(ModelRunnerBase):
         Pre-captures graphs for designated token counts so that at runtime,
         matching sizes replay the graph while other sizes fall back to eager.
         """
-        if not fastdeploy.envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
+        if not envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
             return
 
         from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
@@ -3369,7 +3371,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # Parse capture sizes from env var
-        sizes_str = fastdeploy.envs.FD_BLOCK_WISE_CUDA_GRAPH_SIZES
+        sizes_str = envs.FD_BLOCK_WISE_CUDA_GRAPH_SIZES
         capture_sizes = sorted([int(s.strip()) for s in sizes_str.split(",") if s.strip()], reverse=True)
         if not capture_sizes:
             logger.warning("FD_BLOCK_WISE_CUDA_GRAPH_SIZES is empty, skipping block-wise CUDA graph capture")
