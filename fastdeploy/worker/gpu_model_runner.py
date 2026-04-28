@@ -2094,10 +2094,14 @@ class GPUModelRunner(ModelRunnerBase):
             self.execute_model_overlap(model_forward_batch, num_running_requests)
 
     def _make_preempted_batch_output(self):
+        preempted_indices = paddle.nonzero(self.share_inputs["preempted_idx"] == 1)
+        bsz = int(preempted_indices[-1][0].item()) + 1
 
-        bsz = int(getattr(self.share_inputs, "num_running_requests", 0))
-        fill_value = PREEMPTED_TOKEN_ID  # if envs.FD_USE_GET_SAVE_OUTPUT_V1 else 0
-        fake_sampled_token_ids = paddle.full([bsz, 1], fill_value=fill_value, dtype="int64", device="cpu")
+        fake_sampled_token_ids = paddle.where(
+            self.share_inputs["preempted_idx"][:bsz] == 1,
+            PREEMPTED_TOKEN_ID,
+            -1,
+        ).astype("int64")
         self.share_inputs["sampled_token_ids"][:bsz].copy_(fake_sampled_token_ids, False)
 
         fake_logprobs_tensors = None
@@ -2182,6 +2186,7 @@ class GPUModelRunner(ModelRunnerBase):
                 and self.parallel_config.use_ep
             ):
                 self._execute_empty_mtp_input(self.forward_meta)
+
             if paddle.sum(self.share_inputs["preempted_idx"]) > 0:
                 logger.info(
                     f"All requests in batch are preempted, real_bsz: {real_bsz} preempted: {paddle.sum(self.share_inputs['preempted_idx'])}"
@@ -2190,14 +2195,14 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["last_preempted_idx"].copy_(self.share_inputs["preempted_idx"])
                 self.share_inputs["preempted_idx"][:] = 0
                 self._save_model_output(model_output_data, sampler_output)
-            return
-        model_output_data, sampler_output, post_process_event = self._postprocess(
-            model_output, p_done_idxs, model_forward_batch, num_running_requests, real_bsz
-        )
-        if model_output_data is not None:
-            # synchronizes the async DtoH copies of sampled_token_ids.
-            post_process_event.synchronize()
-            self._save_model_output(model_output_data, sampler_output)
+        else:
+            model_output_data, sampler_output, post_process_event = self._postprocess(
+                model_output, p_done_idxs, model_forward_batch, num_running_requests, real_bsz
+            )
+            if model_output_data is not None:
+                # synchronizes the async DtoH copies of sampled_token_ids.
+                post_process_event.synchronize()
+                self._save_model_output(model_output_data, sampler_output)
 
     def execute_model_overlap(
         self,
