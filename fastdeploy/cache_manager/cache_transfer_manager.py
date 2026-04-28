@@ -323,7 +323,8 @@ class CacheTransferManager:
         try:
             # TODO: support cache scale for other backend
             if self.has_cache_scale and self.storage_backend_type is not None:
-                if self.storage_backend_type not in ["mooncake"]:
+                is_as_only_flush = envs.FD_AS_ONLY_FLUSH and self.storage_backend_type == "attention_store"
+                if not is_as_only_flush and self.storage_backend_type not in ["mooncake"]:
                     raise ValueError(
                         f"Unsupported storage backend ({self.storage_backend_type}) "
                         "when cache quantization is block_wise_fp8"
@@ -949,6 +950,34 @@ class CacheTransferManager:
             )
             return 0
 
+    def _flush_only_storage_task(self, task: WriteStorageTask):
+        """
+        AS-only flush mode: skip actual storage write, only report cache index to AttentionStore.
+        Used when FD_AS_ONLY_FLUSH is enabled — AS acts as index-only (no data storage).
+
+        Args:
+            task: WriteStorageTask with flush_cache_exists indicating cache state:
+                  True/None = cache present on this node (request finish)
+                  False = cache gone from this node (eviction)
+        """
+        try:
+            if (self.rank == 0) and self.storage_backend_type == "attention_store":
+                reside_in_gpu = task.flush_cache_exists if task.flush_cache_exists is not None else True
+                self.storage_backend.flush_token_index(
+                    task.task_id, task.token_ids, task.start_write_block_idx, reside_in_gpu
+                )
+                logger.info(
+                    f"[AS_ONLY_FLUSH] flush token index reside_in_gpu={reside_in_gpu} "
+                    f"start_block_idx={task.start_write_block_idx} for task {task.task_id}"
+                )
+        except Exception as e:
+            logger.warning(f"[AS_ONLY_FLUSH] Failed to flush token index for task {task.task_id}, error: {e}")
+        result = (CacheStatus.GPU2STORAGE, task.task_id, task.keys, [])
+        self.cache_task_queue.swap_to_storage_barrier.wait()
+        if self.rank == 0:
+            self.cache_task_queue.swap_to_storage_barrier.reset()
+            self.cache_task_queue.put_transfer_done_signal(result)
+
     def write_back_storage_task(self, task: WriteStorageTask):
         """
         Write cache to the storage backend from the GPU memory.
@@ -956,6 +985,9 @@ class CacheTransferManager:
         assert (
             self.storage_backend
         ), f"storage_backend not initialized, storage_backend_type: {self.storage_backend_type}"
+
+        if envs.FD_AS_ONLY_FLUSH:
+            return self._flush_only_storage_task(task)
 
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
