@@ -267,12 +267,12 @@ echo "服务启动中，PID=$!"
 
 轮询策略（每 30s 一次）：
 - **就绪标志**：`curl -s http://<HOST>:<PORT>/v1/models` 返回 HTTP 200
-- **致命错误**：日志出现 `Traceback` / `AssertionError` / `Error` / `OOM` / `Killed`，且 30s 内日志无新增行 → 停止等待，输出最后 30 行日志供排查
+- **致命错误**：日志出现 `Traceback` / `AssertionError` / `OOM` / `Killed`，且 30s 内日志无新增行 → 停止等待，输出最后 30 行日志供排查
 - **超时**：超过 20 分钟未就绪 → 终止
 
 检查日志时，**每次只取最新 50 行**（避免进度条等刷屏内容干扰）：
 ```bash
-tail -50 /tmp/nsys_serve.log | grep -E "Traceback|AssertionError|Error|OOM|Killed|startup complete"
+tail -50 /tmp/nsys_serve.log | grep -E "Traceback|AssertionError|OOM|Killed|startup complete"
 ```
 
 ### 5.3 发送请求
