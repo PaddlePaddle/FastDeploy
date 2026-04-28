@@ -171,7 +171,7 @@ def build_output_logprobs(
     logprobs_tensors = None
     cu_batch_token_offset = None
 
-    max_draft_token_num_plus_1 = share_inputs["accept_tokens"].shape[1]
+    max_draft_token_num = share_inputs["accept_tokens"].shape[1]
     max_occupied_slots = share_inputs["seq_lens_this_time"].shape[0]
 
     if is_naive:
@@ -185,10 +185,10 @@ def build_output_logprobs(
         )
 
         output_logits = paddle.empty(
-            [real_bsz * max_draft_token_num_plus_1, logits.shape[1]],
+            [real_bsz * max_draft_token_num, logits.shape[1]],
             dtype=logits.dtype,
         )
-        token_ids = paddle.full([real_bsz * max_draft_token_num_plus_1], fill_value=0, dtype="int64")
+        token_ids = paddle.full([real_bsz * max_draft_token_num], fill_value=0, dtype="int64")
 
         speculate_get_accept_tokens_and_logits(
             token_ids,
