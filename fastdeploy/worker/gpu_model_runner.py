@@ -2075,6 +2075,13 @@ class GPUModelRunner(ModelRunnerBase):
             self.proposer.model.empty_input_forward(forward_meta)
 
     def _make_preempted_batch_output(self):
+        """Build a minimal batch-shaped control output for preempted slots.
+
+        This is used when the current step contains only preempted/aborted
+        requests and therefore produces no normal model tokens. The helper
+        fabricates a lightweight batch output so the existing save_output path
+        can still return PREEMPTED_TOKEN_ID for the affected slots.
+        """
         preempted_indices = paddle.nonzero(self.share_inputs["preempted_idx"] == 1)
         bsz = int(preempted_indices[-1][0].item()) + 1
 
