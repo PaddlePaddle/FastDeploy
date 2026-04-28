@@ -288,6 +288,8 @@ class ResourceManagerV1(ResourceManager):
                 del self.requests[request_id]
                 del self.req_dict[request_id]
                 self.to_be_aborted_req_id_set.discard(request_id)
+                self.waiting_abort_req_id_set.discard(request_id)
+                llm_logger.debug(f"request_id:{request_id} recycle end")
         self.update_metrics()
 
     def _trigger_abort(self, request_id, scheduled_reqs):
