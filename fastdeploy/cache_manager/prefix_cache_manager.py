@@ -306,6 +306,7 @@ class PrefixCacheManager:
                     + visible_devices
                     + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                     + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
+                    + f" FD_AS_ONLY_FLUSH={int(envs.FD_AS_ONLY_FLUSH)}"
                     + f" {sys.executable} {py_path}"
                     + f" --device_id {int(device_ids[i])}"
                     + f" --rank {i}"
@@ -828,7 +829,7 @@ class PrefixCacheManager:
                 storage_match_token_num = 0
                 match_storage_block_ids = []
 
-                if self.kvcache_storage_backend and no_match_token_num >= block_size:
+                if self.kvcache_storage_backend and no_match_token_num >= block_size and not envs.FD_AS_ONLY_FLUSH:
                     if not self.can_allocate_gpu_blocks(num_blocks=no_match_block_num, try_free_gpu_blocks=False):
                         raise Exception(
                             "request_match_blocks: Not enough GPU memory to allocate cache for matched Storage Cache"
@@ -1240,14 +1241,15 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return
 
-        if len(task.keys) != len(task.gpu_block_ids):
+        if not envs.FD_AS_ONLY_FLUSH and len(task.keys) != len(task.gpu_block_ids):
             err_msg = (
                 f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
             )
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        self.task_write_back_event[task.task_id] = Event()
+        if is_sync:
+            self.task_write_back_event[task.task_id] = Event()
         self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
         if is_sync:
             self.wait_write_storage_task(task.task_id)
@@ -1434,6 +1436,7 @@ class PrefixCacheManager:
 
                 hash_value_swap_node_ids_map = defaultdict(list)
                 hash_value_gpu_block_ids_map = defaultdict(list)
+                hash_value_flush_info = {}  # {input_hash_value: (token_ids, min_depth)}
                 total_gpu_free_count = 0
 
                 while True:
@@ -1446,6 +1449,10 @@ class PrefixCacheManager:
                     self.gpu_lru_leaf_set.remove(node)
                     if self.cache_config.num_cpu_blocks < need_block_num:
                         if node.shared_count == 0 and node.is_gpu_leaf_node:  # 直接回收
+                            if envs.FD_AS_ONLY_FLUSH and self.kvcache_storage_backend == "attention_store":
+                                key = node.input_hash_value
+                                if key not in hash_value_flush_info or node.depth < hash_value_flush_info[key][1]:
+                                    hash_value_flush_info[key] = (node.input_ids, node.depth)
                             self._handle_free_gpu_node_without_cpu(node)
                             total_gpu_free_count += 1
                             cur_node = node
@@ -1494,6 +1501,22 @@ class PrefixCacheManager:
                 logger.info(
                     f"free_block_ids_async: need_block_num {need_block_num}, free_block_num {total_gpu_free_count}."
                 )
+
+                if (
+                    envs.FD_AS_ONLY_FLUSH
+                    and self.kvcache_storage_backend == "attention_store"
+                    and hash_value_flush_info
+                ):
+                    for input_hash_value, (token_ids, min_depth) in hash_value_flush_info.items():
+                        flush_task = WriteStorageTask(
+                            task_id=str(uuid.uuid4()),
+                            keys=[input_hash_value],
+                            token_ids=token_ids,
+                            gpu_block_ids=[],
+                            flush_cache_exists=False,
+                            start_write_block_idx=min_depth - 1,
+                        )
+                        self.issue_write_back_storage_task(flush_task, is_sync=False)
 
                 # swap cache to cpu
                 if hash_value_gpu_block_ids_map:
