@@ -19,6 +19,7 @@ from unittest.mock import Mock, patch
 import numpy as np
 import paddle
 
+from fastdeploy.config import PREEMPTED_TOKEN_ID
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
@@ -589,6 +590,55 @@ class TestSleepWakeupBehavior(unittest.TestCase):
         runner.initialize_kv_cache.assert_not_called()
         runner.dynamic_weight_manager.reload_model_weights.assert_not_called()
         mock_print_memory.assert_not_called()
+
+
+class TestMakePreemptedBatchOutput(unittest.TestCase):
+    def _make_runner(self):
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.speculative_decoding = False
+        runner.enable_logprob = False
+        runner.parallel_config = Mock(msg_queue_id=0, tensor_parallel_rank=0, use_ep=False)
+
+        class _ShareInputs(dict):
+            enable_pd_reorder = False
+
+        share_inputs = _ShareInputs()
+        share_inputs["preempted_idx"] = paddle.to_tensor(
+            [[0], [0], [0], [1], [0], [0], [1], [0], [0], [0]], dtype="int32"
+        )
+        share_inputs["sampled_token_ids"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["index_to_batch_id"] = {i: i for i in range(10)}
+        share_inputs["next_tokens"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_flags"] = paddle.zeros([10, 1], dtype="bool")
+        share_inputs["step_idx"] = 0
+        share_inputs["max_dec_len"] = 16
+        share_inputs["seq_lens_this_time"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["eos_token_id"] = paddle.zeros([1], dtype="int64")
+        share_inputs["not_need_stop"] = False
+        share_inputs["not_need_stop_device"] = paddle.zeros([1], dtype="bool")
+        share_inputs["input_ids"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["seq_lens_encoder"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["seq_lens_decoder"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["is_block_step"] = paddle.zeros([10, 1], dtype="bool")
+        share_inputs["token_ids_all"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_seqs"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_seqs_len"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["min_dec_len"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["prompt_lens"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["mask_rollback"] = paddle.zeros([10, 1], dtype="bool")
+        runner.share_inputs = share_inputs
+        return runner
+
+    def test_make_preempted_batch_output_emits_sparse_preempt_mask(self):
+        runner = self._make_runner()
+
+        model_output_data, sampler_output = runner._make_preempted_batch_output()
+
+        expected = [-1, -1, -1, PREEMPTED_TOKEN_ID, -1, -1, PREEMPTED_TOKEN_ID]
+        self.assertEqual(sampler_output.sampled_token_ids.shape, [7, 1])
+        self.assertEqual(sampler_output.sampled_token_ids.numpy().reshape([-1]).tolist(), expected)
+        self.assertEqual(runner.share_inputs["sampled_token_ids"][:7].numpy().reshape([-1]).tolist(), expected)
+        self.assertEqual(model_output_data.index_to_batch_id, {i: i for i in range(7)})
 
 
 if __name__ == "__main__":
