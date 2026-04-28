@@ -68,7 +68,7 @@ try:
     for out in outputs:
         print(f"Prompt: {out.prompt}")
         if out.outputs:
-            o = out.outputs[0]
+            o = out.outputs[0] if isinstance(out.outputs, list) else out.outputs
             print(f"Output text: {repr(o.text)}")
             print(f"Token IDs: {list(o.token_ids)}")
             if o.token_ids and o.token_ids[0] == 367:
