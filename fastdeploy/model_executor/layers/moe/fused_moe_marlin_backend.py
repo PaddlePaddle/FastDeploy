@@ -464,8 +464,13 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         if ep_sz > 1:
             assert hasattr(layer, "_ep_expert_map"), "init_ep() must be called before apply_ep_noalltoall()"
             return self.apply_ep_noalltoall(
-                layer, x, gate, topk_ids_hookfunc, shared_experts,
-                fc1_latent_proj, fc2_latent_proj,
+                layer,
+                x,
+                gate,
+                topk_ids_hookfunc,
+                shared_experts,
+                fc1_latent_proj,
+                fc2_latent_proj,
             )
 
         gate_out = gate(x)

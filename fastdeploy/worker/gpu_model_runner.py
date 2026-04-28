@@ -2101,7 +2101,11 @@ class GPUModelRunner(ModelRunnerBase):
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
                     # SM80 BF16 MoE: one-hot matmul is memory-intensive, use 1 token to avoid OOM
-                    if get_sm_version() < 90 and current_platform.is_cuda() and os.environ.get("FD_MARLIN_FP8", "0") == "1":
+                    if (
+                        get_sm_version() < 90
+                        and current_platform.is_cuda()
+                        and os.environ.get("FD_MARLIN_FP8", "0") == "1"
+                    ):
                         capture_num_tokens = 1
                     else:
                         capture_num_tokens = self.fd_config.get_max_chunk_tokens()
