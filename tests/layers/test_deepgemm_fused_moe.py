@@ -208,7 +208,8 @@ class TestApplyTp:
     @requires_deepgemm
     def test_apply_tp_noaux_tc_with_use_fused_false(self):
         """noaux_tc path with FD_ENABLE_RL=True: triggers use_fused=False and gate_out.cast('float32')."""
-        layer = DummyLayer(topk_method="noaux_tc")
+        layer = DummyLayer()
+        layer.topk_method = "noaux_tc"
         gate = DummyGate(layer.num_local_experts)
         method = _make_method()
 

@@ -836,7 +836,6 @@ class TestMoePermuteTrueRealOps:
         assert permute_called["v"], "moe_permute was not called"
         assert not dispatch_called["v"], "moe_expert_dispatch must not be called"
         assert list(out.shape) == [num_tokens, hidden_size], f"wrong output shape: {out.shape}"
-        assert list(out.shape) == [num_tokens, hidden_size], f"wrong hidden_size: {out.shape}"
         assert not paddle.isnan(out).any(), "output contains NaN"
         assert not paddle.isinf(out).any(), "output contains Inf"
 
