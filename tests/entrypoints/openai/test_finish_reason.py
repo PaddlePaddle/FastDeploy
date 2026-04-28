@@ -15,6 +15,7 @@
 """
 
 import json
+from types import SimpleNamespace
 from typing import Any, Dict, List
 from unittest import IsolatedAsyncioTestCase
 from unittest.mock import AsyncMock, MagicMock, Mock, patch
@@ -29,14 +30,14 @@ from fastdeploy.entrypoints.openai.protocol import (
 )
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
-from fastdeploy.input.ernie4_5_vl_processor import Ernie4_5_VLProcessor
+from fastdeploy.input.multimodal_processor import MultiModalProcessor
 from fastdeploy.utils import data_processor_logger
 
 
 class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
-        with patch.object(Ernie4_5_VLProcessor, "__init__", return_value=None):
-            self.multi_modal_processor = Ernie4_5_VLProcessor("model_path")
+        with patch.object(MultiModalProcessor, "__init__", return_value=None):
+            self.multi_modal_processor = MultiModalProcessor("model_path")
             self.multi_modal_processor.tokenizer = MagicMock()
             self.multi_modal_processor.tokenizer.eos_token_id = 102
             self.multi_modal_processor.tokenizer.pad_token_id = 0
@@ -45,13 +46,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             self.multi_modal_processor.generation_config = MagicMock()
             self.multi_modal_processor.decode_status = {}
             self.multi_modal_processor.tool_parser_dict = {}
-            self.multi_modal_processor.ernie4_5_processor = MagicMock()
-            self.multi_modal_processor.ernie4_5_processor.request2ids.return_value = {
-                "input_ids": np.array([101, 9012, 3456, 102])
-            }
-            self.multi_modal_processor.ernie4_5_processor.text2ids.return_value = {
-                "input_ids": np.array([101, 1234, 5678, 102])
-            }
             self.multi_modal_processor._apply_default_parameters = lambda x: x
             self.multi_modal_processor.update_stop_seq = Mock(return_value=([], []))
             self.multi_modal_processor.update_bad_words = Mock(return_value=[])
@@ -60,6 +54,19 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             self.multi_modal_processor.pack_outputs = lambda x: x
             self.multi_modal_processor.reasoning_parser = None
             self.multi_modal_processor.model_status_dict = {}
+            self.multi_modal_processor.cfg = SimpleNamespace(
+                stop_tokens_variant="default",
+                has_bad_words=True,
+                has_logits_processor_think=False,
+                force_disable_thinking=False,
+                preserve_prompt_token_ids=False,
+                set_default_reasoning_max_tokens=False,
+                cap_response_max_tokens=False,
+            )
+            self.multi_modal_processor._tokenize_request = lambda request: {
+                "input_ids": np.array([101, 9012, 3456, 102])
+            }
+            self.multi_modal_processor._process_post_tokens = lambda request, outputs: None
 
         self.engine_client = Mock()
         self.engine_client.connection_initialized = False

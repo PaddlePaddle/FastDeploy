@@ -1,7 +1,7 @@
 """
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026  PaddlePaddle Authors. All Rights Reserved.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
+# Licensed under the Apache License, Version 2.0 (the "License"
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -14,10 +14,17 @@
 # limitations under the License.
 """
 
-# Backward compatibility: this module has been migrated to
-# fastdeploy.input.image_processors.qwen3_processor
-# This file will be removed in a future version.
+try:
+    import nvtx
 
-from fastdeploy.input.image_processors.qwen3_processor import (  # noqa: F401
-    ImageProcessor,
-)
+    _NVTX_AVAILABLE = True
+except ImportError:
+    _NVTX_AVAILABLE = False
+
+
+def nvtx_range(name, color="blue"):
+    if _NVTX_AVAILABLE:
+        return nvtx.annotate(name, color=color)
+    import contextlib
+
+    return contextlib.nullcontext()
