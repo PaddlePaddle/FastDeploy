@@ -880,6 +880,7 @@ class GPUModelRunner(ModelRunnerBase):
                         enable_thinking = bool(request.get("enable_thinking"))
                         logger.debug(f"request {request.request_id} with {enable_thinking=} at idx {idx}")
                         self.share_inputs["enable_thinking"][idx : idx + 1, :] = enable_thinking
+                        async_set_value(self.share_inputs["reasoning_status"][idx : idx + 1], 0)
                         if enable_thinking:
                             self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
                             if request.get("reasoning_max_tokens") is not None:
