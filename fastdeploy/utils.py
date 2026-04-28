@@ -38,7 +38,7 @@ from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
 from logging.handlers import BaseRotatingHandler
 from pathlib import Path
-from typing import Any, Literal, TypeVar, Union
+from typing import Any, Dict, Literal, TypeVar, Union
 
 import numpy as np
 import paddle
@@ -1044,10 +1044,12 @@ class StatefulSemaphore:
         }
 
 
-def parse_quantization(value: str):
+def parse_quantization(value: Union[Dict, str]) -> Dict:
     """
     Parse a JSON string into a dictionary.
     """
+    if isinstance(value, dict):
+        return value
     if value is None:
         value = "null"
     try:
