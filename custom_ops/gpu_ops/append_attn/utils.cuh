@@ -445,6 +445,9 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
   } else if (group_size == 16) {                             \
     constexpr size_t GROUP_SIZE = 16;                        \
     __VA_ARGS__                                              \
+  } else if (group_size == 24) {                             \
+    constexpr size_t GROUP_SIZE = 24;                        \
+    __VA_ARGS__                                              \
   } else {                                                   \
     PD_THROW("not support the group_size", group_size);      \
   }
