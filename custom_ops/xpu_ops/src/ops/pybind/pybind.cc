@@ -57,6 +57,15 @@ void GetOutputKVSignal(const paddle::Tensor& x,
                        int64_t rank_id,
                        bool wait_flag);
 
+std::vector<paddle::Tensor> TopPSamplingFromProbsKernel(
+    const paddle::Tensor& probs,
+    const paddle::Tensor& top_p_arr,
+    float top_p_val,
+    bool deterministic,
+    int64_t philox_seed,
+    int64_t philox_offset,
+    int64_t topk);
+
 std::vector<paddle::Tensor> SplitEmbeddingKVCacheBlockAttn(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
@@ -1835,6 +1844,17 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def(
       "quant2d_per_token", &Quant2dPerToken, py::arg("x"), "quant x per token");
+
+  m.def("top_p_sampling_from_probs_xpu",
+        &TopPSamplingFromProbsKernel,
+        py::arg("probs"),
+        py::arg("top_p_arr"),
+        py::arg("top_p_val"),
+        py::arg("deterministic"),
+        py::arg("philox_seed"),
+        py::arg("philox_offset"),
+        py::arg("topk"),
+        "top_p_sampling_from_probs in XPU");
 
   m.def("xpu_moe_layer",
         &MoeLayer,

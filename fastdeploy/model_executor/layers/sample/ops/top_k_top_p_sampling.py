@@ -27,6 +27,7 @@ if current_platform.is_gcu():
 from paddleformers.utils.log import logger
 
 _DETERMINISTIC_RNG_SEED = 42
+_xpu_rng = paddle.framework.core.default_cpu_generator()
 
 
 def _reset_cuda_generator_for_determinism():
@@ -180,6 +181,8 @@ def rejection_top_p_sampling(
                 rejection_top_p_sampling,
                 top_k_renorm_probs,
             )
+        if current_platform.is_xpu():
+            return _xpu_top_p_sampling_from_probs(x, top_p, seed)
 
         if top_k_list and not any(x > 0 for x in top_k_list):
             ids = rejection_top_p_sampling(
@@ -230,3 +233,33 @@ def min_p_sampling(
             invalid_token_mask = probs < adjusted_min_p.reshape([-1, 1])
             probs = paddle.where(invalid_token_mask, paddle.full_like(probs, 0.0), probs)
         return probs
+
+
+def _xpu_top_p_sampling_from_probs(
+    probs: paddle.Tensor,
+    top_p: paddle.Tensor,
+    topp_seed: int = 0,
+) -> paddle.Tensor:
+    """Call infer_ops::top_p_sampling_from_probs via XPU custom op."""
+    from fastdeploy.model_executor.ops.xpu import top_p_sampling_from_probs_xpu
+
+    # Ensure probs is float32 (infer_ops only instantiates <float, int32_t>)
+    if probs.dtype != paddle.float32:
+        probs = probs.cast(paddle.float32)
+    if top_p.dtype != paddle.float32:
+        top_p = top_p.cast(paddle.float32)
+
+    philox_offset = paddle.randint(0, 131071, dtype=paddle.int32, place=paddle.CPUPlace(), generator=_xpu_rng).item()
+
+    output = top_p_sampling_from_probs_xpu(
+        probs,
+        top_p,
+        1.0,  # top_p_val (use top_p_arr per-row, set scalar to 1.0)
+        True,  # deterministic
+        topp_seed,
+        philox_offset,
+        0,  # topk
+    )
+
+    # infer_ops returns int32, downstream expects int64
+    return output.cast(paddle.int64)
