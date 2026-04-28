@@ -16,6 +16,7 @@
 
 from typing import Any, Dict, Optional
 
+from fastdeploy.utils import parse_quantization
 from fastdeploy.worker.worker_process import initialize_fd_config
 
 
@@ -107,7 +108,7 @@ class RolloutModelConfig:
         self.enable_expert_parallel = enable_expert_parallel
         self.data_parallel_size = data_parallel_size
         self.ori_vocab_size = ori_vocab_size
-        self.quantization = quantization
+        self.quantization = parse_quantization(quantization)
         self.guided_decoding_backend = guided_decoding_backend
         self.disable_any_whitespace = disable_any_whitespace
         self.enable_logprob = enable_logprob

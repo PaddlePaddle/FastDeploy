@@ -1048,6 +1048,8 @@ def parse_quantization(value: str):
     """
     Parse a JSON string into a dictionary.
     """
+    if value is None:
+        value = "null"
     try:
         return json.loads(value)
     except ValueError:
