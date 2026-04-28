@@ -221,7 +221,15 @@ def test_speculative_sampler_logprobs():
     for logprobs_mode in logprobs_mode_list:
         fd_config.model_config.logprobs_mode = logprobs_mode
         sampler = SpeculativeSampler(fd_config)
-        sampler(logits, sampling_metadata, max_model_len, share_inputs, token_num_output_cpu, increment_value)
+        sampler(
+            logits,
+            sampling_metadata,
+            max_model_len,
+            share_inputs,
+            token_num_output_cpu,
+            increment_value,
+            real_bsz=batch_size,
+        )
 
 
 def test_mtp_sampler():

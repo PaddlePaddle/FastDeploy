@@ -77,6 +77,9 @@ class DummyTokenizer:
     def convert_tokens_to_ids(self, tokens):
         return [self._value(token) for token in tokens]
 
+    def encode(self, text, add_special_tokens=True, **kwargs):
+        return self.convert_tokens_to_ids(self.tokenize(text))
+
     def decode(self, token_ids, **kwargs):
         return " ".join(str(t) for t in token_ids)
 
@@ -298,7 +301,7 @@ class DummyRequest:
         self.set(key, value)
 
 
-class DataProcessorTestCase(unittest.TestCase):
+class TextProcessorTestCase(unittest.TestCase):
     @staticmethod
     def create_dummy_reasoning(tokenizer, reasoning_content="think", content="content"):
         class DummyReasoning:
@@ -359,34 +362,7 @@ class DataProcessorTestCase(unittest.TestCase):
         module, cleanup = _import_text_processor()
         self.text_processor_module = module
         self.addCleanup(cleanup)
-        self.processor = self.text_processor_module.DataProcessor("stub-model")
-
-    def test_base_data_processor_contract(self):
-        text_processor_module = self.text_processor_module
-
-        class MinimalProcessor(text_processor_module.BaseDataProcessor):
-            def __init__(self):
-                self.generation_config = SimpleNamespace(
-                    top_p=0.5,
-                    temperature=0.6,
-                    repetition_penalty=1.1,
-                    frequency_penalty=0.2,
-                    presence_penalty=0.3,
-                )
-                super().__init__()
-
-            def _load_tokenizer(self):
-                return DummyTokenizer()
-
-        processor = MinimalProcessor()
-        defaults = processor._apply_default_parameters({})
-        self.assertAlmostEqual(defaults["top_p"], 0.5)
-        with self.assertRaises(NotImplementedError):
-            processor.text2ids("text")
-        with self.assertRaises(NotImplementedError):
-            processor.messages2ids([])
-        with self.assertRaises(NotImplementedError):
-            processor.ids2tokens([1], "task")
+        self.processor = self.text_processor_module.TextProcessor("stub-model")
 
     def test_process_request_dict_prompt_defaults(self):
         request = {"prompt": "hi", "temperature": 0, "top_p": 0, "stop": ["stop"]}
@@ -412,6 +388,89 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(processed["system"], "system prompt")
         self.assertTrue(processed["enable_thinking"])
         self.assertEqual(processed["prompt_tokens"], "system prompt hello")
+
+    def test_process_request_dict_messages_template_batch_encoding(self):
+        """encode() 返回 BatchEncoding-like 对象时，messages2ids 应正确提取 input_ids"""
+
+        class BatchEncodingLike:
+            """模拟 HuggingFace BatchEncoding (UserDict 子类，hasattr input_ids = True)"""
+
+            def __init__(self, ids):
+                self.input_ids = ids
+
+            def __getitem__(self, key):
+                return getattr(self, key)
+
+        class BatchEncodingTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return BatchEncodingLike([len(text)])
+
+        module = self.text_processor_module
+        processor = module.TextProcessor("stub-model")
+        processor.tokenizer = BatchEncodingTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+
+    def test_process_request_dict_messages_template_tensor(self):
+        """encode() 返回带 tolist() 的 tensor-like 对象时，messages2ids 应正确转换为 list"""
+
+        class TensorLike:
+            """模拟 numpy/paddle/torch tensor，有 tolist() 方法"""
+
+            def __init__(self, ids):
+                self._ids = ids
+
+            def tolist(self):
+                return self._ids
+
+        class TensorTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return TensorLike([len(text)])
+
+        module = self.text_processor_module
+        processor = module.TextProcessor("stub-model")
+        processor.tokenizer = TensorTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+
+    def test_process_request_dict_messages_template_plain_dict(self):
+        """encode() 返回 plain dict 时，messages2ids 应正确提取 input_ids 而非返回 key 列表"""
+
+        class PlainDictTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return {"input_ids": [len(text)], "attention_mask": [1]}
+
+        module = self.text_processor_module
+        processor = module.TextProcessor("stub-model")
+        processor.tokenizer = PlainDictTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+        # 确保不是 key 列表 ['input_ids', 'attention_mask']
+        self.assertNotIn("input_ids", token_ids)
 
     def test_process_request_dict_handles_sequences(self):
         request = {
@@ -482,7 +541,7 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_clear_request_status_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.decode_status = {"task": [[], [], "transcript"]}
 
         self.assertEqual(processor.clear_request_status("task"), "transcript")
@@ -495,7 +554,7 @@ class DataProcessorTestCase(unittest.TestCase):
             "from_pretrained",
             side_effect=OSError("missing"),
         ):
-            processor = self.text_processor_module.DataProcessor("stub-model")
+            processor = self.text_processor_module.TextProcessor("stub-model")
         self.assertIsNone(processor.generation_config)
 
     def test_process_response_with_reasoning_and_tools(self):
@@ -611,7 +670,7 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(lengths.shape, (0,))
 
     def test_get_pad_id_prefers_eos_when_missing(self):
-        processor = self.text_processor_module.DataProcessor("stub-model")
+        processor = self.text_processor_module.TextProcessor("stub-model")
         llama_tokenizer = DummyLlamaTokenizer()
         llama_tokenizer.pad_token_id = None
         llama_tokenizer.eos_token = 99
@@ -622,13 +681,13 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_load_tokenizer_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         self.assertIsInstance(processor.tokenizer, DummyTokenizer)
 
     def test_text2ids_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         ids = processor.text2ids("hi", max_model_len=5)
         self.assertEqual(ids.tolist(), [2, 0, 0, 0, 0][: len(ids)])
 

@@ -432,7 +432,7 @@ def save_output_normal(
     share_inputs["last_preempted_idx"][:] = 0
 
 
-def post_process_specualate(
+def post_process_speculate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
@@ -521,17 +521,18 @@ def post_process_specualate(
     )
 
 
-def save_output_specualate(
+def save_output_speculate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
-    proposer_share_inputs: ProposerInputBatch,
     local_rank: int,
     tensor_parallel_rank: int,
     save_each_rank: bool = False,
     is_mtp_prefill: bool = False,
+    proposer_share_inputs: Optional[ProposerInputBatch] = None,
 ):
     if is_mtp_prefill:
+        assert proposer_share_inputs is not None
         if tensor_parallel_rank == 0:
             skip_chunk_prefill = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
             if sampler_output.logprobs_tensors is None:
@@ -684,7 +685,7 @@ def post_process(
         )
     else:
         if speculative_decoding:
-            post_process_specualate(
+            post_process_speculate(
                 sampler_or_pooler_output,
                 model_output,
                 share_inputs,

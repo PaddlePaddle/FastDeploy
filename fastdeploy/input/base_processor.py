@@ -15,11 +15,11 @@
 """Abstract base class for all data processors.
 
 Provides unified response-processing logic (ids2tokens, process_response_dict*,
-update_stop_seq, update_bad_words, pad_batch_data, …) extracted from the two
-existing concrete processors:
+update_stop_seq, update_bad_words, pad_batch_data, …) shared by all concrete
+processors:
 
-    DataProcessor      (fastdeploy/input/text_processor.py)
-    Ernie4_5Processor  (fastdeploy/input/ernie4_5_processor.py)
+    TextProcessor       (fastdeploy/input/text_processor.py)
+    MultiModalProcessor (fastdeploy/input/multimodal_processor.py)
 
 Key design decisions
 --------------------
@@ -28,16 +28,12 @@ Key design decisions
   of each subclass.  Subclasses that do not call ``super().__init__()`` must
   initialise those three attributes themselves.
 
-* ``process_response_dict`` reads ``stream`` from ``kwargs`` (DataProcessor
-  convention).  Callers that previously passed ``stream`` as a positional
-  argument (ERNIE convention) must be updated to use ``stream=`` keyword.
+* ``process_response_dict`` reads ``stream`` from ``kwargs`` (default: True).
 
-* EOS removal uses ``in self.eos_token_ids`` (list membership).  ERNIE's
-  ``eos_token_ids`` contains exactly one element, so this is equivalent to the
-  ``==`` check it currently uses.
+* EOS removal uses ``in self.eos_token_ids`` (list membership).
 
 * tool_parser result never updates ``outputs["text"]``; only ``tool_calls`` is
-  set.  This matches DataProcessor behaviour.
+  set.
 
 * ``ids2tokens`` always returns a three-tuple
   ``(delta_text, previous_token_ids, previous_texts)``.  The HF-tokeniser
@@ -163,8 +159,19 @@ class BaseTextProcessor(ABC):
         )
         request["prompt_tokens"] = spliced_message
         req_id = request.get("request_id", None) if isinstance(request, dict) else None
-        tokens = self.tokenizer.tokenize(spliced_message)
-        token_ids = self.tokenizer.convert_tokens_to_ids(tokens)
+        if self.tokenizer_type == "ernie4_5":
+            # NOTE: ernie4_5 tokenizer will hang when meet long input when use .encode()
+            token_ids = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(spliced_message))
+        else:
+            token_ids = self.tokenizer.encode(spliced_message, add_special_tokens=False)
+            if hasattr(token_ids, "input_ids") or (isinstance(token_ids, dict) and "input_ids" in token_ids):
+                token_ids = token_ids["input_ids"]
+                if hasattr(token_ids, "ndim") and token_ids.ndim > 1:
+                    token_ids = token_ids[0]
+            if hasattr(token_ids, "tolist"):
+                token_ids = token_ids.tolist()
+            if not isinstance(token_ids, list):
+                token_ids = list(token_ids)
         log_request(
             level=1,
             message="req_id:{req_id}, token_ids: {token_ids}",
@@ -242,6 +249,17 @@ class BaseTextProcessor(ABC):
 
         ``stream`` is read from ``kwargs`` (default: True).
         """
+        # Error responses (e.g., preemption) have outputs=None or error_code!=200.
+        # Skip token decoding and return as-is to let upstream error handling take over.
+        if isinstance(response_dict, dict):
+            outputs = response_dict.get("outputs")
+            error_code = response_dict.get("error_code", 200)
+        else:
+            outputs = getattr(response_dict, "outputs", None)
+            error_code = getattr(response_dict, "error_code", 200)
+        if outputs is None or error_code != 200:
+            return response_dict
+
         stream = kwargs.get("stream", True)
         if stream:
             return self.process_response_dict_streaming(response_dict, **kwargs)

@@ -21,6 +21,7 @@ import numpy as np
 import paddle
 
 import fastdeploy.metrics.trace as tracing
+from fastdeploy.entrypoints.openai.protocol import CompletionResponse
 from fastdeploy.entrypoints.openai.serving_completion import OpenAIServingCompletion
 from fastdeploy.utils import ErrorCode, ParameterError
 from fastdeploy.worker.output import LogprobsLists, LogprobsTensors, SpeculateMetrics
@@ -171,7 +172,8 @@ class TestServingCompletion(unittest.IsolatedAsyncioTestCase):
         ec.connection_manager.get_connection = AsyncMock(return_value=(Mock(), rq))
         serving = OpenAIServingCompletion(ec, None, "pid", None, -1)
         res = await serving.completion_full_generator(_make_request(), 1, "req", 1, "m", [[1, 2]], [["p1", "p2"]], [2])
-        self.assertIsNone(res)
+        self.assertIsNotNone(res)
+        self.assertIsInstance(res, CompletionResponse)
         ec.connection_manager.cleanup_request.assert_called_once_with("req")
 
     def test_logprobs_helpers(self):

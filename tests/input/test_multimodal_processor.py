@@ -1284,5 +1284,534 @@ class TestRequest2ids(unittest.TestCase):
         self.assertIs(call_args[0][0], request)
 
 
+# =====================================================================
+# process_response_dict – dispatch
+# =====================================================================
+
+
+class TestProcessResponseDictDispatch(unittest.TestCase):
+    """Test process_response_dict dispatches to streaming / normal."""
+
+    def test_stream_true_dispatches_to_streaming(self):
+        proc = _make_processor(QWEN_VL)
+        proc.process_response_dict_streaming = MagicMock(return_value={"text": "ok"})
+        result = proc.process_response_dict({"data": 1, "outputs": {"token_ids": [1]}}, stream=True)
+        proc.process_response_dict_streaming.assert_called_once()
+        self.assertEqual(result, {"text": "ok"})
+
+    def test_stream_false_dispatches_to_normal(self):
+        proc = _make_processor(ERNIE4_5_VL)
+        proc.process_response_dict_normal = MagicMock(return_value={"text": "ok"})
+        result = proc.process_response_dict({"data": 1, "outputs": {"token_ids": [1]}}, stream=False)
+        proc.process_response_dict_normal.assert_called_once()
+        self.assertEqual(result, {"text": "ok"})
+
+    def test_default_stream_is_true(self):
+        proc = _make_processor(QWEN3_VL)
+        proc.process_response_dict_streaming = MagicMock(return_value={})
+        proc.process_response_dict({"outputs": {"token_ids": [1]}})
+        proc.process_response_dict_streaming.assert_called_once()
+
+
+# =====================================================================
+# process_response_dict_normal
+# =====================================================================
+
+
+class TestProcessResponseDictNormal(unittest.TestCase):
+    """Tests for the non-streaming response handler."""
+
+    def _make(self, reasoning=False, tool=False):
+        proc = _make_processor(ERNIE4_5_VL)
+        # stub ids2tokens to return deterministic values
+        proc.ids2tokens = lambda token_ids, task_id: ("decoded", [], "prev")
+        proc.model_status_dict = {"req-1": "think_start"}
+        proc.decode_status = {"req-1": "some_state"}
+
+        if reasoning:
+            mock_rp = MagicMock()
+            mock_rp.extract_reasoning_content.return_value = ("reasoning text", "final text")
+            proc.reasoning_parser = mock_rp
+            proc.tokenizer.tokenize.return_value = ["r1", "r2", "r3"]
+
+        if tool:
+
+            class _ToolInfo:
+                tools_called = True
+                tool_calls = [{"name": "my_tool"}]
+
+            mock_tp_instance = MagicMock()
+            mock_tp_instance.extract_tool_calls.return_value = _ToolInfo()
+            mock_tp_cls = MagicMock(return_value=mock_tp_instance)
+            proc.tool_parser_obj = mock_tp_cls
+
+        return proc
+
+    def test_basic_finished(self):
+        """Finished response builds full_text and cleans decode_status."""
+        proc = self._make()
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10, 11]},
+        }
+        result = proc.process_response_dict_normal(resp)
+        self.assertEqual(result["outputs"]["text"], "prevdecoded")
+        self.assertEqual(result["outputs"]["completion_tokens"], "prevdecoded")
+        self.assertNotIn("req-1", proc.decode_status)
+        self.assertNotIn("req-1", proc.model_status_dict)
+
+    def test_eos_stripped_when_finished(self):
+        """EOS token at the end is removed when finished and include_stop_str_in_output is False."""
+        proc = self._make()
+        eos = proc.eos_token_ids[0]  # 2
+        called_with = {}
+
+        def mock_ids2tokens(token_ids, task_id):
+            called_with["token_ids"] = list(token_ids)
+            return ("decoded", [], "prev")
+
+        proc.ids2tokens = mock_ids2tokens
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10, eos]},
+        }
+        proc.process_response_dict_normal(resp, include_stop_str_in_output=False)
+        # EOS should have been stripped before ids2tokens was called
+        self.assertEqual(called_with["token_ids"], [10])
+
+    def test_eos_kept_when_include_stop_str(self):
+        """EOS is kept when include_stop_str_in_output=True."""
+        proc = self._make()
+        eos = proc.eos_token_ids[0]
+        called_with = {}
+
+        def mock_ids2tokens(token_ids, task_id):
+            called_with["token_ids"] = list(token_ids)
+            return ("decoded", [], "prev")
+
+        proc.ids2tokens = mock_ids2tokens
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10, eos]},
+        }
+        proc.process_response_dict_normal(resp, include_stop_str_in_output=True)
+        self.assertEqual(called_with["token_ids"], [10, eos])
+
+    def test_not_finished_returns_without_text(self):
+        """Non-finished response does not set completion_tokens / text."""
+        proc = self._make()
+        resp = {
+            "finished": False,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        result = proc.process_response_dict_normal(resp)
+        self.assertNotIn("text", result["outputs"])
+        # decode_status should NOT be cleaned up
+        self.assertIn("req-1", proc.decode_status)
+
+    def test_direct_decode_uses_tokenizer_decode(self):
+        """direct_decode=True uses tokenizer.decode instead of ids2tokens."""
+        proc = self._make()
+        proc.tokenizer.decode.return_value = "direct_result"
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10, 11]},
+        }
+        result = proc.process_response_dict_normal(resp, direct_decode=True)
+        proc.tokenizer.decode.assert_called_with([10, 11])
+        self.assertEqual(result["outputs"]["text"], "direct_result")
+
+    def test_with_reasoning_parser(self):
+        """Reasoning parser extracts reasoning_content and adjusts text."""
+        proc = self._make(reasoning=True)
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        result = proc.process_response_dict_normal(resp)
+        self.assertEqual(result["outputs"]["text"], "final text")
+        self.assertEqual(result["outputs"]["reasoning_content"], "reasoning text")
+        self.assertEqual(result["outputs"]["reasoning_token_num"], 3)
+
+    def test_with_tool_parser(self):
+        """Tool parser extracts tool_calls from full_text."""
+        proc = self._make(tool=True)
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        result = proc.process_response_dict_normal(resp)
+        self.assertIn("tool_calls", result["outputs"])
+        self.assertEqual(result["outputs"]["tool_calls"][0]["name"], "my_tool")
+
+
+# =====================================================================
+# process_response_dict_streaming
+# =====================================================================
+
+
+class TestProcessResponseDictStreaming(unittest.TestCase):
+    """Tests for the streaming response handler."""
+
+    def _make(self, reasoning=False, tool=False):
+        proc = _make_processor(QWEN_VL)
+        proc.ids2tokens = lambda token_ids, task_id: ("delta", [2, 3], "previous")
+        proc.model_status_dict = {"req-1": "think_start"}
+        proc.decode_status = {"req-1": "state"}
+
+        if reasoning:
+            mock_rp = MagicMock()
+
+            class _RD:
+                reasoning_content = "think"
+                content = "answer"
+
+            mock_rp.extract_reasoning_content_streaming.return_value = _RD()
+            proc.reasoning_parser = mock_rp
+            proc.tokenizer.tokenize.return_value = ["t1", "t2"]
+
+        if tool:
+
+            class _TD:
+                tool_calls = [{"name": "stream_tool"}]
+                content = "tool_text"
+
+            mock_tp_instance = MagicMock()
+            mock_tp_instance.extract_tool_calls_streaming.return_value = _TD()
+            mock_tp_cls = MagicMock(return_value=mock_tp_instance)
+            proc.tool_parser_obj = mock_tp_cls
+
+        return proc
+
+    def test_basic_non_finished(self):
+        """Non-finished streaming sets delta text fields correctly."""
+        proc = self._make()
+        resp = {
+            "finished": False,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10, 11]},
+        }
+        result = proc.process_response_dict_streaming(resp)
+        self.assertEqual(result["outputs"]["text"], "delta")
+        self.assertEqual(result["outputs"]["completion_tokens"], "delta")
+        self.assertFalse(result["outputs"]["skipped"])
+        self.assertIsNone(result["outputs"]["tool_calls"])
+        self.assertEqual(result["outputs"]["reasoning_content"], "")
+
+    def test_finished_cleans_up_status(self):
+        """Finished streaming cleans up decode_status and model_status_dict."""
+        proc = self._make()
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        proc.process_response_dict_streaming(resp)
+        self.assertNotIn("req-1", proc.decode_status)
+        self.assertNotIn("req-1", proc.model_status_dict)
+
+    def test_finished_cleans_up_tool_parser_dict(self):
+        """Finished streaming cleans up tool_parser_dict entry."""
+        proc = self._make(tool=True)
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        proc.process_response_dict_streaming(resp)
+        self.assertNotIn("req-1", proc.tool_parser_dict)
+
+    def test_eos_stripped_when_finished(self):
+        """EOS token stripped on finished streaming response."""
+        proc = self._make()
+        eos = proc.eos_token_ids[0]
+        called_with = {}
+
+        def mock_ids2tokens(token_ids, task_id):
+            called_with["token_ids"] = list(token_ids)
+            return ("delta", [2, 3], "prev")
+
+        proc.ids2tokens = mock_ids2tokens
+        resp = {
+            "finished": True,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10, eos]},
+        }
+        proc.process_response_dict_streaming(resp)
+        self.assertEqual(called_with["token_ids"], [10])
+
+    def test_with_reasoning_parser(self):
+        """Reasoning parser populates reasoning_content and adjusts text."""
+        proc = self._make(reasoning=True)
+        resp = {
+            "finished": False,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        result = proc.process_response_dict_streaming(resp)
+        self.assertEqual(result["outputs"]["reasoning_content"], "think")
+        self.assertEqual(result["outputs"]["text"], "answer")
+        self.assertEqual(result["outputs"]["reasoning_token_num"], 2)
+
+    def test_reasoning_parser_returns_none_sets_skipped(self):
+        """When reasoning parser returns None on non-end, skipped=True."""
+        proc = _make_processor(ERNIE4_5_VL)
+        proc.ids2tokens = lambda tids, tid: ("delta", [2], "prev")
+        proc.model_status_dict = {"req-1": "s"}
+        proc.decode_status = {"req-1": "st"}
+        mock_rp = MagicMock()
+        mock_rp.extract_reasoning_content_streaming.return_value = None
+        proc.reasoning_parser = mock_rp
+
+        resp = {
+            "finished": False,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        result = proc.process_response_dict_streaming(resp)
+        self.assertTrue(result["outputs"]["skipped"])
+
+    def test_with_tool_parser(self):
+        """Tool parser extracts tool_calls in streaming mode."""
+        proc = self._make(tool=True)
+        resp = {
+            "finished": False,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        result = proc.process_response_dict_streaming(resp)
+        self.assertEqual(result["outputs"]["tool_calls"][0]["name"], "stream_tool")
+        self.assertEqual(result["outputs"]["text"], "tool_text")
+        self.assertFalse(result["outputs"]["skipped"])
+
+    def test_tool_parser_returns_none_sets_skipped(self):
+        """When tool parser returns None on non-end, skipped=True."""
+        proc = _make_processor(QWEN3_VL)
+        proc.ids2tokens = lambda tids, tid: ("delta", [2], "prev")
+        proc.model_status_dict = {"req-1": "s"}
+        proc.decode_status = {"req-1": "st"}
+        mock_tp_instance = MagicMock()
+        mock_tp_instance.extract_tool_calls_streaming.return_value = None
+        mock_tp_cls = MagicMock(return_value=mock_tp_instance)
+        proc.tool_parser_obj = mock_tp_cls
+
+        resp = {
+            "finished": False,
+            "request_id": "req-1",
+            "outputs": {"token_ids": [10]},
+        }
+        result = proc.process_response_dict_streaming(resp)
+        self.assertTrue(result["outputs"]["skipped"])
+
+
+# =====================================================================
+# Cache lifecycle – get_processor_cache / update_processor_cache / _update_mm_cache
+# =====================================================================
+
+
+class TestGetProcessorCache(unittest.TestCase):
+    """Tests for MultiModalProcessor.get_processor_cache."""
+
+    def test_sends_pickled_hashes_and_returns_items(self):
+        import pickle
+
+        proc = _make_processor(QWEN_VL)
+        mock_socket = MagicMock()
+        cached = [{"data": "img_pixels"}, {"data": "vid_pixels"}]
+        mock_socket.recv_multipart.return_value = (b"", pickle.dumps(cached))
+
+        result = proc.get_processor_cache(mock_socket, ["hash1", "hash2"])
+        # Verify send
+        call_args = mock_socket.send_multipart.call_args[0][0]
+        self.assertEqual(call_args[0], b"")
+        self.assertEqual(pickle.loads(call_args[1]), ["hash1", "hash2"])
+        # Verify return
+        self.assertEqual(result, cached)
+
+    def test_empty_hashes(self):
+        import pickle
+
+        proc = _make_processor(ERNIE4_5_VL)
+        mock_socket = MagicMock()
+        mock_socket.recv_multipart.return_value = (b"", pickle.dumps([]))
+
+        result = proc.get_processor_cache(mock_socket, [])
+        self.assertEqual(result, [])
+
+
+class TestUpdateProcessorCache(unittest.TestCase):
+    """Tests for MultiModalProcessor.update_processor_cache."""
+
+    def test_sends_pickled_hashes_and_items(self):
+        import pickle
+
+        proc = _make_processor(QWEN3_VL)
+        mock_socket = MagicMock()
+        hashes = ["h1", "h2"]
+        items = [("pixels1", {"thw": (1, 8, 8)}), ("pixels2", {"thw": (2, 4, 4)})]
+
+        proc.update_processor_cache(mock_socket, hashes, items)
+
+        call_args = mock_socket.send_multipart.call_args[0][0]
+        self.assertEqual(call_args[0], b"")
+        sent_data = pickle.loads(call_args[1])
+        self.assertEqual(sent_data[0], hashes)
+        self.assertEqual(sent_data[1], items)
+
+
+class TestUpdateMmCache(unittest.TestCase):
+    """Tests for MultiModalProcessor._update_mm_cache."""
+
+    def test_skips_missing_idx_and_caches_rest(self):
+        proc = _make_processor(QWEN_VL)
+        mock_dealer = MagicMock()
+
+        mm_items = [
+            {"type": "image", "uuid": "img0"},  # idx 0 – missing
+            {"type": "image", "uuid": "img1"},  # idx 1 – to cache
+            {"type": "video", "uuid": "vid0"},  # idx 2 – to cache
+        ]
+        outputs = {
+            "images": [np.array([1]), np.array([2]), np.array([3])],
+            "grid_thw": [
+                np.array([[1, 8, 8]]),  # 2D
+                np.array([1, 4, 4]),  # 1D
+                np.array([[2, 6, 6]]),  # 2D
+            ],
+            "mm_hashes": ["img0_hash", "img1_hash", "vid0_hash"],
+            "fps": [None, None, 6],
+        }
+
+        proc._update_mm_cache(mock_dealer, missing_idx=[0], mm_items=mm_items, outputs=outputs)
+
+        proc.update_processor_cache = MagicMock()
+        # Re-run with the mock to inspect args
+        proc._update_mm_cache(mock_dealer, missing_idx=[0], mm_items=mm_items, outputs=outputs)
+
+        call_args = proc.update_processor_cache.call_args
+        cached_hashes = call_args[0][1]
+        cached_items = call_args[0][2]
+        self.assertEqual(cached_hashes, ["img1_hash", "vid0_hash"])
+        self.assertEqual(cached_items[0][1]["thw"], (1, 4, 4))
+        self.assertEqual(cached_items[1][1]["thw"], (2, 6, 6))
+        self.assertEqual(cached_items[1][1]["fps"], 6)
+
+    def test_no_items_to_cache_skips_update(self):
+        """When all items are missing, update_processor_cache is not called."""
+        proc = _make_processor(ERNIE4_5_VL)
+        proc.update_processor_cache = MagicMock()
+
+        mm_items = [{"type": "image", "uuid": "img0"}]
+        outputs = {
+            "images": [np.array([1])],
+            "grid_thw": [np.array([1, 8, 8])],
+            "mm_hashes": ["h0"],
+        }
+        proc._update_mm_cache(MagicMock(), missing_idx=[0], mm_items=mm_items, outputs=outputs)
+        proc.update_processor_cache.assert_not_called()
+
+    def test_1d_grid_thw(self):
+        """1D grid_thw array is handled correctly."""
+        proc = _make_processor(QWEN3_VL)
+        proc.update_processor_cache = MagicMock()
+
+        mm_items = [{"type": "image", "uuid": "img0"}]
+        outputs = {
+            "images": [np.array([1])],
+            "grid_thw": [np.array([1, 16, 16])],
+            "mm_hashes": ["hash0"],
+        }
+        proc._update_mm_cache(MagicMock(), missing_idx=[], mm_items=mm_items, outputs=outputs)
+
+        cached_items = proc.update_processor_cache.call_args[0][2]
+        self.assertEqual(cached_items[0][1]["thw"], (1, 16, 16))
+
+    def test_2d_grid_thw(self):
+        """2D grid_thw array extracts first row."""
+        proc = _make_processor(QWEN_VL)
+        proc.update_processor_cache = MagicMock()
+
+        mm_items = [{"type": "image", "uuid": "img0"}]
+        outputs = {
+            "images": [np.array([1])],
+            "grid_thw": [np.array([[3, 12, 12]])],
+            "mm_hashes": ["hash0"],
+        }
+        proc._update_mm_cache(MagicMock(), missing_idx=[], mm_items=mm_items, outputs=outputs)
+
+        cached_items = proc.update_processor_cache.call_args[0][2]
+        self.assertEqual(cached_items[0][1]["thw"], (3, 12, 12))
+
+
+# =====================================================================
+# _extract_mm_items with cache enabled
+# =====================================================================
+
+
+class TestExtractMmItemsWithCache(unittest.TestCase):
+    """Tests for _extract_mm_items when processor cache is enabled."""
+
+    @patch("fastdeploy.input.multimodal_processor.zmq")
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_cache_hit_fills_missing_data(self, mock_parse, mock_zmq):
+        """Missing data items are filled from processor cache."""
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "data": None, "uuid": "missing_img"},
+                    {"type": "image", "data": "present_data", "uuid": "present_img"},
+                ],
+            }
+        ]
+        proc = _make_processor(QWEN_VL)
+        proc.enable_processor_cache = True
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        proc.get_processor_cache = MagicMock(return_value=["cached_data"])
+
+        fake_socket = MagicMock()
+        mock_zmq.Context.return_value.socket.return_value = fake_socket
+        mock_zmq.DEALER = "DEALER"
+
+        request = {"messages": [{"role": "user", "content": "test"}]}
+        images, videos, img_uuid, vid_uuid, dealer, missing_idx, mm_items = proc._extract_mm_items(request)
+
+        proc.get_processor_cache.assert_called_once_with(fake_socket, ["missing_img"])
+        self.assertEqual(images, ["cached_data", "present_data"])
+        self.assertEqual(missing_idx, [0])
+
+    @patch("fastdeploy.input.multimodal_processor.zmq")
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_cache_miss_raises(self, mock_parse, mock_zmq):
+        """Missing item not found in cache raises ValueError."""
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "data": None, "uuid": "no_cache"},
+                ],
+            }
+        ]
+        proc = _make_processor(ERNIE4_5_VL)
+        proc.enable_processor_cache = True
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        proc.get_processor_cache = MagicMock(return_value=[None])
+
+        fake_socket = MagicMock()
+        mock_zmq.Context.return_value.socket.return_value = fake_socket
+        mock_zmq.DEALER = "DEALER"
+
+        request = {"messages": [{"role": "user", "content": "test"}]}
+        with self.assertRaisesRegex(ValueError, "Missing item 0 not found in processor cache"):
+            proc._extract_mm_items(request)
+
+
 if __name__ == "__main__":
     unittest.main()

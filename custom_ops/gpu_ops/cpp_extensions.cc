@@ -691,6 +691,10 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     bool renormalize,
                                     float routed_scaling_factor);
 
+std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
+                                                 const paddle::Tensor& bias,
+                                                 std::string cast_type);
+
 std::vector<paddle::Tensor> NoauxTcRedundant(
     paddle::Tensor& scores,
     paddle::Tensor& scores_with_bias,
@@ -780,6 +784,11 @@ std::vector<paddle::Tensor> BuildSamplingParams(
     const paddle::Tensor& cu_seqlens_q_output,
     const int64_t token_num_output_cpu,
     const int64_t increment_value);
+
+std::vector<paddle::Tensor> BuildSamplingParamLogProb(
+    const paddle::Tensor& input_params,
+    const paddle::Tensor& token_num_per_batch,
+    int64_t token_num_output_cpu);
 
 void SpecTokenPenaltyMultiScores(
     const paddle::Tensor& token_ids_all,
@@ -1694,6 +1703,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
 
+  m.def("fused_cast_sigmoid_bias",
+        &FusedCastSigmoidBias,
+        "Fused cast+sigmoid+bias for MoE gating scores",
+        py::arg("input"),
+        py::arg("bias"),
+        py::arg("cast_type") = std::string("float32"));
+
   m.def("noaux_tc_redundant",
         &NoauxTcRedundant,
         "noaux_tc_redundant for MoE compute");
@@ -1768,6 +1784,10 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("build_sampling_params",
         &BuildSamplingParams,
         "build_sampling_params function");
+
+  m.def("build_sampling_params_logprob",
+        &BuildSamplingParamLogProb,
+        "build_sampling_params_logprob function");
 
   m.def("speculate_get_token_penalty_multi_scores",
         &SpecTokenPenaltyMultiScores,

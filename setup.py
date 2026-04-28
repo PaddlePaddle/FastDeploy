@@ -302,7 +302,6 @@ setup(
             "model_executor/ops/iluvatar/fastdeploy_ops/*",
             "model_executor/models/*",
             "model_executor/layers/*",
-            "input/ernie4_5_vl_processor/utils/*",
             "input/utils/Roboto-Regular.ttf",
             "model_executor/ops/gcu/*",
             "model_executor/ops/gcu/fastdeploy_ops/*",

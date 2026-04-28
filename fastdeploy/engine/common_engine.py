@@ -471,15 +471,19 @@ class EngineService:
         start queue service for engine worker communication
         """
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-            address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
+            engine_worker_queue_address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
+            engine_cache_queue_address = (self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port)
         else:
-            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
+            engine_worker_queue_address = (
+                f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
+            )
+            engine_cache_queue_address = f"/dev/shm/fd_task_queue_{self.cfg.cache_config.local_cache_queue_port}.sock"
 
         if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
             if start_queue:
-                self.llm_logger.info(f"Starting engine worker queue server service at {address}")
+                self.llm_logger.info(f"Starting engine worker queue server service at {engine_worker_queue_address}")
                 self.engine_worker_queue_server = EngineWorkerQueue(
-                    address=address,
+                    address=engine_worker_queue_address,
                     is_server=True,
                     num_client=self.cfg.parallel_config.tensor_parallel_size,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
@@ -489,7 +493,7 @@ class EngineService:
                     self.cfg.parallel_config.local_engine_worker_queue_port = (
                         self.engine_worker_queue_server.get_server_port()
                     )
-                    address = (
+                    engine_worker_queue_address = (
                         self.cfg.master_ip,
                         self.cfg.parallel_config.local_engine_worker_queue_port,
                     )
@@ -500,17 +504,18 @@ class EngineService:
                         f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
                     )
                     self.cache_task_queue = EngineCacheQueue(
-                        address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
+                        address=engine_cache_queue_address,
                         authkey=b"cache_queue_service",
                         is_server=True,
                         num_client=self.cfg.parallel_config.tensor_parallel_size,
                         client_id=-1,
                         local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                     )
-                    self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
+                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
 
         self.engine_worker_queue = EngineWorkerQueue(
-            address=address,
+            address=engine_worker_queue_address,
             is_server=False,
             num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
@@ -982,14 +987,18 @@ class EngineService:
                             status, msg = self.split_connector.check_decode_allocated(task)
                             task.metrics.ask_decode_resource_finish_time = time.time()
                             if not status:
-                                self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                error_msg = (
+                                    f"PD Error: prefill failed to apply for resource from decode, "
+                                    f"req: {task.request_id}, msg:{msg}."
+                                )
+                                self.llm_logger.error(error_msg)
                                 self.scheduler.put_results(
                                     [
                                         RequestOutput(
                                             request_id=task.request_id,
                                             finished=True,
                                             error_code=500,
-                                            error_msg=msg,
+                                            error_msg=error_msg,
                                         )
                                     ]
                                 )
@@ -1098,14 +1107,17 @@ class EngineService:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
                         for task in batch_request:
                             if task.task_type == RequestType.PREEMPTED:
-                                msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
+                                msg = (
+                                    f"PD Error: decode does not have enough blocks for "
+                                    f"preallocated request. req:{task.request_id} "
+                                )
                                 self.llm_logger.error(msg)
                                 self.scheduler.put_results(
                                     [
                                         RequestOutput(
                                             request_id=task.request_id,
                                             finished=True,
-                                            error_code=500,
+                                            error_code=502,
                                             error_msg=msg,
                                         )
                                     ]
@@ -1691,6 +1703,7 @@ class EngineService:
             if not remaining:
                 self.llm_logger.info(f"all {len(target_set)} abort reqs cleaned")
                 return
+            self.llm_logger.debug(f"remaining:{remaining}")
 
             current_count = len(remaining)
             if current_count < prev_remaining_count:
