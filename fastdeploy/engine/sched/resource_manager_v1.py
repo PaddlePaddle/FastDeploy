@@ -793,7 +793,7 @@ class ResourceManagerV1(ResourceManager):
             error_reqs: list[tuple[str, str]] = []
             tokens_per_seq = (
                 (self.config.speculative_config.num_speculative_tokens + 1)
-                if self.config.speculative_config is not None
+                if self.config.speculative_config is not None and self.config.speculative_config.method is not None
                 else 1
             )
             num_running_decode_reqs = sum(1 for req in self.running if self._is_decoding(req))
