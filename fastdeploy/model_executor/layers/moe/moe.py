@@ -95,7 +95,7 @@ def get_moe_scores(
     """
     compute moe scores using e_score_correction_bias.
     """
-    scores = paddle.nn.functional.sigmoid(gating_output)
+    scores = paddle.nn.functional.sigmoid(gating_output)  # fp32
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
     scores_with_bias = scores + e_score_correction_bias
 

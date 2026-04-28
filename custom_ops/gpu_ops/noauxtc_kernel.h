@@ -472,26 +472,33 @@ __device__ void topk_with_k2(T* output,
 }
 
 template <typename T>
-__global__ void topk_with_k2_kernel(T* output,
-                                    const T* input,
-                                    int64_t const num_cases,
-                                    int64_t const n_group,
-                                    int64_t const num_experts_per_group) {
+__device__ void topk_with_k2_kernel(
+    T* output,       // group_scores[n, n_group]
+    const T* input,  // scores_with_bias[n, num_experts]
+    int64_t const num_tokens,
+    int64_t const n_group,
+    int64_t const num_experts,
+    int64_t const num_experts_per_group) {
   int32_t warp_id = threadIdx.x / WARP_SIZE;
   int32_t lane_id = threadIdx.x % WARP_SIZE;
-
-  int32_t case_id = blockIdx.x * NUM_WARPS_PER_BLOCK + warp_id;
-  if (case_id < num_cases) {
-    input += case_id * num_experts_per_group;
-    output += case_id;
-
+  int32_t token_id =
+      blockIdx.x * NUM_WARPS_PER_BLOCK + warp_id;  // token_offset
+#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
+  asm volatile("griddepcontrol.wait;");
+#endif
+  if (token_id < num_tokens) {
     cg::thread_block block = cg::this_thread_block();
     cg::thread_block_tile<32> tile = cg::tiled_partition<32>(block);
-
-#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
-    asm volatile("griddepcontrol.wait;");
-#endif
-    topk_with_k2(output, input, tile, lane_id, num_experts_per_group);
+    int32_t input_offset = token_id * num_experts;
+    int32_t output_offset = token_id * n_group;
+    input += input_offset;    // [num_experts]
+    output += output_offset;  //[n_group]
+#pragma unroll
+    for (int loc_group_idx = 0; loc_group_idx < n_group; loc_group_idx++) {
+      const T* input_prt = input + loc_group_idx * num_experts_per_group;
+      T* output_ptr = output + loc_group_idx;
+      topk_with_k2(output_ptr, input_prt, tile, lane_id, num_experts_per_group);
+    }
   }
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   asm volatile("griddepcontrol.launch_dependents;");
@@ -501,7 +508,7 @@ __global__ void topk_with_k2_kernel(T* output,
 template <typename T, typename IdxT>
 __global__ void group_idx_and_topk_idx_kernel(
     T* scores,
-    T const* group_scores,
+    T* group_scores,
     T* topk_values,
     IdxT* topk_indices,
     const T* scores_with_bias,
@@ -517,6 +524,12 @@ __global__ void group_idx_and_topk_idx_kernel(
   int32_t lane_id = threadIdx.x % WARP_SIZE;
   int32_t case_id =
       blockIdx.x * NUM_WARPS_PER_BLOCK + warp_id;  // one per token
+  topk_with_k2_kernel(group_scores,
+                      scores_with_bias,
+                      num_tokens,
+                      n_group,
+                      num_experts,
+                      num_experts_per_group);
   scores_with_bias += case_id * num_experts;
   scores += case_id * num_experts;
   group_scores += case_id * n_group;
@@ -870,37 +883,38 @@ void invokeNoAuxTc(T* scores,
                    bool const renormalize,
                    double const routed_scaling_factor,
                    cudaStream_t const stream) {
-  int64_t num_cases = num_tokens * n_group;
-  int64_t topk_with_k2_num_blocks = (num_cases - 1) / NUM_WARPS_PER_BLOCK + 1;
+  //   int64_t num_cases = num_tokens * n_group;
+  //   int64_t topk_with_k2_num_blocks = (num_cases - 1) / NUM_WARPS_PER_BLOCK +
+  //   1;
 
-#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  topk_with_k2_kernel<T><<<topk_with_k2_num_blocks, BLOCK_SIZE, 0, stream>>>(
-      group_scores,
-      scores_with_bias,
-      num_cases,
-      n_group,
-      num_experts / n_group);
-#else
-  auto* kernel_instance1 = &topk_with_k2_kernel<T>;
-  cudaLaunchConfig_t config;
-  config.gridDim = topk_with_k2_num_blocks;
-  config.blockDim = BLOCK_SIZE;
-  config.dynamicSmemBytes = 0;
-  config.stream = stream;
-  cudaLaunchAttribute attrs[1];
-  attrs[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
-  attrs[0].val.programmaticStreamSerializationAllowed = false;
-  config.numAttrs = 1;
-  config.attrs = attrs;
-  cudaLaunchKernelEx(&config,
-                     kernel_instance1,
-                     group_scores,
-                     scores_with_bias,
-                     num_cases,
-                     n_group,
-                     num_experts / n_group);
-#endif
-
+  // #ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  //   topk_with_k2_kernel<T><<<topk_with_k2_num_blocks, BLOCK_SIZE, 0,
+  //   stream>>>(
+  //       group_scores,
+  //       scores_with_bias,
+  //       num_cases,
+  //       n_group,
+  //       num_experts / n_group);
+  // #else
+  //   auto* kernel_instance1 = &topk_with_k2_kernel<T>;
+  //   cudaLaunchConfig_t config;
+  //   config.gridDim = topk_with_k2_num_blocks;
+  //   config.blockDim = BLOCK_SIZE;
+  //   config.dynamicSmemBytes = 0;
+  //   config.stream = stream;
+  //   cudaLaunchAttribute attrs[1];
+  //   attrs[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
+  //   attrs[0].val.programmaticStreamSerializationAllowed = false;
+  //   config.numAttrs = 1;
+  //   config.attrs = attrs;
+  //   cudaLaunchKernelEx(&config,
+  //                      kernel_instance1,
+  //                      group_scores,
+  //                      scores_with_bias,
+  //                      num_cases,
+  //                      n_group,
+  //                      num_experts / n_group);
+  // #endif
   int64_t topk_with_k_group_num_blocks =
       (num_tokens - 1) / NUM_WARPS_PER_BLOCK + 1;
   size_t dynamic_smem_in_bytes =
@@ -925,6 +939,8 @@ void invokeNoAuxTc(T* scores,
                                                      renormalize,
                                                      routed_scaling_factor);
 #else
+  cudaLaunchConfig_t config;
+  cudaLaunchAttribute attrs[1];
   auto* kernel_instance2 = &group_idx_and_topk_idx_kernel<T, IdxT>;
   config.gridDim = topk_with_k_group_num_blocks;
   config.blockDim = BLOCK_SIZE;
@@ -973,12 +989,12 @@ void invokeNoAuxTcRedundant(T* scores,
   int64_t num_cases = num_tokens * n_group;
   int64_t topk_with_k2_num_blocks = (num_cases - 1) / NUM_WARPS_PER_BLOCK + 1;
 
-  topk_with_k2_kernel<T><<<topk_with_k2_num_blocks, BLOCK_SIZE, 0, stream>>>(
-      group_scores,
-      scores_with_bias,
-      num_cases,
-      n_group,
-      num_experts / n_group);
+  // topk_with_k2_kernel<T><<<topk_with_k2_num_blocks, BLOCK_SIZE, 0, stream>>>(
+  //     group_scores,
+  //     scores_with_bias,
+  //     num_cases,
+  //     n_group,
+  //     num_experts / n_group);
 
   int64_t topk_with_k_group_num_blocks =
       (num_tokens - 1) / NUM_WARPS_PER_BLOCK + 1;
@@ -1033,9 +1049,9 @@ INSTANTIATE_NOAUX_TC(float, int32_t);
       T * topk_values,                              \
       IdxT * topk_indices,                          \
       T * scores_with_bias,                         \
-      int32_t * expert_id_to_ep_rank_array,         \
-      int32_t * expert_in_rank_num_list,            \
-      int32_t * tokens_per_expert_stats_list,       \
+      int32_t* expert_id_to_ep_rank_array,          \
+      int32_t* expert_in_rank_num_list,             \
+      int32_t* tokens_per_expert_stats_list,        \
       int64_t const num_tokens,                     \
       int64_t const num_experts,                    \
       int64_t const n_group,                        \
