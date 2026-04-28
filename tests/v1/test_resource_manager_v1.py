@@ -650,7 +650,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
 
         decode_request = _make_request(request_id="req-decode", prompt_token_ids=[1, 2])
         decode_request.idx = 0
-        decode_request.status = RequestStatus.RUNNING
+        decode_request.status = RequestStatus.RUNNING_DECODE
         decode_request.num_computed_tokens = 2
         decode_request.output_token_ids = [99]
         decode_request.block_tables = [1]
@@ -665,7 +665,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         self.assertGreaterEqual(len(scheduled_reqs), 2)
         self.assertEqual(error_reqs, [])
         self.assertIn(decode_request.request_id, manager.using_extend_tables_req_id)
-        self.assertEqual(waiting_request.status, RequestStatus.RUNNING)
+        self.assertEqual(waiting_request.status, RequestStatus.RUNNING_PREFILL)
 
     def test_trigger_preempt_records_tasks(self):
         manager = _build_manager()
@@ -678,6 +678,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         preempted_req = _make_request(request_id="req-preempted")
         preempted_req.idx = 0
         preempted_req.use_extend_tables = False
+        preempted_req.status = RequestStatus.RUNNING_DECODE
         request = _make_request(request_id="req-target")
         request.idx = 1
         manager.running = [request, preempted_req]

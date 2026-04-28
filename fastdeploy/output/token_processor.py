@@ -37,6 +37,7 @@ from fastdeploy.engine.request import (
     Request,
     RequestMetrics,
     RequestOutput,
+    RequestStatus,
     SpeculateMetrics,
 )
 from fastdeploy.inter_communicator import ZmqIpcServer
@@ -950,6 +951,8 @@ class TokenProcessor:
                     continue
 
             self.total_step += 1
+            if task.status == RequestStatus.RUNNING_PREFILL:
+                task.status = RequestStatus.RUNNING_DECODE
             current_time = time.time()
             trace_carrier = None
             if self.tokens_counter[task_id] == 0:
