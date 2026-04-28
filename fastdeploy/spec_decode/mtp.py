@@ -170,7 +170,6 @@ class MTPProposer(Proposer):
         if getattr(self.model_config, "use_dense_mtp", False):
             # Dense MTP uses Ernie5MLP instead of Ernie5MoE
             self.model_config.moe_num_experts = None
-            self.model_config.moe_layer_start_index = 0
 
     def _load_model(self):
         """
