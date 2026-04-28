@@ -134,6 +134,8 @@ class Glm4Moe(nn.Layer):
         self.use_tp = self.tensor_parallel_size > 1
         self.layer_id = layer_id
         self.last_layer_id = self.num_layers = fd_config.model_config.num_hidden_layers - 1
+        self.enable_all_reduce_fusion = fd_config.parallel_config.enable_flashinfer_allreduce_fusion
+
         self.n_routed_experts: int = fd_config.model_config.n_routed_experts
         self.n_shared_experts: int = fd_config.model_config.n_shared_experts
 
