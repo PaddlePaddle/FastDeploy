@@ -2074,25 +2074,6 @@ class GPUModelRunner(ModelRunnerBase):
         for _ in range(self.fd_config.speculative_config.num_model_steps):
             self.proposer.model.empty_input_forward(forward_meta)
 
-    def execute_model(
-        self,
-        model_forward_batch: Optional[List[Request]] = None,
-        num_running_requests: int = None,
-    ) -> None:
-        """
-        The Entrance of model execute.
-        Args:
-            model_forward_batch: 'Request' contains information related to prompt and is an abstract
-            class at the server level, which is too granular for ModelRunner.
-            We plan to replace it with 'ModelForwardBatch'.
-            intermediate_tensors:
-            num_running_requests: batch_size
-        """
-        if not self.enable_overlap_schedule:
-            self.execute_model_normal(model_forward_batch, num_running_requests)
-        else:
-            self.execute_model_overlap(model_forward_batch, num_running_requests)
-
     def _make_preempted_batch_output(self):
         preempted_indices = paddle.nonzero(self.share_inputs["preempted_idx"] == 1)
         bsz = int(preempted_indices[-1][0].item()) + 1
@@ -2170,6 +2151,25 @@ class GPUModelRunner(ModelRunnerBase):
             enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
         )
         return model_output_data, sampler_output
+
+    def execute_model(
+        self,
+        model_forward_batch: Optional[List[Request]] = None,
+        num_running_requests: int = None,
+    ) -> None:
+        """
+        The Entrance of model execute.
+        Args:
+            model_forward_batch: 'Request' contains information related to prompt and is an abstract
+            class at the server level, which is too granular for ModelRunner.
+            We plan to replace it with 'ModelForwardBatch'.
+            intermediate_tensors:
+            num_running_requests: batch_size
+        """
+        if not self.enable_overlap_schedule:
+            self.execute_model_normal(model_forward_batch, num_running_requests)
+        else:
+            self.execute_model_overlap(model_forward_batch, num_running_requests)
 
     def execute_model_normal(
         self,
