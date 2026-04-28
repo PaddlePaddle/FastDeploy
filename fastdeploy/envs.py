@@ -281,6 +281,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # At runtime, token counts not in this list fall back to eager execution.
     # Example: "1,2,4,8,16,32,64,128,256,512"
     "FD_BLOCK_WISE_CUDA_GRAPH_SIZES": lambda: os.getenv("FD_BLOCK_WISE_CUDA_GRAPH_SIZES", "128,256,512,1024,2048"),
+    # When set to 1, print which op / shape enters the block-wise CUDA Graph
+    # during the capture phase. Defaults to 0 (silent).
+    "FD_BLOCK_WISE_DEBUG": lambda: bool(int(os.getenv("FD_BLOCK_WISE_DEBUG", "0"))),
 }
 
 

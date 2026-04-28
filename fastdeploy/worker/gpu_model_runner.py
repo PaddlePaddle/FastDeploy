@@ -1084,8 +1084,8 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
-        if self.fd_config.parallel_config.enable_expert_parallel:
-            input_length = min(input_length, 32)
+        # if self.fd_config.parallel_config.enable_expert_parallel:
+        #     input_length = min(input_length, 32)
 
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -2648,6 +2648,7 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(
             f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
         )
+
         self._dummy_run(
             num_tokens=num_tokens,
             batch_size=self.scheduler_config.max_num_seqs,
@@ -3209,7 +3210,7 @@ class GPUModelRunner(ModelRunnerBase):
         Pre-captures graphs for designated token counts so that at runtime,
         matching sizes replay the graph while other sizes fall back to eager.
         """
-        if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
+        if not envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
             return
 
         from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (  # Parse capture sizes from env var

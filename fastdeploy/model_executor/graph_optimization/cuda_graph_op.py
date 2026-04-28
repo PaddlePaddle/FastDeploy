@@ -16,10 +16,10 @@
 
 import functools
 import inspect
-import logging
 from typing import Callable, Optional, Sequence
 
 import paddle
+from paddleformers.utils.log import logger as _LOGGER
 
 import fastdeploy
 
@@ -35,9 +35,6 @@ _ALL_SHARED_CACHES: list = []
 # Global counter / registry of all captured block-wise graphs (for logging).
 # Each entry: (qualname, key, shared_mode)
 _CAPTURED_GRAPH_LOG: list = []
-_LOGGER = logging.getLogger("fastdeploy.block_wise_cuda_graph")
-if not _LOGGER.handlers:
-    _LOGGER.setLevel(logging.INFO)
 
 
 def get_captured_graph_log():
@@ -49,17 +46,18 @@ def dump_captured_graph_summary():
     """Print a summary of all captured block-wise CUDA graphs."""
     from collections import Counter
 
+    if not fastdeploy.envs.FD_BLOCK_WISE_DEBUG:
+        return
     if not _CAPTURED_GRAPH_LOG:
         _LOGGER.info("[block_wise_cuda_graph] no graph captured")
         return
     counter = Counter(q for q, _, _ in _CAPTURED_GRAPH_LOG)
     _LOGGER.info(
-        "[block_wise_cuda_graph] total captured graphs=%d across %d distinct methods:",
-        len(_CAPTURED_GRAPH_LOG),
-        len(counter),
+        f"[block_wise_cuda_graph] total captured graphs={len(_CAPTURED_GRAPH_LOG)} "
+        f"across {len(counter)} distinct methods:"
     )
     for qname, cnt in sorted(counter.items(), key=lambda x: -x[1]):
-        _LOGGER.info("  - %s : %d graph(s)", qname, cnt)
+        _LOGGER.info(f"  - {qname} : {cnt} graph(s)")
 
 
 def set_block_wise_capturing(capturing: bool):
@@ -272,13 +270,11 @@ def block_wise_cuda_graph_wrap(
 
                 # --- Log which op just entered the CUDA graph ---
                 _CAPTURED_GRAPH_LOG.append((_qualname, key, _shared))
-                _LOGGER.info(
-                    "[block_wise_cuda_graph] captured #%d op=%s shared=%s key=%s",
-                    len(_CAPTURED_GRAPH_LOG),
-                    _qualname,
-                    _shared,
-                    key,
-                )
+                if fastdeploy.envs.FD_BLOCK_WISE_DEBUG:
+                    _LOGGER.info(
+                        f"[block_wise_cuda_graph] captured #{len(_CAPTURED_GRAPH_LOG)} "
+                        f"op={_qualname} shared={_shared} key={key}"
+                    )
 
                 graph.replay()
 
