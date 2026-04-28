@@ -72,7 +72,7 @@ class TestResourceManagerV1(unittest.TestCase):
         req1 = Mock(spec=Request)
         req1.request_id = "req1"
         req1.use_extend_tables = False
-        req1.status = RequestStatus.RUNNING
+        req1.status = RequestStatus.RUNNING_DECODE
         req1.block_tables = [1, 2, 3]
         req1.num_cached_blocks = 0
         req1.idx = 0
@@ -80,7 +80,7 @@ class TestResourceManagerV1(unittest.TestCase):
         req2 = Mock(spec=Request)
         req2.request_id = "req2"
         req2.use_extend_tables = False
-        req2.status = RequestStatus.RUNNING
+        req2.status = RequestStatus.RUNNING_DECODE
         req2.block_tables = [4, 5]
         req2.num_cached_blocks = 0
         req2.idx = 1
