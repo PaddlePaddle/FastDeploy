@@ -72,6 +72,3 @@ class TextProcessor(BaseTextProcessor):
         if self.tokenizer_type == "ernie4_5":
             return self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(text))
         return super().text2ids(text, max_model_len, **kwargs)
-
-    def process_logprob_response(self, token_ids, **kwargs):
-        return self.tokenizer.decode(token_ids, **kwargs)
