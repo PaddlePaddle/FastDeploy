@@ -178,7 +178,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     )
                 )
 
-                if paddlefleet_ops is not None:
+                if fastdeploy.envs.FD_USE_DEEP_GEMM:
                     out = m_grouped_bf16_gemm_nn_contiguous(
                         permute_input, getattr(layer, self.added_weight_attrs[0]), m_indices
                     )
@@ -194,7 +194,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 else:
                     out = paddle.incubate.nn.functional.swiglu(out)
 
-                if paddlefleet_ops is not None:
+                if fastdeploy.envs.FD_USE_DEEP_GEMM:
                     ffn_out = m_grouped_bf16_gemm_nn_contiguous(
                         out, getattr(layer, self.added_weight_attrs[1]), m_indices
                     )
