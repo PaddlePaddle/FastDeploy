@@ -206,6 +206,27 @@ class TestApplyTp:
         assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
 
     @requires_deepgemm
+    def test_apply_tp_noaux_tc_with_use_fused_false(self):
+        """noaux_tc path with FD_ENABLE_RL=True: triggers use_fused=False and gate_out.cast('float32')."""
+        layer = DummyLayer()
+        layer.topk_method = "noaux_tc"
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+
+        import fastdeploy.envs as fd_envs
+
+        original_fd_enable_rl = fd_envs.FD_ENABLE_RL
+        fd_envs.FD_ENABLE_RL = True
+
+        try:
+            out = method.apply(layer, x, gate)
+            assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
+        finally:
+            fd_envs.FD_ENABLE_RL = original_fd_enable_rl
+
+    @requires_deepgemm
     def test_apply_tp_aux_path(self):
         """Non-noaux_tc: moe_topk_select → fp8_quant_blockwise → moe_permute → deepgemm → moe_unpermute."""
         layer = DummyLayer()
