@@ -20,7 +20,7 @@ import queue
 import time
 from concurrent.futures import Future
 from threading import Thread
-from typing import List, Optional, cast
+from typing import List, Optional, Tuple, cast
 
 import numpy as np
 import paddle
@@ -399,7 +399,7 @@ class MetaxModelRunner(ModelRunnerBase):
         if not self.enable_mm:
             return
 
-        def _grid_thw_tuple(grid_thw) -> tuple[int, int, int]:
+        def _grid_thw_tuple(grid_thw) -> Tuple[int, int, int]:
             return tuple(int(v) for v in grid_thw)
 
         self.share_inputs["image_features_list"] = [-1] * self.scheduler_config.max_num_seqs

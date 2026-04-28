@@ -37,6 +37,7 @@ def rotate_half(x):
 
 
 def apply_rotary_pos_emb_vision(x, cos, sin):
+    assert x.dtype == paddle.float32, f"expected float32, got {x.dtype}"
     x_embed = (x * cos) + (rotate_half(x) * sin)
     return x_embed
 

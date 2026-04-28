@@ -326,7 +326,7 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         self.layer_norm2 = paddle.nn.LayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
         self.mlp = SiglipMLP(config)
 
-    def forward(
+    def _forward_impl(
         self,
         hidden_states,
         attention_mask,
@@ -336,35 +336,7 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         cos_emb=None,
         sin_emb=None,
     ):
-        if hidden_states.dim() == 3 and hidden_states.shape[0] == 1:
-            hidden_states = hidden_states[0]
-
-            residual = hidden_states
-            ln1_out = self.layer_norm1(hidden_states)
-
-            x = self.self_attn(
-                hidden_states=ln1_out,
-                attention_mask=attention_mask,
-                output_attentions=output_attentions,
-                cu_seqlens=cu_seqlens,
-                max_seqlen=max_seqlen,
-                cos_emb=cos_emb,
-                sin_emb=sin_emb,
-            )
-
-            hs_post_attn = residual + x
-
-            residual = hs_post_attn
-            ln2_out = self.layer_norm2(residual)
-
-            mlp_out = self.mlp(ln2_out)
-
-            hidden_states_out = residual + mlp_out
-
-            return (hidden_states_out.unsqueeze(0),)
-
         residual = hidden_states
-        ############################
         ln1_out = self.layer_norm1(hidden_states)
 
         x = self.self_attn(
@@ -377,18 +349,45 @@ class SiglipEncoderLayer(paddle.nn.Layer):
             sin_emb=sin_emb,
         )
 
-        hs_post_attn = residual + x
-
-        residual = hs_post_attn
+        hidden_states = residual + x
+        residual = hidden_states
         ln2_out = self.layer_norm2(residual)
 
         mlp_out = self.mlp(ln2_out)
+        return residual + mlp_out
 
-        hidden_states_out = residual + mlp_out
+    def forward(
+        self,
+        hidden_states,
+        attention_mask,
+        output_attentions=False,
+        cu_seqlens=None,
+        max_seqlen=None,
+        cos_emb=None,
+        sin_emb=None,
+    ):
+        if hidden_states.dim() == 3 and hidden_states.shape[0] == 1:
+            hidden_states_out = self._forward_impl(
+                hidden_states=hidden_states[0],
+                attention_mask=attention_mask,
+                output_attentions=output_attentions,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                cos_emb=cos_emb,
+                sin_emb=sin_emb,
+            )
+            return (hidden_states_out.unsqueeze(0),)
 
-        outputs = (hidden_states_out,)
-
-        return outputs
+        hidden_states_out = self._forward_impl(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            output_attentions=output_attentions,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+            cos_emb=cos_emb,
+            sin_emb=sin_emb,
+        )
+        return (hidden_states_out,)
 
 
 class SigLIPRotaryEmbedding(nn.Layer):
