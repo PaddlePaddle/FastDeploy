@@ -462,7 +462,11 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         """Marlin compute Fused MoE. Routes to apply_ep_noalltoall() when ep_size > 1."""
         ep_sz = getattr(layer, "ep_size", 1)
         if ep_sz > 1:
-            return self.apply_ep_noalltoall(layer, x, gate, topk_ids_hookfunc, shared_experts)
+            assert hasattr(layer, "_ep_expert_map"), "init_ep() must be called before apply_ep_noalltoall()"
+            return self.apply_ep_noalltoall(
+                layer, x, gate, topk_ids_hookfunc, shared_experts,
+                fc1_latent_proj, fc2_latent_proj,
+            )
 
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
