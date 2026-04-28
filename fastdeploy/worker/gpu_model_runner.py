@@ -851,6 +851,7 @@ class GPUModelRunner(ModelRunnerBase):
                         self.share_inputs["enable_thinking"][idx : idx + 1, :] = enable_thinking
                         if enable_thinking:
                             self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                            self.share_inputs["reasoning_status"][idx : idx + 1, :] = 0
                             if request.get("reasoning_max_tokens") is not None:
                                 # Enable thinking
                                 self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get(
@@ -870,6 +871,7 @@ class GPUModelRunner(ModelRunnerBase):
                             self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                             self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                             self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                            self.share_inputs["reasoning_status"][idx : idx + 1, :] = 0
 
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()

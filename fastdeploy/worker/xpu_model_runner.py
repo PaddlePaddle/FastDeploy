@@ -599,10 +599,12 @@ class XPUModelRunner(ModelRunnerBase):
                     # Enable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_status"][idx : idx + 1, :] = 0
                 else:
                     # Disable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_status"][idx : idx + 1, :] = 0
 
                 if (
                     hasattr(request, "sampling_params")
@@ -798,10 +800,12 @@ class XPUModelRunner(ModelRunnerBase):
                     # Enable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_status"][idx : idx + 1, :] = 0
                 else:
                     # Disable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                    self.share_inputs["reasoning_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
                 res = request.get(attr, default_value)
