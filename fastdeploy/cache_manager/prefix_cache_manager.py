@@ -1126,10 +1126,7 @@ class PrefixCacheManager:
         if isinstance(token_ids, np.ndarray):
             token_ids = token_ids.tolist()
 
-        if self.config.cache_config.enable_output_caching:
-            input_token_ids = token_ids + request.output_token_ids
-        else:
-            input_token_ids = token_ids
+        input_token_ids = token_ids + request.output_token_ids
 
         req_id = request.request_id
         keys = []
@@ -1143,6 +1140,7 @@ class PrefixCacheManager:
 
         trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_START, request.request_id, getattr(request, "user", ""))
         gpu_block_ids = request.block_tables[: len(keys)]
+        input_token_ids = input_token_ids[:len(keys) * self.config.cache_config.block_size.block_size]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
         write_storage_task = WriteStorageTask(
             task_id=req_id,

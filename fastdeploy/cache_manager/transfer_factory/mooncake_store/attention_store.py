@@ -214,7 +214,7 @@ class AttentionStore(KVCacheStorage):
 
             if written < len(slice_gpu_block_ids):
                 logger.warning(
-                    f"[WRITE SLILCE INCOMPLETE] task_id: {task_id} slice [{slice_start}:{slice_end}] "
+                    f"[WRITE SLICE INCOMPLETE] task_id: {task_id} slice [{slice_start}:{slice_end}] "
                     f"({written}/{len(slice_gpu_block_ids)}), cost={slice_cost:.6f}s, "
                     f"total written {total_written}/{total_blocks}, "
                     f"prefix cache continuity broken, skip remaining slices"
