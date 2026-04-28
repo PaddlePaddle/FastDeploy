@@ -319,6 +319,38 @@ class TestSampleFramesPaddleocr(unittest.TestCase):
         indices = sample_frames_paddleocr(1, 1, 100, meta, num_frames=6)
         self.assertEqual(len(indices), 6)
 
+    def test_fps_without_metadata_raises(self):
+        """fps specified but metadata is None raises ValueError."""
+        with self.assertRaisesRegex(ValueError, "metadata is required"):
+            sample_frames_paddleocr(1, 4, 100, metadata=None, fps=10)
+
+    def test_fps_hits_min_frames(self):
+        """fps produces frames below min_frames, result is clamped to min_frames."""
+        # total=100, video_fps=25, target fps=1 → num_frames_calc = 100/25*1 = 4
+        # clamped to min_frames=8, then floor(8/4)*4 = 8
+        indices = sample_frames_paddleocr(
+            frame_factor=4,
+            min_frames=8,
+            max_frames=32,
+            metadata=self.META,
+            fps=1,
+        )
+        self.assertEqual(len(indices), 8)
+
+    def test_fps_hits_total_frames(self):
+        """fps produces more frames than total, result is clamped to total_num_frames."""
+        # total=100, video_fps=25, target fps=50 → num_frames_calc = 100/25*50 = 200
+        # clamped to min(min(max(200,8),200),100) = 100, floor(100/4)*4 = 100
+        indices = sample_frames_paddleocr(
+            frame_factor=4,
+            min_frames=8,
+            max_frames=200,
+            metadata=self.META,
+            fps=50,
+        )
+        self.assertEqual(len(indices), 100)
+        self.assertEqual(indices[-1], 99)
+
     def test_indices_dtype(self):
         indices = sample_frames_paddleocr(1, 4, 100, self.META, num_frames=8)
         self.assertEqual(indices.dtype, np.int32)

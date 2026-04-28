@@ -275,7 +275,7 @@ class DummyRequest:
         self.set(key, value)
 
 
-class DataProcessorTestCase(unittest.TestCase):
+class TextProcessorTestCase(unittest.TestCase):
     @staticmethod
     def create_dummy_reasoning(tokenizer, reasoning_content="think", content="content"):
         class DummyReasoning:
@@ -336,34 +336,7 @@ class DataProcessorTestCase(unittest.TestCase):
         module, cleanup = _import_text_processor()
         self.text_processor_module = module
         self.addCleanup(cleanup)
-        self.processor = self.text_processor_module.DataProcessor("stub-model")
-
-    def test_base_data_processor_contract(self):
-        text_processor_module = self.text_processor_module
-
-        class MinimalProcessor(text_processor_module.BaseDataProcessor):
-            def __init__(self):
-                self.generation_config = SimpleNamespace(
-                    top_p=0.5,
-                    temperature=0.6,
-                    repetition_penalty=1.1,
-                    frequency_penalty=0.2,
-                    presence_penalty=0.3,
-                )
-                super().__init__()
-
-            def _load_tokenizer(self):
-                return DummyTokenizer()
-
-        processor = MinimalProcessor()
-        defaults = processor._apply_default_parameters({})
-        self.assertAlmostEqual(defaults["top_p"], 0.5)
-        with self.assertRaises(NotImplementedError):
-            processor.text2ids("text")
-        with self.assertRaises(NotImplementedError):
-            processor.messages2ids([])
-        with self.assertRaises(NotImplementedError):
-            processor.ids2tokens([1], "task")
+        self.processor = self.text_processor_module.TextProcessor("stub-model")
 
     def test_process_request_dict_prompt_defaults(self):
         request = {"prompt": "hi", "temperature": 0, "top_p": 0, "stop": ["stop"]}
@@ -407,7 +380,7 @@ class DataProcessorTestCase(unittest.TestCase):
                 return BatchEncodingLike([len(text)])
 
         module = self.text_processor_module
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.tokenizer = BatchEncodingTokenizer()
 
         request = {
@@ -437,7 +410,7 @@ class DataProcessorTestCase(unittest.TestCase):
                 return TensorLike([len(text)])
 
         module = self.text_processor_module
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.tokenizer = TensorTokenizer()
 
         request = {
@@ -458,7 +431,7 @@ class DataProcessorTestCase(unittest.TestCase):
                 return {"input_ids": [len(text)], "attention_mask": [1]}
 
         module = self.text_processor_module
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.tokenizer = PlainDictTokenizer()
 
         request = {
@@ -542,7 +515,7 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_clear_request_status_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.decode_status = {"task": [[], [], "transcript"]}
 
         self.assertEqual(processor.clear_request_status("task"), "transcript")
@@ -555,7 +528,7 @@ class DataProcessorTestCase(unittest.TestCase):
             "from_pretrained",
             side_effect=OSError("missing"),
         ):
-            processor = self.text_processor_module.DataProcessor("stub-model")
+            processor = self.text_processor_module.TextProcessor("stub-model")
         self.assertIsNone(processor.generation_config)
 
     def test_process_response_with_reasoning_and_tools(self):
@@ -671,7 +644,7 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(lengths.shape, (0,))
 
     def test_get_pad_id_prefers_eos_when_missing(self):
-        processor = self.text_processor_module.DataProcessor("stub-model")
+        processor = self.text_processor_module.TextProcessor("stub-model")
         llama_tokenizer = DummyLlamaTokenizer()
         llama_tokenizer.pad_token_id = None
         llama_tokenizer.eos_token = 99
@@ -682,13 +655,13 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_load_tokenizer_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         self.assertIsInstance(processor.tokenizer, DummyTokenizer)
 
     def test_text2ids_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         ids = processor.text2ids("hi", max_model_len=5)
         self.assertEqual(ids.tolist(), [2, 0, 0, 0, 0][: len(ids)])
 
