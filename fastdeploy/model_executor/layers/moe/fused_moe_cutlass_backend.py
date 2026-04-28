@@ -340,9 +340,11 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         Paddle Cutlass compute Fused MoE.
         """
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
         if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
             if layer.topk_method == "noaux_tc":
+                use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
+                if not use_fused:
+                    gate_out = gate_out.cast("float32")
                 gate_out, topk_weights, topk_idx = get_moe_scores(
                     gate_out,
                     layer.n_group,
@@ -351,8 +353,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     layer.routed_scaling_factor,
                     layer.gate_correction_bias,
                     getattr(layer, "renormalize", True),
+                    use_fused_cast=use_fused,
                 )
             else:
+                gate_out = gate_out.cast("float32")
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                     gate_out,
                     layer.gate_correction_bias,
@@ -405,6 +409,9 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             return fused_moe_out
 
         if layer.topk_method == "noaux_tc":
+            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -414,6 +421,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
                 topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                use_fused_cast=use_fused,
             )
 
             (
@@ -438,6 +446,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 topk_only_mode=True,
             )
         else:
+            gate_out = gate_out.cast("float32")
             (
                 permute_input,
                 token_nums_per_expert,
