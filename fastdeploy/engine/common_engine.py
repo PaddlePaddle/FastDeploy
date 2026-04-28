@@ -1701,6 +1701,7 @@ class EngineService:
             if not remaining:
                 self.llm_logger.info(f"all {len(target_set)} abort reqs cleaned")
                 return
+            self.llm_logger.debug(f"remaining:{remaining}")
 
             current_count = len(remaining)
             if current_count < prev_remaining_count:

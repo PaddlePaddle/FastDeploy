@@ -318,6 +318,7 @@ class TokenProcessor:
                             request_id=task_id,
                         )
                         self.resource_manager.recycle_abort_task(task_id)
+                        self._put_abort_results(task)
                     if (
                         task_id in self.resource_manager.to_be_rescheduled_request_id_set
                         and token_ids[-1] == PREEMPTED_TOKEN_ID
@@ -819,6 +820,7 @@ class TokenProcessor:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_aborted_req_id_set:
                             self.resource_manager.recycle_abort_task(task_id)
+                            self._put_abort_results(task)
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
@@ -861,6 +863,7 @@ class TokenProcessor:
                             and token_id == PREEMPTED_TOKEN_ID
                         ):
                             self.resource_manager.recycle_abort_task(task_id)
+                            self._put_abort_results(task)
                             log_request(
                                 RequestLogLevel.STAGES,
                                 message="sync abortion for request_id {request_id} done.",
@@ -1158,6 +1161,33 @@ class TokenProcessor:
         for i in range(accept_num):
             self.accept_token_num_per_head_per_request[req_id][i] += 1
             self.accept_token_num_per_head[i] += 1
+
+    def _put_abort_results(self, task):
+        now = time.time()
+        eos_token_ids = getattr(task, "eos_token_ids", [0])
+        abort_metrics = copy.copy(task.metrics)
+        for field in (
+            "arrival_time",
+            "inference_start_time",
+            "engine_recv_latest_token_time",
+            "engine_recv_first_token_time",
+            "request_start_time",
+        ):
+            if not getattr(abort_metrics, field):
+                setattr(abort_metrics, field, now)
+        result = RequestOutput(
+            request_id=task.request_id,
+            finished=True,
+            outputs=CompletionOutput(
+                index=0,
+                send_idx=self.tokens_counter.get(task.request_id),
+                token_ids=[eos_token_ids[0]],
+            ),
+            metrics=abort_metrics,
+            error_code=200,
+            error_msg="Aborted",
+        )
+        self.cached_generated_tokens.put_results([result])
 
     def clear_data(self):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:
