@@ -8,7 +8,25 @@ FastDeploy提供Golang版本[Router](https://github.com/PaddlePaddle/FastDeploy/
 
 ## 安装
 
-### 1. 预编译库下载
+### 1. Python 包（推荐）
+
+FastDeploy v2.5.0 起，`fd-router` 二进制已内置于 FastDeploy wheel 包中。安装 FastDeploy 后，可直接通过 Python 模块启动 Router，无需额外下载或安装：
+
+```bash
+# 启动 mixed 模式 router
+python -m fastdeploy.golang_router.launch --port 9000
+
+# 启动 PD 分离模式 router
+python -m fastdeploy.golang_router.launch --port 9000 --splitwise
+
+# 使用配置文件
+python -m fastdeploy.golang_router.launch --config_path config.yaml
+
+# 查看版本
+python -m fastdeploy.golang_router.launch --version
+```
+
+### 2. 预编译库下载
 
 在 FastDeploy v2.5.0 及之后版本中，官方 Docker 镜像将内置 Golang Router 编译所需的 Go 语言环境，并提供已编译完成的 Router 二进制文件。该二进制文件默认位于 `/usr/local/bin` 目录下，可直接使用。相关安装方式可参考 [FastDeploy 安装文档](../get_started/installation/nvidia_gpu.md)。
 
@@ -18,7 +36,7 @@ wget https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop
 mv fd-router /usr/local/bin/fd-router
 ```
 
-### 2. 编译安装
+### 3. 编译安装
 
 在以下场景中，需要从源码编译 Router：
 
@@ -40,8 +58,11 @@ bash build.sh
 ## 集中式部署
 
 启动Router服务，其中`--port`参数指定集中式部署的调度端口.
+
+> **提示：** 使用 Python wheel 安装时，以下所有命令中的 `/usr/local/bin/fd-router` 均可替换为 `python -m fastdeploy.golang_router.launch`。
+
 ```
-/usr/local/bin/fd-router \
+python -m fastdeploy.golang_router.launch \
   --port 30000
 ```
 
@@ -59,7 +80,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 启动Router服务，其中`--splitwise`参数指定为分离式部署的调度方式.
 ```
-/usr/local/bin/fd-router \
+python -m fastdeploy.golang_router.launch \
   --port 30000 \
   --splitwise
 ```
@@ -114,7 +135,7 @@ popd
 
 在Router启动Router服务，其中`--config_path`参数指定配置路径.
 ```
-/usr/local/bin/fd-router \
+python -m fastdeploy.golang_router.launch \
   --port 30000 \
   --splitwise \
   --config_path examples/run_with_config/config/config.yaml

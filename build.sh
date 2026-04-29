@@ -386,14 +386,31 @@ function version_info() {
 function download_fd_router() {
   local FD_ROUTER_DIR="fastdeploy/golang_router"
   local FD_ROUTER_BIN="${FD_ROUTER_DIR}/fd-router"
-  local FD_ROUTER_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router"
+
+  # Detect host architecture and select the matching binary URL.
+  # Only x86_64 and aarch64 are currently supported; skip on other architectures.
+  local HOST_ARCH
+  HOST_ARCH=$(uname -m)
+  local FD_ROUTER_URL
+  case "${HOST_ARCH}" in
+    x86_64)
+      FD_ROUTER_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router"
+      ;;
+    aarch64)
+      FD_ROUTER_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router-aarch64"
+      ;;
+    *)
+      echo -e "${YELLOW}[WARNING]${NONE} Unsupported architecture '${HOST_ARCH}' for fd-router prebuilt binary, skipping download (please build from source: https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)"
+      return 0
+      ;;
+  esac
 
   if [ -x "${FD_ROUTER_BIN}" ]; then
     echo -e "${GREEN}[golang_router]${NONE} fd-router already exists, skipping download"
     return 0
   fi
 
-  echo -e "${BLUE}[golang_router]${NONE} Downloading fd-router binary..."
+  echo -e "${BLUE}[golang_router]${NONE} Downloading fd-router binary for ${HOST_ARCH}..."
   mkdir -p "${FD_ROUTER_DIR}"
 
   local TMP_BIN="${FD_ROUTER_BIN}.tmp"
@@ -411,9 +428,14 @@ function download_fd_router() {
     return 0
   }
 
-  # 2. Must be x86_64 architecture
-  file "${TMP_BIN}" | grep -q "x86-64" || {
-    echo -e "${YELLOW}[WARNING]${NONE} fd-router architecture mismatch (expected x86-64), skipping"
+  # 2. Verify downloaded binary matches the host architecture
+  local EXPECTED_ARCH_PATTERN
+  case "${HOST_ARCH}" in
+    x86_64)  EXPECTED_ARCH_PATTERN="x86-64" ;;
+    aarch64) EXPECTED_ARCH_PATTERN="aarch64|ARM aarch64" ;;
+  esac
+  file "${TMP_BIN}" | grep -qE "${EXPECTED_ARCH_PATTERN}" || {
+    echo -e "${YELLOW}[WARNING]${NONE} fd-router architecture mismatch (expected ${HOST_ARCH}), skipping"
     rm -f "${TMP_BIN}"
     return 0
   }

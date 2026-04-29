@@ -8,7 +8,25 @@ FastDeploy provides a Golang-based [Router](https://github.com/PaddlePaddle/Fast
 
 ## Installation
 
-### 1. Prebuilt Binaries
+### 1. Python Package (Recommended)
+
+Starting from FastDeploy v2.5.0, the `fd-router` binary is bundled inside the FastDeploy wheel package. After installing FastDeploy, you can launch the Router directly using the Python module — no separate download or installation is required:
+
+```bash
+# Start in mixed mode
+python -m fastdeploy.golang_router.launch --port 9000
+
+# Start in PD disaggregated mode
+python -m fastdeploy.golang_router.launch --port 9000 --splitwise
+
+# Start with a custom config file
+python -m fastdeploy.golang_router.launch --config_path config.yaml
+
+# Print version info
+python -m fastdeploy.golang_router.launch --version
+```
+
+### 2. Prebuilt Binaries
 
 Starting from FastDeploy v2.5.0, the official Docker images include the Go language environment required to build the Golang Router and also provide a precompiled Router binary. The Router binary is located by default in the `/usr/local/bin` directory and can be used directly without additional compilation. For installation details, please refer to the [FastDeploy Installation Guide](../get_started/installation/nvidia_gpu.md)
 
@@ -18,7 +36,7 @@ wget https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop
 mv fd-router /usr/local/bin/fd-router
 ```
 
-### 2. Build from Source
+### 3. Build from Source
 
 You need to build the Router from source in the following scenarios:
 
@@ -40,8 +58,11 @@ bash build.sh
 ## Centralized Deployment
 
 Start the Router service. The `--port` parameter specifies the scheduling port for centralized deployment.
+
+> **Tip:** When using the Python wheel, replace `/usr/local/bin/fd-router` with `python -m fastdeploy.golang_router.launch` in all commands below.
+
 ```
-/usr/local/bin/fd-router --port 30000
+python -m fastdeploy.golang_router.launch --port 30000
 ```
 
 Start a mixed inference instance. Compared to standalone deployment, specify the Router endpoint via `--router`. Other parameters remain unchanged.
@@ -58,7 +79,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 
 Start the Router service with PD disaggregation enabled using the `--splitwise` flag.
 ```
-/usr/local/bin/fd-router \
+python -m fastdeploy.golang_router.launch \
   --port 30000 \
   --splitwise
 ```
@@ -113,7 +134,7 @@ popd
 
 Launch the Router with the custom configuration specified via `--config_path`:
 ```
-/usr/local/bin/fd-router \
+python -m fastdeploy.golang_router.launch \
   --port 30000 \
   --splitwise \
   --config_path examples/run_with_config/config/config.yaml
