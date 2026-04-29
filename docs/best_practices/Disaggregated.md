@@ -103,7 +103,7 @@ python -m fastdeploy.golang_router.launch \
     --splitwise
 ```
 
-Note: This uses the [Golang Router](../online_serving/router.md) bundled with the FastDeploy Python package. For more Router options, refer to the [Router documentation](../online_serving/router.md).
+Note: This uses the Golang Router bundled with the FastDeploy Python package. For more options, refer to the [Router documentation](../online_serving/router.md).
 
 #### Start Prefill Nodes
 
