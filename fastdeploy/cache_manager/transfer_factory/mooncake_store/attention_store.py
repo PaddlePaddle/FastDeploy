@@ -189,42 +189,96 @@ class AttentionStore(KVCacheStorage):
         start_write_block_idx: int,
         timeout: float = 30.0,
     ) -> int:
-        logger.debug(
-            f"[WRITE BEGIN] task_id: {task_id} token_ids: {token_ids} gpu_block_ids: {gpu_block_ids} start_write_block_idx: {start_write_block_idx} timeout: {timeout}"
-        )
-        tokens = Tokens(token_ids, self.config.block_token_size)
         k_data_ptrs = [k.data_ptr() for k in key_cache]
         v_data_ptrs = [v.data_ptr() for v in val_cache]
-        num = 0
-        try:
-            if current_platform.is_cuda():
-                num = self.sdk.write(
-                    list(range(self.config.layer_num)),
-                    tokens,
-                    start_write_block_idx,
-                    k_data_ptrs,
-                    v_data_ptrs,
-                    gpu_block_ids,
-                    timeout,
-                    h2h_copy=False,
-                    params=None,
+        layer_ids = list(range(self.config.layer_num))
+        block_token_size = self.config.block_token_size
+
+        total_timeout = float(os.getenv("AS_WRITE_TOTAL_TIMEOUT", str(timeout)))
+        slice_block_num = int(os.getenv("AS_WRITE_SLICE_BLOCK_NUM", "100"))
+        slice_timeout = float(os.getenv("AS_WRITE_SLICE_TIMEOUT", "10"))
+        logger.debug(
+            f"[WRITE BEGIN] task_id: {task_id} token_ids: {token_ids} gpu_block_ids: {gpu_block_ids}"
+            f" start_write_block_idx: {start_write_block_idx} timeout: {total_timeout}"
+        )
+        total_blocks = len(gpu_block_ids)
+        total_written = 0
+        overall_start = time.time()
+
+        for slice_start in range(0, total_blocks, slice_block_num):
+            elapsed = time.time() - overall_start
+            remaining_timeout = total_timeout - elapsed
+            if remaining_timeout <= 0:
+                logger.warning(
+                    f"[WRITE TIMEOUT] task_id: {task_id} total timeout {total_timeout}s reached, "
+                    f"written {total_written}/{total_blocks} blocks"
                 )
-            else:
-                num = self.sdk.write(
-                    list(range(self.config.layer_num)),
-                    tokens,
-                    start_write_block_idx,
-                    k_data_ptrs,
-                    v_data_ptrs,
-                    gpu_block_ids,
-                    timeout,
-                )
-            logger.debug(f"[WRITE END] task_id: {task_id} written_blocks: {num}")
-        except AttentionStoreSDKError:
-            logger.error(
-                f"[WRITE ERROR] failed to execute sdk write, task_id: {task_id}, traceback:\n{traceback.format_exc()}"
+                break
+
+            slice_end = min(slice_start + slice_block_num, total_blocks)
+            slice_gpu_block_ids = gpu_block_ids[slice_start:slice_end]
+            slice_write_block_idx = start_write_block_idx + slice_start
+            slice_token_ids = token_ids[: (start_write_block_idx + slice_end) * block_token_size]
+            slice_tokens = Tokens(slice_token_ids, block_token_size)
+
+            logger.debug(
+                f"[WRITE SLICE BEGIN] task_id: {task_id} slice [{slice_start}:{slice_end}] "
+                f"block_idx={slice_write_block_idx}, blocks={len(slice_gpu_block_ids)}, "
+                f"token_ids_len={len(slice_token_ids)}, timeout={slice_timeout:.2f}s"
             )
-        return num
+            slice_start_time = time.time()
+            try:
+                if current_platform.is_cuda():
+                    written = self.sdk.write(
+                        layer_ids,
+                        slice_tokens,
+                        slice_write_block_idx,
+                        k_data_ptrs,
+                        v_data_ptrs,
+                        slice_gpu_block_ids,
+                        slice_timeout,
+                        h2h_copy=False,
+                        params=None,
+                    )
+                else:
+                    written = self.sdk.write(
+                        layer_ids,
+                        slice_tokens,
+                        slice_write_block_idx,
+                        k_data_ptrs,
+                        v_data_ptrs,
+                        slice_gpu_block_ids,
+                        slice_timeout,
+                    )
+            except AttentionStoreSDKError:
+                logger.error(
+                    f"[WRITE ERROR] task_id: {task_id} slice [{slice_start}:{slice_end}], "
+                    f"traceback:\n{traceback.format_exc()}"
+                )
+                written = 0
+            slice_cost = time.time() - slice_start_time
+            total_written += written
+
+            if written < len(slice_gpu_block_ids):
+                logger.warning(
+                    f"[WRITE SLICE INCOMPLETE] task_id: {task_id} slice [{slice_start}:{slice_end}] "
+                    f"({written}/{len(slice_gpu_block_ids)}), cost={slice_cost:.6f}s, "
+                    f"total written {total_written}/{total_blocks}, "
+                    f"prefix cache continuity broken, skip remaining slices"
+                )
+                break
+
+            logger.debug(
+                f"[WRITE SLICE END] task_id: {task_id} slice [{slice_start}:{slice_end}] "
+                f"written={written}, cost={slice_cost:.6f}s"
+            )
+
+        total_cost = time.time() - overall_start
+        logger.info(
+            f"[WRITE END] task_id: {task_id} total cost={total_cost:.6f}s, "
+            f"written {total_written}/{total_blocks} blocks"
+        )
+        return total_written
 
     def query(self, task_id: str, token_ids: List[int], start_match_block_idx: int, timeout: float = 10.0):
         """
