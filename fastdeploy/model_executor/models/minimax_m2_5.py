@@ -142,6 +142,9 @@ def _process_fp8_marlin_weights(moe_layer, up_gate_info_list, down_info_list, up
         )
         s_expanded = s_expanded[:, :N_combined]
         marlin_s = _marlin_permute_scales(s_expanded, K, N_combined, block_size)
+        # FP8 Marlin kernel expects scales in a specific fixed-point encoding;
+        # 2**120 is the alignment factor between E4M3FN float8 and Marlin's
+        # internal scale representation (cf. vLLM Marlin FP8 implementation).
         marlin_s = marlin_s * (2**120)
         target_ug_scale[i].set_value(marlin_s.cast(target_ug_scale.dtype))
         del s, s_expanded, marlin_s

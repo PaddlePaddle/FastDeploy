@@ -383,9 +383,6 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         layer.weight_scale_inv.set_value(weight_scale)
 
     def apply(self, layer, x):
-        # Handle case where x is a list (e.g., from append_attention on SM80)
-        if isinstance(x, list):
-            x = x[0]
         linear_out = paddle.empty((x.shape[0], layer.output_size), dtype=paddle.bfloat16)
         if x.shape[0] == 0:
             return linear_out
