@@ -518,7 +518,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
             if not hasattr(layer, "_sm80_gate"):
                 raise RuntimeError(
-                    "SM80 FP8 MoE requires init_ep() to be called before apply(). " "No _sm80_gate found on layer."
+                    "SM80 FP8 MoE: layer._sm80_gate not found. "
+                    "Ensure _load_fp8_marlin_layer() has been called during weight loading."
                 )
             ep_group = getattr(layer, "ep_group", None)
             return self._apply_ep_sm80_bf16(
@@ -586,6 +587,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             size_n=actual_size_n_up,
             size_k=actual_size_k_up,
             is_k_full=True,
+            # Non-EP path: tritonmoe_preprocess sorts tokens so output rows
+            # are non-overlapping; atomic add is not needed.
             use_atomic_add=False,
             use_fp32_reduce=True,
             is_zp_float=False,
@@ -679,7 +682,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
             if not hasattr(layer, "_sm80_gate"):
                 raise RuntimeError(
-                    "SM80 FP8 MoE requires init_ep() to be called before apply_ep_noalltoall(). "
+                    "SM80 FP8 MoE: layer._sm80_gate not found. "
+                    "Ensure _load_fp8_marlin_layer() has been called during weight loading."
                     "No _sm80_gate found on layer."
                 )
             return self._apply_ep_sm80_bf16(
@@ -753,6 +757,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             size_n=actual_size_n_up,
             size_k=actual_size_k_up,
             is_k_full=True,
+            # EP path: tokens are pre-sorted by expert; output rows are
+            # non-overlapping, so atomic add is not needed.
             use_atomic_add=False,
             use_fp32_reduce=True,
             is_zp_float=False,

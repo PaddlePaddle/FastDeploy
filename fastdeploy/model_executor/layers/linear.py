@@ -269,6 +269,7 @@ class LinearBase(nn.Layer):
         # SM80: append_attention may return a list. Extract first element
         # to satisfy quant_method.apply()'s tensor type contract.
         if isinstance(x, list):
+            assert len(x) == 1, f"Expected single tensor from attention, got list of {len(x)}"
             x = x[0]
         if self.weight_dtype == "float32":
             linear_out = self.quant_method.apply(self, x.cast("float32"))
@@ -956,6 +957,7 @@ class RowParallelLinear(LinearBase):
         # SM80: append_attention may return a list. Extract first element
         # to satisfy quant_method.apply()'s tensor type contract.
         if isinstance(x, list):
+            assert len(x) == 1, f"Expected single tensor from attention, got list of {len(x)}"
             x = x[0]
         if self.split_token:
             x = self.all2all_transpose(x)
