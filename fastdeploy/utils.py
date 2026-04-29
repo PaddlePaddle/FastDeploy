@@ -57,7 +57,7 @@ from fastdeploy.logger.logger import FastDeployLogger
 from fastdeploy.worker.output import PromptLogprobs
 
 T = TypeVar("T")
-from typing import Callable, List, Optional
+from typing import Callable, Dict, List, Optional
 
 # [N,2] -> every line is [config_name, enable_xxx_name]
 # Make sure enable_xxx equal to config.enable_xxx
@@ -1044,10 +1044,14 @@ class StatefulSemaphore:
         }
 
 
-def parse_quantization(value: str):
+def parse_quantization(value: Union[Dict, str]) -> Dict:
     """
     Parse a JSON string into a dictionary.
     """
+    if isinstance(value, dict):
+        return value
+    if value is None:
+        value = "null"
     try:
         return json.loads(value)
     except ValueError:
