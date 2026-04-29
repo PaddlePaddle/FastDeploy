@@ -289,6 +289,14 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """Marlin MoE load weight process. Supports both INT4 and FP8."""
+        # SM80+FP8: weights handled by model-specific loading path (e.g., minimax_m2_5.py).
+        # create_weights already created dummy params; skip repack here to match.
+        from fastdeploy.model_executor.utils import get_sm_version
+        from fastdeploy.platforms import current_platform
+
+        if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
+            return
+
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
         assert len(up_gate_proj_weights) == layer.num_local_experts
         assert len(down_proj_weights) == layer.num_local_experts
@@ -512,18 +520,21 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         from fastdeploy.platforms import current_platform
 
         if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
-            if hasattr(layer, "_sm80_gate"):
-                ep_group = getattr(layer, "ep_group", None)
-                return self._apply_ep_sm80_bf16(
-                    layer,
-                    x,
-                    topk_weights,
-                    topk_ids,
-                    token_num,
-                    hidden_size,
-                    top_k,
-                    ep_group,
+            if not hasattr(layer, "_sm80_gate"):
+                raise RuntimeError(
+                    "SM80 FP8 MoE requires init_ep() to be called before apply(). " "No _sm80_gate found on layer."
                 )
+            ep_group = getattr(layer, "ep_group", None)
+            return self._apply_ep_sm80_bf16(
+                layer,
+                x,
+                topk_weights,
+                topk_ids,
+                token_num,
+                hidden_size,
+                top_k,
+                ep_group,
+            )
 
         block_size_m = 64
         for m in [8, 16, 32, 48, 64]:
@@ -672,17 +683,21 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         from fastdeploy.platforms import current_platform
 
         if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
-            if hasattr(layer, "_sm80_gate"):
-                return self._apply_ep_sm80_bf16(
-                    layer,
-                    x,
-                    topk_weights,
-                    topk_ids,
-                    M,
-                    hidden_size,
-                    top_k,
-                    ep_group,
+            if not hasattr(layer, "_sm80_gate"):
+                raise RuntimeError(
+                    "SM80 FP8 MoE requires init_ep() to be called before apply_ep_noalltoall(). "
+                    "No _sm80_gate found on layer."
                 )
+            return self._apply_ep_sm80_bf16(
+                layer,
+                x,
+                topk_weights,
+                topk_ids,
+                M,
+                hidden_size,
+                top_k,
+                ep_group,
+            )
 
         block_size_m = 64
         for m in [8, 16, 32, 48, 64]:
@@ -706,16 +721,19 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
         up_gate_weight = layer.up_gate_proj_weight
         down_weight = layer.down_proj_weight
-        actual_size_k_up = up_gate_weight.shape[1] * 16
-        actual_size_k_down = down_weight.shape[1] * 16
         if self.weight_type == "fp8":
             # FP8: Marlin repack packs 4 FP8 per int32, shape[2] = N*4
+            actual_size_k_up = up_gate_weight.shape[1] * 16
+            actual_size_k_down = down_weight.shape[1] * 16
             actual_size_n_up = up_gate_weight.shape[2] // 4
             actual_size_n_down = down_weight.shape[2] // 4
         else:
-            # INT4: Marlin repack packs 8 per int32, shape[2] = N
-            actual_size_n_up = up_gate_weight.shape[2]
-            actual_size_n_down = down_weight.shape[2]
+            # INT4: use layer dimensions (same as non-EP apply() path).
+            # Marlin packed shape[2] != actual size_n because of packing.
+            actual_size_k_up = layer.hidden_size
+            actual_size_n_up = layer.moe_intermediate_size * 2
+            actual_size_k_down = layer.moe_intermediate_size
+            actual_size_n_down = layer.hidden_size
 
         ffn_out_up = paddle.zeros([M * top_k, actual_size_n_up], dtype=x.dtype)
         ffn_out = MoeWna16MarlinGemmApi(
