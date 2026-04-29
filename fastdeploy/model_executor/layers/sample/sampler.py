@@ -100,7 +100,7 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
 
     offsets = paddle.where(
         is_decoder,
-        local_pos * 4,
+        local_pos * 32,
         paddle.zeros_like(local_pos),
     )
 
