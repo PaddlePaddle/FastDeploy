@@ -576,6 +576,15 @@ def save_output_speculate(
     # can safely read sampling_mask and logz_per_batch.
     if sampler_output.sampling_mask_event is not None:
         sampler_output.sampling_mask_event.synchronize()
+        # TODO (wangyanpeng): Currently, there is a bug when overlap is enabled.
+        # Please ensure overlap is disabled when using this functionality to avoid unexpected behavior.
+        real_token_num = share_inputs["accept_num_cpu"].sum()
+        sampler_output.logprobs_tensors = LogprobsTensors(
+            logprob_token_ids=sampler_output.logprobs_tensors.logprob_token_ids[:real_token_num],
+            logprobs=sampler_output.logprobs_tensors.logprobs[:real_token_num],
+            selected_token_ranks=sampler_output.logprobs_tensors.selected_token_ranks[:real_token_num],
+        )
+
         if sampler_output.sampling_mask is not None:
             indices_window_cpu, mask_window_cpu, mask_bsz = sampler_output.sampling_mask
             sampler_output.sampling_mask = _extract_sparse_indices(

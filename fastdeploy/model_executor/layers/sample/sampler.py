@@ -1242,6 +1242,7 @@ class SpeculativeSampler(nn.Layer):
             if keep_sampling_mask:
                 real_bsz = share_inputs["seq_lens_this_time"].shape[0]
                 accept_nums = share_inputs["accept_num"][:real_bsz].reshape([-1])
+                target_logits = target_logits[: accept_nums.sum()]
                 # Derive target probs from already-extracted target_logits; avoids a second kernel call.
                 target_probs = F.softmax(target_logits, axis=-1)
                 # Compute sampling mask at accepted token positions.
