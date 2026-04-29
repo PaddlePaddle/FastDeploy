@@ -1997,7 +1997,7 @@ class GPUModelRunner(ModelRunnerBase):
                     is_dummy_run=True,
                 )
             elif self.spec_method == SpecMethod.NAIVE:
-                pass
+                self.proposer.run()
             else:
                 self.proposer.prepare_dummy_speculative_drafts(share_inputs=self.share_inputs, batch_size=batch_size)
         return sampler_output
@@ -2802,7 +2802,7 @@ class GPUModelRunner(ModelRunnerBase):
                         real_bsz=real_bsz,
                     )
                 elif self.spec_method == SpecMethod.NAIVE:
-                    pass
+                    self.proposer.run()
                 else:
                     self.proposer.run(share_inputs=self.share_inputs)
 
