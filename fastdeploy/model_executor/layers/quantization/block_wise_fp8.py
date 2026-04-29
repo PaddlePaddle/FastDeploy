@@ -117,6 +117,8 @@ class BlockWiseFP8Config(QuantConfigBase):
                 # SM < 90 (A100/A800): no FP8 tensor cores.
                 # Use Marlin kernel for FP8 weight-only quantization when enabled,
                 # otherwise return None to trigger BF16 dequant fallback.
+                # Note: SM80 always returns here; the elif below (DeepGemm, Triton)
+                # is only reachable on SM90+ devices.
                 import os
 
                 if os.environ.get("FD_MARLIN_FP8", "0") == "1":
