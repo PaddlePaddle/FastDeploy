@@ -84,7 +84,7 @@ def get_moe_scores(
     topk_group,
     top_k,
     routed_scaling_factor,
-    e_score_correction_bias,
+    e_score_correction_bias,  # [1, n_expert] fp32
     renormalize: bool = False,
     expert_id_to_ep_rank_array: paddle.Tensor = None,
     expert_in_rank_num_list: paddle.Tensor = None,
@@ -95,10 +95,7 @@ def get_moe_scores(
     """
     compute moe scores using e_score_correction_bias.
     """
-    scores = paddle.nn.functional.sigmoid(gating_output)  # fp32
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
-    scores_with_bias = scores + e_score_correction_bias
-
     if envs.FD_USE_PHI_MOE_TOPK:
         # calculate renormalize and routed_scaling_factor value outside the noaux_tc
         original_renormalize = renormalize
@@ -108,8 +105,8 @@ def get_moe_scores(
 
     if expert_id_to_ep_rank_array is None:
         scores, topk_values, topk_idx = noaux_tc(
-            scores,
-            scores_with_bias,
+            gating_output,
+            e_score_correction_bias,
             n_group if n_group > 0 else 1,
             topk_group if topk_group > 0 else 1,
             top_k,
@@ -117,8 +114,9 @@ def get_moe_scores(
             routed_scaling_factor,
         )
     else:
-        # noaux_tc_redundant returns 4 values: scores, topk_values, topk_idx,
-        # and tokens_per_expert_stats_list_out (inplace updated)
+        # noaux_tc_redundant still takes scores + scores_with_bias (not yet fused)
+        scores = paddle.nn.functional.sigmoid(gating_output)
+        scores_with_bias = scores + e_score_correction_bias
         scores, topk_values, topk_idx, _ = noaux_tc_redundant(
             scores,
             scores_with_bias,

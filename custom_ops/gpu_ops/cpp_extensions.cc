@@ -683,8 +683,8 @@ void DynamicPerTokenScaledFp8Quant(paddle::Tensor& out,
                                    paddle::Tensor& scales,
                                    float scale_ub);
 
-std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
-                                    paddle::Tensor& scores_with_bias,
+std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& gating_output,
+                                    paddle::Tensor& bias,
                                     int n_group,
                                     int topk_group,
                                     int topk,
