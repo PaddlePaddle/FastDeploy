@@ -245,10 +245,12 @@ class MTPProposer(Proposer):
 
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
-        # 2. If no need to profile, create kv cache if cache managers do not exist.
+        # 2. If no need to profile, create kv cache unless kvcache_storage_backend or
+        #    p/d disaggregation is enabled. Note: CPU cache (num_cpu_blocks > 0) does NOT
+        #    prevent GPU runner from creating GPU cache tensors; cache transfer manager
+        #    handles CPU<->GPU swap on top of the GPU tensors created here.
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
+            self.fd_config.cache_config.kvcache_storage_backend
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
 
