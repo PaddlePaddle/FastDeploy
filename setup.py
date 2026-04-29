@@ -306,6 +306,7 @@ setup(
             "model_executor/ops/gcu/*",
             "model_executor/ops/gcu/fastdeploy_ops/*",
             "cache_manager/transfer_factory/get_rdma_nics.sh",
+            "golang_router/fd-router",
             "version.txt",
         ]
     },
