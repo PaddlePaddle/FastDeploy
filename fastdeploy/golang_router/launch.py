@@ -90,9 +90,10 @@ def main() -> None:
         cmd.append("--version")
 
     try:
-        subprocess.run(cmd)
+        result = subprocess.run(cmd)
+        sys.exit(result.returncode)
     except KeyboardInterrupt:
-        pass
+        sys.exit(130)
     except FileNotFoundError:
         print(f"Error: fd-router binary not found at {binary_path}", file=sys.stderr)
         sys.exit(1)
