@@ -461,7 +461,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
     ) -> paddle.Tensor:
         """Marlin compute Fused MoE. Routes to apply_ep_noalltoall() when ep_size > 1."""
         ep_sz = getattr(layer, "ep_size", 1)
-        if ep_sz > 1:
+        if ep_sz > 1 and self.weight_type == "fp8":
             if not hasattr(layer, "_ep_expert_map"):
                 raise RuntimeError("init_ep() must be called before apply_ep_noalltoall()")
             return self.apply_ep_noalltoall(
