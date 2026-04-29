@@ -24,6 +24,8 @@ from fastdeploy.model_executor.ops.gpu import (
     MoeWna16MarlinGemmApi,
     tritonmoe_preprocess_func,
 )
+from fastdeploy.model_executor.utils import get_sm_version
+from fastdeploy.platforms import current_platform
 
 # ops.gpu.__getattr__ returns None for missing ops instead of raising.
 # Check and try alternative names.
@@ -188,8 +190,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
         # SM80: skip creating Marlin packed weights (we use BF16 dequant instead).
         # Create minimal dummy params so attribute access doesn't fail.
-        from fastdeploy.model_executor.utils import get_sm_version
-        from fastdeploy.platforms import current_platform
 
         if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
             for name in self.added_weight_attrs:
@@ -291,8 +291,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         """Marlin MoE load weight process. Supports both INT4 and FP8."""
         # SM80+FP8: weights handled by model-specific loading path (e.g., minimax_m2_5.py).
         # create_weights already created dummy params; skip repack here to match.
-        from fastdeploy.model_executor.utils import get_sm_version
-        from fastdeploy.platforms import current_platform
 
         if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
             return
@@ -516,8 +514,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             topk_ids_hookfunc(topk_ids=topk_ids)
 
         # SM80 (A100): route to BF16 bmm path (skip Marlin kernel)
-        from fastdeploy.model_executor.utils import get_sm_version
-        from fastdeploy.platforms import current_platform
 
         if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
             if not hasattr(layer, "_sm80_gate"):
@@ -679,8 +675,6 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
         # Step 3: Triton preprocess with expert_map filtering
         # On SM80, skip preprocess and go directly to _apply_ep_sm80_bf16
-        from fastdeploy.model_executor.utils import get_sm_version
-        from fastdeploy.platforms import current_platform
 
         if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
             if not hasattr(layer, "_sm80_gate"):
