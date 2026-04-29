@@ -18,8 +18,8 @@ import numpy as np
 import paddle
 import pytest
 
-from fastdeploy.model_executor.models.paddleocr_vl.config import PaddleOCRVisionConfig
 from fastdeploy.model_executor.models.paddleocr_vl import siglip as siglip_module
+from fastdeploy.model_executor.models.paddleocr_vl.config import PaddleOCRVisionConfig
 from fastdeploy.model_executor.models.paddleocr_vl.projector import Projector
 from fastdeploy.model_executor.models.paddleocr_vl.siglip import (
     SiglipAttention,
