@@ -912,7 +912,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Initialize all share buffers for model inputs.
         Note: In the future, we may abandon share buffers.
         """
-        self.MAX_INFER_SEED = 9223372036854775806
+        self.MAX_INFER_SEED = 2147483646
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
@@ -1300,9 +1300,10 @@ class XPUModelRunner(ModelRunnerBase):
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
         # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
+        #    Note: even when CPU cache (num_cpu_blocks > 0) is enabled, GPU runner still
+        #    creates GPU cache tensors; cache transfer manager handles CPU<->GPU swap.
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
+            self.fd_config.cache_config.kvcache_storage_backend
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
         if not create_cache_tensor:

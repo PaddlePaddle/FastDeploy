@@ -169,7 +169,7 @@ The Router exposes a set of HTTP services to provide unified request scheduling,
 ### Configuration File Preparation
 
 Before using `--config_path`, prepare a configuration file that conforms to the Router specification.
-The configuration file is typically written in YAML format. For detailed parameters, refer to [Configuration Parameteres](#configuration-parameteres)。You may copy and modify the configuration template (example available at examples/run_with_config)：
+The configuration file is typically written in YAML format. For detailed parameters, refer to [Configuration Parameters](#configuration-parameters)。You may copy and modify the configuration template (example available at examples/run_with_config)：
 ```bash
 cp config/config.example.yaml config/config.yaml
 ```
@@ -180,7 +180,7 @@ cp config/config.example.yaml config/config.yaml
 cp config/register.example.yaml config/register.yaml
 ```
 
-### Configuration Parameteres
+### Configuration Parameters
 
 config.yaml example:
 ```yaml

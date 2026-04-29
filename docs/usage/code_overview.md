@@ -169,7 +169,7 @@ The main entry file `fastdeploy/__init__.py` exports core classes:
 | File | Function | Development Guide |
 |------|----------|-------------------|
 | `text_processor.py` | `BaseDataProcessor` text processor base class | Input processing extension |
-| `ernie4_5_processor.py` | ERNIE 4.5 input processor | Baidu model input processing |
+| `multimodal_processor.py` | Unified multimodal processor | Multimodal input processing |
 | `ernie4_5_tokenizer.py` | ERNIE 4.5 tokenizer | Tokenization logic modification |
 | `preprocess.py` | Input preprocessing utilities | Preprocessing flow |
 
@@ -177,9 +177,9 @@ The main entry file `fastdeploy/__init__.py` exports core classes:
 
 | Directory | Function |
 |-----------|----------|
-| `ernie4_5_vl_processor/` | ERNIE 4.5 VL image/video processing |
-| `qwen_vl_processor/` | Qwen VL multimodal processing |
-| `paddleocr_vl_processor/` | PaddleOCR VL processing |
+| `encodings/` | Model-specific encoding strategies (Ernie, Qwen, PaddleOCR) |
+| `image_processors/` | Image preprocessing (Adaptive, Qwen, Qwen3, PaddleOCR) |
+| `multimodal_processor.py` | Unified multimodal processor |
 
 ---
 

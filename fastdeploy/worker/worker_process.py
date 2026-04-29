@@ -1306,7 +1306,7 @@ def run_worker_proc() -> None:
     # This must happen AFTER worker creation but BEFORE model loading,
     # because enable_batch_invariant_mode() calls paddle.enable_compat()
     # which makes torch appear available via proxy. If called before worker creation,
-    # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
+    # the gpu_model_runner import chain (image_processors → paddleformers →
     # transformers) will fail when transformers tries to query torch metadata.
     if envs.FD_DETERMINISTIC_MODE:
         from fastdeploy.model_executor.layers.batch_invariant_ops import (
