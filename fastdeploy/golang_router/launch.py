@@ -77,7 +77,6 @@ def main() -> None:
     parser = build_arg_parser()
     args = parser.parse_args()
 
-    binary_path = _get_fd_router_path()
     try:
         binary_path = _get_fd_router_path()
 
@@ -91,9 +90,10 @@ def main() -> None:
         if args.version:
             cmd.append("--version")
 
-        subprocess.run(cmd)
+        result = subprocess.run(cmd)
+        sys.exit(result.returncode)
     except KeyboardInterrupt:
-        pass
+        sys.exit(130)
     except FileNotFoundError as exc:
         print(f"Error: {exc}", file=sys.stderr)
         sys.exit(1)
