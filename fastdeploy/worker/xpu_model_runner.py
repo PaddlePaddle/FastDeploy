@@ -1746,9 +1746,9 @@ class XPUModelRunner(ModelRunnerBase):
                     self.proposer.run(share_inputs=self.share_inputs)
 
             # 7. Updata 'infer_seed' and step_paddle()
-            if not self.speculative_decoding:
-                self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-                self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 step_xpu(
                     self.share_inputs,
