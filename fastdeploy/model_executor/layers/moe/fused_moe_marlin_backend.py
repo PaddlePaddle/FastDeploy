@@ -330,7 +330,14 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
                 self._process_int4_weights(layer, weight_tensor, weight_name, scale_name)
 
     def _process_fp8_weights(self, layer, weight_tensor, weight_name, scale_name, num_bits):
-        """Process FP8 weights for Marlin kernel."""
+        """Process FP8 weights for Marlin kernel.
+
+        Note: initializes scales to all-ones (placeholder). The caller MUST
+        subsequently call set_fp8_scales() with the real per-block FP8 scales,
+        otherwise inference precision will be severely degraded.
+        Currently only MiniMax-M2.5 (minimax_m2_5.py) implements the full
+        set_fp8_scales() flow.
+        """
         from fastdeploy.model_executor.ops.gpu import gptq_marlin_repack
 
         E, K, N = weight_tensor.shape

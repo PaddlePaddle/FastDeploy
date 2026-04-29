@@ -33,6 +33,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     slice_fn,
 )
+from fastdeploy.model_executor.utils import get_sm_version
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor, modules_to_convert
@@ -268,7 +269,8 @@ class LinearBase(nn.Layer):
         """
         # SM80: append_attention may return a list. Extract first element
         # to satisfy quant_method.apply()'s tensor type contract.
-        if isinstance(x, list):
+        # Only active on SM80+CUDA; SM90+ will raise if a list is unexpectedly passed.
+        if get_sm_version() < 90 and current_platform.is_cuda() and isinstance(x, list):
             if len(x) != 1:
                 raise RuntimeError(f"Expected single tensor from attention, got list of {len(x)}")
             x = x[0]
@@ -957,7 +959,8 @@ class RowParallelLinear(LinearBase):
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         # SM80: append_attention may return a list. Extract first element
         # to satisfy quant_method.apply()'s tensor type contract.
-        if isinstance(x, list):
+        # Only active on SM80+CUDA; SM90+ will raise if a list is unexpectedly passed.
+        if get_sm_version() < 90 and current_platform.is_cuda() and isinstance(x, list):
             if len(x) != 1:
                 raise RuntimeError(f"Expected single tensor from attention, got list of {len(x)}")
             x = x[0]
