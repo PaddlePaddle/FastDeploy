@@ -793,6 +793,7 @@ class TestFusedMoeTritonBackend:
 
         _ = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
         assert "topk_ids" in captured
+
     def test_python_op_learnable_scaling(self, fake_ops, monkeypatch):
         """routed_scaling_factor_learnable=True: per_expert_scale applied to topk_weights inside python_op."""
         quant_config = DummyQuantConfig(is_checkpoint_bf16=False, weight_block_size=(2, 2))
