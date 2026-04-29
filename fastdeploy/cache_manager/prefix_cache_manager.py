@@ -296,6 +296,8 @@ class PrefixCacheManager:
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
             storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
+            if not self.enable_splitwise:
+                storage_arg_str += " --create_cache_tensor"
         else:
             storage_arg_str = " "
 
@@ -326,7 +328,6 @@ class PrefixCacheManager:
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
                     + storage_arg_str
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
