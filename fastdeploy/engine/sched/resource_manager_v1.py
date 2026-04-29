@@ -1615,7 +1615,9 @@ class ResourceManagerV1(ResourceManager):
 
     def update_metrics(self, verbose=False):
         # Update metrics
-        num_tasks = sum([1 if task else 0 for task in self.tasks_list])
+        num_requests_running = len(self.running)
+        num_requests_waiting = len(self.waiting)
+        num_requests_queuing = max(int(getattr(self, "scheduler_unhandled_request_num", 0) or 0), 0)
         blocks_used_by_tasks = set()
         for task in self.tasks_list:
             if task is not None:
@@ -1624,10 +1626,14 @@ class ResourceManagerV1(ResourceManager):
         main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
         main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
         main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-        main_process_metrics.num_requests_running.set(len(self.running))
-        main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+        main_process_metrics.num_requests_running.set(num_requests_running)
+        main_process_metrics.num_requests_waiting.set(num_requests_waiting)
+        main_process_metrics.num_requests_queuing.set(num_requests_queuing)
         if verbose:
-            llm_logger.info(f"update metrics: running={len(self.running)}, waiting={num_tasks - len(self.running)}")
+            llm_logger.info(
+                f"update metrics: running={num_requests_running}, "
+                f"waiting={num_requests_waiting}, queuing={num_requests_queuing}"
+            )
 
     def log_status(self):
         llm_logger.info(
