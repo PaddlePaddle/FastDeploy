@@ -767,6 +767,28 @@ class TestMTPProposer(unittest.TestCase):
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.worker.input_batch.get_rope")
+    def test_update_mtp_config_dense_mtp(self, mock_rope, mock_attn_backend, mock_model_loader):
+        """Cover dense MTP branch: use_dense_mtp=True sets moe_num_experts=None (line 172)"""
+        mock_model = Mock()
+        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
+        mock_model_loader.return_value.load_model.return_value = mock_model
+        mock_attn = Mock()
+        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
+        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
+        mock_rope.return_value = paddle.zeros([1, 2048, 64])
+
+        self.fd_config.model_config.use_dense_mtp = True
+        self.fd_config.model_config.moe_num_experts = 8
+        proposer = MTPProposer(
+            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+        )
+        self.assertIsNone(proposer.model_config.moe_num_experts)
+        del self.fd_config.model_config.use_dense_mtp
+        del self.fd_config.model_config.moe_num_experts
+
+    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
+    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
+    @patch("fastdeploy.worker.input_batch.get_rope")
     @patch("fastdeploy.spec_decode.mtp.current_platform")
     def test_unsupported_platform_raises_runtime_error(
         self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader
