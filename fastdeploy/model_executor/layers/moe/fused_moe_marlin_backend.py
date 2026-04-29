@@ -819,6 +819,14 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         SM80 (A100) fallback: use pre-stacked BF16 expert weights on GPU.
         Per-selection batched GEMM with paddle.bmm. CUDA graph compatible:
         no numpy(), no data-dependent Python loops, no dynamic tensor creation.
+
+        Contract: the caller's model loading path MUST set three attributes on
+        the layer before inference:
+            layer._sm80_gate  — [local_E, interm, hidden]  BF16 gate+up weights
+            layer._sm80_up    — [local_E, interm, hidden]  BF16 up weights
+            layer._sm80_down  — [local_E, hidden, interm]  BF16 down weights
+        Currently only MiniMax-M2.5 (minimax_m2_5.py) implements this via
+        _load_fp8_marlin_layer(). Other models using this path must do the same.
         """
         gate_all = layer._sm80_gate  # [local_E, interm, hidden]
         up_all = layer._sm80_up  # [local_E, interm, hidden]
