@@ -78,24 +78,30 @@ def main() -> None:
     args = parser.parse_args()
 
     binary_path = _get_fd_router_path()
-
-    cmd = [binary_path]
-    if args.port:
-        cmd.extend(["--port", args.port])
-    if args.splitwise:
-        cmd.append("--splitwise")
-    if args.config_path:
-        cmd.extend(["--config_path", args.config_path])
-    if args.version:
-        cmd.append("--version")
-
     try:
-        result = subprocess.run(cmd)
-        sys.exit(result.returncode)
+        binary_path = _get_fd_router_path()
+
+        cmd = [binary_path]
+        if args.port:
+            cmd.extend(["--port", args.port])
+        if args.splitwise:
+            cmd.append("--splitwise")
+        if args.config_path:
+            cmd.extend(["--config_path", args.config_path])
+        if args.version:
+            cmd.append("--version")
+
+        subprocess.run(cmd)
     except KeyboardInterrupt:
-        sys.exit(130)
-    except FileNotFoundError:
-        print(f"Error: fd-router binary not found at {binary_path}", file=sys.stderr)
+        pass
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        sys.exit(1)
+    except PermissionError as exc:
+        print(
+            f"Error: unable to access or execute fd-router binary: {exc}",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
 
