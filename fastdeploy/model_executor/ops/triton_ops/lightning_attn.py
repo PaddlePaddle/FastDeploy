@@ -573,10 +573,13 @@ def lightning_attention_forward(q, k, v, s, kv_history, block_size=256):
     )
 
     # Step 4: Compute non-diagonal blocks of attention
-    assert NUM_FBLOCK == 1, (
-        "_fwd_none_diag_kernel uses tl.program_id(2) for feature blocks "
-        "but grid is 2D; extend grid to 3D if NUM_FBLOCK > 1 is needed"
-    )
+    # Use explicit RuntimeError instead of assert so the check survives
+    # python -O / PYTHONOPTIMIZE=1 (which strips assertions).
+    if NUM_FBLOCK != 1:
+        raise NotImplementedError(
+            f"_fwd_none_diag_kernel uses tl.program_id(2) for feature blocks but grid is 2D; "
+            f"extend grid to 3D if NUM_FBLOCK > 1 is needed (got NUM_FBLOCK={NUM_FBLOCK})."
+        )
     grid = (b * h, NUM_BLOCK * NUM_CBLOCK)
     _fwd_none_diag_kernel[grid](
         q,
@@ -655,11 +658,13 @@ def lightning_attention(
         o, kv_history = lightning_attention_forward(q1, k1, v, ed, kv_history, block_size=block_size)
         output = o if output is None else output + o
     # Guard: if d < m the loop body never executes and output stays None.
-    # With the d % m == 0 assert above this should never happen for valid head
-    # dimensions (64, 128, …), but be explicit to aid debugging.
-    assert output is not None, (
-        f"lightning_attention produced no output (d={d}, m={m}). " "head_dim must be >= m and divisible by m."
-    )
+    # With the d % m == 0 check above this should never happen for valid head
+    # dimensions (64, 128, ...).  Use a real exception (not assert) so the
+    # check survives python -O / PYTHONOPTIMIZE=1.
+    if output is None:
+        raise RuntimeError(
+            f"lightning_attention produced no output (d={d}, m={m}); " f"head_dim must be >= m and divisible by m."
+        )
     return output, kv_history
 
 

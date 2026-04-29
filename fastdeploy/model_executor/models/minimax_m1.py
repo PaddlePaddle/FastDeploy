@@ -21,6 +21,7 @@ MoE configuration: 32 experts with top-2 routing per token.
 from __future__ import annotations
 
 import math
+import os
 import re
 from typing import Any, Dict, Union
 
@@ -381,6 +382,32 @@ class MiniMaxM1LinearAttention(nn.Layer):
         q = q.transpose([0, 2, 1, 3])
         k = k.transpose([0, 2, 1, 3])
         v = v.transpose([0, 2, 1, 3])
+
+        # ----------------------------------------------------------------
+        # Continuous-batching safety guard.
+        #
+        # ``_kv_history`` is a per-layer recurrent state stored as a module
+        # attribute and is **not** isolated per request.  Under FastDeploy's
+        # default continuous batching, the same ``batch_size`` may contain
+        # entirely different requests across calls (a finished slot is reused
+        # by a new request), which would silently leak linear-attention state
+        # between unrelated requests.
+        #
+        # Default behaviour: when called with a real ``ForwardMeta`` (i.e. via
+        # the FD runtime), refuse to run unless the operator explicitly
+        # opts in via ``FD_MINIMAX_M1_ALLOW_OFFLINE_KV_HISTORY=1``.  Tests
+        # and offline single-request use that pass ``forward_meta=None``
+        # (or set the env var) are unaffected.
+        # TODO: Migrate to ForwardMeta.caches / slot-based cache management
+        #       so this guard can be removed.
+        # ----------------------------------------------------------------
+        if forward_meta is not None and os.environ.get("FD_MINIMAX_M1_ALLOW_OFFLINE_KV_HISTORY") != "1":
+            raise NotImplementedError(
+                "MiniMaxM1LinearAttention: _kv_history is not isolated per-request and is "
+                "unsafe under continuous batching. Set "
+                "FD_MINIMAX_M1_ALLOW_OFFLINE_KV_HISTORY=1 to acknowledge offline / "
+                "single-request use, or migrate to slot-based cache before serving."
+            )
 
         # Retrieve or initialize KV history for recurrent state persistence.
         # TODO: Migrate to ForwardMeta.caches / slot-based cache management for
@@ -941,7 +968,17 @@ class MiniMaxM1ForCausalLM(ModelForCasualLM):
 
 
 class MiniMaxM1PretrainedModel(PretrainedModel):
-    """MiniMax-M1 Pretrained Model"""
+    """MiniMax-M1 Pretrained Model.
+
+    .. note::
+       PaddleFormers-only weight-conversion helper. **Not used in the FD
+       serving path** (FD serving goes through ``MiniMaxM1ForCausalLM`` and
+       ``ModelRegistry``).  This class exists solely to provide
+       ``_get_tensor_parallel_mappings`` for offline checkpoint conversion
+       via PaddleFormers' ``PretrainedModel`` machinery; it is intentionally
+       *not* registered with ``ModelRegistry`` and does not implement FD's
+       ``set_state_dict`` / ``load_weights`` interface.
+    """
 
     config_class = FDConfig
 
