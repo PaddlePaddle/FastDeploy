@@ -383,77 +383,6 @@ function version_info() {
   echo "CXX compiler version: $cxx_version" >> $output_file
 }
 
-function download_fd_router() {
-  local FD_ROUTER_DIR="fastdeploy/golang_router"
-  local FD_ROUTER_BIN="${FD_ROUTER_DIR}/fd-router"
-
-  # Detect host architecture and select the matching binary URL.
-  # Only x86_64 and aarch64 are currently supported; skip on other architectures.
-  local HOST_ARCH
-  HOST_ARCH=$(uname -m)
-  local FD_ROUTER_URL
-  case "${HOST_ARCH}" in
-    x86_64)
-      FD_ROUTER_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router"
-      ;;
-    aarch64)
-      FD_ROUTER_URL="https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router-aarch64"
-      ;;
-    *)
-      echo -e "${YELLOW}[WARNING]${NONE} Unsupported architecture '${HOST_ARCH}' for fd-router prebuilt binary, skipping download (please build from source: https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)"
-      return 0
-      ;;
-  esac
-
-  if [ -x "${FD_ROUTER_BIN}" ]; then
-    echo -e "${GREEN}[golang_router]${NONE} fd-router already exists, skipping download"
-    return 0
-  fi
-
-  echo -e "${BLUE}[golang_router]${NONE} Downloading fd-router binary for ${HOST_ARCH}..."
-  mkdir -p "${FD_ROUTER_DIR}"
-
-  local TMP_BIN="${FD_ROUTER_BIN}.tmp"
-  wget -q --no-proxy "${FD_ROUTER_URL}" -O "${TMP_BIN}" || {
-    echo -e "${YELLOW}[WARNING]${NONE} Failed to download fd-router, skipping (golang router is optional)"
-    rm -f "${TMP_BIN}"
-    return 0
-  }
-
-  # Sanity checks
-  # 1. Must be ELF binary
-  file "${TMP_BIN}" | grep -q "ELF" || {
-    echo -e "${YELLOW}[WARNING]${NONE} fd-router is not an ELF binary, skipping"
-    rm -f "${TMP_BIN}"
-    return 0
-  }
-
-  # 2. Verify downloaded binary matches the host architecture
-  local EXPECTED_ARCH_PATTERN
-  case "${HOST_ARCH}" in
-    x86_64)  EXPECTED_ARCH_PATTERN="x86-64" ;;
-    aarch64) EXPECTED_ARCH_PATTERN="aarch64|ARM aarch64" ;;
-  esac
-  file "${TMP_BIN}" | grep -qE "${EXPECTED_ARCH_PATTERN}" || {
-    echo -e "${YELLOW}[WARNING]${NONE} fd-router architecture mismatch (expected ${HOST_ARCH}), skipping"
-    rm -f "${TMP_BIN}"
-    return 0
-  }
-
-  # 3. Size check (avoid HTML / empty / error pages)
-  local SIZE
-  SIZE=$(stat -c%s "${TMP_BIN}")
-  if [ "$SIZE" -lt 1000000 ]; then
-    echo -e "${YELLOW}[WARNING]${NONE} fd-router size is too small ($SIZE bytes), skipping"
-    rm -f "${TMP_BIN}"
-    return 0
-  fi
-
-  mv "${TMP_BIN}" "${FD_ROUTER_BIN}"
-  chmod +x "${FD_ROUTER_BIN}"
-  echo -e "${GREEN}[golang_router]${NONE} fd-router downloaded and installed successfully"
-}
-
 function cleanup() {
   rm -rf $BUILD_DIR $EGG_DIR
   if [ `${python} -m pip list | grep fastdeploy | wc -l` -gt 0  ]; then
@@ -485,7 +414,6 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
 
   init
   version_info
-  download_fd_router
   # Whether to enable precompiled wheel
   if [ "$FD_USE_PRECOMPILED" -eq 1 ]; then
     echo -e "${BLUE}[MODE]${NONE} Using precompiled .whl"
