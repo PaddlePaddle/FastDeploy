@@ -81,14 +81,14 @@ def _send_chat(port, model, prompt, max_tokens=64):
 def minimax_server():
     """Start a MiniMax-M1 server for the test module.
 
-    Uses WINT4 quantization (smallest GPU footprint: ~228 GB, 3× A800).
+    Uses WINT4 quantization (smallest supported TP footprint: ~228 GB, 4× A800).
     Yields (port, model_path) when ready, kills on teardown.
     """
     ngpus = _gpu_count()
-    if ngpus < 3:
-        pytest.skip(f"MiniMax-M1 needs ≥3 GPUs (WINT4). Found: {ngpus}")
+    if ngpus < 4:
+        pytest.skip(f"MiniMax-M1 needs ≥4 GPUs (WINT4 TP). Found: {ngpus}")
 
-    tp = min(ngpus, 8)  # cap at 8-way TP
+    tp = 4
     cmd = [
         sys.executable,
         "-m",
@@ -157,7 +157,8 @@ class TestMiniMaxM1ModelLoad:
         with urllib.request.urlopen(req, timeout=10) as resp:
             data = json.loads(resp.read().decode())
         model_ids = [m["id"] for m in data.get("data", [])]
-        assert len(model_ids) > 0, f"No models served: {data}"
+        expected_ids = {model_path, os.path.basename(model_path.rstrip("/"))}
+        assert expected_ids.intersection(model_ids), f"Expected one of {expected_ids} in {model_ids!r}"
 
 
 class TestMiniMaxM1Inference:

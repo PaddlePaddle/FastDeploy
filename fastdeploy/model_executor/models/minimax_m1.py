@@ -21,7 +21,6 @@ MoE configuration: 32 experts with top-2 routing per token.
 from __future__ import annotations
 
 import math
-import os
 import re
 from typing import Any, Dict, Union
 
@@ -54,7 +53,10 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
-from fastdeploy.model_executor.ops.triton_ops.lightning_attn import lightning_attention
+from fastdeploy.model_executor.ops.triton_ops.lightning_attn import (
+    lightning_attention,
+    linear_decode_forward_triton,
+)
 
 
 class MiniMaxM1MLP(nn.Layer):
@@ -247,19 +249,11 @@ class MiniMaxM1Attention(nn.Layer):
 class MiniMaxM1LinearAttention(nn.Layer):
     """Linear attention (Lightning Attention).
 
-    .. warning::
-        **Offline / single-request use only.**
-        ``_kv_history`` is a per-layer recurrent state stored as a module attribute,
-        keyed implicitly by ``batch_size``. Under continuous batching where requests
-        within a batch shuffle (insertion / eviction at arbitrary slots) the cached
-        state will silently leak across requests and produce wrong outputs even when
-        ``batch_size`` is unchanged.
-
-        Production serving must migrate this state into
-        ``ForwardMeta.caches`` / slot-based cache management with explicit per-slot
-        reset on request boundaries. The current implementation is intended for
-        accuracy validation, single-request inference and the integration tests in
-        ``tests/model_executor/test_minimax_m1*``.
+    The serving path stores recurrent state in
+    ``ForwardMeta.linear_attn_caches`` so each request keeps a dedicated slot
+    across continuous batching, reordering and slot reuse. When that metadata is
+    absent, the layer falls back to module-local ``_kv_history`` for offline or
+    single-request execution.
     """
 
     def __init__(
@@ -273,6 +267,7 @@ class MiniMaxM1LinearAttention(nn.Layer):
 
         self.hidden_size = fd_config.model_config.hidden_size
         self.head_dim = fd_config.model_config.head_dim
+        self.linear_layer_id = linear_layer_id
         tp_size = fd_config.parallel_config.tensor_parallel_size
         self.num_attention_heads = fd_config.model_config.num_attention_heads // tp_size
         # Full (unsharded) inner dim for parallel linear layer declarations;
@@ -372,78 +367,100 @@ class MiniMaxM1LinearAttention(nn.Layer):
         k = paddle.nn.functional.silu(k.astype("float32"))
         v = paddle.nn.functional.silu(v.astype("float32"))
 
-        # Reshape for lightning attention
-        batch_size = q.shape[0]
-        q = q.reshape([batch_size, -1, self.num_attention_heads, self.head_dim])
-        k = k.reshape([batch_size, -1, self.num_attention_heads, self.head_dim])
-        v = v.reshape([batch_size, -1, self.num_attention_heads, self.head_dim])
+        slope_rate = self.slope_rate.reshape([-1])
+        linear_attn_caches = getattr(forward_meta, "linear_attn_caches", None) if forward_meta is not None else None
 
-        # Transpose to [batch, heads, seq_len, dim]
-        q = q.transpose([0, 2, 1, 3])
-        k = k.transpose([0, 2, 1, 3])
-        v = v.transpose([0, 2, 1, 3])
+        if linear_attn_caches is None:
+            # Offline / test fallback: treat each row as an independent single-token
+            # sequence and keep module-local state.
+            batch_size = q.shape[0]
+            q = q.reshape([batch_size, self.num_attention_heads, 1, self.head_dim])
+            k = k.reshape([batch_size, self.num_attention_heads, 1, self.head_dim])
+            v = v.reshape([batch_size, self.num_attention_heads, 1, self.head_dim])
 
-        # ----------------------------------------------------------------
-        # Continuous-batching safety guard.
-        #
-        # ``_kv_history`` is a per-layer recurrent state stored as a module
-        # attribute and is **not** isolated per request.  Under FastDeploy's
-        # default continuous batching, the same ``batch_size`` may contain
-        # entirely different requests across calls (a finished slot is reused
-        # by a new request), which would silently leak linear-attention state
-        # between unrelated requests.
-        #
-        # Default behaviour: when called with a real ``ForwardMeta`` (i.e. via
-        # the FD runtime), refuse to run unless the operator explicitly
-        # opts in via ``FD_MINIMAX_M1_ALLOW_OFFLINE_KV_HISTORY=1``.  Tests
-        # and offline single-request use that pass ``forward_meta=None``
-        # (or set the env var) are unaffected.
-        # TODO: Migrate to ForwardMeta.caches / slot-based cache management
-        #       so this guard can be removed.
-        # ----------------------------------------------------------------
-        if forward_meta is not None and os.environ.get("FD_MINIMAX_M1_ALLOW_OFFLINE_KV_HISTORY") != "1":
-            raise NotImplementedError(
-                "MiniMaxM1LinearAttention: _kv_history is not isolated per-request and is "
-                "unsafe under continuous batching. Set "
-                "FD_MINIMAX_M1_ALLOW_OFFLINE_KV_HISTORY=1 to acknowledge offline / "
-                "single-request use, or migrate to slot-based cache before serving."
+            needs_init = (
+                not hasattr(self, "_kv_history") or self._kv_history is None or self._kv_history.shape[0] != batch_size
             )
-
-        # Retrieve or initialize KV history for recurrent state persistence.
-        # TODO: Migrate to ForwardMeta.caches / slot-based cache management for
-        #       proper multi-request isolation in production serving scenarios.
-        needs_init = (
-            not hasattr(self, "_kv_history") or self._kv_history is None or self._kv_history.shape[0] != batch_size
-        )
-        if needs_init:
-            if getattr(self, "_kv_history", None) is not None and self._kv_history.shape[0] != batch_size:
-                logger.warning(
-                    "MiniMaxM1LinearAttention: batch_size changed from %d to %d; "
-                    "resetting _kv_history. This will discard accumulated linear-attention "
-                    "state and may degrade generation quality under continuous/dynamic batching. "
-                    "Pending migration to slot-based cache (see TODO above).",
-                    self._kv_history.shape[0],
-                    batch_size,
+            if needs_init:
+                self._kv_history = paddle.zeros(
+                    [batch_size, self.num_attention_heads, self.head_dim, self.head_dim],
+                    dtype=q.dtype,
                 )
-            self._kv_history = paddle.zeros(
-                [batch_size, self.num_attention_heads, self.head_dim, self.head_dim],
-                dtype=q.dtype,
+
+            attn_output, new_kv_history = lightning_attention(
+                q, k, v, slope_rate, block_size=256, kv_history=self._kv_history
+            )
+            self._kv_history = new_kv_history
+            attn_output = attn_output.transpose([0, 2, 1, 3]).reshape(
+                [batch_size, self.num_attention_heads * self.head_dim]
+            )
+        else:
+            slot_caches = linear_attn_caches[self.linear_layer_id]
+            num_tokens = q.shape[0]
+            seq_lens_this_time = getattr(forward_meta, "seq_lens_this_time", None)
+            cu_seqlens_q = getattr(forward_meta, "cu_seqlens_q", None)
+            if seq_lens_this_time is None or cu_seqlens_q is None:
+                raise ValueError("MiniMaxM1LinearAttention requires seq_lens_this_time and cu_seqlens_q")
+
+            all_single_token = (
+                num_tokens == seq_lens_this_time.shape[0]
+                and int(paddle.max(seq_lens_this_time).item()) == 1
+                and int(paddle.min(seq_lens_this_time).item()) == 1
             )
 
-        # Apply lightning attention (returns 4D kv_history, not 5D concat).
-        # Use .reshape([-1]) not .squeeze(-1): slope_rate is [heads, 1, 1] and
-        # .squeeze(-1) would yield [heads, 1] (ndim=2), which is NOT reshaped by
-        # lightning_attention's `if ed.ndim == 1` guard and would reach the Triton
-        # kernel with an incorrect shape.  .reshape([-1]) always produces 1-D [heads].
-        attn_output, new_kv_history = lightning_attention(
-            q, k, v, self.slope_rate.reshape([-1]), block_size=256, kv_history=self._kv_history
-        )
-        # Update persisted KV state for next token generation
-        self._kv_history = new_kv_history
+            if all_single_token:
+                slot_idx = forward_meta.batch_id_per_token[:num_tokens].reshape([-1]).cast("int32")
+                q_decode = q.reshape([num_tokens, self.num_attention_heads, self.head_dim]).unsqueeze(2)
+                k_decode = k.reshape([num_tokens, self.num_attention_heads, self.head_dim]).unsqueeze(2)
+                v_decode = v.reshape([num_tokens, self.num_attention_heads, self.head_dim]).unsqueeze(2)
+                attn_output = linear_decode_forward_triton(
+                    q_decode,
+                    k_decode,
+                    v_decode,
+                    slot_caches,
+                    slope_rate,
+                    slot_idx,
+                ).reshape([num_tokens, self.num_attention_heads * self.head_dim])
+            else:
+                outputs = []
+                cu_seqlens_q = cu_seqlens_q.reshape([-1])
+                for batch_idx in range(seq_lens_this_time.shape[0]):
+                    start = int(cu_seqlens_q[batch_idx].item())
+                    end = int(cu_seqlens_q[batch_idx + 1].item())
+                    if end <= start:
+                        continue
 
-        # Reshape back to [batch, seq, hidden_inner]
-        attn_output = attn_output.transpose([0, 2, 1, 3])
-        attn_output = attn_output.reshape([batch_size, -1, self.num_attention_heads * self.head_dim])
+                    seq_len = end - start
+                    q_seq = (
+                        q[start:end]
+                        .reshape([1, seq_len, self.num_attention_heads, self.head_dim])
+                        .transpose([0, 2, 1, 3])
+                    )
+                    k_seq = (
+                        k[start:end]
+                        .reshape([1, seq_len, self.num_attention_heads, self.head_dim])
+                        .transpose([0, 2, 1, 3])
+                    )
+                    v_seq = (
+                        v[start:end]
+                        .reshape([1, seq_len, self.num_attention_heads, self.head_dim])
+                        .transpose([0, 2, 1, 3])
+                    )
+
+                    seq_out, new_kv_history = lightning_attention(
+                        q_seq,
+                        k_seq,
+                        v_seq,
+                        slope_rate,
+                        block_size=256,
+                        kv_history=slot_caches[batch_idx : batch_idx + 1],
+                    )
+                    slot_caches[batch_idx : batch_idx + 1] = new_kv_history
+                    outputs.append(
+                        seq_out.transpose([0, 2, 1, 3]).reshape([seq_len, self.num_attention_heads * self.head_dim])
+                    )
+
+                attn_output = paddle.concat(outputs, axis=0).reshape([num_tokens, hidden_inner])
 
         # Norm → gate → output projection (matches vLLM/HF forward).
         # Note: ``RMSNorm.forward`` always returns ``(out, residual_out)`` regardless
@@ -1044,3 +1061,15 @@ class MiniMaxM1PretrainedModel(PretrainedModel):
         mappings = get_tensor_parallel_split_mappings(config.num_hidden_layers)
 
         return mappings
+
+
+class MiniMaxText01PretrainedModel(MiniMaxM1PretrainedModel):
+    """Alias pretrained helper for HuggingFace MiniMaxText01 checkpoints."""
+
+    @classmethod
+    def arch_name(cls):
+        return "MiniMaxText01ForCausalLM"
+
+    @classmethod
+    def name(cls):
+        return "MiniMaxText01ForCausalLM"

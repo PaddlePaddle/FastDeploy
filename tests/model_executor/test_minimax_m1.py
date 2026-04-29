@@ -64,8 +64,8 @@ class _StubAttention(paddle.nn.Layer):
     def __init__(self, *a, **kw):
         super().__init__()
 
-    def forward(self, qkv=None, forward_meta=None, **kw):
-        return qkv
+    def forward(self, q=None, k=None, v=None, forward_meta=None, **kw):
+        return q
 
     def load_state_dict(self, _sd):
         pass
@@ -127,6 +127,11 @@ def _stub_lightning_attention(q, k, v, slope, block_size=256, kv_history=None):
     """Return dummy output tensors for lightning attention."""
     b, h, s, d = q.shape
     return paddle.zeros_like(q), paddle.zeros([b, h, d, d], dtype=q.dtype)
+
+
+def _stub_linear_decode_forward_triton(q, k, v, kv_caches, slope_rate, slot_idx, BLOCK_SIZE=32):
+    """Return dummy decode output tensor for slot-based linear attention."""
+    return paddle.zeros([q.shape[0], q.shape[1] * q.shape[3]], dtype=q.dtype)
 
 
 # ── Forward-test callables (replace sublayer internals after construction) ──
@@ -220,6 +225,7 @@ def m(monkeypatch):
     monkeypatch.setattr(minimax_m1, "ParallelLMHead", _StubLMHead)
     monkeypatch.setattr(minimax_m1, "FusedMoE", _StubFusedMoE)
     monkeypatch.setattr(minimax_m1, "lightning_attention", _stub_lightning_attention)
+    monkeypatch.setattr(minimax_m1, "linear_decode_forward_triton", _stub_linear_decode_forward_triton)
     monkeypatch.setattr(minimax_m1, "tensor_model_parallel_all_reduce", lambda x: x)
     return minimax_m1
 
@@ -300,6 +306,13 @@ def test_name_method():
 def test_pretrained_name():
     assert minimax_m1.MiniMaxM1PretrainedModel.arch_name() == "MiniMaxM1ForCausalLM"
     assert minimax_m1.MiniMaxM1PretrainedModel.name() == "MiniMaxM1ForCausalLM"
+
+
+def test_pretrained_alias_registered():
+    assert (
+        ModelRegistry._arch_to_pretrained_model_cls["MiniMaxText01ForCausalLM"]
+        is minimax_m1.MiniMaxText01PretrainedModel
+    )
 
 
 # ===================================================================
@@ -599,6 +612,37 @@ def test_compute_logits_float32(m):
     assert logits.shape == [3, 1024]
 
 
+def test_linear_attention_prefill_groups_tokens_by_sequence(m, monkeypatch):
+    calls = []
+
+    def _recording_lightning_attention(q, k, v, slope, block_size=256, kv_history=None):
+        calls.append((list(q.shape), list(kv_history.shape)))
+        return paddle.zeros_like(q), paddle.ones_like(kv_history)
+
+    monkeypatch.setattr(m, "lightning_attention", _recording_lightning_attention)
+
+    fd = _make_fd_config(num_layers=1, attn_type_list=[0])
+    layer = m.MiniMaxM1LinearAttention(fd, layer_id=0, linear_layer_id=0, prefix="model.layers.0.self_attn")
+    forward_meta = SimpleNamespace(
+        linear_attn_caches=[
+            paddle.zeros([4, layer.num_attention_heads, layer.head_dim, layer.head_dim], dtype="float32")
+        ],
+        seq_lens_this_time=paddle.to_tensor([3, 1], dtype="int32"),
+        cu_seqlens_q=paddle.to_tensor([0, 3, 4], dtype="int32"),
+        batch_id_per_token=paddle.to_tensor([0, 0, 0, 1], dtype="int32"),
+    )
+    hidden_states = paddle.randn([4, fd.model_config.hidden_size], dtype="float32")
+
+    output = layer(forward_meta=forward_meta, hidden_states=hidden_states)
+
+    # Token-major grouping invariant: each request's tokens are passed to
+    # lightning_attention as a separate sequence, seeded from its own slot cache.
+    assert output.shape[0] == 4
+    assert calls == [([1, 8, 3, 32], [1, 8, 32, 32]), ([1, 8, 1, 32], [1, 8, 32, 32])]
+    assert float(forward_meta.linear_attn_caches[0][0].sum().item()) > 0
+    assert float(forward_meta.linear_attn_caches[0][1].sum().item()) > 0
+
+
 # ===================================================================
 # 7. Weight loading — HF→FD name remapping
 # ===================================================================
@@ -667,6 +711,6 @@ def test_decoder_layer_returns_none_residual(m):
     fd = _make_fd_config()
     layer = m.MiniMaxM1DecoderLayer(fd, layer_id=0, prefix="model.layers.0")
     meta = SimpleNamespace()
-    h = paddle.randn([2, 4])
+    h = paddle.randn([2, fd.model_config.hidden_size])
     out, residual = layer(forward_meta=meta, hidden_states=h)
     assert residual is None, f"Expected None residual (DeepNorm folds it into hidden_states), got {type(residual)}"

@@ -38,8 +38,8 @@ MiniMax-M1 (456B params) requires quantization for practical deployment. Approxi
 
 | Mode | GPU Memory | Example Config |
 |------|-----------|----------------|
-| BF16 | ~912 GB | 12× A800-80GB, `--tensor-parallel-size 12` |
-| FP8 | ~456 GB | 6× A800-80GB, `--tensor-parallel-size 6` |
+| BF16 | ~912 GB | Requires additional parallelism; `--tensor-parallel-size` must divide both 64 attention heads and 8 KV heads |
+| FP8 | ~456 GB | 8× A800-80GB, `--tensor-parallel-size 8` |
 | WINT4 | ~228 GB | 4× A800-80GB, `--tensor-parallel-size 4` |
 
 ```shell
@@ -64,4 +64,4 @@ python -m fastdeploy.entrypoints.openai.api_server \
 - This initial integration is focused on model structure and backend wiring.
 - Low-bit quantization support still requires follow-up validation against MiniMax-M1 weights.
 - Production validation should include GPU runtime checks for Lightning Attention decode/prefill paths.
-- Linear attention KV history uses instance variables, which needs migration to slot-based cache for proper multi-request isolation (TODO in code).
+- Continuous batching now keeps linear-attention history in slot-aligned runtime caches, but long-running multi-request GPU validation is still pending.

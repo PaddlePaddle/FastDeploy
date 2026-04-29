@@ -100,6 +100,7 @@ class InputBatch:
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
         self.enable_pd_reorder = False
+        self.linear_attn_caches = None
         # Qwen vl etc. do not support mm_max_tokens_per_item now
         if self.enable_mm and self.model_config.mm_max_tokens_per_item is None:
             self.max_chunk_tokens = self.model_config.max_model_len
@@ -454,6 +455,10 @@ class InputBatch:
         # Swap mask rollback
         swap_data(self.mask_rollback, i1, i2)
 
+        if self.linear_attn_caches is not None:
+            for cache in self.linear_attn_caches:
+                swap_data(cache, i1, i2)
+
     def condense(self) -> None:
         """
         Condense the input batch by keeping only the running requests and moving their data to the front.
@@ -616,6 +621,10 @@ class InputBatch:
             self.req_ids = [""] * max_num_seqs
             self.entropy_list = [[] for _ in range(max_num_seqs)]
             self.logits_processors_args = [{} for _ in range(max_num_seqs)]
+
+            if self.linear_attn_caches is not None:
+                for cache in self.linear_attn_caches:
+                    cache[:] = 0
 
             # Reset speculative decoding tensors if enabled
             if self.speculative_decoding:

@@ -6,9 +6,9 @@
 # MiniMax-M1 is 456B params — requires multiple GPUs for any model-loading test.
 #
 # Hardware requirements by quantization:
-#   BF16:  12× A800-80GB (~912 GB)
-#   FP8:    6× A800-80GB (~456 GB)
-#   WINT4:  3× A800-80GB (~228 GB)  ← recommended minimum
+#   BF16:  requires additional parallelism beyond raw TP sizing (~912 GB)
+#   FP8:    8× A800-80GB (~456 GB, TP=8)
+#   WINT4:  4× A800-80GB (~228 GB, TP=4)  ← recommended minimum
 #
 # Usage:
 #   # Minimum (WINT4 on 4 GPUs):
@@ -60,23 +60,32 @@ echo "║  Quantization: $QUANT_MODE"
 echo "║  Max seq len: $MAX_MODEL_LEN"
 echo "╚═══════════════════════════════════════════════════════════════╝"
 
-if [[ "$NUM_GPUS" -lt 3 ]]; then
-    echo "ERROR: MiniMax-M1 requires at least 3 GPUs (WINT4). Found: $NUM_GPUS"
+if [[ "$NUM_GPUS" -lt 4 ]]; then
+    echo "ERROR: MiniMax-M1 requires at least 4 GPUs (WINT4 TP=4). Found: $NUM_GPUS"
     echo "For single-GPU component tests, use: aistudio/task047_minimax_m1_validate.sh"
     exit 1
 fi
 
 # Recommend TP size based on GPU count and quant
-TP_SIZE="$NUM_GPUS"
+pick_supported_tp() {
+    local available="$1"
+    for candidate in 8 4 2 1; do
+        if [[ "$available" -ge "$candidate" ]]; then
+            echo "$candidate"
+            return
+        fi
+    done
+}
+
+TP_SIZE="$(pick_supported_tp "$NUM_GPUS")"
 if [[ "$QUANT_MODE" == "wint4" ]] && [[ "$NUM_GPUS" -ge 4 ]]; then
     TP_SIZE=4
 elif [[ "$QUANT_MODE" == *"fp8"* ]] && [[ "$NUM_GPUS" -ge 8 ]]; then
     TP_SIZE=8
 elif [[ "$QUANT_MODE" == "bf16" ]] || [[ "$QUANT_MODE" == "none" ]]; then
     if [[ "$NUM_GPUS" -lt 12 ]]; then
-        echo "WARNING: BF16 needs ~12 GPUs. Using all $NUM_GPUS — may OOM."
+        echo "WARNING: BF16 needs ~12 GPUs of memory budget. Using TP=$TP_SIZE (supported head divisor) — may OOM."
     fi
-    TP_SIZE="$NUM_GPUS"
 fi
 echo "Using tensor_parallel_size=$TP_SIZE"
 

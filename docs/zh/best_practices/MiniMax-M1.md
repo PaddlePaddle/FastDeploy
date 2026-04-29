@@ -38,8 +38,8 @@ MiniMax-M1（456B 参数）在实际部署中需要量化。不同模式的 GPU 
 
 | 模式 | 显存需求 | 配置示例 |
 |------|---------|----------|
-| BF16 | ~912 GB | 12× A800-80GB, `--tensor-parallel-size 12` |
-| FP8 | ~456 GB | 6× A800-80GB, `--tensor-parallel-size 6` |
+| BF16 | ~912 GB | 需要额外并行策略；`--tensor-parallel-size` 必须同时整除 64 个 attention heads 和 8 个 KV heads |
+| FP8 | ~456 GB | 8× A800-80GB, `--tensor-parallel-size 8` |
 | WINT4 | ~228 GB | 4× A800-80GB, `--tensor-parallel-size 4` |
 
 ```shell
@@ -64,4 +64,4 @@ python -m fastdeploy.entrypoints.openai.api_server \
 - 当前版本优先完成模型组网与后端接线。
 - 各类低比特量化推理能力还需要结合真实权重进一步验证。
 - Lightning Attention 的 prefill/decode 路径仍需在 GPU 环境完成端到端验证。
-- 线性注意力的 KV history 当前使用实例变量存储，多请求并发场景下需迁移至 slot-based cache（已有 TODO 标注）。
+- 连续批处理场景下，线性注意力历史状态已迁移到 slot 对齐的运行时缓存；但长时、多请求 GPU 验证仍待补齐。
