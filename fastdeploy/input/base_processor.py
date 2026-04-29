@@ -687,6 +687,10 @@ class BaseTextProcessor(ABC):
             return padded_insts, seq_len
         return padded_insts
 
+    def process_logprob_response(self, token_ids, **kwargs):
+        """Decode a list of token ids to a string for logprob responses."""
+        return self.tokenizer.decode(token_ids, **kwargs)
+
     def get_mm_max_tokens_per_item(self, seq_len: int):
         """Return the maximum number of tokens per item for each modality.
 
