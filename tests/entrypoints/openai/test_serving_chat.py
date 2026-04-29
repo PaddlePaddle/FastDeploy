@@ -1667,5 +1667,71 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_dealer.write.assert_called_once_with([b"", f"{request_id}_0".encode("utf-8")])
 
 
+class TestLogprobsWithMultiModalProcessor(unittest.TestCase):
+    """Regression tests: process_logprob_response must be accessible via MultiModalProcessor.
+
+    Previously, process_logprob_response was only defined in TextProcessor.
+    MultiModalProcessor inherits directly from BaseTextProcessor, so it would
+    raise AttributeError when serving_chat.py called
+    engine_client.data_processor.process_logprob_response(...) on multimodal paths.
+    """
+
+    def setUp(self):
+        self.mock_engine = MagicMock()
+        self.chat_completion_handler = OpenAIServingChat(
+            self.mock_engine,
+            models=None,
+            pid=123,
+            ips=None,
+            max_waiting_time=10,
+            chat_template=None,
+        )
+
+        # Replace the auto-created MagicMock data_processor with a real
+        # MultiModalProcessor instance (with __init__ bypassed) so that
+        # any missing method would surface as AttributeError instead of
+        # silently succeeding via MagicMock auto-attribute creation.
+        from fastdeploy.input.multimodal_processor import MultiModalProcessor
+
+        with patch.object(MultiModalProcessor, "__init__", return_value=None):
+            mm_proc = MultiModalProcessor.__new__(MultiModalProcessor)
+        mm_proc.tokenizer = MagicMock()
+        mm_proc.tokenizer.decode = MagicMock(return_value="tok")
+        self.chat_completion_handler.engine_client.data_processor = mm_proc
+
+    def test_build_logprobs_response_with_multimodal_processor(self):
+        """_build_logprobs_response must not raise AttributeError with MultiModalProcessor."""
+        from fastdeploy.worker.output import LogprobsLists
+
+        top_logprobs = LogprobsLists(
+            logprob_token_ids=[[1, 2]],
+            logprobs=[[-0.1, -0.2]],
+            sampled_token_ranks=[1],
+        )
+        # Should not raise AttributeError — this was the original bug.
+        result = self.chat_completion_handler._build_logprobs_response(True, top_logprobs, 0, True)
+        self.assertIsNotNone(result)
+        self.chat_completion_handler.engine_client.data_processor.tokenizer.decode.assert_called()
+
+    def test_build_prompt_logprobs_with_multimodal_processor(self):
+        """_build_prompt_logprobs must not raise AttributeError with MultiModalProcessor."""
+        import paddle
+
+        from fastdeploy.worker.output import LogprobsTensors
+
+        token_ids = paddle.to_tensor([[1, 2]], dtype=paddle.int64)
+        logprobs = paddle.to_tensor([[-0.1, -0.5]], dtype=paddle.float32)
+        ranks = paddle.to_tensor([1], dtype=paddle.int64)
+        prompt_logprobs_tensors = LogprobsTensors(token_ids, logprobs, ranks)
+
+        result = self.chat_completion_handler._build_prompt_logprobs(
+            prompt_logprobs_tensors,
+            num_prompt_logprobs=1,
+            include_logprobs_decode_token=True,
+        )
+        self.assertIsNotNone(result)
+        self.chat_completion_handler.engine_client.data_processor.tokenizer.decode.assert_called()
+
+
 if __name__ == "__main__":
     unittest.main()

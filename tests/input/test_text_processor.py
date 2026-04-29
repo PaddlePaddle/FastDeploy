@@ -668,6 +668,24 @@ class TextProcessorTestCase(unittest.TestCase):
     def test_process_logprob_response(self):
         self.assertEqual(self.processor.process_logprob_response([1, 2]), "1 2")
 
+    def test_process_logprob_response_single_token(self):
+        # Matches the [tid] call pattern in _build_logprobs_response
+        result = self.processor.process_logprob_response([1])
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "1")
+
+    def test_process_logprob_response_with_kwargs(self):
+        # Matches the serving_chat.py call: process_logprob_response([tid], clean_up_tokenization_spaces=False)
+        result = self.processor.process_logprob_response([1], clean_up_tokenization_spaces=False)
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "1")
+
+    def test_process_logprob_response_batch_token_id(self):
+        # Matches the _build_prompt_logprobs call: process_logprob_response(token_id) for a flat token_id
+        result = self.processor.process_logprob_response([42])
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "42")
+
     def test_process_request_dict_uses_existing_ids(self):
         request = {"prompt_token_ids": [1, 2, 3], "max_tokens": 5}
         processed = self.processor.process_request_dict(request, max_model_len=6)
