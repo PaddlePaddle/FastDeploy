@@ -985,8 +985,16 @@ class TokenProcessor:
                 result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
                 result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
-            if is_prefill and len(token_ids) > 1:
-                result.outputs.draft_token_ids = copy.deepcopy(token_ids)
+            if is_prefill:
+                if len(token_ids) > 1:
+                    result.outputs.draft_token_ids = copy.deepcopy(token_ids)
+                elif (
+                    self.cfg.speculative_config.method == SpecMethod.NAIVE
+                    and self.cfg.scheduler_config.splitwise_role == "prefill"
+                ):
+                    # NAIVE only generates 1 token in prefill, but decode node
+                    # needs it as draft_token_ids to initialize the first decode step
+                    result.outputs.draft_token_ids = copy.deepcopy(token_ids)
 
             for batch_token_index in range(len(token_ids)):
                 token_id = token_ids[batch_token_index]
