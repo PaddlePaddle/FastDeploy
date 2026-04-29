@@ -495,7 +495,15 @@ class TestFusedMoeCutlassBackend:
         """routed_scaling_factor_learnable=True: per_expert_scale multiplied into topk_weights in apply_tp."""
 
         def fake_get_moe_scores(
-            gate_out, n_group, topk_group, top_k, routed_scaling_factor, bias, renormalize, topk_reduce_func=None
+            gate_out,
+            n_group,
+            topk_group,
+            top_k,
+            routed_scaling_factor,
+            bias,
+            renormalize,
+            topk_reduce_func=None,
+            use_fused_cast=False,
         ):
             return gate_out, paddle.to_tensor([[0.6, 0.4]]), paddle.to_tensor([[0, 1]])
 
@@ -908,6 +916,16 @@ class TestMoePermuteTrueRealOps:
         """FD_USE_PHI_MOE_PERMUTE=True + w16a16: real moe_permute/moe_unpermute/
         count_tokens_per_expert_func/moe_expert_ffn all called end-to-end."""
         monkeypatch.setattr(backend.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", True)
+
+        # fused_cast_sigmoid_bias GPU op may not be compiled; provide a pure-Python fallback
+        from fastdeploy.model_executor.layers.moe import moe as moe_module
+
+        def fake_fused_cast_sigmoid_bias(gate_out, e_score_correction_bias, cast_type="float32"):
+            scores = paddle.nn.functional.sigmoid(gate_out.cast("float32"))
+            scores_with_bias = scores + e_score_correction_bias
+            return scores.cast(cast_type), scores_with_bias.cast(cast_type)
+
+        monkeypatch.setattr(moe_module, "fused_cast_sigmoid_bias", fake_fused_cast_sigmoid_bias, raising=False)
 
         num_tokens, hidden_size = 8, 64
         layer, gate, method = self._build(hidden_size=hidden_size)
