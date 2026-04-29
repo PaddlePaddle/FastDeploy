@@ -169,7 +169,6 @@ def build_output_logprobs(
     """
     num_logprobs = sampling_metadata.max_num_logprobs
     logprobs_tensors = None
-    cu_batch_token_offset = None
 
     max_draft_token_num = share_inputs["accept_tokens"].shape[1]
     max_occupied_slots = share_inputs["seq_lens_this_time"].shape[0]
