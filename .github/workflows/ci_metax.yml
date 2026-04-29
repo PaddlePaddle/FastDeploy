@@ -1,13 +1,13 @@
 name: CI_METAX
 
 on:
-#  pull_request_target:
-#    types:
-#      - opened
-#      - synchronize
-#    branches:
-#      - develop
-#      - release/**
+  pull_request_target:
+    types:
+      - opened
+      - synchronize
+    branches:
+      - develop
+      - release/**
 
 permissions:
   contents: read

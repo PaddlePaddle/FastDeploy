@@ -320,7 +320,7 @@ jobs:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm90100_rl.outputs.wheel_path_rl }}
-      COMPILE_ARCH: "80,90"
+      COMPILE_ARCH: "90,100"
     steps:
       - uses: actions/setup-python@v6
         with:
