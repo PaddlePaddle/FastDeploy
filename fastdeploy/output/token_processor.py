@@ -645,6 +645,7 @@ class TokenProcessor:
                             f"PD Error: prefill failed to send cache to decode, "
                             f"{task_id}, {self.prefill_result_status[task_id]}"
                         )
+                    self.prefill_result_status.pop(task_id)
                     llm_logger.info(
                         f"wait for sending cache, request_id: {task_id}, cost seconds: {time.time()-start_time:.5f}"
                     )
