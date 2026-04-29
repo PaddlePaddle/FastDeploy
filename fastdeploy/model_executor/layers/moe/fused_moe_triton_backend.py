@@ -1224,8 +1224,6 @@ def python_op_fused_moe_kernel_paddle(
     layer,
     fc1_latent_proj,
     fc2_latent_proj,
-    routed_scaling_factor_learnable,
-    per_expert_scale,
 ):
 
     token_num = x.shape[0]
@@ -1251,9 +1249,9 @@ def python_op_fused_moe_kernel_paddle(
             False,
         )
 
-    if routed_scaling_factor_learnable:
+    if layer.routed_scaling_factor_learnable:
         safe_topk_indices = paddle.clip(topk_ids, min=0)
-        gathered_scales = F.embedding(safe_topk_indices, per_expert_scale.unsqueeze(1)).squeeze(-1)
+        gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
         topk_weights = topk_weights * gathered_scales
 
     if topk_ids_hookfunc is not None:
@@ -1898,6 +1896,4 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer,
             fc1_latent_proj,
             fc2_latent_proj,
-            layer.routed_scaling_factor_learnable,
-            layer.per_expert_scale,
         )
