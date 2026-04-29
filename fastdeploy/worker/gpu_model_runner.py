@@ -2794,7 +2794,7 @@ class GPUModelRunner(ModelRunnerBase):
         # 2. Dummy run
         num_tokens = self.fd_config.get_max_chunk_tokens()
         # Cap dummy run tokens to avoid OOM with large models (especially SM80 MoE)
-        if get_sm_version() < 90 and current_platform.is_cuda():
+        if get_sm_version() < 90 and current_platform.is_cuda() and os.environ.get("FD_MARLIN_FP8", "0") == "1":
             num_tokens = min(num_tokens, 256)
         logger.info(
             f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"

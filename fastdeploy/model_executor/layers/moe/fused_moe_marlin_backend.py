@@ -339,7 +339,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
             qweight = qweight.T.contiguous()
 
             perm = paddle.empty([0], dtype="int32")
-            marlin_qw = gptq_marlin_repack(qweight, perm, K, N, num_bits)
+            marlin_qw = gptq_marlin_repack(qweight, perm, K, N, num_bits)[0]
             marlin_qweights.append(marlin_qw)
 
             s_placeholder = paddle.ones([n_blocks_k, N], dtype="float32")
@@ -462,7 +462,8 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         """Marlin compute Fused MoE. Routes to apply_ep_noalltoall() when ep_size > 1."""
         ep_sz = getattr(layer, "ep_size", 1)
         if ep_sz > 1:
-            assert hasattr(layer, "_ep_expert_map"), "init_ep() must be called before apply_ep_noalltoall()"
+            if not hasattr(layer, "_ep_expert_map"):
+                raise RuntimeError("init_ep() must be called before apply_ep_noalltoall()")
             return self.apply_ep_noalltoall(
                 layer,
                 x,
