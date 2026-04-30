@@ -69,14 +69,17 @@ def test_block_wise_fp8_reshape_preserves_total_elements():
     assert reshaped.size == flat.size == flat2.size == nb * kvh * bs * hd
 
 
-def test_forward_meta_head_wise_field_default_when_disabled():
-    """#11c — ForwardMeta.block_tables_3d sentinel default is ``None``.
+def test_forward_meta_unchanged_in_pr1_scope():
+    """#11c — PR1 scope: ``ForwardMeta`` is NOT extended with kernel-side fields.
 
-    AST-only inspection of the source file: importing
-    ``fastdeploy.model_executor.forward_meta`` transitively pulls
-    AppendAttentionBackend → compiled gpu ops, which are not available on
-    a CPU-only workstation. The field default is a literal ``None`` so a
-    pure source-level check is sufficient and faithful to commit 3.
+    Per ⚖ Opus 4.7 review (review-pr1-final.md, P3 HIGH), kernel-side plumbing
+    (``block_tables_3d``) was deliberately moved out of PR1 (cache management)
+    and into PR2 (AppendAttention discrete kernel). This test pins that scope
+    decision: ``forward_meta.py`` must NOT carry head-wise kernel fields in PR1.
+
+    AST-only inspection — importing ``fastdeploy.model_executor.forward_meta``
+    transitively pulls AppendAttentionBackend → compiled gpu ops, unavailable
+    on CPU-only environments.
     """
     import ast
     import pathlib
@@ -87,25 +90,20 @@ def test_forward_meta_head_wise_field_default_when_disabled():
 
     tree = ast.parse(fwd_meta.read_text(encoding="utf-8"))
     fwd_cls = next(
-        (n for n in ast.walk(tree)
-         if isinstance(n, ast.ClassDef) and n.name == "ForwardMeta"),
+        (n for n in ast.walk(tree) if isinstance(n, ast.ClassDef) and n.name == "ForwardMeta"),
         None,
     )
     assert fwd_cls is not None, "ForwardMeta class missing from forward_meta.py"
 
-    # Locate the `block_tables_3d: Optional[paddle.Tensor] = None` annotation.
-    block_tables_3d = None
-    for stmt in fwd_cls.body:
-        if (
-            isinstance(stmt, ast.AnnAssign)
-            and isinstance(stmt.target, ast.Name)
-            and stmt.target.id == "block_tables_3d"
-        ):
-            block_tables_3d = stmt
-            break
-    assert block_tables_3d is not None, "commit 3 must add ForwardMeta.block_tables_3d"
-
-    default = block_tables_3d.value
-    assert isinstance(default, ast.Constant) and default.value is None, (
-        "head-wise sentinel must default to None for legacy parity"
+    # PR1 must NOT introduce the head-wise kernel field — that lands in PR2.
+    head_wise_fields = [
+        stmt
+        for stmt in fwd_cls.body
+        if isinstance(stmt, ast.AnnAssign)
+        and isinstance(stmt.target, ast.Name)
+        and stmt.target.id == "block_tables_3d"
+    ]
+    assert head_wise_fields == [], (
+        "PR1 scope violation: block_tables_3d must NOT be added to ForwardMeta in PR1; "
+        "deferred to PR2 (AppendAttention discrete kernel) per Opus review P3."
     )
