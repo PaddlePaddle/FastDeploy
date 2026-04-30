@@ -38,7 +38,7 @@ for subdir in "$run_path"*/; do
                 if [ $exit_code -ne 0 ]; then
                     if [ -d "${subdir%/}/log" ]; then
                         echo ">>> grep error in ${subdir%/}/log/"
-                        grep -Rni --color=auto "error" "${subdir%/}/log/" || true
+                        grep -Rni --color=auto "error" "${subdir%/}/log/" --exclude="pytest_*_error.log" || true
                     else
                         echo "${subdir%/}/log directory not found"
                     fi
