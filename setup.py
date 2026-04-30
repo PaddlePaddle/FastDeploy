@@ -69,15 +69,17 @@ def download_fd_router():
     host_arch = platform.machine()
     arch_info = FD_ROUTER_ARCH_MAP.get(host_arch)
     if arch_info is None:
-        print(f"[golang_router] Unsupported architecture '{host_arch}', skipping download "
-              f"(please build from source: https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)")
+        print(
+            f"[golang_router] Unsupported architecture '{host_arch}', skipping download "
+            f"(please build from source: https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)"
+        )
         return
 
     router_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fastdeploy", "golang_router")
     router_bin = os.path.join(router_dir, "fd-router")
 
     if os.path.isfile(router_bin) and os.access(router_bin, os.X_OK):
-        print(f"[golang_router] fd-router already exists, skipping download")
+        print("[golang_router] fd-router already exists, skipping download")
         return
 
     if platform.system() != "Linux":

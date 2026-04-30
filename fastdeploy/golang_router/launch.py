@@ -64,7 +64,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Path to the router config YAML file",
     )
     parser.add_argument(
-        "--version", "-V",
+        "--version",
+        "-V",
         action="store_true",
         default=False,
         help="Print fd-router version info and exit",

@@ -78,6 +78,7 @@ main = _launch_module.main
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _fake_binary(tmp_path: Path, executable: bool = True) -> Path:
     """Write a tiny fake binary and optionally mark it executable."""
     binary = tmp_path / "fd-router"
@@ -93,13 +94,16 @@ def _fake_binary(tmp_path: Path, executable: bool = True) -> Path:
 # Tests for _get_fd_router_path
 # ---------------------------------------------------------------------------
 
+
 class TestGetFdRouterPath(unittest.TestCase):
 
     def test_raises_when_binary_missing(self):
         """FileNotFoundError is raised when fd-router is not installed."""
-        with patch.object(_launch_module.importlib.resources, "files") as mock_files, \
-             patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file, \
-             patch.object(_launch_module.os.path, "isfile", return_value=False):
+        with (
+            patch.object(_launch_module.importlib.resources, "files") as mock_files,
+            patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file,
+            patch.object(_launch_module.os.path, "isfile", return_value=False),
+        ):
 
             fake_resource = MagicMock()
             mock_files.return_value.__truediv__ = MagicMock(return_value=fake_resource)
@@ -107,6 +111,7 @@ class TestGetFdRouterPath(unittest.TestCase):
             class _FakeCtx:
                 def __enter__(self):
                     return Path("/nonexistent/fd-router")
+
                 def __exit__(self, *a):
                     return False
 
@@ -124,11 +129,13 @@ class TestGetFdRouterPath(unittest.TestCase):
             binary.write_bytes(b"\x7fELF")
             binary.chmod(0o644)
 
-            with patch.object(_launch_module.importlib.resources, "files") as mock_files, \
-                 patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file, \
-                 patch.object(_launch_module.os.path, "isfile", return_value=True), \
-                 patch.object(_launch_module.os, "access", return_value=False), \
-                 patch.object(_launch_module.os, "chmod") as mock_chmod:
+            with (
+                patch.object(_launch_module.importlib.resources, "files") as mock_files,
+                patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file,
+                patch.object(_launch_module.os.path, "isfile", return_value=True),
+                patch.object(_launch_module.os, "access", return_value=False),
+                patch.object(_launch_module.os, "chmod") as mock_chmod,
+            ):
 
                 fake_resource = MagicMock()
                 mock_files.return_value.__truediv__ = MagicMock(return_value=fake_resource)
@@ -136,8 +143,10 @@ class TestGetFdRouterPath(unittest.TestCase):
                 class _FakeCtx:
                     def __init__(self, p):
                         self._p = p
+
                     def __enter__(self):
                         return self._p
+
                     def __exit__(self, *a):
                         return False
 
@@ -154,11 +163,13 @@ class TestGetFdRouterPath(unittest.TestCase):
             binary = Path(td) / "fd-router"
             binary.write_bytes(b"\x7fELF")
 
-            with patch.object(_launch_module.importlib.resources, "files") as mock_files, \
-                 patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file, \
-                 patch.object(_launch_module.os.path, "isfile", return_value=True), \
-                 patch.object(_launch_module.os, "access", return_value=True), \
-                 patch.object(_launch_module.os, "chmod") as mock_chmod:
+            with (
+                patch.object(_launch_module.importlib.resources, "files") as mock_files,
+                patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file,
+                patch.object(_launch_module.os.path, "isfile", return_value=True),
+                patch.object(_launch_module.os, "access", return_value=True),
+                patch.object(_launch_module.os, "chmod") as mock_chmod,
+            ):
 
                 fake_resource = MagicMock()
                 mock_files.return_value.__truediv__ = MagicMock(return_value=fake_resource)
@@ -166,8 +177,10 @@ class TestGetFdRouterPath(unittest.TestCase):
                 class _FakeCtx:
                     def __init__(self, p):
                         self._p = p
+
                     def __enter__(self):
                         return self._p
+
                     def __exit__(self, *a):
                         return False
 
@@ -182,6 +195,7 @@ class TestGetFdRouterPath(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Tests for build_arg_parser
 # ---------------------------------------------------------------------------
+
 
 class TestBuildArgParser(unittest.TestCase):
 
@@ -222,6 +236,7 @@ class TestBuildArgParser(unittest.TestCase):
 # ---------------------------------------------------------------------------
 # Tests for main()
 # ---------------------------------------------------------------------------
+
 
 class TestMain(unittest.TestCase):
 
@@ -316,20 +331,24 @@ class TestMain(unittest.TestCase):
 
     def test_missing_binary_exits_1(self):
         """FileNotFoundError from _get_fd_router_path prints to stderr and exits 1."""
-        with patch("sys.argv", ["launch"]), \
-             patch.object(_launch_module, "_get_fd_router_path",
-                          side_effect=FileNotFoundError("fd-router binary not found")), \
-             patch("sys.stderr"):
+        with (
+            patch("sys.argv", ["launch"]),
+            patch.object(
+                _launch_module, "_get_fd_router_path", side_effect=FileNotFoundError("fd-router binary not found")
+            ),
+            patch("sys.stderr"),
+        ):
             with self.assertRaises(SystemExit) as cm:
                 main()
         self.assertEqual(cm.exception.code, 1)
 
     def test_permission_error_exits_1(self):
         """PermissionError from subprocess prints to stderr and exits 1."""
-        with patch("sys.argv", ["launch"]), \
-             patch.object(_launch_module, "_get_fd_router_path",
-                          side_effect=PermissionError("access denied")), \
-             patch("sys.stderr"):
+        with (
+            patch("sys.argv", ["launch"]),
+            patch.object(_launch_module, "_get_fd_router_path", side_effect=PermissionError("access denied")),
+            patch("sys.stderr"),
+        ):
             with self.assertRaises(SystemExit) as cm:
                 main()
         self.assertEqual(cm.exception.code, 1)
@@ -338,11 +357,11 @@ class TestMain(unittest.TestCase):
 
     def test_keyboard_interrupt_exits_130(self):
         """SIGINT/KeyboardInterrupt causes an exit with code 130."""
-        with patch("sys.argv", ["launch"]), \
-             patch.object(_launch_module, "_get_fd_router_path",
-                          return_value="/fake/fd-router"), \
-             patch.object(_launch_module.subprocess, "run",
-                          side_effect=KeyboardInterrupt):
+        with (
+            patch("sys.argv", ["launch"]),
+            patch.object(_launch_module, "_get_fd_router_path", return_value="/fake/fd-router"),
+            patch.object(_launch_module.subprocess, "run", side_effect=KeyboardInterrupt),
+        ):
             with self.assertRaises(SystemExit) as cm:
                 main()
         self.assertEqual(cm.exception.code, 130)

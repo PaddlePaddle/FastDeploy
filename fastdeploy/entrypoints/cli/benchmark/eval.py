@@ -20,9 +20,9 @@ import logging
 import subprocess
 import sys
 from functools import partial
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_version
 from typing import Union
-
-from importlib.metadata import PackageNotFoundError, version as get_version
 
 from fastdeploy.entrypoints.cli.benchmark.base import BenchmarkSubcommandBase
 
