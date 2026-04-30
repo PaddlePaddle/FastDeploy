@@ -1470,6 +1470,12 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"][:num_running_requests],
+            # T53 PR1 head-wise SWA: surface the (already-widened by
+            # ``input_batch.py``) block_tables tensor as ``block_tables_3d``
+            # when active. Default-off: ``None`` preserves the legacy path.
+            block_tables_3d=(
+                self.share_inputs["block_tables"][:num_running_requests] if envs.FD_HEAD_WISE_KV_CACHE else None
+            ),
             caches=self.share_inputs["caches"],
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
