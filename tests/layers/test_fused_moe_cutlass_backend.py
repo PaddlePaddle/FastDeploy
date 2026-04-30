@@ -394,7 +394,15 @@ class TestFusedMoeCutlassBackend:
 
     def test_apply_tp_with_dispatch_and_reduce(self, monkeypatch):
         def fake_get_moe_scores(
-            gate_out, n_group, topk_group, top_k, routed_scaling_factor, bias, renormalize, topk_reduce_func=None
+            gate_out,
+            n_group,
+            topk_group,
+            top_k,
+            routed_scaling_factor,
+            bias,
+            renormalize,
+            topk_reduce_func=None,
+            use_fused_cast=False,
         ):
             return gate_out, paddle.to_tensor([[0.6, 0.4]]), paddle.to_tensor([[0, 1]])
 
@@ -830,6 +838,74 @@ class TestMoePermuteTrueRealOps:
         assert list(out.shape) == [num_tokens, hidden_size], f"wrong output shape: {out.shape}"
         assert not paddle.isnan(out).any(), "output contains NaN"
         assert not paddle.isinf(out).any(), "output contains Inf"
+
+    def test_apply_tp_noaux_tc_with_use_fused_false(self, monkeypatch):
+        fc1_called = {"count": 0}
+
+        class FC1Proj(paddle.nn.Layer):
+            def forward(self, x):
+                fc1_called["count"] += 1
+                return x * 2
+
+        fc1_latent_proj = FC1Proj()
+
+        def fake_get_moe_scores(
+            gate_out,
+            n_group,
+            topk_group,
+            top_k,
+            routed_scaling_factor,
+            bias,
+            renormalize,
+            topk_reduce_func=None,
+            use_fused_cast=False,
+        ):
+            return gate_out, paddle.to_tensor([[0.6, 0.4]]), paddle.to_tensor([[0, 1]])
+
+        def fake_dispatch(*args, **kwargs):
+            return (
+                paddle.ones([1, 2]),
+                paddle.to_tensor([1, 0]),
+                paddle.to_tensor([0]),
+                paddle.to_tensor([[0.6, 0.4]]),
+                paddle.to_tensor([[0, 1]]),
+                paddle.to_tensor([0]),
+                None,
+                None,
+            )
+
+        def fake_reduce(*args, **kwargs):
+            return paddle.ones([1, 2]) * 5
+
+        def fake_compute_ffn(*args, **kwargs):
+            return paddle.ones([1, 2]) * 2
+
+        monkeypatch.setattr(backend, "get_moe_scores", fake_get_moe_scores, raising=False)
+        monkeypatch.setattr(backend, "moe_expert_dispatch", fake_dispatch, raising=False)
+        monkeypatch.setattr(backend, "moe_expert_reduce", fake_reduce, raising=False)
+
+        # Mock compute_ffn on the class to avoid real GPU op data type issues
+        monkeypatch.setattr(backend.CutlassMoEMethod, "compute_ffn", fake_compute_ffn)
+
+        # Set FD_ENABLE_RL=True to trigger use_fused = False
+        monkeypatch.setattr(backend.fastdeploy.envs, "FD_ENABLE_RL", True)
+
+        layer = DummyLayer(with_bias=False)
+        layer.topk_method = "noaux_tc"
+        # Add necessary attributes for compute_ffn access
+        layer.up_gate_proj_weight = paddle.zeros([2, 2 * 1], dtype="float16")
+        layer.down_proj_weight = paddle.zeros([2, 2], dtype="float16")
+        layer.activation = "silu"
+
+        method = backend.CutlassMoEMethod(None)
+
+        x = paddle.ones([1, 2])
+        gate = paddle.nn.Identity()
+
+        method.apply(layer, x, gate, fc1_latent_proj=fc1_latent_proj)
+
+        # Verify fc1_latent_proj was called (line 354/425-426 was executed)
+        assert fc1_called["count"] > 0, "fc1_latent_proj should have been called"
 
     @requires_cuda
     def test_apply_ep_prefill_moe_permute_real_ops(self, monkeypatch):
