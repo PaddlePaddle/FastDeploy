@@ -108,6 +108,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENC_DEC_BLOCK_NUM": lambda: int(os.getenv("FD_ENC_DEC_BLOCK_NUM", "2")),
     # enbale max prefill of one execute step
     "FD_ENABLE_MAX_PREFILL": lambda: int(os.getenv("FD_ENABLE_MAX_PREFILL", "0")),
+    # T53 head-wise SWA KV cache toggles (default off).
+    "FD_HEAD_WISE_KV_CACHE": lambda: int(os.getenv("FD_HEAD_WISE_KV_CACHE", "0")),
+    "FD_T53_HEAD_WISE_SWA_FIXTURE": lambda: int(os.getenv("FD_T53_HEAD_WISE_SWA_FIXTURE", "0")),
+    "FD_T53_HEAD_WISE_SWA_RATIO": lambda: (
+        float(os.getenv("FD_T53_HEAD_WISE_SWA_RATIO")) if os.getenv("FD_T53_HEAD_WISE_SWA_RATIO", "") else None
+    ),
     # Whether to use PLUGINS.
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # set trace attribute job_id.
