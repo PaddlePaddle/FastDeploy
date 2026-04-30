@@ -1329,12 +1329,9 @@ def run_worker_proc() -> None:
     # Note(ZKK):
     # In some scenarios, we need to evaluate the performance of various model based on a fixed batch size and input length.
     # Instead of doing end to end tests which is very unstable, we can profile the following line of code to pick the best model.
-
-    if (
-        current_platform.is_cuda()
-        and fd_config.scheduler_config.splitwise_role == "mixed"
-        and not fd_config.routing_replay_config.enable_routing_replay
-    ):
+    # so we add an environment variable RUN_DUMMY_FOR_PROFILE to control whether to run dummy run for profile.
+    # Any Question refer to ChangWenBin.
+    if int(os.getenv("RUN_DUMMY_FOR_PROFILE", "0")) == 0:
         worker_proc.worker.model_runner._dummy_run(
             num_tokens=100, batch_size=1, expected_decode_len=10, step_use_cudagraph=True
         )
