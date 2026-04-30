@@ -991,13 +991,13 @@ class GPUModelRunner(ModelRunnerBase):
                         self._cached_launch_token_num += token_num_one_step
                         self._cached_real_bsz += 1
                     if self.speculative_decoding:
-                        if self.spec_method == SpecMethod.MTP:
+                        if self.spec_method in (SpecMethod.MTP, SpecMethod.SUFFIX):
                             # D first decode step, [Target first token, MTP first draft token]
                             # MTP in P only generate one draft token in any num_model_step config
                             draft_tokens_to_write = request.draft_token_ids[0:2]
                             if len(draft_tokens_to_write) != 2:
                                 raise ValueError(
-                                    "Expected at least 2 draft tokens for speculative MTP decode, "
+                                    f"Expected at least 2 draft tokens for speculative {self.spec_method.value} decode, "
                                     f"but got {len(draft_tokens_to_write)} for request {request.request_id}."
                                 )
                             async_set_value(
