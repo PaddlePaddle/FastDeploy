@@ -19,15 +19,18 @@
 #ifndef PADDLE_WITH_COREX
 #include "glog/logging.h"
 #endif
-#include <fcntl.h>
 #include <nvml.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+// POSIX-only headers
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
+#endif
 #include <cassert>
 #include <cstdlib>
 #include <cstring>
