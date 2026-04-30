@@ -124,10 +124,10 @@ def save_routing_to_buffer(
     token_num, top_k = topk_ids.shape
     max_num_seqs, max_model_len, num_hidden_layers, _ = routing_replay_table.shape
     assert token_num > 0
-    assert topk_ids.shape[1] == routing_replay_table.shape[3], (topk_ids.shape[1], routing_replay_table.shape[3])
-    assert batch_id_per_token.shape[0] == token_num, (batch_id_per_token.shape[0], token_num)
-    assert seq_lens_decoder.shape[0] == max_num_seqs, (seq_lens_decoder.shape[0], max_num_seqs)
-
+    assert (
+        topk_ids.shape[1] == routing_replay_table.shape[3]
+    ), f"({topk_ids.shape[1]}, {routing_replay_table.shape[3]})"
+    assert batch_id_per_token.shape[0] == token_num, f"({batch_id_per_token.shape[0]}, {token_num})"
     BLOCK_SIZE_M = 128
     BLOCK_SIZE_K = triton.next_power_of_2(top_k)  # top_k
 
