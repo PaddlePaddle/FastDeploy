@@ -144,6 +144,9 @@ class ForwardMeta:
     block_tables: Optional[paddle.Tensor] = None
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
+    # Slot-aligned recurrent state for models that need auxiliary per-request
+    # caches outside the paged attention KV layout, e.g. MiniMax-M1 linear attention.
+    linear_attn_caches: Optional[list[paddle.Tensor]] = None
     # Flag of profile run
     is_dummy_or_profile_run: bool = False
     # Routing Replay table buffer

@@ -817,6 +817,8 @@ class GPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = self.share_inputs.get_index_by_batch_id(request.idx)
+            if self.share_inputs["req_ids"][idx] != str(request.request_id):
+                self._reset_linear_attn_slot(idx)
             self.share_inputs["req_ids"][idx] = str(request.request_id)
 
             if hasattr(request, "pooling_params") and request.pooling_params is not None:
@@ -1412,12 +1414,40 @@ class GPUModelRunner(ModelRunnerBase):
                 if self.spec_method == SpecMethod.MTP:
                     self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
 
+    def _init_linear_attn_caches(self) -> None:
+        """Allocate slot-aligned recurrent state for MiniMax-style linear attention."""
+        linear_layers = []
+        if hasattr(self.model, "model") and hasattr(self.model.model, "layers"):
+            for layer in self.model.model.layers:
+                self_attn = getattr(layer, "self_attn", None)
+                if hasattr(self_attn, "linear_layer_id") and hasattr(self_attn, "kv_cache_shape"):
+                    linear_layers.append(self_attn)
+
+        if not linear_layers:
+            self.share_inputs.linear_attn_caches = None
+            return
+
+        num_slots = self.scheduler_config.max_num_seqs
+        num_linear_layers = max(layer.linear_layer_id for layer in linear_layers) + 1
+        num_heads, head_dim0, head_dim1 = linear_layers[0].kv_cache_shape
+        self.share_inputs.linear_attn_caches = [
+            paddle.zeros([num_slots, num_heads, head_dim0, head_dim1], dtype=paddle.float32)
+            for _ in range(num_linear_layers)
+        ]
+
+    def _reset_linear_attn_slot(self, slot_idx: int) -> None:
+        if getattr(self.share_inputs, "linear_attn_caches", None) is None:
+            return
+        for cache in self.share_inputs.linear_attn_caches:
+            cache[slot_idx] = 0
+
     def load_model(self) -> None:
         """load or download model"""
         logger.info(f"Starting to load model {self.model_config.architectures[0]}")
         # 1. Load original model
         model_loader = get_model_loader(load_config=self.fd_config.load_config)
         self.model = model_loader.load_model(fd_config=self.fd_config)
+        self._init_linear_attn_caches()
 
         # 2. Load lora model
 
@@ -1471,6 +1501,7 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"][:num_running_requests],
             caches=self.share_inputs["caches"],
+            linear_attn_caches=getattr(self.share_inputs, "linear_attn_caches", None),
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],
             encoder_num_blocks_x_cpu=self.share_inputs["encoder_num_blocks_x_cpu"],

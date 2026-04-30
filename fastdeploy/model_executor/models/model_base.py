@@ -20,6 +20,7 @@ import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import (
     ModelConfig,
@@ -308,6 +309,20 @@ class ModelRegistry:
         def _register(model_cls):
             # Traditional registration for ModelForCasualLM subclasses
             cls._arch_to_model_cls[model_cls.name()] = model_cls
+            if architecture and architecture != model_cls.name():
+                # Only warn / write a *distinct* alias key.  Use class-name
+                # comparison rather than object identity so module hot-reload
+                # (which produces a new class object with the same name) does
+                # not emit spurious warnings.
+                existing = cls._arch_to_model_cls.get(architecture)
+                if existing is not None and getattr(existing, "__name__", None) != model_cls.__name__:
+                    logger.warning(
+                        "Overwriting model registration for architecture '%s' (old=%s, new=%s)",
+                        architecture,
+                        getattr(existing, "__name__", existing),
+                        model_cls.__name__,
+                    )
+                cls._arch_to_model_cls[architecture] = model_cls
 
             # Enhanced decorator-style registration
             if architecture and module_name:
