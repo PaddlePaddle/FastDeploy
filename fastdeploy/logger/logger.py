@@ -28,7 +28,7 @@ from pathlib import Path
 from fastdeploy import envs
 from fastdeploy.logger.config import resolve_log_level
 from fastdeploy.logger.formatters import ColoredFormatter, CustomFormatter
-from fastdeploy.logger.handlers import DailyRotatingFileHandler, LazyFileHandler
+from fastdeploy.logger.handlers import LazyFileHandler
 from fastdeploy.logger.setup_logging import setup_logging
 
 # Standard log format
@@ -44,7 +44,7 @@ class FastDeployLogger:
     _channel_files = {
         "main": "fastdeploy.log",
         "request": "request.log",
-        "console": "console.log",
+        "console": "fastdeploy.log",
     }
 
     # Cache for channel loggers that have been configured
@@ -134,13 +134,14 @@ class FastDeployLogger:
                 channel_logger.removeHandler(handler)
 
             # Create file handler for this channel
-            file_name = self._channel_files.get(channel, f"{channel}.log")
-            log_file = os.path.join(log_dir, file_name)
             backup_count = int(envs.FD_LOG_BACKUP_COUNT)
+            file_name = self._channel_files.get(channel)
+            if file_name is not None:
+                log_file = os.path.join(log_dir, file_name)
 
-            file_handler = LazyFileHandler(log_file, backupCount=backup_count)
-            file_handler.setFormatter(file_formatter)
-            channel_logger.addHandler(file_handler)
+                file_handler = LazyFileHandler(log_file, backupCount=backup_count)
+                file_handler.setFormatter(file_formatter)
+                channel_logger.addHandler(file_handler)
 
             # Error file handler (all channels write errors to error.log)
             error_log_file = os.path.join(log_dir, "error.log")
@@ -219,8 +220,7 @@ class FastDeployLogger:
         # Create main log file handler
         LOG_FILE = f"{log_dir}/{file_name}"
         backup_count = int(envs.FD_LOG_BACKUP_COUNT)
-        # handler = LazyFileHandler(filename=LOG_FILE, backupCount=backup_count, level=hanlder_level)
-        handler = DailyRotatingFileHandler(LOG_FILE, backupCount=backup_count)
+        handler = LazyFileHandler(filename=LOG_FILE, backupCount=backup_count)
 
         # Create ERROR log file handler (new feature)
         if not file_name.endswith(".log"):

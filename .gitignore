@@ -6,6 +6,9 @@ tests/log_*
 benchmarks/openai-chat-infqps*
 splitwise/log*
 
+# Prebuilt golang router binary (downloaded at build time)
+fastdeploy/golang_router/fd-router
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

@@ -463,6 +463,57 @@ class TestZmqServerBase(unittest.TestCase):
             server.recv_result_handle()
         server.send_response.assert_called_once_with("req-1", [])
 
+    def test_recv_result_handle_logs_error_on_zmq_error(self):
+        """Test recv_result_handle logs error with traceback when ZMQError occurs."""
+        fake_socket = _FakeSocket()
+        server = _DummyServer(socket=fake_socket)
+        server.running = True
+        server.cached_results = defaultdict(list)
+
+        call_count = [0]
+
+        def _recv_zmq_error(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise zmq.error.ZMQError(msg="test zmq error")
+            server.running = False
+            return b"client", b"", b"req-1"
+
+        fake_socket.recv_multipart = _recv_zmq_error
+
+        with mock.patch("fastdeploy.inter_communicator.zmq_server.llm_logger") as mock_logger:
+            server.recv_result_handle()
+
+        mock_logger.error.assert_called_once()
+        error_msg = mock_logger.error.call_args[0][0]
+        self.assertIn("recv_result_handle get zmq error", error_msg)
+
+    def test_recv_result_handle_logs_error_on_unknown_exception(self):
+        """Test recv_result_handle logs error with traceback when unknown exception occurs."""
+        fake_socket = _FakeSocket()
+        server = _DummyServer(socket=fake_socket)
+        server.running = True
+        server.cached_results = defaultdict(list)
+
+        call_count = [0]
+
+        def _recv_unknown_error(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise RuntimeError("test unknown error")
+            server.running = False
+            return b"client", b"", b"req-1"
+
+        fake_socket.recv_multipart = _recv_unknown_error
+
+        with mock.patch("fastdeploy.inter_communicator.zmq_server.llm_logger") as mock_logger:
+            with mock.patch.object(envs, "FD_ENABLE_INTERNAL_ADAPTER", True):
+                server.recv_result_handle()
+
+        mock_logger.error.assert_called_once()
+        error_msg = mock_logger.error.call_args[0][0]
+        self.assertIn("recv_result_handle get unknown exception", error_msg)
+
     def test_exit_calls_close(self):
         server = _DummyServer(socket=_FakeSocket())
         server.close = mock.Mock()

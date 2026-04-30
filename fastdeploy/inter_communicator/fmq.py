@@ -17,6 +17,7 @@
 import asyncio
 import json
 import time
+import traceback
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum
@@ -103,8 +104,8 @@ class EndpointManager:
                     if value is not None:
                         setattr(cls.config, key, value)
             except Exception as e:
-                fmq_logger.error(f"Failed to load FMQ config: {e}")
-        fmq_logger.info(f"Loaded FMQ config: {cls.config}")
+                fmq_logger.error(f"Failed to load FMQ config: {e}, {traceback.format_exc()}")
+        fmq_logger.debug(f"Loaded FMQ config: {cls.config}")
 
     @classmethod
     def get_endpoint(cls, name: str) -> Endpoint:
@@ -214,7 +215,7 @@ class Queue(BaseComponent):
         else:
             self.socket.bind(full_ep)
 
-        fmq_logger.info(f"Queue {name}({role}) initialized on {full_ep}")
+        fmq_logger.debug(f"Queue {name}({role}) initialized on {full_ep}")
 
     async def put(self, data: Any, shm_threshold: int = 1024 * 1024):
         """

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import traceback
 from dataclasses import field
 from enum import Enum
 from typing import Any, Dict, Literal, Optional, Union
@@ -2203,6 +2204,24 @@ class FDConfig:
         if self.speculative_config is not None and self.speculative_config.method is not None:
             num_spec_tokens = self.speculative_config.num_speculative_tokens
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
+
+            # For speculative, enlarge the threshold to trigger block preallocation earlier,
+            # since each step consumes num_spec_tokens + 1 slots at once
+            old_prealloc_threshold = self.cache_config.prealloc_dec_block_slot_num_threshold
+            prealloc_dec_block_slot = self.cache_config.prealloc_dec_block_slot_num_threshold * (num_spec_tokens + 1)
+            max_prealloc_dec_block_slot = max(
+                0, self.cache_config.block_size * self.cache_config.enc_dec_block_num - 1
+            )
+            self.cache_config.prealloc_dec_block_slot_num_threshold = min(
+                prealloc_dec_block_slot, max_prealloc_dec_block_slot
+            )
+            logger.info(
+                f"prealloc_dec_block_slot_num_threshold updated: {old_prealloc_threshold} -> "
+                f"{self.cache_config.prealloc_dec_block_slot_num_threshold} "
+                f"(num_spec_tokens={num_spec_tokens}, block_size={self.cache_config.block_size}, "
+                f"enc_dec_block_num={self.cache_config.enc_dec_block_num})"
+            )
+
         else:
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs
         if (
@@ -2275,7 +2294,9 @@ class FDConfig:
                 else None
             )
         except Exception as e:
-            logger.error(f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}")
+            logger.error(
+                f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}, {traceback.format_exc()}"
+            )
 
     def check(self):
         """
@@ -2294,7 +2315,7 @@ class FDConfig:
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
         tokens_per_seq = (
             (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
-            if self.speculative_config is not None
+            if self.speculative_config is not None and self.speculative_config.method is not None
             else 1
         )
         assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs * tokens_per_seq, (

@@ -15,11 +15,11 @@
 """Abstract base class for all data processors.
 
 Provides unified response-processing logic (ids2tokens, process_response_dict*,
-update_stop_seq, update_bad_words, pad_batch_data, …) extracted from the two
-existing concrete processors:
+update_stop_seq, update_bad_words, pad_batch_data, …) shared by all concrete
+processors:
 
-    DataProcessor      (fastdeploy/input/text_processor.py)
-    Ernie4_5Processor  (fastdeploy/input/ernie4_5_processor.py)
+    TextProcessor       (fastdeploy/input/text_processor.py)
+    MultiModalProcessor (fastdeploy/input/multimodal_processor.py)
 
 Key design decisions
 --------------------
@@ -28,16 +28,12 @@ Key design decisions
   of each subclass.  Subclasses that do not call ``super().__init__()`` must
   initialise those three attributes themselves.
 
-* ``process_response_dict`` reads ``stream`` from ``kwargs`` (DataProcessor
-  convention).  Callers that previously passed ``stream`` as a positional
-  argument (ERNIE convention) must be updated to use ``stream=`` keyword.
+* ``process_response_dict`` reads ``stream`` from ``kwargs`` (default: True).
 
-* EOS removal uses ``in self.eos_token_ids`` (list membership).  ERNIE's
-  ``eos_token_ids`` contains exactly one element, so this is equivalent to the
-  ``==`` check it currently uses.
+* EOS removal uses ``in self.eos_token_ids`` (list membership).
 
 * tool_parser result never updates ``outputs["text"]``; only ``tool_calls`` is
-  set.  This matches DataProcessor behaviour.
+  set.
 
 * ``ids2tokens`` always returns a three-tuple
   ``(delta_text, previous_token_ids, previous_texts)``.  The HF-tokeniser
@@ -387,7 +383,6 @@ class BaseTextProcessor(ABC):
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
         """Unified request pre-processing shared by all processors."""
-        log_request(RequestLogLevel.CONTENT, message="Start processing request dict: {request}", request=request)
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
@@ -690,6 +685,10 @@ class BaseTextProcessor(ABC):
                 seq_len = np.array(seq_len, dtype=np.int64).reshape(-1, 1)
             return padded_insts, seq_len
         return padded_insts
+
+    def process_logprob_response(self, token_ids, **kwargs):
+        """Decode a list of token ids to a string for logprob responses."""
+        return self.tokenizer.decode(token_ids, **kwargs)
 
     def get_mm_max_tokens_per_item(self, seq_len: int):
         """Return the maximum number of tokens per item for each modality.

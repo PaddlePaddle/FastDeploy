@@ -19,13 +19,10 @@ from fastdeploy.engine import common_engine as common_engine_module
 from fastdeploy.engine import engine as engine_module
 from fastdeploy.engine.args_utils import EngineArgs  # Import EngineArgs
 from fastdeploy.engine.sampling_params import SamplingParams
-from fastdeploy.input.ernie4_5_processor import (
-    Ernie4_5Processor as ErnieTextDataProcessor,
+from fastdeploy.input.multimodal_processor import (
+    MultiModalProcessor as ErnieVLDataProcessor,
 )
-from fastdeploy.input.ernie4_5_vl_processor import (
-    Ernie4_5_VLProcessor as ErnieVLDataProcessor,
-)
-from fastdeploy.input.text_processor import DataProcessor as TextDataProcessor
+from fastdeploy.input.text_processor import TextProcessor
 from fastdeploy.model_executor.logits_processor import ThinkingBudgetLogitsProcessor
 from fastdeploy.scheduler import SchedulerConfig
 
@@ -705,7 +702,7 @@ class DummyCfgRaiseParallel:
 
 class TestThinkingBudgetSupplemental(unittest.TestCase):
     def test_update_thinking_prompt_state_from_text_processor(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor._think_token_ids = None
         processor.tokenizer = DummyTokenizerForTextProcessor()
         prompt_ids = [1, THINKING_START_TOKEN_ID, 2, THINKING_END_TOKEN_ID, 3]
@@ -745,7 +742,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             common_engine_module.EngineService._start_worker_service(engine)
 
     def test_ernie_encode_literal_text_with_cache(self):
-        processor = ErnieTextDataProcessor.__new__(ErnieTextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor.tokenizer = SimpleNamespace(
             tokenize=lambda text: ["token_a", "token_b"],
             convert_tokens_to_ids=lambda tokens: [71, 72],
@@ -755,7 +752,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         self.assertEqual(processor._encode_literal_text_with_cache("fallback"), [71, 72])
 
     def test_text_update_thinking_prompt_state_branches(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor._think_token_ids = None
         processor.tokenizer = DummyTokenizerForTextProcessor()
 
@@ -796,7 +793,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         self.assertEqual(processor._get_think_token_ids(), (THINKING_START_TOKEN_ID, THINKING_END_TOKEN_ID))
 
     def test_text_process_request_dict_think_stop_sentence(self):
-        processor = TextDataProcessor.__new__(TextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor._apply_default_parameters = lambda request: request
         processor.eos_token_ids = [1]
         processor.update_stop_seq = lambda *args, **kwargs: None
@@ -827,7 +824,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         self.assertNotIn("think_stop_sentence", processed["logits_processors_args"])
 
     def test_ernie_process_request_dict_prepares_thinking_budget_args(self):
-        processor = ErnieTextDataProcessor.__new__(ErnieTextDataProcessor)
+        processor = TextProcessor.__new__(TextProcessor)
         processor._apply_default_parameters = lambda request: request
         processor.eos_token_ids = [1]
         processor.update_stop_seq = lambda *args, **kwargs: None
@@ -871,9 +868,19 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         processor._check_mm_limits = lambda *args, **kwargs: None
         processor.append_completion_tokens = lambda *args, **kwargs: None
         processor.pack_outputs = lambda outs: outs
-        processor.ernie4_5_processor = SimpleNamespace(
-            request2ids=lambda request: {"input_ids": np.array([1, THINKING_START_TOKEN_ID, 2], dtype=np.int64)}
+        processor.cfg = SimpleNamespace(
+            stop_tokens_variant="default",
+            has_bad_words=True,
+            has_logits_processor_think=True,
+            force_disable_thinking=False,
+            preserve_prompt_token_ids=False,
+            set_default_reasoning_max_tokens=True,
+            cap_response_max_tokens=False,
         )
+        processor._tokenize_request = lambda request: {
+            "input_ids": np.array([1, THINKING_START_TOKEN_ID, 2], dtype=np.int64)
+        }
+        processor._process_post_tokens = lambda request, outputs: None
 
         request = {
             "request_id": "req_ernie_vl",
@@ -887,7 +894,7 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
             "response_max_tokens": None,
         }
         with patch(
-            "fastdeploy.input.utils.process_stop_token_ids",
+            "fastdeploy.input.multimodal_processor.process_stop_token_ids",
             lambda *args, **kwargs: None,
         ):
             processed = processor.process_request_dict(request, max_model_len=16)

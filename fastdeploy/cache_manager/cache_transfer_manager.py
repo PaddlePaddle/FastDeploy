@@ -323,7 +323,8 @@ class CacheTransferManager:
         try:
             # TODO: support cache scale for other backend
             if self.has_cache_scale and self.storage_backend_type is not None:
-                if self.storage_backend_type not in ["mooncake"]:
+                is_as_only_flush = envs.FD_AS_ONLY_FLUSH and self.storage_backend_type == "attention_store"
+                if not is_as_only_flush and self.storage_backend_type not in ["mooncake"]:
                     raise ValueError(
                         f"Unsupported storage backend ({self.storage_backend_type}) "
                         "when cache quantization is block_wise_fp8"
@@ -949,6 +950,34 @@ class CacheTransferManager:
             )
             return 0
 
+    def _flush_only_storage_task(self, task: WriteStorageTask):
+        """
+        AS-only flush mode: skip actual storage write, only report cache index to AttentionStore.
+        Used when FD_AS_ONLY_FLUSH is enabled — AS acts as index-only (no data storage).
+
+        Args:
+            task: WriteStorageTask with flush_cache_exists indicating cache state:
+                  True/None = cache present on this node (request finish)
+                  False = cache gone from this node (eviction)
+        """
+        try:
+            if (self.rank == 0) and self.storage_backend_type == "attention_store":
+                reside_in_gpu = task.flush_cache_exists if task.flush_cache_exists is not None else True
+                self.storage_backend.flush_token_index(
+                    task.task_id, task.token_ids, task.start_write_block_idx, reside_in_gpu
+                )
+                logger.info(
+                    f"[AS_ONLY_FLUSH] flush token index reside_in_gpu={reside_in_gpu} "
+                    f"start_block_idx={task.start_write_block_idx} for task {task.task_id}"
+                )
+        except Exception as e:
+            logger.warning(f"[AS_ONLY_FLUSH] Failed to flush token index for task {task.task_id}, error: {e}")
+        result = (CacheStatus.GPU2STORAGE, task.task_id, task.keys, [])
+        self.cache_task_queue.swap_to_storage_barrier.wait()
+        if self.rank == 0:
+            self.cache_task_queue.swap_to_storage_barrier.reset()
+            self.cache_task_queue.put_transfer_done_signal(result)
+
     def write_back_storage_task(self, task: WriteStorageTask):
         """
         Write cache to the storage backend from the GPU memory.
@@ -956,6 +985,9 @@ class CacheTransferManager:
         assert (
             self.storage_backend
         ), f"storage_backend not initialized, storage_backend_type: {self.storage_backend_type}"
+
+        if envs.FD_AS_ONLY_FLUSH:
+            return self._flush_only_storage_task(task)
 
         try:
             gpu_block_ids = task.gpu_block_ids.copy()
@@ -1307,7 +1339,7 @@ class CacheTransferManager:
             except (BrokenPipeError, EOFError, ConnectionResetError) as e:
                 # When a cache_transfer_manager process remains, it keeps printing error logs and may exhaust disk space.
                 # Add a check to see if the worker process is alive; if it has ended, exit the loop to stop continuous logging.
-                logger.error(f"[CacheTransferManager] Connection broken: {e}")
+                logger.error(f"[CacheTransferManager] Connection broken: {e}, {traceback.format_exc()}")
                 consecutive_error_count += 1
                 if consecutive_error_count > max_errors:
                     try:
@@ -1432,7 +1464,7 @@ class CacheTransferManager:
                     f"transfer data: Get unexpected event type {event_type}, only SWAP2CPU and SWAP2GPU supported"
                 )
         except Exception as e:
-            logger.error(f"transfer data: error: {e}")
+            logger.error(f"transfer data: error: {e}, {traceback.format_exc()}")
             raise e
         end_time = time.time()
         elasped_time = end_time - start_time
@@ -1471,7 +1503,7 @@ class CacheTransferManager:
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
                     self._log_memory("check_cache_status: after clearing caches")
                 except Exception as e:
-                    logger.error(f"check_cache_status: failed to clear caches: {e}")
+                    logger.error(f"check_cache_status: failed to clear caches: {e}, {traceback.format_exc()}")
 
             elif self.kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
@@ -1491,7 +1523,7 @@ class CacheTransferManager:
                     self._log_memory("check_cache_status: after restoring caches")
 
                 except Exception as e:
-                    logger.error(f"check_cache_status: failed to restore caches: {e}")
+                    logger.error(f"check_cache_status: failed to restore caches: {e}, {traceback.format_exc()}")
 
             time.sleep(0.1)
 
