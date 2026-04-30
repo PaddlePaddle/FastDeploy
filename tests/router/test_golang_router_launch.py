@@ -18,7 +18,7 @@ Unit tests for fastdeploy.golang_router.launch.
 Covers:
   1. _get_fd_router_path() when fd-router binary is missing.
   2. _get_fd_router_path() when fd-router exists but is not executable (chmod path).
-  3. main() argument → cmd mapping.
+  3. main() argument -> cmd mapping.
   4. main() subprocess return-code propagation.
   5. main() KeyboardInterrupt handling.
 """
@@ -48,11 +48,14 @@ _LAUNCH_PATH = os.path.join(
 )
 
 # Provide a minimal stub for the fastdeploy.golang_router package so that
-# importlib.resources.files("fastdeploy.golang_router") resolves at test time.
+# importlib.resources.files("fastdeploy.golang_router") resolves at test time
+# and patch("fastdeploy.golang_router.launch.xxx") can find the module.
 _pkg_stub = types.ModuleType("fastdeploy.golang_router")
 _pkg_stub.__path__ = [os.path.join(os.path.dirname(__file__), "..", "..", "fastdeploy", "golang_router")]
 _pkg_stub.__package__ = "fastdeploy.golang_router"
-sys.modules.setdefault("fastdeploy", types.ModuleType("fastdeploy"))
+_fastdeploy_stub = types.ModuleType("fastdeploy")
+_fastdeploy_stub.golang_router = _pkg_stub
+sys.modules.setdefault("fastdeploy", _fastdeploy_stub)
 sys.modules.setdefault("fastdeploy.golang_router", _pkg_stub)
 
 _spec = importlib.util.spec_from_file_location(
@@ -62,6 +65,8 @@ _spec = importlib.util.spec_from_file_location(
 )
 _launch_module = importlib.util.module_from_spec(_spec)
 sys.modules["fastdeploy.golang_router.launch"] = _launch_module
+# Also wire the attribute so that patch() can resolve the dotted path.
+_pkg_stub.launch = _launch_module
 _spec.loader.exec_module(_launch_module)
 
 _get_fd_router_path = _launch_module._get_fd_router_path
@@ -92,9 +97,9 @@ class TestGetFdRouterPath(unittest.TestCase):
 
     def test_raises_when_binary_missing(self):
         """FileNotFoundError is raised when fd-router is not installed."""
-        with patch("fastdeploy.golang_router.launch.importlib.resources.files") as mock_files, \
-             patch("fastdeploy.golang_router.launch.importlib.resources.as_file") as mock_as_file, \
-             patch("fastdeploy.golang_router.launch.os.path.isfile", return_value=False):
+        with patch.object(_launch_module.importlib.resources, "files") as mock_files, \
+             patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file, \
+             patch.object(_launch_module.os.path, "isfile", return_value=False):
 
             fake_resource = MagicMock()
             mock_files.return_value.__truediv__ = MagicMock(return_value=fake_resource)
@@ -119,11 +124,11 @@ class TestGetFdRouterPath(unittest.TestCase):
             binary.write_bytes(b"\x7fELF")
             binary.chmod(0o644)
 
-            with patch("fastdeploy.golang_router.launch.importlib.resources.files") as mock_files, \
-                 patch("fastdeploy.golang_router.launch.importlib.resources.as_file") as mock_as_file, \
-                 patch("fastdeploy.golang_router.launch.os.path.isfile", return_value=True), \
-                 patch("fastdeploy.golang_router.launch.os.access", return_value=False), \
-                 patch("fastdeploy.golang_router.launch.os.chmod") as mock_chmod:
+            with patch.object(_launch_module.importlib.resources, "files") as mock_files, \
+                 patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file, \
+                 patch.object(_launch_module.os.path, "isfile", return_value=True), \
+                 patch.object(_launch_module.os, "access", return_value=False), \
+                 patch.object(_launch_module.os, "chmod") as mock_chmod:
 
                 fake_resource = MagicMock()
                 mock_files.return_value.__truediv__ = MagicMock(return_value=fake_resource)
@@ -149,11 +154,11 @@ class TestGetFdRouterPath(unittest.TestCase):
             binary = Path(td) / "fd-router"
             binary.write_bytes(b"\x7fELF")
 
-            with patch("fastdeploy.golang_router.launch.importlib.resources.files") as mock_files, \
-                 patch("fastdeploy.golang_router.launch.importlib.resources.as_file") as mock_as_file, \
-                 patch("fastdeploy.golang_router.launch.os.path.isfile", return_value=True), \
-                 patch("fastdeploy.golang_router.launch.os.access", return_value=True), \
-                 patch("fastdeploy.golang_router.launch.os.chmod") as mock_chmod:
+            with patch.object(_launch_module.importlib.resources, "files") as mock_files, \
+                 patch.object(_launch_module.importlib.resources, "as_file") as mock_as_file, \
+                 patch.object(_launch_module.os.path, "isfile", return_value=True), \
+                 patch.object(_launch_module.os, "access", return_value=True), \
+                 patch.object(_launch_module.os, "chmod") as mock_chmod:
 
                 fake_resource = MagicMock()
                 mock_files.return_value.__truediv__ = MagicMock(return_value=fake_resource)
@@ -227,14 +232,14 @@ class TestMain(unittest.TestCase):
 
         return (
             patch("sys.argv", ["launch"] + argv),
-            patch("fastdeploy.golang_router.launch._get_fd_router_path", return_value=binary_path),
-            patch("fastdeploy.golang_router.launch.subprocess.run", return_value=mock_proc),
+            patch.object(_launch_module, "_get_fd_router_path", return_value=binary_path),
+            patch.object(_launch_module.subprocess, "run", return_value=mock_proc),
         )
 
     # -- argument to cmd mapping -------------------------------------------
 
     def test_cmd_no_args(self):
-        """No optional args → cmd contains only the binary path."""
+        """No optional args -> cmd contains only the binary path."""
         argv_patch, path_patch, run_patch = self._patch_env([])
         with argv_patch, path_patch, run_patch as mock_run:
             with self.assertRaises(SystemExit) as cm:
@@ -312,9 +317,9 @@ class TestMain(unittest.TestCase):
     def test_missing_binary_exits_1(self):
         """FileNotFoundError from _get_fd_router_path prints to stderr and exits 1."""
         with patch("sys.argv", ["launch"]), \
-             patch("fastdeploy.golang_router.launch._get_fd_router_path",
-                   side_effect=FileNotFoundError("fd-router binary not found")), \
-             patch("sys.stderr") as mock_stderr:
+             patch.object(_launch_module, "_get_fd_router_path",
+                          side_effect=FileNotFoundError("fd-router binary not found")), \
+             patch("sys.stderr"):
             with self.assertRaises(SystemExit) as cm:
                 main()
         self.assertEqual(cm.exception.code, 1)
@@ -322,9 +327,9 @@ class TestMain(unittest.TestCase):
     def test_permission_error_exits_1(self):
         """PermissionError from subprocess prints to stderr and exits 1."""
         with patch("sys.argv", ["launch"]), \
-             patch("fastdeploy.golang_router.launch._get_fd_router_path",
-                   side_effect=PermissionError("access denied")), \
-             patch("sys.stderr") as mock_stderr:
+             patch.object(_launch_module, "_get_fd_router_path",
+                          side_effect=PermissionError("access denied")), \
+             patch("sys.stderr"):
             with self.assertRaises(SystemExit) as cm:
                 main()
         self.assertEqual(cm.exception.code, 1)
@@ -333,14 +338,11 @@ class TestMain(unittest.TestCase):
 
     def test_keyboard_interrupt_exits_130(self):
         """SIGINT/KeyboardInterrupt causes an exit with code 130."""
-        mock_proc = MagicMock()
-        mock_proc.returncode = 0
-
         with patch("sys.argv", ["launch"]), \
-             patch("fastdeploy.golang_router.launch._get_fd_router_path",
-                   return_value="/fake/fd-router"), \
-             patch("fastdeploy.golang_router.launch.subprocess.run",
-                   side_effect=KeyboardInterrupt):
+             patch.object(_launch_module, "_get_fd_router_path",
+                          return_value="/fake/fd-router"), \
+             patch.object(_launch_module.subprocess, "run",
+                          side_effect=KeyboardInterrupt):
             with self.assertRaises(SystemExit) as cm:
                 main()
         self.assertEqual(cm.exception.code, 130)
