@@ -1976,7 +1976,7 @@ class GPUModelRunner(ModelRunnerBase):
         capture_prefill: bool = False,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
-        step_use_cudagraph = False,
+        step_use_cudagraph=False,
     ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
@@ -2009,7 +2009,7 @@ class GPUModelRunner(ModelRunnerBase):
         while True:
             # 1. Initialize forward meta and attention meta data
             self._prepare_inputs(is_dummy_or_profile_run=True)
-            
+
             if not (in_capturing or step_use_cudagraph):
                 self.forward_meta.step_use_cudagraph = False
             # 2. Padding inputs for cuda graph
