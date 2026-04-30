@@ -22,8 +22,10 @@ import paddle
 from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
     flash_attn_func,
 )
-from fastdeploy.model_executor.layers.attention.ops import get_attn_mask_q
-from fastdeploy.model_executor.ops.gpu import flash_mask_attention
+from fastdeploy.model_executor.layers.attention.ops import (
+    flash_mask_attention,
+    get_attn_mask_q,
+)
 
 
 class TestFlashMaskAttention(unittest.TestCase):
