@@ -18,7 +18,6 @@ from unittest.mock import patch
 from fastdeploy.logger.request_logger import (
     RequestLogLevel,
     _should_log,
-    _truncate,
     log_request,
     log_request_error,
 )
@@ -63,32 +62,6 @@ class TestShouldLog(unittest.TestCase):
             self.assertFalse(_should_log(RequestLogLevel.FULL))
 
 
-class TestTruncate(unittest.TestCase):
-    """Test _truncate function"""
-
-    def test_short_text_unchanged(self):
-        """Short text should remain unchanged"""
-        with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
-            mock_envs.FD_LOG_MAX_LEN = 100
-            result = _truncate("short text")
-            self.assertEqual(result, "short text")
-
-    def test_long_text_truncated(self):
-        """Long text should be truncated"""
-        with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
-            mock_envs.FD_LOG_MAX_LEN = 10
-            result = _truncate("this is a very long text")
-            self.assertEqual(result, "this is a ")
-            self.assertEqual(len(result), 10)
-
-    def test_non_string_converted(self):
-        """Non-string should be converted"""
-        with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
-            mock_envs.FD_LOG_MAX_LEN = 100
-            result = _truncate(12345)
-            self.assertEqual(result, "12345")
-
-
 class TestLogRequest(unittest.TestCase):
     """Test log_request function"""
 
@@ -98,7 +71,6 @@ class TestLogRequest(unittest.TestCase):
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 1
             mock_envs.FD_LOG_REQUESTS_LEVEL = 0
-            mock_envs.FD_LOG_MAX_LEN = 2048
 
             log_request(RequestLogLevel.LIFECYCLE, message="test {value}", value="hello")
             mock_logger.info.assert_called_once()
@@ -126,27 +98,13 @@ class TestLogRequest(unittest.TestCase):
             mock_logger.info.assert_not_called()
 
     @patch("fastdeploy.logger._request_logger")
-    def test_content_level_truncates_content(self, mock_logger):
-        """CONTENT level should truncate content"""
+    def test_content_level_no_truncation(self, mock_logger):
+        """CONTENT level should not truncate content"""
         with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
             mock_envs.FD_LOG_REQUESTS = 1
             mock_envs.FD_LOG_REQUESTS_LEVEL = 3
-            mock_envs.FD_LOG_MAX_LEN = 5
 
             log_request(RequestLogLevel.CONTENT, message="content: {data}", data="very long data")
-            mock_logger.info.assert_called_once()
-            call_args = mock_logger.info.call_args[0][0]
-            self.assertEqual(call_args, "content: very ")
-
-    @patch("fastdeploy.logger._request_logger")
-    def test_lifecycle_level_no_truncation(self, mock_logger):
-        """LIFECYCLE level should not truncate content"""
-        with patch("fastdeploy.logger.request_logger.envs") as mock_envs:
-            mock_envs.FD_LOG_REQUESTS = 1
-            mock_envs.FD_LOG_REQUESTS_LEVEL = 3
-            mock_envs.FD_LOG_MAX_LEN = 5
-
-            log_request(RequestLogLevel.LIFECYCLE, message="content: {data}", data="very long data")
             mock_logger.info.assert_called_once()
             call_args = mock_logger.info.call_args[0][0]
             self.assertEqual(call_args, "content: very long data")

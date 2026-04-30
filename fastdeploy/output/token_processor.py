@@ -435,7 +435,10 @@ class TokenProcessor:
                     self.postprocess(batch_result)
             except Exception as e:
                 log_request_error(
-                    message="Receive message:{receive_datas}, error:{error}", receive_datas=receive_datas, error=e
+                    message="Receive message:{receive_datas}, error:{error}, {traceback}",
+                    receive_datas=receive_datas,
+                    error=e,
+                    traceback=traceback.format_exc(),
                 )
                 continue
 

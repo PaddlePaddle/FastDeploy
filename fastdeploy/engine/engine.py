@@ -51,13 +51,7 @@ from fastdeploy.logger.request_logger import (
 )
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import (
-    EngineError,
-    console_logger,
-    ensure_workerlog_alias,
-    envs,
-    llm_logger,
-)
+from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
 
 class LLMEngine:
@@ -171,7 +165,7 @@ class LLMEngine:
         def check_worker_initialize_status_func(res: dict):
             res["worker_is_alive"] = True
             if not self.check_worker_initialize_status():
-                console_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+                console_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
                 res["worker_is_alive"] = False
 
         self.check_worker_initialize_status_func_thread = threading.Thread(
@@ -218,7 +212,7 @@ class LLMEngine:
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
         if not result_container["worker_is_alive"]:
-            console_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+            console_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
             return False
 
         console_logger.info(f"Worker processes are launched with {time.time() - start_time} seconds.")
@@ -813,7 +807,9 @@ class LLMEngine:
         while self.get_profile_block_num_signal.value[0] == 0:
             if hasattr(self, "worker_proc") and self.worker_proc is not None:
                 if self.worker_proc.poll() is not None:
-                    console_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+                    console_logger.error(
+                        _format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle"))
+                    )
                     return False
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
@@ -963,7 +959,4 @@ class LLMEngine:
             self.checking_worker_status_thread.join(timeout=1)
         except Exception:
             pass
-        # Create symlinks for paddle workerlog files after workers are ready
-        if hasattr(self, "log_dir") and hasattr(self, "paddle_log_dir"):
-            ensure_workerlog_alias(self.log_dir, self.paddle_log_dir)
         return True

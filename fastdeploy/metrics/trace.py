@@ -23,6 +23,7 @@ import os
 import random
 import threading
 import time
+import traceback
 import uuid
 from dataclasses import dataclass
 from enum import Enum, unique
@@ -46,7 +47,6 @@ try:
 
     opentelemetry_imported = True
 except ImportError as e:
-    print(f"Failed to import opentelemetry, tracing disabled.{e}")
     logger.error(f"Failed to import opentelemetry, tracing disabled.{e}")
 
     class id_generator:
@@ -231,7 +231,7 @@ def __get_host_id() -> str:
 def process_tracing_init():
     global tracing_enabled
     global __get_cur_time_ns
-    tracing_enabled = envs.TRACES_ENABLE.lower() == "true"
+    tracing_enabled = envs.FD_TRACE in ("otel", "all")
 
     if not tracing_enabled:
         logger.warning("Opentelemetry is DISABLED.")
@@ -270,7 +270,7 @@ def process_tracing_init():
         # )
         trace.set_tracer_provider(tracer_provider)
     except Exception as e:
-        logger.error(f": initialize opentelemetry error:{e}")
+        logger.error(f": initialize opentelemetry error:{e}, {traceback.format_exc()}")
         logger.warning("please set correct otlp endpoint")
         tracing_enabled = False
         return

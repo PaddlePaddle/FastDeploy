@@ -555,7 +555,7 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     Create a chat completion for the provided prompt and parameters.
     """
     log_request(RequestLogLevel.FULL, message="Chat Received request: {request}", request=request.model_dump_json())
-    if envs.TRACES_ENABLE:
+    if envs.FD_TRACE in ("otel", "all"):
         if req.headers:
             headers = dict(req.headers)
             trace_context = extract(headers)
@@ -598,7 +598,7 @@ async def create_completion(request: CompletionRequest, req: Request):
     log_request(
         RequestLogLevel.FULL, message="Completion Received request: {request}", request=request.model_dump_json()
     )
-    if envs.TRACES_ENABLE:
+    if envs.FD_TRACE in ("otel", "all"):
         if req.headers:
             headers = dict(req.headers)
             trace_context = extract(headers)

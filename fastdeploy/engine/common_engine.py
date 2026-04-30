@@ -74,14 +74,7 @@ from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import (
-    EngineError,
-    console_logger,
-    ensure_workerlog_alias,
-    envs,
-    get_logger,
-    llm_logger,
-)
+from fastdeploy.utils import EngineError, console_logger, envs, get_logger, llm_logger
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -90,11 +83,13 @@ except:
     from fastdeploy.output.token_processor import TokenProcessor
 
 
-def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
+def _read_latest_worker_traceback(paddle_log_dir: str) -> Optional[str]:
     """读取 workerlog.* 文件中的最新 traceback。"""
 
     try:
-        candidates = sorted(Path(log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True)
+        candidates = sorted(
+            Path(paddle_log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True
+        )
     except OSError:
         return None
 
@@ -112,10 +107,12 @@ def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
     return None
 
 
-def _format_worker_launch_failure_message(log_dir: str) -> str:
+def _format_worker_launch_failure_message(paddle_log_dir: str) -> str:
     """格式化 worker 启动失败的错误消息，包含 traceback 信息。"""
-    message = "Failed to launch worker processes, check log/workerlog.* for more details."
-    traceback_text = _read_latest_worker_traceback(log_dir)
+    message = (
+        "Failed to launch worker processes, check log/paddle/workerlog.* and log/worker_process.log for more details."
+    )
+    traceback_text = _read_latest_worker_traceback(paddle_log_dir)
     if traceback_text:
         return f"{message}\n{traceback_text}"
     return message
@@ -301,7 +298,7 @@ class EngineService:
         def check_worker_initialize_status_func(res: dict):
             res["worker_is_alive"] = True
             if not self.check_worker_initialize_status():
-                self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+                self.llm_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
                 res["worker_is_alive"] = False
 
         self.check_worker_initialize_status_func_thread = threading.Thread(
@@ -331,7 +328,7 @@ class EngineService:
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
         if not result_container["worker_is_alive"]:
-            self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+            self.llm_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
             return False
 
         # Start ZMQ service for communication with AsyncLLM
@@ -1946,7 +1943,9 @@ class EngineService:
             try:
                 response = task.result()
             except Exception as e:
-                self.llm_logger.error(f"Waiting for control response from {name} failed: {repr(e)}")
+                self.llm_logger.error(
+                    f"Waiting for control response from {name} failed: {repr(e)}, {traceback.format_exc()}"
+                )
                 raise
 
             if response.error_code != 200:
@@ -2261,7 +2260,7 @@ class EngineService:
             self.llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:
-            self.llm_logger.error(f"Clear data error: {e}")
+            self.llm_logger.error(f"Clear data error: {e}, {traceback.format_exc()}")
             return False
 
     def _exit_sub_services(self):
@@ -2621,7 +2620,9 @@ class EngineService:
         while self.get_profile_block_num_signal.value[0] == 0:
             if hasattr(self, "worker_proc") and self.worker_proc is not None:
                 if self.worker_proc.poll() is not None:
-                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
+                    raise RuntimeError(
+                        "Worker process failed to start. Please check log/paddle/workerlog.* and log/worker_process.log for details."
+                    )
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
@@ -2764,7 +2765,4 @@ class EngineService:
             self.checking_worker_status_thread.join(timeout=1)
         except Exception:
             pass
-        # Create symlinks for paddle workerlog files after workers are ready
-        if hasattr(self, "log_dir") and hasattr(self, "paddle_log_dir"):
-            ensure_workerlog_alias(self.log_dir, self.paddle_log_dir)
         return True

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import traceback
 from dataclasses import field
 from enum import Enum
 from typing import Any, Dict, Literal, Optional, Union
@@ -2293,7 +2294,9 @@ class FDConfig:
                 else None
             )
         except Exception as e:
-            logger.error(f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}")
+            logger.error(
+                f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}, {traceback.format_exc()}"
+            )
 
     def check(self):
         """

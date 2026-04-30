@@ -355,9 +355,10 @@ class OpenAIServingCompletion(OpenAiServingBase):
             return res
         except Exception as e:
             log_request_error(
-                message="request[{request_id}] Error in completion_full_generator: {error}",
+                message="request[{request_id}] Error in completion_full_generator: {error}, {traceback}",
                 request_id=ctx.request_id,
                 error=e,
+                traceback=traceback.format_exc(),
             )
             return self._create_error_response(str(e))
 

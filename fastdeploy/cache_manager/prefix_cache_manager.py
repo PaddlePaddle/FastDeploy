@@ -923,7 +923,9 @@ class PrefixCacheManager:
                         f"request_match_blocks: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
-                    logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
+                    logger.error(
+                        f"request_match_blocks: request_block_ids: error: {type(e)} {e}, {traceback.format_exc()}"
+                    )
                     raise e
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
@@ -1007,6 +1009,11 @@ class PrefixCacheManager:
                 # 3. update metrics
                 if matched_block_num > 0:
                     self.metrics.hit_req_count += 1
+                    # Record CACHE_HIT trace event
+                    trace_print(LoggingEventName.CACHE_HIT, req_id, "")
+                else:
+                    # Record CACHE_MISS trace event
+                    trace_print(LoggingEventName.CACHE_MISS, req_id, "")
                 self.metrics.calculate_hit_metrics(
                     req_id,
                     cpu_match_token_num,
@@ -1328,7 +1335,7 @@ class PrefixCacheManager:
                         f"free_nodes_directly: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
-                    logger.error(f"free_nodes_directly: error: {type(e)} {e}")
+                    logger.error(f"free_nodes_directly: error: {type(e)} {e}, {traceback.format_exc()}")
                     raise e
 
     def _handle_free_gpu_node_without_cpu(self, node):

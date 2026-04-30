@@ -40,6 +40,9 @@ class LoggingEventName(Enum):
     POSTPROCESSING_END = "POSTPROCESSING_END"
     PREEMPTED = "PREEMPTED"
     RESCHEDULED_INFERENCE_START = "RESCHEDULED_INFERENCE_START"
+    # New events for optimization
+    CACHE_HIT = "CACHE_HIT"  # Prefix cache hit
+    CACHE_MISS = "CACHE_MISS"  # Prefix cache miss
 
     # For Prefill Instance
     ASK_DECODE_RESOURCE_START = "ASK_DECODE_RESOURCE_START"
@@ -79,6 +82,8 @@ EVENT_TO_STAGE_MAP = {
     LoggingEventName.PREPARE_PREFIX_CACHE_END: StageName.SCHEDULE,
     LoggingEventName.RESOURCE_ALLOCATE_END: StageName.SCHEDULE,
     LoggingEventName.REQUEST_SCHEDULE_END: StageName.SCHEDULE,
+    LoggingEventName.CACHE_HIT: StageName.SCHEDULE,
+    LoggingEventName.CACHE_MISS: StageName.SCHEDULE,
     LoggingEventName.INFERENCE_START: StageName.PREFILL,
     LoggingEventName.FIRST_TOKEN_GENERATED: StageName.PREFILL,
     LoggingEventName.DECODE_START: StageName.DECODE,

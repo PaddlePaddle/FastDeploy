@@ -16,6 +16,7 @@
 
 import threading
 import time
+import traceback
 from http import HTTPStatus
 from multiprocessing import Pipe, Process
 
@@ -376,7 +377,9 @@ class RedundantExpertManager:
                     expert_token_stats += np.array(meta_data, dtype=np.int32)
                 success_count += 1
             except Exception as e:
-                self.logger.error(f"redundant_expert: allgather_expert_token_stats fail. addr {addr}, error {e}")
+                self.logger.error(
+                    f"redundant_expert: allgather_expert_token_stats fail. addr {addr}, error {e}, {traceback.format_exc()}"
+                )
         if success_count == len(self.dp_rank_address):
             self.need_rearrange_expert = True
             self.model_tokens_per_expert_stats_list[:] = expert_token_stats[:]
@@ -415,7 +418,7 @@ class RedundantExpertManager:
                 success_count += 1
             except Exception as e:
                 self.logger.error(
-                    f"redundant_expert: broadcast_expert_token_stats request fail. addr {addr}, error {e}"
+                    f"redundant_expert: broadcast_expert_token_stats request fail. addr {addr}, error {e}, {traceback.format_exc()}"
                 )
         if success_count == len(self.dp_rank_address):
             self.logger.info("redundant_expert: broadcast_expert_token_stats success")
@@ -501,7 +504,9 @@ class RedundantExpertManager:
                             f"edundant_expert: allgather_load_weight_result unfinish. addr {addr}, result {result}"
                         )
             except Exception as e:
-                self.logger.error(f"redundant_expert: allgather_load_weight_result error. addr {addr}, error {e}")
+                self.logger.error(
+                    f"redundant_expert: allgather_load_weight_result error. addr {addr}, error {e}, {traceback.format_exc()}"
+                )
 
         if fail_count > 0:
             self.logger.info(

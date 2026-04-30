@@ -27,11 +27,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Request logging detail level (0-3). Higher level means more verbose output.
     "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "2")),
 
-    # Max field length for request logging truncation.
-    "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
-
-    # Unified trace mode: off, local, otel, all.
-    "FD_TRACE": lambda: os.getenv("FD_TRACE", "off"),
+    # Whether to open Trace (off/local/otel/all)
+    "FD_TRACE": lambda: os.getenv("FD_TRACE", "off").lower(),
 
     # FastDeploy log retention days
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
@@ -86,9 +83,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # Whether to use aggregate send
     "FD_USE_AGGREGATE_SEND": lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
-
-    # Whether to open Trace
-    "TRACES_ENABLE": lambda: os.getenv("TRACES_ENABLE", "false"),
 
     # Set trace server name
     "FD_SERVICE_NAME": lambda: os.getenv("FD_SERVICE_NAME", "FastDeploy"),

@@ -342,7 +342,7 @@ class RegisterManager:
             response = requests.get(url, timeout=self._timeout)
             return response.status_code == 200
         except Exception as e:
-            logger.error(f"_is_decode_health error: {e}, host: {host_ip}, port: {port}")
+            logger.error(f"_is_decode_health error: {e}, host: {host_ip}, port: {port}, {traceback.format_exc()}")
             return False
 
     def _try_rdma_connect(self, instance: Dict) -> bool:
@@ -382,7 +382,7 @@ class RegisterManager:
                 self.connect_status.pop(task_id, None)
 
         except Exception as e:
-            logger.error(f"_try_rdma_connect error: {e}")
+            logger.error(f"_try_rdma_connect error: {e}, {traceback.format_exc()}")
         return False
 
     def _check_rdma_connection(self, instance: Dict) -> bool:
