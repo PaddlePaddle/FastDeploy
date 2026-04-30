@@ -98,12 +98,12 @@ This chapter demonstrates the **TP4DP1｜D：TP4DP1** configuration test scenari
 #### Start Router
 
 ```bash
-python -m fastdeploy.router.launch \
+python -m fastdeploy.golang_router.launch \
     --port 8109 \
     --splitwise
 ```
 
-Note: This uses the Python version of the router. If needed, you can also use the high-performance [Golang version router](../online_serving/router.md).
+Note: This uses the Golang Router bundled with the FastDeploy Python package. For more options, refer to the [Router documentation](../online_serving/router.md).
 
 #### Start Prefill Nodes
 
@@ -186,7 +186,7 @@ This chapter demonstrates the **TP1DP8EP8｜D：TP1DP8EP8** cross-machine config
 ```bash
 unset http_proxy && unset https_proxy
 
-python -m fastdeploy.router.launch \
+python -m fastdeploy.golang_router.launch \
     --port 8109 \
     --splitwise
 ```
