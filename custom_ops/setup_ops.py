@@ -565,13 +565,20 @@ elif paddle.is_compiled_with_cuda():
     # appended explicitly for SM75 and also discovered by later directory globs.
     sources = list(dict.fromkeys(sources))
 
+    # Platform-specific CUDA linker configuration
+    cuda_libs = ["cublasLt"]
+    if sys.platform == "win32":
+        cuda_linker_flags = ["/DEFAULTLIB:cuda.lib", "/DEFAULTLIB:nvml.lib"]
+    else:
+        cuda_linker_flags = ["-lcuda", "-lnvidia-ml"]
+
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
             extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
-            libraries=["cublasLt"],
-            extra_link_args=["-lcuda", "-lnvidia-ml"],
+            libraries=cuda_libs,
+            extra_link_args=cuda_linker_flags,
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
