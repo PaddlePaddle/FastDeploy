@@ -447,7 +447,9 @@ def load_model_weights_process(
                 result = False
 
         except Exception as e:
-            logger.error(f"redundant_expert: async load weights failed, rank {rank} error {e}")
+            logger.error(
+                f"redundant_expert: async load weights failed, rank {rank} error {e}, {traceback.format_exc()}"
+            )
             result = False
             weight_infos = []
         finally:

@@ -118,7 +118,7 @@ class EngineServiceClient:
             llm_logger.info("EngineServiceClient started successfully")
 
         except Exception as e:
-            llm_logger.error(f"Failed to start EngineServiceClient: {e}")
+            llm_logger.error(f"Failed to start EngineServiceClient: {e}, {traceback.format_exc()}")
             raise
         return True
 
@@ -158,7 +158,7 @@ class EngineServiceClient:
                             engine._exit_sub_services()
                             llm_logger.info("Engine process cleanup completed")
                         except Exception as e:
-                            llm_logger.error(f"Error during engine cleanup: {e}")
+                            llm_logger.error(f"Error during engine cleanup: {e}, {traceback.format_exc()}")
 
             self.engine_process = multiprocessing.Process(target=run_engine)
             self.engine_process.start()
@@ -166,7 +166,7 @@ class EngineServiceClient:
             llm_logger.info(f"Started engine process with PID: {self.engine_process.pid}")
 
         except Exception as e:
-            llm_logger.error(f"Failed to start engine process: {e}")
+            llm_logger.error(f"Failed to start engine process: {e}, {traceback.format_exc()}")
             raise
 
     def _wait_engine_ready(self) -> bool:
@@ -328,7 +328,7 @@ class AsyncLLM(EngineServiceClient):
 
             llm_logger.info("High-performance ZMQ connections initialized successfully")
         except Exception as e:
-            llm_logger.error(f"Failed to initialize ZMQ connections: {e}")
+            llm_logger.error(f"Failed to initialize ZMQ connections: {e}, {traceback.format_exc()}")
             raise
 
     async def get_model_config(self):
@@ -563,7 +563,12 @@ class AsyncLLM(EngineServiceClient):
             llm_logger.info(f"Request {conn_request_id} generator exit (outer)")
             return
         except Exception as e:
-            log_request_error(message="Request {request_id} failed: {error}", request_id=conn_request_id, error=e)
+            log_request_error(
+                message="Request {request_id} failed: {error}, {traceback}",
+                request_id=conn_request_id,
+                error=e,
+                traceback=traceback.format_exc(),
+            )
             raise EngineError(str(e), error_code=500) from e
         finally:
             # Ensure request_map/request_num are cleaned up
@@ -585,7 +590,12 @@ class AsyncLLM(EngineServiceClient):
                 await self.connection_manager.cleanup_request(request_id)
             llm_logger.info(f"Aborted request {request_id}")
         except Exception as e:
-            log_request_error(message="Failed to abort request {request_id}: {error}", request_id=request_id, error=e)
+            log_request_error(
+                message="Failed to abort request {request_id}: {error}, {traceback}",
+                request_id=request_id,
+                error=e,
+                traceback=traceback.format_exc(),
+            )
 
     async def shutdown(self):
         """
@@ -601,7 +611,7 @@ class AsyncLLM(EngineServiceClient):
             try:
                 await self.connection_manager.close()
             except Exception as e:
-                llm_logger.error(f"Error while stopping connection manager: {e}")
+                llm_logger.error(f"Error while stopping connection manager: {e}, {traceback.format_exc()}")
 
         # Close ZMQ client
         if hasattr(self, "request_client") and self.request_client is not None:
@@ -615,7 +625,7 @@ class AsyncLLM(EngineServiceClient):
         try:
             super().shutdown()
         except Exception as e:
-            llm_logger.error(f"Error while stopping engine service process: {e}")
+            llm_logger.error(f"Error while stopping engine service process: {e}, {traceback.format_exc()}")
 
         llm_logger.info("AsyncLLM shutdown completed")
 

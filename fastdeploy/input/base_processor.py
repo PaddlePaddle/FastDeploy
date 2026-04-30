@@ -383,7 +383,6 @@ class BaseTextProcessor(ABC):
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
         """Unified request pre-processing shared by all processors."""
-        log_request(RequestLogLevel.CONTENT, message="Start processing request dict: {request}", request=request)
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids

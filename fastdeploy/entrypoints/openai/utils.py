@@ -248,7 +248,7 @@ class DealerConnectionManager:
 
             except (ConnectionError, OSError) as e:
                 if self.running:
-                    api_server_logger.error(f"Dispatcher: connection lost, exiting: {e}")
+                    api_server_logger.error(f"Dispatcher: connection lost, exiting: {e}, {traceback.format_exc()}")
                 break
             except Exception as e:
                 consecutive_errors += 1

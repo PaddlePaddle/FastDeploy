@@ -78,9 +78,10 @@ async def generate(request: dict):
         except Exception as e:
             # 记录完整的异常堆栈信息
             log_request_error(
-                message="request[{request_id}] Error during generation: {error}",
+                message="request[{request_id}] Error during generation: {error}, {traceback}",
                 request_id=request.get("request_id"),
                 error=str(e),
+                traceback=traceback.format_exc(),
             )
             # 返回结构化的错误消息并终止流
             output = {"error": str(e), "error_type": e.__class__.__name__}
@@ -94,9 +95,10 @@ async def generate(request: dict):
         except Exception as e:
             # 记录完整的异常堆栈信息
             log_request_error(
-                message="request[{request_id}] Error during generation: {error}",
+                message="request[{request_id}] Error during generation: {error}, {traceback}",
                 request_id=request.get("request_id"),
                 error=str(e),
+                traceback=traceback.format_exc(),
             )
             # 返回结构化的错误消息并终止流
             error_msg = {"error": str(e), "error_type": e.__class__.__name__}
