@@ -301,11 +301,14 @@ class WarpSort {
 template <int capacity, bool greater, typename T, typename idxT, bool is_stable>
 class WarpSelect : public WarpSort<capacity, greater, T, idxT, is_stable> {
  public:
+  // Default constructor: uses extern __shared__ smem_buf from offset 0.
+  // Used by callers that have no other shared memory before the WarpSelect
+  // staging region.
   __device__ WarpSelect(idxT k, T dummy)
       : WarpSort<capacity, greater, T, idxT, is_stable>(k, dummy),
         k_th_(dummy),
         k_th_lane_((k - 1) % WARP_SIZE) {
-    extern __shared__ char smem_buf[];  // extern __shared__ T smem_buf[];
+    extern __shared__ char smem_buf[];
 
     int const num_of_warp = blockDim.x / WARP_SIZE;
     int const warp_id = threadIdx.x / WARP_SIZE;
@@ -313,6 +316,23 @@ class WarpSelect : public WarpSort<capacity, greater, T, idxT, is_stable> {
     val_smem_ += warp_id * WARP_SIZE;
     idx_smem_ = reinterpret_cast<idxT*>(
         smem_buf +
+        round_up_to_multiple_of<256>(num_of_warp * sizeof(T) * WARP_SIZE));
+    idx_smem_ += warp_id * WARP_SIZE;
+  }
+
+  // Constructor with explicit smem base pointer.
+  // Use this when shared memory before offset `smem_base` must be preserved
+  // (e.g. smem_scores_warp in the fused noaux_tc kernel).
+  __device__ WarpSelect(idxT k, T dummy, char* smem_base)
+      : WarpSort<capacity, greater, T, idxT, is_stable>(k, dummy),
+        k_th_(dummy),
+        k_th_lane_((k - 1) % WARP_SIZE) {
+    int const num_of_warp = blockDim.x / WARP_SIZE;
+    int const warp_id = threadIdx.x / WARP_SIZE;
+    val_smem_ = reinterpret_cast<T*>(smem_base);
+    val_smem_ += warp_id * WARP_SIZE;
+    idx_smem_ = reinterpret_cast<idxT*>(
+        smem_base +
         round_up_to_multiple_of<256>(num_of_warp * sizeof(T) * WARP_SIZE));
     idx_smem_ += warp_id * WARP_SIZE;
   }
@@ -467,7 +487,7 @@ __device__ void topk_with_k2(T* output,
   }
 
   if (lane_id == 0) {
-    *output = max1 + max2;
+    *output = max1 + max2;  // reg <- reg
   }
 }
 
@@ -500,11 +520,12 @@ __global__ void topk_with_k2_kernel(T* output,
 
 template <typename T, typename IdxT>
 __global__ void group_idx_and_topk_idx_kernel(
+    T* gating_output,
+    T* e_score_correction_bias,
     T* scores,
-    T const* group_scores,
+    T* group_scores,
     T* topk_values,
     IdxT* topk_indices,
-    const T* scores_with_bias,
     int64_t const num_tokens,
     int64_t const n_group,
     int64_t const topk_group,
@@ -517,7 +538,38 @@ __global__ void group_idx_and_topk_idx_kernel(
   int32_t lane_id = threadIdx.x % WARP_SIZE;
   int32_t case_id =
       blockIdx.x * NUM_WARPS_PER_BLOCK + warp_id;  // one per token
-  scores_with_bias += case_id * num_experts;
+
+  extern __shared__ char smem_buf[];
+  // smem layout:
+  //   [0, smem_scores_bytes):  smem_scores[NUM_WARPS_PER_BLOCK * num_experts]
+  //   [smem_scores_bytes, ..): WarpSelect staging, reused as
+  //   s_topk_idx/s_topk_value
+  T* smem_scores_warp =
+      reinterpret_cast<T*>(smem_buf) + warp_id * num_experts;  // [num_experts]
+  char* warpselect_base =
+      smem_buf + NUM_WARPS_PER_BLOCK * num_experts * sizeof(T);
+  int32_t* s_topk_idx =
+      reinterpret_cast<int32_t*>(warpselect_base) + warp_id * topk;
+  T* s_topk_value =
+      reinterpret_cast<T*>(reinterpret_cast<int32_t*>(warpselect_base) +
+                           NUM_WARPS_PER_BLOCK * topk) +
+      warp_id * topk;
+
+  // Register arrays for Phase 0+1 merged loop.
+  // Per-lane top-2 accumulators per group (supports n_group up to 8).
+  constexpr int MAX_N_GROUP = 8;
+  float largest[MAX_N_GROUP];
+  float second_largest[MAX_N_GROUP];
+  // group_scores_reg[g]: warp-reduced top2-sum per group, broadcast to all
+  // lanes. Replaces the global group_scores buffer for Phase 2 and Phase 3.
+  float group_scores_reg[MAX_N_GROUP];
+#pragma unroll
+  for (int g = 0; g < MAX_N_GROUP; g++) {
+    largest[g] = -cuda::std::numeric_limits<float>::infinity();
+    second_largest[g] = -cuda::std::numeric_limits<float>::infinity();
+    group_scores_reg[g] = -cuda::std::numeric_limits<float>::infinity();
+  }
+
   scores += case_id * num_experts;
   group_scores += case_id * n_group;
   topk_values += case_id * topk;
@@ -525,16 +577,60 @@ __global__ void group_idx_and_topk_idx_kernel(
   int32_t align_num_experts_per_group =
       warp_topk::round_up_to_multiple_of<WARP_SIZE>(num_experts_per_group);
 
+  // Phase 0 + Phase 1 merged:
+  // Single pass over [0, num_experts) with stride WARP_SIZE.
+  // Each column i:
+  //   - sigmoid(gating_output[row, i])          → s  (unbiased)
+  //   - s + e_score_correction_bias[i]          → sb (biased)
+  //   - write s to smem_scores_warp[i]          (Phase 3 biased score and Phase
+  //   4 gather use this)
+  //   - update largest/second_largest[g] for g = i / num_experts_per_group
+  if (case_id < num_tokens) {
+    const T* gating_row = gating_output + case_id * num_experts;
+    for (int i = lane_id; i < num_experts; i += WARP_SIZE) {
+      float g_val = cuda_cast<float, T>(gating_row[i]);
+      float s = 1.f / (1.f + __expf(-g_val));
+      float sb = s + cuda_cast<float, T>(e_score_correction_bias[i]);
+
+      smem_scores_warp[i] = cuda_cast<T, float>(s);
+      // topk_with2 收敛到每个lane在某一个group的局部最大值和局部第二最大值
+      int g = i / num_experts_per_group;
+      if (sb > largest[g]) {
+        second_largest[g] = largest[g];
+        largest[g] = sb;
+      } else if (sb > second_largest[g]) {
+        second_largest[g] = sb;
+      }
+    }
+  }
+  __syncwarp();
+
+  // Phase 1 reduction: warp-reduce top-2 per group → store in group_scores_reg.
+  // Result is broadcast to all lanes via __shfl_sync so Phase 2 and Phase 3
+  // can read it directly from registers without touching global group_scores.
+  if (case_id < num_tokens) {
+    cg::thread_block_tile<32> tile_p1 =
+        cg::tiled_partition<32>(cg::this_thread_block());
+    for (int g = 0; g < n_group; g++) {
+      float max1 = cg::reduce(tile_p1, largest[g], cg::greater<float>());
+      float max2 = max1;
+      bool eq = (largest[g] == max1);
+      if (__popc(__ballot_sync(FULL_WARP_MASK, eq)) == 1) {
+        float l = (largest[g] == max1) ? second_largest[g] : largest[g];
+        max2 = cg::reduce(tile_p1, l, cg::greater<float>());
+      }
+      // cg::reduce returns the same value to all lanes in the warp,
+      // so max1+max2 is already consistent across all lanes — store directly.
+      group_scores_reg[g] = max1 + max2;
+    }
+  }
+  // No __syncthreads() needed: group_scores_reg is warp-local register state,
+  // not shared memory. A __syncwarp() suffices to ensure all lanes are past
+  // the reduction before Phase 2 begins.
+  __syncwarp();
+
   cg::thread_block block = cg::this_thread_block();
   cg::thread_block_tile<32> tile = cg::tiled_partition<32>(block);
-
-  extern __shared__ char smem_buf[];  // NOTE: reuse the shared memory here to
-                                      // store the target topk idx
-  int32_t* s_topk_idx = reinterpret_cast<int32_t*>(smem_buf);
-  T* s_topk_value =
-      reinterpret_cast<T*>(s_topk_idx + NUM_WARPS_PER_BLOCK * topk) +
-      warp_id * topk;
-  s_topk_idx += warp_id * topk;
 
   T value = neg_inf<T>();
   T topk_group_value = neg_inf<T>();
@@ -546,14 +642,12 @@ __global__ void group_idx_and_topk_idx_kernel(
 #endif
 
   if (case_id < num_tokens) {
-    // calculate group_idx
+    // Phase 2: select topk_group groups using group_scores_reg (register, no
+    // global read). Each lane owns one group slot (lane_id < n_group); lanes >=
+    // n_group stay at -inf.
     int32_t want_neg_inf_num = WARP_SIZE - n_group + topk_group;
-    if (lane_id < n_group &&
-        (isfinite(cuda_cast<float, T>(
-            group_scores[lane_id]))))  // The check is necessary to avoid
-                                       // abnormal input
-    {
-      value = group_scores[lane_id];
+    if (lane_id < n_group && isfinite(group_scores_reg[lane_id])) {
+      value = cuda_cast<T, float>(group_scores_reg[lane_id]);
     }
 
     int neg_inf_num = WARP_SIZE - n_group;
@@ -575,33 +669,48 @@ __global__ void group_idx_and_topk_idx_kernel(
     // but we only accept some of them!
     num_equalto_topkth_group = want_neg_inf_num - last_neg_inf_num;
   }
-  __syncthreads();
+  // Only a warp-level sync is needed here since we no longer write to shared
+  // memory in Phase 1; the subsequent WarpSelect constructor does __syncthreads
+  // internally via done(), so this is sufficient.
+  __syncwarp();
 
+  // Pass warpselect_base so WarpSelect staging smem does not overwrite
+  // smem_scores_warp which sits at the start of smem_buf.
   warp_topk::WarpSelect</*capability*/ WARP_SIZE,
                         /*greater*/ true,
                         T,
                         int32_t,
                         /* is_stable */ true>
-      queue((int32_t)topk, neg_inf<T>());
+      queue((int32_t)topk, neg_inf<T>(), warpselect_base);
 
   int count_equalto_topkth_group = 0;
   bool if_proceed_next_topk = (topk_group_value != neg_inf<T>());
   if (case_id < num_tokens && if_proceed_next_topk) {
     for (int i_group = 0; i_group < n_group; i_group++) {
-      if ((group_scores[i_group] > topk_group_value) ||
-          ((group_scores[i_group] == topk_group_value) &&
+      // Use group_scores_reg (register) instead of global group_scores.
+      float gs_i = group_scores_reg[i_group];
+      if ((gs_i > cuda_cast<float, T>(topk_group_value)) ||
+          ((gs_i == cuda_cast<float, T>(topk_group_value)) &&
            (count_equalto_topkth_group < num_equalto_topkth_group))) {
         int32_t offset = i_group * num_experts_per_group;
         for (int32_t i = lane_id; i < align_num_experts_per_group;
              i += WARP_SIZE) {
-          T candidates =
-              (i < num_experts_per_group) && isfinite(cuda_cast<float, T>(
-                                                 scores_with_bias[offset + i]))
-                  ? scores_with_bias[offset + i]
-                  : neg_inf<T>();
+          // Phase 3: compute biased score from smem (unbiased) + global bias.
+          // smem_scores_warp[offset+i] holds sigmoid(gating[offset+i]) written
+          // in Phase 0; adding the bias here recovers the biased score without
+          // needing sbias_reg to be addressable across non-WARP_SIZE-aligned
+          // group boundaries.
+          float sb =
+              (i < num_experts_per_group)
+                  ? (cuda_cast<float, T>(smem_scores_warp[offset + i]) +
+                     cuda_cast<float, T>(e_score_correction_bias[offset + i]))
+                  : -cuda::std::numeric_limits<float>::infinity();
+          T candidates = (i < num_experts_per_group) && isfinite(sb)
+                             ? cuda_cast<T, float>(sb)
+                             : neg_inf<T>();
           queue.add(candidates, offset + i);
         }
-        if (group_scores[i_group] == topk_group_value) {
+        if (gs_i == cuda_cast<float, T>(topk_group_value)) {
           count_equalto_topkth_group++;
         }
       }
@@ -613,14 +722,14 @@ __global__ void group_idx_and_topk_idx_kernel(
     __syncwarp();
   }
 
-  // Load the valid score value
-  // Calculate the summation
+  // Phase 4: gather topk_values from smem_scores (unbiased, stored in Phase 0).
+  // No global memory read needed for scores.
   float topk_sum = 1e-20;
   if (case_id < num_tokens && if_proceed_next_topk) {
     for (int i = lane_id;
          i < warp_topk::round_up_to_multiple_of<WARP_SIZE>(topk);
          i += WARP_SIZE) {
-      T value = i < topk ? scores[s_topk_idx[i]]
+      T value = i < topk ? smem_scores_warp[s_topk_idx[i]]
                          : 0.0f;  // Load the valid value of expert
       if (i < topk) {
         s_topk_value[i] = value;
@@ -857,11 +966,12 @@ __global__ void group_idx_and_topk_idx_redundant_kernel(
 }
 
 template <typename T, typename IdxT>
-void invokeNoAuxTc(T* scores,
+void invokeNoAuxTc(T* gating_output,
+                   T* bias,
+                   T* scores,
                    T* group_scores,
                    T* topk_values,
                    IdxT* topk_indices,
-                   T* scores_with_bias,
                    int64_t const num_tokens,
                    int64_t const num_experts,
                    int64_t const n_group,
@@ -870,52 +980,23 @@ void invokeNoAuxTc(T* scores,
                    bool const renormalize,
                    double const routed_scaling_factor,
                    cudaStream_t const stream) {
-  int64_t num_cases = num_tokens * n_group;
-  int64_t topk_with_k2_num_blocks = (num_cases - 1) / NUM_WARPS_PER_BLOCK + 1;
-
-#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-  topk_with_k2_kernel<T><<<topk_with_k2_num_blocks, BLOCK_SIZE, 0, stream>>>(
-      group_scores,
-      scores_with_bias,
-      num_cases,
-      n_group,
-      num_experts / n_group);
-#else
-  auto* kernel_instance1 = &topk_with_k2_kernel<T>;
-  cudaLaunchConfig_t config;
-  config.gridDim = topk_with_k2_num_blocks;
-  config.blockDim = BLOCK_SIZE;
-  config.dynamicSmemBytes = 0;
-  config.stream = stream;
-  cudaLaunchAttribute attrs[1];
-  attrs[0].id = cudaLaunchAttributeProgrammaticStreamSerialization;
-  attrs[0].val.programmaticStreamSerializationAllowed = false;
-  config.numAttrs = 1;
-  config.attrs = attrs;
-  cudaLaunchKernelEx(&config,
-                     kernel_instance1,
-                     group_scores,
-                     scores_with_bias,
-                     num_cases,
-                     n_group,
-                     num_experts / n_group);
-#endif
-
   int64_t topk_with_k_group_num_blocks =
       (num_tokens - 1) / NUM_WARPS_PER_BLOCK + 1;
+  size_t smem_score_bytes = NUM_WARPS_PER_BLOCK * num_experts * sizeof(T);
   size_t dynamic_smem_in_bytes =
-      warp_topk::calc_smem_size_for_block_wide<T, int32_t>(NUM_WARPS_PER_BLOCK,
-                                                           topk);
+      smem_score_bytes + warp_topk::calc_smem_size_for_block_wide<T, int32_t>(
+                             NUM_WARPS_PER_BLOCK, topk);
 
 #ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
   group_idx_and_topk_idx_kernel<T, IdxT><<<topk_with_k_group_num_blocks,
                                            BLOCK_SIZE,
                                            dynamic_smem_in_bytes,
-                                           stream>>>(scores,
+                                           stream>>>(gating_output,
+                                                     bias,
+                                                     scores,
                                                      group_scores,
                                                      topk_values,
                                                      topk_indices,
-                                                     scores_with_bias,
                                                      num_tokens,
                                                      n_group,
                                                      topk_group,
@@ -925,6 +1006,8 @@ void invokeNoAuxTc(T* scores,
                                                      renormalize,
                                                      routed_scaling_factor);
 #else
+  cudaLaunchConfig_t config;
+  cudaLaunchAttribute attrs[1];
   auto* kernel_instance2 = &group_idx_and_topk_idx_kernel<T, IdxT>;
   config.gridDim = topk_with_k_group_num_blocks;
   config.blockDim = BLOCK_SIZE;
@@ -936,11 +1019,12 @@ void invokeNoAuxTc(T* scores,
   config.attrs = attrs;
   cudaLaunchKernelEx(&config,
                      kernel_instance2,
+                     gating_output,
+                     bias,
                      scores,
                      group_scores,
                      topk_values,
                      topk_indices,
-                     scores_with_bias,
                      num_tokens,
                      n_group,
                      topk_group,
@@ -1010,11 +1094,12 @@ void invokeNoAuxTcRedundant(T* scores,
 }
 
 #define INSTANTIATE_NOAUX_TC(T, IdxT)                                      \
-  template void invokeNoAuxTc<T, IdxT>(T * scores,                         \
+  template void invokeNoAuxTc<T, IdxT>(T * gating_output,                  \
+                                       T * bias,                           \
+                                       T * scores,                         \
                                        T * group_scores,                   \
                                        T * topk_values,                    \
                                        IdxT * topk_indices,                \
-                                       T * scores_with_bias,               \
                                        int64_t const num_tokens,           \
                                        int64_t const num_experts,          \
                                        int64_t const n_group,              \

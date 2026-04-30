@@ -19,7 +19,7 @@
 #include <optional>
 
 #include "helper.h"
-#include "noauxtc_kernel_dev.h"
+#include "noauxtc_kernel.h"
 
 std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& gating_output,
                                     paddle::Tensor& bias,
