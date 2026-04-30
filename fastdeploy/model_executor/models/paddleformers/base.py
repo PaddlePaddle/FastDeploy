@@ -16,6 +16,7 @@
 
 """Generic PaddleFormers modeling backend base class."""
 
+import os
 import re
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
@@ -787,6 +788,21 @@ class PaddleFormersModelBase(nn.Layer):
                 self.fd_config.model_config.layer_types = layer_types
             if not hasattr(self.fd_config.model_config, "sliding_window") and sliding_window is not None:
                 self.fd_config.model_config.sliding_window = sliding_window
+
+        # T53 head-wise SWA fixture (default off).
+        if os.environ.get("FD_T53_HEAD_WISE_SWA_FIXTURE", "0") == "1":
+            cfg = self.fd_config.model_config
+            n_kv = getattr(cfg, "num_key_value_heads", 1) or 1
+            ratio_env = os.environ.get("FD_T53_HEAD_WISE_SWA_RATIO", "")
+            ratio = float(ratio_env) if ratio_env else (1.0 / n_kv)
+            if getattr(cfg, "window_size", None) is None:
+                cfg.window_size = 4096
+            if getattr(cfg, "sink_size", None) is None:
+                cfg.sink_size = 0
+            if getattr(cfg, "window_attn_skip_freq", None) is None:
+                cfg.window_attn_skip_freq = 1
+            if getattr(cfg, "head_wise_swa_ratio", None) is None:
+                cfg.head_wise_swa_ratio = ratio
 
         attention_instances = {}
         for i in range(num_layers):
