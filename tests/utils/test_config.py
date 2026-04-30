@@ -420,7 +420,8 @@ class TestFDConfig(unittest.TestCase):
         fd6 = _mfd(self.mp, structured_outputs_config=so, speculative_config=SpeculativeConfig({"method": "mtp"}))
         assert fd6.structured_outputs_config.guided_decoding_backend == "off"
         assert _mfd(self.mp, model_config=_mm(), cache={"max_encoder_cache": -1}).cache_config.max_encoder_cache == 0
-        assert _mfd(self.mp, model_config=_mm(), cache={"max_encoder_cache": 10}).cache_config.max_encoder_cache == 0
+        fd_cache = _mfd(self.mp, model_config=_mm(), cache={"max_encoder_cache": 10})
+        assert fd_cache.cache_config.max_encoder_cache == fd_cache.scheduler_config.max_num_batched_tokens
 
     def test_guided_check(self):
         self._cuda()

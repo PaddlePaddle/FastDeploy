@@ -2144,7 +2144,7 @@ class FDConfig:
 
         if self.enable_mm_runtime:
             if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
-                self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+                self.cache_config.max_encoder_cache = 0
             elif self.cache_config.max_encoder_cache != 0:
                 if self.cache_config.max_encoder_cache < self.scheduler_config.max_num_batched_tokens:
                     logger.warning(
@@ -2153,8 +2153,6 @@ class FDConfig:
                         f"set to max_num_batched_tokens."
                     )
                     self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
-            # TODO: mm encoder_cache close for now
-            self.cache_config.max_encoder_cache = 0
         else:
             self.cache_config.max_encoder_cache = 0
 

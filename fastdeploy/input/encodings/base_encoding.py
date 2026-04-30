@@ -41,6 +41,7 @@ class BaseEncoding(ABC):
         self.cfg = cfg
         self.image_processor = processor.image_processor
         self.tokenizer = processor.tokenizer
+        self.enable_local_processor_cache = getattr(processor, "enable_local_processor_cache", False)
 
         # Conv params
         if cfg.conv_params_from_kwargs:

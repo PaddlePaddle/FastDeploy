@@ -64,7 +64,7 @@ def test_projector_build_merge_permutation_accepts_tensor_and_empty_grid():
     assert empty_indices.shape == (0,)
     assert empty_lengths == []
 
-    with pytest.raises(AssertionError):
+    with pytest.raises(ValueError, match="not divisible"):
         projector._build_merge_permutation([(1, 3, 2)])
 
 
@@ -123,7 +123,7 @@ def test_apply_rotary_pos_emb_vision_requires_float32():
 
     np.testing.assert_allclose(apply_rotary_pos_emb_vision(x, cos, sin).numpy(), x.numpy())
 
-    with pytest.raises(AssertionError, match="expected float32"):
+    with pytest.raises(TypeError, match="expects float32 input"):
         apply_rotary_pos_emb_vision(x.astype("float16"), cos, sin)
 
 
@@ -148,7 +148,7 @@ def test_siglip_attention_accepts_batch_one_fast_path(monkeypatch):
 
     assert output.shape == [2, 4]
 
-    with pytest.raises(AssertionError, match="batch=1"):
+    with pytest.raises(ValueError, match="batch=1"):
         attention(
             paddle.zeros([2, 2, 4], dtype="float32"),
             cu_seqlens=paddle.to_tensor([0, 2, 4], dtype="int32"),

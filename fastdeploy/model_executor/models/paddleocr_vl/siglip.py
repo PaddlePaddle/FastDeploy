@@ -128,7 +128,8 @@ class SiglipAttention(nn.Layer):
         sin_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
     ):
         if hidden_states.dim() == 3:
-            assert hidden_states.shape[0] == 1, f"SiglipAttention only supports batch=1, got {hidden_states.shape}"
+            if hidden_states.shape[0] != 1:
+                raise ValueError(f"SiglipAttention only supports batch=1, got {hidden_states.shape}")
             hidden_states = hidden_states[0]
 
         seq_length, D = hidden_states.shape

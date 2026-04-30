@@ -32,7 +32,7 @@ from fastdeploy.input.utils import IDS_TYPE_FLAG
 # ===================================================================
 # Encoding-level helpers
 # ===================================================================
-def _make_encoding(model_type, processor_kwargs=None):
+def _make_encoding(model_type, processor_kwargs=None, enable_local_processor_cache=False):
     """Instantiate a real encoding class with mocked processor dependencies.
 
     Returns (encoding, mock_processor) so tests can inspect mock calls.
@@ -44,6 +44,7 @@ def _make_encoding(model_type, processor_kwargs=None):
     mock_processor = MagicMock()
     mock_processor.cfg = cfg
     mock_processor.enable_processor_cache = False
+    mock_processor.enable_local_processor_cache = enable_local_processor_cache
 
     # image_processor mock
     ip = MagicMock()
@@ -279,8 +280,8 @@ class TestQwenEncoding(unittest.TestCase):
 class TestPaddleOCREncoding(unittest.TestCase):
     """Tests for PaddleOCREncoding overrides."""
 
-    def _make_enc(self):
-        return _make_encoding(PADDLEOCR_VL)
+    def _make_enc(self, enable_local_processor_cache=False, processor_kwargs=None):
+        return _make_encoding(PADDLEOCR_VL, processor_kwargs, enable_local_processor_cache)
 
     def test_make_outputs_has_vit_fields(self):
         enc, _ = self._make_enc()
@@ -308,6 +309,26 @@ class TestPaddleOCREncoding(unittest.TestCase):
         self.assertEqual(outputs["vit_seqlen"][0], 16)
         self.assertEqual(len(outputs["vit_position_ids"]), 1)
         np.testing.assert_array_equal(outputs["vit_position_ids"][0], np.arange(16) % 16)
+
+    def test_add_image_uses_local_processor_cache_when_enabled(self):
+        enc, mock_proc = self._make_enc(enable_local_processor_cache=True)
+        ip = mock_proc.image_processor
+        ip.preprocess.return_value = {
+            "pixel_values": np.zeros((4, 3, 28, 28)),
+            "grid_thw": np.array([1, 4, 4]),
+        }
+        mock_img = MagicMock()
+        mock_img.convert.return_value = mock_img
+
+        first_outputs = enc._make_outputs()
+        enc.add_image(mock_img, first_outputs, uuid="img1")
+        second_outputs = enc._make_outputs()
+        enc.add_image(mock_img, second_outputs, uuid="img1")
+
+        ip.preprocess.assert_called_once()
+        self.assertEqual(second_outputs["mm_hashes"], ["img1"])
+        np.testing.assert_array_equal(second_outputs["grid_thw"][0], np.array([[1, 4, 4]]))
+        self.assertEqual(second_outputs["vit_seqlen"], [16])
 
     def test_add_video_uses_video_token_id(self):
         """PaddleOCR uses video_token_id (not image_token_id) for video."""

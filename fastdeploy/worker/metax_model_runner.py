@@ -512,10 +512,11 @@ class MetaxModelRunner(ModelRunnerBase):
                                     multi_vision_inputs["grid_thw_lst"].append(grid_thw_tensor)
                                     grid_thw_lst_per_req.append(grid_thw_tensor)
                             else:
-                                assert pending_mm_grid_thw[mm_hash] == grid_thw_key, (
-                                    f"mm_hash {mm_hash} grid_thw mismatch: "
-                                    f"{pending_mm_grid_thw[mm_hash]} != {grid_thw_key}"
-                                )
+                                if pending_mm_grid_thw[mm_hash] != grid_thw_key:
+                                    raise ValueError(
+                                        f"mm_hash {mm_hash} grid_thw mismatch: "
+                                        f"{pending_mm_grid_thw[mm_hash]} != {grid_thw_key}"
+                                    )
                         image_start_idx += image_offset
                     multi_vision_inputs["grid_thw_lst_batches"].append(grid_thw_lst_per_req)
                     multi_vision_inputs["encoder_cache_info"].append(encoder_cache_info_per_req)
@@ -565,10 +566,11 @@ class MetaxModelRunner(ModelRunnerBase):
                                     multi_vision_inputs["grid_thw_lst"].append(grid_thw_tensor)
                                     grid_thw_lst_per_req.append(grid_thw_tensor)
                             else:
-                                assert pending_mm_grid_thw[mm_hash] == grid_thw_key, (
-                                    f"mm_hash {mm_hash} grid_thw mismatch: "
-                                    f"{pending_mm_grid_thw[mm_hash]} != {grid_thw_key}"
-                                )
+                                if pending_mm_grid_thw[mm_hash] != grid_thw_key:
+                                    raise ValueError(
+                                        f"mm_hash {mm_hash} grid_thw mismatch: "
+                                        f"{pending_mm_grid_thw[mm_hash]} != {grid_thw_key}"
+                                    )
                             image_start_idx += image_offset
                         multi_vision_inputs["grid_thw_lst_batches"].append(grid_thw_lst_per_req)
                         mm_feature_info_batches.append(mm_feature_info_per_req)
@@ -626,7 +628,7 @@ class MetaxModelRunner(ModelRunnerBase):
                         mm_token_length = mm_num_token_func(grid_thw=grid_thw)
                         mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
                         fresh_mm_feature_cache[mm_hash] = mm_feature
-                        self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
+                        self.encoder_cache[mm_hash] = mm_feature.detach().clone()
                         feature_idx += mm_token_length
                 image_features_list = []
                 for index, encoder_cache_info in enumerate(multi_vision_inputs["encoder_cache_info"]):
@@ -634,7 +636,7 @@ class MetaxModelRunner(ModelRunnerBase):
                     for mm_hash, feature_position, use_cache in encoder_cache_info:
                         if use_cache:
                             assert mm_hash in self.encoder_cache, f"{mm_hash} not in encoder cache"
-                            mm_feature = self.encoder_cache[mm_hash].to(self.device)
+                            mm_feature = self.encoder_cache[mm_hash]
                         else:
                             assert (
                                 mm_hash in fresh_mm_feature_cache

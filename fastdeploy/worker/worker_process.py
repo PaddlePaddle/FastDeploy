@@ -148,6 +148,15 @@ def update_fd_config_for_mm(fd_config: FDConfig) -> None:
         fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
 
 
+def update_fd_config_for_paddleocr(fd_config: FDConfig) -> None:
+    architecture = fd_config.model_config.architectures[0]
+    if "PaddleOCR" in architecture:
+        envs.FD_ENABLE_MAX_PREFILL = 1
+        fd_config.cache_config.enable_prefix_caching = False
+        if fd_config.cache_config.max_encoder_cache is None or fd_config.cache_config.max_encoder_cache < 0:
+            fd_config.cache_config.max_encoder_cache = 0
+
+
 class PaddleDisWorkerProc:
     """
     Paddle Distributed wrapper for fastdeploy.worker.Worker,
@@ -1271,11 +1280,7 @@ def initialize_fd_config(args, ranks: int = 1, local_rank: int = 0) -> FDConfig:
     if fd_config.load_config.load_choices == "default_v1" and not v1_loader_support(fd_config):
         fd_config.load_config.load_choices = "default"
 
-    architecture = fd_config.model_config.architectures[0]
-    if "PaddleOCR" in architecture:
-        envs.FD_ENABLE_MAX_PREFILL = 1
-        fd_config.cache_config.enable_prefix_caching = False
-        fd_config.cache_config.max_encoder_cache = 0
+    update_fd_config_for_paddleocr(fd_config)
 
     return fd_config
 

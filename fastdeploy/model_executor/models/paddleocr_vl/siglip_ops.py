@@ -37,7 +37,13 @@ def rotate_half(x):
 
 
 def apply_rotary_pos_emb_vision(x, cos, sin):
-    assert x.dtype == paddle.float32, f"expected float32, got {x.dtype}"
+    """Apply rotary embeddings to float32 query/key tensors.
+
+    Callers should cast lower precision inputs to float32 before calling this
+    helper, and cast the result back afterwards if needed.
+    """
+    if x.dtype != paddle.float32:
+        raise TypeError(f"apply_rotary_pos_emb_vision expects float32 input, got {x.dtype}")
     x_embed = (x * cos) + (rotate_half(x) * sin)
     return x_embed
 
