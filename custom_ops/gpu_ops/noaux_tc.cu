@@ -22,7 +22,7 @@
 #include "noauxtc_kernel.h"
 
 std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& gating_output,
-                                    paddle::Tensor& bias,
+                                    paddle::Tensor& e_score_correction_bias,
                                     int n_group,
                                     int topk_group,
                                     int topk,
@@ -48,7 +48,7 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& gating_output,
 
   invokeNoAuxTc<float, int64_t>(
       reinterpret_cast<float*>(gating_output.data<float>()),
-      reinterpret_cast<float*>(bias.data<float>()),
+      reinterpret_cast<float*>(e_score_correction_bias.data<float>()),
       reinterpret_cast<float*>(scores.data<float>()),
       reinterpret_cast<float*>(group_scores.data<float>()),
       reinterpret_cast<float*>(topk_values.data<float>()),
@@ -84,7 +84,7 @@ std::vector<std::vector<int64_t>> NoauxTcInferShape(
 }
 
 PD_BUILD_STATIC_OP(noaux_tc)
-    .Inputs({"gating_output", "bias"})
+    .Inputs({"gating_output", "e_score_correction_bias"})
     .Outputs({"output_tensor", "topk_values", "topk_indices"})
     .Attrs({"n_group: int",
             "topk_group: int",

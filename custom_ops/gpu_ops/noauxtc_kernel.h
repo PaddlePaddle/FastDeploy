@@ -967,7 +967,7 @@ __global__ void group_idx_and_topk_idx_redundant_kernel(
 
 template <typename T, typename IdxT>
 void invokeNoAuxTc(T* gating_output,
-                   T* bias,
+                   T* e_score_correction_bias,
                    T* scores,
                    T* group_scores,
                    T* topk_values,
@@ -992,7 +992,7 @@ void invokeNoAuxTc(T* gating_output,
                                            BLOCK_SIZE,
                                            dynamic_smem_in_bytes,
                                            stream>>>(gating_output,
-                                                     bias,
+                                                     e_score_correction_bias,
                                                      scores,
                                                      group_scores,
                                                      topk_values,
@@ -1020,7 +1020,7 @@ void invokeNoAuxTc(T* gating_output,
   cudaLaunchKernelEx(&config,
                      kernel_instance2,
                      gating_output,
-                     bias,
+                     e_score_correction_bias,
                      scores,
                      group_scores,
                      topk_values,
@@ -1095,7 +1095,7 @@ void invokeNoAuxTcRedundant(T* scores,
 
 #define INSTANTIATE_NOAUX_TC(T, IdxT)                                      \
   template void invokeNoAuxTc<T, IdxT>(T * gating_output,                  \
-                                       T * bias,                           \
+                                       T * e_score_correction_bias,        \
                                        T * scores,                         \
                                        T * group_scores,                   \
                                        T * topk_values,                    \
