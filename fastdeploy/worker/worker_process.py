@@ -1326,6 +1326,7 @@ def run_worker_proc() -> None:
     # Trigger CUDAGraph capture
     worker_proc.graph_optimize_and_warm_up_model()
 
+    # Note(ZKK):
     # In some scenarios, we need to evaluate the performance of the model based on a fixed batch size and input length
     # we can profile the following line of code
     if current_platform.is_cuda():
