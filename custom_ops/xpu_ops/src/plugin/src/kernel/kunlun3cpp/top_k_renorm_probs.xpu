@@ -1,0 +1,129 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+
+namespace fd_xpu3 {
+
+template <typename T>
+__global__ void top_k_renorm_probs(const T* probs,   // [batch_size, vocab_size]
+                                   T* renorm_probs,  // [batch_size, vocab_size]
+                                   const int64_t* top_k,  // [batch_size]
+                                   int batch_size,
+                                   int vocab_size) {
+  char lm[6 * 1024];
+  T* lm_src = (T*)lm;
+  int64_t buf_size = 6 * 1024 / sizeof(T);
+
+  int cid = core_id();
+  int tid = cid * cluster_num() + cluster_id();
+  int nthreads = cluster_num() * core_num();
+
+  for (int i = tid; i < batch_size; i += nthreads) {
+    // Read top_k[i]
+    int64_t lm_k;
+    GM2LM(top_k + i, &lm_k, sizeof(int64_t));
+    mfence_lm();
+    int k = (lm_k <= 0 || lm_k >= (int64_t)vocab_size) ? vocab_size : (int)lm_k;
+
+    int64_t row_offset = (int64_t)i * vocab_size;
+
+    if (k >= vocab_size) {
+      // No filtering: copy row directly
+      for (int j = 0; j < vocab_size; j += (int)buf_size) {
+        int64_t read_size = (buf_size < (int64_t)(vocab_size - j))
+                                ? buf_size
+                                : (int64_t)(vocab_size - j);
+        GM2LM(probs + row_offset + j, lm_src, read_size * sizeof(T));
+        mfence_lm();
+        LM2GM_ASYNC(
+            lm_src, renorm_probs + row_offset + j, read_size * sizeof(T));
+      }
+      mfence_lm();
+      continue;
+    }
+
+    // Phase 1: find max_val
+    float max_val = 0.f;
+    for (int j = 0; j < vocab_size; j += (int)buf_size) {
+      int64_t read_size = (buf_size < (int64_t)(vocab_size - j))
+                              ? buf_size
+                              : (int64_t)(vocab_size - j);
+      GM2LM(probs + row_offset + j, lm_src, read_size * sizeof(T));
+      mfence_lm();
+      for (int kk = 0; kk < (int)read_size; kk++) {
+        float p = (float)lm_src[kk];
+        if (p > max_val) max_val = p;
+      }
+    }
+
+    // Phase 2: ternary search for pivot
+    float low = 0.f, high = max_val, sum_low = 1.f;
+    float min_gt_low, max_le_high;
+    do {
+      float p0 = (high + 2.f * low) / 3.f;
+      float p1 = (2.f * high + low) / 3.f;
+      float sg0 = 0.f, sg1 = 0.f;
+      int cg0 = 0, cg1 = 0;
+      min_gt_low = high;
+      max_le_high = low;
+      for (int j = 0; j < vocab_size; j += (int)buf_size) {
+        int64_t read_size = (buf_size < (int64_t)(vocab_size - j))
+                                ? buf_size
+                                : (int64_t)(vocab_size - j);
+        GM2LM(probs + row_offset + j, lm_src, read_size * sizeof(T));
+        mfence_lm();
+        for (int kk = 0; kk < (int)read_size; kk++) {
+          float p = (float)lm_src[kk];
+          if (p > p0) {
+            sg0 += p;
+            cg0++;
+          }
+          if (p > p1) {
+            sg1 += p;
+            cg1++;
+          }
+          if (p > low && p < min_gt_low) min_gt_low = p;
+          if (p <= high && p > max_le_high) max_le_high = p;
+        }
+      }
+      if (cg1 >= k) {
+        low = p1;
+        sum_low = sg1;
+      } else if (cg0 >= k) {
+        low = p0;
+        high = (p1 < max_le_high) ? p1 : max_le_high;
+        sum_low = sg0;
+      } else {
+        high = (p0 < max_le_high) ? p0 : max_le_high;
+      }
+    } while (min_gt_low != max_le_high);
+
+    float normalizer = 1.f / (sum_low > 1e-8f ? sum_low : 1e-8f);
+    float pivot = low;
+
+    // Phase 3: write renorm output
+    for (int j = 0; j < vocab_size; j += (int)buf_size) {
+      int64_t read_size = (buf_size < (int64_t)(vocab_size - j))
+                              ? buf_size
+                              : (int64_t)(vocab_size - j);
+      GM2LM(probs + row_offset + j, lm_src, read_size * sizeof(T));
+      mfence_lm();
+      for (int kk = 0; kk < (int)read_size; kk++) {
+        float p = (float)lm_src[kk];
+        lm_src[kk] = (T)(p > pivot ? p * normalizer : 0.f);
+      }
+      LM2GM_ASYNC(lm_src, renorm_probs + row_offset + j, read_size * sizeof(T));
+    }
+    mfence_lm();
+  }
+}
+
+#define _XPU_DEF_TOP_K_RENORM_PROBS_KERNEL(T)     \
+  template __global__ void top_k_renorm_probs<T>( \
+      const T*, T*, const int64_t*, int, int);
+
+_XPU_DEF_TOP_K_RENORM_PROBS_KERNEL(float)
+_XPU_DEF_TOP_K_RENORM_PROBS_KERNEL(float16)
+_XPU_DEF_TOP_K_RENORM_PROBS_KERNEL(bfloat16)
+
+}  // namespace fd_xpu3

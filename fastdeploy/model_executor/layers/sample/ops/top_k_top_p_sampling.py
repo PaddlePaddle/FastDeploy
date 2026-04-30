@@ -90,6 +90,8 @@ def top_k_top_p_sampling(
                     from fastdeploy.model_executor.ops.iluvatar import (
                         top_k_renorm_probs,
                     )
+                elif current_platform.is_xpu():
+                    from fastdeploy.model_executor.ops.xpu import top_k_renorm_probs
                 else:
                     from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
                 x = top_k_renorm_probs(x, top_k)
