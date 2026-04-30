@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import paddle
 
+from fastdeploy.config import PREEMPTED_TOKEN_ID
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
@@ -748,6 +749,186 @@ class TestInsertTasksV1SplitwiseSuffix(unittest.TestCase):
         req = self._make_prefill_request(idx=0, draft_token_ids=[42])
         with self.assertRaises(ValueError):
             runner.insert_tasks_v1([req], num_running_requests=1)
+
+
+class TestMakePreemptedBatchOutput(unittest.TestCase):
+    def _make_runner(self, speculative_decoding=False, enable_logprob=False):
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.speculative_decoding = speculative_decoding
+        runner.enable_logprob = enable_logprob
+        runner.parallel_config = Mock(msg_queue_id=0, tensor_parallel_rank=0, use_ep=False)
+
+        class _ShareInputs(dict):
+            enable_pd_reorder = False
+
+        share_inputs = _ShareInputs()
+        share_inputs["preempted_idx"] = paddle.to_tensor(
+            [[0], [0], [0], [1], [0], [0], [1], [0], [0], [0]], dtype="int32"
+        )
+        share_inputs["sampled_token_ids"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["index_to_batch_id"] = {i: i for i in range(10)}
+        share_inputs["next_tokens"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_flags"] = paddle.zeros([10, 1], dtype="bool")
+        share_inputs["step_idx"] = 0
+        share_inputs["max_dec_len"] = 16
+        share_inputs["seq_lens_this_time"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["eos_token_id"] = paddle.zeros([1], dtype="int64")
+        share_inputs["not_need_stop"] = False
+        share_inputs["not_need_stop_device"] = paddle.zeros([1], dtype="bool")
+        share_inputs["input_ids"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["seq_lens_encoder"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["seq_lens_decoder"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["is_block_step"] = paddle.zeros([10, 1], dtype="bool")
+        share_inputs["token_ids_all"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_seqs"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_seqs_len"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["min_dec_len"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["prompt_lens"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["mask_rollback"] = paddle.zeros([10, 1], dtype="bool")
+        share_inputs["accept_tokens_cpu"] = paddle.full([10, 1], fill_value=-1, dtype="int64")
+        share_inputs["accept_num_cpu"] = paddle.full([10, 1], fill_value=-1, dtype="int32")
+        share_inputs["seq_lens_decoder_cpu"] = paddle.full([10, 1], fill_value=-1, dtype="int32")
+        share_inputs["prompt_lens_cpu"] = paddle.full([10, 1], fill_value=-1, dtype="int32")
+        share_inputs["draft_tokens"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["actual_draft_token_num"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["accept_tokens"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["accept_num"] = paddle.zeros([10, 1], dtype="int32")
+        runner.share_inputs = share_inputs
+        return runner
+
+    def test_make_preempted_batch_output_emits_sparse_preempt_mask(self):
+        runner = self._make_runner()
+
+        model_output_data, sampler_output = runner._make_preempted_batch_output()
+
+        expected = [-1, -1, -1, PREEMPTED_TOKEN_ID, -1, -1, PREEMPTED_TOKEN_ID]
+        self.assertEqual(sampler_output.sampled_token_ids.shape, [7, 1])
+        self.assertEqual(sampler_output.sampled_token_ids.numpy().reshape([-1]).tolist(), expected)
+        self.assertEqual(runner.share_inputs["sampled_token_ids"][:7].numpy().reshape([-1]).tolist(), expected)
+        self.assertEqual(model_output_data.index_to_batch_id, {i: i for i in range(7)})
+
+    def test_make_preempted_batch_output_speculative_logprob(self):
+        runner = self._make_runner(speculative_decoding=True, enable_logprob=True)
+        runner.share_inputs["seq_lens_decoder"][:7] = paddle.arange(7, dtype="int32").reshape([7, 1])
+        runner.share_inputs["prompt_lens"][:7] = paddle.arange(10, 17, dtype="int32").reshape([7, 1])
+
+        model_output_data, sampler_output = runner._make_preempted_batch_output()
+
+        self.assertEqual(sampler_output.sampled_token_ids.shape, [7, 1])
+        self.assertIsNotNone(sampler_output.logprobs_tensors)
+        self.assertEqual(sampler_output.logprobs_tensors.logprob_token_ids.shape, [7, 1])
+        self.assertEqual(sampler_output.token_num_per_batch.shape, [7, 1])
+        self.assertEqual(sampler_output.cu_batch_token_offset.shape, [8])
+        self.assertEqual(runner.share_inputs["accept_tokens_cpu"][:7].numpy().reshape([-1]).tolist(), [0] * 7)
+        self.assertEqual(runner.share_inputs["accept_num_cpu"][:7].numpy().reshape([-1]).tolist(), [0] * 7)
+        self.assertEqual(
+            runner.share_inputs["seq_lens_decoder_cpu"][:7].numpy().reshape([-1]).tolist(),
+            list(range(7)),
+        )
+        self.assertEqual(
+            runner.share_inputs["prompt_lens_cpu"][:7].numpy().reshape([-1]).tolist(),
+            list(range(10, 17)),
+        )
+        self.assertIsNotNone(model_output_data.accept_tokens)
+        self.assertIsNotNone(model_output_data.accept_num)
+
+
+class TestExecuteModel(unittest.TestCase):
+    def _make_runner(self):
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.speculative_decoding = False
+        runner.parallel_config = Mock(use_ep=False)
+        runner.fd_config = Mock()
+        runner.fd_config.speculative_config = Mock(method=None)
+        runner.proposer = Mock(model=Mock())
+        runner.forward_meta = Mock()
+        runner._save_model_output = Mock()
+        runner._make_preempted_batch_output = Mock(return_value=("model_output", "sampler_output"))
+        runner._postprocess = Mock()
+        runner._execute_empty_mtp_input = Mock()
+        runner._cached_launch_token_num = 0
+        runner._cached_real_bsz = 0
+
+        class _ShareInputs(dict):
+            pass
+
+        share_inputs = _ShareInputs()
+        share_inputs["seq_lens_this_time_cpu"] = paddle.zeros([2, 1], dtype="int32")
+        share_inputs["preempted_idx"] = paddle.to_tensor([[1], [0]], dtype="int32")
+        share_inputs["last_preempted_idx"] = paddle.zeros([2, 1], dtype="int32")
+        runner.share_inputs = share_inputs
+        return runner
+
+    def test_execute_model_dispatches_to_normal_path(self):
+        runner = self._make_runner()
+        runner.enable_overlap_schedule = False
+        runner.execute_model_normal = Mock()
+        runner.execute_model_overlap = Mock()
+
+        runner.execute_model(model_forward_batch=["req"], num_running_requests=1)
+
+        runner.execute_model_normal.assert_called_once_with(["req"], 1)
+        runner.execute_model_overlap.assert_not_called()
+
+    def test_execute_model_dispatches_to_overlap_path(self):
+        runner = self._make_runner()
+        runner.enable_overlap_schedule = True
+        runner.execute_model_normal = Mock()
+        runner.execute_model_overlap = Mock()
+
+        runner.execute_model(model_forward_batch=["req"], num_running_requests=1)
+
+        runner.execute_model_overlap.assert_called_once_with(["req"], 1)
+        runner.execute_model_normal.assert_not_called()
+
+    def test_execute_model_normal_zero_output_flushes_preempted_batch(self):
+        runner = self._make_runner()
+        runner._preprocess = Mock(return_value=("model_inputs", "done_idxs", None))
+        runner._execute = Mock(return_value=None)
+
+        runner.execute_model_normal()
+
+        runner._make_preempted_batch_output.assert_called_once_with()
+        np.testing.assert_array_equal(runner.share_inputs["last_preempted_idx"].numpy(), np.array([[1], [0]]))
+        np.testing.assert_array_equal(runner.share_inputs["preempted_idx"].numpy(), np.array([[0], [0]]))
+        runner._save_model_output.assert_called_once_with("model_output", "sampler_output")
+
+    def test_execute_model_normal_postprocess_saves_output_after_sync(self):
+        runner = self._make_runner()
+        runner.share_inputs["seq_lens_this_time_cpu"] = paddle.to_tensor([[1], [0]], dtype="int32")
+        runner._preprocess = Mock(return_value=("model_inputs", "done_idxs", None))
+        runner._execute = Mock(return_value="model_output")
+        post_process_event = Mock()
+        runner._postprocess.return_value = ("model_output_data", "sampler_output", post_process_event)
+
+        runner.execute_model_normal(model_forward_batch=["req"], num_running_requests=1)
+
+        runner._make_preempted_batch_output.assert_not_called()
+        post_process_event.synchronize.assert_called_once_with()
+        runner._save_model_output.assert_called_once_with("model_output_data", "sampler_output")
+
+    def test_execute_model_overlap_zero_output_flushes_preempted_batch(self):
+        runner = self._make_runner()
+        token_num_event = Mock()
+        runner._preprocess = Mock(return_value=("model_inputs", "done_idxs", token_num_event))
+        runner._execute = Mock(return_value=None)
+        runner._predict_next_launch_token_num = Mock(return_value=(11, 22))
+        runner._cached_model_output_data = None
+        runner._cached_sampler_output = "cached_sampler"
+        runner._cached_post_process_event = "cached_event"
+
+        runner.execute_model_overlap()
+
+        token_num_event.synchronize.assert_called_once_with()
+        runner._make_preempted_batch_output.assert_called_once_with()
+        np.testing.assert_array_equal(runner.share_inputs["last_preempted_idx"].numpy(), np.array([[1], [0]]))
+        np.testing.assert_array_equal(runner.share_inputs["preempted_idx"].numpy(), np.array([[0], [0]]))
+        runner._save_model_output.assert_called_once_with("model_output", "sampler_output")
+        self.assertIsNone(runner._cached_model_output_data)
+        self.assertIsNone(runner._cached_sampler_output)
+        self.assertIsNone(runner._cached_post_process_event)
+        self.assertEqual(runner._cached_launch_token_num, 11)
+        self.assertEqual(runner._cached_real_bsz, 22)
 
 
 if __name__ == "__main__":
