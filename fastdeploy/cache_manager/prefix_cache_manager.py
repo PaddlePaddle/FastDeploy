@@ -79,6 +79,17 @@ class PrefixCacheManager:
             self.num_gpu_blocks = self.cache_config.prefill_kvcache_block_num
         self.num_cpu_blocks = self.cache_config.num_cpu_blocks
 
+        # Head-wise KV cache (Hackathon 10th Spring No.53, mirrors PR #6702 contract).
+        # Default-off: behavior is bit-identical to mainline unless FD_HEAD_WISE_KV_CACHE=1.
+        self.kv_num_heads = int(getattr(getattr(self.cache_config, "model_cfg", None), "num_key_value_heads", 1) or 1)
+        _enable_prefix_caching = bool(getattr(self.cache_config, "enable_prefix_caching", False))
+        if bool(envs.FD_HEAD_WISE_KV_CACHE) and _enable_prefix_caching:
+            raise ValueError(
+                "FD_HEAD_WISE_KV_CACHE is mutually exclusive with enable_prefix_caching " "(matches PR #6702 contract)"
+            )
+        self.head_wise = bool(envs.FD_HEAD_WISE_KV_CACHE) and not _enable_prefix_caching
+        self.total_head_wise_cache_ids = 0
+
         self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))
         if self.num_cpu_blocks > 0:
             self.cpu_free_block_list = list(range(self.num_cpu_blocks - 1, -1, -1))
@@ -172,6 +183,8 @@ class PrefixCacheManager:
 
     @property
     def available_gpu_resource(self):
+        if getattr(self, "head_wise", False) and self.num_gpu_blocks > 0:
+            return (len(self.gpu_free_block_list) // max(1, self.kv_num_heads)) / self.num_gpu_blocks
         return len(self.gpu_free_block_list) / self.num_gpu_blocks if self.num_gpu_blocks > 0 else 0.0
 
     def launch_cache_manager(
@@ -468,6 +481,25 @@ class PrefixCacheManager:
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
+        if getattr(self, "head_wise", False):
+            self._init_head_wise_free_list()
+
+    def _init_head_wise_free_list(self):
+        """
+        Build a head-wise free list over ``num_gpu_blocks * kv_num_heads`` cache ids.
+
+        Each cache id corresponds to a (block, head) pair. Allocation/recycling
+        is performed via :meth:`allocate_gpu_blocks_head_wise` /
+        :meth:`recycle_gpu_blocks_head_wise`. This path is unreachable when
+        ``FD_HEAD_WISE_KV_CACHE=0`` (default).
+        """
+        total_cache_ids = self.num_gpu_blocks * max(1, self.kv_num_heads)
+        self.gpu_free_block_list = list(range(total_cache_ids - 1, -1, -1))
+        heapq.heapify(self.gpu_free_block_list)
+        self.total_head_wise_cache_ids = total_cache_ids
+        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+
     def can_allocate_gpu_blocks(self, num_blocks: int, try_free_gpu_blocks: bool = True):
         """
         Check if num_blocks gpu blocks can be allocated.
@@ -529,6 +561,87 @@ class PrefixCacheManager:
         else:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
         logger.debug(f"req_id:{req_id} recycle blocks end")
+        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+
+    def allocate_gpu_blocks_head_wise(self, num_blocks, req_id=None):
+        """
+        Allocate ``num_blocks`` GPU blocks per KV head.
+
+        Returns a head-major nested list of cache ids with shape
+        ``[kv_num_heads][num_blocks]``. Mirrors :meth:`allocate_gpu_blocks` but
+        operates on the head-wise free list built by
+        :meth:`_init_head_wise_free_list`.
+
+        Active only when ``FD_HEAD_WISE_KV_CACHE=1`` (default-off; mainline
+        behavior is unchanged).
+        """
+        kv_num_heads = max(1, self.kv_num_heads)
+        needed = num_blocks * kv_num_heads
+        assert needed <= len(
+            self.gpu_free_block_list
+        ), f"head-wise gpu free block num: {len(self.gpu_free_block_list)} < needed number {needed}"
+        logger.debug(f"{req_id} start allocate (head-wise)...")
+        flat = [heapq.heappop(self.gpu_free_block_list) for _ in range(needed)]
+        # Head-major reshape: row h holds the num_blocks ids assigned to head h.
+        allocated = [flat[h * num_blocks : (h + 1) * num_blocks] for h in range(kv_num_heads)]
+        logger.info(
+            f"req_id:{req_id} allocate_gpu_blocks_head_wise: {allocated}, "
+            f"len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+        )
+        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        return allocated
+
+    def recycle_gpu_blocks_head_wise(self, cache_ids, req_id=None):
+        """
+        Recycle head-wise cache ids back into the free heap.
+
+        Accepts either a flat list/tuple of ids or a nested list-of-lists
+        (head-major shape from :meth:`allocate_gpu_blocks_head_wise`).
+        Duplicates are dropped and out-of-range ids are warned and skipped
+        (never raised) so a single bad caller cannot poison the heap.
+
+        Mirrors the ``prefix_tree_status_signal`` early-return guarded by
+        :meth:`recycle_gpu_blocks`.
+        """
+        if (
+            hasattr(self, "prefix_tree_status_signal")
+            and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL
+        ):
+            logger.warning("Prefix tree is not normal, skip recycle gpu blocks (head-wise)")
+            return
+
+        # Auto-flatten nested input.
+        if cache_ids and isinstance(cache_ids[0], (list, tuple)):
+            flat = [cid for row in cache_ids for cid in row]
+        elif isinstance(cache_ids, (list, tuple)):
+            flat = list(cache_ids)
+        else:
+            flat = [cache_ids]
+
+        total = self.total_head_wise_cache_ids
+        seen = set()
+        valid = []
+        for cid in flat:
+            if cid in seen:
+                logger.warning(f"req_id:{req_id} head-wise recycle: duplicate cache id {cid} dropped")
+                continue
+            if not (0 <= int(cid) < total):
+                logger.warning(
+                    f"req_id:{req_id} head-wise recycle: out-of-range cache id {cid} "
+                    f"(valid range [0, {total})) dropped"
+                )
+                continue
+            seen.add(cid)
+            valid.append(cid)
+
+        for cid in valid:
+            heapq.heappush(self.gpu_free_block_list, cid)
+        logger.info(
+            f"req_id:{req_id} recycle_gpu_blocks_head_wise: pushed {len(valid)} ids, "
+            f"len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+        )
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
