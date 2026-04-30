@@ -466,7 +466,7 @@ class PaddleDisWorkerProc:
         self._init_eplb_signal()
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
-        self.nnode = (tp_size + self.max_chips_per_node) // self.max_chips_per_node
+        self.nnode = (tp_size + self.max_chips_per_node - 1) // self.max_chips_per_node
         max_occupied_batch_index = 0
         tp_rank = self.local_rank % tp_size
 
