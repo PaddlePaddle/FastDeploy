@@ -89,6 +89,7 @@ class DummyLayer(paddle.nn.Layer):
         self.n_group = 1
         self.topk_group = 1
         self.routed_scaling_factor = 1.0
+        self.routed_scaling_factor_learnable = False
         self.renormalize = True
         self.gate_correction_bias = paddle.zeros([num_local_experts], dtype="float32")
         self.topk_method = "noaux_tc"
@@ -792,3 +793,67 @@ class TestFusedMoeTritonBackend:
 
         _ = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
         assert "topk_ids" in captured
+
+    def test_python_op_learnable_scaling(self, fake_ops, monkeypatch):
+        """routed_scaling_factor_learnable=True: per_expert_scale applied to topk_weights inside python_op."""
+        quant_config = DummyQuantConfig(is_checkpoint_bf16=False, weight_block_size=(2, 2))
+        layer = DummyLayer(quant_config)
+        layer.routed_scaling_factor_learnable = True
+        layer.per_expert_scale = paddle.ones([layer.num_local_experts], dtype="float32")
+
+        kernel = DummyKernel()
+        monkeypatch.setitem(
+            sys.modules,
+            "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
+            types.SimpleNamespace(fused_moe_kernel_paddle=kernel),
+        )
+        monkeypatch.setattr(
+            paddle.static,
+            "MetaTensor",
+            lambda shape, dtype: types.SimpleNamespace(shape=shape, dtype=dtype),
+            raising=False,
+        )
+
+        x = paddle.randn([2, layer.hidden_size], dtype="float32")
+        gate = DummyGate(layer.num_local_experts)
+        gate_out = gate(x)
+
+        up_weight = paddle.randn(
+            [layer.num_local_experts, layer.moe_intermediate_size * 2, layer.hidden_size], dtype="float32"
+        )
+        down_weight = paddle.randn(
+            [layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size], dtype="float32"
+        )
+        up_scale = paddle.ones([layer.num_local_experts, 2, 2], dtype="float32")
+        down_scale = paddle.ones([layer.num_local_experts, 2, 2], dtype="float32")
+
+        captured = {}
+
+        def hook(topk_ids):
+            captured["topk"] = topk_ids
+
+        config = {"BLOCK_SIZE_M": 32, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 1}
+
+        _ = backend.python_op_fused_moe_kernel_paddle(
+            x,
+            up_weight,
+            up_scale,
+            down_weight,
+            down_scale,
+            gate_out,
+            layer.gate_correction_bias,
+            layer.top_k,
+            up_weight.shape[1],
+            down_weight.shape[1],
+            layer.num_local_experts,
+            layer.moe_intermediate_size,
+            layer.hidden_size,
+            config,
+            quant_config,
+            hook,
+            layer,
+            None,
+            None,
+        )
+
+        assert "topk" in captured
