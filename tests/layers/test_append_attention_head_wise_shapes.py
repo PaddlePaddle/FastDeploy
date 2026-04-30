@@ -35,8 +35,6 @@ on a CPU-only workstation during L0 oracle runs and only executes the
 tensor body on a GPU CI worker.
 """
 
-import dataclasses
-
 import pytest
 
 
@@ -72,12 +70,42 @@ def test_block_wise_fp8_reshape_preserves_total_elements():
 
 
 def test_forward_meta_head_wise_field_default_when_disabled():
-    """#11c — ForwardMeta.block_tables_3d sentinel default is ``None``."""
-    # paddle is required even to import ForwardMeta (it types the field as
-    # ``Optional[paddle.Tensor]``); guard with importorskip for CPU-only L0.
-    pytest.importorskip("paddle")
-    from fastdeploy.model_executor.forward_meta import ForwardMeta
+    """#11c — ForwardMeta.block_tables_3d sentinel default is ``None``.
 
-    field_map = {f.name: f for f in dataclasses.fields(ForwardMeta)}
-    assert "block_tables_3d" in field_map, "commit 3 must add ForwardMeta.block_tables_3d"
-    assert field_map["block_tables_3d"].default is None, "head-wise sentinel must be None for legacy parity"
+    AST-only inspection of the source file: importing
+    ``fastdeploy.model_executor.forward_meta`` transitively pulls
+    AppendAttentionBackend → compiled gpu ops, which are not available on
+    a CPU-only workstation. The field default is a literal ``None`` so a
+    pure source-level check is sufficient and faithful to commit 3.
+    """
+    import ast
+    import pathlib
+
+    src_root = pathlib.Path(__file__).resolve().parents[1].parent
+    fwd_meta = src_root / "fastdeploy" / "model_executor" / "forward_meta.py"
+    assert fwd_meta.is_file(), f"forward_meta.py not found at {fwd_meta}"
+
+    tree = ast.parse(fwd_meta.read_text(encoding="utf-8"))
+    fwd_cls = next(
+        (n for n in ast.walk(tree)
+         if isinstance(n, ast.ClassDef) and n.name == "ForwardMeta"),
+        None,
+    )
+    assert fwd_cls is not None, "ForwardMeta class missing from forward_meta.py"
+
+    # Locate the `block_tables_3d: Optional[paddle.Tensor] = None` annotation.
+    block_tables_3d = None
+    for stmt in fwd_cls.body:
+        if (
+            isinstance(stmt, ast.AnnAssign)
+            and isinstance(stmt.target, ast.Name)
+            and stmt.target.id == "block_tables_3d"
+        ):
+            block_tables_3d = stmt
+            break
+    assert block_tables_3d is not None, "commit 3 must add ForwardMeta.block_tables_3d"
+
+    default = block_tables_3d.value
+    assert isinstance(default, ast.Constant) and default.value is None, (
+        "head-wise sentinel must default to None for legacy parity"
+    )
