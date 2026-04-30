@@ -1326,9 +1326,16 @@ def run_worker_proc() -> None:
     # Trigger CUDAGraph capture
     worker_proc.graph_optimize_and_warm_up_model()
 
+
+
+    # In some scenarios, we need to evaluate the performance of the model based on a fixed batch size and input length
+    # So we can profile the following line of code
     if current_platform.is_cuda():
         worker_proc.worker.model_runner._dummy_run(
-            num_tokens=100, batch_size=1, expected_decode_len=10, step_use_cudagraph=True
+            num_tokens=100, 
+            batch_size=1, 
+            expected_decode_len=10, 
+            step_use_cudagraph=True
         )
 
     # Initialize health status
