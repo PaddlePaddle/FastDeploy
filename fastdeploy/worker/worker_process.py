@@ -1326,6 +1326,12 @@ def run_worker_proc() -> None:
     # Trigger CUDAGraph capture
     worker_proc.graph_optimize_and_warm_up_model()
 
+    if current_platform.is_cuda():
+        worker_proc.worker.model_runner._dummy_run(num_tokens=100,
+                                                   batch_size=1,
+                                                   expected_decode_len=10, 
+                                                   step_use_cudagraph=True)
+
     # Initialize health status
     worker_proc.init_health_status()
 
