@@ -53,6 +53,22 @@ def speculate_get_accept_tokens_and_logits(
         raise NotImplementedError
 
 
+def speculate_compute_cu_batch_offset(
+    cu_batch_token_offset: paddle.Tensor,
+    accept_num: paddle.Tensor,
+    real_bsz: int,
+):
+    """
+    Compute cumulative batch offset via inclusive prefix sum of accept_num.
+    """
+    if current_platform.is_cuda():
+        from fastdeploy.model_executor.ops.gpu import speculate_compute_cu_batch_offset
+
+        speculate_compute_cu_batch_offset(cu_batch_token_offset, accept_num, real_bsz)
+    else:
+        raise NotImplementedError
+
+
 def speculate_insert_first_token(
     token_ids: paddle.Tensor,
     accept_tokens: paddle.Tensor,

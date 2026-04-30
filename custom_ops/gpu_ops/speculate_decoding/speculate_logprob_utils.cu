@@ -318,6 +318,39 @@ void SpeculateGetAcceptTokensAndLogits(
           max_occupied_slots);
 }
 
+void SpeculateComputeCuBatchOffset(paddle::Tensor& cu_batch_token_offset,
+                                   const paddle::Tensor& accept_num,
+                                   const int real_bsz) {
+  auto cu_stream = accept_num.stream();
+
+  PADDLE_ENFORCE_LE(
+      real_bsz,
+      2048,
+      phi::errors::InvalidArgument(
+          "Only support bsz <= 2048, but received bsz is ", real_bsz));
+
+  constexpr int BLOCK_DIM = 512;
+  if (real_bsz <= 512) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 1>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            real_bsz);
+  } else if (real_bsz <= 1024) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 2>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            real_bsz);
+  } else if (real_bsz <= 2048) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 4>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            real_bsz);
+  }
+}
+
 PD_BUILD_STATIC_OP(speculate_get_logits)
     .Inputs({"draft_logits",
              "next_token_num",
@@ -365,3 +398,10 @@ PD_BUILD_STATIC_OP(speculate_get_accept_tokens_and_logits)
                     {"target_logits", "target_logits_out"},
                     {"cu_batch_token_offset", "cu_batch_token_offset_out"}})
     .SetKernelFn(PD_KERNEL(SpeculateGetAcceptTokensAndLogits));
+
+PD_BUILD_STATIC_OP(speculate_compute_cu_batch_offset)
+    .Inputs({"cu_batch_token_offset", "accept_num"})
+    .Outputs({"cu_batch_token_offset_out"})
+    .Attrs({"real_bsz: int"})
+    .SetInplaceMap({{"cu_batch_token_offset", "cu_batch_token_offset_out"}})
+    .SetKernelFn(PD_KERNEL(SpeculateComputeCuBatchOffset));

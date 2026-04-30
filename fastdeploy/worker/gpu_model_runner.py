@@ -2789,10 +2789,12 @@ class GPUModelRunner(ModelRunnerBase):
                 self.share_inputs["prompt_lens_cpu"].copy_(self.share_inputs["prompt_lens"], False)
             post_process_event.record()
 
-            # 6. Speculative decode -- proposer run (method="naive" has proposer=None, skip)
-            # For naive mode: seq_lens_this_time is already reset to 1 inside
-            # unified_update_model_status kernel. For MTP/Ngram, the proposer
-            # will overwrite it with (draft_count + 1) below.
+            # 6. Speculative decode -- proposer run
+            # NAIVE: NaiveProposer.run() is a no-op; seq_lens_this_time was
+            # already set to 1 by naive_update_model_status kernel during
+            # sampling. MTP/Ngram: the proposer populates draft_tokens and
+            # updates seq_lens_this_time to (draft_count + 1) for the next
+            # target-model forward pass.
 
             if self.speculative_decoding and self.proposer is not None:
                 if self.spec_method == SpecMethod.MTP:

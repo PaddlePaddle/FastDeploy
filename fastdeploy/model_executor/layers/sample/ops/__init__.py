@@ -20,6 +20,7 @@ from .apply_penalty_multi_scores import (
     reasoning_phase_token_constraint,
 )
 from .speculate_logprob_utils import (
+    speculate_compute_cu_batch_offset,
     speculate_get_accept_tokens_and_logits,
     speculate_insert_first_token,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "reasoning_phase_token_constraint",
     "top_k_top_p_sampling",
     "min_p_sampling",
+    "speculate_compute_cu_batch_offset",
     "speculate_get_accept_tokens_and_logits",
     "speculate_insert_first_token",
     "dispatch_top_k_renorm_probs",

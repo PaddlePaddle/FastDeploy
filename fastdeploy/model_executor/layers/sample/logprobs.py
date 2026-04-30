@@ -181,9 +181,15 @@ def build_output_logprobs(
         # NAIVE mode: one token per request, logits are already correct
         output_logits = logits
         token_ids = share_inputs["accept_tokens"][:real_bsz, 0]
-        cu_batch_token_offset = paddle.concat(
-            [paddle.to_tensor([0]), paddle.cumsum(share_inputs["accept_num"][:max_occupied_slots])]
-        ).astype("int32")
+        from fastdeploy.model_executor.layers.sample.ops import (
+            speculate_compute_cu_batch_offset,
+        )
+
+        speculate_compute_cu_batch_offset(
+            share_inputs["cu_batch_token_offset"],
+            share_inputs["accept_num"],
+            max_occupied_slots,
+        )
     else:
         # Speculative mode: extract target logits for accepted positions
         from fastdeploy.model_executor.layers.sample.ops import (
