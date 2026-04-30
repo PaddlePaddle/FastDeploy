@@ -181,6 +181,15 @@ def setup_logging(log_dir=None, config_file=None):
     # Ensure log directory exists
     Path(log_dir).mkdir(parents=True, exist_ok=True)
 
+    # Isolate the 'legacy' logger namespace from the root logger so that
+    # legacy.* loggers never propagate to root even before get_trace_logger
+    # has been called. This is scoped to our own namespace and does NOT
+    # affect third-party libraries that rely on root-level lastResort output.
+    legacy_logger = logging.getLogger("legacy")
+    if not legacy_logger.handlers:
+        legacy_logger.addHandler(logging.NullHandler())
+    legacy_logger.propagate = False
+
     # Store log_dir for later use
     setup_logging._log_dir = log_dir
 

@@ -18,6 +18,7 @@
 # This must be done before importing any modules that may use the logger
 import logging
 import os
+import sys
 from contextlib import contextmanager
 
 # Create standard format (without color)
@@ -27,6 +28,15 @@ _root_formatter = logging.Formatter(
 
 # Save original getLogger before any patching
 _original_getLogger = logging.getLogger
+
+
+class _MaxLevelFilter(logging.Filter):
+    def __init__(self, level):
+        super().__init__()
+        self.level = level
+
+    def filter(self, record):
+        return record.levelno < self.level
 
 
 @contextmanager
@@ -57,9 +67,16 @@ def _configure_logger(name=None):
     logger.setLevel(logging.DEBUG if envs.FD_DEBUG else logging.INFO)
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
-    handler = logging.StreamHandler()
-    handler.setFormatter(_root_formatter)
-    logger.addHandler(handler)
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.DEBUG)
+    stdout_handler.addFilter(_MaxLevelFilter(logging.ERROR))
+    stdout_handler.setFormatter(_root_formatter)
+    logger.addHandler(stdout_handler)
+
+    stderr_handler = logging.StreamHandler(sys.stderr)
+    stderr_handler.setLevel(logging.ERROR)
+    stderr_handler.setFormatter(_root_formatter)
+    logger.addHandler(stderr_handler)
     logger.propagate = False
     return logger
 
