@@ -74,17 +74,13 @@ class TestResolveRequestLoggingDefaults(unittest.TestCase):
             result = resolve_request_logging_defaults()
             self.assertEqual(result["enabled"], 1)
             self.assertEqual(result["level"], 2)
-            self.assertEqual(result["max_len"], 2048)
 
     def test_custom_values(self):
         """自定义值测试"""
-        with patch.dict(
-            "os.environ", {"FD_LOG_REQUESTS": "0", "FD_LOG_REQUESTS_LEVEL": "2", "FD_LOG_MAX_LEN": "1024"}
-        ):
+        with patch.dict("os.environ", {"FD_LOG_REQUESTS": "0", "FD_LOG_REQUESTS_LEVEL": "2"}):
             result = resolve_request_logging_defaults()
             self.assertEqual(result["enabled"], 0)
             self.assertEqual(result["level"], 2)
-            self.assertEqual(result["max_len"], 1024)
 
 
 if __name__ == "__main__":

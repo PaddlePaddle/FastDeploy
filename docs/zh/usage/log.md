@@ -11,9 +11,9 @@ FastDeploy 将日志分为三个通道：
 
 | 通道 | Logger 名称 | 输出文件 | 说明 |
 |------|-------------|----------|------|
-| main | `fastdeploy.main.*` | `fastdeploy.log`, `console.log` | 主日志，记录系统配置、启动信息等 |
+| main | `fastdeploy.main.*` | `fastdeploy.log` | 主日志，记录系统配置、启动信息等 |
 | request | `fastdeploy.request.*` | `request.log` | 请求日志，记录请求生命周期和处理细节 |
-| console | `fastdeploy.console.*` | `console.log` | 控制台日志，输出到终端和 console.log |
+| console | `fastdeploy.console.*` | `fastdeploy.log` + 终端 | 控制台日志，启动信息等，同时写入 fastdeploy.log 并输出到终端 |
 
 ## 请求日志级别
 
@@ -36,17 +36,16 @@ FastDeploy 将日志分为三个通道：
 | `FD_LOG_LEVEL` | `INFO` | 日志级别，支持 `INFO` 或 `DEBUG` |
 | `FD_LOG_REQUESTS` | `1` | 是否启用请求日志，`0` 禁用，`1` 启用 |
 | `FD_LOG_REQUESTS_LEVEL` | `2` | 请求日志级别，范围 0-3 |
-| `FD_LOG_MAX_LEN` | `2048` | L2 级别日志内容的最大长度（超出部分会被截断） |
 | `FD_LOG_BACKUP_COUNT` | `7` | 日志文件保留数量 |
 | `FD_DEBUG` | `0` | 调试模式，`1` 启用时日志级别设为 `DEBUG` |
+| `FD_TRACE` | `off` | Trace 模式：`off` 关闭，`local` 仅写 trace.log，`otel` 仅上报 OpenTelemetry，`all` 两者均启用 |
 
 ## 推理服务日志
 
-* `fastdeploy.log` : 主日志文件，记录系统配置、启动信息、运行状态等
+* `fastdeploy.log` : 主日志文件，记录系统配置、启动信息、运行状态等，以及控制台输出日志（console_logger）
 * `request.log` : 请求日志文件，记录用户请求的生命周期和处理细节
-* `console.log` : 控制台日志，记录模型启动耗时等信息，该日志信息会被打印到控制台
+* `trace.log` : 追踪日志文件，记录请求处理各阶段的事件和时间戳，用于性能分析（需 `FD_TRACE=local` 或 `all`）
 * `error.log` : 错误日志文件，记录所有 ERROR 及以上级别的日志
-* `workerlog.*` : 指向 `paddle/` 子目录中 paddle workerlog 文件的符号链接，记录模型启动加载进度及推理算子报错信息，每个卡对应一个文件
 * `worker_process.log` : 合并的 worker 日志，包含引擎每轮推理数据、模型运行器信息、GPU Worker profiling 信息和 CudaGraph 状态
 * `cache_manager.log` : 合并的缓存日志，包含 KV Cache 分配信息、缓存命中状态和缓存传输管理器信息
 
@@ -61,5 +60,5 @@ FastDeploy 将日志分为三个通道：
 * `splitwise_connector.log` : 记录收到 P/D 发送的数据，及建联信息
 
 ## Paddle 日志
-* `paddle/workerlog.*` : Paddle 分布式启动日志，每个 GPU 卡对应一个文件。主日志目录中会创建符号链接以便访问。
+* `paddle/workerlog.*` : Paddle 分布式启动日志，每个 GPU 卡对应一个文件
 * `paddle/backup_env.*.json` : 记录当前实例启动时设置的环境变量，文件个数与卡数相同

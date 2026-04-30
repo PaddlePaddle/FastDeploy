@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import traceback
 from typing import Any, Optional, Union
 
 import httpx
@@ -200,9 +201,10 @@ class AsyncTokenizerClient:
                         return resp.json().get("result")
                     except Exception as e:
                         log_request_error(
-                            message="Attempt to decode_request {attempt} failed: {error}",
+                            message="Attempt to decode_request {attempt} failed: {error}, {traceback}",
                             attempt=attempt + 1,
                             error=str(e),
+                            traceback=traceback.format_exc(),
                         )
                         if attempt == self.max_retries - 1:
                             log_request_error(

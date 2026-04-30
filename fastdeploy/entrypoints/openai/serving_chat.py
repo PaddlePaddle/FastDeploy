@@ -269,9 +269,6 @@ class OpenAIServingChat:
             choices=[],
             model=model_name,
         )
-        log_request(
-            RequestLogLevel.LIFECYCLE, message="create chat completion request: {request_id}", request_id=request_id
-        )
 
         try:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
