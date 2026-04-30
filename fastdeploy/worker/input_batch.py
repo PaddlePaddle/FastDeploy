@@ -19,6 +19,7 @@ import traceback
 import paddle
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import CacheConfig, FDConfig, ModelConfig, SpeculativeConfig
 from fastdeploy.model_executor.layers.rotary_embedding import get_rope
 from fastdeploy.model_executor.logits_processor import build_logits_processors
@@ -248,6 +249,10 @@ class InputBatch:
         pre_max_block_num = (
             self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        # Head-wise KV cache widens block_tables column count by kv_num_heads (default-off).
+        if envs.FD_HEAD_WISE_KV_CACHE:
+            kv_num_heads = int(getattr(self.model_config, "num_key_value_heads", 1) or 1)
+            pre_max_block_num *= max(1, kv_num_heads)
         self.block_tables = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
         # Initialize free list

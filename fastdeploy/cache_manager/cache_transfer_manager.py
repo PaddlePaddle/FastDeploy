@@ -1358,6 +1358,17 @@ class CacheTransferManager:
             except Exception as e:
                 logger.info(f"do_data_transfer: error: {e}, {str(traceback.format_exc())}")
 
+    def _maybe_headwise_flatten_scales(self, tensor_list):
+        """Flatten the head axis into the block axis for fp8 scale tensors when
+        FD_HEAD_WISE_KV_CACHE is enabled: ``[Nb, KvH, Bs] -> [Nb*KvH, Bs]``.
+
+        Default-off: returns the input list unchanged when the env flag is not set,
+        preserving bit-identical behavior for the non head-wise path.
+        """
+        if not envs.FD_HEAD_WISE_KV_CACHE:
+            return tensor_list
+        return [t.reshape([t.shape[0] * t.shape[1], t.shape[2]]) for t in tensor_list]
+
     def _transfer_data(
         self,
         swap_node_ids,
@@ -1402,8 +1413,9 @@ class CacheTransferManager:
                     0,
                 )
                 if self.cache_dtype == "block_wise_fp8":
+                    # Head-wise: flatten [Nb,KvH,Bs] -> [Nb*KvH,Bs]; no-op when env off.
                     swap_cache_all_layers(
-                        self.gpu_cache_scales_k_tensors,
+                        self._maybe_headwise_flatten_scales(self.gpu_cache_scales_k_tensors),
                         self.k_scales_ptrs,
                         self.num_cpu_blocks,
                         gpu_block_ids,
@@ -1412,7 +1424,7 @@ class CacheTransferManager:
                         0,
                     )
                     swap_cache_all_layers(
-                        self.gpu_cache_scales_v_tensors,
+                        self._maybe_headwise_flatten_scales(self.gpu_cache_scales_v_tensors),
                         self.v_scales_ptrs,
                         self.num_cpu_blocks,
                         gpu_block_ids,
@@ -1441,8 +1453,9 @@ class CacheTransferManager:
                     1,
                 )
                 if self.cache_dtype == "block_wise_fp8":
+                    # Head-wise: flatten [Nb,KvH,Bs] -> [Nb*KvH,Bs]; no-op when env off.
                     swap_cache_all_layers(
-                        self.gpu_cache_scales_k_tensors,
+                        self._maybe_headwise_flatten_scales(self.gpu_cache_scales_k_tensors),
                         self.k_scales_ptrs,
                         self.num_cpu_blocks,
                         gpu_block_ids,
@@ -1451,7 +1464,7 @@ class CacheTransferManager:
                         1,
                     )
                     swap_cache_all_layers(
-                        self.gpu_cache_scales_v_tensors,
+                        self._maybe_headwise_flatten_scales(self.gpu_cache_scales_v_tensors),
                         self.v_scales_ptrs,
                         self.num_cpu_blocks,
                         gpu_block_ids,
