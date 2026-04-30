@@ -81,7 +81,12 @@ class PrefixCacheManager:
 
         # Head-wise KV cache (Hackathon 10th Spring No.53, mirrors PR #6702 contract).
         # Default-off: behavior is bit-identical to mainline unless FD_HEAD_WISE_KV_CACHE=1.
-        self.kv_num_heads = int(getattr(getattr(self.cache_config, "model_cfg", None), "num_key_value_heads", 1) or 1)
+        # T53: per-rank KV head count for free-list sizing (TP-aware).
+        kv_num_heads_global = int(
+            getattr(getattr(self.cache_config, "model_cfg", None), "num_key_value_heads", 1) or 1
+        )
+        tp_size = int(self.tensor_parallel_size or 1)
+        self.kv_num_heads = max(1, kv_num_heads_global // tp_size) if kv_num_heads_global >= tp_size else 1
         _enable_prefix_caching = bool(getattr(self.cache_config, "enable_prefix_caching", False))
         if bool(envs.FD_HEAD_WISE_KV_CACHE) and _enable_prefix_caching:
             raise ValueError(

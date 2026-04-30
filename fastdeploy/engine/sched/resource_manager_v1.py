@@ -22,7 +22,7 @@ from collections import deque
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import List, Optional, Union
+from typing import List, Union
 
 import numpy as np
 import paddle
@@ -84,10 +84,8 @@ class ScheduledDecodeTask(ScheduledTaskBase):
     """
 
     block_tables: list[int] = field(default_factory=list)
-    # T53 PR1 head-wise SWA: per-head block tables, shape [kv_num_heads][N].
-    # Populated only when FD_HEAD_WISE_KV_CACHE=1 took the head-wise path;
-    # legacy path leaves this ``None`` so behavior is unchanged.
-    block_tables_3d: Optional[list[list[int]]] = None
+    # T53 PR2 will surface per-head block tables to the kernel; PR1 keeps the
+    # head-wise data inside ``swa_head_block_tables`` for cache management only.
 
 
 @dataclass
@@ -295,7 +293,9 @@ class ResourceManagerV1(ResourceManager):
         for queue_name in ("cache_swap_metadata", "cache_evict_metadata"):
             queue = getattr(request, queue_name, None) or []
             for meta in queue:
-                if getattr(meta, "success", True):
+                # P9 fix: missing ``success`` must default to the SAFE direction
+                # (treat as in-flight) so recycle never overlaps a transfer.
+                if getattr(meta, "success", False):
                     continue  # already-completed swaps cannot block recycle
                 ids = list(getattr(meta, "src_block_ids", []) or []) + list(getattr(meta, "dst_block_ids", []) or [])
                 if any(int(b) in block_set for b in ids):
@@ -384,15 +384,10 @@ class ResourceManagerV1(ResourceManager):
         return request
 
     def _prepare_decode_task(self, request):
-        # T53 PR1 head-wise SWA: surface per-head block tables only when active.
-        block_tables_3d = None
-        if envs.FD_HEAD_WISE_KV_CACHE:
-            block_tables_3d = self.swa_head_block_tables.get(request.request_id)
         return ScheduledDecodeTask(
             idx=request.idx,
             request_id=request.request_id,
             block_tables=request.block_tables,
-            block_tables_3d=block_tables_3d,
             cache_swap_metadata=request.pop_cache_swap_metadata(),
             cache_evict_metadata=request.pop_cache_evict_metadata(),
         )
@@ -1765,12 +1760,8 @@ class ResourceManagerV1(ResourceManager):
         if envs.FD_HEAD_WISE_KV_CACHE:
             head_blocks = self.swa_head_block_tables.pop(request.request_id, None)
             self.swa_head_recycle_upto.pop(request.request_id, None)
-            if head_blocks:
-                try:
-                    self.cache_manager.recycle_gpu_blocks_head_wise(head_blocks, request.request_id)
-                except AttributeError:
-                    # Cache manager without head-wise support — defensive no-op.
-                    pass
+            if head_blocks and hasattr(self.cache_manager, "recycle_gpu_blocks_head_wise"):
+                self.cache_manager.recycle_gpu_blocks_head_wise(head_blocks, request.request_id)
         if self.enable_cache_manager_v1:
             self.cache_manager.request_finish(request)
         elif (

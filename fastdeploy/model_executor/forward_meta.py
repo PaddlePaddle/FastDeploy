@@ -142,9 +142,6 @@ class ForwardMeta:
     pre_caches_length: int = 0
     # Block tables
     block_tables: Optional[paddle.Tensor] = None
-    # Optional 3D head-wise block tables [bsz, kv_num_heads, max_blocks_per_seq];
-    # populated only when FD_HEAD_WISE_KV_CACHE is enabled. None preserves legacy path.
-    block_tables_3d: Optional[paddle.Tensor] = None
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
     # Flag of profile run

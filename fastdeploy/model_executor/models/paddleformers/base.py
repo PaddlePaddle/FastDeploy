@@ -16,7 +16,6 @@
 
 """Generic PaddleFormers modeling backend base class."""
 
-import os
 import re
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
@@ -27,6 +26,7 @@ from paddleformers.nn.attention.interface import ALL_ATTENTION_FUNCTIONS
 from paddleformers.transformers import AutoModel, PretrainedModel
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.model_executor.forward_meta import ForwardMeta  # noqa: F401
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -790,11 +790,10 @@ class PaddleFormersModelBase(nn.Layer):
                 self.fd_config.model_config.sliding_window = sliding_window
 
         # T53 head-wise SWA fixture (default off).
-        if os.environ.get("FD_T53_HEAD_WISE_SWA_FIXTURE", "0") == "1":
+        if envs.FD_T53_HEAD_WISE_SWA_FIXTURE:
             cfg = self.fd_config.model_config
             n_kv = getattr(cfg, "num_key_value_heads", 1) or 1
-            ratio_env = os.environ.get("FD_T53_HEAD_WISE_SWA_RATIO", "")
-            ratio = float(ratio_env) if ratio_env else (1.0 / n_kv)
+            ratio = envs.FD_T53_HEAD_WISE_SWA_RATIO if envs.FD_T53_HEAD_WISE_SWA_RATIO is not None else (1.0 / n_kv)
             if getattr(cfg, "window_size", None) is None:
                 cfg.window_size = 4096
             if getattr(cfg, "sink_size", None) is None:
