@@ -49,9 +49,11 @@ def calculate_logits_entropy(logits, share_inputs, temperature):
     entropy_tensor = get_entropy(logits)
     entropy = entropy_tensor.tolist()
 
+    idx = 0
     for i in range(real_bsz):
-        for _ in range(real_seq_lens[i]):
-            share_inputs["entropy_list"][i].append(entropy.pop(0))
+        seq_len = int(real_seq_lens[i])
+        share_inputs["entropy_list"][i].extend(entropy[idx : idx + seq_len])
+        idx += seq_len
         if (
             share_inputs["stop_flags"][i]
             and share_inputs["seq_lens_decoder"][i] != 0
@@ -92,9 +94,11 @@ def speculate_calculate_logits_entropy(logits, share_inputs, temperature):
     entropy_tensor = get_entropy(accepted_logits)
     entropy = entropy_tensor.tolist()
 
+    idx = 0
     for i in range(real_bsz):
-        for _ in range(share_inputs["accept_num"][i]):
-            share_inputs["entropy_list"][i].append(entropy.pop(0))
+        accept_num = int(share_inputs["accept_num"][i])
+        share_inputs["entropy_list"][i].extend(entropy[idx : idx + accept_num])
+        idx += accept_num
         if (
             share_inputs["stop_flags"][i]
             and share_inputs["seq_lens_decoder"][i] != 0
