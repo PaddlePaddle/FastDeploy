@@ -481,6 +481,8 @@ class PaddleDisWorkerProc:
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
 
+            self._tp_barrier_wait() if tp_size > 1 else None
+
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
                 if self.task_queue.exist_tasks():
