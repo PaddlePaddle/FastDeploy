@@ -248,6 +248,8 @@ class InputBatch:
         pre_max_block_num = (
             self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        # PR2 scope: block_tables_head_wise (3D, head-major) is deferred; PR1 keeps block_tables 2D.
+        # See: FD_HEAD_WISE_KV_CACHE path in prefix_cache_manager.allocate_gpu_blocks_head_wise.
         self.block_tables = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
         # Initialize free list
