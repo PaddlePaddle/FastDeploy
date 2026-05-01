@@ -53,16 +53,23 @@ class _FakeCacheManager:
         return [list(range(num_blocks)) for _ in range(self.kv_num_heads)]
 
 
-def _build_manager(window=64, sink=32, block_size=16, kv_num_heads=2):
+def _build_manager(window=64, sink=32, block_size=16, kv_num_heads=2, head_wise_swa_ratio=1.0):
     """Build a bare ``ResourceManagerV1`` with just the SWA recycle state wired."""
     rm = object.__new__(ResourceManagerV1)
     rm.config = SimpleNamespace(
         cache_config=SimpleNamespace(block_size=block_size),
-        model_config=SimpleNamespace(window_size=window, sink_size=sink),
+        model_config=SimpleNamespace(
+            window_size=window,
+            sink_size=sink,
+            num_key_value_heads=kv_num_heads,
+            head_wise_swa_ratio=head_wise_swa_ratio,
+        ),
     )
     rm.cache_manager = _FakeCacheManager(kv_num_heads=kv_num_heads)
     rm.swa_head_recycle_upto = {}
     rm.swa_head_block_tables = {}
+    rm.swa_legacy_recycle_upto = {}
+    rm.swa_legacy_recycled_blocks = {}
     return rm
 
 
@@ -105,6 +112,41 @@ def test_swa_recycle_respects_sink_and_window(monkeypatch):
     released_again = rm.recycle_request_swa_head_cache(req)
     assert released_again == 0
     assert rm.swa_head_recycle_upto["req-0"] == [28, 28]
+
+
+def test_swa_recycle_only_recycles_swa_heads(monkeypatch):
+    """Only the first ``round(kv_heads * ratio)`` rows are recycled; full-attention rows stay intact."""
+    monkeypatch.setattr("fastdeploy.engine.sched.resource_manager_v1.envs.FD_HEAD_WISE_KV_CACHE", 1)
+    rm = _build_manager(window=64, sink=32, block_size=16, kv_num_heads=4, head_wise_swa_ratio=0.5)
+    rm.swa_head_block_tables["req-swa-only"] = [
+        list(range(100, 132)),
+        list(range(200, 232)),
+        list(range(300, 332)),
+        list(range(400, 432)),
+    ]
+    req = _fake_request(req_id="req-swa-only", num_total_tokens=512)
+
+    released = rm.recycle_request_swa_head_cache(req)
+
+    assert released == 26 * 2
+    assert rm.swa_head_recycle_upto["req-swa-only"] == [28, 28, 2, 2]
+    recorded = [ids for (_, ids) in rm.cache_manager.recycled]
+    assert list(range(100 + 2, 100 + 28)) in recorded
+    assert list(range(200 + 2, 200 + 28)) in recorded
+    assert all(not set(ids).intersection(range(300, 432)) for ids in recorded)
+
+
+def test_swa_recycle_fires_only_on_block_boundary(monkeypatch):
+    """Decode-step recycle is throttled to block boundaries to avoid per-token O(H*B) scans."""
+    monkeypatch.setattr("fastdeploy.engine.sched.resource_manager_v1.envs.FD_HEAD_WISE_KV_CACHE", 1)
+    rm = _build_manager(window=64, sink=32, block_size=16, kv_num_heads=2)
+    rm.swa_head_block_tables["req-boundary"] = [list(range(100, 132)), list(range(200, 232))]
+    req = _fake_request(req_id="req-boundary", num_total_tokens=511)
+
+    released = rm.recycle_request_swa_head_cache(req)
+
+    assert released == 0
+    assert "req-boundary" not in rm.swa_head_recycle_upto
 
 
 # ---------------------------------------------------------------------------

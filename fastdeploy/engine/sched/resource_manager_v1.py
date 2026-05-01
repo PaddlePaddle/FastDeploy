@@ -260,6 +260,8 @@ class ResourceManagerV1(ResourceManager):
         # flagged in the architecture brief §6.
         self.swa_head_recycle_upto: dict[str, list[int]] = {}
         self.swa_head_block_tables: dict[str, list[list[int]]] = {}
+        self.swa_legacy_recycle_upto: dict[str, int] = {}
+        self.swa_legacy_recycled_blocks: dict[str, set[int]] = {}
 
     def _swa_window_sink_block(self):
         """Return ``(window_blocks, sink_blocks, block_size)`` for SWA recycle.
@@ -276,6 +278,29 @@ class ResourceManagerV1(ResourceManager):
         # window_size tokens of tail must always be retained.
         window_blocks = (window + block_size - 1) // block_size if window > 0 else 0
         return window_blocks, sink_blocks, block_size
+
+    def _num_swa_heads(self) -> int:
+        """Number of KV heads marked as SWA per the head_wise_swa_ratio fixture.
+
+        Convention: SWA heads are the FIRST `int(round(kv_num_heads * ratio))` rows.
+        Matches the T53 fixture assumption: the first KV-head group is SWA.
+        """
+        kv_num_heads = int(getattr(self.config.model_config, "num_key_value_heads", 0) or 0)
+        if kv_num_heads <= 0:
+            return 0
+        ratio = float(getattr(self.config.model_config, "head_wise_swa_ratio", 0.0) or 0.0)
+        return max(0, min(kv_num_heads, int(round(kv_num_heads * ratio))))
+
+    def _should_use_head_wise_swa(self, num_blocks: int) -> bool:
+        """Return True when the default-off head-wise SWA sidecar should be populated."""
+        return (
+            bool(envs.FD_HEAD_WISE_KV_CACHE)
+            and float(getattr(self.config.model_config, "head_wise_swa_ratio", 0.0) or 0.0) > 0.0
+            and int(getattr(self.config.model_config, "window_size", 0) or 0) > 0
+            and hasattr(self.cache_manager, "allocate_gpu_blocks_head_wise")
+            and hasattr(self.cache_manager, "recycle_gpu_blocks_head_wise")
+            and num_blocks > 0
+        )
 
     def _should_skip_swa_recycle_for_overlap(self, request: Request) -> bool:
         """Return True if any in-flight cache swap targets this request's blocks.
@@ -304,14 +329,61 @@ class ResourceManagerV1(ResourceManager):
 
     def _extend_head_wise_block_tables(self, request: Request, num_new_blocks: int) -> list[list[int]]:
         """Allocate ``num_new_blocks`` per head and append to head-wise block table."""
-        new_rows = self.cache_manager.allocate_gpu_blocks_head_wise(num_new_blocks, request.request_id)
+        try:
+            new_rows = self.cache_manager.allocate_gpu_blocks_head_wise(num_new_blocks, request.request_id)
+        except Exception as exc:
+            llm_logger.warning(
+                f"head-wise SWA sidecar allocation failed for request {request.request_id}; "
+                f"falling back to legacy-only KV blocks: {exc}"
+            )
+            return self.swa_head_block_tables.get(request.request_id, [])
+        if not new_rows:
+            llm_logger.warning(
+                f"head-wise SWA sidecar allocation returned no rows for request {request.request_id}; "
+                "falling back to legacy-only KV blocks"
+            )
+            return self.swa_head_block_tables.get(request.request_id, [])
         existing = self.swa_head_block_tables.setdefault(
             request.request_id,
-            [[] for _ in range(max(1, int(self.cache_manager.kv_num_heads)))],
+            [[] for _ in range(max(1, int(getattr(self.cache_manager, "kv_num_heads", len(new_rows) or 1))))],
         )
         for h, row in enumerate(new_rows):
+            if h >= len(existing):
+                existing.append([])
             existing[h].extend(row)
         return existing
+
+    def _recycle_legacy_swa_blocks(self, request: Request, prev: list[int], recycle_from_floor: int) -> int:
+        """Return fully-aged uniform-SWA legacy block ids to the legacy pool once.
+
+        The active ``request.block_tables`` list stays untouched because worker
+        kernels index it by absolute block position. ``_free_blocks`` filters
+        these ids later to avoid double-recycling at request teardown.
+        """
+        block_tables = list(getattr(request, "block_tables", []) or [])
+        if not block_tables or not hasattr(self.cache_manager, "recycle_gpu_blocks"):
+            return 0
+        head_blocks = self.swa_head_block_tables.get(request.request_id) or []
+        local_kv_heads = len(head_blocks)
+        kv_num_heads = int(getattr(self.config.model_config, "num_key_value_heads", 0) or 0) or local_kv_heads
+        if kv_num_heads <= 0 or self._num_swa_heads() != kv_num_heads or local_kv_heads <= 0:
+            return 0
+        if len(prev) < local_kv_heads:
+            return 0
+        recycle_upto = min(int(prev[h]) for h in range(local_kv_heads))
+        start = max(int(self.swa_legacy_recycle_upto.get(request.request_id, recycle_from_floor)), recycle_from_floor)
+        end = min(int(recycle_upto), len(block_tables))
+        if end <= start:
+            return 0
+
+        already = self.swa_legacy_recycled_blocks.setdefault(request.request_id, set())
+        legacy_ids = [int(block_id) for block_id in block_tables[start:end] if int(block_id) not in already]
+        self.swa_legacy_recycle_upto[request.request_id] = end
+        if not legacy_ids:
+            return 0
+        self.cache_manager.recycle_gpu_blocks(legacy_ids, request.request_id)
+        already.update(legacy_ids)
+        return len(legacy_ids)
 
     def recycle_request_swa_head_cache(self, request: Request) -> int:
         """Recycle SWA tail blocks per head (T53 PR1 §2.3).
@@ -326,26 +398,32 @@ class ResourceManagerV1(ResourceManager):
         """
         if not envs.FD_HEAD_WISE_KV_CACHE:
             return 0
+        window_blocks, sink_blocks, block_size = self._swa_window_sink_block()
+        total_tokens = int(getattr(request, "num_total_tokens", 0) or 0) or int(
+            getattr(request, "num_computed_tokens", 0) or 0
+        )
+        if block_size <= 0 or total_tokens < (window_blocks + 1) * block_size:
+            return 0
+        if total_tokens % block_size != 0:
+            return 0
         head_blocks = self.swa_head_block_tables.get(request.request_id)
         if not head_blocks:
             return 0
         if self._should_skip_swa_recycle_for_overlap(request):
             return 0
 
-        window_blocks, sink_blocks, block_size = self._swa_window_sink_block()
-        # T = total tokens currently materialized for this request.
-        total_tokens = int(getattr(request, "num_total_tokens", 0) or 0) or int(
-            getattr(request, "num_computed_tokens", 0) or 0
-        )
-        if total_tokens <= 0 or block_size <= 0:
-            return 0
         recycle_upto = max(0, (total_tokens - max(0, window_blocks * block_size)) // block_size)
         # Sink floor: never release the first ``sink_blocks`` per head.
         recycle_from_floor = sink_blocks
 
         prev = self.swa_head_recycle_upto.setdefault(request.request_id, [recycle_from_floor for _ in head_blocks])
+        if len(prev) < len(head_blocks):
+            prev.extend([recycle_from_floor for _ in range(len(head_blocks) - len(prev))])
         released_total = 0
-        for h, row in enumerate(head_blocks):
+        for h in range(self._num_swa_heads()):
+            if h >= len(head_blocks):
+                continue
+            row = head_blocks[h]
             start = max(int(prev[h]), recycle_from_floor)
             end = min(int(recycle_upto), len(row))
             if end <= start:
@@ -356,6 +434,7 @@ class ResourceManagerV1(ResourceManager):
             self.cache_manager.recycle_gpu_blocks_head_wise(to_release, request.request_id)
             prev[h] = end  # monotone advance
             released_total += len(to_release)
+        self._recycle_legacy_swa_blocks(request, prev, recycle_from_floor)
         return released_total
 
     def allocated_slots(self, request: Request):
@@ -1478,9 +1557,12 @@ class ResourceManagerV1(ResourceManager):
     def _allocate_gpu_blocks(self, request: Request, num_blocks: int) -> List[int]:
         llm_logger.debug(f"[allocate_gpu_blocks] request_id={request.request_id}, num_blocks={num_blocks}")
         if self.enable_cache_manager_v1:
-            return self.cache_manager.allocate_gpu_blocks(request, num_blocks)
+            block_ids = self.cache_manager.allocate_gpu_blocks(request, num_blocks)
         else:
-            return self.cache_manager.allocate_gpu_blocks(num_blocks, request.request_id)
+            block_ids = self.cache_manager.allocate_gpu_blocks(num_blocks, request.request_id)
+        if self._should_use_head_wise_swa(num_blocks):
+            self._extend_head_wise_block_tables(request, num_blocks)
+        return block_ids
 
     def _request_match_blocks(self, request: Request, skip_storage: bool = True):
         """
@@ -1752,6 +1834,13 @@ class ResourceManagerV1(ResourceManager):
             self.running.append(request)
 
     def _free_blocks(self, request: Request):
+        early_recycled_legacy = set()
+
+        def _filter_early_recycled(block_ids):
+            if not early_recycled_legacy:
+                return block_ids
+            return [block_id for block_id in block_ids if int(block_id) not in early_recycled_legacy]
+
         # T53 PR1 head-wise SWA: release any leftover head-wise blocks and clear
         # per-request recycle state. P4 fix from architecture brief §6: without
         # this drop, ``swa_head_recycle_upto`` and ``swa_head_block_tables``
@@ -1759,8 +1848,19 @@ class ResourceManagerV1(ResourceManager):
         # monotone recycle cursor.
         if envs.FD_HEAD_WISE_KV_CACHE:
             head_blocks = self.swa_head_block_tables.pop(request.request_id, None)
-            self.swa_head_recycle_upto.pop(request.request_id, None)
+            head_cursor = self.swa_head_recycle_upto.pop(request.request_id, None)
+            self.swa_legacy_recycle_upto.pop(request.request_id, None)
+            early_recycled_legacy = self.swa_legacy_recycled_blocks.pop(request.request_id, set())
             if head_blocks and hasattr(self.cache_manager, "recycle_gpu_blocks_head_wise"):
+                if head_cursor:
+                    _, recycle_from_floor, _ = self._swa_window_sink_block()
+                    remaining = []
+                    for h, row in enumerate(head_blocks):
+                        cursor = int(head_cursor[h]) if h < len(head_cursor) else recycle_from_floor
+                        floor = min(recycle_from_floor, len(row))
+                        cursor = max(floor, min(cursor, len(row)))
+                        remaining.append(list(row[:floor]) + list(row[cursor:]))
+                    head_blocks = remaining
                 self.cache_manager.recycle_gpu_blocks_head_wise(head_blocks, request.request_id)
         if self.enable_cache_manager_v1:
             self.cache_manager.request_finish(request)
@@ -1769,10 +1869,10 @@ class ResourceManagerV1(ResourceManager):
         ):
             self.cache_manager.release_block_ids(request)
             self.cache_manager.recycle_gpu_blocks(
-                request.block_tables[request.num_cached_blocks :], request.request_id
+                _filter_early_recycled(request.block_tables[request.num_cached_blocks :]), request.request_id
             )
         else:
-            self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
+            self.cache_manager.recycle_gpu_blocks(_filter_early_recycled(request.block_tables), request.request_id)
         request.block_tables = []
 
         if request.request_id in self.using_extend_tables_req_id:

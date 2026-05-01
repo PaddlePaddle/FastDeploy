@@ -71,6 +71,7 @@ def _build_manager(num_gpu_blocks=8, kv_num_heads=4):
     mgr.head_wise = True
     mgr.total_head_wise_cache_ids = 0
     mgr.gpu_free_block_list = []
+    mgr.gpu_free_head_wise_block_list = []
     mgr._init_head_wise_free_list()
     return mgr
 
@@ -78,14 +79,14 @@ def _build_manager(num_gpu_blocks=8, kv_num_heads=4):
 def test_extend_with_zero_blocks_is_noop():
     """#9a — alloc(0) returns empty per-head rows, free heap unchanged."""
     mgr = _build_manager(num_gpu_blocks=8, kv_num_heads=4)
-    initial_free = len(mgr.gpu_free_block_list)
+    initial_free = len(mgr.gpu_free_head_wise_block_list)
 
     allocated = mgr.allocate_gpu_blocks_head_wise(num_blocks=0, req_id="req-zero")
 
     assert len(allocated) == 4
     for row in allocated:
         assert row == []
-    assert len(mgr.gpu_free_block_list) == initial_free
+    assert len(mgr.gpu_free_head_wise_block_list) == initial_free
 
 
 def test_extend_more_than_available_raises():
@@ -122,7 +123,7 @@ def test_extend_after_partial_recycle_uses_recycled_ids():
     mgr.recycle_gpu_blocks_head_wise(to_recycle, req_id="req-cycle")
 
     # Snapshot the heap; the 4 smallest values must be exactly the recycled ids.
-    snapshot = list(mgr.gpu_free_block_list)
+    snapshot = list(mgr.gpu_free_head_wise_block_list)
     smallest_4 = []
     for _ in range(4):
         smallest_4.append(heapq.heappop(snapshot))

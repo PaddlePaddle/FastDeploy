@@ -92,10 +92,17 @@ def _build_rm(pcm):
             enable_prefix_caching=False,
         ),
         scheduler_config=SimpleNamespace(splitwise_role="mixed"),
-        model_config=SimpleNamespace(window_size=64, sink_size=32),
+        model_config=SimpleNamespace(
+            window_size=64,
+            sink_size=32,
+            num_key_value_heads=pcm.kv_num_heads,
+            head_wise_swa_ratio=1.0,
+        ),
     )
     rm.swa_head_recycle_upto = {}
     rm.swa_head_block_tables = {}
+    rm.swa_legacy_recycle_upto = {}
+    rm.swa_legacy_recycled_blocks = {}
     rm.enable_cache_manager_v1 = True  # forces request_finish branch
     rm.using_extend_tables_req_id = set()
     rm.reuse_block_num_map = {}
@@ -120,18 +127,18 @@ def test_abort_releases_head_wise_blocks_back_to_free_list(monkeypatch):
     monkeypatch.setattr("fastdeploy.engine.sched.resource_manager_v1.envs.FD_HEAD_WISE_KV_CACHE", 1)
     pcm = _build_pcm(num_gpu_blocks=8, kv_num_heads=4)
     rm = _build_rm(pcm)
-    initial_free = len(pcm.gpu_free_block_list)
+    initial_free = len(pcm.gpu_free_head_wise_block_list)
 
     # Allocate 3 blocks per head and stash on the per-request map.
     allocated = pcm.allocate_gpu_blocks_head_wise(num_blocks=3, req_id="req-A")
     rm.swa_head_block_tables["req-A"] = allocated
-    assert len(pcm.gpu_free_block_list) == initial_free - 12
+    assert len(pcm.gpu_free_head_wise_block_list) == initial_free - 12
 
     rm._free_blocks(_fake_request("req-A"))
 
-    assert len(pcm.gpu_free_block_list) == initial_free, "all 12 ids must return to free heap"
+    assert len(pcm.gpu_free_head_wise_block_list) == initial_free, "all 12 ids must return to free heap"
     # Heap invariant: smallest id pops first; sequence must be sorted.
-    snapshot = list(pcm.gpu_free_block_list)
+    snapshot = list(pcm.gpu_free_head_wise_block_list)
     pops = [heapq.heappop(snapshot) for _ in range(len(snapshot))]
     assert pops == sorted(pops), "free list must remain a valid min-heap after abort"
 
@@ -169,17 +176,17 @@ def test_double_abort_is_idempotent(monkeypatch):
     monkeypatch.setattr("fastdeploy.engine.sched.resource_manager_v1.envs.FD_HEAD_WISE_KV_CACHE", 1)
     pcm = _build_pcm(num_gpu_blocks=8, kv_num_heads=4)
     rm = _build_rm(pcm)
-    initial_free = len(pcm.gpu_free_block_list)
+    initial_free = len(pcm.gpu_free_head_wise_block_list)
 
     allocated = pcm.allocate_gpu_blocks_head_wise(num_blocks=3, req_id="req-D")
     rm.swa_head_block_tables["req-D"] = allocated
 
     rm._free_blocks(_fake_request("req-D"))
-    free_after_first = len(pcm.gpu_free_block_list)
+    free_after_first = len(pcm.gpu_free_head_wise_block_list)
     assert free_after_first == initial_free
 
     # Second abort must not raise and must not push any id again.
     rm._free_blocks(_fake_request("req-D"))
-    assert len(pcm.gpu_free_block_list) == free_after_first
+    assert len(pcm.gpu_free_head_wise_block_list) == free_after_first
     # No duplicate ids in the heap.
-    assert len(set(pcm.gpu_free_block_list)) == len(pcm.gpu_free_block_list)
+    assert len(set(pcm.gpu_free_head_wise_block_list)) == len(pcm.gpu_free_head_wise_block_list)
