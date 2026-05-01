@@ -248,6 +248,8 @@ class InputBatch:
         pre_max_block_num = (
             self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        # T53 PR2 will introduce a separate block_tables_head_wise tensor;
+        # PR1 keeps share_inputs.block_tables 2D.
         self.block_tables = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
 
         # Initialize free list

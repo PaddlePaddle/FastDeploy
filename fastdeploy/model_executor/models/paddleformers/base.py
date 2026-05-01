@@ -26,6 +26,7 @@ from paddleformers.nn.attention.interface import ALL_ATTENTION_FUNCTIONS
 from paddleformers.transformers import AutoModel, PretrainedModel
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.model_executor.forward_meta import ForwardMeta  # noqa: F401
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -787,6 +788,20 @@ class PaddleFormersModelBase(nn.Layer):
                 self.fd_config.model_config.layer_types = layer_types
             if not hasattr(self.fd_config.model_config, "sliding_window") and sliding_window is not None:
                 self.fd_config.model_config.sliding_window = sliding_window
+
+        # T53 head-wise SWA fixture (default off).
+        if envs.FD_T53_HEAD_WISE_SWA_FIXTURE:
+            cfg = self.fd_config.model_config
+            n_kv = getattr(cfg, "num_key_value_heads", 1) or 1
+            ratio = envs.FD_T53_HEAD_WISE_SWA_RATIO if envs.FD_T53_HEAD_WISE_SWA_RATIO is not None else (1.0 / n_kv)
+            if getattr(cfg, "window_size", None) is None:
+                cfg.window_size = 4096
+            if getattr(cfg, "sink_size", None) is None:
+                cfg.sink_size = 0
+            if getattr(cfg, "window_attn_skip_freq", None) is None:
+                cfg.window_attn_skip_freq = 1
+            if getattr(cfg, "head_wise_swa_ratio", None) is None:
+                cfg.head_wise_swa_ratio = ratio
 
         attention_instances = {}
         for i in range(num_layers):
