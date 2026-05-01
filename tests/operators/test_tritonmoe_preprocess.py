@@ -105,14 +105,14 @@ class TestTritonMOEPreprocess(unittest.TestCase):
         self._check_output_values_basic(sorted_ids, expert_ids, num_tokens_post_pad)
 
     def test_unsupported_num_experts(self):
-        """Test unsupported num_experts raises OSError"""
+        """Test unsupported num_experts raises ValueError"""
         topk_ids_np = np.array([[0, 1], [1, 0]], dtype=np.int64)
         unsupported_experts = [3, 9, 65, 129]
         GEMM_BLOCK_SIZE_M = 4
 
         for num_experts in unsupported_experts:
             with self.subTest(num_experts=num_experts):
-                with self.assertRaises(OSError):
+                with self.assertRaises(ValueError):
                     self._run_op(topk_ids_np, num_experts, GEMM_BLOCK_SIZE_M)
 
 
