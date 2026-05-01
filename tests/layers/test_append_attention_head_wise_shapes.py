@@ -11,24 +11,17 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""T53 PR1 head-wise kernel-shape oracle for the new ``ForwardMeta`` field.
+"""T53 PR1 head-wise shape/scope oracles.
 
-Case #11 from the architecture brief: commit 3 added the optional 3D
-head-wise block-tables field and a block-wise FP8 reshape
+Case #11 from the architecture brief originally proposed kernel-visible
+head-wise block tables. PR1 deliberately defers that kernel plumbing to PR2;
+these tests pin the PR1 scope instead:
 
-  * ``ForwardMeta.block_tables_3d: Optional[paddle.Tensor] = None``
-  * ``[Nb, KvH, Bs] -> [Nb*KvH, Bs]`` reshape gated behind
-    ``FD_HEAD_WISE_KV_CACHE`` at the V1 swap_cache_all_layers call sites.
-
-This test is a pure shape oracle. There is no model load, no real GPU
-kernel call, no quantized weights. We only verify
-
-  * the head-major slicing ``[Nb, KvH, Bs, Hd] -> [Nb, Bs, Hd]`` at the
-    per-head index preserves the per-head sub-tensor shape,
-  * the ``[Nb*KvH, Bs, Hd] <-> [Nb, KvH, Bs, Hd]`` reshape round-trips
-    without losing elements,
-  * the new ``block_tables_3d`` field on ``ForwardMeta`` defaults to
-    ``None`` (its sentinel for "head-wise disabled / not populated").
+  * per-head cache-management sidecars use head-major rows,
+  * ``ForwardMeta`` is not extended with ``block_tables_3d`` in PR1,
+  * block-wise FP8 scale transfer keeps the existing rank-3
+    ``[Nb, KvH, Bs]`` contract because ``swap_cache_all_layers`` still
+    consumes legacy block ids in PR1.
 
 Paddle is loaded via ``pytest.importorskip`` so the file collects cleanly
 on a CPU-only workstation during L0 oracle runs and only executes the
@@ -51,26 +44,8 @@ def test_head_wise_kv_layout_matches_kv_num_heads():
     assert tuple(head1.shape) == (nb, bs, hd)
 
 
-def test_block_wise_fp8_reshape_preserves_total_elements():
-    """#11b — round-trip [Nb*KvH, Bs, Hd] <-> [Nb, KvH, Bs, Hd] is shape-stable."""
-    paddle = pytest.importorskip("paddle")
-    nb, kvh, bs, hd = 4, 2, 8, 16
-
-    flat = paddle.zeros([nb * kvh, bs, hd], dtype="float16")
-    assert tuple(flat.shape) == (nb * kvh, bs, hd)
-
-    reshaped = flat.reshape([nb, kvh, bs, hd])
-    assert tuple(reshaped.shape) == (nb, kvh, bs, hd)
-
-    flat2 = reshaped.reshape([nb * kvh, bs, hd])
-    assert tuple(flat2.shape) == (nb * kvh, bs, hd)
-
-    # Element count is invariant across both reshape directions.
-    assert reshaped.size == flat.size == flat2.size == nb * kvh * bs * hd
-
-
 def test_forward_meta_unchanged_in_pr1_scope():
-    """#11c — PR1 scope: ``ForwardMeta`` is NOT extended with kernel-side fields.
+    """#11b — PR1 scope: ``ForwardMeta`` is NOT extended with kernel-side fields.
 
     Per ⚖ Opus 4.7 review (review-pr1-final.md, P3 HIGH), kernel-side plumbing
     (``block_tables_3d``) was deliberately moved out of PR1 (cache management)
@@ -107,3 +82,24 @@ def test_forward_meta_unchanged_in_pr1_scope():
         "PR1 scope violation: block_tables_3d must NOT be added to ForwardMeta in PR1; "
         "deferred to PR2 (AppendAttention discrete kernel) per Opus review P3."
     )
+
+
+def test_block_wise_fp8_transfer_keeps_rank3_scale_contract():
+    """#11c — PR1 must not flatten fp8 scales before ``swap_cache_all_layers``.
+
+    ``swap_cache_all_layers`` reads scale tensors as ``[blocks, heads, block_size]``.
+    Flattening scales to rank 2 is a PR2/kernel-layout concern and is invalid
+    while PR1 still sends legacy block ids to the transfer op.
+    """
+    import ast
+    import pathlib
+
+    src_root = pathlib.Path(__file__).resolve().parents[1].parent
+    transfer = src_root / "fastdeploy" / "cache_manager" / "cache_transfer_manager.py"
+    assert transfer.is_file(), f"cache_transfer_manager.py not found at {transfer}"
+
+    tree = ast.parse(transfer.read_text(encoding="utf-8"))
+    helper_defs = [
+        n for n in ast.walk(tree) if isinstance(n, ast.FunctionDef) and n.name == "_maybe_headwise_flatten_scales"
+    ]
+    assert helper_defs == [], "PR1 must not flatten block_wise_fp8 scales for swap_cache_all_layers"

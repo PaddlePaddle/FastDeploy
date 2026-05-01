@@ -83,6 +83,26 @@ def _fake_request(req_id="req-0", num_total_tokens=512, swap_meta=None, evict_me
     )
 
 
+@pytest.mark.parametrize(
+    ("kv_num_heads", "head_wise_swa_ratio", "expected"),
+    [
+        (4, 1.0, 4),
+        (4, 0.5, 2),
+        (4, 0.0, 0),
+        (1, 0.5, 1),
+        (1, 1.0, 1),
+        (1, 0.0, 0),
+        (8, 0.25, 2),
+        (3, 0.5, 2),
+        (2, 0.5, 1),
+    ],
+)
+def test_num_swa_heads_clamps_positive_ratios(kv_num_heads, head_wise_swa_ratio, expected):
+    rm = _build_manager(kv_num_heads=kv_num_heads, head_wise_swa_ratio=head_wise_swa_ratio)
+
+    assert rm._num_swa_heads() == expected
+
+
 # ---------------------------------------------------------------------------
 # Case #5 — sink/window math
 # ---------------------------------------------------------------------------

@@ -282,14 +282,18 @@ class ResourceManagerV1(ResourceManager):
     def _num_swa_heads(self) -> int:
         """Number of KV heads marked as SWA per the head_wise_swa_ratio fixture.
 
-        Convention: SWA heads are the FIRST `int(round(kv_num_heads * ratio))` rows.
+        Convention: positive ratios mark at least one SWA row, capped at KV heads.
         Matches the T53 fixture assumption: the first KV-head group is SWA.
         """
         kv_num_heads = int(getattr(self.config.model_config, "num_key_value_heads", 0) or 0)
         if kv_num_heads <= 0:
             return 0
         ratio = float(getattr(self.config.model_config, "head_wise_swa_ratio", 0.0) or 0.0)
-        return max(0, min(kv_num_heads, int(round(kv_num_heads * ratio))))
+        if ratio <= 0.0:
+            return 0
+        if ratio >= 1.0:
+            return kv_num_heads
+        return max(1, min(kv_num_heads, int(round(kv_num_heads * ratio))))
 
     def _should_use_head_wise_swa(self, num_blocks: int) -> bool:
         """Return True when the default-off head-wise SWA sidecar should be populated."""
