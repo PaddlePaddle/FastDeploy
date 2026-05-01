@@ -94,6 +94,11 @@ class PrefixCacheManager:
             )
         self.head_wise = bool(envs.FD_HEAD_WISE_KV_CACHE) and not _enable_prefix_caching
         self.total_head_wise_cache_ids = 0
+        # Head-wise free list lives in its OWN attribute so the legacy
+        # gpu_free_block_list (consumed by allocate_gpu_blocks) keeps its
+        # [0, num_gpu_blocks) ID space. Aliasing the two lists corrupts the
+        # legacy allocator with OOB cache ids → CUDA error 700 at decode.
+        self.gpu_free_head_wise_block_list = []
 
         self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))
         if self.num_cpu_blocks > 0:
@@ -189,7 +194,8 @@ class PrefixCacheManager:
     @property
     def available_gpu_resource(self):
         if getattr(self, "head_wise", False) and self.num_gpu_blocks > 0:
-            return (len(self.gpu_free_block_list) // max(1, self.kv_num_heads)) / self.num_gpu_blocks
+            head_free = len(getattr(self, "gpu_free_head_wise_block_list", []))
+            return (head_free // max(1, self.kv_num_heads)) / self.num_gpu_blocks
         return len(self.gpu_free_block_list) / self.num_gpu_blocks if self.num_gpu_blocks > 0 else 0.0
 
     def launch_cache_manager(
@@ -497,12 +503,16 @@ class PrefixCacheManager:
         is performed via :meth:`allocate_gpu_blocks_head_wise` /
         :meth:`recycle_gpu_blocks_head_wise`. This path is unreachable when
         ``FD_HEAD_WISE_KV_CACHE=0`` (default).
+
+        The list is stored on a dedicated attribute (``gpu_free_head_wise_block_list``)
+        so the legacy ``gpu_free_block_list`` (consumed by ``allocate_gpu_blocks``)
+        keeps its [0, num_gpu_blocks) ID space untouched.
         """
         total_cache_ids = self.num_gpu_blocks * max(1, self.kv_num_heads)
-        self.gpu_free_block_list = list(range(total_cache_ids - 1, -1, -1))
-        heapq.heapify(self.gpu_free_block_list)
+        self.gpu_free_head_wise_block_list = list(range(total_cache_ids - 1, -1, -1))
+        heapq.heapify(self.gpu_free_head_wise_block_list)
         self.total_head_wise_cache_ids = total_cache_ids
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_head_wise_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
     def can_allocate_gpu_blocks(self, num_blocks: int, try_free_gpu_blocks: bool = True):
@@ -583,18 +593,17 @@ class PrefixCacheManager:
         """
         kv_num_heads = max(1, self.kv_num_heads)
         needed = num_blocks * kv_num_heads
-        assert needed <= len(
-            self.gpu_free_block_list
-        ), f"head-wise gpu free block num: {len(self.gpu_free_block_list)} < needed number {needed}"
+        free_list = self.gpu_free_head_wise_block_list
+        assert needed <= len(free_list), f"head-wise gpu free block num: {len(free_list)} < needed number {needed}"
         logger.debug(f"{req_id} start allocate (head-wise)...")
-        flat = [heapq.heappop(self.gpu_free_block_list) for _ in range(needed)]
+        flat = [heapq.heappop(free_list) for _ in range(needed)]
         # Head-major reshape: row h holds the num_blocks ids assigned to head h.
         allocated = [flat[h * num_blocks : (h + 1) * num_blocks] for h in range(kv_num_heads)]
         logger.info(
             f"req_id:{req_id} allocate_gpu_blocks_head_wise: {allocated}, "
-            f"len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+            f"len(gpu_free_head_wise_block_list) {len(free_list)}"
         )
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.free_gpu_block_num.set(len(free_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
         return allocated
 
@@ -641,13 +650,14 @@ class PrefixCacheManager:
             seen.add(cid)
             valid.append(cid)
 
+        free_list = self.gpu_free_head_wise_block_list
         for cid in valid:
-            heapq.heappush(self.gpu_free_block_list, cid)
+            heapq.heappush(free_list, cid)
         logger.info(
             f"req_id:{req_id} recycle_gpu_blocks_head_wise: pushed {len(valid)} ids, "
-            f"len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
+            f"len(gpu_free_head_wise_block_list) {len(free_list)}"
         )
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.free_gpu_block_num.set(len(free_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
     def allocate_cpu_blocks(self, num_blocks):

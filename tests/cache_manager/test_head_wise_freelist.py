@@ -65,7 +65,8 @@ def _build_manager(num_gpu_blocks=8, kv_num_heads=4, head_wise=True):
     mgr.kv_num_heads = kv_num_heads
     mgr.head_wise = head_wise
     mgr.total_head_wise_cache_ids = 0
-    mgr.gpu_free_block_list = []
+    mgr.gpu_free_block_list = list(range(num_gpu_blocks - 1, -1, -1))
+    mgr.gpu_free_head_wise_block_list = []
     if head_wise:
         mgr._init_head_wise_free_list()
     return mgr
@@ -86,9 +87,11 @@ def test_head_wise_free_list_size():
     """#1 — initializer fills heap with num_gpu_blocks * kv_num_heads ids; smallest pops first."""
     mgr = _build_manager(num_gpu_blocks=8, kv_num_heads=4)
     assert mgr.total_head_wise_cache_ids == 32
-    assert len(mgr.gpu_free_block_list) == 8 * 4
+    assert len(mgr.gpu_free_head_wise_block_list) == 8 * 4
+    # Legacy free list is left untouched (Fix A: split namespaces).
+    assert len(mgr.gpu_free_block_list) == 8
     # heapq is a min-heap → smallest id pops first.
-    assert heapq.heappop(mgr.gpu_free_block_list) == 0
+    assert heapq.heappop(mgr.gpu_free_head_wise_block_list) == 0
 
 
 def test_head_wise_allocate_returns_2d():
@@ -110,13 +113,13 @@ def test_head_wise_allocate_returns_2d():
 def test_head_wise_recycle_round_trip():
     """#3 — alloc → recycle returns the heap to its initial size; subsequent alloc succeeds."""
     mgr = _build_manager(num_gpu_blocks=8, kv_num_heads=4)
-    initial_free = len(mgr.gpu_free_block_list)
+    initial_free = len(mgr.gpu_free_head_wise_block_list)
 
     allocated = mgr.allocate_gpu_blocks_head_wise(num_blocks=3, req_id="req-rt")
-    assert len(mgr.gpu_free_block_list) == initial_free - 12
+    assert len(mgr.gpu_free_head_wise_block_list) == initial_free - 12
 
     mgr.recycle_gpu_blocks_head_wise(allocated, req_id="req-rt")
-    assert len(mgr.gpu_free_block_list) == initial_free
+    assert len(mgr.gpu_free_head_wise_block_list) == initial_free
 
     # Heap invariant preserved.
     again = mgr.allocate_gpu_blocks_head_wise(num_blocks=3, req_id="req-rt-2")
@@ -133,7 +136,7 @@ def test_head_wise_recycle_dedup_and_range_check(caplog):
     duplicate = valid_id  # used twice in the recycle list
     out_of_range = mgr.total_head_wise_cache_ids + 17  # beyond the valid window
 
-    free_before_recycle = len(mgr.gpu_free_block_list)
+    free_before_recycle = len(mgr.gpu_free_head_wise_block_list)
 
     # ``get_logger`` may produce a non-propagating logger; force propagation so
     # caplog can observe the warnings emitted by the recycle path.
@@ -150,7 +153,7 @@ def test_head_wise_recycle_dedup_and_range_check(caplog):
         pcm_logger.propagate = prior_propagate
 
     # Only the single valid id should have been pushed back.
-    assert len(mgr.gpu_free_block_list) == free_before_recycle + 1
+    assert len(mgr.gpu_free_head_wise_block_list) == free_before_recycle + 1
     # Warnings should mention either a dropped duplicate or an out-of-range id.
     log_text = "\n".join(record.getMessage() for record in caplog.records)
     assert ("duplicate" in log_text) or ("out-of-range" in log_text)

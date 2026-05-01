@@ -79,7 +79,8 @@ def _build_for_rank(kv_num_heads_global, tp_size, num_gpu_blocks=8):
     mgr.kv_num_heads = _kv_heads_per_rank(kv_num_heads_global, tp_size)
     mgr.head_wise = True
     mgr.total_head_wise_cache_ids = 0
-    mgr.gpu_free_block_list = []
+    mgr.gpu_free_block_list = list(range(num_gpu_blocks - 1, -1, -1))
+    mgr.gpu_free_head_wise_block_list = []
     mgr._init_head_wise_free_list()
     return mgr
 
@@ -89,7 +90,7 @@ def test_tp_size_1_uses_full_kv_heads():
     mgr = _build_for_rank(kv_num_heads_global=4, tp_size=1, num_gpu_blocks=8)
     assert mgr.kv_num_heads == 4
     assert mgr.total_head_wise_cache_ids == 8 * 4
-    assert len(mgr.gpu_free_block_list) == 32
+    assert len(mgr.gpu_free_head_wise_block_list) == 32
 
 
 def test_tp_size_2_splits_kv_heads_evenly():
@@ -98,7 +99,7 @@ def test_tp_size_2_splits_kv_heads_evenly():
     rank1 = _build_for_rank(kv_num_heads_global=4, tp_size=2, num_gpu_blocks=8)
     assert rank0.kv_num_heads == 2
     assert rank1.kv_num_heads == 2
-    total_ids = len(rank0.gpu_free_block_list) + len(rank1.gpu_free_block_list)
+    total_ids = len(rank0.gpu_free_head_wise_block_list) + len(rank1.gpu_free_head_wise_block_list)
     assert total_ids == 8 * 4, f"sum across ranks must equal num_gpu_blocks * kv_num_heads_global; got {total_ids}"
 
 
@@ -112,12 +113,12 @@ def test_tp_uneven_split_truncates_via_floor_div():
     """
     rank = _build_for_rank(kv_num_heads_global=4, tp_size=3, num_gpu_blocks=8)
     assert rank.kv_num_heads == 1, "4 // 3 == 1; commit 5 P13 fix is a deterministic floor"
-    assert len(rank.gpu_free_block_list) == 8
+    assert len(rank.gpu_free_head_wise_block_list) == 8
 
     # Edge case: more ranks than heads → clamp to 1 head per rank (else branch).
     over = _build_for_rank(kv_num_heads_global=2, tp_size=4, num_gpu_blocks=8)
     assert over.kv_num_heads == 1
-    assert len(over.gpu_free_block_list) == 8
+    assert len(over.gpu_free_head_wise_block_list) == 8
 
 
 def test_tp_alloc_order_deterministic_across_ranks():
