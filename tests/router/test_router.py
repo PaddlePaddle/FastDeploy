@@ -28,7 +28,14 @@ from fastdeploy.router.router import Router, RouterArgs
 
 
 def _make_args(**kwargs):
-    defaults = {"host": "0.0.0.0", "port": 9000, "splitwise": False, "request_timeout_secs": 30}
+    defaults = {
+        "host": "0.0.0.0",
+        "port": 9000,
+        "splitwise": False,
+        "request_timeout_secs": 30,
+        "preempt_retry_count": 3,
+        "preempt_retry_exclude_decode": False,
+    }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
 
@@ -94,6 +101,20 @@ class TestRouterRegistration(unittest.IsolatedAsyncioTestCase):
         router = Router(_make_args(splitwise=False))
         with self.assertRaises(RuntimeError):
             await router.register_instance(_make_instance_dict(role="mixed"))
+
+    @patch("fastdeploy.router.router.logger")
+    async def test_register_instance_logs_error_on_invalid_dict(self, mock_logger):
+        """Test register_instance logs error with traceback when InstanceInfo.from_dict fails."""
+        router = Router(_make_args(splitwise=False))
+        # Pass invalid dict that will cause InstanceInfo.from_dict to fail
+        invalid_dict = {"invalid_key": "value"}
+
+        with self.assertRaises(Exception):
+            await router.register_instance(invalid_dict)
+
+        mock_logger.error.assert_called_once()
+        error_msg = mock_logger.error.call_args[0][0]
+        self.assertIn("register instance failed", error_msg)
 
 
 class TestRouterSelection(unittest.IsolatedAsyncioTestCase):

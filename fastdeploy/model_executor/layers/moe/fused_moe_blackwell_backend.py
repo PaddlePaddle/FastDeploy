@@ -27,19 +27,26 @@ from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     deep_gemm,
     paddlefleet_ops,
+    quant_weight_ue8m0,
+    transform_scale_ue8m0,
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import (
     count_tokens_per_expert_func,
     depermute_prefill_combine,
-    prefill_permute_to_masked_gemm,
+)
+from fastdeploy.model_executor.utils import (
+    TensorTracker,
+    free_tensor,
+    process_weight_transpose,
+    set_weight_attrs,
+    weight_fully_copied,
 )
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import register_custom_python_op
+from fastdeploy.utils import ceil_div, register_custom_python_op
 from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
-from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
 if current_platform.is_cuda():
     try:
@@ -88,7 +95,10 @@ def call_prefill_permute_to_masked_gemm(
     if topk_ids.dtype != paddle.int64:
         topk_ids = topk_ids.cast(paddle.int64)
 
-    results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
+    # results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
+    results = blackwell_ops.prefill_permute_to_blackwell_masked_gemm(
+        x, scale, topk_ids, num_local_experts, max_token_num
+    )
 
     return results[0], results[1], results[2], results[3]
 
@@ -283,13 +293,219 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
 
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
-        deepgemm create weight process.
+        Triton MoE create weight process.
         """
-        BlockWiseFP8MoEMethod.create_weights(self, layer, **extra_weight_attrs)
+        self.up_gate_proj_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            layer.hidden_size,
+        ]
+        self.down_proj_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size,
+        ]
+        up_num_scales = ceil_div(
+            layer.hidden_size,
+            32,
+        )
+        self.up_gate_proj_scale_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            up_num_scales,
+        ]
+        down_num_scales = ceil_div(
+            layer.moe_intermediate_size,
+            32,
+        )
+        self.down_proj_scale_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            down_num_scales,
+        ]
+        self.model_format = extra_weight_attrs.get("model_format")
+
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+            up_gate_proj_weight_shape = [
+                layer.num_local_experts,
+                layer.hidden_size,
+                layer.moe_intermediate_size * 2,
+            ]
+            down_proj_weight_shape = [layer.num_local_experts, layer.moe_intermediate_size, layer.hidden_size]
+            up_gate_proj_attrs = {
+                **extra_weight_attrs,
+                "tensor_track": TensorTracker(shape=up_gate_proj_weight_shape, output_dim=True),
+            }
+            down_proj_attrs = {
+                **extra_weight_attrs,
+                "tensor_track": TensorTracker(shape=down_proj_weight_shape, output_dim=False),
+            }
+
+            layer.up_gate_proj_weight = layer.create_parameter(
+                shape=up_gate_proj_weight_shape,
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_weight = layer.create_parameter(
+                shape=down_proj_weight_shape,
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_weight,
+                up_gate_proj_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_weight,
+                down_proj_attrs,
+            )
+        else:
+            # offline quant
+            # 1.init shape
+            extra_weight_attrs = {**extra_weight_attrs}
+            # transpose [0,2,1]
+            up_gate_proj_weight_shape = self.up_gate_proj_weight_shape[:1] + self.up_gate_proj_weight_shape[1:][::-1]
+
+            up_gate_proj_attrs = {
+                **extra_weight_attrs,
+            }
+            down_proj_attrs = {
+                **extra_weight_attrs,
+            }
+
+            self.weight_dtype = paddle.float8_e4m3fn
+            self.added_scale_attrs = ["up_gate_proj_weight_scale_inv", "down_proj_weight_scale_inv"]
+            up_gate_proj_weight_name = self.added_weight_attrs[0]
+            down_proj_weight_name = self.added_weight_attrs[1]
+            up_gate_proj_scale_name = self.added_scale_attrs[0]
+            down_proj_scale_name = self.added_scale_attrs[1]
+
+            setattr(
+                layer,
+                up_gate_proj_weight_name,
+                layer.create_parameter(
+                    shape=up_gate_proj_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_weight_name,
+                layer.create_parameter(
+                    shape=down_proj_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                up_gate_proj_scale_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_scale_shape,
+                    dtype="uint8",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_scale_name,
+                layer.create_parameter(
+                    shape=self.down_proj_scale_shape,
+                    dtype="uint8",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_weight_name),
+                up_gate_proj_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_scale_name),
+                up_gate_proj_attrs,
+            )
+
+            set_weight_attrs(
+                getattr(layer, down_proj_weight_name),
+                down_proj_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, down_proj_scale_name),
+                down_proj_attrs,
+            )
 
     def process_weights_after_loading(self, layer):
-        """ """
-        BlockWiseFP8MoEMethod.process_weights_after_loading(self, layer)
+
+        def _process_quantize(weight_idx):
+            # 1.init shape and type
+            self.added_scale_attrs = ["up_gate_proj_weight_scale_inv", "down_proj_weight_scale_inv"]
+            # weight
+            weight_name = self.added_weight_attrs[weight_idx]
+            unquantized_weight_name = weight_name.replace("quant_weight", "weight")
+            weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
+            weight_dtype = paddle.float8_e4m3fn
+            # scale
+            scale_name = self.added_scale_attrs[weight_idx]
+
+            # 2.crate tmp tensor and 3.quantize weight
+            weight = paddle.empty(shape=weight_shape, dtype=weight_dtype)
+            scale_list = []
+
+            for expert_id in range(layer.num_local_experts):
+                w_q, s_fp32 = quant_weight_ue8m0(
+                    weight_dequant=getattr(layer, unquantized_weight_name)[expert_id].transpose([1, 0]).contiguous(),
+                    weight_block_size=self.quant_config.weight_block_size,
+                )
+                s_ue8m0 = transform_scale_ue8m0(
+                    s_fp32, mn=w_q.shape[-2], weight_block_size=self.quant_config.weight_block_size
+                )
+                weight[expert_id].copy_(w_q, False)
+                scale_list.append(s_ue8m0)
+            scale = paddle.to_tensor(scale_list).transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
+
+            scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
+
+            free_tensor(getattr(layer, unquantized_weight_name))
+            free_tensor(getattr(layer, weight_name))
+            setattr(
+                layer,
+                weight_name,
+                layer.create_parameter(
+                    shape=weight.shape,
+                    dtype=weight.dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                scale_name,
+                layer.create_parameter(
+                    shape=scale_bw.shape,
+                    dtype=scale_bw.dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+
+            getattr(layer, weight_name).copy_(weight, False)
+            scale_param = getattr(layer, scale_name)
+            scale_param.data = scale_bw
+
+        if self.quant_config.is_checkpoint_bf16:
+            # dynamic quantize
+            weight_id_map = {"gate_up": 0, "down": 1}
+            if weight_fully_copied(layer.up_gate_proj_weight):
+                weight_type = "gate_up"
+            else:
+                weight_type = "down"
+            if self.model_format == "torch":
+                # pt model
+                unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
+                    "quant_weight", "weight"
+                )
+                process_weight_transpose(layer, unquantized_weight_name)
+            _process_quantize(weight_id_map[weight_type])
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -521,18 +737,13 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
                 )
             )
 
-            up_gate_proj_out = paddle.zeros(
+            up_gate_proj_out = paddle.empty(
                 [
-                    layer.num_local_experts,
-                    layer.ep_size * max_tokens_per_rank,
+                    layer.num_local_experts * layer.ep_size * max_tokens_per_rank,
                     layer.moe_intermediate_size * 2,
                 ],
                 dtype=paddle.bfloat16,
             )
-            permute_input = permute_input.reshape([-1, permute_input.shape[-1]])
-
-            permute_scale_new = blackwell_ops.unpack_and_convert_scale(permute_scale, token_nums_per_expert)
-
             # masked group gemm
             # a: [num_local_experts * expected_m, k]
             # b: [num_local_experts, n, k]
@@ -546,25 +757,24 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
             group_gemm_masked(
                 permute_input,
                 getattr(layer, self.added_weight_attrs[0]),
-                permute_scale_new,
-                getattr(layer, self.added_scale_attrs[0] + "_bw"),  # weight_scale_new
+                permute_scale,
+                getattr(layer, self.added_scale_attrs[0]),
                 token_nums_per_expert,
                 up_gate_proj_out,
                 None,
                 layer.ep_size * max_tokens_per_rank,
                 -1,
+                "w8a8",
             )
-            act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.fused_mask_swiglu_fp8_quant(
+            act_out_fp8, scale = blackwell_ops.fused_mask_swiglu_fp8_quant_blackwell(
                 up_gate_proj_out,
                 token_nums_per_expert,
-                self.quant_config.weight_block_size[0],
-                use_ue8m0=self.quant_config.deepgemm_scale_ue8m0,
             )
 
             if layer.hidden_size == layer.moe_intermediate_size * 2:
-                ffn_out = up_gate_proj_out
+                ffn_out = up_gate_proj_out.reshape([layer.num_local_experts, layer.ep_size * max_tokens_per_rank, -1])
             else:
-                ffn_out = paddle.zeros(
+                ffn_out = paddle.empty(
                     [
                         layer.num_local_experts,
                         layer.ep_size * max_tokens_per_rank,
@@ -573,19 +783,17 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
                     dtype=paddle.bfloat16,
                 )
 
-            act_out_fp8 = act_out_fp8.reshape([-1, act_out_fp8.shape[-1]])
-
-            act_out_fp8_scale = blackwell_ops.unpack_and_convert_scale(scale, token_nums_per_expert)
             group_gemm_masked(
                 act_out_fp8,
                 getattr(layer, self.added_weight_attrs[1]),
-                act_out_fp8_scale,
-                getattr(layer, self.added_scale_attrs[1] + "_bw"),  # weight_scale_new
+                scale,
+                getattr(layer, self.added_scale_attrs[1]),  # weight_scale_new
                 token_nums_per_expert,
                 ffn_out,
                 None,
                 layer.ep_size * max_tokens_per_rank,
                 -1,
+                "w8a8",
             )
 
             tmp_ffn_out = call_depermute_prefill_combine(
@@ -767,10 +975,11 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
         )
         # 3. Compute ffn
         assert isinstance(permute_input, tuple)
-        up_gate_proj_out = paddle.zeros(
+        up_gate_proj_out = paddle.empty(
             [
-                layer.num_local_experts,
-                layer.ep_size * layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+                layer.num_local_experts
+                * layer.ep_size
+                * layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
                 layer.moe_intermediate_size * 2,
             ],
             dtype=paddle.bfloat16,
@@ -784,61 +993,38 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
             ],
             dtype=paddle.bfloat16,
         )
+        input_x = permute_input[0].reshape([-1, permute_input[0].shape[-1]])
 
-        expected_m = 128
-
-        # group_gemm_masked(
-        #     permute_input[0],
-        #     getattr(layer, self.added_weight_attrs[0]),
-        #     permute_input[1],
-        #     getattr(layer, self.added_scale_attrs[0]),
-        #     up_gate_proj_out,
-        #     token_nums_per_expert,
-        #     None,
-        #     layer.ep_size * max_tokens_per_rank,
-        #     -1,
-        # )
-
-        # disable_ue8m0_cast is False for SM100
-        m_grouped_fp8_gemm_nt_masked(
-            permute_input,
-            (
-                getattr(layer, self.added_weight_attrs[0]),
-                getattr(layer, self.added_scale_attrs[0]),
-            ),
-            up_gate_proj_out,
+        permute_scale_new = blackwell_ops.unpack_and_convert_scale(permute_input[1], token_nums_per_expert)
+        group_gemm_masked(
+            input_x,
+            getattr(layer, self.added_weight_attrs[0]),
+            permute_scale_new,
+            getattr(layer, self.added_scale_attrs[0]),  # weight_scale_new
             token_nums_per_expert,
-            expected_m,
+            up_gate_proj_out,
+            None,
+            layer.ep_size * layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+            -1,
+            "w8a8",
         )
 
-        act_out_fp8, scale = fastdeploy.model_executor.ops.gpu.fused_mask_swiglu_fp8_quant(
+        act_out_fp8, scale = blackwell_ops.fused_mask_swiglu_fp8_quant_blackwell(
             up_gate_proj_out,
             token_nums_per_expert,
-            self.quant_config.weight_block_size[0],
-            use_ue8m0=self.quant_config.deepgemm_scale_ue8m0,
         )
 
-        # group_gemm_masked(
-        #     act_out_fp8,
-        #     getattr(layer, self.added_weight_attrs[1]),
-        #     scale
-        #     getattr(layer, self.added_scale_attrs[1]),
-        #     ffn_out,
-        #     token_nums_per_expert,
-        #     None,
-        #     layer.ep_size * max_tokens_per_rank,
-        #     -1,
-        # )
-        # disable_ue8m0_cast is False for SM100
-        m_grouped_fp8_gemm_nt_masked(
-            (act_out_fp8, scale),
-            (
-                getattr(layer, self.added_weight_attrs[1]),
-                getattr(layer, self.added_scale_attrs[1]),
-            ),
+        group_gemm_masked(
+            act_out_fp8,
+            getattr(layer, self.added_weight_attrs[1]),
+            scale,
+            getattr(layer, self.added_scale_attrs[1]),  # weight_scale_new
+            token_nums_per_expert,
             ffn_out,
-            token_nums_per_expert,
-            expected_m,
+            None,
+            layer.ep_size * layer.fd_config.model_config.num_max_dispatch_tokens_per_rank,
+            -1,
+            "w8a8",
         )
 
         if shared_experts is not None:

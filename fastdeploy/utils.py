@@ -33,7 +33,7 @@ from enum import Enum
 from functools import cache
 from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
-from typing import Any, Literal, TypeVar, Union
+from typing import Any, Dict, Literal, TypeVar, Union
 
 import numpy as np
 import paddle
@@ -428,7 +428,7 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
                         converted = action.type(str_value)
                     value = converted
                 except Exception as e:
-                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}")
+                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}, {traceback.format_exc()}")
             setattr(namespace, key, value)
         args = super().parse_args(args=remaining_args, namespace=namespace)
 
@@ -937,10 +937,14 @@ class StatefulSemaphore:
         }
 
 
-def parse_quantization(value: str):
+def parse_quantization(value: Union[Dict, str]) -> Dict:
     """
     Parse a JSON string into a dictionary.
     """
+    if isinstance(value, dict):
+        return value
+    if value is None:
+        value = "null"
     try:
         return json.loads(value)
     except ValueError:
@@ -1232,5 +1236,4 @@ from fastdeploy.logger import (  # noqa: F401
     scheduler_logger,
     spec_logger,
     trace_logger,
-    zmq_client_logger,
 )

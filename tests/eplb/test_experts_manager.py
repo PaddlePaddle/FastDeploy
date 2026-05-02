@@ -48,7 +48,6 @@ class TestRedundantExpertManager(unittest.TestCase):
 
         cache_cfg = CacheConfig(args)
         model_cfg = SimpleNamespace(enable_mm=True)  # Enable multimodal for feature testing
-        speculative_cfg = SimpleNamespace(method=None)
         model_cfg.print = print
         model_cfg.max_model_len = 5120
         model_cfg.num_hidden_layers = 3
@@ -80,7 +79,7 @@ class TestRedundantExpertManager(unittest.TestCase):
             cache_config=cache_cfg,
             parallel_config=parallel_cfg,
             graph_opt_config=graph_opt_cfg,
-            speculative_config=speculative_cfg,
+            speculative_config=None,
             scheduler_config=scheduler_cfg,
             eplb_config=eplb_config,
         )
@@ -342,6 +341,38 @@ class TestRedundantExpertManager(unittest.TestCase):
             # Test broadcast with empty addresses
             result = manager.broadcast_expert_token_stats()
             self.assertTrue(result)  # Should return True for empty list
+
+    def _make_manager(self):
+        with (
+            patch("fastdeploy.eplb.experts_manager.get_logger"),
+            patch("fastdeploy.eplb.experts_manager.Process"),
+            patch("fastdeploy.eplb.experts_manager.threading.Thread"),
+        ):
+            manager = RedundantExpertManager(rank=0, ep_size=32, fd_config=self.fd_config, ipc_signal_suffix=0)
+        manager.logger = MagicMock()
+        manager.dp_rank_address = ["10.0.0.1:8000"]
+        return manager
+
+    @patch("fastdeploy.eplb.experts_manager.requests.post", side_effect=RuntimeError("conn refused"))
+    def test_allgather_expert_token_stats_logs_error_on_exception(self, mock_post):
+        """Test allgather_expert_token_stats logs error with traceback when request raises."""
+        manager = self._make_manager()
+        result = manager.allgather_expert_token_stats()
+        self.assertFalse(result)
+        manager.logger.error.assert_called_once()
+        error_msg = manager.logger.error.call_args[0][0]
+        self.assertIn("allgather_expert_token_stats fail", error_msg)
+        self.assertIn("conn refused", error_msg)
+
+    @patch("fastdeploy.eplb.experts_manager.requests.post", side_effect=RuntimeError("conn refused"))
+    def test_allgather_load_weight_result_logs_error_on_exception(self, mock_post):
+        """Test allgather_load_weight_result logs error with traceback when request raises."""
+        manager = self._make_manager()
+        manager.allgather_load_weight_result()
+        manager.logger.error.assert_called_once()
+        error_msg = manager.logger.error.call_args[0][0]
+        self.assertIn("allgather_load_weight_result error", error_msg)
+        self.assertIn("conn refused", error_msg)
 
 
 if __name__ == "__main__":

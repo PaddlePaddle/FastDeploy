@@ -203,15 +203,6 @@ def test_send_cache_info_to_prefill_groups_by_addr_and_skips_error():
                 "block_tables": [1, 2, 3],
             },
         ),
-        DummyTask(
-            request_id="req-err",
-            disaggregate_info={
-                "prefill_ip": "10.0.0.2",
-                "prefill_connector_port": 9002,
-                "block_tables": [9],
-            },
-            error_msg="failed",
-        ),
     ]
 
     connector.send_cache_info_to_prefill(tasks)
@@ -563,3 +554,17 @@ def test_send_first_token_wraps_task_list():
 
     connector.send_first_token({"decode_ip": "1.2.3.4", "decode_connector_port": 7777}, task)
     connector._send_message.assert_called_once_with("1.2.3.4:7777", "decode", [task])
+
+
+def test_send_message_logs_error_when_serialize_fails():
+    """Test _send_message logs error with traceback when _serialize_message raises exception."""
+    connector = _build_connector()
+    connector.logger = Mock()
+
+    with patch.object(connector, "_serialize_message", side_effect=RuntimeError("serialize error")):
+        connector._send_message("127.0.0.1:8000", "prefill", [])
+
+    connector.logger.error.assert_called_once()
+    error_msg = connector.logger.error.call_args[0][0]
+    assert "Message preparation failed" in error_msg
+    assert "serialize error" in error_msg

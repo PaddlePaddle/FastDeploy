@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import time
 import traceback
 from dataclasses import dataclass
@@ -25,11 +26,15 @@ from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
     KVCacheStorage,
     logger,
 )
+from fastdeploy.platforms import current_platform
 
 try:
     import attentionstore_sdk.api.common.common_pb2 as common_pb2
     from attentionstore_sdk.sdk import AttentionStoreSDK, Tokens
     from attentionstore_sdk.utils.err import AttentionStoreSDKError
+
+    if current_platform.is_cuda():
+        from attentionstore_sdk.client.client import AttentionType
 
     _ATTENTIONSTORE_AVAILABLE = True
 except Exception:
@@ -51,6 +56,7 @@ class AttentionStoreConfig:
     bytes_per_shard_layer_per_block: int = 1024
     device_id: int = 0
     dp_id: int = 0
+    splitwise_role: str = "mixed"
 
 
 class AttentionStore(KVCacheStorage):
@@ -62,19 +68,44 @@ class AttentionStore(KVCacheStorage):
         self.config = AttentionStoreConfig(**args)
 
         try:
+            self.config.namespace = os.getenv("AS_NAMESPACE", self.config.namespace)
+            self.config.pod_name = os.getenv("AS_POD_NAME", self.config.pod_name)
+            if int(os.getenv("ENABLE_EP_DP_IN_FD", "1")):
+                self.config.pod_name = (
+                    self.config.pod_name + "_" + self.config.splitwise_role + "_" + str(self.config.dp_id)
+                )
+            self.config.model_version = os.getenv("AS_MODEL_VERSION", self.config.model_version)
             logger.info(f"[INIT] Start initializing AttentionStoreSDK with config: {self.config}")
-            self.sdk = AttentionStoreSDK(
-                self.config.namespace,
-                self.config.pod_name,
-                self.config.model_version,
-                self.config.shard_id,
-                self.config.shard_num,
-                self.config.layer_num,
-                self.config.block_token_size,
-                self.config.bytes_per_shard_layer_per_block,
-                self.config.device_id,
-                self.config.dp_id,
-            )
+            if current_platform.is_cuda():
+                self.sdk = AttentionStoreSDK(
+                    self.config.namespace,
+                    self.config.pod_name,
+                    self.config.model_version,
+                    self.config.shard_id,
+                    self.config.shard_num,
+                    self.config.layer_num,
+                    self.config.block_token_size,
+                    self.config.bytes_per_shard_layer_per_block,
+                    self.config.bytes_per_shard_layer_per_block,
+                    self.config.device_id,
+                    self.config.dp_id,
+                    attention_type=AttentionType.MHA,
+                    enable_as_kv_rw=True,
+                    gpu_count=0,
+                )
+            else:
+                self.sdk = AttentionStoreSDK(
+                    self.config.namespace,
+                    self.config.pod_name,
+                    self.config.model_version,
+                    self.config.shard_id,
+                    self.config.shard_num,
+                    self.config.layer_num,
+                    self.config.block_token_size,
+                    self.config.bytes_per_shard_layer_per_block,
+                    self.config.device_id,
+                    self.config.dp_id,
+                )
             self.wait_for_sdk_ready(timeout=300, delta_t=5)
             logger.info("[INIT] ✅ AttentionStore is initialized successfully!")
         except Exception as e:
@@ -120,15 +151,27 @@ class AttentionStore(KVCacheStorage):
         v_data_ptrs = [v.data_ptr() for v in val_cache]
         num = 0
         try:
-            num = self.sdk.read(
-                list(range(self.config.layer_num)),
-                tokens,
-                start_read_block_idx,
-                k_data_ptrs,
-                v_data_ptrs,
-                gpu_block_ids,
-                timeout,
-            )
+            if current_platform.is_cuda():
+                num = self.sdk.read(
+                    list(range(self.config.layer_num)),
+                    tokens,
+                    start_read_block_idx,
+                    k_data_ptrs,
+                    v_data_ptrs,
+                    gpu_block_ids,
+                    timeout,
+                    remote_addrs=None,
+                )
+            else:
+                num = self.sdk.read(
+                    list(range(self.config.layer_num)),
+                    tokens,
+                    start_read_block_idx,
+                    k_data_ptrs,
+                    v_data_ptrs,
+                    gpu_block_ids,
+                    timeout,
+                )
             logger.debug(f"[READ END] task_id: {task_id} read_blocks: {num}")
         except AttentionStoreSDKError:
             logger.error(
@@ -154,15 +197,28 @@ class AttentionStore(KVCacheStorage):
         v_data_ptrs = [v.data_ptr() for v in val_cache]
         num = 0
         try:
-            num = self.sdk.write(
-                list(range(self.config.layer_num)),
-                tokens,
-                start_write_block_idx,
-                k_data_ptrs,
-                v_data_ptrs,
-                gpu_block_ids,
-                timeout,
-            )
+            if current_platform.is_cuda():
+                num = self.sdk.write(
+                    list(range(self.config.layer_num)),
+                    tokens,
+                    start_write_block_idx,
+                    k_data_ptrs,
+                    v_data_ptrs,
+                    gpu_block_ids,
+                    timeout,
+                    h2h_copy=False,
+                    params=None,
+                )
+            else:
+                num = self.sdk.write(
+                    list(range(self.config.layer_num)),
+                    tokens,
+                    start_write_block_idx,
+                    k_data_ptrs,
+                    v_data_ptrs,
+                    gpu_block_ids,
+                    timeout,
+                )
             logger.debug(f"[WRITE END] task_id: {task_id} written_blocks: {num}")
         except AttentionStoreSDKError:
             logger.error(

@@ -17,10 +17,10 @@
 from typing import Callable
 
 import paddle
+import paddle.nn.functional as F
 from paddle import nn
 
 import fastdeploy
-from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -29,6 +29,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     weight_fully_copied,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import ceil_div, register_custom_python_op
 
 from ..quantization.quant_base import QuantMethodBase
@@ -302,7 +303,6 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
@@ -310,6 +310,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
 
         if layer.topk_method == "noaux_tc":
+            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             gate_out, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -318,8 +321,10 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,
@@ -1248,6 +1253,11 @@ def python_op_fused_moe_kernel_paddle(
             False,
         )
 
+    if layer.routed_scaling_factor_learnable:
+        safe_topk_indices = paddle.clip(topk_ids, min=0)
+        gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+        topk_weights = topk_weights * gathered_scales
+
     if topk_ids_hookfunc is not None:
         topk_ids_hookfunc(topk_ids=topk_ids)
 
@@ -1425,7 +1435,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer.hidden_size,
             layer.moe_intermediate_size,
         ]
-        if not self.quant_config.deepgemm_scale_ue8m0:
+        if not self.quant_config.moe_blockwise_gemm_scale_ue8m0:
             self.up_gate_proj_scale_shape = [
                 layer.num_local_experts,
                 ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
@@ -1582,7 +1592,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 ),
             )
             # weight_scale
-            if not self.quant_config.deepgemm_scale_ue8m0:
+            if not self.quant_config.moe_blockwise_gemm_scale_ue8m0:
                 setattr(
                     layer,
                     up_gate_proj_scale_name,
@@ -1653,7 +1663,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
 
             # 2.crate tmp tensor and 3.quantize weight
-            if not self.quant_config.deepgemm_scale_ue8m0:
+            if not self.quant_config.moe_blockwise_gemm_scale_ue8m0:
                 scale_dtype = "float32"
                 weight = paddle.empty(shape=[weight_shape[0], weight_shape[2], weight_shape[1]], dtype=weight_dtype)
                 scale = paddle.empty(shape=[scale_shape[0], scale_shape[2], scale_shape[1]], dtype=scale_dtype)
@@ -1679,7 +1689,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                         chunk_experts = [w.contiguous() for w in expert_weight_list[start_idx:end_idx]]
 
                         w1_t_quant, w1_t_scale = fused_stack_transpose_quant(
-                            chunk_experts, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
+                            chunk_experts, use_ue8m0=self.quant_config.moe_blockwise_gemm_scale_ue8m0
                         )
                         w1_t_quant = w1_t_quant.reshape([local_chunk_size, -1, w1_t_quant.shape[-1]])
                         w1_t_scale = w1_t_scale.reshape([local_chunk_size, -1, w1_t_scale.shape[-1]])
@@ -1728,29 +1738,13 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 ),
             )
 
-            if not self.quant_config.deepgemm_scale_ue8m0:
+            if not self.quant_config.moe_blockwise_gemm_scale_ue8m0:
                 getattr(layer, weight_name).copy_(weight.transpose([0, 2, 1]).contiguous(), False)
                 getattr(layer, scale_name).copy_(scale.transpose([0, 2, 1]).contiguous(), False)
             else:
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
                 scale_param.data = scale
-            if bool(envs.FD_USE_BLACKWELL_GEMM):
-                import blackwell_ops
-
-                scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
-                scale_bw_name = scale_name + "_bw"
-                setattr(
-                    layer,
-                    scale_bw_name,
-                    scale_bw,
-                )
-                if layer.fd_config.scheduler_config.splitwise_role != "mixed":
-                    setattr(
-                        layer,
-                        scale_name,
-                        None,
-                    )
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize
@@ -1776,7 +1770,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 process_weight_transpose(layer, down_proj_weight_name)
                 process_weight_transpose(layer, up_gate_proj_scale_name)
                 process_weight_transpose(layer, down_proj_scale_name)
-            if self.quant_config.deepgemm_scale_ue8m0:
+            if self.quant_config.moe_blockwise_gemm_scale_ue8m0:
                 up_gate_proj_scale = getattr(layer, self.added_scale_attrs[0])
                 new_up_gate_proj_scale = paddle.empty(
                     up_gate_proj_scale.shape[:1] + up_gate_proj_scale.shape[1:][::-1], dtype=up_gate_proj_scale.dtype

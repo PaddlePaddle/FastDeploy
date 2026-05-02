@@ -58,7 +58,7 @@ from fastdeploy.model_executor.ops.xpu import (
 from fastdeploy.model_executor.xpu_pre_and_post_process import (
     step_xpu,
     xpu_post_process_normal,
-    xpu_post_process_specualate,
+    xpu_post_process_speculate,
     xpu_pre_process,
     xpu_process_output,
 )
@@ -595,14 +595,27 @@ class XPUModelRunner(ModelRunnerBase):
                 prefill_start_index = request.prefill_start_index
                 prefill_end_index = request.prefill_end_index
                 length = prefill_end_index - prefill_start_index
-                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                    # Enable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-                else:
-                    # Disable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                if request.get("enable_thinking") is not None:
+                    enable_thinking = bool(request.get("enable_thinking"))
+                    logger.debug(f"request {request.request_id} with {enable_thinking=} at idx {idx}")
+                    self.share_inputs["enable_thinking"][idx : idx + 1, :] = enable_thinking
+                    if enable_thinking:
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                        if request.get("reasoning_max_tokens") is not None:
+                            # Enable thinking
+                            self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                        else:
+                            self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                        if request.get("response_max_tokens") is not None:
+                            # Enable thinking
+                            self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get("response_max_tokens")
+                        else:
+                            self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
+                    else:
+                        # Disable thinking
+                        self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
+                        self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if (
                     hasattr(request, "sampling_params")
@@ -749,6 +762,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 self.share_inputs["input_ids"][idx : idx + 1, 0] = request.prompt_token_ids[0]
                 self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["token_ids_all"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["token_ids_all"][idx : idx + 1, length:] = -1
                 self.share_inputs["seq_lens_encoder"][idx : idx + 1] = 0
                 self.share_inputs["seq_lens_decoder"][idx : idx + 1] = length
                 self.share_inputs["seq_lens_this_time"][idx : idx + 1] = 1
@@ -770,6 +785,8 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = 0
                 self.share_inputs["input_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
                 self.share_inputs["prompt_ids"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["token_ids_all"][idx : idx + 1, :length] = np.array(request.prompt_token_ids)
+                self.share_inputs["token_ids_all"][idx : idx + 1, length:] = -1
                 if self.enable_mm:
                     inputs = self._preprocess_mm_task(request.multimodal_inputs)
                     if inputs.get("images") is not None:
@@ -798,9 +815,14 @@ class XPUModelRunner(ModelRunnerBase):
                     # Enable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                    if request.get("response_max_tokens") is not None:
+                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = request.get("response_max_tokens")
+                    else:
+                        self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                 else:
                     # Disable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                     self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
             def get_attr_from_request(request, attr, default_value=None):
@@ -890,7 +912,7 @@ class XPUModelRunner(ModelRunnerBase):
         """Initialize all share buffers for model inputs.
         Note: In the future, we may abandon share buffers.
         """
-        self.MAX_INFER_SEED = 9223372036854775806
+        self.MAX_INFER_SEED = 2147483646
         self.share_inputs = {}
 
         self.share_inputs["pre_ids"] = paddle.full(
@@ -975,10 +997,6 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
         self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-
-        # Initialize thinking related buffers
-        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
-        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
         # Initialize rotary position embedding
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
@@ -1103,6 +1121,28 @@ class XPUModelRunner(ModelRunnerBase):
         self.max_num_seqs = max_num_seqs
         self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
+        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> or <response>
+        # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
+        self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["reasoning_allowed_tokens"] = (
+            paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
+            if self.model_config.reasoning_allowed_token_ids
+            else paddle.to_tensor([], dtype="int64")
+        )
+
+        # Initialize thinking related buffers
+        self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
+        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["max_reply_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
+        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
+        self.share_inputs["inject_token_ids"] = paddle.to_tensor(
+            self.model_config.think_truncate_prompt_ids, dtype="int64"
+        ).reshape([-1, 1])
+        self.share_inputs["token_ids_all"] = paddle.full(
+            [max_num_seqs, self.model_config.max_model_len],
+            -1,
+            dtype="int64",
+        )
 
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
@@ -1185,6 +1225,7 @@ class XPUModelRunner(ModelRunnerBase):
             min_p_list=self.share_inputs["min_p_list"],
             seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
+            token_ids_all=self.share_inputs["token_ids_all"],
             pre_token_ids=self.share_inputs["pre_ids"],
             prompt_ids=self.share_inputs["prompt_ids"],
             prompt_lens=self.share_inputs["prompt_lens"],
@@ -1259,9 +1300,10 @@ class XPUModelRunner(ModelRunnerBase):
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
         # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
+        #    Note: even when CPU cache (num_cpu_blocks > 0) is enabled, GPU runner still
+        #    creates GPU cache tensors; cache transfer manager handles CPU<->GPU swap.
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
+            self.fd_config.cache_config.kvcache_storage_backend
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
         if not create_cache_tensor:
@@ -1403,6 +1445,7 @@ class XPUModelRunner(ModelRunnerBase):
             input_length = input_length_list[idx]
             max_dec_len = max_dec_len_list[idx]
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
+            self.share_inputs["token_ids_all"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
             self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
@@ -1657,6 +1700,7 @@ class XPUModelRunner(ModelRunnerBase):
                 ),
                 accept_tokens=(self.share_inputs["accept_tokens"] if self.speculative_decoding else None),
                 accept_num=(self.share_inputs["accept_num"] if self.speculative_decoding else None),
+                token_ids_all=self.share_inputs["token_ids_all"],
                 stop_token_ids=self.share_inputs["stop_seqs"],
                 stop_seqs_len=self.share_inputs["stop_seqs_len"],
                 min_tokens=self.share_inputs["min_dec_len"],
@@ -1671,7 +1715,7 @@ class XPUModelRunner(ModelRunnerBase):
 
             if self.speculative_decoding:
                 # base model post process
-                xpu_post_process_specualate(
+                xpu_post_process_speculate(
                     sampler_output,
                     model_output_data,
                     self.share_inputs,
@@ -1679,6 +1723,8 @@ class XPUModelRunner(ModelRunnerBase):
                     skip_save_output,
                     is_naive_mode=(self.speculative_decoding and self.proposer is None),
                     prefill_one_step_stop=self.parallel_config.prefill_one_step_stop,
+                    think_end_id=self.model_config.think_end_id,
+                    splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 )
             else:
                 xpu_post_process_normal(
@@ -1690,7 +1736,7 @@ class XPUModelRunner(ModelRunnerBase):
                     save_each_rank=self.parallel_config.data_parallel_size > 1,
                     async_output_queue=self.async_output_queue,
                     think_end_id=self.model_config.think_end_id,
-                    line_break_id=self.model_config.line_break_id,
+                    splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 )
 
             # 6. Draft model propose

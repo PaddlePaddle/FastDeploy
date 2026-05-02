@@ -47,7 +47,7 @@ def test_speculate_set_value_by_flags_and_idx():
     step_idx = paddle.to_tensor(step_idx, dtype="int64")
 
     if paddle.is_compiled_with_xpu():
-        out_xpu = speculate_set_value_by_flags_and_idx(
+        speculate_set_value_by_flags_and_idx(
             pre_ids_all,
             accept_tokens,
             accept_num,
@@ -57,6 +57,7 @@ def test_speculate_set_value_by_flags_and_idx():
             seq_lens_decoder,
             step_idx,
         )
+        out_xpu = pre_ids_all.numpy()
     else:
         out_xpu = speculate_set_value_by_flags_and_idx(
             pre_ids_all,
@@ -69,7 +70,7 @@ def test_speculate_set_value_by_flags_and_idx():
             seq_lens_decoder,
             step_idx,
         )
-    out_xpu = out_xpu.numpy()
+        out_xpu = out_xpu.numpy()
 
     out_cpu = paddle.to_tensor(np.full((bs, length), -1), dtype="int64")
     for i in range(bs):

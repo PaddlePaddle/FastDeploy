@@ -310,6 +310,7 @@ def test_speculative_sampler_basic(monkeypatch):
             enf_gen_phase_tag=False,
             verify_strategy="topp",
             accept_policy="normal",
+            num_speculative_tokens=1,
         ),
         parallel_config=types.SimpleNamespace(prefill_one_step_stop=False),
     )
@@ -327,7 +328,7 @@ def test_speculative_sampler_basic(monkeypatch):
     m.top_p_normalized_logprobs_flag = True
     m.share_inputs = {
         "seq_lens_this_time": paddle.to_tensor([[1]], dtype="int64"),
-        "accept_num": paddle.to_tensor([1], dtype="int64"),
+        "accept_num": paddle.to_tensor([1], dtype="int32"),
     }
     gathered = sampler.gather_logprobs(sampler.compute_logprobs(logits, m), 0, paddle.to_tensor([1], dtype="int64"))
     assert gathered.logprob_token_ids.shape[1] == 1

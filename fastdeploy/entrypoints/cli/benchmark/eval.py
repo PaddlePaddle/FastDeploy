@@ -20,9 +20,9 @@ import logging
 import subprocess
 import sys
 from functools import partial
+from importlib.metadata import PackageNotFoundError
+from importlib.metadata import version as get_version
 from typing import Union
-
-import pkg_resources
 
 from fastdeploy.entrypoints.cli.benchmark.base import BenchmarkSubcommandBase
 
@@ -298,16 +298,16 @@ class BenchmarkEvalSubcommand(BenchmarkSubcommandBase):
         """构建并执行lm-eval命令"""
         # 检查lm_eval版本是否为0.4.9.1
         try:
-            version = pkg_resources.get_distribution("lm_eval").version
-            if version != "0.4.9.1":
+            lm_eval_version = get_version("lm_eval")
+            if lm_eval_version != "0.4.9.1":
                 print(
-                    f"Warning: lm_eval version {version} is installed, but version 0.4.9.1 is required.\n"
+                    f"Warning: lm_eval version {lm_eval_version} is installed, but version 0.4.9.1 is required.\n"
                     "Please install the correct version with:\n"
                     "pip install lm_eval==0.4.9.1",
                     file=sys.stderr,
                 )
                 sys.exit(1)
-        except pkg_resources.DistributionNotFound:
+        except PackageNotFoundError:
             print(
                 "Error: lm_eval is not installed. Please install version 0.4.9.1 with:\n"
                 "pip install lm_eval==0.4.9.1",

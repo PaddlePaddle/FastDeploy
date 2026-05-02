@@ -60,6 +60,7 @@ class MockModelConfig:
     architectures = ["mock"]
     mm_max_tokens_per_item = None
     think_truncate_prompt_ids = [-1]
+    reasoning_allowed_token_ids = None
 
 
 class MockCacheConfig:
@@ -150,6 +151,7 @@ class TestChunkedMoE(unittest.TestCase):
         model_runner.share_inputs["caches"] = None
         model_runner.routing_replay_manager = None
         model_runner.exist_prefill_flag = False
+        model_runner.enable_cache_manager_v1 = False
 
         if dist.get_rank() == 0:
             model_runner.share_inputs["ids_remove_padding"] = paddle.ones([10])
