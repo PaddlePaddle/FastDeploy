@@ -48,6 +48,14 @@ def get_moe_method(layer=None):
     """
 
     if current_platform.is_cuda():
+        moe_backend = envs.FD_MOE_BACKEND.lower()
+        if moe_backend == "triton":
+            from paddleformers.utils.log import logger
+
+            from .fused_moe_triton_backend import TritonBF16MoEMethod
+
+            logger.info("[get_moe_method] FD_MOE_BACKEND=triton -> TritonBF16MoEMethod")
+            return TritonBF16MoEMethod(None)
         from .fused_moe_cutlass_backend import CutlassMoEMethod
 
         return CutlassMoEMethod(None)
