@@ -32,7 +32,6 @@ The verification approach mirrors FlagTree/python/tutorials/tle/02-moe_align_blo
 import unittest
 
 import numpy as np
-import pytest
 import triton
 import paddle
 
@@ -46,8 +45,6 @@ try:
     _AVAILABLE = paddle.device.is_compiled_with_cuda()
 except Exception:
     _AVAILABLE = False
-
-pytestmark = pytest.mark.skipif(not _AVAILABLE, reason="CUDA or fastdeploy not available")
 
 DEVICE = "gpu"
 
@@ -316,11 +313,15 @@ class TestTritonMOEPreprocess(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# pytest-based correctness tests (ported from test_moe_align_block_size.py)
+# Correctness tests (ported from test_moe_align_block_size.py)
 # ---------------------------------------------------------------------------
 
-class TestTritonMoePreprocessBasic:
+class TestTritonMoePreprocessBasic(unittest.TestCase):
     """Basic / small cases – easy to reason about manually."""
+
+    def setUp(self):
+        if not _AVAILABLE:
+            self.skipTest("CUDA or fastdeploy not available")
 
     def test_docstring_example(self):
         """Reproduce the example from the function docstring."""
@@ -371,8 +372,12 @@ class TestTritonMoePreprocessBasic:
         _verify(topk_ids, block_size=1, num_experts=16, label="block_size_1")
 
 
-class TestTritonMoePreprocessEdgeCases:
+class TestTritonMoePreprocessEdgeCases(unittest.TestCase):
     """Edge / boundary cases."""
+
+    def setUp(self):
+        if not _AVAILABLE:
+            self.skipTest("CUDA or fastdeploy not available")
 
     def test_empty_topk_ids(self):
         """Zero-token input should not crash; num_tokens_post_pad == 0."""
@@ -383,7 +388,7 @@ class TestTritonMoePreprocessEdgeCases:
         print(f"[empty_topk_ids] GOLDEN:        num_tokens_post_pad=0")
         got = int(num_post.item())
         print(f"[empty_topk_ids] CHECK: got={got} want=0  {'PASS' if got == 0 else 'FAIL'}")
-        assert got == 0
+        self.assertEqual(got, 0)
 
     def test_one_expert(self):
         """Single expert: all tokens must end up in expert 0's bucket."""
@@ -403,38 +408,51 @@ class TestTritonMoePreprocessEdgeCases:
         _verify(topk_ids, block_size=16, num_experts=8, label="int64_dtype")
 
 
-class TestTritonMoePreprocessRealistic:
+class TestTritonMoePreprocessRealistic(unittest.TestCase):
     """Larger, more realistic MoE shapes."""
 
-    @pytest.mark.parametrize("num_tokens,num_experts,block_size", [
-        (256,   8,  16),
-        (1024,  16, 16),
-        (4096,  64, 16),
-        (8192,  64, 32),
-        (8192, 128, 64),
-        # (16384, 256, 128),
-    ])
-    def test_uniform_distribution(self, num_tokens, num_experts, block_size):
+    def setUp(self):
+        if not _AVAILABLE:
+            self.skipTest("CUDA or fastdeploy not available")
+
+    def _run_uniform_distribution(self, num_tokens, num_experts, block_size):
         """Uniform random token-to-expert assignment across common MoE shapes."""
         paddle.seed(0)
         topk_ids = paddle.randint(0, num_experts, (num_tokens,), dtype='int64')
         _verify(topk_ids, block_size=block_size, num_experts=num_experts,
                 label=f"uniform_T{num_tokens}_E{num_experts}_B{block_size}")
 
-    @pytest.mark.parametrize("num_tokens,top_k,num_experts,block_size", [
-        (512,  2, 8,  16),
-        (1024, 4, 16, 16),
-        (2048, 8, 64, 16),
-    ])
-    def test_topk_2d(self, num_tokens, top_k, num_experts, block_size):
+    def test_uniform_distribution(self):
+        """Uniform random token-to-expert assignment across common MoE shapes."""
+        for num_tokens, num_experts, block_size in [
+            (256,   8,  16),
+            (1024,  16, 16),
+            (4096,  64, 16),
+            (8192,  64, 32),
+            (8192, 128, 64),
+            (16384, 256, 128),
+        ]:
+            with self.subTest(num_tokens=num_tokens, num_experts=num_experts, block_size=block_size):
+                self._run_uniform_distribution(num_tokens, num_experts, block_size)
+
+    def _run_topk_2d(self, num_tokens, top_k, num_experts, block_size):
         """2-D topk_ids as produced by the router (shape [num_tokens, top_k])."""
         paddle.seed(0)
         topk_ids = paddle.randint(0, num_experts, (num_tokens, top_k), dtype='int64')
         _verify(topk_ids, block_size=block_size, num_experts=num_experts,
                 label=f"topk2d_T{num_tokens}_K{top_k}_E{num_experts}_B{block_size}")
 
-    @pytest.mark.parametrize("alpha", [0.5, 1.2, 2.0])
-    def test_zipf_distribution(self, alpha):
+    def test_topk_2d(self):
+        """2-D topk_ids as produced by the router (shape [num_tokens, top_k])."""
+        for num_tokens, top_k, num_experts, block_size in [
+            (512,  2, 8,  16),
+            (1024, 4, 16, 16),
+            (2048, 8, 64, 16),
+        ]:
+            with self.subTest(num_tokens=num_tokens, top_k=top_k, num_experts=num_experts, block_size=block_size):
+                self._run_topk_2d(num_tokens, top_k, num_experts, block_size)
+
+    def _run_zipf_distribution(self, alpha):
         """Skewed (Zipf) token distribution – simulates real MoE load imbalance."""
         num_tokens, num_experts, block_size = 8192, 64, 16
         ranks = paddle.arange(1, num_experts + 1, dtype='float32')
@@ -444,6 +462,12 @@ class TestTritonMoePreprocessRealistic:
         topk_ids = paddle.multinomial(probs, num_tokens, replacement=True).cast('int64')
         _verify(topk_ids, block_size=block_size, num_experts=num_experts,
                 label=f"zipf_alpha{alpha}")
+
+    def test_zipf_distribution(self):
+        """Skewed (Zipf) token distribution – simulates real MoE load imbalance."""
+        for alpha in [0.5, 1.2, 2.0]:
+            with self.subTest(alpha=alpha):
+                self._run_zipf_distribution(alpha)
 
     def test_deterministic_with_fixed_seed(self):
         """Same seed must produce the same outputs (kernel is deterministic)."""
@@ -509,16 +533,15 @@ if __name__ == "__main__":
         real = TestTritonMoePreprocessRealistic()
         for num_tokens, num_experts, block_size in [
             (256, 8, 16), (1024, 16, 16), (4096, 64, 16),
-            (8192, 64, 32), (8192, 128, 64), 
-            (16384, 256, 64),
+            (8192, 64, 32), (8192, 128, 64), (16384, 256, 128),
         ]:
-            real.test_uniform_distribution(num_tokens, num_experts, block_size)
+            real._run_uniform_distribution(num_tokens, num_experts, block_size)
         for num_tokens, top_k, num_experts, block_size in [
             (512, 2, 8, 16), (1024, 4, 16, 16), (2048, 8, 64, 16),
         ]:
-            real.test_topk_2d(num_tokens, top_k, num_experts, block_size)
+            real._run_topk_2d(num_tokens, top_k, num_experts, block_size)
         for alpha in [0.5, 1.2, 2.0]:
-            real.test_zipf_distribution(alpha)
+            real._run_zipf_distribution(alpha)
         real.test_deterministic_with_fixed_seed()
 
         print("\n*** All direct-run tests passed ***")
