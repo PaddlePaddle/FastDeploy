@@ -95,13 +95,22 @@ std::vector<std::vector<int64_t>> tritonmoe_preprocessInferShape(
     const std::vector<int64_t>& topk_ids,
     int64_t num_experts,
     int64_t GEMM_BLOCK_SIZE_M) {
-  int topk_ids_numel = topk_ids[0] * topk_ids[1];
-  int max_num_tokens_padded =
-      topk_ids_numel + num_experts * (GEMM_BLOCK_SIZE_M - 1);
+    int topk_ids_numel = 1;
+    for (int64_t dim : topk_ids) {
+        topk_ids_numel *= static_cast<int>(dim);
+    }
+  int max_num_tokens_padded;
+  if (topk_ids_numel < num_experts + 1) {
+    max_num_tokens_padded = topk_ids_numel * GEMM_BLOCK_SIZE_M;
+  } else {
+    max_num_tokens_padded =
+        topk_ids_numel + (num_experts + 1) * (GEMM_BLOCK_SIZE_M - 1);
+  }
 
   std::vector<int64_t> sorted_ids = {max_num_tokens_padded};
 
-  int max_num_m_blocks = max_num_tokens_padded / GEMM_BLOCK_SIZE_M;
+  int max_num_m_blocks =
+    (max_num_tokens_padded + GEMM_BLOCK_SIZE_M - 1) / GEMM_BLOCK_SIZE_M;
   std::vector<int64_t> experts_ids = {max_num_m_blocks};
   std::vector<int64_t> num_tokens_post_pad = {1};
 
@@ -141,26 +150,35 @@ std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(
     const paddle::Tensor& topk_ids,
     int64_t num_experts,
     int64_t GEMM_BLOCK_SIZE_M) {
-  // num_experts must be a power of 2 and <= 128
-  bool is_pow2 = (num_experts > 0) && ((num_experts & (num_experts - 1)) == 0);
-  PADDLE_ENFORCE_EQ(
-      is_pow2 && num_experts <= 128,
-      true,
-      phi::errors::InvalidArgument(
-          "tritonmoe_preprocess: num_experts must be a power of 2 and <= 128, "
-          "but got %d.",
-          num_experts));
+//   // num_experts must be a power of 2 and <= 128
+//   bool is_pow2 = (num_experts > 0) && ((num_experts & (num_experts - 1)) == 0);
+//   PADDLE_ENFORCE_EQ(
+//       is_pow2 && num_experts <= 128,
+//       true,
+//       phi::errors::InvalidArgument(
+//           "tritonmoe_preprocess: num_experts must be a power of 2 and <= 128, "
+//           "but got %d.",
+//           num_experts));
 
-  int topk_ids_numel = topk_ids.shape()[0] * topk_ids.shape()[1];
-  int max_num_tokens_padded =
-      topk_ids_numel + num_experts * (GEMM_BLOCK_SIZE_M - 1);
+  int topk_ids_numel = static_cast<int>(topk_ids.numel());
+
+  // 修改1: 补充小 token 保护分支，系数改为 num_experts + 1
+  int max_num_tokens_padded;
+  if (topk_ids_numel < num_experts + 1) {
+    max_num_tokens_padded = topk_ids_numel * GEMM_BLOCK_SIZE_M;
+  } else {
+    max_num_tokens_padded =
+        topk_ids_numel + (num_experts + 1) * (GEMM_BLOCK_SIZE_M - 1);
+  }
 
   auto sorted_ids = paddle::full({max_num_tokens_padded},
                                  topk_ids_numel,
                                  paddle::DataType::INT32,
                                  topk_ids.place());
 
-  int max_num_m_blocks = max_num_tokens_padded / GEMM_BLOCK_SIZE_M;
+  // 修改2: 截断整除改为向上取整
+  int max_num_m_blocks =
+      (max_num_tokens_padded + GEMM_BLOCK_SIZE_M - 1) / GEMM_BLOCK_SIZE_M;
 
   auto experts_ids = paddle::empty(
       {max_num_m_blocks}, paddle::DataType::INT32, topk_ids.place());
@@ -168,14 +186,14 @@ std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(
   auto num_tokens_post_pad =
       paddle::empty({1}, paddle::DataType::INT32, topk_ids.place());
 
-  auto cumsum_buffer = paddle::empty(
-      {num_experts + 1}, paddle::DataType::INT32, topk_ids.place());
+  // 修改3: cumsum_buffer 大小改为 num_experts + 2
+  auto cumsum_buffer = paddle::zeros(
+      {num_experts + 2}, paddle::DataType::INT32, topk_ids.place());
 
-//   auto stream = topk_ids.stream();
   using scalar_t = int64_t;
   moe_align_block_size<scalar_t>(
     topk_ids,
-    num_experts,
+    num_experts + 1,  // 修改4: 传 num_experts + 1，覆盖 EP 过滤 expert 的桶
     GEMM_BLOCK_SIZE_M,
     sorted_ids,
     experts_ids,
@@ -185,6 +203,55 @@ std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(
 
   return {sorted_ids, experts_ids, num_tokens_post_pad};
 }
+
+// std::vector<paddle::Tensor> tritonmoe_preprocess_kernel(
+//     const paddle::Tensor& topk_ids,
+//     int64_t num_experts,
+//     int64_t GEMM_BLOCK_SIZE_M) {
+//   // num_experts must be a power of 2 and <= 128
+//   bool is_pow2 = (num_experts > 0) && ((num_experts & (num_experts - 1)) == 0);
+//   PADDLE_ENFORCE_EQ(
+//       is_pow2 && num_experts <= 128,
+//       true,
+//       phi::errors::InvalidArgument(
+//           "tritonmoe_preprocess: num_experts must be a power of 2 and <= 128, "
+//           "but got %d.",
+//           num_experts));
+
+//   int topk_ids_numel = topk_ids.shape()[0] * topk_ids.shape()[1];
+//   int max_num_tokens_padded =
+//       topk_ids_numel + num_experts * (GEMM_BLOCK_SIZE_M - 1);
+
+//   auto sorted_ids = paddle::full({max_num_tokens_padded},
+//                                  topk_ids_numel,
+//                                  paddle::DataType::INT32,
+//                                  topk_ids.place());
+
+//   int max_num_m_blocks = max_num_tokens_padded / GEMM_BLOCK_SIZE_M;
+
+//   auto experts_ids = paddle::empty(
+//       {max_num_m_blocks}, paddle::DataType::INT32, topk_ids.place());
+
+//   auto num_tokens_post_pad =
+//       paddle::empty({1}, paddle::DataType::INT32, topk_ids.place());
+
+//   auto cumsum_buffer = paddle::empty(
+//       {num_experts + 1}, paddle::DataType::INT32, topk_ids.place());
+
+// //   auto stream = topk_ids.stream();
+//   using scalar_t = int64_t;
+//   moe_align_block_size<scalar_t>(
+//     topk_ids,
+//     num_experts,
+//     GEMM_BLOCK_SIZE_M,
+//     sorted_ids,
+//     experts_ids,
+//     num_tokens_post_pad,
+//     cumsum_buffer,
+//     true);
+
+//   return {sorted_ids, experts_ids, num_tokens_post_pad};
+// }
 
 PD_BUILD_STATIC_OP(tritonmoe_preprocess)
     .Inputs({"topk_ids"})

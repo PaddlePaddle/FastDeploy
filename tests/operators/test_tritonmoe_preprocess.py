@@ -12,13 +12,236 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""
+Correctness tests for tritonmoe_preprocess
+==========================================
+
+Tests the fastdeploy wrapper:
+    tritonmoe_preprocess(topk_ids, num_experts, block_size)
+      -> (sorted_token_ids, expert_ids, num_tokens_post_padded)
+
+The verification approach mirrors FlagTree/python/tutorials/tle/02-moe_align_block_size.py:
+  - Use paddle.bincount as an independent reference (no second kernel to cross-compare).
+  - Validate three dimensions:
+      1. num_tokens_post_padded  – total token count after per-expert block alignment
+      2. expert_ids              – each block is mapped to the correct expert
+      3. sorted_token_ids        – every token is routed to the right expert's slot,
+                                   and padding slots carry sentinel values >= num_tokens
+"""
+
 import unittest
 
 import numpy as np
+import pytest
+import triton
 import paddle
 
-from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
+# ---------------------------------------------------------------------------
+# Import guard – skip entire module when CUDA is unavailable or
+# fastdeploy is not installed (e.g. CPU-only CI environments).
+# ---------------------------------------------------------------------------
+try:
+    from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess
 
+    _AVAILABLE = paddle.device.is_compiled_with_cuda()
+except Exception:
+    _AVAILABLE = False
+
+pytestmark = pytest.mark.skipif(not _AVAILABLE, reason="CUDA or fastdeploy not available")
+
+DEVICE = "gpu"
+
+# 仅对小规模 case 打印详细 tensor，超过此阈值只打印统计摘要
+_PRINT_TENSOR_NUMEL_LIMIT = 64
+
+
+def _fmt_tensor(t: paddle.Tensor, name: str) -> str:
+    """将 tensor 格式化为可读字符串：小 tensor 打印全部元素，大 tensor 打印统计摘要。"""
+    t_cpu = t.cpu()
+    if t_cpu.numel() <= _PRINT_TENSOR_NUMEL_LIMIT:
+        return f"{name}{list(t_cpu.shape)} = {t_cpu.tolist()}"
+    return (
+        f"{name}{list(t_cpu.shape)} | "
+        f"min={int(t_cpu.min())} max={int(t_cpu.max())} "
+        f"mean={float(t_cpu.cast('float32').mean()):.2f} numel={t_cpu.numel()}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reference helpers (CPU, independent of the kernel under test)
+# ---------------------------------------------------------------------------
+
+def _ref_counts_and_cumsum(topk_ids_flat: paddle.Tensor, num_experts: int, block_size: int):
+    """
+    Compute per-expert token counts and the cumulative sum of block-aligned counts.
+
+    Returns:
+        counts  : int32 tensor of shape (num_experts,)
+        cumsum  : int32 tensor of shape (num_experts,)  – cumulative aligned counts
+    """
+    # Only consider valid expert ids [0, num_experts); ignore -1 (EP filtered)
+    valid_mask = (topk_ids_flat >= 0) & (topk_ids_flat < num_experts)
+    valid_ids = topk_ids_flat[valid_mask]
+    counts = paddle.bincount(valid_ids.cast('int64'), minlength=num_experts).cast('int32')
+    aligned = ((counts + block_size - 1) // block_size) * block_size
+    cumsum = paddle.cumsum(aligned, axis=0).cast('int32')
+    return counts, cumsum
+
+
+# ---------------------------------------------------------------------------
+# Core verification logic (shared across all test cases)
+# ---------------------------------------------------------------------------
+
+def _verify(topk_ids: paddle.Tensor, block_size: int, num_experts: int, label: str = ""):
+    """
+    Run tritonmoe_preprocess and verify all three output tensors.
+    topk_ids may be 1-D or 2-D; dtype int32 or int64.
+    Prints inputs, golden references, kernel outputs, and per-check comparison.
+    """
+    tag = f"[{label}] " if label else ""
+    sep = "=" * 70
+
+    # ------------------------------------------------------------------ #
+    # Print inputs                                                        #
+    # ------------------------------------------------------------------ #
+    topk_ids = topk_ids.cuda()
+    print(f"\n{sep}")
+    print(f"{tag}INPUT")
+    print(f"  shape        = {list(topk_ids.shape)}  dtype={topk_ids.dtype}")
+    print(f"  block_size   = {block_size}")
+    print(f"  num_experts  = {num_experts}")
+    print(f"  {_fmt_tensor(topk_ids.flatten(), 'topk_ids_flat')}")
+
+    # ------------------------------------------------------------------ #
+    # Run kernel                                                          #
+    # ------------------------------------------------------------------ #
+    sorted_token_ids, expert_ids, num_tokens_post_pad = tritonmoe_preprocess(
+        topk_ids, num_experts, block_size
+    )
+    print(f"  num_tokens_post_pad shape={num_tokens_post_pad.shape}, dtype={num_tokens_post_pad.dtype}")
+
+    # ------------------------------------------------------------------ #
+    # Print raw kernel outputs                                            #
+    # ------------------------------------------------------------------ #
+    print(f"\n{tag}KERNEL OUTPUT")
+    print(f"  num_tokens_post_pad = {int(num_tokens_post_pad.item())}")
+    print(f"  {_fmt_tensor(expert_ids, 'expert_ids')}")
+    print(f"  {_fmt_tensor(sorted_token_ids, 'sorted_token_ids')}")
+
+    # ------------------------------------------------------------------ #
+    # Build golden references                                             #
+    # ------------------------------------------------------------------ #
+    # 固定在 CPU 上做所有 golden 计算，避免与 .cpu() 的 kernel 输出发生 device mismatch
+    topk_ids_flat = topk_ids.flatten().cast('int64').cpu()
+    num_tokens = topk_ids_flat.numel()
+
+    counts, cumsum = _ref_counts_and_cumsum(topk_ids_flat, num_experts, block_size)
+    aligned = ((counts + block_size - 1) // block_size) * block_size
+    valid_length = int(cumsum[-1].item())
+    num_blocks = valid_length // block_size
+
+    expected_num_tokens_post_pad = cumsum[-1:]
+    expected_expert_ids = paddle.repeat_interleave(
+        paddle.arange(num_experts, dtype='int32'),   # CPU
+        (aligned // block_size).cast('int32'),
+    )
+
+    print(f"\n{tag}GOLDEN REFERENCE")
+    print(f"  counts (per expert)  = {counts.tolist()}")
+    print(f"  aligned (per expert) = {aligned.tolist()}")
+    print(f"  cumsum (per expert)  = {cumsum.tolist()}")
+    print(f"  expected num_tokens_post_pad = {int(expected_num_tokens_post_pad.item())}")
+    print(f"  {_fmt_tensor(expected_expert_ids, 'expected_expert_ids')}")
+
+    # ------------------------------------------------------------------ #
+    # Check 1: num_tokens_post_padded equals cumsum[-1]                  #
+    # ------------------------------------------------------------------ #
+    got_ntp  = int(num_tokens_post_pad.item())
+    want_ntp = int(expected_num_tokens_post_pad.item())
+    match1 = (got_ntp == want_ntp)
+    print(f"\n{tag}CHECK 1 – num_tokens_post_pad")
+    print(f"  golden = {want_ntp}  |  kernel = {got_ntp}  |  {'PASS' if match1 else 'FAIL'}")
+    np.testing.assert_array_equal(
+        num_tokens_post_pad.cpu().numpy(),
+        cumsum[-1:].cpu().numpy(),
+    )
+
+    # ------------------------------------------------------------------ #
+    # Check 2: expert_ids – each block maps to the expected expert       #
+    # ------------------------------------------------------------------ #
+    got_eids  = expert_ids[:num_blocks].cpu()
+    want_eids = expected_expert_ids.cpu()
+    match2 = paddle.equal_all(got_eids, want_eids).item()
+    print(f"\n{tag}CHECK 2 – expert_ids  (first {num_blocks} blocks)")
+    print(f"  golden = {_fmt_tensor(want_eids, '')}")
+    print(f"  kernel = {_fmt_tensor(got_eids,  '')}")
+    print(f"  {'PASS' if match2 else 'FAIL'}")
+    np.testing.assert_array_equal(
+        got_eids.numpy(),
+        want_eids.numpy(),
+    )
+
+    # ------------------------------------------------------------------ #
+    # Check 3: sorted_token_ids – routing correctness per expert         #
+    # ------------------------------------------------------------------ #
+    print(f"\n{tag}CHECK 3 – sorted_token_ids (per-expert routing)")
+    start = 0
+    for expert_id in range(num_experts):
+        end = int(cumsum[expert_id].item())
+        tokens = sorted_token_ids[start:end].cpu()
+        valid_tokens = tokens[tokens < num_tokens]
+        padding_tokens = tokens[tokens >= num_tokens]
+
+        want_count = int(counts[expert_id].item())
+        got_count  = valid_tokens.numel()
+        count_ok   = (got_count == want_count)
+
+        if counts[expert_id] > 0 or not count_ok:
+            # 反查 topk_ids 验证路由是否正确
+            if counts[expert_id] > 0:
+                routed_experts = topk_ids_flat[valid_tokens.cast('int64')].tolist()
+                expected_route = [expert_id] * want_count
+                route_ok = (routed_experts == expected_route)
+            else:
+                route_ok = True
+                routed_experts = []
+                expected_route = []
+
+            print(f"  expert {expert_id:>3d} | slot [{start:>6d}, {end:>6d})"
+                  f" | want_count={want_count:>4d} got_count={got_count:>4d} {'OK' if count_ok else 'FAIL'}"
+                  f" | routing {'OK' if route_ok else 'FAIL'}")
+            if not count_ok or not route_ok:
+                print(f"    valid_tokens    = {valid_tokens.tolist()}")
+                print(f"    routed_experts  = {routed_experts}")
+                print(f"    expected_route  = {expected_route}")
+                print(f"    padding_tokens  = {padding_tokens.tolist()}")
+
+        assert count_ok, (
+            f"expert {expert_id}: expected {want_count} valid tokens, got {got_count}"
+        )
+        if counts[expert_id] > 0:
+            np.testing.assert_array_equal(
+                topk_ids_flat[valid_tokens.cast('int64')].numpy(),
+                paddle.full_like(valid_tokens, expert_id).numpy(),
+            )
+        start = end
+
+    # padding 区域哨兵检查
+    if valid_length < sorted_token_ids.numel():
+        padding_region = sorted_token_ids[valid_length:].cpu()
+        sentinel_ok = paddle.all(padding_region >= num_tokens).item()
+        print(f"  padding sentinel check [valid_length={valid_length}..):"
+              f" {'PASS' if sentinel_ok else 'FAIL'}"
+              f" (numel={padding_region.numel()}, all>={num_tokens})")
+        assert sentinel_ok, "padding slots beyond valid_length contain non-sentinel values"
+
+    print(f"\n{tag}ALL CHECKS PASSED")
+    print(sep)
+
+
+# ---------------------------------------------------------------------------
+# Original unittest-based tests (kept for backward compatibility)
+# ---------------------------------------------------------------------------
 
 class TestTritonMOEPreprocess(unittest.TestCase):
     def setUp(self):
@@ -50,38 +273,14 @@ class TestTritonMOEPreprocess(unittest.TestCase):
         """Check expected values for the fixed example"""
         expected_sorted_ids = np.array(
             [
-                8,
-                12,
-                16,
-                16,
-                4,
-                9,
-                15,
-                16,
-                5,
-                10,
-                14,
-                16,
-                6,
-                11,
-                13,
-                16,
-                3,
-                7,
-                16,
-                16,
-                2,
-                16,
-                16,
-                16,
-                1,
-                16,
-                16,
-                16,
-                0,
-                16,
-                16,
-                16,
+                8, 12, 16, 16,
+                4,  9, 15, 16,
+                5, 10, 14, 16,
+                6, 11, 13, 16,
+                3,  7, 16, 16,
+                2, 16, 16, 16,
+                1, 16, 16, 16,
+                0, 16, 16, 16,
             ],
             dtype=np.int32,
         )
@@ -116,5 +315,210 @@ class TestTritonMOEPreprocess(unittest.TestCase):
                     self._run_op(topk_ids_np, num_experts, GEMM_BLOCK_SIZE_M)
 
 
+# ---------------------------------------------------------------------------
+# pytest-based correctness tests (ported from test_moe_align_block_size.py)
+# ---------------------------------------------------------------------------
+
+class TestTritonMoePreprocessBasic:
+    """Basic / small cases – easy to reason about manually."""
+
+    def test_docstring_example(self):
+        """Reproduce the example from the function docstring."""
+        topk_ids = paddle.to_tensor([[2, 3, 4], [1, 2, 4], [1, 3, 4], [1, 2, 3]], dtype='int64')
+        _verify(topk_ids, block_size=4, num_experts=5, label="docstring_example")
+
+    def test_single_token_single_expert(self):
+        """Minimal input: one token assigned to one expert."""
+        topk_ids = paddle.to_tensor([[0]], dtype='int64')
+        _verify(topk_ids, block_size=16, num_experts=8, label="single_token_single_expert")
+
+    def test_all_tokens_same_expert(self):
+        """All tokens go to expert 0 – only one expert's slot is used."""
+        topk_ids = paddle.zeros((64, 1), dtype='int64')
+        _verify(topk_ids, block_size=16, num_experts=8, label="all_tokens_same_expert")
+
+    def test_uniform_1d(self):
+        """1-D topk_ids (top_k=1 squeezed) with uniform distribution."""
+        paddle.seed(42)
+        topk_ids = paddle.randint(0, 8, (128,), dtype='int64')
+        _verify(topk_ids, block_size=16, num_experts=8, label="uniform_1d")
+
+    def test_topk_equals_num_experts(self):
+        """Every token selects all experts (top_k == num_experts)."""
+        num_experts = 4
+        topk_ids = paddle.arange(num_experts, dtype='int64').unsqueeze(0).expand((8, num_experts))
+        _verify(topk_ids, block_size=4, num_experts=num_experts, label="topk_equals_num_experts")
+
+    def test_num_tokens_less_than_num_experts(self):
+        """Fewer tokens than experts – exercises the small-input branch."""
+        topk_ids = paddle.to_tensor([[0], [3]], dtype='int64')
+        _verify(topk_ids, block_size=16, num_experts=64, label="num_tokens_less_than_num_experts")
+
+    def test_exact_block_boundary(self):
+        """Token count per expert is exactly block_size – no padding needed."""
+        block_size = 16
+        num_experts = 4
+        topk_ids = paddle.concat([
+            paddle.full((block_size,), e, dtype='int64') for e in range(num_experts)
+        ])
+        _verify(topk_ids, block_size=block_size, num_experts=num_experts,
+                label="exact_block_boundary")
+
+    def test_block_size_1(self):
+        """block_size=1 means no padding is ever added."""
+        paddle.seed(0)
+        topk_ids = paddle.randint(0, 16, (64,), dtype='int64')
+        _verify(topk_ids, block_size=1, num_experts=16, label="block_size_1")
+
+
+class TestTritonMoePreprocessEdgeCases:
+    """Edge / boundary cases."""
+
+    def test_empty_topk_ids(self):
+        """Zero-token input should not crash; num_tokens_post_pad == 0."""
+        topk_ids = paddle.empty((0,), dtype='int64').cuda()
+        print("\n[empty_topk_ids] INPUT: shape=[], block_size=16, num_experts=8")
+        sorted_ids, expert_ids_out, num_post = tritonmoe_preprocess(topk_ids, 8, 16)
+        print(f"[empty_topk_ids] KERNEL OUTPUT: num_tokens_post_pad={int(num_post.item())}")
+        print(f"[empty_topk_ids] GOLDEN:        num_tokens_post_pad=0")
+        got = int(num_post.item())
+        print(f"[empty_topk_ids] CHECK: got={got} want=0  {'PASS' if got == 0 else 'FAIL'}")
+        assert got == 0
+
+    def test_one_expert(self):
+        """Single expert: all tokens must end up in expert 0's bucket."""
+        paddle.seed(1)
+        topk_ids = paddle.zeros((32,), dtype='int64')
+        _verify(topk_ids, block_size=8, num_experts=1, label="one_expert")
+
+    def test_large_block_size(self):
+        """block_size larger than total tokens."""
+        topk_ids = paddle.randint(0, 4, (8,), dtype='int64')
+        _verify(topk_ids, block_size=128, num_experts=4, label="large_block_size")
+
+    def test_int64_dtype(self):
+        """topk_ids in int64 – the kernel should handle dtype conversion."""
+        paddle.seed(7)
+        topk_ids = paddle.randint(0, 8, (64, 2), dtype='int64')
+        _verify(topk_ids, block_size=16, num_experts=8, label="int64_dtype")
+
+
+class TestTritonMoePreprocessRealistic:
+    """Larger, more realistic MoE shapes."""
+
+    @pytest.mark.parametrize("num_tokens,num_experts,block_size", [
+        (256,   8,  16),
+        (1024,  16, 16),
+        (4096,  64, 16),
+        (8192,  64, 32),
+        (8192, 128, 64),
+        # (16384, 256, 128),
+    ])
+    def test_uniform_distribution(self, num_tokens, num_experts, block_size):
+        """Uniform random token-to-expert assignment across common MoE shapes."""
+        paddle.seed(0)
+        topk_ids = paddle.randint(0, num_experts, (num_tokens,), dtype='int64')
+        _verify(topk_ids, block_size=block_size, num_experts=num_experts,
+                label=f"uniform_T{num_tokens}_E{num_experts}_B{block_size}")
+
+    @pytest.mark.parametrize("num_tokens,top_k,num_experts,block_size", [
+        (512,  2, 8,  16),
+        (1024, 4, 16, 16),
+        (2048, 8, 64, 16),
+    ])
+    def test_topk_2d(self, num_tokens, top_k, num_experts, block_size):
+        """2-D topk_ids as produced by the router (shape [num_tokens, top_k])."""
+        paddle.seed(0)
+        topk_ids = paddle.randint(0, num_experts, (num_tokens, top_k), dtype='int64')
+        _verify(topk_ids, block_size=block_size, num_experts=num_experts,
+                label=f"topk2d_T{num_tokens}_K{top_k}_E{num_experts}_B{block_size}")
+
+    @pytest.mark.parametrize("alpha", [0.5, 1.2, 2.0])
+    def test_zipf_distribution(self, alpha):
+        """Skewed (Zipf) token distribution – simulates real MoE load imbalance."""
+        num_tokens, num_experts, block_size = 8192, 64, 16
+        ranks = paddle.arange(1, num_experts + 1, dtype='float32')
+        probs = (1.0 / ranks ** alpha)
+        probs = probs / probs.sum()
+        paddle.seed(0)
+        topk_ids = paddle.multinomial(probs, num_tokens, replacement=True).cast('int64')
+        _verify(topk_ids, block_size=block_size, num_experts=num_experts,
+                label=f"zipf_alpha{alpha}")
+
+    def test_deterministic_with_fixed_seed(self):
+        """Same seed must produce the same outputs (kernel is deterministic)."""
+        num_tokens, num_experts, block_size = 4096, 64, 16
+        print(f"\n[deterministic] num_tokens={num_tokens} num_experts={num_experts} block_size={block_size}")
+
+        paddle.seed(99)
+        topk_ids = paddle.randint(0, num_experts, (num_tokens,), dtype='int64').cuda()
+        s1, e1, n1 = tritonmoe_preprocess(topk_ids, num_experts, block_size)
+
+        paddle.seed(99)
+        topk_ids2 = paddle.randint(0, num_experts, (num_tokens,), dtype='int64').cuda()
+        s2, e2, n2 = tritonmoe_preprocess(topk_ids2, num_experts, block_size)
+
+        valid = int(n1.item())
+        n_match = (int(n1.item()) == int(n2.item()))
+        e_match = paddle.equal_all(e1[: valid // block_size], e2[: valid // block_size]).item()
+        s_match = paddle.equal_all(
+            paddle.sort(s1[:valid]), paddle.sort(s2[:valid])
+        ).item()
+
+        print(f"[deterministic] run1: num_tokens_post_pad={int(n1.item())}"
+              f"  expert_ids[:5]={e1[:5].tolist()}"
+              f"  sorted_ids[:5]={s1[:5].tolist()}")
+        print(f"[deterministic] run2: num_tokens_post_pad={int(n2.item())}"
+              f"  expert_ids[:5]={e2[:5].tolist()}"
+              f"  sorted_ids[:5]={s2[:5].tolist()}")
+        print(f"[deterministic] CHECK num_tokens_post_pad : {'PASS' if n_match else 'FAIL'}")
+        print(f"[deterministic] CHECK expert_ids          : {'PASS' if e_match else 'FAIL'}")
+        print(f"[deterministic] CHECK sorted_token_ids    : {'PASS' if s_match else 'FAIL'}")
+
+        np.testing.assert_array_equal(n1.numpy(), n2.numpy())
+        np.testing.assert_array_equal(e1[: valid // block_size].numpy(), e2[: valid // block_size].numpy())
+        np.testing.assert_array_equal(
+            paddle.sort(s1[:valid]).numpy(), paddle.sort(s2[:valid]).numpy()
+        )
+
+
+# ---------------------------------------------------------------------------
+# Direct-run entry point  (python test_tritonmoe_preprocess.py)
+# ---------------------------------------------------------------------------
+
 if __name__ == "__main__":
-    unittest.main()
+    if not _AVAILABLE:
+        print("SKIP: CUDA or fastdeploy not available.")
+    else:
+        basic = TestTritonMoePreprocessBasic()
+        basic.test_docstring_example()
+        basic.test_single_token_single_expert()
+        basic.test_all_tokens_same_expert()
+        basic.test_uniform_1d()
+        basic.test_topk_equals_num_experts()
+        basic.test_num_tokens_less_than_num_experts()
+        basic.test_exact_block_boundary()
+        basic.test_block_size_1()
+
+        edge = TestTritonMoePreprocessEdgeCases()
+        edge.test_empty_topk_ids()
+        edge.test_one_expert()
+        edge.test_large_block_size()
+        edge.test_int64_dtype()
+
+        real = TestTritonMoePreprocessRealistic()
+        for num_tokens, num_experts, block_size in [
+            (256, 8, 16), (1024, 16, 16), (4096, 64, 16),
+            (8192, 64, 32), (8192, 128, 64), 
+            (16384, 256, 64),
+        ]:
+            real.test_uniform_distribution(num_tokens, num_experts, block_size)
+        for num_tokens, top_k, num_experts, block_size in [
+            (512, 2, 8, 16), (1024, 4, 16, 16), (2048, 8, 64, 16),
+        ]:
+            real.test_topk_2d(num_tokens, top_k, num_experts, block_size)
+        for alpha in [0.5, 1.2, 2.0]:
+            real.test_zipf_distribution(alpha)
+        real.test_deterministic_with_fixed_seed()
+
+        print("\n*** All direct-run tests passed ***")

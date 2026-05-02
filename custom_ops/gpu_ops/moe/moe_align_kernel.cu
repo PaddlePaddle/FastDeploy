@@ -406,7 +406,7 @@ __global__ void moe_align_block_size_small_batch_expert_kernel(
   }
 
   for (size_t i = tid; i < numel; i += stride) {
-    int32_t expert_id = topk_ids[i];
+    int32_t expert_id = topk_ids[i] + 1;
     ++tokens_cnts[(tid + 1) * num_experts + expert_id];
   }
 
@@ -433,12 +433,12 @@ __global__ void moe_align_block_size_small_batch_expert_kernel(
 
   if (tid < num_experts) {
     for (int i = cumsum[tid]; i < cumsum[tid + 1]; i += block_size) {
-      expert_ids[i / block_size] = tid;
+      expert_ids[i / block_size] = tid - 1;
     }
   }
 
   for (size_t i = tid; i < numel; i += stride) {
-    int32_t expert_id = topk_ids[i];
+    int32_t expert_id = topk_ids[i] + 1;
     int32_t rank_post_pad = tokens_cnts[tid * num_experts + expert_id] + cumsum[expert_id];
     sorted_token_ids[rank_post_pad] = i;
     ++tokens_cnts[tid * num_experts + expert_id];
