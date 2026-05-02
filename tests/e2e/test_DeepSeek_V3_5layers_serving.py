@@ -30,8 +30,9 @@ from utils.serving_utils import (
     is_port_open,
 )
 
-os.environ["RUN_DUMMY_FOR_PROFILE"] = "1"
-os.environ["FD_ATTENTION_BACKEND"] = os.getenv("FD_ATTENTION_BACKEND", "MLA_ATTN")
+os.environ["FD_ATTENTION_BACKEND"] = os.getenv(
+    "FD_ATTENTION_BACKEND", "MLA_ATTN"
+)  # T53: head-wise path uses same backend
 os.environ["FLAGS_flash_attn_version"] = os.getenv("FLAGS_flash_attn_version", "3")
 os.getenv("FLAGS_flash_attn_version", 3)
 
