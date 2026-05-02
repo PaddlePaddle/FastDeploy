@@ -35,9 +35,10 @@ from fastdeploy.utils import ceil_div, register_custom_python_op
 from ..quantization.quant_base import QuantMethodBase
 
 try:
+    import triton.language as tl
     from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
 
-    from .triton_moe_kernels import fused_moe_kernel_paddle
+    from .triton_moe_kernels import fused_moe_kernel_bf16, fused_moe_kernel_paddle
 except ImportError:
     pass
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
@@ -1885,3 +1886,240 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             fc1_latent_proj,
             fc2_latent_proj,
         )
+
+
+class TritonBF16MoEMethod(QuantMethodBase):
+    """
+    Use Triton Group Gemm (BF16 unquantized) to compute Fused MoE.
+
+    Activated via: export FD_MOE_BACKEND=triton
+    Weight layout (CUDA path): [E, K, 2N] for up_gate_proj, [E, N, K] for down_proj.
+    This matches UnquantizedFusedMoEMethod.create_weights layout on CUDA.
+    """
+
+    # Class-level flag: print the "Triton BF16 MoE activated" message only once.
+    _logged = False
+
+    def __init__(self, quant_config=None):
+        self.quant_config = quant_config
+        self.added_weight_attrs = ["up_gate_proj_weight", "down_proj_weight"]
+        if not TritonBF16MoEMethod._logged:
+            import logging
+
+            logging.getLogger(__name__).warning(
+                "[TritonBF16MoEMethod] Triton BF16 MoE backend is ACTIVE "
+                "(FD_MOE_BACKEND=triton). Using fused_moe_kernel_paddle for BF16."
+            )
+            TritonBF16MoEMethod._logged = True
+
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False) -> None:
+        pass
+
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
+        """
+        Reuse UnquantizedFusedMoEMethod weight creation logic.
+        Weight shapes on CUDA (non-torch format):
+          up_gate_proj_weight: [E, hidden_size, moe_intermediate_size * 2]  (K-major)
+          down_proj_weight:    [E, moe_intermediate_size, hidden_size]       (K-major)
+        The Triton kernel reads B as [E, K, N] which maps directly to these shapes.
+        """
+        from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import UnquantizedFusedMoEMethod
+
+        UnquantizedFusedMoEMethod.create_weights(self, layer, **extra_weight_attrs)
+
+    def process_weights_after_loading(self, layer: nn.Layer):
+        from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import UnquantizedFusedMoEMethod
+
+        UnquantizedFusedMoEMethod.process_weights_after_loading(self, layer)
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """Stack individual expert weights into the stacked parameter."""
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
+        layer.up_gate_proj_weight.set_value(paddle.stack(up_gate_proj_weights, axis=0))
+        layer.down_proj_weight.set_value(paddle.stack(down_proj_weights, axis=0))
+
+    def _get_default_config(self, M: int, N: int, K: int) -> dict:
+        """
+        Heuristic tile config for BF16 MoE, mirroring vLLM's get_default_config logic.
+        M: number of token-expert pairs (post-padded) / BLOCK_SIZE_M
+        N: output dimension of the GEMM
+        K: input dimension of the GEMM
+        """
+        if M <= 32:
+            block_m, block_n, block_k = 16, 64, 64
+        elif M <= 512:
+            block_m, block_n, block_k = 32, 128, 64
+        else:
+            block_m, block_n, block_k = 128, 128, 64
+        return {
+            "BLOCK_SIZE_M": block_m,
+            "BLOCK_SIZE_N": block_n,
+            "BLOCK_SIZE_K": block_k,
+            "GROUP_SIZE_M": 8,
+        }
+
+    def apply(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+        shared_experts: nn.Layer = None,
+    ) -> paddle.Tensor:
+        """
+        BF16 Triton Fused MoE forward.
+
+        Pipeline:
+          1. Gate + topk routing
+          2. tritonmoe_preprocess -> sorted_token_ids, expert_ids, num_tokens_post_padded
+          3. fused_moe_kernel_paddle GEMM1: [tokens*topk, K] x [E, K, 2N] -> [tokens*topk, 2N]
+          4. SwiGLU activation
+          5. fused_moe_kernel_paddle GEMM2: [tokens*topk, N] x [E, N, K] -> [tokens*topk, K]
+             (with MUL_ROUTED_WEIGHT=True to fuse router weight multiplication)
+          6. Reshape + sum over topk dim
+        """
+        import fastdeploy
+
+        token_num = x.shape[0]
+        if token_num == 0:
+            return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
+
+        top_k = layer.top_k
+        num_local_experts = layer.num_local_experts
+        moe_intermediate_size = layer.moe_intermediate_size
+        hidden_size = layer.hidden_size
+
+        # --- 1. Routing ---
+        gate_out = gate(x)
+        gate_out = gate_out.cast("float32")
+
+        if layer.topk_method == "noaux_tc":
+            from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
+
+            _, topk_weights, topk_ids = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
+                topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+            )
+        else:
+            topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                top_k,
+                True,  # apply_norm_weight
+                False,
+            )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
+
+        # --- 2. Preprocess: sort tokens by expert assignment ---
+        # Choose BLOCK_SIZE_M based on decode vs prefill heuristic
+        num_token_expert_pairs = token_num * top_k
+        cfg = self._get_default_config(num_token_expert_pairs, moe_intermediate_size * 2, hidden_size)
+
+        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
+            topk_ids, num_local_experts, cfg["BLOCK_SIZE_M"]
+        )
+        max_possible_num_post_padded = sorted_token_ids.shape[0]
+
+        # --- 3. GEMM1: hidden -> up_gate (BF16 x BF16 -> BF16) ---
+        # up_gate_proj_weight layout: [E, hidden_size, inter*2] => stride_be, stride_bk, stride_bn
+        up_gate_proj_out = paddle.empty(
+            [num_token_expert_pairs, moe_intermediate_size * 2],
+            dtype=x.dtype,
+        )
+        grid1 = (
+            ceil_div(max_possible_num_post_padded, cfg["BLOCK_SIZE_M"])
+            * ceil_div(moe_intermediate_size * 2, cfg["BLOCK_SIZE_N"]),
+        )
+        fused_moe_kernel_bf16[grid1](
+            x,
+            layer.up_gate_proj_weight,
+            up_gate_proj_out,
+            None,   # topk_weights_ptr (no weight mul on GEMM1)
+            sorted_token_ids,
+            expert_ids,
+            num_tokens_post_padded,
+            N=moe_intermediate_size * 2,
+            K=hidden_size,
+            EM=max_possible_num_post_padded,
+            num_valid_tokens=num_token_expert_pairs,
+            stride_am=x.strides[0],
+            stride_ak=x.strides[1],
+            stride_be=layer.up_gate_proj_weight.strides[0],
+            stride_bk=layer.up_gate_proj_weight.strides[1],
+            stride_bn=layer.up_gate_proj_weight.strides[2],
+            stride_cm=up_gate_proj_out.strides[0],
+            stride_cn=up_gate_proj_out.strides[1],
+            BLOCK_SIZE_M=cfg["BLOCK_SIZE_M"],
+            BLOCK_SIZE_N=cfg["BLOCK_SIZE_N"],
+            BLOCK_SIZE_K=cfg["BLOCK_SIZE_K"],
+            GROUP_SIZE_M=cfg["GROUP_SIZE_M"],
+            MUL_ROUTED_WEIGHT=False,
+            top_k=top_k,
+            compute_type=tl.bfloat16,
+        )
+
+        # --- 4. SwiGLU activation ---
+        down_proj_input = paddle.incubate.nn.functional.swiglu(up_gate_proj_out)
+
+        # --- 5. GEMM2: inter -> hidden, fuse router weight multiplication ---
+        # down_proj_weight layout: [E, moe_intermediate_size, hidden_size] => stride_be, stride_bk, stride_bn
+        down_proj_out = paddle.empty(
+            (num_token_expert_pairs, hidden_size),
+            dtype=x.dtype,
+        )
+        cfg2 = self._get_default_config(num_token_expert_pairs, hidden_size, moe_intermediate_size)
+        grid2 = (
+            ceil_div(max_possible_num_post_padded, cfg2["BLOCK_SIZE_M"])
+            * ceil_div(hidden_size, cfg2["BLOCK_SIZE_N"]),
+        )
+        fused_moe_kernel_bf16[grid2](
+            down_proj_input,
+            layer.down_proj_weight,
+            down_proj_out,
+            topk_weights,
+            sorted_token_ids,
+            expert_ids,
+            num_tokens_post_padded,
+            N=hidden_size,
+            K=moe_intermediate_size,
+            EM=max_possible_num_post_padded,
+            num_valid_tokens=num_token_expert_pairs,
+            stride_am=down_proj_input.strides[0],
+            stride_ak=down_proj_input.strides[1],
+            stride_be=layer.down_proj_weight.strides[0],
+            stride_bk=layer.down_proj_weight.strides[1],
+            stride_bn=layer.down_proj_weight.strides[2],
+            stride_cm=down_proj_out.strides[0],
+            stride_cn=down_proj_out.strides[1],
+            BLOCK_SIZE_M=cfg2["BLOCK_SIZE_M"],
+            BLOCK_SIZE_N=cfg2["BLOCK_SIZE_N"],
+            BLOCK_SIZE_K=cfg2["BLOCK_SIZE_K"],
+            GROUP_SIZE_M=cfg2["GROUP_SIZE_M"],
+            MUL_ROUTED_WEIGHT=True,   # fuse router weight * output
+            # top_k=1: down_proj_input rows are indexed directly by sorted_token_ids,
+            # so a_ptrs = base + offs_token * stride_am (no // top_k needed).
+            top_k=1,
+            compute_type=tl.bfloat16,
+        )
+
+        # --- 6. Reduce over topk ---
+        down_proj_out.reshape_([token_num, top_k, hidden_size])
+        out = down_proj_out.sum(axis=1)
+        return out
+
+    def apply_ep_prefill(self, layer, x, gate, topk_ids_hookfunc=None, shared_experts=None):
+        raise NotImplementedError("TritonBF16MoEMethod does not support EP prefill yet.")
+
+    def apply_ep_decode(self, layer, x, gate, topk_ids_hookfunc=None, shared_experts=None):
+        raise NotImplementedError("TritonBF16MoEMethod does not support EP decode yet.")
+
+    def apply_tp(self, layer, x, gate, topk_ids_hookfunc=None, shared_experts=None):
+        return self.apply(layer, x, gate, topk_ids_hookfunc=topk_ids_hookfunc)
