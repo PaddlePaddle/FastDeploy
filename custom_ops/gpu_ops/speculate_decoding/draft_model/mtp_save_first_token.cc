@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "../speculate_msg.h"
 #include "../../custom_ftok.h"
 #include "paddle/extension.h"
@@ -36,6 +39,11 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
                        int msg_queue_id,
                        bool save_each_rank,
                        bool skip_chunk_prefill) {
+#ifdef _WIN32
+  PD_THROW(
+      "MTPSaveFirstToken is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   if (!save_each_rank && rank_id > 0) {
     return;
   }
@@ -155,6 +163,7 @@ void MTPSaveFirstToken(const paddle::Tensor& x,
     printf("full msg buffer\n");
   }
   return;
+#endif
 }
 
 void MTPSaveFirstTokenStatic(const paddle::Tensor& x,

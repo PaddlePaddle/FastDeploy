@@ -12,8 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #pragma once
 
+#ifndef _WIN32
 #include <errno.h>
 #include <stdio.h>
 #include <sys/stat.h>
@@ -35,3 +37,4 @@ inline key_t custom_ftok(const char* path, int id) {
   return static_cast<key_t>(((st.st_dev & 0x0f) << 28) |
                             ((st.st_ino & 0xff) << 20) | (id & 0xfffff));
 }
+#endif

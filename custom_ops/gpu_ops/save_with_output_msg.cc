@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include "save_with_output_msg.h"
 #include "custom_ftok.h"
 
@@ -21,6 +22,9 @@ void save_kernel(const paddle::Tensor& x,
                  int64_t rank_id,
                  int msg_queue_id,
                  bool save_each_rank) {
+#ifdef _WIN32
+  PD_THROW("save_kernel is not supported on Windows (POSIX IPC required).");
+#else
   const int64_t* x_data = x.data<int64_t>();
   static struct msgdata msg_sed;
   const int32_t* preempted_idx_data = preempted_idx.data<int32_t>();
@@ -100,6 +104,7 @@ void save_kernel(const paddle::Tensor& x,
     printf("full msg buffer\n");
   }
   return;
+#endif
 }
 
 void SaveOutMmsg(const paddle::Tensor& x,

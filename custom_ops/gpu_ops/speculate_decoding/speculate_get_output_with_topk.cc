@@ -12,18 +12,36 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "paddle/extension.h"
 #include "../custom_ftok.h"
-#include "speculate_logprob_msg.h"
 
 #ifndef PD_BUILD_STATIC_OP
 #define PD_BUILD_STATIC_OP(name) PD_BUILD_OP(static_op_##name)
 #endif
+
+#define MAX_BSZ 512
+#define K 20
+#define MAX_DRAFT_TOKEN_NUM 6
+
+struct batch_msgdata {
+  int tokens[MAX_DRAFT_TOKEN_NUM * (K + 1)];
+  float scores[MAX_DRAFT_TOKEN_NUM * (K + 1)];
+  int ranks[MAX_DRAFT_TOKEN_NUM];
+};
+
+struct msgdata {
+  long mtype;
+  int meta[3 + MAX_BSZ];  // stop_flag, message_flag, bsz, batch_token_nums
+  batch_msgdata mtext[MAX_BSZ];
+};
 
 void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                              const paddle::Tensor& output_scores,
@@ -31,6 +49,11 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
                              int real_k,
                              int64_t rank_id,
                              bool wait_flag) {
+#ifdef _WIN32
+  PD_THROW(
+      "SpeculateGetOutMmsgTopK is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   struct msgdata msg_rcv;
   int msg_queue_id = 1;
 
@@ -78,22 +101,22 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
   output_tokens_data[1] = (int64_t)msg_rcv.meta[1];
   output_tokens_data[2] = (int64_t)msg_rcv.meta[2];
 
-  int output_tokens_offset = 3 + SPEC_LOGPROB_MAX_BSZ;
+  int output_tokens_offset = 3 + MAX_BSZ;
   for (int i = 0; i < bsz; i++) {
     int cur_token_num = msg_rcv.meta[3 + i];
     output_tokens_data[3 + i] = (int64_t)cur_token_num;  // batch_token_nums
 
     auto* cur_output_token = output_tokens_data + output_tokens_offset +
-                             i * (MAX_DRAFT_TOKEN_NUM * (SPEC_LOGPROB_K + 1));
+                             i * (MAX_DRAFT_TOKEN_NUM * (K + 1));
     auto* cur_output_score =
-        output_scores_data + i * (MAX_DRAFT_TOKEN_NUM * (SPEC_LOGPROB_K + 1));
+        output_scores_data + i * (MAX_DRAFT_TOKEN_NUM * (K + 1));
     auto* cur_batch_msg_rcv = &msg_rcv.mtext[i];
     for (int j = 0; j < cur_token_num; j++) {
       for (int k = 0; k < real_k + 1; k++) {
-        cur_output_token[j * (SPEC_LOGPROB_K + 1) + k] =
-            (int64_t)cur_batch_msg_rcv->tokens[j * (SPEC_LOGPROB_K + 1) + k];
-        cur_output_score[j * (SPEC_LOGPROB_K + 1) + k] =
-            cur_batch_msg_rcv->scores[j * (SPEC_LOGPROB_K + 1) + k];
+        cur_output_token[j * (K + 1) + k] =
+            (int64_t)cur_batch_msg_rcv->tokens[j * (K + 1) + k];
+        cur_output_score[j * (K + 1) + k] =
+            cur_batch_msg_rcv->scores[j * (K + 1) + k];
       }
       output_ranks_data[i * MAX_DRAFT_TOKEN_NUM + j] =
           (int64_t)cur_batch_msg_rcv->ranks[j];
@@ -109,19 +132,17 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
     std::cout << "batch " << i << " token_num: " << cur_token_num << std::endl;
     for (int j = 0; j < cur_token_num; j++) {
       std::cout << "tokens: ";
-      for (int k = 0; k < SPEC_LOGPROB_K + 1; k++) {
+      for (int k = 0; k < K + 1; k++) {
         std::cout << output_tokens_data[output_tokens_offset +
-                                        i * MAX_DRAFT_TOKEN_NUM *
-                                            (SPEC_LOGPROB_K + 1) +
-                                        j * (SPEC_LOGPROB_K + 1) + k]
+                                        i * MAX_DRAFT_TOKEN_NUM * (K + 1) +
+                                        j * (K + 1) + k]
                   << " ";
       }
       std::cout << std::endl;
       std::cout << "scores: ";
-      for (int k = 0; k < SPEC_LOGPROB_K + 1; k++) {
-        std::cout << output_scores_data[i * MAX_DRAFT_TOKEN_NUM *
-                                            (SPEC_LOGPROB_K + 1) +
-                                        j * (SPEC_LOGPROB_K + 1) + k]
+      for (int k = 0; k < K + 1; k++) {
+        std::cout << output_scores_data[i * MAX_DRAFT_TOKEN_NUM * (K + 1) +
+                                        j * (K + 1) + k]
                   << " ";
       }
       std::cout << std::endl;
@@ -132,6 +153,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
   std::cout << std::endl;
 #endif
   return;
+#endif
 }
 
 PD_BUILD_STATIC_OP(speculate_get_output_topk)

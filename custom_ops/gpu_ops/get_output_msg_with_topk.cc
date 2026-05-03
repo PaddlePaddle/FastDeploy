@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "custom_ftok.h"
 #include "paddle/extension.h"
 
@@ -40,6 +43,9 @@ void GetOutputTopK(const paddle::Tensor& x,
                    int k,
                    int64_t rank_id,
                    bool wait_flag) {
+#ifdef _WIN32
+  PD_THROW("GetOutputTopK is not supported on Windows (POSIX IPC required).");
+#else
   static struct msgdata msg_rcv;
   int msg_queue_id = 1;
 
@@ -101,6 +107,7 @@ void GetOutputTopK(const paddle::Tensor& x,
     ranks_data[i] = (int64_t)msg_rcv.mtext_ranks[i];
   }
   return;
+#endif
 }
 
 PD_BUILD_STATIC_OP(get_output_topk)

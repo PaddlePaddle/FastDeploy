@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #pragma once
 
 #include <cuda_fp8.h>
@@ -19,15 +20,17 @@
 #ifndef PADDLE_WITH_COREX
 #include "glog/logging.h"
 #endif
-#include <fcntl.h>
 #include <nvml.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/mman.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#ifndef _WIN32
+#include <fcntl.h>
+#include <sys/mman.h>
 #include <unistd.h>
+#endif
 #include <cassert>
 #include <cstdlib>
 #include <cstring>

@@ -12,7 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #pragma once
+
+#include <cstdlib>
+#include <string>
 
 inline uint32_t get_decoder_block_shape_q() {
   static const char* decoder_block_shape_q_env =

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include "../custom_ftok.h"
 #include "helper.h"
 #include "speculate_msg.h"
@@ -222,6 +223,11 @@ void SpeculateStepSchedule(
     const int block_size,
     const int encoder_decoder_block_num,
     const int max_draft_tokens) {
+#ifdef _WIN32
+  PD_THROW(
+      "SpeculateStepSchedule is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   auto cu_stream = seq_lens_this_time.stream();
   const int bsz = seq_lens_this_time.shape()[0];
   const int block_num_per_seq = block_tables.shape()[1];
@@ -328,6 +334,7 @@ void SpeculateStepSchedule(
       printf("full msg buffer\n");
     }
   }
+#endif
 }
 
 PD_BUILD_STATIC_OP(speculate_step_reschedule)

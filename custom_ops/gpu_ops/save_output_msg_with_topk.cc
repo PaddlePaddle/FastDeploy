@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "custom_ftok.h"
 #include "paddle/extension.h"
 
@@ -42,6 +45,9 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
                      const paddle::Tensor& not_need_stop,
                      const paddle::Tensor& preempted_idx,
                      int64_t rank_id) {
+#ifdef _WIN32
+  PD_THROW("SaveOutMmsgTopK is not supported on Windows (POSIX IPC required).");
+#else
   if (rank_id > 0) {
     return;
   }
@@ -145,6 +151,7 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
     printf("full msg buffer\n");
   }
   return;
+#endif
 }
 
 PD_BUILD_STATIC_OP(save_output_topk)

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include "custom_ftok.h"
 #include "helper.h"
 #include "save_with_output_msg.h"
@@ -211,6 +212,11 @@ void Schedule(const paddle::Tensor &stop_flags,
               const paddle::Tensor &first_token_ids,
               const int block_size,
               const int encoder_decoder_block_num) {
+#ifdef _WIN32
+  PD_THROW(
+      "Schedule is not supported on Windows "
+      "(POSIX IPC required).");
+#else
   auto cu_stream = seq_lens_this_time.stream();
   const int bsz = seq_lens_this_time.shape()[0];
   const int block_num_per_seq = block_tables.shape()[1];
@@ -314,6 +320,7 @@ void Schedule(const paddle::Tensor &stop_flags,
       printf("full msg buffer\n");
     }
   }
+#endif
 }
 
 PD_BUILD_STATIC_OP(step_reschedule)

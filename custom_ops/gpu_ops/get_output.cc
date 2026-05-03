@@ -12,11 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
+#ifndef _WIN32
 #include <sys/ipc.h>
 #include <sys/msg.h>
-#include <sys/types.h>
+#endif
 #include "custom_ftok.h"
 #include "paddle/extension.h"
 
@@ -36,6 +39,9 @@ void GetOutput(const paddle::Tensor& x,
                int64_t rank_id,
                bool wait_flag,
                int msg_queue_id) {
+#ifdef _WIN32
+  PD_THROW("GetOutput is not supported on Windows (POSIX IPC required).");
+#else
   if (rank_id > 0) {
     return;
   }
@@ -81,6 +87,7 @@ void GetOutput(const paddle::Tensor& x,
 #endif
 
   return;
+#endif
 }
 
 void GetOutputStatic(const paddle::Tensor& x, int64_t rank_id, bool wait_flag) {

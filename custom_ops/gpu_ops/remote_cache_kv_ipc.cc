@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Hackathon 10th Spring No.46 — compilation guards
 #include "remote_cache_kv_ipc.h"
 
 RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data
@@ -24,6 +25,11 @@ bool RemoteCacheKvIpc::kv_complete_signal_shmem_opened = false;
 RemoteCacheKvIpc::save_cache_kv_complete_signal_layerwise_meta_data
 RemoteCacheKvIpc::open_shm_and_get_complete_signal_meta_data(
     const int rank_id, const int device_id, const bool keep_pd_step_flag) {
+#ifdef _WIN32
+  PD_THROW(
+      "open_shm_and_get_complete_signal_meta_data is not supported on "
+      "Windows (POSIX shared memory required).");
+#else
   if (RemoteCacheKvIpc::kv_complete_signal_shmem_opened) {
     if (keep_pd_step_flag) {
       return RemoteCacheKvIpc::kv_complete_signal_meta_data;
@@ -103,6 +109,7 @@ RemoteCacheKvIpc::open_shm_and_get_complete_signal_meta_data(
   RemoteCacheKvIpc::kv_complete_signal_identity_ptr = identity_ptr;
   RemoteCacheKvIpc::kv_complete_signal_shmem_opened = true;
   return meta_data;
+#endif
 }
 
 void CUDART_CB
