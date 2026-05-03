@@ -11,7 +11,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""setup for FastDeploy custom ops"""
+"""Module for Hackathon 10th Spring No.46."""
 import importlib
 import json
 import os
@@ -565,13 +565,19 @@ elif paddle.is_compiled_with_cuda():
     # appended explicitly for SM75 and also discovered by later directory globs.
     sources = list(dict.fromkeys(sources))
 
+    cuda_libraries = ["cublasLt"]
+    if sys.platform == "win32":
+        cuda_link_args = ["/DEFAULTLIB:cuda.lib", "/DEFAULTLIB:nvml.lib"]
+    else:
+        cuda_link_args = ["-lcuda", "-lnvidia-ml"]
+
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
             extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
-            libraries=["cublasLt"],
-            extra_link_args=["-lcuda", "-lnvidia-ml"],
+            libraries=cuda_libraries,
+            extra_link_args=cuda_link_args,
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
