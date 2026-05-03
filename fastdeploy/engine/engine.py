@@ -1,4 +1,4 @@
-"""
+"""Module for Hackathon 10th Spring No.46.
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
@@ -24,6 +24,7 @@ import re
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -44,11 +45,6 @@ from fastdeploy.engine.common_engine import (
 from fastdeploy.engine.expert_service import start_data_parallel_service
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineWorkerQueue, IPCSignal
-from fastdeploy.logger.request_logger import (
-    RequestLogLevel,
-    log_request,
-    log_request_error,
-)
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
@@ -290,7 +286,7 @@ class LLMEngine:
         # Create Request struct after processing
         request = Request.from_dict(task)
         request.metrics.scheduler_recv_req_time = time.time()
-        log_request(RequestLogLevel.CONTENT, message="Receive request {request}", request=request)
+        llm_logger.info(f"Receive request {request}")
         request.metrics.preprocess_start_time = time.time()
 
         request.prompt_token_ids_len = len(request.prompt_token_ids)
@@ -309,20 +305,12 @@ class LLMEngine:
                 f"Input text is too long, length of prompt token({input_ids_len}) "
                 f"+ min_dec_len ({min_tokens}) >= max_model_len "
             )
-            log_request_error(
-                message="request[{request_id}] error: {error}",
-                request_id=request.get("request_id"),
-                error=error_msg,
-            )
+            llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
         if input_ids_len > self.cfg.model_config.max_model_len:
             error_msg = f"Length of input token({input_ids_len}) exceeds the limit max_model_len({self.cfg.model_config.max_model_len})."
-            log_request_error(
-                message="request[{request_id}] error: {error}",
-                request_id=request.get("request_id"),
-                error=error_msg,
-            )
+            llm_logger.error(error_msg)
             raise EngineError(error_msg, error_code=400)
 
         if request.get("stop_seqs_len") is not None:
@@ -333,11 +321,7 @@ class LLMEngine:
                     f"Length of stop ({stop_seqs_len}) exceeds the limit max_stop_seqs_num({max_stop_seqs_num})."
                     "Please reduce the number of stop or set a lager max_stop_seqs_num by `FD_MAX_STOP_SEQS_NUM`"
                 )
-                log_request_error(
-                    message="request[{request_id}] error: {error}",
-                    request_id=request.get("request_id"),
-                    error=error_msg,
-                )
+                llm_logger.error(error_msg)
                 raise EngineError(error_msg, error_code=400)
             stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
             for single_stop_seq_len in stop_seqs_len:
@@ -346,11 +330,7 @@ class LLMEngine:
                         f"Length of stop_seqs({single_stop_seq_len}) exceeds the limit stop_seqs_max_len({stop_seqs_max_len})."
                         "Please reduce the length of stop sequences or set a larger stop_seqs_max_len by `FD_STOP_SEQS_MAX_LEN`"
                     )
-                    log_request_error(
-                        message="request[{request_id}] error: {error}",
-                        request_id=request.get("request_id"),
-                        error=error_msg,
-                    )
+                    llm_logger.error(error_msg)
                     raise EngineError(error_msg, error_code=400)
 
         if self._has_guided_input(request):
@@ -363,22 +343,14 @@ class LLMEngine:
                 request, err_msg = self.guided_decoding_checker.schema_format(request)
 
             if err_msg is not None:
-                log_request_error(
-                    message="request[{request_id}] error: {error}",
-                    request_id=request.get("request_id"),
-                    error=err_msg,
-                )
+                llm_logger.error(err_msg)
                 raise EngineError(err_msg, error_code=400)
 
         request.metrics.preprocess_end_time = time.time()
         request.metrics.scheduler_recv_req_time = time.time()
         self.engine.scheduler.put_requests([request])
-        log_request(
-            RequestLogLevel.STAGES,
-            message="Cache task with request_id ({request_id})",
-            request_id=request.get("request_id"),
-        )
-        log_request(RequestLogLevel.FULL, message="cache task: {request}", request=request)
+        llm_logger.info(f"Cache task with request_id ({request.get('request_id')})")
+        llm_logger.debug(f"cache task: {request}")
 
     def _worker_processes_ready(self):
         """
@@ -465,8 +437,11 @@ class LLMEngine:
             for p in self.cache_manager_processes:
                 llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    pgid = os.getpgid(p.pid)
-                    os.killpg(pgid, signal.SIGTERM)
+                    if sys.platform != "win32":
+                        pgid = os.getpgid(p.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    else:
+                        p.terminate()
                 except Exception as e:
                     console_logger.error(
                         f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
@@ -479,8 +454,11 @@ class LLMEngine:
 
         if hasattr(self, "worker_proc") and self.worker_proc is not None:
             try:
-                pgid = os.getpgid(self.worker_proc.pid)
-                os.killpg(pgid, signal.SIGTERM)
+                if sys.platform != "win32":
+                    pgid = os.getpgid(self.worker_proc.pid)
+                    os.killpg(pgid, signal.SIGTERM)
+                else:
+                    self.worker_proc.terminate()
             except Exception as e:
                 console_logger.error(f"Error extracting sub services: {e}, {str(traceback.format_exc())}")
 
@@ -700,7 +678,6 @@ class LLMEngine:
             "enable_entropy": self.cfg.model_config.enable_entropy,
             "ep_prefill_use_worst_num_tokens": self.cfg.parallel_config.ep_prefill_use_worst_num_tokens,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
-            "enable_flashinfer_allreduce_fusion": self.cfg.parallel_config.enable_flashinfer_allreduce_fusion,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:
@@ -722,7 +699,7 @@ class LLMEngine:
             pd_cmd,
             stdout=subprocess.PIPE,
             shell=True,
-            preexec_fn=os.setsid,
+            **({} if sys.platform == "win32" else {"preexec_fn": os.setsid}),
         )
         return p
 
@@ -761,16 +738,11 @@ class LLMEngine:
         Yields:
             dict: The generated response.
         """
-        log_request(RequestLogLevel.CONTENT, message="Starting generation for prompt: {prompts}", prompts=prompts)
+        llm_logger.info(f"Starting generation for prompt: {prompts}")
         try:
             req_id = self._format_and_add_data(prompts)
         except Exception as e:
-            log_request_error(
-                message="request[{request_id}] error while adding request: {error}, {traceback}",
-                request_id=prompts.get("request_id"),
-                error=str(e),
-                traceback=traceback.format_exc(),
-            )
+            llm_logger.error(f"Error happened while adding request, details={e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
 
         # Get the result of the current request
@@ -789,7 +761,7 @@ class LLMEngine:
                 output = self.engine.data_processor.process_response_dict(
                     result.to_dict(), stream=False, include_stop_str_in_output=False, direct_decode=not stream
                 )
-                log_request(RequestLogLevel.FULL, message="Generate result: {output}", output=output)
+                llm_logger.debug(f"Generate result: {output}")
                 if not stream:
                     yield output
                 else:
@@ -865,7 +837,10 @@ class LLMEngine:
                             int(self.cfg.parallel_config.engine_worker_queue_port[i]),
                         )
                     else:
-                        address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+                        _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+                        address = (
+                            f"{_shm_dir}/fd_task_queue_{self.cfg.parallel_config.engine_worker_queue_port[i]}.sock"
+                        )
 
                     llm_logger.info(f"dp start queue service {address}")
                     self.dp_engine_worker_queue_server.append(
@@ -876,7 +851,7 @@ class LLMEngine:
                             local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
                         )
                     )
-                    ctx = multiprocessing.get_context("fork")
+                    ctx = multiprocessing.get_context("spawn" if sys.platform == "win32" else "fork")
                     cfg = copy.deepcopy(self.cfg)
                     self.dp_processed.append(
                         ctx.Process(
@@ -893,14 +868,8 @@ class LLMEngine:
                         + f" data parallel id {i}"
                     )
                     self.dp_processed[-1].start()
-
-                for i in range(
-                    1,
-                    self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
-                ):
-
                     while self.launched_expert_service_signal.value[i] == 0:
-                        time.sleep(0.1)
+                        time.sleep(1)
 
     def check_worker_initialize_status(self):
         """

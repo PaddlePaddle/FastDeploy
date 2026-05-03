@@ -1,4 +1,4 @@
-"""
+"""Module for Hackathon 10th Spring No.46.
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
@@ -335,7 +335,8 @@ class PrefixCacheManager:
                     + f" >{log_dir}/cache_manager_{int(device_ids[i])}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
-                cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+                _popen_kwargs = {} if sys.platform == "win32" else {"preexec_fn": os.setsid}
+                cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, **_popen_kwargs))
 
             logger.info("PrefixCacheManager is waiting for cache transfer manager to be initialized.")
             while np.sum(self.cache_transfer_inited_signal.value) != tensor_parallel_size:
@@ -430,7 +431,8 @@ class PrefixCacheManager:
                 + f" >{log_dir}/cache_messager_{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
-            cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
+            _popen_kwargs = {} if sys.platform == "win32" else {"preexec_fn": os.setsid}
+            cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, **_popen_kwargs))
 
         logger.info("Waiting for cache ready...")
         while np.sum(self.cache_ready_signal.value) != tensor_parallel_size:

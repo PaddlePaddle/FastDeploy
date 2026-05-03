@@ -1,4 +1,4 @@
-"""
+"""Module for Hackathon 10th Spring No.46.
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
@@ -15,6 +15,8 @@
 """
 
 import os
+import sys
+import tempfile
 import threading
 import time
 import traceback
@@ -430,10 +432,11 @@ class ZmqIpcServer(ZmqServerBase):
             self.file_name = None
             return
 
+        _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
         if mode == zmq.PULL:
-            self.file_name = f"/dev/shm/{name}.socket"
+            self.file_name = f"{_shm_dir}/{name}.socket"
         elif mode == zmq.ROUTER:
-            self.file_name = f"/dev/shm/router_{name}.ipc"
+            self.file_name = f"{_shm_dir}/router_{name}.ipc"
         else:
             raise ValueError(f"Unsupported ZMQ mode: {mode}")
         self._create_socket()
@@ -456,7 +459,8 @@ class ZmqIpcServer(ZmqServerBase):
             sock = self.context.socket(zmq.PUSH)
             sock.setsockopt(zmq.SNDHWM, self.ZMQ_SNDHWM)
             sock.setsockopt(zmq.SNDTIMEO, -1)
-            address = f"ipc:///dev/shm/response_{self.push_name_prefix}_w{worker_pid}.pull"
+            _shm_dir = "/dev/shm" if sys.platform != "win32" else tempfile.gettempdir()
+            address = f"ipc://{_shm_dir}/response_{self.push_name_prefix}_w{worker_pid}.pull"
             sock.connect(address)
             self.worker_push_sockets[worker_pid] = sock
             self.worker_push_addresses[worker_pid] = address

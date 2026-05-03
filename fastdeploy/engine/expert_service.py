@@ -1,4 +1,4 @@
-"""
+"""Module for Hackathon 10th Spring No.46.
 # Copyright (c) 2025  PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License"
@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import signal
+import sys
 import threading
 import time
 import traceback
@@ -109,7 +110,7 @@ class ExpertService:
         if envs.FD_ENABLE_RETURN_TEXT:
             self.engine.create_data_processor()
         if self.cfg.scheduler_config.name == "dp":
-            self.cfg.init_pd_info()
+            self.cfg.init_cache_info()
             self.engine.scheduler.start(local_data_parallel_id)
 
         if ipc_signal_suffix is not None:
@@ -122,7 +123,7 @@ class ExpertService:
         self.llm_logger.info(f"start expert service {local_data_parallel_id}")
 
         if self.cfg.scheduler_config.name == "splitwise":
-            self.cfg.init_pd_info()
+            self.cfg.init_cache_info()
             role = self.cfg.scheduler_config.splitwise_role
             host_ip = self.cfg.host_ip
             self.engine.scheduler.start(role, host_ip, self.cfg.register_info)
@@ -201,8 +202,11 @@ class ExpertService:
             for p in self.cache_manager_processes:
                 self.llm_logger.info(f"Killing cache manager process {p.pid}")
                 try:
-                    pgid = os.getpgid(p.pid)
-                    os.killpg(pgid, signal.SIGTERM)
+                    if sys.platform != "win32":
+                        pgid = os.getpgid(p.pid)
+                        os.killpg(pgid, signal.SIGTERM)
+                    else:
+                        p.terminate()
                 except Exception as e:
                     console_logger.error(
                         f"Error killing cache manager process {p.pid}: {e}, {str(traceback.format_exc())}"
