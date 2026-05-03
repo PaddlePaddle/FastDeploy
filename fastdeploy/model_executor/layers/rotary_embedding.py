@@ -1,4 +1,4 @@
-"""
+"""Module for Hackathon 10th Spring No.47.
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -341,7 +341,7 @@ def get_rope_impl(
     """
 
     architecture = model_config.architectures[0]
-    if architecture.startswith("Qwen"):
+    if architecture.startswith("Qwen") or architecture.startswith("MiniMaxM1"):
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
     elif architecture.startswith("Glm"):
