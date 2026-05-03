@@ -332,7 +332,9 @@ def get_tensor(input: Union[paddle.Tensor, np.ndarray, str], model_path=None) ->
         paddle.Tensor: Returns a PaddlePaddle tensor.
 
     """
-    if "PySafeSlice" in str(type(input)):
+    # Optimize type checking: type(input).__name__ avoids the overhead of converting
+    # the type object to a string for substring matching.
+    if type(input).__name__ == "PySafeSlice":
         input = input.get()
 
     if isinstance(input, paddle.Tensor):
