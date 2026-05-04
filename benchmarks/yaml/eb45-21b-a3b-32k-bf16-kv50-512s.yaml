@@ -1,0 +1,10 @@
+# T53 bench workload — KV-bound (not slot-bound); gate: FD_HEAD_WISE_KV_CACHE=1
+# max_num_seqs raised to 512 so the KV pool, not the slot count, is the bottleneck.
+# kv_cache_ratio lowered to 0.50 to shrink the pool and accelerate KV pressure.
+# Use with: INPUT_LEN=8192 OUTPUT_LEN=4096 REQUEST_RATE=8
+#
+max_model_len: 32768
+max_num_seqs: 512
+kv_cache_ratio: 0.50
+tensor_parallel_size: 1
+max_num_batched_tokens: 32768

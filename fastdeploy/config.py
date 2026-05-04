@@ -71,7 +71,7 @@ PREEMPTED_TOKEN_ID = -9
 
 # Some model suffixes are based on auto classes from Transformers:
 # https://huggingface.co/docs/transformers/en/model_doc/auto
-# NOTE: Items higher on this list priority over lower ones
+# NOTE: Items higher on this list priority over lower ones.
 _SUFFIX_TO_DEFAULTS: list[tuple[str, tuple[RunnerType, ConvertType]]] = [
     ("ForCausalLM", ("generate", "none")),
     ("ForConditionalGeneration", ("generate", "none")),
@@ -2043,6 +2043,25 @@ class FDConfig:
         self.read_from_config()
         self.postprocess()
         self.init_pd_info()
+        # T53 PR1 — engine-main FDConfig fixture for per-head SWA block recycle.
+        # ResourceManagerV1._should_use_head_wise_swa (resource_manager_v1.py:298-305)
+        # reads model_config.head_wise_swa_ratio from the engine-main FDConfig instance.
+        # The worker-side mutation at paddleformers/base.py:793-804 sets the same attrs
+        # on a DIFFERENT FDConfig copy (worker process). This block mirrors that mutation
+        # in the engine-main process so the dispatcher gate is not dormant.
+        # Guards are identical to the worker side — idempotent if already set.
+        if envs.FD_T53_HEAD_WISE_SWA_FIXTURE:
+            cfg = self.model_config
+            n_kv = getattr(cfg, "num_key_value_heads", 1) or 1
+            ratio = envs.FD_T53_HEAD_WISE_SWA_RATIO if envs.FD_T53_HEAD_WISE_SWA_RATIO is not None else (1.0 / n_kv)
+            if getattr(cfg, "window_size", None) is None:
+                cfg.window_size = 4096
+            if getattr(cfg, "sink_size", None) is None:
+                cfg.sink_size = 0
+            if getattr(cfg, "window_attn_skip_freq", None) is None:
+                cfg.window_attn_skip_freq = 1
+            if getattr(cfg, "head_wise_swa_ratio", None) is None:
+                cfg.head_wise_swa_ratio = ratio
         if test_mode:
             return
         self.check()
