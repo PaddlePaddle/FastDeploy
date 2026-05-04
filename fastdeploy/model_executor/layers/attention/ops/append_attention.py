@@ -294,9 +294,12 @@ def append_attention_with_output(
         # append_attention() above. Until then, the use_output path does not
         # implement per-head full-hidden override, so reject any caller that
         # tries to enable it here rather than silently dropping the parameter.
-        assert (
-            head_wise_full_hidden == 0
-        ), "append_attention_with_output: head_wise_full_hidden>0 not yet supported in use_output path (see T53 PR3)."
+        if head_wise_full_hidden != 0:
+            raise NotImplementedError(
+                "append_attention_with_output: head_wise_full_hidden>0 not yet supported "
+                "in the use_output path (T53 PR3 scope). Disable FD_T53_HEAD_WISE_SWA_RATIO "
+                "or set use_output=False."
+            )
         return append_attention_with_output_gpu(
             qkv,
             key_cache,

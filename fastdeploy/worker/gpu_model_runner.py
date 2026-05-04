@@ -943,6 +943,30 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num], request.block_tables
                 )
 
+                # T53 PR2 B-1: materialize the per-head block tables for the
+                # discrete AppendAttention kernel. ``head_block_tables`` is
+                # ``None`` when the head-wise SWA gate is off (every other
+                # backend reads ``block_tables`` only). Always clear the
+                # ``kv_num_heads_local`` rows owned by this slot to ``-1``
+                # whenever the sidecar is preallocated, so a previous
+                # occupant's per-head block ids cannot leak into the new
+                # request when ``head_block_tables`` is absent.
+                if "block_tables_headwise" in self.share_inputs:
+                    kv_local = self.input_batch.kv_num_heads_local
+                    row_start = idx * kv_local
+                    row_end = row_start + kv_local
+                    async_set_value(self.share_inputs["block_tables_headwise"][row_start:row_end, :], -1)
+                    head_tables = getattr(request, "head_block_tables", None)
+                    if head_tables:
+                        for h, head_row in enumerate(head_tables):
+                            if h >= kv_local or not head_row:
+                                continue
+                            n = len(head_row)
+                            async_set_value(
+                                self.share_inputs["block_tables_headwise"][row_start + h : row_start + h + 1, :n],
+                                head_row,
+                            )
+
                 async_set_value(self.share_inputs["stop_flags"][idx : idx + 1], False)
 
                 async_set_value(self.share_inputs["seq_lens_decoder"][idx : idx + 1], prefill_start_index)
@@ -1017,6 +1041,36 @@ class GPUModelRunner(ModelRunnerBase):
                     self.share_inputs["block_tables"][idx : idx + 1, :encoder_block_num] = np.array(
                         request.block_tables, dtype="int32"
                     )
+                # T53 PR2 B-1: mirror the head-wise block table refresh on the
+                # decode path. Always clear-first per slot whenever the
+                # sidecar is preallocated, regardless of whether the request
+                # carries ``head_block_tables``.
+                if "block_tables_headwise" in self.share_inputs:
+                    kv_local = self.input_batch.kv_num_heads_local
+                    row_start = idx * kv_local
+                    row_end = row_start + kv_local
+                    head_tables = getattr(request, "head_block_tables", None)
+                    if current_platform.is_cuda():
+                        async_set_value(self.share_inputs["block_tables_headwise"][row_start:row_end, :], -1)
+                        if head_tables:
+                            for h, head_row in enumerate(head_tables):
+                                if h >= kv_local or not head_row:
+                                    continue
+                                n = len(head_row)
+                                async_set_value(
+                                    self.share_inputs["block_tables_headwise"][row_start + h : row_start + h + 1, :n],
+                                    head_row,
+                                )
+                    else:
+                        self.share_inputs["block_tables_headwise"][row_start:row_end, :] = -1
+                        if head_tables:
+                            for h, head_row in enumerate(head_tables):
+                                if h >= kv_local or not head_row:
+                                    continue
+                                n = len(head_row)
+                                self.share_inputs["block_tables_headwise"][row_start + h : row_start + h + 1, :n] = (
+                                    np.array(head_row, dtype="int32")
+                                )
                 # CPU Tensor
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
@@ -1241,7 +1295,79 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
+            # T53 PR2 B-1: seed the head-wise block table for warmup/profile
+            # runs with an identity stride per head so the discrete
+            # AppendAttention kernel reads valid block ids during CUDA-graph
+            # capture. Each kv head gets its own non-overlapping block range,
+            # mirroring the flat ``block_tables`` seeding above.
+            if "block_tables_headwise" in self.share_inputs:
+                kv_local = getattr(self.input_batch, "kv_num_heads_local", 1)
+                row_start = idx * kv_local
+                hw_max_blocks = self.share_inputs["block_tables_headwise"].shape[1]
+                fill_blocks = min(block_num, hw_max_blocks)
+                for h in range(kv_local):
+                    base = (idx * kv_local + h) * fill_blocks
+                    self.share_inputs["block_tables_headwise"][row_start + h : row_start + h + 1, :fill_blocks] = (
+                        np.arange(base, base + fill_blocks, 1, dtype="int32")
+                    )
         self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
+
+    def _maybe_slice_block_tables_headwise(self, num_running_requests: int, is_dummy_or_profile_run: bool = False):
+        """T53 PR2 B-1: gate the head-wise sidecar tensor at ForwardMeta time.
+
+        The discrete AppendAttention C16 kernel branches on the *pointer* of
+        ``block_tables_headwise``: any non-null tensor activates the per-head
+        recycle path and triggers a shape assertion of
+        ``[num_running_requests * kv_num_heads_local, pre_max_block_num]``.
+        To preserve backward compatibility on every other code path we must
+        return ``None`` unless:
+          1. the composite head-wise SWA gate is active
+             (``FD_HEAD_WISE_KV_CACHE=1`` and ``FD_T53_HEAD_WISE_SWA_RATIO>0``), and
+          2. at least one running request in the batch carries non-empty
+             ``head_block_tables``.
+        When forwarded, slice to the live batch so the kernel's shape
+        assertion holds.
+
+        During CUDA graph capture (``is_dummy_or_profile_run=True``) the live
+        request list is empty so condition 2 would always be false, causing the
+        graph to capture the legacy flat-only path and never activate head-wise
+        SWA in production.  We skip the per-request scan and return the
+        preallocated slice directly so the graph captures the head-wise branch.
+        Slots whose request lacks head_block_tables keep the -1 sentinel from
+        reset_share_inputs / per-slot clear-first. The C16 multiquery_attention
+        kernel reads block 0's cache address as a harmless placeholder for any
+        block_id == -1 entry; the SWA attention mask zeroes that KV contribution,
+        so per-head slots without recycle metadata contribute nothing rather than
+        falling back to flat block_tables. See
+        custom_ops/gpu_ops/append_attn/multiquery_attention_c16_impl.cuh
+        (head-wise branch ~L78-82, sentinel handling L215-223 / L605-613, shape
+        assert ~L894-897).
+        """
+        sidecar = self.share_inputs.get("block_tables_headwise")
+        if sidecar is None:
+            return None
+        if not bool(envs.FD_HEAD_WISE_KV_CACHE) or (envs.FD_T53_HEAD_WISE_SWA_RATIO or 0) <= 0:
+            return None
+        kv_local = getattr(self.input_batch, "kv_num_heads_local", 1)
+        # FIX 1: during CUDA-graph capture forward_batch_reqs_list is empty;
+        # return the pre-allocated slice directly so the graph captures the
+        # head-wise path instead of the legacy flat-only path.
+        if is_dummy_or_profile_run:
+            return sidecar[: num_running_requests * kv_local]
+        # Walk the live batch slice and confirm at least one request carries
+        # per-head block ids; otherwise the kernel would be activated for a
+        # batch that has nothing to recycle and would read stale rows.
+        any_head_wise = False
+        for slot in range(num_running_requests):
+            req = self.forward_batch_reqs_list[slot]
+            if req is None:
+                continue
+            if getattr(req, "head_block_tables", None):
+                any_head_wise = True
+                break
+        if not any_head_wise:
+            return None
+        return sidecar[: num_running_requests * kv_local]
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
@@ -1411,6 +1537,20 @@ class GPUModelRunner(ModelRunnerBase):
             if self.speculative_decoding:
                 if self.spec_method == SpecMethod.MTP:
                     self.proposer.reorder_inputs(self.share_inputs.index_to_batch_id)
+            # T53 PR2 FIX 2C: mirror the slot permutation to forward_batch_reqs_list
+            # so that _maybe_slice_block_tables_headwise reads the correct
+            # head_block_tables attribute per slot after condense() +
+            # reorder_split_prefill_and_decode() have rearranged slots.
+            # index_to_batch_id[new_slot] == orig_slot (batch_id equals the
+            # original slot index when first registered via get_index_by_batch_id).
+            old_reqs = list(self.forward_batch_reqs_list)
+            # Rebuild from clean state to prevent stale tail entries from leaking into
+            # logprob-settings consumers that scan the entire list (L~1402-1411).
+            for k in range(len(self.forward_batch_reqs_list)):
+                self.forward_batch_reqs_list[k] = None
+            for new_slot, orig_slot in self.share_inputs.index_to_batch_id.items():
+                if 0 <= orig_slot < len(old_reqs):
+                    self.forward_batch_reqs_list[new_slot] = old_reqs[orig_slot]
 
     def load_model(self) -> None:
         """load or download model"""
@@ -1470,8 +1610,18 @@ class GPUModelRunner(ModelRunnerBase):
             cu_seqlens_q=self.share_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.share_inputs["cu_seqlens_k"],
             block_tables=self.share_inputs["block_tables"][:num_running_requests],
-            # PR2 scope: head-wise block tables and the discrete AppendAttention
-            # kernel that will consume them are deferred; this comment is the PR1 placeholder.
+            # T53 PR2 B-1: only forward the head-wise sidecar when the
+            # composite SWA gate is active AND at least one running request
+            # actually carries ``head_block_tables`` (otherwise the discrete
+            # AppendAttention kernel would be selected unconditionally — its
+            # branch is taken whenever the pointer is non-null, see
+            # ``custom_ops/gpu_ops/multiquery_attention/multiquery_attention_c16_impl.cuh``).
+            # When forwarded, slice the preallocated tensor to the running
+            # batch shape ``[num_running_requests * kv_num_heads_local,
+            # pre_max_block_num]`` so the kernel's shape assertion holds.
+            block_tables_headwise=self._maybe_slice_block_tables_headwise(
+                num_running_requests, is_dummy_or_profile_run=is_dummy_or_profile_run
+            ),
             caches=self.share_inputs["caches"],
             encoder_batch_ids=self.share_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.share_inputs["encoder_tile_ids_per_batch"],

@@ -308,12 +308,14 @@ class ResourceManagerV1(ResourceManager):
             return kv_num_heads
         return max(1, min(kv_num_heads, int(round(kv_num_heads * ratio))))
 
+    def _head_wise_swa_active(self) -> bool:
+        """Return True when the T53 head-wise SWA feature gate is active."""
+        return bool(envs.FD_HEAD_WISE_KV_CACHE) and (envs.FD_T53_HEAD_WISE_SWA_RATIO or 0) > 0
+
     def _should_use_head_wise_swa(self, num_blocks: int) -> bool:
         """Return True when the default-off head-wise SWA sidecar should be populated."""
         return (
-            bool(envs.FD_HEAD_WISE_KV_CACHE)
-            and float(getattr(self.config.model_config, "head_wise_swa_ratio", 0.0) or 0.0) > 0.0
-            and int(getattr(self.config.model_config, "window_size", 0) or 0) > 0
+            int(getattr(self.config.model_config, "window_size", 0) or 0) > 0
             and hasattr(self.cache_manager, "allocate_gpu_blocks_head_wise")
             and hasattr(self.cache_manager, "recycle_gpu_blocks_head_wise")
             and num_blocks > 0
@@ -377,6 +379,12 @@ class ResourceManagerV1(ResourceManager):
             if h >= len(existing):
                 existing.append([])
             existing[h].extend(row)
+        # T53 PR2 B-1: snapshot the per-head dict onto the Request envelope so
+        # the worker process (which has no view of ``self.swa_head_block_tables``)
+        # can materialize ``share_inputs['block_tables_headwise']`` for the
+        # discrete AppendAttention kernel. Shallow per-row copy is sufficient
+        # because the worker reads-then-writes its own preallocated tensor.
+        request.head_block_tables = [list(row) for row in existing]
         return existing
 
     def _recycle_legacy_swa_blocks(self, request: Request, prev: list[int], recycle_from_floor: int) -> int:
@@ -461,6 +469,11 @@ class ResourceManagerV1(ResourceManager):
             prev[h] = end  # monotone advance
             released_total += len(to_release)
         self._recycle_legacy_swa_blocks(request, prev, recycle_from_floor)
+        # T53 PR2 B-1: refresh the Request snapshot whenever the per-head dict
+        # is mutated by recycle so the worker sees the post-recycle layout on
+        # its next ForwardMeta materialization.
+        if released_total > 0:
+            request.head_block_tables = [list(row) for row in head_blocks]
         return released_total
 
     def allocated_slots(self, request: Request):
@@ -1120,9 +1133,10 @@ class ResourceManagerV1(ResourceManager):
                         continue
 
                     # T53 PR1 head-wise SWA recycle (§2.3 recycle-before-allocate).
-                    # Default-off: helper returns 0 immediately when
-                    # FD_HEAD_WISE_KV_CACHE != 1, so the legacy path is bit-identical.
-                    if envs.FD_HEAD_WISE_KV_CACHE:
+                    # Default-off: helper returns 0 immediately when the
+                    # composite head-wise SWA gate is inactive, so the legacy
+                    # path is bit-identical.
+                    if self._head_wise_swa_active():
                         self.recycle_request_swa_head_cache(request)
 
                     if (
@@ -1586,23 +1600,24 @@ class ResourceManagerV1(ResourceManager):
             block_ids = self.cache_manager.allocate_gpu_blocks(request, num_blocks)
         else:
             block_ids = self.cache_manager.allocate_gpu_blocks(num_blocks, request.request_id)
-        if self._should_use_head_wise_swa(num_blocks):
-            # P10/Fix-3 (review): real-KV and head-wise sidecar must commit
-            # atomically. If the sidecar extension fails we MUST recycle the
-            # real-KV blocks we just acquired, otherwise ownership drifts and
-            # those blocks leak (preempt/abort path will not see them).
-            try:
-                self._extend_head_wise_block_tables(request, num_blocks)
-            except Exception:
-                if block_ids and hasattr(self.cache_manager, "recycle_gpu_blocks"):
-                    try:
-                        self.cache_manager.recycle_gpu_blocks(block_ids, request.request_id)
-                    except Exception as recycle_exc:  # pragma: no cover - defensive
-                        llm_logger.error(
-                            f"failed to roll back real-KV blocks {block_ids} for request "
-                            f"{request.request_id} after head-wise sidecar failure: {recycle_exc}"
-                        )
-                raise
+        if self._head_wise_swa_active():
+            if self._should_use_head_wise_swa(num_blocks):
+                # P10/Fix-3 (review): real-KV and head-wise sidecar must commit
+                # atomically. If the sidecar extension fails we MUST recycle the
+                # real-KV blocks we just acquired, otherwise ownership drifts and
+                # those blocks leak (preempt/abort path will not see them).
+                try:
+                    self._extend_head_wise_block_tables(request, num_blocks)
+                except Exception:
+                    if block_ids and hasattr(self.cache_manager, "recycle_gpu_blocks"):
+                        try:
+                            self.cache_manager.recycle_gpu_blocks(block_ids, request.request_id)
+                        except Exception as recycle_exc:  # pragma: no cover - defensive
+                            llm_logger.error(
+                                f"failed to roll back real-KV blocks {block_ids} for request "
+                                f"{request.request_id} after head-wise sidecar failure: {recycle_exc}"
+                            )
+                    raise
         return block_ids
 
     def _request_match_blocks(self, request: Request, skip_storage: bool = True):
@@ -1887,11 +1902,15 @@ class ResourceManagerV1(ResourceManager):
         # this drop, ``swa_head_recycle_upto`` and ``swa_head_block_tables``
         # would leak across request_id reuse and corrupt the next request's
         # monotone recycle cursor.
-        if envs.FD_HEAD_WISE_KV_CACHE:
+        if self._head_wise_swa_active():
             head_blocks = self.swa_head_block_tables.pop(request.request_id, None)
             head_cursor = self.swa_head_recycle_upto.pop(request.request_id, None)
             self.swa_legacy_recycle_upto.pop(request.request_id, None)
             early_recycled_legacy = self.swa_legacy_recycled_blocks.pop(request.request_id, set())
+            # T53 PR2 B-1: clear the worker-facing snapshot so any stale read
+            # after teardown sees ``None`` and the materialization layer skips
+            # the head-wise tensor (kernel falls back to flat ``block_tables``).
+            request.head_block_tables = None
             if head_blocks and hasattr(self.cache_manager, "recycle_gpu_blocks_head_wise"):
                 if head_cursor:
                     _, recycle_from_floor, _ = self._swa_window_sink_block()
