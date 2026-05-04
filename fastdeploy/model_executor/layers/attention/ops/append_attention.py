@@ -85,6 +85,8 @@ def append_attention(
     sliding_window: int = 0,
     sink_size: int = 0,
     head_wise_full_hidden: int = 0,
+    *,
+    block_tables_headwise: Optional[paddle.Tensor] = None,
 ) -> paddle.Tensor:
     """
     append_attention
@@ -92,6 +94,9 @@ def append_attention(
     if current_platform.is_cuda():
 
         if sliding_window > 0 and head_wise_full_hidden > 0:
+            # TODO(T53 PR2): collapse this dual-call once the C++ slice has a
+            # per-head SWA/full predicate; block_tables_headwise alone does not
+            # make the full-head prefix safe under a global sliding-window mask.
             out_swa = append_attention_gpu(
                 qkv.clone(),
                 key_cache,
@@ -129,6 +134,7 @@ def append_attention(
                 q_norm_weight,
                 k_norm_weight,
                 sinks,
+                block_tables_headwise,
                 rms_norm_eps,
                 compute_type,
                 cache_quant_type,
@@ -188,6 +194,7 @@ def append_attention(
             q_norm_weight,
             k_norm_weight,
             sinks,
+            block_tables_headwise,
             rms_norm_eps,
             compute_type,
             cache_quant_type,
@@ -274,11 +281,22 @@ def append_attention_with_output(
     causal: bool = True,
     speculate_decoder: bool = False,
     sliding_window: int = 0,
+    sink_size: int = 0,
+    head_wise_full_hidden: int = 0,
+    *,
+    block_tables_headwise: Optional[paddle.Tensor] = None,
 ) -> None:
     """
     append_attention
     """
     if current_platform.is_cuda():
+        # TODO(T53 PR3): mirror the dual-call head-wise SWA merge from
+        # append_attention() above. Until then, the use_output path does not
+        # implement per-head full-hidden override, so reject any caller that
+        # tries to enable it here rather than silently dropping the parameter.
+        assert (
+            head_wise_full_hidden == 0
+        ), "append_attention_with_output: head_wise_full_hidden>0 not yet supported in use_output path (see T53 PR3)."
         return append_attention_with_output_gpu(
             qkv,
             key_cache,
@@ -317,6 +335,7 @@ def append_attention_with_output(
             q_norm_weight,
             k_norm_weight,
             sinks,
+            block_tables_headwise,
             rms_norm_eps,
             compute_type,
             cache_quant_type,
@@ -334,7 +353,7 @@ def append_attention_with_output(
             causal,
             speculate_decoder,
             sliding_window,
-            0,
+            sink_size,
         )
     else:
         raise NotImplementedError

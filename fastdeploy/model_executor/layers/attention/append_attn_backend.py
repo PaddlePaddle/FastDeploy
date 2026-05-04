@@ -231,6 +231,17 @@ class AppendAttentionBackend(AttentionBackend):
         """get_attention_meta"""
         return self.attention_metadata
 
+    def _get_block_tables_headwise(self, forward_meta: ForwardMeta) -> Optional[paddle.Tensor]:
+        """Return optional rank-2 head-wise block table from forward/cache metadata."""
+        block_tables_headwise = getattr(forward_meta, "block_tables_headwise", None)
+        if block_tables_headwise is not None:
+            return block_tables_headwise
+
+        cache_manager = getattr(forward_meta, "cache_manager", None)
+        if cache_manager is not None:
+            return getattr(cache_manager, "block_tables_headwise", None)
+        return None
+
     def _get_identity_rotary_embs(self, original_rotary_embs: paddle.Tensor) -> paddle.Tensor:
         """
         Create identity rotary embeddings (cos=1, sin=0) that make RoPE a no-op.
@@ -285,6 +296,7 @@ class AppendAttentionBackend(AttentionBackend):
         forward_mixed
         """
         metadata = self.attention_metadata
+        block_tables_headwise = self._get_block_tables_headwise(forward_meta)
 
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
@@ -438,6 +450,9 @@ class AppendAttentionBackend(AttentionBackend):
                 self.causal,
                 self.speculative_method is not None,
                 sliding_window,
+                self.sink_size,
+                self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
+                block_tables_headwise=block_tables_headwise,
             )
         else:
             res = append_attention(
@@ -496,5 +511,6 @@ class AppendAttentionBackend(AttentionBackend):
                 sliding_window,
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
+                block_tables_headwise=block_tables_headwise,
             )
         return res
