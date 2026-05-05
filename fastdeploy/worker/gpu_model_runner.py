@@ -952,7 +952,10 @@ class GPUModelRunner(ModelRunnerBase):
                 # occupant's per-head block ids cannot leak into the new
                 # request when ``head_block_tables`` is absent.
                 if "block_tables_headwise" in self.share_inputs:
-                    kv_local = self.input_batch.kv_num_heads_local
+                    # T53 PR2: read kv_num_heads_local from model_config (set
+                    # before warmup); ``self.input_batch`` may not yet exist
+                    # during _dummy_prefill_inputs / profile runs.
+                    kv_local = max(1, int(getattr(self.model_config, "kv_num_heads", 1) or 1))
                     row_start = idx * kv_local
                     row_end = row_start + kv_local
                     async_set_value(self.share_inputs["block_tables_headwise"][row_start:row_end, :], -1)
@@ -1046,7 +1049,8 @@ class GPUModelRunner(ModelRunnerBase):
                 # sidecar is preallocated, regardless of whether the request
                 # carries ``head_block_tables``.
                 if "block_tables_headwise" in self.share_inputs:
-                    kv_local = self.input_batch.kv_num_heads_local
+                    # T53 PR2: read from model_config (warmup-safe).
+                    kv_local = max(1, int(getattr(self.model_config, "kv_num_heads", 1) or 1))
                     row_start = idx * kv_local
                     row_end = row_start + kv_local
                     head_tables = getattr(request, "head_block_tables", None)
@@ -1301,7 +1305,9 @@ class GPUModelRunner(ModelRunnerBase):
             # capture. Each kv head gets its own non-overlapping block range,
             # mirroring the flat ``block_tables`` seeding above.
             if "block_tables_headwise" in self.share_inputs:
-                kv_local = getattr(self.input_batch, "kv_num_heads_local", 1)
+                # T53 PR2: ``self.input_batch`` is not constructed yet during
+                # warmup/profile; read kv_num_heads_local from model_config.
+                kv_local = max(1, int(getattr(self.model_config, "kv_num_heads", 1) or 1))
                 row_start = idx * kv_local
                 hw_max_blocks = self.share_inputs["block_tables_headwise"].shape[1]
                 fill_blocks = min(block_num, hw_max_blocks)
@@ -1344,11 +1350,17 @@ class GPUModelRunner(ModelRunnerBase):
         assert ~L894-897).
         """
         sidecar = self.share_inputs.get("block_tables_headwise")
+        # T53 PR2: kv_num_heads_local is read from model_config (warmup-safe);
+        # this method is also invoked from _dummy_run before InputBatch exists.
+        _kv_local_warmup = max(1, int(getattr(self.model_config, "kv_num_heads", 1) or 1))
         if sidecar is None:
             return None
         if not bool(envs.FD_HEAD_WISE_KV_CACHE) or (envs.FD_T53_HEAD_WISE_SWA_RATIO or 0) <= 0:
             return None
-        kv_local = getattr(self.input_batch, "kv_num_heads_local", 1)
+        # T53 PR2: ``self.input_batch`` may be absent during warmup/profile.
+        # Fall back to the model_config-derived value so dummy capture works.
+        ib = getattr(self, "input_batch", None)
+        kv_local = getattr(ib, "kv_num_heads_local", _kv_local_warmup) if ib is not None else _kv_local_warmup
         # FIX 1: during CUDA-graph capture forward_batch_reqs_list is empty;
         # return the pre-allocated slice directly so the graph captures the
         # head-wise path instead of the legacy flat-only path.
