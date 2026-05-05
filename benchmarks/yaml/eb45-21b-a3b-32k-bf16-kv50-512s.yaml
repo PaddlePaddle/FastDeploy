@@ -1,11 +1,12 @@
 # T53 bench workload — KV-bound (not slot-bound); gate: FD_HEAD_WISE_KV_CACHE=1
 # max_num_seqs raised to 256 so the KV pool, not the slot count, is the bottleneck.
-# kv_cache_ratio: 0.35 → ~28GB KV on A800-80GB; safe margin with 42GB model weights.
-# (kv_cache_ratio is a fraction of total GPU memory — 0.50 causes OOM on A800+21B model)
+# kv_cache_ratio: 0.30 → ~24GB KV on A800-80GB (TINY envelope diagnostic per opus v2 verdict).
+# (0.35 deterministic OOM at 78.99GB / index 3408/3689 weights load — 4 identical failures.
+#  0.50 also OOMs. Revert to 0.35 before SMOKE/FULL only after opus comparability decision.)
 # Use with: INPUT_LEN=8192 OUTPUT_LEN=4096 REQUEST_RATE=8
 #
 max_model_len: 32768
 max_num_seqs: 256
-kv_cache_ratio: 0.35
+kv_cache_ratio: 0.30
 tensor_parallel_size: 1
 max_num_batched_tokens: 32768
