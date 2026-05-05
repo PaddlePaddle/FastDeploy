@@ -309,15 +309,9 @@ class AppendAttentionBackend(AttentionBackend):
             sentinel_mask = block_tables_headwise == -1
             normalized = block_tables_headwise % num_gpu_blocks
             block_tables_headwise = paddle.where(sentinel_mask, block_tables_headwise, normalized)
-            # Fail-fast: catch residual OOB (should be impossible after normalization)
-            non_sentinel = block_tables_headwise[~sentinel_mask.all(axis=-1)]
-            if non_sentinel.numel() > 0:
-                _max_id = int(non_sentinel.max().item())
-                assert _max_id < num_gpu_blocks, (
-                    f"T53-HOTFIX OOB: max block_id={_max_id} >= num_gpu_blocks={num_gpu_blocks}. "
-                    f"Normalization failed. This proves the allocator emits flat global IDs. "
-                    f"Fix: RFC-PR1-reanchored.md §3 per-head independent pool rewrite."
-                )
+            # NOTE: OOB fail-fast assert removed — boolean fancy indexing (non_sentinel = ...)
+            # and .item() CPU sync are incompatible with CUDA graph capture (cudaError 900).
+            # The paddle.where normalization above is graph-safe (static-shape elementwise ops).
 
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
