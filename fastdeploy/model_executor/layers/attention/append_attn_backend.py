@@ -298,6 +298,27 @@ class AppendAttentionBackend(AttentionBackend):
         metadata = self.attention_metadata
         block_tables_headwise = self._get_block_tables_headwise(forward_meta)
 
+        # T53-PR2-HOTFIX: normalize head-wise allocator flat IDs → per-head local IDs
+        # The PR1 allocator emits flat IDs in [0, num_gpu_blocks * kv_num_heads) from a
+        # single shared min-heap. The kernel expects IDs in {-1} ∪ [0, num_gpu_blocks).
+        # FORMULA: local = flat % num_gpu_blocks  (sentinel -1 preserved)
+        # NOTE: This is a bench-only stop-gap. Production fix = PR1 per-head pool rewrite.
+        # Remove this block once RFC-PR1-reanchored.md §3 allocator fix lands.
+        if block_tables_headwise is not None:
+            num_gpu_blocks = forward_meta.caches[2 * layer.layer_id].shape[0]
+            sentinel_mask = block_tables_headwise == -1
+            normalized = block_tables_headwise % num_gpu_blocks
+            block_tables_headwise = paddle.where(sentinel_mask, block_tables_headwise, normalized)
+            # Fail-fast: catch residual OOB (should be impossible after normalization)
+            non_sentinel = block_tables_headwise[~sentinel_mask.all(axis=-1)]
+            if non_sentinel.numel() > 0:
+                _max_id = int(non_sentinel.max().item())
+                assert _max_id < num_gpu_blocks, (
+                    f"T53-HOTFIX OOB: max block_id={_max_id} >= num_gpu_blocks={num_gpu_blocks}. "
+                    f"Normalization failed. This proves the allocator emits flat global IDs. "
+                    f"Fix: RFC-PR1-reanchored.md §3 per-head independent pool rewrite."
+                )
+
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
         if rope_already_applied and forward_meta.rotary_embs is not None:

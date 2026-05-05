@@ -28,6 +28,19 @@ def _validate_split_kv_size(value: int) -> int:
     return value
 
 
+def _checked_swa_ratio(raw: str) -> float:
+    """Parse and validate FD_T53_HEAD_WISE_SWA_RATIO ∈ [0.0, 1.0]. Default: 0.0."""
+    if not raw:
+        return 0.0
+    v = float(raw)
+    if not (0.0 <= v <= 1.0):
+        raise ValueError(
+            f"FD_T53_HEAD_WISE_SWA_RATIO={v!r} out of range [0.0, 1.0]. "
+            f"Use 0.0 to disable, 1.0 for full SWA on all heads."
+        )
+    return v
+
+
 environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to use BF16 on CPU.
     "FD_CPU_USE_BF16": lambda: os.getenv("FD_CPU_USE_BF16", "False"),
@@ -111,9 +124,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # T53: per-head SWA block recycle toggles — all default-off; requires FD_HEAD_WISE_KV_CACHE=1 to enter recycle path.
     "FD_HEAD_WISE_KV_CACHE": lambda: int(os.getenv("FD_HEAD_WISE_KV_CACHE", "0")),
     "FD_T53_HEAD_WISE_SWA_FIXTURE": lambda: int(os.getenv("FD_T53_HEAD_WISE_SWA_FIXTURE", "0")),
-    "FD_T53_HEAD_WISE_SWA_RATIO": lambda: (
-        float(os.getenv("FD_T53_HEAD_WISE_SWA_RATIO")) if os.getenv("FD_T53_HEAD_WISE_SWA_RATIO", "") else None
-    ),
+    "FD_T53_HEAD_WISE_SWA_RATIO": lambda: (_checked_swa_ratio(os.getenv("FD_T53_HEAD_WISE_SWA_RATIO", ""))),
     # Whether to use PLUGINS.
     "FD_PLUGINS": lambda: None if "FD_PLUGINS" not in os.environ else os.environ["FD_PLUGINS"].split(","),
     # set trace attribute job_id.
