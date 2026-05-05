@@ -298,20 +298,26 @@ class AppendAttentionBackend(AttentionBackend):
         metadata = self.attention_metadata
         block_tables_headwise = self._get_block_tables_headwise(forward_meta)
 
-        # T53-PR2-HOTFIX: normalize head-wise allocator flat IDs → per-head local IDs
-        # The PR1 allocator emits flat IDs in [0, num_gpu_blocks * kv_num_heads) from a
-        # single shared min-heap. The kernel expects IDs in {-1} ∪ [0, num_gpu_blocks).
-        # FORMULA: local = flat % num_gpu_blocks  (sentinel -1 preserved)
-        # NOTE: This is a bench-only stop-gap. Production fix = PR1 per-head pool rewrite.
-        # Remove this block once RFC-PR1-reanchored.md §3 allocator fix lands.
-        if block_tables_headwise is not None:
+        # T53 PR2 hotfix (RFC-PR2-reanchored §5): the prior modulo HOTFIX
+        # ``flat % num_gpu_blocks`` silently aliased distinct heads onto
+        # identical block_ids when the PR1 allocator emitted flat ids from a
+        # single shared heap. PR1 has been re-architected to emit per-head ids
+        # directly in ``{-1} ∪ [0, num_gpu_blocks)`` (RFC-PR1-reanchored §3),
+        # so this contract is now satisfied at the source — no normalization
+        # needed and no normalization correct (any modulo would still mask
+        # producer bugs).
+        #
+        # Optional debug invariant check, off by default to avoid CUDA-graph
+        # capture incompatibility (boolean fancy-indexing + .item() syncs).
+        # Enable with ``FD_T53_DEBUG_BLOCK_TABLES=1`` outside graph capture.
+        if os.getenv("FD_T53_DEBUG_BLOCK_TABLES") == "1" and block_tables_headwise is not None:
             num_gpu_blocks = forward_meta.caches[2 * layer.layer_id].shape[0]
-            sentinel_mask = block_tables_headwise == -1
-            normalized = block_tables_headwise % num_gpu_blocks
-            block_tables_headwise = paddle.where(sentinel_mask, block_tables_headwise, normalized)
-            # NOTE: OOB fail-fast assert removed — boolean fancy indexing (non_sentinel = ...)
-            # and .item() CPU sync are incompatible with CUDA graph capture (cudaError 900).
-            # The paddle.where normalization above is graph-safe (static-shape elementwise ops).
+            valid = (block_tables_headwise == -1) | (
+                (block_tables_headwise >= 0) & (block_tables_headwise < num_gpu_blocks)
+            )
+            assert bool(valid.all().item()), (
+                "PR2 invariant: per-head block id must be in {-1} \u222a " f"[0, num_gpu_blocks={num_gpu_blocks})"
+            )
 
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)

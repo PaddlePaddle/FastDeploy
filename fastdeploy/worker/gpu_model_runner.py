@@ -1300,10 +1300,16 @@ class GPUModelRunner(ModelRunnerBase):
                 idx * block_num, (idx + 1) * block_num, 1
             )
             # T53 PR2 B-1: seed the head-wise block table for warmup/profile
-            # runs with an identity stride per head so the discrete
-            # AppendAttention kernel reads valid block ids during CUDA-graph
-            # capture. Each kv head gets its own non-overlapping block range,
-            # mirroring the flat ``block_tables`` seeding above.
+            # runs so the discrete AppendAttention kernel reads valid block ids
+            # during CUDA-graph capture.
+            #
+            # T53 PR2 hotfix (RFC-PR2-reanchored §4.1): per-head value spaces
+            # are independent — head_idx and block_id are orthogonal in
+            # cache_k[block_id, kv_head_idx, :, :]. The seeding base must NOT
+            # multiply by kv_local; all heads share the same per-slot block
+            # range ``[idx*fill_blocks, (idx+1)*fill_blocks)``. The previous
+            # ``base = (idx*kv_local + h)*fill_blocks`` violated the per-head
+            # value-space invariant ``[0, num_gpu_blocks)`` for h>=1, idx>0.
             if "block_tables_headwise" in self.share_inputs:
                 # T53 PR2: ``self.input_batch`` is not constructed yet during
                 # warmup/profile; read kv_num_heads_local from model_config.
@@ -1311,8 +1317,18 @@ class GPUModelRunner(ModelRunnerBase):
                 row_start = idx * kv_local
                 hw_max_blocks = self.share_inputs["block_tables_headwise"].shape[1]
                 fill_blocks = min(block_num, hw_max_blocks)
+                # Bound the seeded range against the per-head value space so we
+                # cannot drift outside ``[0, num_gpu_blocks)`` even if a future
+                # caller bumps max_num_seqs.
+                num_gpu_blocks = int(getattr(self, "num_gpu_blocks", 0) or 0)
+                if num_gpu_blocks > 0:
+                    assert (idx + 1) * fill_blocks <= num_gpu_blocks, (
+                        f"T53 PR2 warmup seeding: (idx+1)*fill_blocks="
+                        f"{(idx + 1) * fill_blocks} exceeds num_gpu_blocks="
+                        f"{num_gpu_blocks}; per-head value space invariant violated."
+                    )
+                base = idx * fill_blocks  # head-independent
                 for h in range(kv_local):
-                    base = (idx * kv_local + h) * fill_blocks
                     self.share_inputs["block_tables_headwise"][row_start + h : row_start + h + 1, :fill_blocks] = (
                         np.arange(base, base + fill_blocks, 1, dtype="int32")
                     )
