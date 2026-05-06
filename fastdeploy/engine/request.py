@@ -913,6 +913,7 @@ class CompletionOutput:
     delta_message: Optional[DeltaMessage] = None
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
+    logits_stats: Optional[dict[str, float]] = None
 
     def to_dict(self):
         """
@@ -931,6 +932,7 @@ class CompletionOutput:
             "text": self.text,
             "reasoning_content": self.reasoning_content,
             "reasoning_token_num": self.reasoning_token_num,
+            "logits_stats": self.logits_stats,
         }
 
     @classmethod
@@ -956,6 +958,7 @@ class CompletionOutput:
             f"logprobs={self.logprobs}, "
             f"top_logprobs={self.top_logprobs}, "
             f"draft_top_logprobs={self.draft_top_logprobs}, "
+            f"logits_stats={self.logits_stats}, "
         )
 
     def get(self, key: str, default_value=None):
