@@ -445,6 +445,11 @@ class ResourceManagerV1(ResourceManager):
         )
         if block_size <= 0 or total_tokens < (window_blocks + 1) * block_size:
             return 0
+        # Boundary guard: only release SWA blocks at exact block boundaries.
+        # Mid-block decode steps (total_tokens % block_size != 0) leave the
+        # tail block partially-filled by the in-flight token; releasing it
+        # would race with the next decode write. We resume recycle on the
+        # next step that crosses a clean block boundary.
         if total_tokens % block_size != 0:
             return 0
         head_blocks = self.swa_head_block_tables.get(request.request_id)
