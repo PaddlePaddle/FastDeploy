@@ -212,6 +212,13 @@ __global__ void multi_query_append_attention_kernel(
       wid * 4 + tid / 8, tid % 8);
 
   uint32_t kv_idx_base = chunk_start;
+  // SWA sentinel guard (T53 PR1): block_id == -1 indicates the slot was
+  // recycled by recycle_request_swa_head_cache. The SWA mask built from
+  // chunk_start/chunk_end zeroes any contribution from this aged-out region,
+  // so the value loaded from block 0 is masked away in softmax. SAFETY:
+  // when sink_size>0, recycle_from_floor=sink_blocks guarantees the sink
+  // window is never recycled, so block_id==-1 cannot occur inside the
+  // attended sink region and the fallback to block 0 is provably out of range.
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
   if (block_id < 0) {
     block_id = 0;
@@ -288,6 +295,9 @@ __global__ void multi_query_append_attention_kernel(
     __syncthreads();
 
     kv_idx_base += num_frags_z * 16;
+    // SWA sentinel guard (T53 PR1): see top-of-function note. block_id == -1
+    // means the slot was recycled; SWA mask zeroes its contribution and the
+    // sink window (when sink_size>0) is never recycled.
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
     if (block_id < 0) {
       block_id = 0;
@@ -603,6 +613,13 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
       wid * 4 + tid / 8, tid % 8);
 
   uint32_t kv_idx_base = chunk_start;
+  // SWA sentinel guard (T53 PR1): block_id == -1 indicates the slot was
+  // recycled by recycle_request_swa_head_cache. The SWA mask built from
+  // chunk_start/chunk_end zeroes any contribution from this aged-out region,
+  // so the value loaded from block 0 is masked away in softmax. SAFETY:
+  // when sink_size>0, recycle_from_floor=sink_blocks guarantees the sink
+  // window is never recycled, so block_id==-1 cannot occur inside the
+  // attended sink region and the fallback to block 0 is provably out of range.
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
   if (block_id < 0) {
     block_id = 0;
@@ -683,6 +700,9 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     __syncthreads();
 
     kv_idx_base += BLOCK_SIZE;
+    // SWA sentinel guard (T53 PR1): see top-of-function note. block_id == -1
+    // means the slot was recycled; SWA mask zeroes its contribution and the
+    // sink window (when sink_size>0) is never recycled.
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
     if (block_id < 0) {
       block_id = 0;
