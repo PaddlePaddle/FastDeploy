@@ -215,10 +215,17 @@ __global__ void multi_query_append_attention_kernel(
   // SWA sentinel guard (T53 PR1): block_id == -1 indicates the slot was
   // recycled by recycle_request_swa_head_cache. The SWA mask built from
   // chunk_start/chunk_end zeroes any contribution from this aged-out region,
-  // so the value loaded from block 0 is masked away in softmax. SAFETY:
-  // when sink_size>0, recycle_from_floor=sink_blocks guarantees the sink
-  // window is never recycled, so block_id==-1 cannot occur inside the
-  // attended sink region and the fallback to block 0 is provably out of range.
+  // so the value loaded from block 0 is masked away in softmax.
+  // Invariant: recycle writes -1 ONLY at block positions < window_start_block.
+  // Current chunk's first position is chunk_start (or chunk_start aligned),
+  // and the loop guard ensures chunk_start >= window_start, so
+  //   block_idx >= window_start_block => recycle never wrote -1 here.
+  // This holds for BOTH sink configs:
+  //   sink_size > 0: sink blocks [0, sink_blocks) are kept; gap [-1] blocks
+  //                  lie in [sink_blocks, window_start_block) - not reachable.
+  //   sink_size == 0: recycle writes -1 only at pos < window_start; since
+  //                   chunk_start >= window_start, block_idx never falls there.
+  // Therefore block_id >= 0 is guaranteed and the clamp is a safety net only.
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
   if (block_id < 0) {
     block_id = 0;
@@ -295,9 +302,9 @@ __global__ void multi_query_append_attention_kernel(
     __syncthreads();
 
     kv_idx_base += num_frags_z * 16;
-    // SWA sentinel guard (T53 PR1): see top-of-function note. block_id == -1
-    // means the slot was recycled; SWA mask zeroes its contribution and the
-    // sink window (when sink_size>0) is never recycled.
+    // SWA sentinel guard (T53 PR1): see top-of-loop comment.
+    // block_id >= 0 guaranteed for both sink_size > 0 and == 0 (see loop-level
+    // comment).
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
     if (block_id < 0) {
       block_id = 0;
@@ -616,10 +623,17 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   // SWA sentinel guard (T53 PR1): block_id == -1 indicates the slot was
   // recycled by recycle_request_swa_head_cache. The SWA mask built from
   // chunk_start/chunk_end zeroes any contribution from this aged-out region,
-  // so the value loaded from block 0 is masked away in softmax. SAFETY:
-  // when sink_size>0, recycle_from_floor=sink_blocks guarantees the sink
-  // window is never recycled, so block_id==-1 cannot occur inside the
-  // attended sink region and the fallback to block 0 is provably out of range.
+  // so the value loaded from block 0 is masked away in softmax.
+  // Invariant: recycle writes -1 ONLY at block positions < window_start_block.
+  // Current chunk's first position is chunk_start (or chunk_start aligned),
+  // and the loop guard ensures chunk_start >= window_start, so
+  //   block_idx >= window_start_block => recycle never wrote -1 here.
+  // This holds for BOTH sink configs:
+  //   sink_size > 0: sink blocks [0, sink_blocks) are kept; gap [-1] blocks
+  //                  lie in [sink_blocks, window_start_block) - not reachable.
+  //   sink_size == 0: recycle writes -1 only at pos < window_start; since
+  //                   chunk_start >= window_start, block_idx never falls there.
+  // Therefore block_id >= 0 is guaranteed and the clamp is a safety net only.
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
   if (block_id < 0) {
     block_id = 0;
@@ -700,9 +714,9 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     __syncthreads();
 
     kv_idx_base += BLOCK_SIZE;
-    // SWA sentinel guard (T53 PR1): see top-of-function note. block_id == -1
-    // means the slot was recycled; SWA mask zeroes its contribution and the
-    // sink window (when sink_size>0) is never recycled.
+    // SWA sentinel guard (T53 PR1): see top-of-loop comment.
+    // block_id >= 0 guaranteed for both sink_size > 0 and == 0 (see loop-level
+    // comment).
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
     if (block_id < 0) {
       block_id = 0;

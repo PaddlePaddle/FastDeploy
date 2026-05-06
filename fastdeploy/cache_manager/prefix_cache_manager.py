@@ -604,7 +604,8 @@ class PrefixCacheManager:
         kv_num_heads = max(1, self.kv_num_heads)
         needed = num_blocks * kv_num_heads
         free_list = self.gpu_free_head_wise_block_list
-        assert needed <= len(free_list), f"head-wise gpu free block num: {len(free_list)} < needed number {needed}"
+        if needed > len(free_list):
+            raise RuntimeError(f"head-wise gpu free block num: {len(free_list)} < needed number {needed}")
         logger.debug(f"{req_id} start allocate (head-wise)...")
         flat = [heapq.heappop(free_list) for _ in range(needed)]
         # Head-major reshape: row h contains the num_blocks cache ids assigned to KV head h.
