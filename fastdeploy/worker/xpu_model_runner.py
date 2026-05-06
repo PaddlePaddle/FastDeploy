@@ -161,7 +161,7 @@ class XPUModelRunner(ModelRunnerBase):
         self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
-        self.MAX_INFER_SEED = 9223372036854775806
+        self.MAX_INFER_SEED = 2147483646
         self.share_inputs = InputBatch(self.fd_config)
         self.share_inputs.init_share_inputs()
         self.max_num_seqs = self.fd_config.scheduler_config.max_num_seqs
