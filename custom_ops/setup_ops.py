@@ -651,6 +651,7 @@ elif paddle.is_compiled_with_custom_device("gcu"):
     )
 elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
     maca_path = os.getenv("MACA_PATH", "/opt/maca")
+    cu_bridge_path = os.path.join(maca_path, "tools", "cu-bridge")
     sources = [
         "gpu_ops/update_inputs_v1.cu",
         "gpu_ops/save_with_output_msg.cc",
@@ -768,11 +769,15 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
                 os.path.join(maca_path, "include"),
                 os.path.join(maca_path, "include/mcr"),
                 os.path.join(maca_path, "include/common"),
+                os.path.join(maca_path, "include/mcblas"),
                 os.path.join(maca_path, "include/mcfft"),
+                os.path.join(maca_path, "include/mcdnn"),
                 os.path.join(maca_path, "include/mcrand"),
                 os.path.join(maca_path, "include/mcsparse"),
-                os.path.join(maca_path, "include/mcblas"),
                 os.path.join(maca_path, "include/mcsolver"),
+                os.path.join(maca_path, "include/mckl"),
+                os.path.join(cu_bridge_path, "include"),
+                os.path.join(cu_bridge_path, "include/nvtx3"),
             ],
         ),
     )
