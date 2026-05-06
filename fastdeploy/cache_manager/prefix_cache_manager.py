@@ -512,7 +512,13 @@ class PrefixCacheManager:
         self.gpu_free_head_wise_block_list = list(range(total_cache_ids - 1, -1, -1))
         heapq.heapify(self.gpu_free_head_wise_block_list)
         self.total_head_wise_cache_ids = total_cache_ids
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_head_wise_block_list))
+        # head-wise free list holds per-(block,head) cache ids; divide by
+        # kv_num_heads so the exported metric stays in logical-block units
+        # (matches legacy gpu_free_block_list semantics; avoids kv_num_heads
+        # inflation observed by PaddlePaddle-bot review on PR #7717).
+        main_process_metrics.free_gpu_block_num.set(
+            len(self.gpu_free_head_wise_block_list) // max(1, self.kv_num_heads)
+        )
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
     def can_allocate_gpu_blocks(self, num_blocks: int, try_free_gpu_blocks: bool = True):
@@ -603,7 +609,8 @@ class PrefixCacheManager:
             f"req_id:{req_id} allocate_gpu_blocks_head_wise: {allocated}, "
             f"len(gpu_free_head_wise_block_list) {len(free_list)}"
         )
-        main_process_metrics.free_gpu_block_num.set(len(free_list))
+        # report logical-block units (free_list counts per-(block,head) ids)
+        main_process_metrics.free_gpu_block_num.set(len(free_list) // max(1, self.kv_num_heads))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
         return allocated
 
@@ -657,7 +664,8 @@ class PrefixCacheManager:
             f"req_id:{req_id} recycle_gpu_blocks_head_wise: pushed {len(valid)} ids, "
             f"len(gpu_free_head_wise_block_list) {len(free_list)}"
         )
-        main_process_metrics.free_gpu_block_num.set(len(free_list))
+        # report logical-block units (free_list counts per-(block,head) ids)
+        main_process_metrics.free_gpu_block_num.set(len(free_list) // max(1, self.kv_num_heads))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
     def allocate_cpu_blocks(self, num_blocks):
