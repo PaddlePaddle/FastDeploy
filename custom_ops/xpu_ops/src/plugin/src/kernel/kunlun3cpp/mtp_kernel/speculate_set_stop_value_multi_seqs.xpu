@@ -6,21 +6,23 @@
 
 namespace fd_xpu3 {
 
-__global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
-                                                    int64_t *accept_tokens,
-                                                    int *accept_nums,
-                                                    const int64_t *pre_ids,
-                                                    const int64_t *step_idx,
-                                                    const int64_t *stop_seqs,
-                                                    const int *stop_seqs_len,
-                                                    const int *seq_lens,
-                                                    const int64_t *end_ids,
-                                                    const int64_t *min_tokens,
-                                                    const int bs,
-                                                    const int accept_tokens_len,
-                                                    const int stop_seqs_bs,
-                                                    const int stop_seqs_max_len,
-                                                    const int pre_ids_len) {
+__global__ void speculate_set_stop_value_multi_seqs(
+    bool *stop_flags,
+    int64_t *accept_tokens,
+    int *accept_nums,
+    const int64_t *token_ids_all,
+    const int64_t *prompt_lens,
+    const int64_t *step_idx,
+    const int64_t *stop_seqs,
+    const int *stop_seqs_len,
+    const int *seq_lens,
+    const int64_t *end_ids,
+    const int64_t *min_tokens,
+    const int bs,
+    const int accept_tokens_len,
+    const int stop_seqs_bs,
+    const int stop_seqs_max_len,
+    const int max_model_len) {
   int cls_id = cluster_id();
   int cid = core_id();
   int ncores = core_num();
@@ -31,51 +33,74 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
   int64_t min_token_limit = 0;
   bool stop_flags_now = false;
   int stop_seq_len = 0;
+  int64_t prompt_len = 0;
 
-  for (int bid = cls_id; bid < bs; bid += nclusters) {
+  for (int bid = cid; bid < bs; bid += ncores) {
     GM2LM_ASYNC(accept_nums + bid, &accept_num, sizeof(int));
     GM2LM_ASYNC(step_idx + bid, &step_idx_now, sizeof(int64_t));
     GM2LM_ASYNC(min_tokens + bid, &min_token_limit, sizeof(int64_t));
+    GM2LM_ASYNC(prompt_lens + bid, &prompt_len, sizeof(int64_t));
     GM2LM(stop_flags + bid, &stop_flags_now, sizeof(bool));
-    if (step_idx_now >= min_token_limit) continue;
+
+    // Align with GPU: can_stop = (step_idx_now + accept_num >= min_token_limit)
+    bool can_stop = (step_idx_now + accept_num >= min_token_limit);
+    if (!can_stop) continue;
     if (stop_flags_now) {
       continue;
     }
-    for (int tid = cid; tid < stop_seqs_bs; tid += ncores) {
-      GM2LM_ASYNC(stop_seqs_len + tid, &stop_seq_len, sizeof(int));
+
+    for (int tid = 0; tid < stop_seqs_bs; tid += 1) {
+      // Align with GPU: per-batch stop_seqs_len
+      GM2LM(
+          stop_seqs_len + bid * stop_seqs_bs + tid, &stop_seq_len, sizeof(int));
       if (stop_seq_len <= 0) {
         continue;
       }
-      int accept_idx = 0;
+      /*
+        Align with GPU:
+        accept_idx = -1 means the last token of stop_seq is at the end
+        of pre_ids (pre_ids[step_idx_now - 1]), i.e. a delayed match from
+        the previous round. To prevent appending eos after stop_seqs from
+        going out of bounds, skip accept_tokens[accept_num-1] (the last
+        token of the current round); that token is deferred to the next
+        round. Loop range: when accept_num > 0, [-1, accept_num-2];
+                           when accept_num = 0, [-1] (only check pre_ids tail).
+      */
+      int accept_idx = -1;
       bool is_end = false;
       int64_t stop_seq_now_lm = 0;
-      for (; accept_idx <= accept_num - 1 && !is_end; accept_idx++) {
-        if (step_idx_now - accept_num + accept_idx + 1 < stop_seq_len) {
+
+      int loop_end = (accept_num > 0) ? accept_num - 2 : -1;
+      for (; accept_idx <= loop_end && !is_end; accept_idx++) {
+        if (step_idx_now + accept_idx + 1 < stop_seq_len) {
           continue;
         }
-        // 遍历一个 stop_seqs
         for (int i = stop_seq_len - 1; i >= 0; --i) {
           int64_t cur_token_idx = -1;
-          // 通过当前值判断 token 是在 pre_ids 还是 accept_token 里
-          if (stop_seq_len - 1 - i < accept_idx) {
-            GM2LM(accept_tokens + bid * accept_tokens_len + accept_idx -
-                      (stop_seq_len - 1 - i) - 1,
+
+          int offset = stop_seq_len - 1 - i;
+          int accept_tokens_idx = accept_idx - offset;
+
+          if (accept_tokens_idx >= 0) {
+            GM2LM(accept_tokens + bid * accept_tokens_len + accept_tokens_idx,
                   &cur_token_idx,
                   sizeof(int64_t));
           } else {
-            int pre_ids_idx =
-                step_idx_now - accept_num + accept_idx - (stop_seq_len - 1 - i);
-            // EC3
-            // 特殊拼接会导致input_ids最后一位无特殊token，即pre_ids[0]可能为23,
-            // 导致异常结束
-            if (pre_ids_idx <= 0) {
+            int pre_ids_idx = step_idx_now + accept_tokens_idx;
+            // Align with GPU: use < 0 instead of <= 0
+            if (pre_ids_idx < 0) {
               break;
             }
-            GM2LM(pre_ids + bid * pre_ids_len + pre_ids_idx,
-                  &cur_token_idx,
-                  sizeof(int64_t));
+            // Align with GPU: pre_ids_now = token_ids_all + bid * max_model_len
+            // + prompt_lens[bid]
+            GM2LM(
+                token_ids_all + bid * max_model_len + prompt_len + pre_ids_idx,
+                &cur_token_idx,
+                sizeof(int64_t));
           }
-          GM2LM(stop_seqs + tid * stop_seqs_max_len + i,
+          // Align with GPU: per-batch stop_seqs
+          GM2LM(stop_seqs + bid * stop_seqs_max_len * stop_seqs_bs +
+                    tid * stop_seqs_max_len + i,
                 &stop_seq_now_lm,
                 sizeof(int64_t));
           if (cur_token_idx != stop_seq_now_lm) {
@@ -88,12 +113,18 @@ __global__ void speculate_set_stop_value_multi_seqs(bool *stop_flags,
       }
       if (is_end) {
         int64_t end_id_lm;
-        bool value_true = true;
         GM2LM(end_ids, &end_id_lm, sizeof(int64_t));
-        LM2GM_ASYNC(&end_id_lm,
-                    accept_tokens + bid * accept_tokens_len + accept_idx - 1,
-                    sizeof(int64_t));
-        LM2GM(&value_true, stop_flags + bid, sizeof(bool));
+        // Align with GPU: accept_idx has already been incremented,
+        // pointing to the position after the last token of stop_seq.
+        // Truncate accept_nums and write eos at accept_idx position.
+        int new_accept_num = accept_idx + 1;
+        LM2GM_ASYNC(&new_accept_num, accept_nums + bid, sizeof(int));
+        LM2GM(&end_id_lm,
+              accept_tokens + bid * accept_tokens_len + accept_idx,
+              sizeof(int64_t));
+        // Align with GPU: do NOT set stop_flags here.
+        // It will be handled by downstream speculate_update /
+        // unified_update_model_status.
       }
     }
   }

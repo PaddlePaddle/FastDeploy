@@ -15,7 +15,7 @@
 """
 
 from dataclasses import dataclass
-from typing import List
+from typing import List, Optional
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -35,3 +35,8 @@ class ReadStorageTask(CacheTask):
 @dataclass(frozen=True, kw_only=True)
 class WriteStorageTask(CacheTask):
     timeout: float = 30.0
+    # Used in FD_AS_ONLY_FLUSH mode to indicate whether cache is present on this node.
+    # True = cache exists (request finish), False = cache gone (CPU eviction), None = not applicable.
+    flush_cache_exists: Optional[bool] = None
+    # Block index to start the write/flush operation from. Defaults to 0 (all blocks).
+    start_write_block_idx: int = 0

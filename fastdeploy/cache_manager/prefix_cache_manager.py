@@ -37,6 +37,8 @@ from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import Request
 from fastdeploy.inter_communicator import EngineCacheQueue, IPCSignal, PrefixTreeStatus
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.trace.constants import LoggingEventName
+from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import get_hash_str, get_logger
 
 logger = get_logger("prefix_cache_manager", "cache_manager.log")
@@ -211,8 +213,12 @@ class PrefixCacheManager:
             create=True,
         )
 
+        if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+            engine_cache_queue_address = (pod_ip, cache_config.local_cache_queue_port)
+        else:
+            engine_cache_queue_address = f"/dev/shm/fd_task_queue_{cache_config.local_cache_queue_port}.sock"
         self.cache_task_queue = EngineCacheQueue(
-            address=(pod_ip, cache_config.local_cache_queue_port),
+            address=engine_cache_queue_address,
             authkey=b"cache_queue_service",
             is_server=False,
             num_client=tensor_parallel_size,
@@ -290,6 +296,8 @@ class PrefixCacheManager:
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
             storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
+            if not self.enable_splitwise:
+                storage_arg_str += " --create_cache_tensor"
         else:
             storage_arg_str = " "
 
@@ -300,6 +308,7 @@ class PrefixCacheManager:
                     + visible_devices
                     + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                     + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
+                    + f" FD_AS_ONLY_FLUSH={int(envs.FD_AS_ONLY_FLUSH)}"
                     + f" {sys.executable} {py_path}"
                     + f" --device_id {int(device_ids[i])}"
                     + f" --rank {i}"
@@ -319,12 +328,11 @@ class PrefixCacheManager:
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
                     + storage_arg_str
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
                     + f" --model_path {self.config.model_config.model}"
-                    + f" >{log_dir}/launch_cache_transfer_manager_{int(device_ids[i])}.log 2>&1"
+                    + f" >{log_dir}/cache_manager_{int(device_ids[i])}.log 2>&1"
                 )
                 logger.info(f"Launch cache transfer manager, command:{launch_cmd}")
                 cache_manager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -346,9 +354,7 @@ class PrefixCacheManager:
             if exit_code is None:
                 logger.info("Launch cache transfer manager successful")
             else:
-                logger.info(
-                    "Launch cache transfer manager failed, see launch_cache_transfer_manager.log for more information"
-                )
+                logger.info("Launch cache transfer manager failed, see cache_manager.log for more information")
 
         # Start additional threads
         if cache_config.kvcache_storage_backend or self.num_cpu_blocks > 0:
@@ -421,7 +427,7 @@ class PrefixCacheManager:
                 + f" --ipc_suffix {ipc_suffix}"
                 + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                 + f" --speculative_config '{self.speculative_config.to_json_string()}'"
-                + f" >{log_dir}/launch_cache_messager_{i}.log 2>&1"
+                + f" >{log_dir}/cache_messager_{i}.log 2>&1"
             )
             logger.info(f"Launch cache messager, command:{launch_cmd}")
             cache_messager_processes.append(subprocess.Popen(launch_cmd, shell=True, preexec_fn=os.setsid))
@@ -433,7 +439,7 @@ class PrefixCacheManager:
         if exit_code is None:
             logger.info("Launch cache messager successful")
         else:
-            logger.info("Launch cache messager failed, see launch_cache_messager.log for more information")
+            logger.info("Launch cache messager failed, see cache_messager.log for more information")
             cache_messager_processes = None
         return cache_messager_processes
 
@@ -824,7 +830,7 @@ class PrefixCacheManager:
                 storage_match_token_num = 0
                 match_storage_block_ids = []
 
-                if self.kvcache_storage_backend and no_match_token_num >= block_size:
+                if self.kvcache_storage_backend and no_match_token_num >= block_size and not envs.FD_AS_ONLY_FLUSH:
                     if not self.can_allocate_gpu_blocks(num_blocks=no_match_block_num, try_free_gpu_blocks=False):
                         raise Exception(
                             "request_match_blocks: Not enough GPU memory to allocate cache for matched Storage Cache"
@@ -917,7 +923,9 @@ class PrefixCacheManager:
                         f"request_match_blocks: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
-                    logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
+                    logger.error(
+                        f"request_match_blocks: request_block_ids: error: {type(e)} {e}, {traceback.format_exc()}"
+                    )
                     raise e
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
@@ -1001,6 +1009,11 @@ class PrefixCacheManager:
                 # 3. update metrics
                 if matched_block_num > 0:
                     self.metrics.hit_req_count += 1
+                    # Record CACHE_HIT trace event
+                    trace_print(LoggingEventName.CACHE_HIT, req_id, "")
+                else:
+                    # Record CACHE_MISS trace event
+                    trace_print(LoggingEventName.CACHE_MISS, req_id, "")
                 self.metrics.calculate_hit_metrics(
                     req_id,
                     cpu_match_token_num,
@@ -1137,6 +1150,7 @@ class PrefixCacheManager:
         if not keys:
             return
 
+        trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_START, request.request_id, getattr(request, "user", ""))
         gpu_block_ids = request.block_tables[: len(keys)]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
         write_storage_task = WriteStorageTask(
@@ -1150,6 +1164,7 @@ class PrefixCacheManager:
         self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
         logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+        trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_END, request.request_id, getattr(request, "user", ""))
 
     def write_cache_to_storage_decode(self, request: Request):
         """
@@ -1234,14 +1249,15 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return
 
-        if len(task.keys) != len(task.gpu_block_ids):
+        if not envs.FD_AS_ONLY_FLUSH and len(task.keys) != len(task.gpu_block_ids):
             err_msg = (
                 f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
             )
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        self.task_write_back_event[task.task_id] = Event()
+        if is_sync:
+            self.task_write_back_event[task.task_id] = Event()
         self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
         if is_sync:
             self.wait_write_storage_task(task.task_id)
@@ -1319,7 +1335,7 @@ class PrefixCacheManager:
                         f"free_nodes_directly: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
-                    logger.error(f"free_nodes_directly: error: {type(e)} {e}")
+                    logger.error(f"free_nodes_directly: error: {type(e)} {e}, {traceback.format_exc()}")
                     raise e
 
     def _handle_free_gpu_node_without_cpu(self, node):
@@ -1428,6 +1444,7 @@ class PrefixCacheManager:
 
                 hash_value_swap_node_ids_map = defaultdict(list)
                 hash_value_gpu_block_ids_map = defaultdict(list)
+                hash_value_flush_info = {}  # {input_hash_value: (token_ids, min_depth)}
                 total_gpu_free_count = 0
 
                 while True:
@@ -1440,6 +1457,10 @@ class PrefixCacheManager:
                     self.gpu_lru_leaf_set.remove(node)
                     if self.cache_config.num_cpu_blocks < need_block_num:
                         if node.shared_count == 0 and node.is_gpu_leaf_node:  # 直接回收
+                            if envs.FD_AS_ONLY_FLUSH and self.kvcache_storage_backend == "attention_store":
+                                key = node.input_hash_value
+                                if key not in hash_value_flush_info or node.depth < hash_value_flush_info[key][1]:
+                                    hash_value_flush_info[key] = (node.input_ids, node.depth)
                             self._handle_free_gpu_node_without_cpu(node)
                             total_gpu_free_count += 1
                             cur_node = node
@@ -1488,6 +1509,22 @@ class PrefixCacheManager:
                 logger.info(
                     f"free_block_ids_async: need_block_num {need_block_num}, free_block_num {total_gpu_free_count}."
                 )
+
+                if (
+                    envs.FD_AS_ONLY_FLUSH
+                    and self.kvcache_storage_backend == "attention_store"
+                    and hash_value_flush_info
+                ):
+                    for input_hash_value, (token_ids, min_depth) in hash_value_flush_info.items():
+                        flush_task = WriteStorageTask(
+                            task_id=str(uuid.uuid4()),
+                            keys=[input_hash_value],
+                            token_ids=token_ids,
+                            gpu_block_ids=[],
+                            flush_cache_exists=False,
+                            start_write_block_idx=min_depth - 1,
+                        )
+                        self.issue_write_back_storage_task(flush_task, is_sync=False)
 
                 # swap cache to cpu
                 if hash_value_gpu_block_ids_map:

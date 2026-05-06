@@ -133,7 +133,7 @@ class SplitwiseConnector:
             return sock
 
         except zmq.ZMQError as e:
-            self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}")
+            self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}, {traceback.format_exc()}")
 
             raise ConnectionError(f"Failed to connect to {addr}") from e
 
@@ -158,7 +158,7 @@ class SplitwiseConnector:
                 main_process_metrics.send_cache_failed_num.inc()
                 self._close_connection(addr)
         except Exception as e:
-            self.logger.error(f"_send_message: Message preparation failed: {e}")
+            self.logger.error(f"_send_message: Message preparation failed: {e}, {traceback.format_exc()}")
 
     def _close_connection(self, addr):
         """
@@ -277,23 +277,15 @@ class SplitwiseConnector:
                     "request_id": tasks[i].request_id,
                     "error_msg": tasks[i].get("error_msg"),
                 }
-                if (
-                    envs.ENABLE_V1_KVCACHE_SCHEDULER
-                    and tasks[i].request_id in self.resource_manager.waiting_abort_req_id_set
-                ):
-                    addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
-                    if addr not in cache_info:
-                        cache_info[addr] = []
-                    cache_info[addr].append(info)
             else:
-                addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
                 info = {
                     "request_id": tasks[i].request_id,
                     "dest_block_ids": dsg_info["block_tables"],
                 }
-                if addr not in cache_info:
-                    cache_info[addr] = []
-                cache_info[addr].append(info)
+            addr = f"{dsg_info['prefill_ip']}:" + f"{dsg_info['prefill_connector_port']}"
+            if addr not in cache_info:
+                cache_info[addr] = []
+            cache_info[addr].append(info)
 
         self.logger.debug(f"send cache info to prefill, {cache_info}")
         if len(cache_info):

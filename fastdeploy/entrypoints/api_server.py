@@ -78,9 +78,10 @@ async def generate(request: dict):
         except Exception as e:
             # 记录完整的异常堆栈信息
             log_request_error(
-                message="request[{request_id}] Error during generation: {error}",
+                message="request[{request_id}] Error during generation: {error}, {traceback}",
                 request_id=request.get("request_id"),
                 error=str(e),
+                traceback=traceback.format_exc(),
             )
             # 返回结构化的错误消息并终止流
             output = {"error": str(e), "error_type": e.__class__.__name__}
@@ -94,9 +95,10 @@ async def generate(request: dict):
         except Exception as e:
             # 记录完整的异常堆栈信息
             log_request_error(
-                message="request[{request_id}] Error during generation: {error}",
+                message="request[{request_id}] Error during generation: {error}, {traceback}",
                 request_id=request.get("request_id"),
                 error=str(e),
+                traceback=traceback.format_exc(),
             )
             # 返回结构化的错误消息并终止流
             error_msg = {"error": str(e), "error_type": e.__class__.__name__}
@@ -136,7 +138,7 @@ def main():
     parser = FlexibleArgumentParser()
     parser.add_argument("--port", default=9904, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-    parser.add_argument("--workers", default=1, type=int, help="number of workers")
+    parser.add_argument("--workers", default=4, type=int, help="number of workers")
     parser = EngineArgs.add_cli_args(parser)
     args = parser.parse_args()
     launch_api_server(args)

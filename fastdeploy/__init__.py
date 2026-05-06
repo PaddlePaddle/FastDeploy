@@ -18,6 +18,7 @@
 # This must be done before importing any modules that may use the logger
 import logging
 import os
+import warnings
 from contextlib import contextmanager
 
 # Create standard format (without color)
@@ -73,6 +74,23 @@ _configure_logger()
 os.environ["GLOG_minloglevel"] = "2"
 # suppress log from aistudio
 os.environ["AISTUDIO_LOG"] = "critical"
+# suppress transformers "None of PyTorch" warning
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+# suppress noisy warnings from third-party libraries
+warnings.filterwarnings("ignore", message="Setuptools is replacing distutils")
+warnings.filterwarnings("ignore", message="Due to potential compatibility issues between PaddlePaddle and PyTorch")
+
+
+class _PaddleFormersFilter(logging.Filter):
+    """Suppress paddleformers compatibility warning logged at import time."""
+
+    def filter(self, record):
+        return "Due to potential compatibility" not in record.getMessage()
+
+
+# Pre-register filter on PaddleFormers logger BEFORE it gets imported,
+# so the warning is suppressed during the first import.
+logging.getLogger("PaddleFormers").addFilter(_PaddleFormersFilter())
 
 import typing
 
