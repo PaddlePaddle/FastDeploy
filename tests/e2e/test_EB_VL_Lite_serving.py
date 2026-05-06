@@ -60,6 +60,7 @@ def setup_and_run_server():
     log_path = "server.log"
     limit_mm_str = json.dumps({"image": 100, "video": 100})
 
+    os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
     cmd = [
         sys.executable,
         "-m",

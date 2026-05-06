@@ -24,6 +24,8 @@ if project_root not in sys.path:
 
 os.environ["FD_USE_MACHETE"] = "0"
 
+os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
+
 from model_loader.utils import (
     calculate_diff_rate,
     form_model_get_output_topp0,

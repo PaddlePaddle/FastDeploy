@@ -20,6 +20,17 @@ import sys
 from types import ModuleType
 from typing import Any, Callable
 
+import paddle
+
+
+# ZKK: Copyied from fastdeploy/platforms/base.py
+def is_cuda() -> bool:
+    return False
+    """
+    whether platform is cuda
+    """
+    return paddle.is_compiled_with_cuda() and not paddle.is_compiled_with_rocm()
+
 
 def _validate_split_kv_size(value: int) -> int:
     """Validate FD_DETERMINISTIC_SPLIT_KV_SIZE is a positive power of 2."""
@@ -65,7 +76,11 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_CACHE_PARAMS": lambda: os.getenv("FD_CACHE_PARAMS", "none"),
     # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"
     # and "MLA_ATTN" can be set currently.
-    "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
+    "FD_ATTENTION_BACKEND": lambda: (
+        os.getenv("FD_ATTENTION_BACKEND", "FLASH_ATTN")
+        if is_cuda()
+        else os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN")
+    ),
     # Set sampling class. "base", "base_non_truncated", "air" and "rejection" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
     # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass", "flashinfer-cutedsl" and "flashinfer-trtllm" can be set currently.

@@ -13,6 +13,8 @@
 # limitations under the License.
 
 import os
+
+os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
 import re
 import shutil
 import signal

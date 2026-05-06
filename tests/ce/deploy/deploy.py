@@ -1,6 +1,9 @@
 import ast
 import json
 import os
+
+os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
+
 import re
 import signal
 import socket
@@ -272,6 +275,7 @@ def start_service():
         # 设置环境变量并启动进程
         env = os.environ.copy()
 
+        env["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
         with open(LOG_FILE, "w") as log:
             process = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)
 
@@ -341,6 +345,8 @@ def switch_service():
     try:
         # 设置环境变量并启动进程
         env = os.environ.copy()
+
+        env["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
 
         with open(LOG_FILE, "w") as log:
             process = subprocess.Popen(cmd, stdout=log, stderr=log, env=env, start_new_session=True)

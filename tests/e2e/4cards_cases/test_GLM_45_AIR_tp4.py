@@ -14,6 +14,8 @@
 
 import json
 import os
+
+os.environ["FD_ATTENTION_BACKEND"] = "APPEND_ATTN"
 import shutil
 import signal
 import subprocess
