@@ -599,6 +599,7 @@ class XPUModelRunner(ModelRunnerBase):
                     enable_thinking = bool(request.get("enable_thinking"))
                     logger.debug(f"request {request.request_id} with {enable_thinking=} at idx {idx}")
                     self.share_inputs["enable_thinking"][idx : idx + 1, :] = enable_thinking
+                    self.share_inputs["reasoning_status"][idx : idx + 1, :] = 0
                     if enable_thinking:
                         self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
                         if request.get("reasoning_max_tokens") is not None:
@@ -811,6 +812,7 @@ class XPUModelRunner(ModelRunnerBase):
                     )[0]
                     self.share_inputs["seq_lens_decoder"][idx : idx + 1] = 0
 
+                self.share_inputs["reasoning_status"][idx : idx + 1, :] = 0
                 if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
                     # Enable thinking
                     self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
