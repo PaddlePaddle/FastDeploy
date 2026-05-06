@@ -58,6 +58,7 @@ from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
+from fastdeploy.model_executor.utils import get_sm_version
 from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import print_gpu_memory_use
@@ -2109,8 +2110,17 @@ class GPUModelRunner(ModelRunnerBase):
                     )
             else:
                 for batch_size in sorted(capture_sizes, reverse=True):
+                    # SM80 BF16 MoE: one-hot matmul is memory-intensive, use 1 token to avoid OOM
+                    if (
+                        get_sm_version() < 90
+                        and current_platform.is_cuda()
+                        and os.environ.get("FD_MARLIN_FP8", "0") == "1"
+                    ):
+                        capture_num_tokens = 1
+                    else:
+                        capture_num_tokens = self.fd_config.get_max_chunk_tokens()
                     self._dummy_run(
-                        num_tokens=self.fd_config.get_max_chunk_tokens(),
+                        num_tokens=capture_num_tokens,
                         batch_size=batch_size,
                         in_capturing=True,
                         expected_decode_len=expected_decode_len,
@@ -2897,6 +2907,9 @@ class GPUModelRunner(ModelRunnerBase):
 
         # 2. Dummy run
         num_tokens = self.fd_config.get_max_chunk_tokens()
+        # Cap dummy run tokens to avoid OOM with large models (especially SM80 MoE)
+        if get_sm_version() < 90 and current_platform.is_cuda() and os.environ.get("FD_MARLIN_FP8", "0") == "1":
+            num_tokens = min(num_tokens, 256)
         logger.info(
             f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
         )
