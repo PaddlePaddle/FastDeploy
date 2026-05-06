@@ -18,14 +18,12 @@ from __future__ import annotations
 
 import os
 import re
-import time
 from typing import Dict
 
 import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.transformers import PretrainedModel
-from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -179,10 +177,6 @@ def _process_fp8_marlin_weights(moe_layer, up_gate_info_list, down_info_list, up
         # Periodic cache flush
         if i % 16 == 0:
             paddle.device.cuda.empty_cache()
-
-    logger.info(
-        f"Marlin FP8: Loaded up_gate={moe_layer.up_gate_proj_weight.shape}, down={moe_layer.down_proj_weight.shape}"
-    )
 
 
 class MiniMaxRMSNorm(paddle.nn.Layer):
@@ -495,7 +489,6 @@ class MiniMaxM2_5Model(nn.Layer):
         self.embed_tokens.load_state_dict(state_dict)
         self.norm.load_state_dict(state_dict)
         for i in range(self.num_layers):
-            logger.info(f"Loading layer {i}")
             self.layers[i].load_state_dict(state_dict)
 
     def forward(self, ids_remove_padding: paddle.Tensor, forward_meta: ForwardMeta):
@@ -752,7 +745,6 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
                 continue  # skip the normal dequant path
 
             if scale is None:
-                logger.warning(f"No scale for {wname}, loading raw fp8 as bf16")
                 wt_dq = get_tensor(wt).cast("bfloat16")
             else:
                 wt_f32_t = get_tensor(wt).cast("float32")
@@ -837,7 +829,6 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
                     break
 
         if moe_layer is None:
-            logger.warning(f"Marlin FP8: No MoE layer found for layer {layer_idx}")
             return
 
         num_experts = moe_layer.num_local_experts
@@ -893,10 +884,6 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
                     expert_down_scales[local_expert_id] = get_tensor(fp8_scales[scale_name])
 
         if not expert_up_gate or not expert_down:
-            logger.warning(
-                f"Marlin FP8: No expert weights found for layer {layer_idx}, "
-                f"up_gate={len(expert_up_gate)}, down={len(expert_down)}"
-            )
             return
 
         # Prepare per-expert data lists (avoid paddle.concat/stack on FP8)
@@ -925,8 +912,6 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
         from fastdeploy.platforms import current_platform
 
         if get_sm_version() < 90 and current_platform.is_cuda():
-            _t_start = time.time()
-
             # Get dimensions from expert weight shapes
             # gate weight: [moe_intermediate_size, hidden_size] = [1536, 3072]
             # down weight: [hidden_size, moe_intermediate_size] = [3072, 1536]
@@ -974,13 +959,6 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
             moe_layer._sm80_down = stacked_down  # [E, 3072, 1536]
             del stacked_ug, stacked_down
             paddle.device.cuda.empty_cache()
-
-            _dt = time.time() - _t_start
-            _mem = paddle.device.cuda.memory_allocated() / (1024**3)
-            logger.info(
-                f"SM80: Dequant {num_experts} experts for layer {layer_idx} "
-                f"took {_dt:.1f}s, GPU mem: {_mem:.1f} GB. Stacked on GPU."
-            )
             return  # Skip Marlin packing
 
         # Process through Marlin backend (packs weights for Marlin kernel)
@@ -1039,7 +1017,6 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
         scales_by_layer: Dict[int, dict] = {}  # layer_idx -> {scale_name: scale_tensor}
 
         for loaded_weight_name, loaded_weight in weights_iterator:
-            logger.debug(f"Loading weight: {loaded_weight_name}")
 
             # Skip MTP layers (model.layers.62, 63, 64, ...)
             # MTP layer indices start at num_hidden_layers
@@ -1186,7 +1163,6 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
 
         # Process non-layer FP8 weights (layer_idx = -1)
         if -1 in fp8_by_layer:
-            logger.info(f"Dequantizing non-layer FP8 weights ({len(fp8_by_layer[-1])} tensors) ...")
             self._dequant_fp8_weights(
                 fp8_by_layer[-1],
                 scales_by_layer.get(-1, {}),
@@ -1203,15 +1179,8 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
 
         # Process ALL decoder layers' FP8 weights in one batch
         layer_indices = sorted(k for k in fp8_by_layer.keys() if k >= 0)
-        mem_before_all = paddle.device.cuda.memory_allocated() / (1024**3)
-        logger.info(
-            f"Batch FP8 dequant: processing {len(layer_indices)} layers "
-            f"({sum(len(fp8_by_layer[li]) for li in layer_indices)} tensors total, "
-            f"GPU: {mem_before_all:.1f} GB) ..."
-        )
 
         for li in layer_indices:
-            logger.info(f"Start load layer {li}")  # Engine progress detection
             if _enable_marlin_fp8:
                 # Marlin FP8 mode: load FP8 expert weights directly to Marlin backend
                 self._load_fp8_marlin_layer(
@@ -1252,11 +1221,6 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
                 del scales_by_layer[li]
 
         paddle.device.cuda.empty_cache()
-        mem_after_all = paddle.device.cuda.memory_allocated() / (1024**3)
-        logger.info(
-            f"Batch FP8 dequant done. GPU: {mem_after_all:.1f} GB " f"(freed {mem_before_all - mem_after_all:.1f} GB)"
-        )
-
         del fp8_by_layer, scales_by_layer
 
         # Transpose all Linear weights after loading.
