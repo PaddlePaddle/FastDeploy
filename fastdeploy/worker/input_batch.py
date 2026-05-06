@@ -27,7 +27,7 @@ from fastdeploy.platforms import current_platform
 
 class InputBatch:
     def __getitem__(self, key):
-        """Support dictionary-style attribute access"""
+        """Support dictionary-style attribute access."""
         if hasattr(self, key):
             return getattr(self, key)
         raise KeyError(f"'{key}' is not a valid attribute of InputBatch")
@@ -249,6 +249,21 @@ class InputBatch:
             self.model_config.max_model_len + self.cache_config.block_size - 1
         ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
         self.block_tables = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
+
+        # T53 PR2: head-wise block tables (rank-2 head-major, default sentinel
+        # ``-1``). Sized for the local KV head count on this rank — mirrors the
+        # ``_num_swa_heads`` formula in resource_manager_v1.py so GQA/MQA
+        # (kv<tp) replicates KV across ranks correctly. Preallocated so that
+        # CUDA-graph capture is stable; per-step writes go through
+        # ``async_set_value`` only.
+        kv_num_heads_global = max(1, int(getattr(self.model_config, "num_key_value_heads", 1) or 1))
+        tp_size = max(1, int(getattr(self.fd_config.parallel_config, "tensor_parallel_size", 1) or 1))
+        self.kv_num_heads_local = (
+            max(1, kv_num_heads_global // tp_size) if kv_num_heads_global >= tp_size else kv_num_heads_global
+        )
+        self.block_tables_headwise = paddle.full(
+            [max_num_seqs * self.kv_num_heads_local, pre_max_block_num], -1, dtype="int32"
+        )
 
         # Initialize free list
         free_list = list(
@@ -485,6 +500,18 @@ class InputBatch:
         # Swap mask rollback
         swap_data(self.mask_rollback, i1, i2)
 
+        # T53 PR2 FIX 2: keep head-wise sidecar rows in lockstep with slot
+        # move.  Each slot owns kv_num_heads_local consecutive rows; the C16
+        # kernel expects row[slot*kv_local : (slot+1)*kv_local] to belong to
+        # the request occupying that slot.
+        if getattr(self, "block_tables_headwise", None) is not None:
+            kv_local = getattr(self, "kv_num_heads_local", 1)
+            i_start, i_end = i1 * kv_local, (i1 + 1) * kv_local
+            j_start, j_end = i2 * kv_local, (i2 + 1) * kv_local
+            tmp = self.block_tables_headwise[i_start:i_end].clone()
+            self.block_tables_headwise[i_start:i_end] = self.block_tables_headwise[j_start:j_end]
+            self.block_tables_headwise[j_start:j_end] = tmp
+
     def condense(self) -> None:
         """
         Condense the input batch by keeping only the running requests and moving their data to the front.
@@ -632,6 +659,12 @@ class InputBatch:
 
             # Reset block tables
             fill_paddle_tensor(self, "block_tables", -1)
+            # T53 PR2 B-1: also reset the head-wise sidecar (when allocated)
+            # so a slot reused after ``reset_share_inputs`` cannot leak any
+            # previous occupant's per-head block ids into the discrete
+            # AppendAttention kernel.
+            if hasattr(self, "block_tables_headwise") and self.block_tables_headwise is not None:
+                fill_paddle_tensor(self, "block_tables_headwise", -1)
 
             # Reset free list (requires special handling)
             free_list = list(
@@ -752,6 +785,10 @@ class ProposerInputBatch(InputBatch):
         self.enable_pd_reorder = getattr(self.target_model_input_batch, "enable_pd_reorder", False)
 
         self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
+        # T53 PR2: mirror clone for head-wise block tables so the speculative
+        # proposer sees the same per-head layout as the target model.
+        self.kv_num_heads_local = getattr(self.target_model_input_batch, "kv_num_heads_local", 1)
+        self.block_tables_headwise = paddle.clone(self.target_model_input_batch["block_tables_headwise"])
         self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
         self.input_ids_cpu = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
@@ -946,6 +983,16 @@ class ProposerInputBatch(InputBatch):
             swap_data(self.attn_mask_offsets_full, i1, i2)
             swap_data(self.attn_mask_offsets_decoder, i1, i2)
 
+        # T53 PR2 FIX 2: keep proposer head-wise sidecar rows in lockstep
+        # with slot move.  Mirror of InputBatch.swap_states fix.
+        if getattr(self, "block_tables_headwise", None) is not None:
+            kv_local = getattr(self, "kv_num_heads_local", 1)
+            i_start, i_end = i1 * kv_local, (i1 + 1) * kv_local
+            j_start, j_end = i2 * kv_local, (i2 + 1) * kv_local
+            tmp = self.block_tables_headwise[i_start:i_end].clone()
+            self.block_tables_headwise[i_start:i_end] = self.block_tables_headwise[j_start:j_end]
+            self.block_tables_headwise[j_start:j_end] = tmp
+
     def reset_model_inputs(self) -> None:
         """
         Reset all paddle tensors in self to their initial state.
@@ -959,6 +1006,10 @@ class ProposerInputBatch(InputBatch):
             # Reset all paddle tensors to their default values
             # Clone the target model inputs to restore initial values
             self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
+            # T53 PR2: keep the head-wise mirror in lockstep with the flat
+            # ``block_tables`` reset so the proposer never reads stale per-head
+            # rows after a reset.
+            self.block_tables_headwise = paddle.clone(self.target_model_input_batch["block_tables_headwise"])
             self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
             fill_paddle_tensor(self, "input_ids_cpu", -1)
             # acceptance rate decline when reset seq_lens_this_time

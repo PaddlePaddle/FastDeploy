@@ -57,7 +57,7 @@ class PrefixCacheManager:
         local_data_parallel_id=0,
     ):
         """
-        initialize the PrefixCacheManager
+        initialize the PrefixCacheManager.
         """
 
         self.metrics = CacheMetrics()
@@ -78,6 +78,27 @@ class PrefixCacheManager:
         else:
             self.num_gpu_blocks = self.cache_config.prefill_kvcache_block_num
         self.num_cpu_blocks = self.cache_config.num_cpu_blocks
+
+        # Head-wise KV cache (Hackathon 10th Spring No.53, mirrors PR #6702 contract).
+        # Default-off: behavior is bit-identical to mainline unless FD_HEAD_WISE_KV_CACHE=1.
+        # T53: per-rank KV head count for free-list sizing (TP-aware).
+        kv_num_heads_global = int(
+            getattr(getattr(self.cache_config, "model_cfg", None), "num_key_value_heads", 1) or 1
+        )
+        tp_size = int(self.tensor_parallel_size or 1)
+        self.kv_num_heads = max(1, kv_num_heads_global // tp_size) if kv_num_heads_global >= tp_size else 1
+        _enable_prefix_caching = bool(getattr(self.cache_config, "enable_prefix_caching", False))
+        if bool(envs.FD_HEAD_WISE_KV_CACHE) and _enable_prefix_caching:
+            raise ValueError(
+                "FD_HEAD_WISE_KV_CACHE is mutually exclusive with enable_prefix_caching " "(matches PR #6702 contract)"
+            )
+        self.head_wise = bool(envs.FD_HEAD_WISE_KV_CACHE) and not _enable_prefix_caching
+        self.total_head_wise_cache_ids = 0
+        # Head-wise free list lives in its OWN attribute so the legacy
+        # gpu_free_block_list (consumed by allocate_gpu_blocks) keeps its
+        # [0, num_gpu_blocks) ID space. Aliasing the two lists corrupts the
+        # legacy allocator with OOB cache ids → CUDA error 700 at decode.
+        self.gpu_free_head_wise_block_list = []
 
         self.gpu_free_block_list = list(range(self.num_gpu_blocks - 1, -1, -1))
         if self.num_cpu_blocks > 0:
@@ -172,7 +193,14 @@ class PrefixCacheManager:
 
     @property
     def available_gpu_resource(self):
-        return len(self.gpu_free_block_list) / self.num_gpu_blocks if self.num_gpu_blocks > 0 else 0.0
+        if self.num_gpu_blocks <= 0:
+            return 0.0
+        if getattr(self, "head_wise", False):
+            heaps = getattr(self, "gpu_free_head_wise_block_lists", None)
+            if heaps is not None:
+                head_free = sum(len(h) for h in heaps)
+                return (head_free / max(1, self.kv_num_heads)) / self.num_gpu_blocks
+        return len(self.gpu_free_block_list) / self.num_gpu_blocks
 
     def launch_cache_manager(
         self,
@@ -468,6 +496,49 @@ class PrefixCacheManager:
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
+        if getattr(self, "head_wise", False):
+            self._init_head_wise_free_list()
+
+    def _init_head_wise_free_list(self):
+        """
+        Build ``kv_num_heads`` independent free heaps, each over ``[0, num_gpu_blocks)``.
+
+        Each KV head owns its own ID space. The discrete AppendAttention C16
+        kernel addresses ``cache_k[block_id, kv_head_idx, :, :]`` — block_id and
+        head are orthogonal dimensions in the underlying KV cache layout, so
+        head A using block_id 7 and head B using block_id 7 reference DIFFERENT
+        KV slices and MUST NOT be considered "colliding".
+
+        T53 PR2 hotfix (RFC-PR2-reanchored §3.1): the prior single shared heap
+        emitted flattened ids ``[0, num_gpu_blocks * kv_num_heads)`` which the
+        kernel could not consume directly. The downstream ``flat % num_gpu_blocks``
+        modulo aliased distinct heads onto identical block_ids → wrong KV reads
+        → empty smoke responses. Per-head independent heaps eliminate this
+        aliasing class entirely.
+
+        Heap sequence ``range(num_gpu_blocks - 1, -1, -1)`` is identical to
+        :meth:`__init__`'s legacy ``gpu_free_block_list`` initialization (heap
+        stability — smallest id pops first after heapify).
+
+        The legacy ``gpu_free_head_wise_block_list`` (singular) attribute is
+        kept as an empty list for compatibility with introspection callers.
+        """
+        kv_num_heads = max(1, self.kv_num_heads)
+        # Per-head independent free heaps: list of length kv_num_heads, each a
+        # min-heap over the per-head value space [0, num_gpu_blocks).
+        self.gpu_free_head_wise_block_lists: list[list[int]] = [
+            list(range(self.num_gpu_blocks - 1, -1, -1)) for _ in range(kv_num_heads)
+        ]
+        for heap in self.gpu_free_head_wise_block_lists:
+            heapq.heapify(heap)
+        # Compatibility: legacy attribute kept as empty list. Tests/callers that
+        # need free-count should use ``available_head_wise_blocks`` instead.
+        self.gpu_free_head_wise_block_list = []
+        # Per-head value space size (NOT total flat id count).
+        self.total_head_wise_cache_ids = self.num_gpu_blocks
+        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks * kv_num_heads)
+        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+
     def can_allocate_gpu_blocks(self, num_blocks: int, try_free_gpu_blocks: bool = True):
         """
         Check if num_blocks gpu blocks can be allocated.
@@ -530,6 +601,123 @@ class PrefixCacheManager:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
         logger.debug(f"req_id:{req_id} recycle blocks end")
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+
+    def allocate_gpu_blocks_head_wise(self, num_blocks, req_id=None):
+        """
+        Allocate ``num_blocks`` GPU blocks per KV head from independent per-head heaps.
+
+        Returns a head-major nested list of cache ids with shape
+        ``[kv_num_heads][num_blocks]``. Each row ``h`` contains ids drawn from
+        the per-head value space ``[0, num_gpu_blocks)``. Heads are independent:
+        head 0 and head 1 may legitimately return overlapping ids since they
+        index disjoint KV slices via ``cache_k[block_id, kv_head_idx, :, :]``.
+
+        T53 PR2 hotfix (RFC-PR2-reanchored §3.2): replaces flat-heap allocation
+        which emitted ids in ``[0, num_gpu_blocks * kv_num_heads)`` and required
+        a downstream modulo HOTFIX (which silently aliased heads).
+
+        Active only when ``FD_HEAD_WISE_KV_CACHE=1`` (default-off; mainline
+        behavior is unchanged).
+
+        Raises:
+            RuntimeError: if any per-head heap has fewer than ``num_blocks``
+                free ids. No silent shrink — caller must handle backpressure.
+        """
+        kv_num_heads = max(1, self.kv_num_heads)
+        per_head_heaps = self.gpu_free_head_wise_block_lists
+        # Pre-flight: every head must have enough blocks. No silent shrink.
+        for h, heap in enumerate(per_head_heaps):
+            if len(heap) < num_blocks:
+                raise RuntimeError(
+                    f"head-wise gpu free block num at head {h}: {len(heap)} < needed number {num_blocks}"
+                )
+        logger.debug(f"{req_id} start allocate (head-wise, per-head heaps)...")
+        # Pop num_blocks from EACH per-head heap independently.
+        allocated = [[heapq.heappop(per_head_heaps[h]) for _ in range(num_blocks)] for h in range(kv_num_heads)]
+        total_free = sum(len(heap) for heap in per_head_heaps)
+        logger.info(
+            f"req_id:{req_id} allocate_gpu_blocks_head_wise: {allocated}, " f"total free across heads {total_free}"
+        )
+        main_process_metrics.free_gpu_block_num.set(total_free)
+        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        return allocated
+
+    def recycle_gpu_blocks_head_wise(self, cache_ids, req_id=None):
+        """
+        Recycle head-wise cache ids back into the per-head free heaps.
+
+        Expects a nested list-of-lists of shape ``[kv_num_heads][N]`` (head-major)
+        as produced by :meth:`allocate_gpu_blocks_head_wise`. Each row ``h`` is
+        pushed back to ``gpu_free_head_wise_block_lists[h]``.
+
+        T53 PR2 hotfix (RFC-PR2-reanchored §3.3): the flat-list form is no
+        longer accepted because per-head value spaces are independent — a flat
+        list does not carry head-of-origin information needed for routing.
+
+        Validation: each id must be in ``[0, num_gpu_blocks)``. Duplicates within
+        a head's row are dropped (warning). Out-of-range ids are dropped (warning).
+
+        Mirrors the ``prefix_tree_status_signal`` early-return guarded by
+        :meth:`recycle_gpu_blocks`.
+        """
+        if (
+            hasattr(self, "prefix_tree_status_signal")
+            and self.prefix_tree_status_signal.value[0] != PrefixTreeStatus.NORMAL
+        ):
+            logger.warning("Prefix tree is not normal, skip recycle gpu blocks (head-wise)")
+            return
+
+        kv_num_heads = max(1, self.kv_num_heads)
+        per_head_heaps = self.gpu_free_head_wise_block_lists
+
+        # Normalize input to nested list-of-lists [kv_num_heads][...].
+        # Backward-compat: if a flat list is passed (legacy callers from PR1
+        # encoded behavior), interpret it as head-0-only and warn loudly.
+        if cache_ids and isinstance(cache_ids[0], (list, tuple)):
+            head_rows = list(cache_ids)
+            if len(head_rows) != kv_num_heads:
+                logger.warning(
+                    f"req_id:{req_id} head-wise recycle: nested input has {len(head_rows)} rows, "
+                    f"expected {kv_num_heads}. Padding with empty rows."
+                )
+                # Pad/truncate to kv_num_heads.
+                head_rows = (head_rows + [[]] * kv_num_heads)[:kv_num_heads]
+        elif isinstance(cache_ids, (list, tuple)):
+            logger.warning(
+                f"req_id:{req_id} head-wise recycle: received flat list (legacy). "
+                f"Per-head independent heaps require nested [kv_num_heads][N] input. "
+                f"Routing entire flat list to head-0 only."
+            )
+            head_rows = [list(cache_ids)] + [[] for _ in range(kv_num_heads - 1)]
+        else:
+            head_rows = [[cache_ids]] + [[] for _ in range(kv_num_heads - 1)]
+
+        per_head_value_space = self.num_gpu_blocks
+        total_pushed = 0
+        for h, row in enumerate(head_rows):
+            seen: set = set()
+            for cid in row:
+                cid_int = int(cid)
+                if cid_int in seen:
+                    logger.warning(f"req_id:{req_id} head-wise recycle (head {h}): duplicate cache id {cid} dropped")
+                    continue
+                if not (0 <= cid_int < per_head_value_space):
+                    logger.warning(
+                        f"req_id:{req_id} head-wise recycle (head {h}): out-of-range cache id {cid} "
+                        f"(valid range [0, {per_head_value_space})) dropped"
+                    )
+                    continue
+                seen.add(cid_int)
+                heapq.heappush(per_head_heaps[h], cid_int)
+                total_pushed += 1
+
+        total_free = sum(len(heap) for heap in per_head_heaps)
+        logger.info(
+            f"req_id:{req_id} recycle_gpu_blocks_head_wise: pushed {total_pushed} ids, "
+            f"total free across heads {total_free}"
+        )
+        main_process_metrics.free_gpu_block_num.set(total_free)
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
     def allocate_cpu_blocks(self, num_blocks):

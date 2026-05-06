@@ -190,6 +190,12 @@ class Request:
 
         # token num
         self.block_tables = []
+        # T53 PR2 B-1: head-wise per-request block tables snapshot. ``None``
+        # when the head-wise SWA gate is off; otherwise a ``list[list[int]]``
+        # of shape ``[kv_num_heads_local][num_blocks_per_head]`` produced by
+        # the V1 scheduler and consumed by the worker to fill
+        # ``share_inputs['block_tables_headwise']``.
+        self.head_block_tables: Optional[List[List[int]]] = None
         self.output_token_ids = []
         self.num_computed_tokens = num_computed_tokens
         self.prefill_start_index = prefill_start_index

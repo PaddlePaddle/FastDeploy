@@ -676,6 +676,14 @@ class MTPProposer(Proposer):
             cu_seqlens_q=self.model_inputs["cu_seqlens_q"],
             cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
             block_tables=self.model_inputs["block_tables"],
+            # T53 PR2 B-1: MTP/spec-decode is OUT OF SCOPE for the head-wise
+            # SWA recycle path (deferred to PR3). Force the sidecar to
+            # ``None`` so the discrete AppendAttention kernel's per-head
+            # branch is never selected on proposer batches, regardless of
+            # the target model's gate state. The sidecar is still cloned in
+            # ``MTPInputBatch.init_share_inputs`` to keep the target/proposer
+            # share-shape contract intact.
+            block_tables_headwise=None,
             caches=self.model_inputs["caches"],
             encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
             encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],

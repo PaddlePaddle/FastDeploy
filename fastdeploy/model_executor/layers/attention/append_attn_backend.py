@@ -231,6 +231,17 @@ class AppendAttentionBackend(AttentionBackend):
         """get_attention_meta"""
         return self.attention_metadata
 
+    def _get_block_tables_headwise(self, forward_meta: ForwardMeta) -> Optional[paddle.Tensor]:
+        """Return optional rank-2 head-wise block table from forward/cache metadata."""
+        block_tables_headwise = getattr(forward_meta, "block_tables_headwise", None)
+        if block_tables_headwise is not None:
+            return block_tables_headwise
+
+        cache_manager = getattr(forward_meta, "cache_manager", None)
+        if cache_manager is not None:
+            return getattr(cache_manager, "block_tables_headwise", None)
+        return None
+
     def _get_identity_rotary_embs(self, original_rotary_embs: paddle.Tensor) -> paddle.Tensor:
         """
         Create identity rotary embeddings (cos=1, sin=0) that make RoPE a no-op.
@@ -285,6 +296,28 @@ class AppendAttentionBackend(AttentionBackend):
         forward_mixed
         """
         metadata = self.attention_metadata
+        block_tables_headwise = self._get_block_tables_headwise(forward_meta)
+
+        # T53 PR2 hotfix (RFC-PR2-reanchored §5): the prior modulo HOTFIX
+        # ``flat % num_gpu_blocks`` silently aliased distinct heads onto
+        # identical block_ids when the PR1 allocator emitted flat ids from a
+        # single shared heap. PR1 has been re-architected to emit per-head ids
+        # directly in ``{-1} ∪ [0, num_gpu_blocks)`` (RFC-PR1-reanchored §3),
+        # so this contract is now satisfied at the source — no normalization
+        # needed and no normalization correct (any modulo would still mask
+        # producer bugs).
+        #
+        # Optional debug invariant check, off by default to avoid CUDA-graph
+        # capture incompatibility (boolean fancy-indexing + .item() syncs).
+        # Enable with ``FD_T53_DEBUG_BLOCK_TABLES=1`` outside graph capture.
+        if os.getenv("FD_T53_DEBUG_BLOCK_TABLES") == "1" and block_tables_headwise is not None:
+            num_gpu_blocks = forward_meta.caches[2 * layer.layer_id].shape[0]
+            valid = (block_tables_headwise == -1) | (
+                (block_tables_headwise >= 0) & (block_tables_headwise < num_gpu_blocks)
+            )
+            assert bool(valid.all().item()), (
+                "PR2 invariant: per-head block id must be in {-1} \u222a " f"[0, num_gpu_blocks={num_gpu_blocks})"
+            )
 
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
@@ -438,6 +471,9 @@ class AppendAttentionBackend(AttentionBackend):
                 self.causal,
                 self.speculative_method is not None,
                 sliding_window,
+                self.sink_size,
+                self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
+                block_tables_headwise=block_tables_headwise,
             )
         else:
             res = append_attention(
@@ -496,5 +532,6 @@ class AppendAttentionBackend(AttentionBackend):
                 sliding_window,
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
+                block_tables_headwise=block_tables_headwise,
             )
         return res

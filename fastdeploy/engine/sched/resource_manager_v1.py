@@ -56,7 +56,7 @@ from fastdeploy.utils import download_from_bos, init_bos_client, llm_logger
 @dataclass
 class ScheduledTaskBase:
     """
-    Task for Scheduled.
+    Task for Scheduled
     """
 
     idx: int
@@ -84,6 +84,8 @@ class ScheduledDecodeTask(ScheduledTaskBase):
     """
 
     block_tables: list[int] = field(default_factory=list)
+    # T53 PR2 will surface per-head block tables to the kernel; PR1 keeps the
+    # head-wise data inside ``swa_head_block_tables`` for cache management only.
 
 
 @dataclass
@@ -251,6 +253,242 @@ class ResourceManagerV1(ResourceManager):
 
         # Scheduler-side requests that have not been moved into resource manager waiting queue yet.
         self.scheduler_unhandled_request_num = 0
+
+        # T53 PR1 head-wise SWA recycle state (default-off; populated only when
+        # FD_HEAD_WISE_KV_CACHE=1). Both maps are keyed by request_id; entries
+        # are removed by ``_free_blocks`` to prevent the P4 cross-request leak
+        # flagged in the architecture brief §6.
+        self.swa_head_recycle_upto: dict[str, list[int]] = {}
+        self.swa_head_block_tables: dict[str, list[list[int]]] = {}
+        self.swa_legacy_recycle_upto: dict[str, int] = {}
+        self.swa_legacy_recycled_blocks: dict[str, set[int]] = {}
+
+    def _swa_window_sink_block(self):
+        """Return ``(window_blocks, sink_blocks, block_size)`` for SWA recycle.
+
+        Reads ``window_size`` and ``sink_size`` from ``model_config`` (set by
+        the T53 fixture hook in ``paddleformers/base.py``); falls back to
+        ``(0, 0)`` when the attributes are absent so callers naturally no-op.
+        """
+        block_size = max(1, int(self.config.cache_config.block_size))
+        window = int(getattr(self.config.model_config, "window_size", 0) or 0)
+        sink = int(getattr(self.config.model_config, "sink_size", 0) or 0)
+        # ceil(sink/bs) sink blocks must always be retained.
+        sink_blocks = (sink + block_size - 1) // block_size if sink > 0 else 0
+        # window_size tokens of tail must always be retained.
+        window_blocks = (window + block_size - 1) // block_size if window > 0 else 0
+        return window_blocks, sink_blocks, block_size
+
+    def _num_swa_heads(self) -> int:
+        """Number of KV heads marked as SWA per the head_wise_swa_ratio fixture.
+
+        Convention: positive ratios mark at least one SWA row, capped at KV heads.
+        Matches the per-head recycle fixture: the leading KV-head group is designated SWA.
+
+        TP-aware (P10 review fix): ``num_key_value_heads`` on ``model_config``
+        is the GLOBAL count. Under tensor parallelism each rank only holds
+        ``num_kv_heads // tp_size`` rows in its head-wise sidecar, so we must
+        divide here to avoid over-allocating per rank and indexing past the
+        local KV head count downstream.
+        """
+        kv_num_heads_global = int(getattr(self.config.model_config, "num_key_value_heads", 0) or 0)
+        if kv_num_heads_global <= 0:
+            return 0
+        tp_size = max(1, int(getattr(self.config.parallel_config, "tensor_parallel_size", 1) or 1))
+        # GQA/MQA divisibility guard: when kv >= tp, kv must be divisible by tp
+        # (Paddle's TP shards KV heads evenly). The kv < tp replication path is
+        # handled below.
+        if kv_num_heads_global >= tp_size and kv_num_heads_global % tp_size != 0:
+            raise ValueError(
+                f"GQA/MQA constraint violated: kv_num_heads={kv_num_heads_global} "
+                f"not divisible by tp_size={tp_size} (only kv<tp replication path or "
+                f"exact divisibility supported)"
+            )
+        # Local KV heads on this rank. GQA/MQA models can have kv < tp; in that
+        # case Paddle replicates KV across ranks and each rank still owns the
+        # full local set, so floor-divide-then-max-1 keeps us correct.
+        kv_num_heads = (
+            max(1, kv_num_heads_global // tp_size) if kv_num_heads_global >= tp_size else kv_num_heads_global
+        )
+        ratio = float(getattr(self.config.model_config, "head_wise_swa_ratio", 0.0) or 0.0)
+        if ratio <= 0.0:
+            return 0
+        if ratio >= 1.0:
+            return kv_num_heads
+        return max(1, min(kv_num_heads, int(round(kv_num_heads * ratio))))
+
+    def _head_wise_swa_active(self) -> bool:
+        """Return True when the T53 head-wise SWA feature gate is active."""
+        return bool(envs.FD_HEAD_WISE_KV_CACHE) and (envs.FD_T53_HEAD_WISE_SWA_RATIO or 0) > 0
+
+    def _should_use_head_wise_swa(self, num_blocks: int) -> bool:
+        """Return True when the default-off head-wise SWA sidecar should be populated."""
+        return (
+            int(getattr(self.config.model_config, "window_size", 0) or 0) > 0
+            and hasattr(self.cache_manager, "allocate_gpu_blocks_head_wise")
+            and hasattr(self.cache_manager, "recycle_gpu_blocks_head_wise")
+            and num_blocks > 0
+        )
+
+    def _should_skip_swa_recycle_for_overlap(self, request: Request) -> bool:
+        """Return True if any in-flight cache swap targets this request's blocks.
+
+        ``CacheSwapMetadata`` does not expose a global ``is_inflight`` query,
+        so we approximate by inspecting the per-request swap and evict queues
+        the V1 scheduler already publishes (see ``ScheduledTaskBase``). Any
+        unfinished metadata that touches a block currently owned by ``request``
+        is treated as in-flight: skipping the recycle for this turn is safe
+        because the next schedule call will retry.
+        """
+        block_set = set(int(b) for row in self.swa_head_block_tables.get(request.request_id, []) for b in row)
+        if not block_set:
+            return False
+        for queue_name in ("cache_swap_metadata", "cache_evict_metadata"):
+            queue = getattr(request, queue_name, None) or []
+            for meta in queue:
+                # P9 fix: missing ``success`` must default to the SAFE direction
+                # (treat as in-flight) so recycle never overlaps a transfer.
+                if getattr(meta, "success", False):
+                    continue  # already-completed swaps cannot block recycle
+                ids = list(getattr(meta, "src_block_ids", []) or []) + list(getattr(meta, "dst_block_ids", []) or [])
+                if any(int(b) in block_set for b in ids):
+                    return True
+        return False
+
+    def _extend_head_wise_block_tables(self, request: Request, num_new_blocks: int) -> list[list[int]]:
+        """Allocate ``num_new_blocks`` per head and append to head-wise block table.
+
+        P10/P7 review fix: previously the broad ``except Exception: pass``-style
+        fallback (warn + return existing rows) silently desynchronised the
+        head-wise sidecar from the real KV pool — real KV had already been
+        allocated by the caller, but the sidecar entry was left empty. Any
+        downstream recycle then leaked real-KV blocks. We now LOG and RE-RAISE
+        so the caller (``_allocate_gpu_blocks``) can roll the real-KV
+        allocation back atomically and propagate the failure.
+        """
+        try:
+            new_rows = self.cache_manager.allocate_gpu_blocks_head_wise(num_new_blocks, request.request_id)
+        except Exception as exc:
+            llm_logger.error(
+                f"head-wise SWA sidecar allocation FAILED for request {request.request_id} "
+                f"(num_new_blocks={num_new_blocks}); rolling back real-KV allocation: {exc}"
+            )
+            raise
+        if not new_rows:
+            llm_logger.error(
+                f"head-wise SWA sidecar allocation returned no rows for request {request.request_id} "
+                f"(num_new_blocks={num_new_blocks}); rolling back real-KV allocation"
+            )
+            raise RuntimeError(f"head-wise SWA sidecar empty result for request {request.request_id}")
+        existing = self.swa_head_block_tables.setdefault(
+            request.request_id,
+            [[] for _ in range(max(1, int(getattr(self.cache_manager, "kv_num_heads", len(new_rows) or 1))))],
+        )
+        for h, row in enumerate(new_rows):
+            if h >= len(existing):
+                existing.append([])
+            existing[h].extend(row)
+        # T53 PR2 B-1: snapshot the per-head dict onto the Request envelope so
+        # the worker process (which has no view of ``self.swa_head_block_tables``)
+        # can materialize ``share_inputs['block_tables_headwise']`` for the
+        # discrete AppendAttention kernel. Shallow per-row copy is sufficient
+        # because the worker reads-then-writes its own preallocated tensor.
+        request.head_block_tables = [list(row) for row in existing]
+        return existing
+
+    def _recycle_legacy_swa_blocks(self, request: Request, prev: list[int], recycle_from_floor: int) -> int:
+        """Return fully-aged uniform-SWA legacy block ids to the legacy pool once.
+
+        The active ``request.block_tables`` list stays untouched because worker
+        kernels index it by absolute block position. ``_free_blocks`` filters
+        these ids later to avoid double-recycling at request teardown.
+        """
+        block_tables = list(getattr(request, "block_tables", []) or [])
+        if not block_tables or not hasattr(self.cache_manager, "recycle_gpu_blocks"):
+            return 0
+        head_blocks = self.swa_head_block_tables.get(request.request_id) or []
+        local_kv_heads = len(head_blocks)
+        kv_num_heads = int(getattr(self.config.model_config, "num_key_value_heads", 0) or 0) or local_kv_heads
+        if kv_num_heads <= 0 or self._num_swa_heads() != kv_num_heads or local_kv_heads <= 0:
+            return 0
+        if len(prev) < local_kv_heads:
+            return 0
+        recycle_upto = min(int(prev[h]) for h in range(local_kv_heads))
+        start = max(int(self.swa_legacy_recycle_upto.get(request.request_id, recycle_from_floor)), recycle_from_floor)
+        end = min(int(recycle_upto), len(block_tables))
+        if end <= start:
+            return 0
+
+        already = self.swa_legacy_recycled_blocks.setdefault(request.request_id, set())
+        legacy_ids = [int(block_id) for block_id in block_tables[start:end] if int(block_id) not in already]
+        self.swa_legacy_recycle_upto[request.request_id] = end
+        if not legacy_ids:
+            return 0
+        self.cache_manager.recycle_gpu_blocks(legacy_ids, request.request_id)
+        already.update(legacy_ids)
+        return len(legacy_ids)
+
+    def recycle_request_swa_head_cache(self, request: Request) -> int:
+        """Recycle SWA tail blocks per head (T53 PR1 §2.3).
+
+        Computes the open interval ``[ceil(sink/bs), floor((T-window)/bs))``
+        of fully-aged blocks and pushes them back to the head-wise free heap
+        via ``cache_manager.recycle_gpu_blocks_head_wise``. ``swa_head_recycle_upto``
+        is monotonic per head so we never re-release a block.
+
+        Returns the number of blocks released across all heads (0 when no-op).
+        Default-off: returns immediately when ``FD_HEAD_WISE_KV_CACHE != 1``.
+        """
+        if not envs.FD_HEAD_WISE_KV_CACHE:
+            return 0
+        window_blocks, sink_blocks, block_size = self._swa_window_sink_block()
+        total_tokens = int(getattr(request, "num_total_tokens", 0) or 0) or int(
+            getattr(request, "num_computed_tokens", 0) or 0
+        )
+        if block_size <= 0 or total_tokens < (window_blocks + 1) * block_size:
+            return 0
+        # Boundary guard: only release SWA blocks at exact block boundaries.
+        # Mid-block decode steps (total_tokens % block_size != 0) leave the
+        # tail block partially-filled by the in-flight token; releasing it
+        # would race with the next decode write. We resume recycle on the
+        # next step that crosses a clean block boundary.
+        if total_tokens % block_size != 0:
+            return 0
+        head_blocks = self.swa_head_block_tables.get(request.request_id)
+        if not head_blocks:
+            return 0
+        if self._should_skip_swa_recycle_for_overlap(request):
+            return 0
+
+        recycle_upto = max(0, (total_tokens - max(0, window_blocks * block_size)) // block_size)
+        # Sink floor: never release the first ``sink_blocks`` per head.
+        recycle_from_floor = sink_blocks
+
+        prev = self.swa_head_recycle_upto.setdefault(request.request_id, [recycle_from_floor for _ in head_blocks])
+        if len(prev) < len(head_blocks):
+            prev.extend([recycle_from_floor for _ in range(len(head_blocks) - len(prev))])
+        released_total = 0
+        for h in range(self._num_swa_heads()):
+            if h >= len(head_blocks):
+                continue
+            row = head_blocks[h]
+            start = max(int(prev[h]), recycle_from_floor)
+            end = min(int(recycle_upto), len(row))
+            if end <= start:
+                continue
+            to_release = row[start:end]
+            if not to_release:
+                continue
+            self.cache_manager.recycle_gpu_blocks_head_wise(to_release, request.request_id)
+            prev[h] = end  # monotone advance
+            released_total += len(to_release)
+        self._recycle_legacy_swa_blocks(request, prev, recycle_from_floor)
+        # T53 PR2 B-1: refresh the Request snapshot whenever the per-head dict
+        # is mutated by recycle so the worker sees the post-recycle layout on
+        # its next ForwardMeta materialization.
+        if released_total > 0:
+            request.head_block_tables = [list(row) for row in head_blocks]
+        return released_total
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -908,6 +1146,13 @@ class ResourceManagerV1(ResourceManager):
                         need_abort_requests.append(request)
                         continue
 
+                    # T53 PR1 head-wise SWA recycle (§2.3 recycle-before-allocate).
+                    # Default-off: helper returns 0 immediately when the
+                    # composite head-wise SWA gate is inactive, so the legacy
+                    # path is bit-identical.
+                    if self._head_wise_swa_active():
+                        self.recycle_request_swa_head_cache(request)
+
                     if (
                         self.allocated_slots(request) - request.num_total_tokens
                         <= self.config.cache_config.prealloc_dec_block_slot_num_threshold
@@ -1366,9 +1611,28 @@ class ResourceManagerV1(ResourceManager):
     def _allocate_gpu_blocks(self, request: Request, num_blocks: int) -> List[int]:
         llm_logger.debug(f"[allocate_gpu_blocks] request_id={request.request_id}, num_blocks={num_blocks}")
         if self.enable_cache_manager_v1:
-            return self.cache_manager.allocate_gpu_blocks(request, num_blocks)
+            block_ids = self.cache_manager.allocate_gpu_blocks(request, num_blocks)
         else:
-            return self.cache_manager.allocate_gpu_blocks(num_blocks, request.request_id)
+            block_ids = self.cache_manager.allocate_gpu_blocks(num_blocks, request.request_id)
+        if self._head_wise_swa_active():
+            if self._should_use_head_wise_swa(num_blocks):
+                # P10/Fix-3 (review): real-KV and head-wise sidecar must commit
+                # atomically. If the sidecar extension fails we MUST recycle the
+                # real-KV blocks we just acquired, otherwise ownership drifts and
+                # those blocks leak (preempt/abort path will not see them).
+                try:
+                    self._extend_head_wise_block_tables(request, num_blocks)
+                except Exception:
+                    if block_ids and hasattr(self.cache_manager, "recycle_gpu_blocks"):
+                        try:
+                            self.cache_manager.recycle_gpu_blocks(block_ids, request.request_id)
+                        except Exception as recycle_exc:  # pragma: no cover - defensive
+                            llm_logger.error(
+                                f"failed to roll back real-KV blocks {block_ids} for request "
+                                f"{request.request_id} after head-wise sidecar failure: {recycle_exc}"
+                            )
+                    raise
+        return block_ids
 
     def _request_match_blocks(self, request: Request, skip_storage: bool = True):
         """
@@ -1640,6 +1904,38 @@ class ResourceManagerV1(ResourceManager):
             self.running.append(request)
 
     def _free_blocks(self, request: Request):
+        early_recycled_legacy = set()
+
+        def _filter_early_recycled(block_ids):
+            if not early_recycled_legacy:
+                return block_ids
+            return [block_id for block_id in block_ids if int(block_id) not in early_recycled_legacy]
+
+        # T53 PR1 head-wise SWA: release any leftover head-wise blocks and clear
+        # per-request recycle state. P4 fix from architecture brief §6: without
+        # this drop, ``swa_head_recycle_upto`` and ``swa_head_block_tables``
+        # would leak across request_id reuse and corrupt the next request's
+        # monotone recycle cursor.
+        if self._head_wise_swa_active():
+            head_blocks = self.swa_head_block_tables.pop(request.request_id, None)
+            head_cursor = self.swa_head_recycle_upto.pop(request.request_id, None)
+            self.swa_legacy_recycle_upto.pop(request.request_id, None)
+            early_recycled_legacy = self.swa_legacy_recycled_blocks.pop(request.request_id, set())
+            # T53 PR2 B-1: clear the worker-facing snapshot so any stale read
+            # after teardown sees ``None`` and the materialization layer skips
+            # the head-wise tensor (kernel falls back to flat ``block_tables``).
+            request.head_block_tables = None
+            if head_blocks and hasattr(self.cache_manager, "recycle_gpu_blocks_head_wise"):
+                if head_cursor:
+                    _, recycle_from_floor, _ = self._swa_window_sink_block()
+                    remaining = []
+                    for h, row in enumerate(head_blocks):
+                        cursor = int(head_cursor[h]) if h < len(head_cursor) else recycle_from_floor
+                        floor = min(recycle_from_floor, len(row))
+                        cursor = max(floor, min(cursor, len(row)))
+                        remaining.append(list(row[:floor]) + list(row[cursor:]))
+                    head_blocks = remaining
+                self.cache_manager.recycle_gpu_blocks_head_wise(head_blocks, request.request_id)
         if self.enable_cache_manager_v1:
             self.cache_manager.request_finish(request)
         elif (
@@ -1647,10 +1943,10 @@ class ResourceManagerV1(ResourceManager):
         ):
             self.cache_manager.release_block_ids(request)
             self.cache_manager.recycle_gpu_blocks(
-                request.block_tables[request.num_cached_blocks :], request.request_id
+                _filter_early_recycled(request.block_tables[request.num_cached_blocks :]), request.request_id
             )
         else:
-            self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
+            self.cache_manager.recycle_gpu_blocks(_filter_early_recycled(request.block_tables), request.request_id)
         request.block_tables = []
 
         if request.request_id in self.using_extend_tables_req_id:

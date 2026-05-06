@@ -142,6 +142,12 @@ class ForwardMeta:
     pre_caches_length: int = 0
     # Block tables
     block_tables: Optional[paddle.Tensor] = None
+    # T53 PR2: rank-2 head-wise block tables for per-head SWA. Shape
+    # ``[max_num_seqs * kv_num_heads_local, max_blocks_per_head]``, dtype
+    # ``int32``, padding sentinel ``-1``. ``None`` (default) keeps every other
+    # backend on the flat ``block_tables`` path; the discrete AppendAttention
+    # kernel reads this through ``_get_block_tables_headwise``.
+    block_tables_headwise: Optional[paddle.Tensor] = None
     # KV caches
     caches: Optional[list[paddle.Tensor]] = None
     # Flag of profile run
