@@ -63,6 +63,7 @@ from fastdeploy.model_executor.xpu_pre_and_post_process import (
 )
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import get_logger
+from fastdeploy.worker.input_batch import InputBatch
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
 
@@ -160,7 +161,12 @@ class XPUModelRunner(ModelRunnerBase):
         self.input_ids = paddle.zeros(self.scheduler_config.max_num_seqs, dtype="int32")
 
         # Initialize share inputs
-        self._init_share_inputs(self.fd_config.scheduler_config.max_num_seqs)
+        self.MAX_INFER_SEED = 9223372036854775806
+        self.share_inputs = InputBatch(self.fd_config)
+        self.share_inputs.init_share_inputs()
+        self.max_num_seqs = self.fd_config.scheduler_config.max_num_seqs
+
+
         self.infer_seed_increment = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, 1],
             fill_value=4,
@@ -649,7 +655,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
-                self.share_inputs["pre_ids"][idx : idx + 1] = -1
                 if (
                     self.fd_config.scheduler_config.splitwise_role == "decode"
                 ):  # In PD, we continue to decode after P generate first token
@@ -746,242 +751,6 @@ class XPUModelRunner(ModelRunnerBase):
     def insert_prefill_inputs(self, req_dicts: List[Request], num_running_requests: int):
         raise NotImplementedError("XPU only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
 
-    def _init_share_inputs(self, max_num_seqs: int):
-        """Initialize all share buffers for model inputs.
-        Note: In the future, we may abandon share buffers.
-        """
-        self.MAX_INFER_SEED = 2147483646
-        self.share_inputs = {}
-
-        self.share_inputs["pre_ids"] = paddle.full(
-            [max_num_seqs, self.model_config.max_model_len],
-            -1,
-            dtype="int64",
-        )
-        self.share_inputs["input_ids"] = paddle.full(
-            [max_num_seqs, self.model_config.max_model_len],
-            self.model_config.pad_token_id,
-            dtype="int64",
-        )
-        self.share_inputs["prompt_ids"] = paddle.full(
-            [max_num_seqs, self.model_config.max_model_len],
-            self.model_config.pad_token_id,
-            dtype="int64",
-        )
-        self.share_inputs["eos_token_id"] = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
-        # self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
-        # self.share_inputs["top_p"] default to 0.0 on XPU for consideration of the performance
-        self.share_inputs["top_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
-        self.share_inputs["top_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.share_inputs["top_k_list"] = [0] * max_num_seqs
-        self.share_inputs["min_p"] = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
-        self.share_inputs["min_p_list"] = [0.0] * max_num_seqs
-        self.share_inputs["temperature"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.temperature, dtype="float32"
-        )
-        self.share_inputs["penalty_score"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.penalty_score, dtype="float32"
-        )
-        self.share_inputs["frequency_score"] = paddle.full(
-            [max_num_seqs, 1],
-            self.model_config.frequency_score,
-            dtype="float32",
-        )
-        self.share_inputs["presence_score"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.presence_score, dtype="float32"
-        )
-        self.share_inputs["temp_scaled_logprobs"] = paddle.full([max_num_seqs, 1], False, dtype="bool")
-        self.share_inputs["top_p_normalized_logprobs"] = paddle.full([max_num_seqs, 1], False, dtype="bool")
-
-        self.share_inputs["min_dec_len"] = paddle.full([max_num_seqs, 1], self.model_config.min_length, dtype="int64")
-        self.share_inputs["max_dec_len"] = paddle.full(
-            [max_num_seqs, 1], self.model_config.max_model_len, dtype="int64"
-        )
-        self.share_inputs["seq_lens_this_time"] = paddle.full(max_num_seqs, 0, dtype="int32")
-        self.share_inputs["seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["step_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["step_seq_lens_decoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["prompt_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.share_inputs["step_idx"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.share_inputs["not_need_stop"] = paddle.full(
-            [1], False, dtype="bool"
-        ).cpu()  # TODO(gongshaotian): move to pinnd memory
-        self.share_inputs["stop_flags"] = paddle.full([max_num_seqs, 1], True, dtype="bool")
-
-        self.share_inputs["bad_tokens"] = paddle.full([max_num_seqs, self.model_config.vocab_size], -1, dtype="int64")
-        self.share_inputs["bad_tokens_len"] = paddle.full([max_num_seqs], 1, dtype="int64")
-        self.share_inputs["next_tokens"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
-        self.share_inputs["is_block_step"] = paddle.full([max_num_seqs], False, dtype="bool")
-        self.share_inputs["encoder_block_lens"] = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.share_inputs["step_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
-        self.share_inputs["step_lens"] = paddle.full([1], 0, dtype="int32")
-        self.share_inputs["recover_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
-        self.share_inputs["recover_lens"] = paddle.full([1], 0, dtype="int32")
-        self.share_inputs["need_block_list"] = paddle.full([max_num_seqs], -1, dtype="int32")
-        self.share_inputs["need_block_len"] = paddle.full([1], 0, dtype="int32")
-        self.share_inputs["used_list_len"] = paddle.full([max_num_seqs], 0, dtype="int32")
-        self.share_inputs["infer_seed"] = paddle.full([max_num_seqs, 1], 0, dtype="int64")
-        self.share_inputs["first_token_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int64")
-        self.share_inputs["ori_seq_lens_encoder"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["system_lens"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["system_ids"] = paddle.full([max_num_seqs, 1], -1, dtype="int32")
-
-        self.share_inputs["ids_remove_padding"] = paddle.full(
-            [max_num_seqs * self.model_config.max_model_len],
-            0,
-            dtype="int64",
-        )
-        self.share_inputs["batch_id_per_token"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_q"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-        self.share_inputs["cu_seqlens_k"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-
-        # Initialize rotary position embedding
-        tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
-
-        # TODO(gongshaotian): move to models
-        if not self.enable_mm:
-            self.share_inputs["rope_emb"] = get_rope(
-                rotary_dim=self.model_config.head_dim,
-                position_ids=tmp_position_ids,
-                base=self.model_config.rope_theta,
-                model_config=self.model_config,
-                partial_rotary_factor=self.model_config.partial_rotary_factor,
-            )
-
-        # Set block tables
-        pre_max_block_num = (
-            self.model_config.max_model_len + self.cache_config.block_size - 1
-        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
-        self.share_inputs["block_tables"] = paddle.full([max_num_seqs, pre_max_block_num], -1, dtype="int32")
-
-        # Initialize free list
-        free_list = list(
-            range(
-                self.cache_config.total_block_num - 1,
-                int(self.cache_config.total_block_num * self.cache_config.kv_cache_ratio) - 1,
-                -1,
-            )
-        )
-        self.free_list_len = len(free_list)
-        self.share_inputs["free_list"] = paddle.to_tensor(free_list, dtype="int32")
-        self.share_inputs["free_list_len"] = paddle.full([1], self.free_list_len, dtype="int32")
-
-        # Initialize stop seqs
-        self.share_inputs["stop_seqs_len"] = paddle.full(
-            [max_num_seqs, self.model_config.max_stop_seqs_num], 0, dtype="int32"
-        )
-        self.share_inputs["stop_seqs"] = paddle.full(
-            [
-                max_num_seqs,
-                self.model_config.max_stop_seqs_num,
-                self.model_config.stop_seqs_max_len,
-            ],
-            -1,
-            dtype="int64",
-        )
-
-        if self.enable_mm:
-            head_dim = self.model_config.head_dim
-            if "paddleocr" in self.model_config.model_type:  # neox style = True
-                rope_head_dim = head_dim
-            else:  # neox style = False
-                rope_head_dim = head_dim // 2
-
-            self.share_inputs["rope_emb"] = paddle.full(
-                shape=[
-                    max_num_seqs,
-                    2,
-                    1,
-                    self.model_config.max_model_len,
-                    1,
-                    rope_head_dim,
-                ],
-                fill_value=0,
-                dtype="float32",
-            )
-            self.share_inputs["image_features"] = None
-
-        if self.speculative_decoding:
-            max_draft_token_num = self.speculative_config.num_speculative_tokens
-            self.share_inputs["input_ids_cpu"] = paddle.full(
-                shape=[max_num_seqs, self.model_config.max_model_len],
-                fill_value=1,
-                dtype="int64",
-            ).cpu()
-            self.share_inputs["accept_tokens"] = paddle.full(
-                shape=[max_num_seqs, max_draft_token_num + 1],
-                fill_value=0,
-                dtype="int64",
-            )
-            self.share_inputs["accept_num"] = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
-            self.share_inputs["draft_tokens"] = paddle.full(
-                shape=[max_num_seqs, max_draft_token_num + 1],
-                fill_value=0,
-                dtype="int64",
-            )
-
-            self.share_inputs["actual_draft_token_num"] = paddle.full(
-                shape=[max_num_seqs],
-                fill_value=max_draft_token_num,
-                dtype="int32",
-            )
-            self.share_inputs["cu_seqlens_q_output"] = paddle.full(
-                shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32"
-            )
-            self.share_inputs["batch_id_per_token_output"] = paddle.full(
-                shape=[max_num_seqs * (max_draft_token_num + 1)],
-                fill_value=0,
-                dtype="int32",
-            )
-            # reasoning_status: per-sequence reasoning phase indicator
-            # 0=thinking, 1=emitting boundary, 2=response, 3=end
-            # verify_draft_tokens 在 reasoning_status==1 时强制拒绝所有 draft token
-            self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-            # For V1_KVCACHE_SCHEDULER
-            self.share_inputs["step_draft_tokens"] = paddle.full(
-                shape=[max_num_seqs, max_draft_token_num + 1],
-                fill_value=0,
-                dtype="int64",
-            )
-            self.share_inputs["step_seq_lens_this_time"] = paddle.full([max_num_seqs, 1], 0, dtype="int32")
-            self.share_inputs["temp_scaled_logprobs"] = paddle.full([max_num_seqs, 1], False, dtype=bool)
-            self.share_inputs["top_p_normalized_logprobs"] = paddle.full([max_num_seqs, 1], False, dtype=bool)
-            # For MTP Logprob
-            self.share_inputs["draft_logits"] = paddle.full(
-                [max_num_seqs * (self.speculative_config.num_speculative_tokens + 1), self.model_config.vocab_size],
-                -1,
-                dtype="float32",
-            )
-            self.share_inputs["cu_batch_token_offset"] = paddle.full(
-                shape=[max_num_seqs + 1], fill_value=0, dtype="int32"
-            )
-        self.max_num_seqs = max_num_seqs
-        self.share_inputs["mask_rollback"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.share_inputs["preempted_idx"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32").cpu()
-        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> or <response>
-        # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
-        self.share_inputs["reasoning_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.share_inputs["reasoning_allowed_tokens"] = (
-            paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
-            if self.model_config.reasoning_allowed_token_ids
-            else paddle.to_tensor([], dtype="int64")
-        )
-
-        # Initialize thinking related buffers
-        self.share_inputs["enable_thinking"] = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
-        self.share_inputs["max_think_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
-        self.share_inputs["max_reply_lens"] = paddle.full(shape=[max_num_seqs, 1], fill_value=-1, dtype="int32")
-        self.share_inputs["limit_think_status"] = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.share_inputs["inject_token_ids"] = paddle.to_tensor(
-            self.model_config.think_truncate_prompt_ids, dtype="int64"
-        ).reshape([-1, 1])
-        self.share_inputs["token_ids_all"] = paddle.full(
-            [max_num_seqs, self.model_config.max_model_len],
-            -1,
-            dtype="int64",
-        )
-
     def _prepare_inputs(self, is_dummy_run=False) -> None:
         """Prepare the model inputs"""
         if not is_dummy_run:
@@ -1063,8 +832,6 @@ class XPUModelRunner(ModelRunnerBase):
             seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             token_ids_all=self.share_inputs["token_ids_all"],
-            pre_token_ids=self.share_inputs["pre_ids"],
-            prompt_ids=self.share_inputs["prompt_ids"],
             prompt_lens=self.share_inputs["prompt_lens"],
             frequency_penalties=self.share_inputs["frequency_score"],
             presence_penalties=self.share_inputs["presence_score"],
@@ -1283,7 +1050,6 @@ class XPUModelRunner(ModelRunnerBase):
             max_dec_len = max_dec_len_list[idx]
             self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["token_ids_all"][idx : idx + 1, :input_length] = np.array([5] * input_length)
-            self.share_inputs["prompt_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
             self.share_inputs["eos_token_id"][:] = np.array([2], dtype="int64").reshape(-1, 1)
             self.share_inputs["seq_lens_this_time"][idx : idx + 1] = input_length
 
@@ -1518,7 +1284,6 @@ class XPUModelRunner(ModelRunnerBase):
                 stop_flags=self.share_inputs["stop_flags"],
                 step_idx=self.share_inputs["step_idx"],
                 max_dec_len=self.share_inputs["max_dec_len"],
-                pre_ids=self.share_inputs["pre_ids"],
                 seq_lens_this_time=self.share_inputs["seq_lens_this_time"],
                 eos_token_id=self.share_inputs["eos_token_id"],
                 not_need_stop=self.share_inputs["not_need_stop"],

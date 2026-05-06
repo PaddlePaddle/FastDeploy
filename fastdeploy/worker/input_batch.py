@@ -790,7 +790,12 @@ class ProposerInputBatch(InputBatch):
         else:
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
-            self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+            # self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+            self.pre_ids = paddle.full(
+                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
+                -1,
+                dtype="int64",
+            )
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
