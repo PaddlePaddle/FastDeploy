@@ -131,9 +131,8 @@ class CacheTransferManager:
         self._transfer_connector = create_transfer_connector(self.cache_config)
 
         # ============ MLA & DSA ============
-        self._is_mla = getattr(config.model_config, 'kv_lora_rank', 0) > 0
-        self._is_dsa = self._is_mla and getattr(config.model_config, 'index_head_dim', 0) > 0
-
+        self._is_mla = getattr(config.model_config, "kv_lora_rank", 0) > 0
+        self._is_dsa = self._is_mla and getattr(config.model_config, "index_head_dim", 0) > 0
 
     # ============ Cache Map Setters ============
 
@@ -360,7 +359,12 @@ class CacheTransferManager:
                     mode,
                 )
             # Scale cache is only used in GQA + fp8 quantization
-            if not self._is_mla and self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+            if (
+                not self._is_mla
+                and self._is_fp8_quantization()
+                and self._device_key_scales
+                and self._host_key_scales_ptrs
+            ):
                 swap_cache_all_layers(
                     self._device_key_scales,
                     self._host_key_scales_ptrs,
@@ -418,8 +422,13 @@ class CacheTransferManager:
                 return False
 
             swap_cache_per_layer(
-                key_cache, key_ptr, self._num_host_blocks,
-                device_block_ids, host_block_ids, self._device_id, mode,
+                key_cache,
+                key_ptr,
+                self._num_host_blocks,
+                device_block_ids,
+                host_block_ids,
+                self._device_id,
+                mode,
             )
 
             if not self._is_mla or self._is_dsa:
@@ -428,8 +437,13 @@ class CacheTransferManager:
                 if value_cache is None or value_ptr == 0:
                     return False
                 swap_cache_per_layer(
-                    value_cache, value_ptr, self._num_host_blocks,
-                    device_block_ids, host_block_ids, self._device_id, mode,
+                    value_cache,
+                    value_ptr,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
                 )
             return True
         except Exception:
@@ -493,7 +507,12 @@ class CacheTransferManager:
                             self._device_id,
                             mode,
                         )
-                    if not self._is_mla and self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+                    if (
+                        not self._is_mla
+                        and self._is_fp8_quantization()
+                        and self._device_key_scales
+                        and self._host_key_scales_ptrs
+                    ):
                         swap_cache_all_layers(
                             self._device_key_scales,
                             self._host_key_scales_ptrs,

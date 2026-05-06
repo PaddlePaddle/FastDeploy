@@ -104,8 +104,8 @@ class CacheController(KVCacheBase):
         # NUMA binding flag
         self._numa_bound = False
 
-        self._is_mla = getattr(self.model_config, 'kv_lora_rank', 0) > 0
-        self._is_dsa = self._is_mla and getattr(self.model_config, 'index_head_dim', 0) > 0
+        self._is_mla = getattr(self.model_config, "kv_lora_rank", 0) > 0
+        self._is_dsa = self._is_mla and getattr(self.model_config, "index_head_dim", 0) > 0
 
     @property
     def write_policy(self) -> Optional[str]:
@@ -240,7 +240,7 @@ class CacheController(KVCacheBase):
         if self._is_dsa:
             names["indexer"] = f"indexer_caches_{layer_idx}_rank{local_rank}.device{self._device_id}"
         elif self._is_mla:
-            pass # MLA: only key, no value, no indexer
+            pass  # MLA: only key, no value, no indexer
         else:
             # GQA/MHA: key + value + optional scales
             names["value"] = f"value_caches_{layer_idx}_rank{local_rank}.device{self._device_id}"
@@ -300,15 +300,19 @@ class CacheController(KVCacheBase):
         if not self._is_mla and self._is_fp8_quantization(kv_cache_quant_type):
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
 
-        logger.info(f"Initializing kv cache for all layers. num_layers={self._num_layers},"
-                   f"is_dsa = {self._is_dsa}, _is_mla = {self._is_mla}")
+        logger.info(
+            f"Initializing kv cache for all layers. num_layers={self._num_layers},"
+            f"is_dsa = {self._is_dsa}, _is_mla = {self._is_mla}"
+        )
         cache_kvs_list = []
 
         for i in range(self._num_layers):
             # Generate cache names
             cache_names = self._get_cache_names(i)
 
-            logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}")
+            logger.info(
+                f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"
+            )
 
             # Create key cache and value cache
             key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_dtype)
