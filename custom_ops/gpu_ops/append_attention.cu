@@ -97,6 +97,17 @@ void AppendAttentionKernel(
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
 
+  // Dtype guards for Python-supplied INT32 metadata tensors accessed via
+  // .data<int>() below. Catches accidental INT64/FP dtype before UB.
+  PD_CHECK(set_max_lengths.dtype() == paddle::DataType::INT32,
+           "set_max_lengths must be INT32");
+  PD_CHECK(encoder_num_blocks.dtype() == paddle::DataType::INT32,
+           "encoder_num_blocks must be INT32");
+  PD_CHECK(kv_num_blocks.dtype() == paddle::DataType::INT32,
+           "kv_num_blocks must be INT32");
+  PD_CHECK(decoder_num_blocks.dtype() == paddle::DataType::INT32,
+           "decoder_num_blocks must be INT32");
+
   const int max_len_this_time = set_max_lengths.data<int>()[0];
   const int max_enc_len_this_time = set_max_lengths.data<int>()[1];
   const int max_dec_len_this_time = set_max_lengths.data<int>()[2];
@@ -585,6 +596,8 @@ std::vector<paddle::Tensor> AppendAttention(
   }
 
   if (mask_offset) {
+    PD_CHECK(mask_offset.get().dtype() == paddle::DataType::INT32,
+             "mask_offset must be INT32");
     meta_data.mask_offset = mask_offset.get().data<int>();
   }
 
@@ -747,6 +760,8 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
   meta_data.batch_size = seq_lens_this_time.dims()[0];
 
   if (mask_offset) {
+    PD_CHECK(mask_offset.get().dtype() == paddle::DataType::INT32,
+             "mask_offset must be INT32");
     meta_data.mask_offset = mask_offset.get().data<int>();
   }
 
