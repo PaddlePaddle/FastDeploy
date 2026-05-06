@@ -267,7 +267,7 @@ class CacheController(KVCacheBase):
         num_gpu_blocks: int,
     ) -> List[Any]:
         """
-        Initialize KV Cache tensors.
+        Initialize KV Cache tensors (GQA/MHA only).
 
         Create KV Cache tensors on GPU for storing attention Key and Value.
 
@@ -278,61 +278,41 @@ class CacheController(KVCacheBase):
         Returns:
             cache_kvs_list: KV Cache tensor list in [key_cache_layer0, value_cache_layer0, ...] order.
         """
-        # Get kv cache quantization type
-        kv_cache_quant_type = self._get_kv_cache_quant_type()
-
-        # Get kv cache shape
+        # Dispatch to specialized initializers for MLA/DSA
         if self._is_dsa:
-            kv_cache_quant_type = "uint8"
-            key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
-                max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
-            )
-            cache_dtype = "uint8"
-        else:
-            key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
-                max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
-            )
-            indexer_cache_shape = []
-            cache_dtype = self.model_config.dtype
+            return self.initialize_dsa_kv_cache(attn_backend, num_gpu_blocks)
+        elif self._is_mla:
+            return self.initialize_mla_kv_cache(attn_backend, num_gpu_blocks)
 
-        # Get scale shape for block_wise_fp8 quantization
+        # GQA/MHA path
+        kv_cache_quant_type = self._get_kv_cache_quant_type()
+        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
+            max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+        )
+        cache_dtype = self.model_config.dtype
+
+        # Scale shape for block_wise_fp8 quantization
         kv_cache_scale_shape = None
-        if not self._is_mla and self._is_fp8_quantization(kv_cache_quant_type):
+        if self._is_fp8_quantization(kv_cache_quant_type):
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
 
         logger.info(
-            f"Initializing kv cache for all layers. num_layers={self._num_layers},"
-            f"is_dsa = {self._is_dsa}, _is_mla = {self._is_mla}"
+            f"Initializing GQA kv cache: num_layers={self._num_layers}, "
+            f"key_shape={key_cache_shape}, value_shape={value_cache_shape}"
         )
         cache_kvs_list = []
 
         for i in range(self._num_layers):
-            # Generate cache names
             cache_names = self._get_cache_names(i)
 
-            logger.info(
-                f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"
-            )
-
-            # Create key cache and value cache
             key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_dtype)
             self.cache_kvs_map[cache_names["key"]] = key_cache
 
-            if value_cache_shape:
-                val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=cache_dtype)
-                self.cache_kvs_map[cache_names["value"]] = val_cache
-                cache_kvs_list.extend([key_cache, val_cache])
-            elif indexer_cache_shape:
-                # DSA: key + indexer
-                indexer_cache = paddle.full(shape=indexer_cache_shape, fill_value=0, dtype=cache_dtype)
-                self.cache_kvs_map[cache_names["indexer"]] = indexer_cache
-                cache_kvs_list.extend([key_cache, indexer_cache])
-            else:
-                # MLA: only key, no value, no indexer
-                cache_kvs_list.append(key_cache)
+            val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=cache_dtype)
+            self.cache_kvs_map[cache_names["value"]] = val_cache
+            cache_kvs_list.extend([key_cache, val_cache])
 
-            # Create scale caches for block_wise_fp8 quantization
-            if not self._is_mla and self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
+            if self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
                 key_cache_scales = paddle.full(
                     shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                 )
@@ -344,14 +324,93 @@ class CacheController(KVCacheBase):
                 cache_kvs_list.extend([key_cache_scales, val_cache_scales])
 
         paddle.device.cuda.empty_cache()
-        logger.info("kv cache is initialized!")
+        logger.info("GQA kv cache initialized!")
 
-        # Share cache_kvs_map with transfer manager for data transfer operations
         self._transfer_manager.set_cache_kvs_map(self.cache_kvs_map)
-
-        # Initialize host cache
         self.initialize_host_cache(attn_backend)
+        return cache_kvs_list
 
+    def initialize_mla_kv_cache(
+        self,
+        attn_backend: Any,
+        num_gpu_blocks: int,
+    ) -> List[Any]:
+        """
+        Initialize MLA KV Cache tensors (key only, no value).
+
+        Args:
+            attn_backend: Attention backend instance for getting kv cache shape.
+            num_gpu_blocks: Maximum number of blocks on GPU.
+
+        Returns:
+            cache_kvs_list: KV Cache tensor list in [key_layer0, key_layer1, ...] order.
+        """
+        kv_cache_quant_type = self._get_kv_cache_quant_type()
+        key_cache_shape, _ = attn_backend.get_kv_cache_shape(
+            max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+        )
+        cache_dtype = self.model_config.dtype
+
+        logger.info(f"Initializing MLA kv cache: num_layers={self._num_layers}, " f"key_shape={key_cache_shape}")
+        cache_kvs_list = []
+
+        for i in range(self._num_layers):
+            cache_names = self._get_cache_names(i)
+
+            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_dtype)
+            self.cache_kvs_map[cache_names["key"]] = key_cache
+            cache_kvs_list.append(key_cache)
+
+        paddle.device.cuda.empty_cache()
+        logger.info("MLA kv cache initialized!")
+
+        self._transfer_manager.set_cache_kvs_map(self.cache_kvs_map)
+        return cache_kvs_list
+
+    def initialize_dsa_kv_cache(
+        self,
+        attn_backend: Any,
+        num_gpu_blocks: int,
+    ) -> List[Any]:
+        """
+        Initialize DSA KV Cache tensors (key + indexer, two pools).
+
+        Creates interleaved [key, indexer, key, indexer, ...] layout.
+        Future HiSparse extension: add host_blocks parameter for key host backup.
+
+        Args:
+            attn_backend: Attention backend instance for getting kv cache shape.
+            num_gpu_blocks: Maximum number of blocks on GPU.
+
+        Returns:
+            cache_kvs_list: KV Cache tensor list in [key_layer0, indexer_layer0, ...] order.
+        """
+        key_cache_shape, _, indexer_cache_shape = attn_backend.get_kv_cache_shape(
+            max_num_blocks=num_gpu_blocks, kv_cache_quant_type="uint8"
+        )
+        cache_dtype = "uint8"
+
+        logger.info(
+            f"Initializing DSA kv cache: num_layers={self._num_layers}, "
+            f"key_shape={key_cache_shape}, indexer_shape={indexer_cache_shape}"
+        )
+        cache_kvs_list = []
+
+        for i in range(self._num_layers):
+            cache_names = self._get_cache_names(i)
+
+            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_dtype)
+            self.cache_kvs_map[cache_names["key"]] = key_cache
+
+            indexer_cache = paddle.full(shape=indexer_cache_shape, fill_value=0, dtype=cache_dtype)
+            self.cache_kvs_map[cache_names["indexer"]] = indexer_cache
+
+            cache_kvs_list.extend([key_cache, indexer_cache])
+
+        paddle.device.cuda.empty_cache()
+        logger.info("DSA kv cache initialized!")
+
+        self._transfer_manager.set_cache_kvs_map(self.cache_kvs_map)
         return cache_kvs_list
 
     def initialize_mtp_kv_cache(
