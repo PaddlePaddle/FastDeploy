@@ -196,10 +196,10 @@ class PrefixCacheManager:
         if self.num_gpu_blocks <= 0:
             return 0.0
         if getattr(self, "head_wise", False):
-            heaps = getattr(self, "gpu_free_head_wise_block_lists", None)
-            if heaps is not None:
-                head_free = sum(len(h) for h in heaps)
-                return (head_free / max(1, self.kv_num_heads)) / self.num_gpu_blocks
+            free_list = getattr(self, "gpu_free_head_wise_block_list", None)
+            if free_list is not None:
+                head_free = len(free_list) // max(1, self.kv_num_heads)
+                return head_free / self.num_gpu_blocks
         return len(self.gpu_free_block_list) / self.num_gpu_blocks
 
     def launch_cache_manager(
