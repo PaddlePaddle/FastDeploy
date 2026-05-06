@@ -82,6 +82,7 @@ def process_stop_token_ids(
     update_stop_seq_fn: Callable[[List[str]], Tuple[List[List[int]], List[int]]],
 ) -> None:
     stop_token_ids_final = []
+    stop_seqs_len_final = []
 
     if request.get("stop_token_ids") is not None:
         stop_token_ids = request.get("stop_token_ids")
@@ -89,17 +90,19 @@ def process_stop_token_ids(
             if isinstance(stop_token_ids[0], int):
                 # List[int] -> List[List[int]]
                 stop_token_ids_final.extend([[t] for t in stop_token_ids])
+                stop_seqs_len_final.extend([1] * len(stop_token_ids))
             elif isinstance(stop_token_ids[0], list):
                 # Already List[List[int]]
                 stop_token_ids_final.extend(stop_token_ids)
+                stop_seqs_len_final.extend([len(seq) for seq in stop_token_ids])
 
     stop_sequences = request.get("stop", [])
     if stop_sequences:
-        stop_seqs, _ = update_stop_seq_fn(stop_sequences)
+        stop_seqs, stop_seqs_actual_lens = update_stop_seq_fn(stop_sequences)
         stop_token_ids_final.extend(stop_seqs)
+        stop_seqs_len_final.extend(stop_seqs_actual_lens)
 
     # Update request
     if stop_token_ids_final:
-        stop_seqs_len = [len(seq) for seq in stop_token_ids_final]
         request["stop_token_ids"] = stop_token_ids_final
-        request["stop_seqs_len"] = stop_seqs_len
+        request["stop_seqs_len"] = stop_seqs_len_final
