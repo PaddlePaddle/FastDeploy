@@ -104,6 +104,9 @@ class CacheController(KVCacheBase):
         # NUMA binding flag
         self._numa_bound = False
 
+        self._is_mla = getattr(self.model_config, 'kv_lora_rank', 0) > 0
+        self._is_dsa = self._is_mla and getattr(self.model_config, 'index_head_dim', 0) > 0
+
     @property
     def write_policy(self) -> Optional[str]:
         """Get the write policy for cache operations."""
@@ -230,12 +233,21 @@ class CacheController(KVCacheBase):
         """
         local_rank = self._local_rank % self.parallel_config.tensor_parallel_size
 
-        return {
-            "key": f"key_caches_{layer_idx}_rank{local_rank}.device{self._device_id}",
-            "value": f"value_caches_{layer_idx}_rank{local_rank}.device{self._device_id}",
-            "key_scale": f"key_cache_scales_{layer_idx}_rank{local_rank}.device{self._device_id}",
-            "value_scale": f"value_cache_scales_{layer_idx}_rank{local_rank}.device{self._device_id}",
+        names = {
+            "key": f"key_cache_{layer_idx}_rank{local_rank}.device{self._device_id}",
         }
+
+        if self._is_dsa:
+            names["indexer"] = f"indexer_caches_{layer_idx}_rank{local_rank}.device{self._device_id}"
+        elif self._is_mla:
+            pass # MLA: only key, no value, no indexer
+        else:
+            # GQA/MHA: key + value + optional scales
+            names["value"] = f"value_caches_{layer_idx}_rank{local_rank}.device{self._device_id}"
+            names["key_scale"] = f"key_cache_scales_{layer_idx}_rank{local_rank}.device{self._device_id}"
+            names["value_scale"] = f"value_cache_scales_{layer_idx}_rank{local_rank}.device{self._device_id}"
+
+        return names
 
     # ============ KV Cache Management ============
 
@@ -270,34 +282,53 @@ class CacheController(KVCacheBase):
         kv_cache_quant_type = self._get_kv_cache_quant_type()
 
         # Get kv cache shape
-        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
-            max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
-        )
+        if self._is_dsa:
+            kv_cache_quant_type = "uint8"
+            key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
+                max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+            )
+            cache_dtype = "uint8"
+        else:
+            key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
+                max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+            )
+            indexer_cache_shape = []
+            cache_dtype = self.model_config.dtype
 
         # Get scale shape for block_wise_fp8 quantization
         kv_cache_scale_shape = None
-        if self._is_fp8_quantization(kv_cache_quant_type):
+        if not self._is_mla and self._is_fp8_quantization(kv_cache_quant_type):
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
 
-        logger.info(f"Initializing kv cache for all layers. num_layers={self._num_layers}")
+        logger.info(f"Initializing kv cache for all layers. num_layers={self._num_layers},"
+                   f"is_dsa = {self._is_dsa}, _is_mla = {self._is_mla}")
         cache_kvs_list = []
 
         for i in range(self._num_layers):
             # Generate cache names
             cache_names = self._get_cache_names(i)
 
-            logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
+            logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}")
 
             # Create key cache and value cache
-            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=self.model_config.dtype)
+            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_dtype)
             self.cache_kvs_map[cache_names["key"]] = key_cache
 
-            val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
-            self.cache_kvs_map[cache_names["value"]] = val_cache
-            cache_kvs_list.extend([key_cache, val_cache])
+            if value_cache_shape:
+                val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=cache_dtype)
+                self.cache_kvs_map[cache_names["value"]] = val_cache
+                cache_kvs_list.extend([key_cache, val_cache])
+            elif indexer_cache_shape:
+                # DSA: key + indexer
+                indexer_cache = paddle.full(shape=indexer_cache_shape, fill_value=0, dtype=cache_dtype)
+                self.cache_kvs_map[cache_names["indexer"]] = indexer_cache
+                cache_kvs_list.extend([key_cache, indexer_cache])
+            else:
+                # MLA: only key, no value, no indexer
+                cache_kvs_list.append(key_cache)
 
             # Create scale caches for block_wise_fp8 quantization
-            if self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
+            if not self._is_mla and self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
                 key_cache_scales = paddle.full(
                     shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                 )
@@ -346,31 +377,50 @@ class CacheController(KVCacheBase):
         """
         kv_cache_quant_type = self._get_kv_cache_quant_type()
 
-        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
-            max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
-        )
+        if self._is_dsa:
+            kv_cache_quant_type = "uint8"
+            key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
+                max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+            )
+            cache_dtype = "uint8"
+        else:
+            key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
+                max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+            )
+            indexer_cache_shape = []
+            cache_dtype = self.model_config.dtype
 
         kv_cache_scale_shape = None
-        if self._is_fp8_quantization(kv_cache_quant_type):
+        if not self._is_mla and self._is_fp8_quantization(kv_cache_quant_type):
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
 
         logger.info(
             f"[CacheController] Initializing MTP kv cache for {num_mtp_layers} layers "
             f"(layer_offset={layer_offset}, num_gpu_blocks={num_gpu_blocks})."
+            f"is_dsa = {self._is_dsa}, _is_mla = {self._is_mla}."
         )
         cache_kvs_list = []
 
         for i in range(layer_offset, layer_offset + num_mtp_layers):
             cache_names = self._get_cache_names(i)
 
-            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=self.model_config.dtype)
+            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_dtype)
             self.cache_kvs_map[cache_names["key"]] = key_cache
 
-            val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
-            self.cache_kvs_map[cache_names["value"]] = val_cache
-            cache_kvs_list.extend([key_cache, val_cache])
+            if value_cache_shape:
+                val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=cache_dtype)
+                self.cache_kvs_map[cache_names["value"]] = val_cache
+                cache_kvs_list.extend([key_cache, val_cache])
+            elif indexer_cache_shape:
+                # DSA: key + indexer
+                indexer_cache = paddle.full(shape=indexer_cache_shape, fill_value=0, dtype=cache_dtype)
+                self.cache_kvs_map[cache_names["indexer"]] = indexer_cache
+                cache_kvs_list.extend([key_cache, indexer_cache])
+            else:
+                # MLA: only key, no value, no indexer
+                cache_kvs_list.append(key_cache)
 
-            if self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
+            if not self._is_mla and self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
                 key_cache_scales = paddle.full(
                     shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                 )
@@ -542,9 +592,16 @@ class CacheController(KVCacheBase):
         kv_cache_quant_type = self._get_kv_cache_quant_type()
 
         # Get kv cache shape (pass num_host_blocks as max_num_blocks for host cache)
-        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
-            max_num_blocks=num_host_blocks, kv_cache_quant_type=kv_cache_quant_type
-        )
+        if self._is_dsa:
+            kv_cache_quant_type = "uint8"
+            key_cache_shape, _, indexer_cache_shape = attn_backend.get_kv_cache_shape(
+                max_num_blocks=num_host_blocks, kv_cache_quant_type=kv_cache_quant_type
+            )
+            value_cache_shape = []
+        else:
+            key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
+                max_num_blocks=num_host_blocks, kv_cache_quant_type=kv_cache_quant_type
+            )
 
         # Calculate cache sizes (elements per block per layer)
         key_cache_size = key_cache_shape[1] * key_cache_shape[2] * key_cache_shape[3]
@@ -554,8 +611,11 @@ class CacheController(KVCacheBase):
             value_cache_size = 0
 
         # Get cache dtype and bytes per element
-        cache_dtype = self.cache_config.cache_dtype
-        cache_item_bytes = self.cache_config.get_cache_bytes(cache_dtype)
+        if self._is_dsa:
+            cache_item_bytes = 1
+        else:
+            cache_dtype = self.cache_config.cache_dtype
+            cache_item_bytes = self.cache_config.get_cache_bytes(cache_dtype)
 
         # Calculate total bytes to allocate
         key_need_to_allocate_bytes = num_host_blocks * cache_item_bytes * key_cache_size
