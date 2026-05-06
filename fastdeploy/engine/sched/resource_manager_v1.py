@@ -298,10 +298,12 @@ class ResourceManagerV1(ResourceManager):
         # GQA/MQA divisibility guard: when kv >= tp, kv must be divisible by tp
         # (Paddle's TP shards KV heads evenly). The kv < tp replication path is
         # handled below.
-        assert (kv_num_heads_global < tp_size) or (kv_num_heads_global % tp_size == 0), (
-            f"GQA/MQA constraint violated: kv_num_heads={kv_num_heads_global} not divisible by tp_size={tp_size} "
-            f"(only kv<tp replication path or exact divisibility supported)"
-        )
+        if kv_num_heads_global >= tp_size and kv_num_heads_global % tp_size != 0:
+            raise ValueError(
+                f"GQA/MQA constraint violated: kv_num_heads={kv_num_heads_global} "
+                f"not divisible by tp_size={tp_size} (only kv<tp replication path or "
+                f"exact divisibility supported)"
+            )
         # Local KV heads on this rank. GQA/MQA models can have kv < tp; in that
         # case Paddle replicates KV across ranks and each rank still owns the
         # full local set, so floor-divide-then-max-1 keeps us correct.

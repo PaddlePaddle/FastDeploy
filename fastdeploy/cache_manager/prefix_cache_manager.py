@@ -193,16 +193,18 @@ class PrefixCacheManager:
 
     @property
     def available_gpu_resource(self):
-        if getattr(self, "head_wise", False) and self.num_gpu_blocks > 0:
-            head_free = len(getattr(self, "gpu_free_head_wise_block_list", []))
-            # Use float division so partial SWA recycle (head_free % kv_num_heads != 0)
-            # is reflected in the metric. Integer division would truncate fractional
-            # logical-block availability and cause the scheduler to under-report
-            # capacity, potentially triggering false OOM rejections. The legacy path
-            # below already returns a continuous float in [0, 1]; this keeps both
-            # paths value-domain compatible.
-            return (head_free / max(1, self.kv_num_heads)) / self.num_gpu_blocks
-        return len(self.gpu_free_block_list) / self.num_gpu_blocks if self.num_gpu_blocks > 0 else 0.0
+        if self.num_gpu_blocks <= 0:
+            return 0.0
+        if getattr(self, "head_wise", False):
+            heaps = getattr(self, "gpu_free_head_wise_block_lists", None)
+            if heaps:
+                head_free = sum(len(h) for h in heaps)
+                return (head_free / max(1, self.kv_num_heads)) / self.num_gpu_blocks
+            # legacy / startup-window fallback
+            legacy = getattr(self, "gpu_free_head_wise_block_list", None)
+            if legacy:
+                return (len(legacy) / max(1, self.kv_num_heads)) / self.num_gpu_blocks
+        return len(self.gpu_free_block_list) / self.num_gpu_blocks
 
     def launch_cache_manager(
         self,
