@@ -93,15 +93,15 @@ class TestChat(unittest.TestCase):
         data_processor = self.llm.llm_engine.data_processor
         captured_spliced_message = None
 
-        def capture_spliced_message(request_or_messages, **kwargs):
-            """Wrap original messages2ids to capture spliced_message"""
-            token_ids = data_processor.original_messages2ids(request_or_messages, **kwargs)
-            nonlocal captured_spliced_message
-            captured_spliced_message = request_or_messages.get("prompt_tokens")
-            return token_ids
+        original_process_messages = data_processor.process_messages
 
-        data_processor.original_messages2ids = data_processor.messages2ids
-        data_processor.messages2ids = capture_spliced_message
+        def capture_process_messages(request):
+            """Wrap original process_messages to capture prompt_tokens"""
+            original_process_messages(request)
+            nonlocal captured_spliced_message
+            captured_spliced_message = request.get("prompt_tokens")
+
+        data_processor.process_messages = capture_process_messages
 
         try:
             outputs = self.llm.chat(
@@ -112,7 +112,7 @@ class TestChat(unittest.TestCase):
                 stream=False,
             )
 
-            self.assertIsNotNone(captured_spliced_message, "Failed to capture spliced_message from messages2ids")
+            self.assertIsNotNone(captured_spliced_message, "Failed to capture spliced_message from process_messages")
             self.assertIn(
                 "<tools>",
                 captured_spliced_message,
@@ -124,7 +124,7 @@ class TestChat(unittest.TestCase):
             self.assertTrue(hasattr(output, "outputs"))
             self.assertTrue(hasattr(output.outputs, "text"))
         finally:
-            data_processor.messages2ids = data_processor.original_messages2ids
+            data_processor.process_messages = original_process_messages
 
     def test_validate_tools(self):
         """Test both valid and invalid scenarios for _validate_tools method"""

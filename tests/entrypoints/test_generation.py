@@ -129,9 +129,7 @@ class TestGeneration(unittest.TestCase):
         for prompt_token_ids in self.TOKEN_IDS:
             with self.subTest(prompt_token_ids=prompt_token_ids):
                 output1 = self.llm.chat(messages=[prompt_token_ids], sampling_params=sampling_params)
-                output2 = self.llm.chat(
-                    [{"prompt": "", "prompt_token_ids": prompt_token_ids}], sampling_params=sampling_params
-                )
+                output2 = self.llm.chat(messages=[prompt_token_ids], sampling_params=sampling_params)
                 self.assert_outputs_equal(output1, output2)
 
     def test_multiple_sampling_params_chat(self):
