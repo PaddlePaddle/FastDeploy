@@ -77,7 +77,7 @@ def _reload_api_server(args):
         def get(key, default=None):
             return [] if key == "FD_API_KEY" else default
 
-    fake_envs_mod.TRACES_ENABLE = "false"
+    fake_envs_mod.FD_TRACE = "off"
     fake_envs_mod.FD_SERVICE_NAME = ""
     fake_envs_mod.FD_HOST_NAME = ""
     fake_envs_mod.TRACES_EXPORTER = "console"
@@ -446,7 +446,7 @@ async def test_chat_and_completion_routes():
 async def test_chat_completion_tracing():
     args = _build_args(dynamic_load_weight=False)
     api_server = _reload_api_server(args)
-    api_server.envs.TRACES_ENABLE = "true"
+    api_server.envs.FD_TRACE = "otel"
     api_server.app.state.dynamic_load_weight = False
 
     fake_req = SimpleNamespace(headers={"x-request-id": "1"})
@@ -479,8 +479,8 @@ async def test_chat_completion_tracing():
     assert resp_comp.status_code == 200
     assert getattr(body, "trace_context", None) == "ctx"
 
-    # TRACES_ENABLE=True but req.headers is None/empty (missing branch 379, 415)
-    api_server.envs.TRACES_ENABLE = "true"
+    # FD_TRACE=otel but req.headers is None/empty (missing branch 379, 415)
+    api_server.envs.FD_TRACE = "otel"
     fake_req_no_headers = SimpleNamespace(headers=None)
     body2 = SimpleNamespace(model_dump_json=lambda: "{}", stream=False)
     api_server.app.state.chat_handler = SimpleNamespace(create_chat_completion=AsyncMock(return_value=chat_resp))

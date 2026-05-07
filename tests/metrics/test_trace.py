@@ -190,7 +190,7 @@ class TestTraceComprehensive:
         """Setup test environment"""
         # Mock environment variables
         self.original_env = os.environ.copy()
-        os.environ["TRACES_ENABLE"] = "true"
+        os.environ["FD_TRACE"] = "otel"
         os.environ["FD_SERVICE_NAME"] = "test_service"
         os.environ["FD_HOST_NAME"] = "test_host"
         os.environ["EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4317"
@@ -215,12 +215,12 @@ class TestTraceComprehensive:
         assert trace.tracing_enabled is True
 
         # Test with tracing disabled
-        os.environ["TRACES_ENABLE"] = "false"
+        os.environ["FD_TRACE"] = "off"
         trace.process_tracing_init()
         assert trace.tracing_enabled is False
 
         # Test with invalid endpoint
-        os.environ["TRACES_ENABLE"] = "true"
+        os.environ["FD_TRACE"] = "otel"
         os.environ["EXPORTER_OTLP_ENDPOINT"] = ""
 
         # Test with different protocols
@@ -617,7 +617,7 @@ class TestAdditionalCoverage:
     def setup_method(self):
         """Setup test environment"""
         self.original_env = os.environ.copy()
-        os.environ["TRACES_ENABLE"] = "true"
+        os.environ["FD_TRACE"] = "otel"
         os.environ["FD_SERVICE_NAME"] = "test_service"
         os.environ["EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4317"
 
@@ -1273,7 +1273,7 @@ class TestGetTraceInfoForRequest:
     def setup_method(self):
         """Setup test environment"""
         self.original_env = os.environ.copy()
-        os.environ["TRACES_ENABLE"] = "true"
+        os.environ["FD_TRACE"] = "otel"
         os.environ["FD_SERVICE_NAME"] = "test_service"
         os.environ["EXPORTER_OTLP_ENDPOINT"] = "http://localhost:4317"
 
@@ -1605,6 +1605,34 @@ class TestGetTraceInfoForRequest:
 
         trace.trace_req_finish(rid1)
         trace.trace_req_finish(rid2)
+
+
+class TestProcessTracingInitError(unittest.TestCase):
+    """Test process_tracing_init logs error when initialization fails."""
+
+    def test_process_tracing_init_logs_error_on_exception(self):
+        """Test that initialize opentelemetry error is logged with traceback."""
+        import fastdeploy.metrics.trace as trace_module
+
+        original_enabled = trace_module.tracing_enabled
+        original_imported = trace_module.opentelemetry_imported
+        try:
+            trace_module.opentelemetry_imported = True
+            with patch.object(trace_module.envs, "FD_TRACE", "otel"):
+                with patch.object(
+                    trace_module, "get_otlp_span_exporter", side_effect=RuntimeError("otlp init failed")
+                ):
+                    with patch.object(trace_module.logger, "error") as mock_error:
+                        trace_module.process_tracing_init()
+
+            mock_error.assert_called_once()
+            error_msg = mock_error.call_args[0][0]
+            self.assertIn("initialize opentelemetry error", error_msg)
+            self.assertIn("otlp init failed", error_msg)
+            self.assertFalse(trace_module.tracing_enabled)
+        finally:
+            trace_module.tracing_enabled = original_enabled
+            trace_module.opentelemetry_imported = original_imported
 
 
 if __name__ == "__main__":

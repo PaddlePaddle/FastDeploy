@@ -383,7 +383,6 @@ class BaseTextProcessor(ABC):
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
         """Unified request pre-processing shared by all processors."""
-        log_request(RequestLogLevel.CONTENT, message="Start processing request dict: {request}", request=request)
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
@@ -684,6 +683,10 @@ class BaseTextProcessor(ABC):
                 seq_len = np.array(seq_len, dtype=np.int64).reshape(-1, 1)
             return padded_insts, seq_len
         return padded_insts
+
+    def process_logprob_response(self, token_ids, **kwargs):
+        """Decode a list of token ids to a string for logprob responses."""
+        return self.tokenizer.decode(token_ids, **kwargs)
 
     def get_mm_max_tokens_per_item(self, seq_len: int):
         """Return the maximum number of tokens per item for each modality.

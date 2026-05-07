@@ -17,10 +17,10 @@
 from typing import Callable
 
 import paddle
+import paddle.nn.functional as F
 from paddle import nn
 
 import fastdeploy
-from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -1253,6 +1253,11 @@ def python_op_fused_moe_kernel_paddle(
             False,
         )
 
+    if layer.routed_scaling_factor_learnable:
+        safe_topk_indices = paddle.clip(topk_ids, min=0)
+        gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+        topk_weights = topk_weights * gathered_scales
+
     if topk_ids_hookfunc is not None:
         topk_ids_hookfunc(topk_ids=topk_ids)
 
@@ -1740,22 +1745,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
                 scale_param.data = scale
-            if bool(envs.FD_USE_BLACKWELL_GEMM):
-                import blackwell_ops
-
-                scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
-                scale_bw_name = scale_name + "_bw"
-                setattr(
-                    layer,
-                    scale_bw_name,
-                    scale_bw,
-                )
-                if layer.fd_config.scheduler_config.splitwise_role != "mixed":
-                    setattr(
-                        layer,
-                        scale_name,
-                        None,
-                    )
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize

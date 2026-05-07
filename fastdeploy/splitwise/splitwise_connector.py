@@ -133,7 +133,7 @@ class SplitwiseConnector:
             return sock
 
         except zmq.ZMQError as e:
-            self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}")
+            self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}, {traceback.format_exc()}")
 
             raise ConnectionError(f"Failed to connect to {addr}") from e
 
@@ -158,7 +158,7 @@ class SplitwiseConnector:
                 main_process_metrics.send_cache_failed_num.inc()
                 self._close_connection(addr)
         except Exception as e:
-            self.logger.error(f"_send_message: Message preparation failed: {e}")
+            self.logger.error(f"_send_message: Message preparation failed: {e}, {traceback.format_exc()}")
 
     def _close_connection(self, addr):
         """

@@ -276,6 +276,15 @@ class FusedMoE(nn.Layer):
             self.gate_correction_bias = gate_correction_bias
         else:
             self.gate_correction_bias = None
+
+        self.routed_scaling_factor_learnable = getattr(
+            self.fd_config.model_config, "routed_scaling_factor_learnable", False
+        )
+        if self.routed_scaling_factor_learnable:
+            self.per_expert_scale = self.create_parameter(
+                shape=[self.num_experts], dtype="float32", default_initializer=nn.initializer.Constant(1.0)
+            )
+
         self.quant_method.create_weights(
             self,
             weight_loader=self.weight_loader,
