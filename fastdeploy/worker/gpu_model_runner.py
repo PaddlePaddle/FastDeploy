@@ -27,7 +27,7 @@ import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import PREEMPTED_TOKEN_ID, FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import BatchRequest, ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
@@ -79,7 +79,6 @@ else:
         speculate_schedule_cache,
         set_data_ipc,
         unset_data_ipc,
-        get_position_ids_and_mask_encoder_batch,
         update_attn_mask_offsets,
     )
 
@@ -88,7 +87,12 @@ import zmq
 from fastdeploy import envs
 from fastdeploy.cache_manager.v1 import CacheController
 from fastdeploy.engine.tasks import PoolingTask
-from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+
+try:
+    from fastdeploy.input.ernie4_5_vl_processor import DataProcessor
+except ImportError:
+    DataProcessor = None
+
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
 from fastdeploy.logger.deterministic_logger import DeterministicLogger
 from fastdeploy.model_executor.forward_meta import ForwardMeta
