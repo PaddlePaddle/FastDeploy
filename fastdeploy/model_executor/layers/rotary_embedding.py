@@ -341,6 +341,8 @@ def get_rope_impl(
     """
 
     architecture = model_config.architectures[0]
+    if architecture == "PaddleFleetForCausalLM":
+        architecture = model_config.pretrained_config.architectures[0]
     if architecture.startswith("Qwen"):
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
