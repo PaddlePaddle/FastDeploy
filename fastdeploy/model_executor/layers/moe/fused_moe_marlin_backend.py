@@ -191,7 +191,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         # SM80: skip creating Marlin packed weights (we use BF16 dequant instead).
         # Create minimal dummy params so attribute access doesn't fail.
 
-        if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
+        if self.weight_type == "fp8" and current_platform.is_cuda() and get_sm_version() < 90:
             for name in self.added_weight_attrs:
                 setattr(
                     layer,
@@ -292,7 +292,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         # SM80+FP8: weights handled by model-specific loading path (e.g., minimax_m2_5.py).
         # create_weights already created dummy params; skip repack here to match.
 
-        if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
+        if self.weight_type == "fp8" and current_platform.is_cuda() and get_sm_version() < 90:
             return
 
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
@@ -522,7 +522,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
 
         # SM80 (A100): route to BF16 bmm path (skip Marlin kernel)
 
-        if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
+        if self.weight_type == "fp8" and current_platform.is_cuda() and get_sm_version() < 90:
             if not hasattr(layer, "_sm80_gate"):
                 raise RuntimeError(
                     "SM80 FP8 MoE: layer._sm80_gate not found. "
@@ -686,7 +686,7 @@ class MarlinWeightOnlyMoEMethod(QuantMethodBase):
         # Step 3: Triton preprocess with expert_map filtering
         # On SM80, skip preprocess and go directly to _apply_ep_sm80_bf16
 
-        if self.weight_type == "fp8" and get_sm_version() < 90 and current_platform.is_cuda():
+        if self.weight_type == "fp8" and current_platform.is_cuda() and get_sm_version() < 90:
             if not hasattr(layer, "_sm80_gate"):
                 raise RuntimeError(
                     "SM80 FP8 MoE: layer._sm80_gate not found. "

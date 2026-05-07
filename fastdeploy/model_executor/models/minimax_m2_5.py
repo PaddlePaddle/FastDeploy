@@ -911,7 +911,7 @@ class MiniMaxM2ForCausalLM(ModelForCasualLM):
         from fastdeploy.model_executor.utils import get_sm_version
         from fastdeploy.platforms import current_platform
 
-        if get_sm_version() < 90 and current_platform.is_cuda():
+        if current_platform.is_cuda() and get_sm_version() < 90:
             # Get dimensions from expert weight shapes
             # gate weight: [moe_intermediate_size, hidden_size] = [1536, 3072]
             # down weight: [hidden_size, moe_intermediate_size] = [3072, 1536]

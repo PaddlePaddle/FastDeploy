@@ -113,7 +113,7 @@ class BlockWiseFP8Config(QuantConfigBase):
                 )
 
                 return BlackwellGemmFusedMoeMethod(self)
-            if get_sm_version() < 90:
+            if current_platform.is_cuda() and get_sm_version() < 90:
                 # SM < 90 (A100/A800): no FP8 tensor cores.
                 # Use Marlin kernel for FP8 weight-only quantization when enabled,
                 # otherwise return None to trigger BF16 dequant fallback.
@@ -392,7 +392,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
         # SM < 90 (A100/A800): no FP8 tensor cores, dequant weight to BF16 and use
         # standard GEMM. The weight may already be BF16 (dequantized during
         # load_weights) or still FP8 (dequant on-the-fly using block-wise scales).
-        if get_sm_version() < 90 and current_platform.is_cuda():
+        if current_platform.is_cuda() and get_sm_version() < 90:
             import paddle.nn.functional as F
 
             if layer.weight.dtype == paddle.bfloat16:

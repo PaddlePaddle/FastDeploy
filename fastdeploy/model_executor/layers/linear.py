@@ -270,7 +270,7 @@ class LinearBase(nn.Layer):
         # SM80: append_attention may return a list. Extract first element
         # to satisfy quant_method.apply()'s tensor type contract.
         # Only active on SM80+CUDA; SM90+ will raise if a list is unexpectedly passed.
-        if get_sm_version() < 90 and current_platform.is_cuda() and isinstance(x, list):
+        if current_platform.is_cuda() and get_sm_version() < 90 and isinstance(x, list):
             if len(x) != 1:
                 raise RuntimeError(f"Expected single tensor from attention, got list of {len(x)}")
             x = x[0]
@@ -960,7 +960,7 @@ class RowParallelLinear(LinearBase):
         # SM80: append_attention may return a list. Extract first element
         # to satisfy quant_method.apply()'s tensor type contract.
         # Only active on SM80+CUDA; SM90+ will raise if a list is unexpectedly passed.
-        if get_sm_version() < 90 and current_platform.is_cuda() and isinstance(x, list):
+        if current_platform.is_cuda() and get_sm_version() < 90 and isinstance(x, list):
             if len(x) != 1:
                 raise RuntimeError(f"Expected single tensor from attention, got list of {len(x)}")
             x = x[0]
