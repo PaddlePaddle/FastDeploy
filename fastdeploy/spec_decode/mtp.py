@@ -428,8 +428,7 @@ class MTPProposer(Proposer):
         Clear allocated cacheKV
         """
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
+            self.fd_config.cache_config.kvcache_storage_backend
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
         if not create_cache_tensor:
