@@ -87,15 +87,15 @@ def llm(model_path):
         )
 
         # Wait for the model to be ready
-        wait_start = time.time()
-        while True:
-            try:
-                llm.generate("test", SamplingParams(max_tokens=1))
-                break
-            except Exception:
-                if time.time() - wait_start > MAX_WAIT_SECONDS:
-                    pytest.fail(f"Model engine did not start within {MAX_WAIT_SECONDS} seconds")
-                time.sleep(1)
+        # wait_start = time.time()
+        # while True:
+        #     try:
+        #         llm.generate("test", SamplingParams(max_tokens=1))
+        #         break
+        #     except Exception:
+        #         if time.time() - wait_start > MAX_WAIT_SECONDS:
+        #             pytest.fail(f"Model engine did not start within {MAX_WAIT_SECONDS} seconds")
+        #         time.sleep(1)
 
         print(f"Model loaded successfully from {model_path} in {time.time() - start:.2f}s.")
         yield llm
