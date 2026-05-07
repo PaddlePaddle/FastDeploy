@@ -2178,6 +2178,10 @@ class FDConfig:
                 "Static Graph does not support to be started together with RL Training, and automatically switch to dynamic graph!"
             )
 
+        # Disable overlap schedule in RL. This will be enabled in the future after bugs are fixed.
+        if self.load_config is not None and self.load_config.dynamic_load_weight is True:
+            self.scheduler_config.enable_overlap_schedule = False
+
         if (
             not current_platform.is_cuda()
             and not current_platform.is_maca()
