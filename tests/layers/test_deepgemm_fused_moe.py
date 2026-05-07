@@ -131,6 +131,7 @@ class DummyLayer(paddle.nn.Layer):
         self.n_group = 1
         self.topk_group = 1
         self.routed_scaling_factor = 1.0
+        self.routed_scaling_factor_learnable = False
         self.renormalize = True
         self.gate_correction_bias = paddle.zeros([E], dtype="float32")
         self.topk_method = "noaux_tc"
@@ -231,6 +232,21 @@ class TestApplyTp:
         """Non-noaux_tc: moe_topk_select → fp8_quant_blockwise → moe_permute → deepgemm → moe_unpermute."""
         layer = DummyLayer()
         layer.topk_method = "greedy"
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+        out = method.apply_tp(layer, x, gate)
+
+        assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
+
+    @requires_deepgemm
+    def test_apply_tp_learnable_scaling(self):
+        """routed_scaling_factor_learnable=True: topk_weights are multiplied by per_expert_scale."""
+        layer = DummyLayer()
+        layer.topk_method = "greedy"
+        layer.routed_scaling_factor_learnable = True
+        layer.per_expert_scale = paddle.ones([layer.num_local_experts], dtype="float32")
         gate = DummyGate(layer.num_local_experts)
         method = _make_method()
 
@@ -471,10 +487,21 @@ class TestApplyEpPrefill:
         assert len(out.shape) == 2
         assert out.shape[1] == HIDDEN_SIZE
 
+    @requires_deepgemm
+    def test_ep_prefill_learnable_scaling(self):
+        """routed_scaling_factor_learnable=True: topk_weights scaled by per_expert_scale before dispatch."""
+        layer = DummyLayer()
+        layer.topk_method = "greedy"
+        layer.routed_scaling_factor_learnable = True
+        layer.per_expert_scale = paddle.ones([layer.num_local_experts], dtype="float32")
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+        method.ep_prefill_runner = self._make_contiguous_runner(layer)
 
-# ---------------------------------------------------------------------------
-# Tests: apply_ep_decode
-# ---------------------------------------------------------------------------
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+        out = method.apply_ep_prefill(layer, x, gate)
+        assert len(out.shape) == 2
+        assert out.shape[1] == HIDDEN_SIZE
 
 
 class TestApplyEpDecode:
@@ -529,4 +556,20 @@ class TestApplyEpDecode:
         out = method.apply_ep_decode(layer, x, gate, topk_ids_hookfunc=hook)
 
         assert "topk_ids" in captured
+        assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
+
+    @requires_deepgemm
+    def test_ep_decode_learnable_scaling(self):
+        """routed_scaling_factor_learnable=True: topk_weights scaled by per_expert_scale before GEMM."""
+        layer = DummyLayer()
+        layer.topk_method = "greedy"
+        layer.routed_scaling_factor_learnable = True
+        layer.per_expert_scale = paddle.ones([layer.num_local_experts], dtype="float32")
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+        method.ep_decoder_runner = self._make_decode_runner(layer)
+
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+        out = method.apply_ep_decode(layer, x, gate)
+
         assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]

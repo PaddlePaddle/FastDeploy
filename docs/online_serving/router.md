@@ -8,30 +8,49 @@ FastDeploy provides a Golang-based [Router](https://github.com/PaddlePaddle/Fast
 
 ## Installation
 
-### 1. Prebuilt Binaries
+### 1. Python Command Line (Recommended)
 
-Starting from FastDeploy v2.5.0, the official Docker images include the Go language environment required to build the Golang Router and also provide a precompiled Router binary. The Router binary is located by default in the `/usr/local/bin` directory and can be used directly without additional compilation. For installation details, please refer to the [FastDeploy Installation Guide](../get_started/installation/nvidia_gpu.md)
+The `fd-router` binary is bundled directly in the FastDeploy Python wheel package. After installing FastDeploy, you can launch the Router via the Python command line without any additional download or compilation:
 
-If you need to download the Golang-based router binary separately, it can be installed using the following steps:
+```bash
+# Start in mixed mode
+python -m fastdeploy.golang_router.launch --port 9000
+
+# Start in PD disaggregated mode
+python -m fastdeploy.golang_router.launch --port 9000 --splitwise
+
+# Start with a config file
+python -m fastdeploy.golang_router.launch --config_path config.yaml
+
+# Print version
+python -m fastdeploy.golang_router.launch --version
 ```
+
+### 2. Prebuilt Binary Download (Optional)
+
+If you need to run the Router binary directly (e.g., without the Python environment), you can download the prebuilt binary:
+
+```bash
 wget https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router
+chmod +x fd-router
 mv fd-router /usr/local/bin/fd-router
 ```
 
-### 2. Build from Source
+Starting from FastDeploy v2.5.0, the official Docker images also include the precompiled Router binary at `/usr/local/bin/fd-router`. For installation details, please refer to the [FastDeploy Installation Guide](../get_started/installation/nvidia_gpu.md)
+
+### 3. Build from Source
 
 You need to build the Router from source in the following scenarios:
 
-* The official Docker image is not used
-* FastDeploy version is earlier than v2.5.0
 * Custom modifications to the Router are required
+* The platform is not covered by the prebuilt binary
 
 Environment Requirements:
 
 * Go >= 1.21
 
 Clone the FastDeploy repository and build the Router:
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/fastdeploy/golang_router
 bash build.sh
@@ -40,12 +59,12 @@ bash build.sh
 ## Centralized Deployment
 
 Start the Router service. The `--port` parameter specifies the scheduling port for centralized deployment.
-```
-/usr/local/bin/fd-router --port 30000
+```bash
+python -m fastdeploy.golang_router.launch --port 30000
 ```
 
 Start a mixed inference instance. Compared to standalone deployment, specify the Router endpoint via `--router`. Other parameters remain unchanged.
-```
+```bash
 export CUDA_VISIBLE_DEVICES=0
 export FD_LOG_DIR="log_mixed"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -57,14 +76,14 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ## PD Disaggregated Deployment
 
 Start the Router service with PD disaggregation enabled using the `--splitwise` flag.
-```
-/usr/local/bin/fd-router \
+```bash
+python -m fastdeploy.golang_router.launch \
   --port 30000 \
   --splitwise
 ```
 
 Launch a prefill instance. Compared with standalone deployment, add the `--splitwise-role` parameter to specify the instance role as Prefill, and add the `--router` parameter to specify the Router endpoint. All other parameters remain the same as in standalone deployment.
-```
+```bash
 export CUDA_VISIBLE_DEVICES=0
 export FD_LOG_DIR="log_prefill"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -75,7 +94,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 Launch a decode instance.
-```
+```bash
 export CUDA_VISIBLE_DEVICES=1
 export FD_LOG_DIR="log_decode"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -86,7 +105,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 Once both Prefill and Decode instances are successfully launched and registered with the Router, requests can be sent:
-```
+```bash
 curl -X POST "http://0.0.0.0:30000/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
@@ -112,8 +131,8 @@ popd
 ```
 
 Launch the Router with the custom configuration specified via `--config_path`:
-```
-/usr/local/bin/fd-router \
+```bash
+python -m fastdeploy.golang_router.launch \
   --port 30000 \
   --splitwise \
   --config_path examples/run_with_config/config/config.yaml
@@ -122,7 +141,7 @@ Launch the Router with the custom configuration specified via `--config_path`:
 Prefill and Decode instance startup are the same as PD disaggregated deployment.
 
 Launch the prefill instance.
-```
+```bash
 export CUDA_VISIBLE_DEVICES=0
 export FD_LOG_DIR="log_prefill"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -133,7 +152,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 Launch the decode instance.
-```
+```bash
 export CUDA_VISIBLE_DEVICES=1
 export FD_LOG_DIR="log_decode"
 python -m fastdeploy.entrypoints.openai.api_server \

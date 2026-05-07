@@ -1316,7 +1316,7 @@ class ResourceManagerV1(ResourceManager):
             try:
                 self.bos_client = init_bos_client()
             except Exception as e:
-                error_msg = f"request {request.request_id} init bos client error: {str(e)}"
+                error_msg = f"request {request.request_id} init bos client error: {str(e)}, {traceback.format_exc()}"
                 llm_logger.error(error_msg)
                 request.error_message = error_msg
                 request.error_code = 540

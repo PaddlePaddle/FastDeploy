@@ -87,6 +87,7 @@ class DummyLayer(paddle.nn.Layer):
         self.n_group = 1
         self.topk_group = 1
         self.routed_scaling_factor = 1.0
+        self.routed_scaling_factor_learnable = False
         self.gate_correction_bias = None
         self.is_quantized = False
         self.moe_quant_config = types.SimpleNamespace(moe_dynamic_quant=False, hadamard_block_size=128)
@@ -490,6 +491,112 @@ class TestFusedMoeCutlassBackend:
         np.testing.assert_allclose(out.numpy(), np.full((1, 2), 6.0))
         assert dispatch_args.get("called", False)
 
+    def test_apply_tp_learnable_scaling(self, monkeypatch):
+        """routed_scaling_factor_learnable=True: per_expert_scale multiplied into topk_weights in apply_tp."""
+
+        def fake_get_moe_scores(
+            gate_out,
+            n_group,
+            topk_group,
+            top_k,
+            routed_scaling_factor,
+            bias,
+            renormalize,
+            topk_reduce_func=None,
+            use_fused_cast=False,
+        ):
+            return gate_out, paddle.to_tensor([[0.6, 0.4]]), paddle.to_tensor([[0, 1]])
+
+        def fake_dispatch(*args, **kwargs):
+            return (
+                paddle.ones([1, 2]),
+                paddle.to_tensor([1, 0]),
+                paddle.to_tensor([0]),
+                paddle.to_tensor([[0.6, 0.4]]),
+                paddle.to_tensor([[0, 1]]),
+                paddle.to_tensor([0]),
+                None,
+                None,
+            )
+
+        def fake_reduce(*args, **kwargs):
+            return paddle.ones([1, 2]) * 5
+
+        monkeypatch.setattr(backend, "get_moe_scores", fake_get_moe_scores, raising=False)
+        monkeypatch.setattr(backend, "moe_expert_dispatch", fake_dispatch, raising=False)
+        monkeypatch.setattr(backend, "moe_expert_reduce", fake_reduce, raising=False)
+
+        layer = DummyLayer(topk_method="noaux_tc")
+        layer.routed_scaling_factor_learnable = True
+        layer.per_expert_scale = paddle.ones([layer.num_local_experts], dtype="float32")
+        method = backend.CutlassMoEMethod(None)
+        monkeypatch.setattr(method, "compute_ffn", lambda *args, **kwargs: paddle.ones([1, 2]) * 4)
+
+        x = paddle.ones([1, 2])
+        gate = paddle.nn.Identity()
+        out = method.apply_tp(layer, x, gate)
+        assert list(out.shape) == [1, 2]
+
+    def test_apply_ep_prefill_learnable_scaling(self):
+        """routed_scaling_factor_learnable=True: per_expert_scale applied to topk_weights in apply_ep_prefill."""
+
+        class DummyEvent:
+            def current_stream_wait(self):
+                pass
+
+        class DummyRunner:
+            ep_engine = types.SimpleNamespace(async_finish=False)
+
+            def moe_select(self, layer, gate_out):
+                return paddle.to_tensor([[0, 1]]), paddle.to_tensor([[0.6, 0.4]])
+
+            def dispatch(self, x, topk_idx, topk_weights):
+                recv_x = x * 2
+                return recv_x, topk_idx, topk_weights, [0, 0], object(), DummyEvent()
+
+            def combine(self, tmp_ffn_out, handle, recv_topk_weights):
+                return tmp_ffn_out + 5, DummyEvent()
+
+        method = backend.CutlassMoEMethod(None)
+        method.ep_prefill_runner = DummyRunner()
+        layer = DummyLayer(with_bias=False)
+        layer.routed_scaling_factor_learnable = True
+        layer.per_expert_scale = paddle.ones([layer.num_local_experts], dtype="float32")
+        x = paddle.ones([1, 2])
+        gate = paddle.nn.Identity()
+
+        out = method.apply_ep_prefill(layer, x, gate)
+        assert list(out.shape) == [1, 2]
+
+    def test_apply_ep_decode_learnable_scaling(self, monkeypatch):
+        """routed_scaling_factor_learnable=True: per_expert_scale applied to topk_weights in apply_ep_decode."""
+
+        class DummyDecoderRunner:
+            def __init__(self):
+                self.ep_engine = types.SimpleNamespace(async_finish=False)
+
+            def moe_select(self, layer, gate_out):
+                return paddle.to_tensor([[0, 1]]), paddle.to_tensor([[0.6, 0.4]])
+
+            def dispatch(self, x, topk_idx, topk_weights, expertwise_scale=None, use_fp8=False, quant_group_size=-1):
+                return paddle.ones([1, 2]), paddle.to_tensor([1, 0], dtype="int64"), object()
+
+            def combine(self, ffn_out, topk_idx, topk_weights, handle, quant_group_size=-1):
+                return ffn_out + 3
+
+        method = backend.CutlassMoEMethod(None)
+        method.moe_quant_type = "weight_only_int8"
+        method.ep_decoder_runner = DummyDecoderRunner()
+        monkeypatch.setattr(method, "compute_ffn", lambda *args, **kwargs: paddle.ones([1, 2]) * 2)
+
+        layer = DummyLayer(with_bias=False)
+        layer.routed_scaling_factor_learnable = True
+        layer.per_expert_scale = paddle.ones([layer.num_local_experts], dtype="float32")
+        x = paddle.ones([1, 2])
+        gate = paddle.nn.Identity()
+        out = method.apply_ep_decode(layer, x, gate)
+        assert list(out.shape) == [1, 2]
+
     def test_w4a8_prequanted_and_loaded_weights(self, monkeypatch):
         layer = DummyLayer(ep_size=2, hidden_size=4, moe_intermediate_size=2)
         layer.up_gate_proj_weight = layer.create_parameter(shape=[2, 2, 4], dtype="float32")
@@ -749,6 +856,7 @@ class RealMoELayer(paddle.nn.Layer):
         self.n_group = 1
         self.topk_group = 1
         self.routed_scaling_factor = 1.0
+        self.routed_scaling_factor_learnable = False
         self.with_bias = False
         self.ep_size = 1
         self.ep_rank = 0
@@ -808,6 +916,16 @@ class TestMoePermuteTrueRealOps:
         """FD_USE_PHI_MOE_PERMUTE=True + w16a16: real moe_permute/moe_unpermute/
         count_tokens_per_expert_func/moe_expert_ffn all called end-to-end."""
         monkeypatch.setattr(backend.fastdeploy.envs, "FD_USE_PHI_MOE_PERMUTE", True)
+
+        # fused_cast_sigmoid_bias GPU op may not be compiled; provide a pure-Python fallback
+        from fastdeploy.model_executor.layers.moe import moe as moe_module
+
+        def fake_fused_cast_sigmoid_bias(gate_out, e_score_correction_bias, cast_type="float32"):
+            scores = paddle.nn.functional.sigmoid(gate_out.cast("float32"))
+            scores_with_bias = scores + e_score_correction_bias
+            return scores.cast(cast_type), scores_with_bias.cast(cast_type)
+
+        monkeypatch.setattr(moe_module, "fused_cast_sigmoid_bias", fake_fused_cast_sigmoid_bias, raising=False)
 
         num_tokens, hidden_size = 8, 64
         layer, gate, method = self._build(hidden_size=hidden_size)

@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import traceback
+
 import paddle
 from paddleformers.utils.log import logger
 
@@ -727,7 +729,9 @@ class InputBatch:
 
             logger.info("share_inputs reset completed")
         except Exception as e:
-            logger.error(f"Resetting share inputs failed, skipping reset, error message is {e}")
+            logger.error(
+                f"Resetting share inputs failed, skipping reset, error message is {e}, {traceback.format_exc()}"
+            )
 
 
 class ProposerInputBatch(InputBatch):
@@ -1078,7 +1082,9 @@ class ProposerInputBatch(InputBatch):
 
             logger.info("model_inputs reset completed")
         except Exception as e:
-            logger.error(f"Resetting model inputs failed, skipping reset, error message is {e}")
+            logger.error(
+                f"Resetting model inputs failed, skipping reset, error message is {e}, {traceback.format_exc()}"
+            )
 
 
 def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch, target_model_input_batch: dict):
