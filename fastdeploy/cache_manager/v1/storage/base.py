@@ -34,14 +34,21 @@ class StorageScheduler(ABC):
         Args:
             config: Storage configuration
         """
+        from fastdeploy.utils import get_logger
+
         self.config = config or {}
         self._lock = threading.RLock()
         self._connected = False
+        self.logger = get_logger("mooncake_storage", "cache_manager.log")
 
     @abstractmethod
     def connect(self) -> bool:
         """
         Connect to the storage backend.
+
+        Implementations must be idempotent: if already connected
+        (``self._connected is True``) return ``True`` immediately without
+        re-initialising the underlying client.
 
         Returns:
             True if connection was successful
@@ -56,7 +63,7 @@ class StorageScheduler(ABC):
     @abstractmethod
     def exists(self, key: str) -> bool:
         """
-        Check if a key exists in storage.
+        Check if a single key exists in storage.
 
         Args:
             key: Storage key to check
@@ -67,28 +74,40 @@ class StorageScheduler(ABC):
         pass
 
     @abstractmethod
-    def query(self, keys: List[str]) -> Dict[str, bool]:
+    def batch_exists(self, keys: List[str]) -> List[bool]:
         """
-        Query multiple keys for existence.
+        Batch check existence of multiple keys.
 
         Args:
-            keys: List of keys to query
+            keys: List of storage keys to check
 
         Returns:
-            Dictionary mapping keys to existence status
+            List of booleans corresponding to each key's existence
         """
         pass
 
     @abstractmethod
-    def get_metadata(self, key: str) -> Optional[Dict[str, Any]]:
+    def query_prefix_count(
+        self,
+        k_keys: List[str],
+        v_keys: List[str],
+        k_scale_keys: Optional[List[str]] = None,
+        v_scale_keys: Optional[List[str]] = None,
+    ) -> int:
         """
-        Get metadata for a key.
+        Query the number of consecutive valid KV cache blocks from the beginning.
+
+        Checks k/v key pairs (and optionally scale key pairs) in order and
+        returns the count of leading pairs where all keys exist.
 
         Args:
-            key: Storage key
+            k_keys: List of K-cache keys
+            v_keys: List of V-cache keys (same length as k_keys)
+            k_scale_keys: Optional list of K-scale keys (FP8 quantization)
+            v_scale_keys: Optional list of V-scale keys (FP8 quantization)
 
         Returns:
-            Metadata dictionary or None if not found
+            Number of consecutive valid blocks from the start
         """
         pass
 
@@ -123,6 +142,10 @@ class StorageConnector(ABC):
 
     Used by CacheController (Worker process) to perform actual
     data transfer operations with the storage backend.
+
+    All get/set operations use zero-copy semantics: callers pass raw memory
+    pointers (int) and sizes (int, bytes) so the backend can perform direct
+    RDMA transfers without an intermediate copy.
     """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
@@ -132,14 +155,21 @@ class StorageConnector(ABC):
         Args:
             config: Storage configuration
         """
+        from paddleformers.utils.log import logger
+
         self.config = config or {}
         self._lock = threading.RLock()
         self._connected = False
+        self.logger = logger
 
     @abstractmethod
     def connect(self) -> bool:
         """
         Connect to the storage backend.
+
+        Implementations must be idempotent: if already connected
+        (``self._connected is True``) return ``True`` immediately without
+        re-initialising the underlying client.
 
         Returns:
             True if connection was successful
@@ -151,14 +181,32 @@ class StorageConnector(ABC):
         """Disconnect from the storage backend."""
         pass
 
-    @abstractmethod
-    def get(self, key: str, dst_buffer: Any) -> bool:
+    def register_buffer(self, buffer_ptr: int, buffer_size: int) -> None:
         """
-        Get data from storage.
+        Register a memory buffer with the storage backend for zero-copy transfer.
+
+        This must be called before using the buffer pointer in get/set operations
+        when the backend requires RDMA memory registration (e.g., Mooncake).
+        Backends that do not need registration can leave this as a no-op.
+
+        Args:
+            buffer_ptr: Raw pointer (int) to the start of the memory region
+            buffer_size: Size of the memory region in bytes
+
+        Raises:
+            RuntimeError: If registration fails
+        """
+        pass
+
+    @abstractmethod
+    def get(self, key: str, dst_ptr: int, size: int) -> bool:
+        """
+        Get data from storage into a pre-allocated zero-copy buffer.
 
         Args:
             key: Storage key
-            dst_buffer: Destination buffer to write data
+            dst_ptr: Destination memory pointer (int, must be registered if RDMA)
+            size: Expected size in bytes
 
         Returns:
             True if get was successful
@@ -166,17 +214,57 @@ class StorageConnector(ABC):
         pass
 
     @abstractmethod
-    def set(self, key: str, src_buffer: Any, size: int) -> bool:
+    def batch_get(
+        self,
+        keys: List[str],
+        dst_ptrs: List[int],
+        sizes: List[int],
+    ) -> List[bool]:
         """
-        Set data in storage.
+        Batch get multiple objects from storage into pre-allocated zero-copy buffers.
+
+        Args:
+            keys: List of storage keys
+            dst_ptrs: List of destination memory pointers (must be registered if RDMA)
+            sizes: List of expected sizes in bytes
+
+        Returns:
+            List of booleans indicating success for each key
+        """
+        pass
+
+    @abstractmethod
+    def set(self, key: str, src_ptr: int, size: int) -> bool:
+        """
+        Set data in storage from a zero-copy source buffer.
 
         Args:
             key: Storage key
-            src_buffer: Source buffer to read data from
+            src_ptr: Source memory pointer (int, must be registered if RDMA)
             size: Size of data in bytes
 
         Returns:
             True if set was successful
+        """
+        pass
+
+    @abstractmethod
+    def batch_set(
+        self,
+        keys: List[str],
+        src_ptrs: List[int],
+        sizes: List[int],
+    ) -> List[bool]:
+        """
+        Batch set multiple objects into storage from zero-copy source buffers.
+
+        Args:
+            keys: List of storage keys
+            src_ptrs: List of source memory pointers (must be registered if RDMA)
+            sizes: List of data sizes in bytes
+
+        Returns:
+            List of booleans indicating success for each key
         """
         pass
 
@@ -194,12 +282,9 @@ class StorageConnector(ABC):
         pass
 
     @abstractmethod
-    def clear(self, prefix: str = "") -> int:
+    def clear(self) -> int:
         """
-        Clear data from storage.
-
-        Args:
-            prefix: Key prefix to clear (empty for all)
+        Clear all data from storage.
 
         Returns:
             Number of keys cleared

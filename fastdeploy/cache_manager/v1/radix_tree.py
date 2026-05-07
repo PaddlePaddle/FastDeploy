@@ -590,6 +590,40 @@ class RadixTree:
 
         return gpu_block_ids
 
+    def select_blocks_for_backup(
+        self,
+        needed_num: int,
+    ) -> List[BlockNode]:
+        """
+        Select blocks to backup from evictable device nodes.
+
+        Selects the coldest blocks (LRU) from _evictable_device that don't
+        already have a backup.
+
+        Args:
+            needed_num: Number of blocks to select for backup
+
+        Returns:
+            List of BlockNode objects to backup
+        """
+        if needed_num <= 0:
+            return []
+
+        with self._lock:
+            # Find candidates: evictable device nodes without backup
+            candidates = []
+            for node_id, (_, node) in self._evictable_device.items():
+                if not node.backuped:
+                    candidates.append(node)
+
+            if not candidates:
+                return []
+
+            # Sort by last_access_time (LRU - oldest first)
+            candidates.sort(key=lambda n: n.last_access_time)
+
+            return candidates[:needed_num]
+
     def backup_blocks(
         self,
         nodes: List[BlockNode],
