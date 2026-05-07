@@ -10,7 +10,7 @@ tqdm
 pynvml
 uvicorn>=0.38.0
 fastapi
-paddleformers>=1.1.1
+paddleformers[paddlefleet] @https://paddle-whl.bj.bcebos.com/nightly/cu126/paddleformers/paddleformers-1.1.0.post20260430-py3-none-any.whl
 redis
 etcd3
 httpx
