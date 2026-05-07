@@ -26,7 +26,7 @@ from paddlefleet.models.gpt.gpt_embedding import GPTEmbedding
 from paddlefleet.models.gpt.lm_head import GPTLMHead
 from paddlefleet.transformer.layer import FleetLayer
 from paddlefleet.transformer.transformer_config import TransformerConfig
-from paddleformers.trainer import set_random_seed
+from paddleformers.trainer.trainer_utils import set_random_seed
 from paddleformers.transformers import AutoConfig
 from paddleformers.transformers.auto.modeling import AutoModelForCausalLM
 from paddleformers.utils.log import logger
@@ -190,6 +190,14 @@ class PaddleFleetModelBase(nn.Layer):
         self.paddleformers_config.sequence_parallel = parallel_config.sequence_parallel
         self.paddleformers_config.expert_model_parallel_size = parallel_config.expert_parallel_size
 
+        self.paddleformers_config.max_seq_len = fd_config.model_config.max_model_len
+        self.paddleformers_config.param_dtype = "bfloat16"
+        self.paddleformers_config.moe_grouped_gemm = True
+        # fp32_residual_connection=True causes embedding output to be cast to float32,
+        # which mismatches bfloat16 model weights (e.g. RMSNorm weight).
+        # FastDeploy handles dtype consistency itself, so disable this.
+        self.paddleformers_config.fp32_residual_connection = False
+       
         # Initialize PaddleFleet parallel_state so that its TP group is consistent with FastDeploy.
         # PaddleFleet's ColumnParallelLinear/RowParallelLinear obtains TP world_size/rank
         # via parallel_state. Without initialization, it defaults to 1, causing weights
@@ -315,13 +323,24 @@ class PaddleFleetModelBase(nn.Layer):
 
     def embed_input_ids(self, input_ids: paddle.Tensor) -> paddle.Tensor:
         """Embed input_ids using the model's embedding layer."""
-        embedding_layer = self.model.get_input_embeddings()
+        # PaddleFleet PipelineLayer does not support get_input_embeddings().
+        # Find the GPTEmbedding layer directly from run_function.
+        embedding_layer = None
+        if hasattr(self.model, "run_function"):
+            for layer in self.model.run_function:
+                if isinstance(layer, GPTEmbedding):
+                    embedding_layer = layer
+                    break
+        if embedding_layer is None:
+            raise RuntimeError("Cannot find GPTEmbedding layer in model.run_function")
 
         original_ndim = input_ids.ndim
         if input_ids.ndim == 1:
             input_ids = input_ids.unsqueeze(0)  # [num_tokens] -> [1, num_tokens]
 
-        inputs_embeds = embedding_layer(input_ids)
+        model_input = {"input_ids": input_ids}
+        result = embedding_layer(model_input)
+        inputs_embeds = result["hidden_states"]
 
         # Embedding output is [batch, seq, h], squeeze back to [num_tokens, h]
         if original_ndim == 1 and inputs_embeds.ndim == 3:
@@ -350,7 +369,7 @@ class PaddleFleetModelBase(nn.Layer):
         """
         ids_remove_padding = inputs["ids_remove_padding"]
         num_tokens = ids_remove_padding.shape[0]
-
+        print("forward_meta", forward_meta)
         batch_id_per_token = forward_meta.batch_id_per_token  # [num_tokens]
         seq_lens_decoder = forward_meta.seq_lens_decoder  # [batch_size, 1]
 
@@ -373,7 +392,7 @@ class PaddleFleetModelBase(nn.Layer):
             position_ids = paddle.arange(num_tokens, dtype="int64")
             if seq_lens_decoder is not None:
                 position_ids = position_ids + seq_lens_decoder[0, 0].astype("int64")
-
+        print(f"position_ids: {position_ids}")
         forward_meta.rope_already_applied = True
 
         # Also set forward_meta on each TransformerLayer's config
@@ -385,28 +404,27 @@ class PaddleFleetModelBase(nn.Layer):
                         core_attn = layer.self_attn.core_attention
                         if hasattr(core_attn, "config"):
                             core_attn.config.forward_meta = forward_meta
-
+        
         inputs_embeds = self.embed_input_ids(ids_remove_padding).unsqueeze(0)
 
         # Build input dict, PipelineLayer passes data between layers via dict
         model_input = {
             "input_ids": None,
-            "inputs_embeds": inputs_embeds,
             "position_ids": position_ids,
         }
         # Add other parameters from kwargs
         for k, v in kwargs.items():
             if v is not None:
                 model_input[k] = v
-
         # Iterate over run_function, skip GPTLMHead
         # Only call TransformerLayer
         for layer in self.model.run_function:
-            if isinstance(layer, (GPTLMHead)):
-                # Skip LM Head
+            if isinstance(layer, GPTLMHead):
                 continue
-            model_input = layer(model_input)
-
+            if isinstance(layer, (GPTEmbedding)):
+                model_input = layer(model_input, decoder_input = inputs_embeds)
+            else:
+                model_input = layer(model_input)
         hidden_states = model_input["hidden_states"]
         # [b, s, h] -> [s, h] (b=1)
         hidden_states = hidden_states.squeeze(0)
