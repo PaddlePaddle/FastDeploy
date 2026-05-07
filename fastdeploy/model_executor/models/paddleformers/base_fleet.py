@@ -197,7 +197,7 @@ class PaddleFleetModelBase(nn.Layer):
         # which mismatches bfloat16 model weights (e.g. RMSNorm weight).
         # FastDeploy handles dtype consistency itself, so disable this.
         self.paddleformers_config.fp32_residual_connection = False
-       
+
         # Initialize PaddleFleet parallel_state so that its TP group is consistent with FastDeploy.
         # PaddleFleet's ColumnParallelLinear/RowParallelLinear obtains TP world_size/rank
         # via parallel_state. Without initialization, it defaults to 1, causing weights
@@ -404,7 +404,7 @@ class PaddleFleetModelBase(nn.Layer):
                         core_attn = layer.self_attn.core_attention
                         if hasattr(core_attn, "config"):
                             core_attn.config.forward_meta = forward_meta
-        
+
         inputs_embeds = self.embed_input_ids(ids_remove_padding).unsqueeze(0)
 
         # Build input dict, PipelineLayer passes data between layers via dict
@@ -422,7 +422,7 @@ class PaddleFleetModelBase(nn.Layer):
             if isinstance(layer, GPTLMHead):
                 continue
             if isinstance(layer, (GPTEmbedding)):
-                model_input = layer(model_input, decoder_input = inputs_embeds)
+                model_input = layer(model_input, decoder_input=inputs_embeds)
             else:
                 model_input = layer(model_input)
         hidden_states = model_input["hidden_states"]
