@@ -67,6 +67,284 @@ from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
 )
 from fastdeploy.spec_decode import SpecMethod
 
+# ============================================================================
+# Latent Cache Read Kernel for Prefix Cache Support
+# ============================================================================
+
+
+@enable_compat_on_triton_kernel
+@triton.jit()
+def read_latent_from_cache_kernel(
+    latent_cache,
+    block_tables,
+    cache_kv_lens,
+    cu_seqlens_cached_kv,
+    output_kv_c,
+    output_k_pe,
+    block_size: tl.constexpr,
+    kv_lora_rank: tl.constexpr,
+    qk_rope_head_dim: tl.constexpr,
+    LATENT_DIM: tl.constexpr,
+):
+    """
+    Kernel to read latent vectors (kv_c and k_pe) from paged latent cache.
+    Each program instance handles one cached token.
+
+    Args:
+        latent_cache: [num_blocks, 1, block_size, kv_lora_rank + qk_rope_head_dim]
+        block_tables: [batch_size, max_blocks_per_seq]
+        cache_kv_lens: [batch_size] - cached KV length for each request
+        cu_seqlens_cached_kv: [batch_size + 1] - cumulative sequence lengths for cached KV
+        output_kv_c: [total_cached_tokens, kv_lora_rank]
+        output_k_pe: [total_cached_tokens, qk_rope_head_dim]
+    """
+    # Global token index in the output
+    token_idx = tl.program_id(axis=0)
+
+    # Find which batch this token belongs to using binary search on cu_seqlens
+    # For simplicity, we use a linear scan (could be optimized with binary search)
+    batch_id = 0
+    for i in range(cu_seqlens_cached_kv.shape[0] - 1):
+        if token_idx >= tl.load(cu_seqlens_cached_kv + i) and token_idx < tl.load(cu_seqlens_cached_kv + i + 1):
+            batch_id = i
+            break
+
+    # Local token index within the batch
+    cu_start = tl.load(cu_seqlens_cached_kv + batch_id)
+    local_token_idx = token_idx - cu_start
+
+    # Get the physical block and offset
+    block_idx = local_token_idx // block_size
+    block_offset = local_token_idx % block_size
+
+    # Get physical block id from block_tables
+    physical_block_id = tl.load(block_tables + batch_id * block_tables.shape[1] + block_idx)
+
+    # Load latent vector from cache
+    # latent_cache shape: [num_blocks, 1, block_size, kv_lora_rank + qk_rope_head_dim]
+    latent_base = latent_cache + physical_block_id * LATENT_DIM * block_size + block_offset * LATENT_DIM
+
+    # Read kv_c (first kv_lora_rank dimensions)
+    kv_c_offsets = tl.arange(0, kv_lora_rank)
+    kv_c_value = tl.load(latent_base + kv_c_offsets, mask=kv_c_offsets < kv_lora_rank)
+
+    # Read k_pe (last qk_rope_head_dim dimensions)
+    k_pe_offsets = tl.arange(kv_lora_rank, kv_lora_rank + qk_rope_head_dim)
+    k_pe_value = tl.load(latent_base + k_pe_offsets, mask=k_pe_offsets < LATENT_DIM)
+
+    # Store outputs
+    output_kv_c_base = output_kv_c + token_idx * kv_lora_rank
+    tl.store(output_kv_c_base + kv_c_offsets, kv_c_value, mask=kv_c_offsets < kv_lora_rank)
+
+    output_k_pe_base = output_k_pe + token_idx * qk_rope_head_dim
+    k_pe_out_offsets = tl.arange(0, qk_rope_head_dim)
+    tl.store(output_k_pe_base + k_pe_out_offsets, k_pe_value)
+
+
+def read_latent_from_cache(
+    latent_cache: paddle.Tensor,
+    block_tables: paddle.Tensor,
+    cache_kv_lens: paddle.Tensor,
+    cu_seqlens_cached_kv: paddle.Tensor,
+    total_cached_tokens: int,
+    block_size: int,
+    kv_lora_rank: int,
+    qk_rope_head_dim: int,
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    """
+    Read latent vectors (kv_c and k_pe) from paged latent cache for prefix cache support.
+
+    Args:
+        latent_cache: [num_blocks, 1, block_size, kv_lora_rank + qk_rope_head_dim]
+        block_tables: [batch_size, max_blocks_per_seq]
+        cache_kv_lens: [batch_size] - cached KV length for each request
+        cu_seqlens_cached_kv: [batch_size + 1] - cumulative sequence lengths for cached KV
+        total_cached_tokens: Total number of cached tokens across all requests
+        block_size: Block size for paged attention
+        kv_lora_rank: LoRA rank for KV compression
+        qk_rope_head_dim: Dimension of RoPE part in key
+
+    Returns:
+        cached_kv_c: [total_cached_tokens, kv_lora_rank]
+        cached_k_pe: [total_cached_tokens, qk_rope_head_dim]
+    """
+    if total_cached_tokens == 0:
+        return None, None
+
+    # latent_dim = kv_lora_rank + qk_rope_head_dim
+
+    # Allocate output tensors
+    cached_kv_c = paddle.empty([total_cached_tokens, kv_lora_rank], dtype=latent_cache.dtype)
+    cached_k_pe = paddle.empty([total_cached_tokens, qk_rope_head_dim], dtype=latent_cache.dtype)
+
+    # Use a simpler approach: iterate through each batch and gather latent vectors
+    # IMPORTANT: Only process batches that have prefix cache (use cu_seqlens_cached_kv)
+    bsz = cu_seqlens_cached_kv.shape[0] - 1
+    output_idx = 0
+
+    print(f"[DEBUG read_latent_from_cache] total_cached_tokens={total_cached_tokens}, bsz={bsz}")
+    print(f"[DEBUG read_latent_from_cache] cu_seqlens_cached_kv={cu_seqlens_cached_kv.tolist()}")
+    print(f"[DEBUG read_latent_from_cache] block_tables shape={block_tables.shape}")
+
+    for batch_id in range(bsz):
+        # Get the number of cached tokens for this batch from cu_seqlens_cached_kv
+        cu_start = (
+            cu_seqlens_cached_kv[batch_id].item()
+            if hasattr(cu_seqlens_cached_kv[batch_id], "item")
+            else cu_seqlens_cached_kv[batch_id]
+        )
+        cu_end = (
+            cu_seqlens_cached_kv[batch_id + 1].item()
+            if hasattr(cu_seqlens_cached_kv[batch_id + 1], "item")
+            else cu_seqlens_cached_kv[batch_id + 1]
+        )
+        cache_len = cu_end - cu_start
+
+        if cache_len <= 0:
+            continue
+
+        # Debug: Print cache reading info
+        print(f"[DEBUG read_latent_from_cache] batch_id={batch_id}, cache_len={cache_len}")
+
+        # Read tokens from multiple blocks if cache_len > block_size
+        local_idx = 0
+        while local_idx < cache_len:
+            block_idx = local_idx // block_size
+            block_offset = local_idx % block_size
+            tokens_to_read = min(block_size - block_offset, cache_len - local_idx)
+
+            physical_block_id = block_tables[batch_id, block_idx].item()
+
+            # Debug: Print block access info
+            print(
+                f"[DEBUG read_latent_from_cache] block_idx={block_idx}, block_offset={block_offset}, physical_block_id={physical_block_id}"
+            )
+
+            # Load latent vectors from this block
+            for offset in range(tokens_to_read):
+                latent_vec = latent_cache[physical_block_id, 0, block_offset + offset, :]
+
+                # Split into kv_c and k_pe
+                cached_kv_c[output_idx] = latent_vec[:kv_lora_rank]
+                cached_k_pe[output_idx] = latent_vec[kv_lora_rank:]
+                output_idx += 1
+
+            local_idx += tokens_to_read
+
+    print(f"[DEBUG read_latent_from_cache] Total cached tokens read: {output_idx}")
+    return cached_kv_c, cached_k_pe
+
+
+def interleave_cached_and_new_latent(
+    cached_kv_c: paddle.Tensor,
+    cached_k_pe: paddle.Tensor,
+    new_compressed_kv: paddle.Tensor,
+    new_k_pe: paddle.Tensor,
+    cu_seqlens_cached_kv: paddle.Tensor,
+    seq_lens_encoder: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    kv_lora_rank: int,
+    qk_rope_head_dim: int,
+) -> Tuple[paddle.Tensor, paddle.Tensor]:
+    """
+    Interleave cached and new latent vectors per batch for correct FlashAttention layout.
+
+    The key insight is that FlashAttention expects tokens to be ordered by batch:
+    [batch0_tokens, batch1_tokens, ...]
+    where each batch's tokens should be [cached_tokens, new_tokens].
+
+    Args:
+        cached_kv_c: [total_cached_tokens, kv_lora_rank] - cached KV latent (from read_latent_from_cache)
+        cached_k_pe: [total_cached_tokens, qk_rope_head_dim] - cached K RoPE (from read_latent_from_cache)
+        new_compressed_kv: [total_new_tokens, kv_lora_rank] - new KV latent from current forward
+        new_k_pe: [total_new_tokens, qk_rope_head_dim] - new K RoPE from current forward (already with RoPE applied)
+        cu_seqlens_cached_kv: [batch_size + 1] - cumulative sequence lengths for cached KV
+        seq_lens_encoder: [batch_size] - number of new tokens per batch
+        cu_seqlens_q: [batch_size + 1] - cumulative sequence lengths for new tokens
+        kv_lora_rank: LoRA rank for KV compression
+        qk_rope_head_dim: Dimension of RoPE part in key
+
+    Returns:
+        full_compressed_kv: [total_tokens, kv_lora_rank] - properly interleaved KV latent
+        full_k_pe: [total_tokens, qk_rope_head_dim] - properly interleaved K RoPE
+    """
+    bsz = cu_seqlens_cached_kv.shape[0] - 1
+
+    # Calculate total output size
+    total_cached = cached_kv_c.shape[0] if cached_kv_c is not None and cached_kv_c.numel() > 0 else 0
+    total_new = new_compressed_kv.shape[0]
+    total_tokens = total_cached + total_new
+
+    # Allocate output tensors
+    full_compressed_kv = paddle.empty([total_tokens, kv_lora_rank], dtype=new_compressed_kv.dtype)
+    full_k_pe = paddle.empty([total_tokens, qk_rope_head_dim], dtype=new_k_pe.dtype)
+
+    # Track indices into cached and new tensors
+    cached_idx = 0
+    new_idx = 0
+    out_position = 0  # Track output position for each batch
+
+    print(
+        f"[DEBUG interleave_cached_and_new_latent] bsz={bsz}, total_cached={total_cached}, total_new={total_new}, total_tokens={total_tokens}"
+    )
+
+    for batch_id in range(bsz):
+        # Number of cached tokens for this batch
+        cu_cached_start = (
+            cu_seqlens_cached_kv[batch_id].item()
+            if hasattr(cu_seqlens_cached_kv[batch_id], "item")
+            else cu_seqlens_cached_kv[batch_id]
+        )
+        cu_cached_end = (
+            cu_seqlens_cached_kv[batch_id + 1].item()
+            if hasattr(cu_seqlens_cached_kv[batch_id + 1], "item")
+            else cu_seqlens_cached_kv[batch_id + 1]
+        )
+        num_cached = cu_cached_end - cu_cached_start
+
+        # Number of new tokens for this batch
+        cu_new_start = (
+            cu_seqlens_q[batch_id].item() if hasattr(cu_seqlens_q[batch_id], "item") else cu_seqlens_q[batch_id]
+        )
+        cu_new_end = (
+            cu_seqlens_q[batch_id + 1].item()
+            if hasattr(cu_seqlens_q[batch_id + 1], "item")
+            else cu_seqlens_q[batch_id + 1]
+        )
+        num_new = cu_new_end - cu_new_start
+
+        print(
+            f"[DEBUG interleave] batch_id={batch_id}, num_cached={num_cached}, num_new={num_new}, cached_idx={cached_idx}, out_position={out_position}"
+        )
+
+        # Output position for this batch (sequential, no gaps)
+        out_start = out_position
+
+        # Copy cached tokens first (if any)
+        if num_cached > 0 and cached_kv_c is not None:
+            full_compressed_kv[out_start : out_start + num_cached] = cached_kv_c[cached_idx : cached_idx + num_cached]
+            full_k_pe[out_start : out_start + num_cached] = cached_k_pe[cached_idx : cached_idx + num_cached]
+            cached_idx += num_cached
+
+        # Then copy new tokens
+        if num_new > 0:
+            full_compressed_kv[out_start + num_cached : out_start + num_cached + num_new] = new_compressed_kv[
+                new_idx : new_idx + num_new
+            ]
+            full_k_pe[out_start + num_cached : out_start + num_cached + num_new] = new_k_pe[
+                new_idx : new_idx + num_new
+            ]
+            new_idx += num_new
+
+        # Update output position for next batch
+        out_position += num_cached + num_new
+
+    print(f"[DEBUG interleave] Final: cached_idx={cached_idx}, new_idx={new_idx}, out_position={out_position}")
+    return full_compressed_kv, full_k_pe
+
+
+# ============================================================================
+
 
 @enable_compat_on_triton_kernel
 @triton.jit()
@@ -232,6 +510,20 @@ class MLAAttentionMetadata(AttentionMetadata):
     max_dec_len_this_time: Optional[paddle.Tensor] = None
     max_kv_len_this_time: Optional[paddle.Tensor] = None
 
+    # For prefix cache and chunked prefill support
+    # Indicates whether any request has prefix cache (cached KV from previous requests)
+    has_prefix_cache: bool = False
+    # Total number of cached KV tokens across all requests with prefix cache
+    total_cached_kv_tokens: int = 0
+    # cu_seqlens for cached KV tokens (similar to cu_seqlens_k but for cached portion)
+    cu_seqlens_cached_kv: Optional[paddle.Tensor] = None
+    # Maximum cached KV length across all requests
+    max_cached_kv_len: int = 0
+    # cu_seqlens_k that includes cached tokens (for FlashAttention when prefix cache is present)
+    cu_seqlens_k_with_cache: Optional[paddle.Tensor] = None
+    # Maximum total KV length (cached + new) across all requests for FlashAttention
+    max_total_kv_len: int = 0
+
 
 class MLAAttentionBackend(AttentionBackend):
     """
@@ -365,6 +657,94 @@ class MLAAttentionBackend(AttentionBackend):
         metadata.max_dec_len_this_time = forward_meta.max_len_tensor_cpu[2]
         metadata.max_kv_len_this_time = forward_meta.max_len_tensor_cpu[5]
 
+        # Compute prefix cache metadata
+        # For MLA, prefix cache is indicated by seq_lens_decoder > 0 when there are encoder tokens
+        # This means the request has cached KV from a previous prefix
+        bsz = forward_meta.seq_lens_this_time.shape[0]
+        has_prefix_cache = False
+        total_cached_kv_tokens = 0
+        max_cached_kv_len = 0
+        max_total_kv_len = 0  # max(dec_len + enc_len) for FlashAttention
+
+        # Check if any request has prefix cache
+        # Prefix cache exists when seq_lens_decoder > 0
+        # seq_lens_decoder stores the cached KV length for chunked prefill/prefix cache
+        for i in range(bsz):
+            enc_len = (
+                forward_meta.seq_lens_encoder[i].item()
+                if hasattr(forward_meta.seq_lens_encoder[i], "item")
+                else forward_meta.seq_lens_encoder[i]
+            )
+            dec_len = (
+                forward_meta.seq_lens_decoder[i].item()
+                if hasattr(forward_meta.seq_lens_decoder[i], "item")
+                else forward_meta.seq_lens_decoder[i]
+            )
+            # Count cached tokens whenever dec_len > 0, which includes:
+            # - chunked-prefill continuation (enc_len>0, dec_len>0)
+            # - pure decode (enc_len==0, dec_len>0) — its KV is read via this path too so that
+            #   cu_seqlens_k_with_cache stays consistent with cu_seqlens_q for the prefill
+            #   FlashAttention call; decode batch outputs here are discarded by merge_prefill_decode_output.
+            if dec_len > 0:
+                has_prefix_cache = True
+                total_cached_kv_tokens += dec_len
+                max_cached_kv_len = max(max_cached_kv_len, dec_len)
+                max_total_kv_len = max(max_total_kv_len, dec_len + enc_len)
+            if enc_len > 0:
+                max_total_kv_len = max(max_total_kv_len, max(enc_len, dec_len + enc_len))
+
+        metadata.has_prefix_cache = has_prefix_cache
+        metadata.total_cached_kv_tokens = total_cached_kv_tokens
+        metadata.max_cached_kv_len = max_cached_kv_len
+        metadata.max_total_kv_len = max_total_kv_len
+
+        # Compute cu_seqlens_cached_kv if there's prefix cache
+        if has_prefix_cache and total_cached_kv_tokens > 0:
+            cu_seqlens_cached_kv = paddle.zeros([bsz + 1], dtype=paddle.int32)
+            cu_seqlens_k_with_cache = paddle.zeros([bsz + 1], dtype=paddle.int32)
+            cumsum_cached = 0
+            cumsum_total = 0
+            # cu_seqlens layout must stay CONSISTENT with the input tensor layout used
+            # by the prefill FlashAttention call. The input `compressed_kv`/`key_pe` contains
+            # ALL tokens in the batch (prefill + decode), in seq_lens_this_time order.
+            #
+            # For each batch i, the interleaved layout writes: [cached_tokens, new_tokens_of_this_batch]
+            #   - new_tokens_of_this_batch = seq_lens_this_time[i] (== enc_len for prefill, == 1 for decode)
+            #   - cached_tokens = dec_len if dec_len > 0 else 0
+            # cu_seqlens_k_with_cache must reflect this sum per batch.
+            # cu_seqlens_cached_kv tracks only the cached portion for read_latent_from_cache().
+            for i in range(bsz):
+                enc_len = (
+                    forward_meta.seq_lens_encoder[i].item()
+                    if hasattr(forward_meta.seq_lens_encoder[i], "item")
+                    else forward_meta.seq_lens_encoder[i]
+                )
+                dec_len = (
+                    forward_meta.seq_lens_decoder[i].item()
+                    if hasattr(forward_meta.seq_lens_decoder[i], "item")
+                    else forward_meta.seq_lens_decoder[i]
+                )
+                seq_this_time = (
+                    forward_meta.seq_lens_this_time[i].item()
+                    if hasattr(forward_meta.seq_lens_this_time[i], "item")
+                    else forward_meta.seq_lens_this_time[i]
+                )
+                print(
+                    f"[DEBUG init_attn_meta] batch {i}: enc_len={enc_len}, dec_len={dec_len}, seq_this={seq_this_time}, cumsum_cached={cumsum_cached}, cumsum_total={cumsum_total}"
+                )
+                if dec_len > 0:
+                    cumsum_cached += dec_len
+                    cumsum_total += dec_len
+                # Add this batch's new tokens to cumsum_total. Use seq_lens_this_time to cover
+                # both prefill (== enc_len) and decode (== 1) correctly.
+                cumsum_total += seq_this_time
+                cu_seqlens_cached_kv[i + 1] = cumsum_cached
+                cu_seqlens_k_with_cache[i + 1] = cumsum_total
+            print(f"[DEBUG init_attn_meta] Final cu_seqlens_cached_kv: {cu_seqlens_cached_kv.tolist()}")
+            print(f"[DEBUG init_attn_meta] Final cu_seqlens_k_with_cache: {cu_seqlens_k_with_cache.tolist()}")
+            metadata.cu_seqlens_cached_kv = cu_seqlens_cached_kv
+            metadata.cu_seqlens_k_with_cache = cu_seqlens_k_with_cache
+
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
         if self.pd_disaggregation_mode == "per_chunk":
@@ -411,7 +791,13 @@ class MLAAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
-        Prefill阶段的前向传播
+        Prefill阶段的前向传播，支持 prefix cache
+
+        对于 MLA 模型的 prefix cache 支持：
+        1. 如果存在 prefix cache (metadata.has_prefix_cache = True)
+           - k 和 v 应该已经包含了 cached KV 和 new KV 的拼接
+           - cu_seqlens_k 应该已经调整为包含 cached tokens
+        2. 如果不存在 prefix cache，行为与之前相同
         """
         metadata = self.attention_metadata
 
@@ -423,7 +809,7 @@ class MLAAttentionBackend(AttentionBackend):
 
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
 
-        # 写入缓存
+        # 写入新的 KV 到缓存 (只写入新 tokens，不写入 cached 部分)
         prefill_mla_write_cache(
             compressed_kv,
             k_pe,
@@ -439,14 +825,28 @@ class MLAAttentionBackend(AttentionBackend):
         )
 
         # Flash注意力计算
+        # 对于 prefix cache 场景：
+        # - k 和 v 应该已经包含了 cached + new tokens
+        # - cu_seqlens_k 应该已经调整
+        # - max_seqlen_k 应该是 cached_len + new_len 的最大值
+
+        # 获取正确的 cu_seqlens_k 和 max_seqlen_k
+        if metadata.has_prefix_cache and metadata.cu_seqlens_k_with_cache is not None:
+            # When prefix cache is present, use cu_seqlens_k that includes cached tokens
+            cu_seqlens_k = metadata.cu_seqlens_k_with_cache
+            max_seqlen_k = metadata.max_total_kv_len  # max(dec_len + enc_len)
+        else:
+            cu_seqlens_k = forward_meta.cu_seqlens_k
+            max_seqlen_k = metadata.max_enc_len_this_time
+
         fmha_out = self.flash_attn_func(
             q,
             k,
             v,
             forward_meta.cu_seqlens_q,
-            forward_meta.cu_seqlens_k,
-            metadata.max_enc_len_this_time,
-            metadata.max_enc_len_this_time,
+            cu_seqlens_k,
+            metadata.max_enc_len_this_time,  # max_seqlen_q - only new tokens
+            max_seqlen_k,  # max_seqlen_k - may include cached tokens
             causal=self.causal,
             **self.flash_attn_kwargs,
         )[0]
@@ -553,7 +953,11 @@ class MLAAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
-        Mixed模式的前向传播
+        Mixed模式的前向传播，支持 prefix cache
+
+        对于 MLA 模型的 prefix cache 支持：
+        1. Prefill 分支：k 和 v 应该已包含 cached + new tokens
+        2. Decode 分支：保持原有 latent attention 逻辑
         """
         metadata = self.attention_metadata
         speculate_decoder = self.speculative_method is not None
@@ -567,7 +971,41 @@ class MLAAttentionBackend(AttentionBackend):
 
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
 
+        # Prefill branch: k is not None
         if k is not None:
+            # Debug: Verify tensor shapes and sequence lengths
+            bsz = forward_meta.cu_seqlens_q.shape[0] - 1
+            total_q_tokens = q.shape[0]
+            total_k_tokens = k.shape[0]
+
+            # Calculate expected cu_seqlens_k_with_cache
+            if metadata.has_prefix_cache and metadata.cu_seqlens_k_with_cache is not None:
+                expected_k_len = (
+                    metadata.cu_seqlens_k_with_cache[bsz].item()
+                    if hasattr(metadata.cu_seqlens_k_with_cache[bsz], "item")
+                    else metadata.cu_seqlens_k_with_cache[bsz]
+                )
+            else:
+                expected_k_len = (
+                    forward_meta.cu_seqlens_k[bsz].item()
+                    if hasattr(forward_meta.cu_seqlens_k[bsz], "item")
+                    else forward_meta.cu_seqlens_k[bsz]
+                )
+
+            # Debug output
+            print(
+                f"[DEBUG forward_mixed] bsz={bsz}, total_q={total_q_tokens}, total_k={total_k_tokens}, expected_k={expected_k_len}"
+            )
+            print(f"[DEBUG forward_mixed] has_prefix_cache={metadata.has_prefix_cache}")
+            print(
+                f"[DEBUG forward_mixed] cu_seqlens_q={forward_meta.cu_seqlens_q.tolist() if hasattr(forward_meta.cu_seqlens_q, 'tolist') else forward_meta.cu_seqlens_q}"
+            )
+            if metadata.has_prefix_cache and metadata.cu_seqlens_k_with_cache is not None:
+                print(
+                    f"[DEBUG forward_mixed] cu_seqlens_k_with_cache={metadata.cu_seqlens_k_with_cache.tolist() if hasattr(metadata.cu_seqlens_k_with_cache, 'tolist') else metadata.cu_seqlens_k_with_cache}"
+                )
+
+            # Write cache only for new tokens
             prefill_mla_write_cache(
                 compressed_kv,
                 k_pe,
@@ -581,22 +1019,31 @@ class MLAAttentionBackend(AttentionBackend):
                 "none",
                 self.max_seq_len,
             )
-            # FA
+
+            # Determine cu_seqlens_k and max_seqlen_k considering prefix cache
+            if metadata.has_prefix_cache and metadata.cu_seqlens_k_with_cache is not None:
+                cu_seqlens_k = metadata.cu_seqlens_k_with_cache
+                max_seqlen_k = metadata.max_total_kv_len  # max(dec_len + enc_len)
+            else:
+                cu_seqlens_k = forward_meta.cu_seqlens_k
+                max_seqlen_k = metadata.max_enc_len_this_time
+
+            # FlashAttention for prefill
             fmha_out = self.flash_attn_func(
                 q,
                 k,
                 v,
                 forward_meta.cu_seqlens_q,
-                forward_meta.cu_seqlens_k,
-                metadata.max_enc_len_this_time,
-                metadata.max_enc_len_this_time,
+                cu_seqlens_k,
+                metadata.max_enc_len_this_time,  # max_seqlen_q - only new tokens
+                max_seqlen_k,  # max_seqlen_k - may include cached tokens
                 causal=self.causal,
                 **self.flash_attn_kwargs,
             )[0]
 
             return fmha_out
 
-        # Decode
+        # Decode branch: k is None
         if k is None:
             decode_mla_write_cache(
                 compressed_kv,

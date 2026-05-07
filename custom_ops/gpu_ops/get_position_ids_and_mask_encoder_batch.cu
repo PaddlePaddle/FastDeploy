@@ -17,7 +17,8 @@
 
 __global__ void GetPositionIdsAndMaskEncoderBatchKernel(
     const int* seq_lens_encoder,  // [bsz] 每个批次的 encoder 长度
-    const int* seq_lens_decoder,  // [bsz] 每个批次的 decoder 长度
+    const int* seq_lens_decoder,  // [bsz] 每个批次的 decoder 长度 (对于 MLA
+                                  // prefix cache，这是 cached KV 长度)
     const int* seq_lens_this_time,
     int* position_ids,  // 输出的一维 position_ids
     const int bsz) {    // 批次大小
@@ -25,11 +26,16 @@ __global__ void GetPositionIdsAndMaskEncoderBatchKernel(
   int tid = threadIdx.x;
   if (tid >= bsz) return;
 
-  // 动态计算当前批次的偏移量
+  // 动态计算当前批次的偏移量。
+  // 每个 batch 只会贡献 encoder_len 或 seq_lens_this_time 中的一个，
+  // 而非两者之和（chunked prefill 时 encoder_len > 0 与 decoder_len > 0
+  // 同时成立，
+  //  但该 batch 只有 encoder_len 个真实 token）。
   int offset = 0;
   for (int i = 0; i < tid; i++) {
-    offset += seq_lens_encoder[i];
-    if (seq_lens_decoder[i] > 0) {
+    if (seq_lens_encoder[i] > 0) {
+      offset += seq_lens_encoder[i];
+    } else if (seq_lens_decoder[i] > 0) {
       offset += seq_lens_this_time[i];
     }
   }
@@ -39,16 +45,21 @@ __global__ void GetPositionIdsAndMaskEncoderBatchKernel(
   int decoder_len = seq_lens_decoder[tid];
   int seq_len_this_time = seq_lens_this_time[tid];
 
-  // 写入 encoder 的 position_ids
-  for (int i = 0; i < encoder_len; i++) {
-    position_ids[offset + i] = i;
-  }
-  offset += encoder_len;
-
-  // 写入 decoder 的 position_ids
-  if (decoder_len > 0) {
+  // For MLA with prefix cache support:
+  // - Chunked prefill (encoder_len > 0 && decoder_len > 0):
+  //   only writes encoder positions starting at decoder_len (cached length).
+  // - First-chunk prefill (encoder_len > 0 && decoder_len == 0):
+  //   writes encoder positions starting at 0.
+  // - Pure decode (encoder_len == 0 && decoder_len > 0):
+  //   writes seq_lens_this_time decode positions starting at decoder_len.
+  if (encoder_len > 0) {
+    int start_pos = (decoder_len > 0) ? decoder_len : 0;
+    for (int i = 0; i < encoder_len; i++) {
+      position_ids[offset + i] = start_pos + i;
+    }
+  } else if (decoder_len > 0) {
     for (int i = 0; i < seq_len_this_time; i++) {
-      position_ids[offset + i] = decoder_len + i;  // 使用 decoder 长度本身
+      position_ids[offset + i] = decoder_len + i;
     }
   }
 }

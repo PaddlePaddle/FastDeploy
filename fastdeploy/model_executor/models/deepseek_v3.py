@@ -351,7 +351,13 @@ class DeepseekV3MLAAttention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
-        """ """
+        """MLA attention forward with prefix cache support."""
+
+        from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
+            MLAAttentionMetadata,
+            interleave_cached_and_new_latent,
+            read_latent_from_cache,
+        )
 
         attn_out = None
         if self.use_gated_attn:
@@ -378,7 +384,61 @@ class DeepseekV3MLAAttention(nn.Layer):
         need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
 
         if need_do_prefill:  # max_enc_len_this_time
-            key_value = self.kv_b_proj(compressed_kv)
+            # Check for prefix cache
+            attn_meta = forward_meta.attn_backend.attention_metadata if hasattr(forward_meta, "attn_backend") else None
+            has_prefix_cache = False
+            total_cached_tokens = 0
+
+            if attn_meta is not None and isinstance(attn_meta, MLAAttentionMetadata):
+                has_prefix_cache = attn_meta.has_prefix_cache
+                total_cached_tokens = attn_meta.total_cached_kv_tokens
+
+            # Handle prefix cache: read and concatenate cached latent with new latent
+            if has_prefix_cache and total_cached_tokens > 0:
+                # Get latent cache from forward_meta
+                layer_id = self.mla_attn.layer_id if hasattr(self.mla_attn, "layer_id") else 0
+                latent_cache = forward_meta.caches[layer_id] if hasattr(forward_meta, "caches") else None
+
+                if latent_cache is not None:
+                    # Read cached latent vectors
+                    cached_kv_c, cached_k_pe = read_latent_from_cache(
+                        latent_cache,
+                        forward_meta.block_tables,
+                        forward_meta.seq_lens_decoder,  # cache_kv_lens
+                        attn_meta.cu_seqlens_cached_kv,
+                        total_cached_tokens,
+                        self.mla_attn.block_size if hasattr(self.mla_attn, "block_size") else 64,
+                        self.kv_lora_rank,
+                        self.qk_rope_head_dim,
+                    )
+
+                    if cached_kv_c is not None and cached_k_pe is not None:
+                        # Interleave cached and new latent vectors per batch
+                        # This ensures correct ordering: [batch0_cached, batch0_new, batch1_cached, batch1_new, ...]
+                        # cached_k_pe already has RoPE applied (stored with RoPE)
+                        full_compressed_kv, full_k_pe = interleave_cached_and_new_latent(
+                            cached_kv_c,
+                            cached_k_pe,
+                            compressed_kv,
+                            key_pe.squeeze(1),
+                            attn_meta.cu_seqlens_cached_kv,
+                            forward_meta.seq_lens_encoder,
+                            forward_meta.cu_seqlens_q,
+                            self.kv_lora_rank,
+                            self.qk_rope_head_dim,
+                        )
+                    else:
+                        full_compressed_kv = compressed_kv
+                        full_k_pe = key_pe.squeeze(1)
+                else:
+                    full_compressed_kv = compressed_kv
+                    full_k_pe = key_pe.squeeze(1)
+            else:
+                full_compressed_kv = compressed_kv
+                full_k_pe = key_pe.squeeze(1)
+
+            # Project latent KV to full key and value
+            key_value = self.kv_b_proj(full_compressed_kv)
             key_value.reshape_(
                 [
                     -1,
@@ -389,9 +449,9 @@ class DeepseekV3MLAAttention(nn.Layer):
             key_nope, value = key_value.split([self.qk_nope_head_dim, self.v_head_dim], axis=-1)
 
             query[..., self.qk_nope_head_dim :] = query_pe
-            key = paddle.empty_like(query)
+            key = paddle.empty([full_k_pe.shape[0], self.num_attention_heads_tp, self.qk_head_dim], dtype=query.dtype)
             key[..., : self.qk_nope_head_dim] = key_nope
-            key[..., self.qk_nope_head_dim :] = key_pe
+            key[..., self.qk_nope_head_dim :] = full_k_pe.unsqueeze(1)
             value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
 
             fmha_out = self.mla_attn(
@@ -399,10 +459,14 @@ class DeepseekV3MLAAttention(nn.Layer):
                 k=key,
                 v=value,
                 qkv=None,
-                compressed_kv=compressed_kv,
-                k_pe=key_pe,
+                compressed_kv=compressed_kv,  # Pass original (new only) for cache writing
+                k_pe=key_pe,  # Pass original (new only) for cache writing
                 forward_meta=forward_meta,
             )
+
+            # Debug: Print tensor shapes
+            print(f"[DEBUG deepseek_v3 forward] key.shape={key.shape}, value.shape={value.shape}")
+            print(f"[DEBUG deepseek_v3 forward] full_k_pe.shape={full_k_pe.shape if 'full_k_pe' in dir() else 'N/A'}")
 
             fmha_out.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out = fmha_out[:, :, : self.v_head_dim]
