@@ -33,7 +33,7 @@ from fastdeploy.cache_manager.multimodal_cache_manager import (
     EncoderCacheManager,
     ProcessorCacheManager,
 )
-from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata, StorageMetadata
+from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
 from fastdeploy.engine.request import (
     BatchRequest,
     ImagePosition,
@@ -112,6 +112,28 @@ class ScheduledAbortTask(ScheduledTaskBase):
     """Task for allocating new blocks to skip."""
 
     task_type: RequestType = RequestType.ABORT
+
+
+@dataclass
+class PrefetchResult:
+    """Result of a completed storage prefetch, populated by the receiver thread."""
+
+    request_id: str = ""
+    host_block_ids: List[int] = field(default_factory=list)
+    success: bool = True
+    error: str = ""
+
+
+@dataclass
+class InflightPrefetch:
+    """Tracks an in-flight prefetch dispatched to TP workers."""
+
+    request_id: str = ""
+    host_block_ids: List[int] = field(default_factory=list)
+    expected_count: int = 0
+    done_ranks: Set[int] = field(default_factory=set)
+    failed_ranks: Set[int] = field(default_factory=set)
+    dispatch_time: float = 0.0
 
 
 class SignalConsumer:
@@ -256,13 +278,27 @@ class ResourceManagerV1(ResourceManager):
 
         # ---- Storage Prefetch ZMQ channels (Scheduler side) ----
         # Initialized only when storage backend is configured.
-        # One PUSH cmd socket + one PULL done socket per worker local_rank.
+        # One PULL done socket per worker local_rank for receiving completion notifications.
+        # Prefetch commands are dispatched via batch_request (EngineWorkerQueue).
         # local_rank = dp_rank * tp_size + tp_rank
-        self._prefetch_cmd_servers: Dict[int, ZmqIpcServer] = {}
         self._prefetch_done_servers: Dict[int, ZmqIpcServer] = {}
 
         if self.config.cache_config.kvcache_storage_backend and self.enable_cache_manager_v1:
             self._init_prefetch_zmq_servers()
+
+        # ---- Storage Prefetch tracking ----
+        self._inflight_prefetches: Dict[str, InflightPrefetch] = {}
+        self._inflight_lock = threading.Lock()
+        self._prefetch_results: Dict[str, PrefetchResult] = {}
+        self._prefetch_results_lock = threading.Lock()
+
+        if self._prefetch_done_servers:
+            self._prefetch_receiver_thread = threading.Thread(
+                target=self._prefetch_receiver_loop,
+                daemon=True,
+                name="StoragePrefetchReceiver",
+            )
+            self._prefetch_receiver_thread.start()
 
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
@@ -1248,6 +1284,10 @@ class ResourceManagerV1(ResourceManager):
             if self.enable_cache_manager_v1:
                 self.cache_manager.check_and_add_pending_backup()
 
+            # Dispatch any pending storage prefetch tasks via batch_request
+            if self.config.cache_config.kvcache_storage_backend:
+                self._dispatch_pending_prefetches(batch_request)
+
             return batch_request, error_reqs
 
     def waiting_async_process(self, request: Request) -> None:
@@ -1278,13 +1318,13 @@ class ResourceManagerV1(ResourceManager):
 
     def _init_prefetch_zmq_servers(self) -> None:
         """
-        Initialize per-worker-rank ZMQ PUSH/PULL sockets for storage prefetch.
+        Initialize per-worker-rank ZMQ PULL sockets for storage prefetch done notification.
 
         Called once during __init__ when storage backend is enabled.
         Creates:
-          - prefetch_cmd_server[local_rank]:  PUSH → Worker (send StorageMetadata)
           - prefetch_done_server[local_rank]: PULL ← Worker (receive done notification)
 
+        Prefetch commands are sent via batch_request (EngineWorkerQueue), not ZMQ.
         local_rank = dp_rank * tp_size + tp_rank, covers all workers in this DP group.
         """
         tp_size = self.config.parallel_config.tensor_parallel_size
@@ -1293,134 +1333,241 @@ class ResourceManagerV1(ResourceManager):
 
         for tp_rank in range(tp_size):
             local_rank = dp_rank * tp_size + tp_rank
-            cmd_name = f"prefetch_cmd_rank{local_rank}_{port}"
             done_name = f"prefetch_done_rank{local_rank}_{port}"
-            self._prefetch_cmd_servers[local_rank] = ZmqIpcServer(cmd_name, zmq.PUSH)
             self._prefetch_done_servers[local_rank] = ZmqIpcServer(done_name, zmq.PULL)
-            llm_logger.info(f"[StoragePrefetch] init ZMQ servers: cmd={cmd_name}, done={done_name}")
+            llm_logger.info(f"[StoragePrefetch] init ZMQ done server: {done_name}")
 
     def _prefetch_storage_cache(self, request: Request) -> None:
         """
         Asynchronously prefetch KV cache blocks from storage to host memory.
 
-        Called when a request is added to the waiting queue. Runs `match_prefix`
-        with skip_storage=False so the Scheduler-side CacheManager can:
-          1. Query which blocks exist in storage (batch_exists).
-          2. Allocate host blocks for them.
-          3. Insert those blocks into the RadixTree with LOADING_FROM_STORAGE status.
+        Phase 1: Calls cache_manager.prefetch_storage() to probe storage,
+                 allocate host blocks, and enqueue prefetch info for dispatch.
+        Phase 2: Polls _prefetch_results dict until the receiver thread reports
+                 that all TP workers have completed the transfer.
 
-        Then immediately sends a StorageMetadata message to all TP Workers via ZMQ,
-        so Workers can start the actual storage→CPU transfer independently of forward.
+        The actual ZMQ dispatch happens in schedule() via _dispatch_pending_prefetches(),
+        and the ZMQ receive happens in the dedicated _prefetch_receiver_loop thread.
 
         Args:
             request: The request to prefetch cache for.
         """
         host_block_ids: List[int] = []
         try:
-            if not self.cache_manager.enable_prefix_caching:
-                return
-            llm_logger.debug(f"[StoragePrefetch] start async prefetch for request_id={request.request_id}")
-            self.cache_manager.match_prefix(request, skip_storage=False)
-            match_result = request.match_result
-            request.match_result = None
-            if match_result is None or match_result.matched_storage_nums == 0:
-                return
-
-            # Collect host_block_ids and hash_values from matched storage nodes
-            storage_nodes = match_result.storage_nodes
-            host_block_ids = [node.block_id for node in storage_nodes]
-            hash_values = [node.hash_value for node in storage_nodes]
-
             llm_logger.info(
-                f"[StoragePrefetch] request_id={request.request_id} "
-                f"storage_matched={match_result.matched_storage_nums} blocks, "
-                f"host_block_ids={host_block_ids}"
+                f"[Debug][StoragePrefetch][Phase1] start prefetch_storage for request_id={request.request_id}"
             )
 
-            if not self._prefetch_cmd_servers:
-                return
-
-            metadata = StorageMetadata(
-                hash_values=hash_values,
-                block_ids=host_block_ids,
-                direction="load",
-            )
-
-            # Build the payload with request_id for done matching
-            payload = {
-                "request_id": request.request_id,
-                "metadata": metadata,
-            }
-
-            # Send to all TP workers in this DP group
-            for local_rank, cmd_server in self._prefetch_cmd_servers.items():
-                try:
-                    cmd_server.send_pyobj(payload)
-                except Exception as e:
-                    llm_logger.error(f"[StoragePrefetch] failed to send cmd to rank={local_rank}: {e}")
-
-            # Block in this thread until all TP workers report done.
-            # This mirrors _download_features: the future is considered complete only
-            # when the actual storage→CPU transfer has finished on every worker.
-            expected_count = len(self._prefetch_cmd_servers)
-            done_ranks: Set[int] = set()
-            failed_ranks: Set[int] = set()
-            poll_interval = 0.001  # 1ms
-
-            while len(done_ranks) + len(failed_ranks) < expected_count:
-                for local_rank, done_server in self._prefetch_done_servers.items():
-                    if local_rank in done_ranks or local_rank in failed_ranks:
-                        continue
-                    err, msg = done_server.receive_pyobj_once(block=False)
-                    if err is not None:
-                        llm_logger.warning(
-                            f"[StoragePrefetch] done_server rank={local_rank} socket error: {err}, "
-                            f"request_id={request.request_id}"
-                        )
-                        failed_ranks.add(local_rank)
-                        continue
-                    if msg is None:
-                        continue
-                    recv_req_id = msg.get("request_id", "")
-                    if recv_req_id != request.request_id:
-                        # Message for a different request; skip and let that request's
-                        # thread poll its own done message. This should not normally happen
-                        # since each worker sends done to the same socket, but guard anyway.
-                        llm_logger.warning(
-                            f"[StoragePrefetch] rank={local_rank} received done for unexpected "
-                            f"request_id={recv_req_id}, expected={request.request_id}, skipping"
-                        )
-                        continue
-                    if msg.get("status") != "ok":
-                        llm_logger.warning(
-                            f"[StoragePrefetch] rank={local_rank} worker reported prefetch failure for "
-                            f"request_id={request.request_id}: {msg.get('error')}"
-                        )
-                        failed_ranks.add(local_rank)
-                        continue
-                    done_ranks.add(local_rank)
-
-                if len(done_ranks) + len(failed_ranks) < expected_count:
-                    time.sleep(poll_interval)
-
-            if failed_ranks:
-                llm_logger.warning(
-                    f"[StoragePrefetch] request_id={request.request_id} prefetch failed on "
-                    f"ranks={failed_ranks}, aborting {len(host_block_ids)} host blocks"
+            has_prefetch = self.cache_manager.prefetch_storage(request)
+            if not has_prefetch:
+                llm_logger.info(
+                    f"[Debug][StoragePrefetch][Phase1] no storage match for request_id={request.request_id}, skip"
                 )
-                self.cache_manager.abort_prefetch_blocks(host_block_ids)
                 return
 
-            # All workers done successfully: update CacheManager block status to HOST
-            self.cache_manager.update_storage_blocks_to_host(host_block_ids)
             llm_logger.info(
-                f"[StoragePrefetch] request_id={request.request_id} all {expected_count} TP workers done, "
-                f"updated {len(host_block_ids)} blocks to HOST"
+                f"[Debug][StoragePrefetch][Phase1] enqueued pending, now polling results for request_id={request.request_id}"
             )
+
+            if not self._prefetch_done_servers:
+                llm_logger.warning(
+                    f"[Debug][StoragePrefetch][Phase1] no done servers, skip polling for request_id={request.request_id}"
+                )
+                return
+
+            # Poll _prefetch_results until receiver thread populates it
+            timeout = 60.0
+            start = time.time()
+            poll_count = 0
+            while True:
+                with self._prefetch_results_lock:
+                    result = self._prefetch_results.pop(request.request_id, None)
+                if result is not None:
+                    elapsed = time.time() - start
+                    host_block_ids = result.host_block_ids
+                    if result.success:
+                        self.cache_manager.update_storage_blocks_to_host(host_block_ids)
+                        llm_logger.info(
+                            f"[Debug][StoragePrefetch][Phase1] request_id={request.request_id} done, "
+                            f"updated {len(host_block_ids)} blocks to HOST, "
+                            f"waited {elapsed:.3f}s, polled {poll_count} times"
+                        )
+                    else:
+                        llm_logger.warning(
+                            f"[Debug][StoragePrefetch][Phase1] request_id={request.request_id} failed: {result.error}, "
+                            f"waited {elapsed:.3f}s"
+                        )
+                        self.cache_manager.abort_prefetch_blocks(host_block_ids)
+                    return
+
+                poll_count += 1
+                if time.time() - start > timeout:
+                    llm_logger.error(
+                        f"[Debug][StoragePrefetch][Phase1] request_id={request.request_id} timeout after {timeout}s, "
+                        f"polled {poll_count} times"
+                    )
+                    self._cleanup_prefetch_on_timeout(request.request_id)
+                    return
+                time.sleep(0.005)
 
         except Exception as e:
             llm_logger.error(f"[StoragePrefetch] request_id={request.request_id} error: {e}")
+            if host_block_ids:
+                self.cache_manager.abort_prefetch_blocks(host_block_ids)
+
+    def _dispatch_pending_prefetches(self, batch_request) -> None:
+        """
+        Drain pending prefetch tasks from CacheManager and attach to batch_request.
+
+        Called from schedule() under self.lock. Prefetch tasks are dispatched to
+        workers via the normal EngineWorkerQueue path (same as swap/evict metadata).
+        Completion notifications are still received via ZMQ in the receiver thread.
+        """
+        pending_items = self.cache_manager.drain_pending_prefetches()
+        if not pending_items:
+            return
+
+        llm_logger.info(
+            f"[Debug][StoragePrefetch][Phase2] drained {len(pending_items)} pending prefetch tasks, "
+            f"request_ids={[item.request_id for item in pending_items]}, "
+            f"attaching to batch_request (existing requests={len(batch_request.requests)})"
+        )
+
+        batch_request.append_prefetch_tasks(pending_items)
+
+        expected_count = len(self._prefetch_done_servers)
+        for item in pending_items:
+            inflight = InflightPrefetch(
+                request_id=item.request_id,
+                host_block_ids=item.host_block_ids,
+                expected_count=expected_count,
+                done_ranks=set(),
+                failed_ranks=set(),
+                dispatch_time=time.time(),
+            )
+            with self._inflight_lock:
+                self._inflight_prefetches[item.request_id] = inflight
+
+            llm_logger.info(
+                f"[Debug][StoragePrefetch][Phase2] registered inflight: request_id={item.request_id}, "
+                f"host_block_ids={item.host_block_ids}, expected_workers={expected_count}"
+            )
+
+    def _prefetch_receiver_loop(self) -> None:
+        """
+        Dedicated daemon thread that receives prefetch done messages from all TP workers.
+
+        Uses zmq.Poller for efficient multiplexed receive. When all workers for a
+        given request_id have reported, stores the result in _prefetch_results dict
+        for the preprocess thread to pick up.
+        """
+        poller = zmq.Poller()
+        rank_by_socket = {}
+        for local_rank, done_server in self._prefetch_done_servers.items():
+            done_server._ensure_socket()
+            poller.register(done_server.socket, zmq.POLLIN)
+            rank_by_socket[done_server.socket] = local_rank
+
+        llm_logger.info("[StoragePrefetch] receiver thread started")
+
+        while True:
+            try:
+                events = dict(poller.poll(timeout=50))
+            except Exception:
+                continue
+
+            for socket, _ in events.items():
+                local_rank = rank_by_socket[socket]
+                done_server = self._prefetch_done_servers[local_rank]
+                err, msg = done_server.receive_pyobj_once(block=False)
+                if err is not None or msg is None:
+                    continue
+
+                request_id = msg.get("request_id", "")
+                status = msg.get("status", "")
+
+                llm_logger.info(
+                    f"[Debug][StoragePrefetch][Phase3] received msg from rank={local_rank}: "
+                    f"request_id={request_id}, status={status}"
+                )
+
+                with self._inflight_lock:
+                    inflight = self._inflight_prefetches.get(request_id)
+                    if inflight is None:
+                        llm_logger.warning(
+                            f"[Debug][StoragePrefetch][Phase3] receiver got stale msg for request_id={request_id}, discarding"
+                        )
+                        continue
+
+                    if status == "ok":
+                        inflight.done_ranks.add(local_rank)
+                    else:
+                        inflight.failed_ranks.add(local_rank)
+                        llm_logger.warning(
+                            f"[Debug][StoragePrefetch][Phase3] rank={local_rank} reported failure for "
+                            f"request_id={request_id}: {msg.get('error', '')}"
+                        )
+
+                    total = len(inflight.done_ranks) + len(inflight.failed_ranks)
+                    llm_logger.info(
+                        f"[Debug][StoragePrefetch][Phase3] request_id={request_id} "
+                        f"progress: {total}/{inflight.expected_count} "
+                        f"(done_ranks={inflight.done_ranks}, failed_ranks={inflight.failed_ranks})"
+                    )
+                    if total < inflight.expected_count:
+                        continue
+
+                    # All workers reported -- produce result
+                    self._inflight_prefetches.pop(request_id)
+
+                success = len(inflight.failed_ranks) == 0
+                result = PrefetchResult(
+                    request_id=request_id,
+                    host_block_ids=inflight.host_block_ids,
+                    success=success,
+                    error=f"failed_ranks={inflight.failed_ranks}" if not success else "",
+                )
+                with self._prefetch_results_lock:
+                    self._prefetch_results[request_id] = result
+
+                elapsed = time.time() - inflight.dispatch_time
+                llm_logger.info(
+                    f"[Debug][StoragePrefetch][Phase3] request_id={request_id} all workers done, "
+                    f"success={success}, elapsed={elapsed:.3f}s, result stored"
+                )
+
+    def _cleanup_prefetch_on_timeout(self, request_id: str) -> None:
+        """
+        Clean up prefetch state when a timeout occurs.
+
+        Removes from inflight tracking (if dispatched) or from CacheManager's
+        pending list (if not yet dispatched), and aborts host blocks.
+        """
+        host_block_ids: List[int] = []
+
+        # Check inflight first (already dispatched to workers)
+        with self._inflight_lock:
+            inflight = self._inflight_prefetches.pop(request_id, None)
+            if inflight is not None:
+                host_block_ids = inflight.host_block_ids
+
+        # Also check pending list (not yet dispatched)
+        if not host_block_ids:
+            with self.cache_manager._pending_prefetch_lock:
+                remaining = []
+                for item in self.cache_manager._pending_prefetch_list:
+                    if item.request_id == request_id:
+                        host_block_ids = item.host_block_ids
+                    else:
+                        remaining.append(item)
+                self.cache_manager._pending_prefetch_list = remaining
+
+        if host_block_ids:
             self.cache_manager.abort_prefetch_blocks(host_block_ids)
+            llm_logger.warning(
+                f"[StoragePrefetch] timeout cleanup: aborted {len(host_block_ids)} "
+                f"host blocks for request_id={request_id}"
+            )
 
     def _has_features_info(self, task):
         inputs = task.multimodal_inputs

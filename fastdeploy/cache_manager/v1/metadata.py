@@ -410,6 +410,23 @@ class StorageMetadata:
 
 
 @dataclass
+class PendingPrefetch:
+    """
+    Represents a pending storage prefetch task enqueued by CacheManager,
+    waiting to be dispatched to workers by the scheduler.
+
+    Attributes:
+        request_id: The request that triggered this prefetch.
+        metadata: StorageMetadata with hash_values and block_ids for the transfer.
+        host_block_ids: Pre-allocated host block IDs (for cleanup on failure).
+    """
+
+    request_id: str = ""
+    metadata: "StorageMetadata" = field(default_factory=lambda: StorageMetadata())
+    host_block_ids: List[int] = field(default_factory=list)
+
+
+@dataclass
 class PDTransferMetadata:
     """
     Base metadata for PD separation transfer operations.

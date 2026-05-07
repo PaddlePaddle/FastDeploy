@@ -30,7 +30,15 @@ if TYPE_CHECKING:
 from .base import KVCacheBase
 from .block_pool import DeviceBlockPool, HostBlockPool
 from .cache_utils import storage_key_for_block
-from .metadata import BlockNode, CacheLevel, CacheStatus, CacheSwapMetadata, MatchResult
+from .metadata import (
+    BlockNode,
+    CacheLevel,
+    CacheStatus,
+    CacheSwapMetadata,
+    MatchResult,
+    PendingPrefetch,
+    StorageMetadata,
+)
 from .radix_tree import RadixTree
 from .storage import create_storage_scheduler
 
@@ -110,6 +118,10 @@ class CacheManager(KVCacheBase):
         # Mapping from host_block_id -> BlockNode for LOADING_FROM_STORAGE blocks,
         # used to quickly update status to HOST once prefetch completes.
         self._prefetch_node_map: Dict[int, BlockNode] = {}
+
+        # Pending prefetch queue: tasks waiting to be dispatched by scheduler
+        self._pending_prefetch_list: List[PendingPrefetch] = []
+        self._pending_prefetch_lock = threading.Lock()
 
         # Storage scheduler (create using factory method if backend is configured)
         self._storage_scheduler = create_storage_scheduler(self.cache_config)
@@ -504,10 +516,11 @@ class CacheManager(KVCacheBase):
                 #   Split matched_nodes into device blocks and host blocks
                 if self.enable_host_cache:
                     for node in matched_nodes:
-                        if node.is_on_device():
-                            result.device_nodes.append(node)
-                        elif node.is_on_host():
-                            result.host_nodes.append(node)
+                        pass
+                        # if node.is_on_device():
+                        #     result.device_nodes.append(node)
+                        # elif node.is_on_host():
+                        #     result.host_nodes.append(node)
                 else:
                     result.device_nodes = matched_nodes
 
@@ -967,6 +980,61 @@ class CacheManager(KVCacheBase):
             return False
 
     # ============ Prefetch Methods ============
+
+    def prefetch_storage(self, request: "Request") -> bool:
+        """
+        Execute storage matching and enqueue prefetch info for later dispatch.
+
+        Called from the preprocess thread. Does match_prefix(skip_storage=False)
+        to probe storage, allocate host blocks, and enqueue PendingPrefetch
+        into the pending list. The scheduler will drain and dispatch later.
+
+        Args:
+            request: The request to prefetch cache for.
+
+        Returns:
+            True if storage blocks were matched and enqueued, False otherwise.
+        """
+        if not self.enable_prefix_caching:
+            return False
+
+        self.match_prefix(request, skip_storage=False)
+        match_result = request.match_result
+        request.match_result = None
+
+        if match_result is None or match_result.matched_storage_nums == 0:
+            return False
+
+        storage_nodes = match_result.storage_nodes
+        host_block_ids = [node.block_id for node in storage_nodes]
+        hash_values = [node.hash_value for node in storage_nodes]
+
+        metadata = StorageMetadata(
+            hash_values=hash_values,
+            block_ids=host_block_ids,
+            direction="load",
+        )
+
+        pending = PendingPrefetch(
+            request_id=request.request_id,
+            metadata=metadata,
+            host_block_ids=host_block_ids,
+        )
+        with self._pending_prefetch_lock:
+            self._pending_prefetch_list.append(pending)
+
+        logger.info(
+            f"[Debug][StoragePrefetch] request_id={request.request_id} "
+            f"storage_matched={match_result.matched_storage_nums} blocks, enqueued for dispatch"
+        )
+        return True
+
+    def drain_pending_prefetches(self) -> List[PendingPrefetch]:
+        """Atomically drain all pending prefetch tasks for scheduler dispatch."""
+        with self._pending_prefetch_lock:
+            items = self._pending_prefetch_list
+            self._pending_prefetch_list = []
+            return items
 
     def prepare_prefetch_metadata(
         self,

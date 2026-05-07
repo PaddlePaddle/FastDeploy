@@ -18,9 +18,9 @@ import argparse
 import asyncio
 import json
 import os
-import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from typing import Tuple
 
 import numpy as np
@@ -190,11 +190,10 @@ class PaddleDisWorkerProc:
 
     def init_prefetch_zmq_clients(self) -> None:
         """
-        Initialize ZMQ PULL/PUSH clients for storage prefetch communication.
+        Initialize ZMQ PUSH client for storage prefetch done notification.
 
-        Connects to the Scheduler-side PUSH/PULL servers for this worker's local_rank.
-        Starts a background thread that continuously receives prefetch commands,
-        executes storage→CPU transfers, and sends done notifications back.
+        The prefetch commands are now received via batch_request (EngineWorkerQueue),
+        but completion notifications are still sent back to Scheduler via ZMQ PUSH.
 
         Only initialized when storage backend is configured and cache_manager_v1 is enabled.
         """
@@ -204,87 +203,95 @@ class PaddleDisWorkerProc:
         port = self.parallel_config.local_engine_worker_queue_port
         local_rank = self.local_rank
 
-        cmd_name = f"prefetch_cmd_rank{local_rank}_{port}"
         done_name = f"prefetch_done_rank{local_rank}_{port}"
-
-        self._prefetch_cmd_client = ZmqIpcClient(name=cmd_name, mode=zmq.PULL)
-        self._prefetch_cmd_client.connect()
 
         self._prefetch_done_client = ZmqIpcClient(name=done_name, mode=zmq.PUSH)
         self._prefetch_done_client.connect()
+        self._prefetch_executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="StoragePrefetch")
 
-        logger.info(f"[StoragePrefetch] rank={local_rank} ZMQ clients connected: " f"cmd={cmd_name}, done={done_name}")
+        logger.info(f"[StoragePrefetch] rank={local_rank} ZMQ done client connected: done={done_name}")
 
-        self._prefetch_loop_thread = threading.Thread(
-            target=self._prefetch_loop,
-            daemon=True,
-            name=f"StoragePrefetchLoop_rank{local_rank}",
-        )
-        self._prefetch_loop_thread.start()
-
-    def _prefetch_loop(self) -> None:
+    def _handle_prefetch_tasks(self, prefetch_tasks) -> None:
         """
-        Background thread: receive prefetch commands and execute storage→CPU transfers.
+        Handle storage prefetch tasks received from batch_request.
 
-        Runs indefinitely (daemon thread, exits with process).
-        For each received StorageMetadata:
-          1. Calls cache_controller.prefetch_from_storage(metadata) asynchronously.
-          2. Waits for the AsyncTaskHandler to complete.
-          3. Sends a done notification (with status ok/error) back to Scheduler via ZMQ.
+        Submits each prefetch task to thread pool for async execution.
+        On completion, sends done notification back to scheduler via ZMQ PUSH.
+
+        Args:
+            prefetch_tasks: List of PendingPrefetch from batch_request.
+        """
+        for task in prefetch_tasks:
+            self._prefetch_executor.submit(self._execute_single_prefetch, task)
+
+    def _execute_single_prefetch(self, task) -> None:
+        """
+        Execute a single storage prefetch task and send done notification via ZMQ.
+
+        Args:
+            task: PendingPrefetch object with request_id, metadata, host_block_ids.
         """
         local_rank = self.local_rank
-        logger.info(f"[StoragePrefetch] prefetch_loop started for rank={local_rank}")
+        request_id = task.request_id
+        metadata = task.metadata
 
-        while True:
-            try:
-                err, msg = self._prefetch_cmd_client.receive_pyobj_once(block=True)
-                if err:
-                    logger.warning(f"[StoragePrefetch] rank={local_rank} recv error: {err}")
-                    continue
-                if msg is None:
-                    continue
+        logger.info(
+            f"[Debug][StoragePrefetch][Worker] rank={local_rank} executing prefetch for "
+            f"request_id={request_id}, block_ids={metadata.block_ids}, timeout={metadata.timeout}"
+        )
 
-                request_id = msg.get("request_id", "")
-                metadata = msg.get("metadata")
+        try:
+            cache_controller = self.worker.model_runner.cache_controller
+            handler = cache_controller.prefetch_from_storage(metadata)
 
-                if metadata is None:
-                    logger.warning(
-                        f"[StoragePrefetch] rank={local_rank} received msg without metadata, "
-                        f"request_id={request_id}"
-                    )
-                    continue
+            start_time = time.time()
+            completed = handler.wait(timeout=metadata.timeout)
+            elapsed = time.time() - start_time
 
-                cache_controller = self.worker.model_runner.cache_controller
-                handler = cache_controller.prefetch_from_storage(metadata)
-
-                # Block until this worker's transfer completes
-                completed = handler.wait(timeout=metadata.timeout)
-
-                if completed and handler.error is None:
-                    done_msg = {
-                        "request_id": request_id,
-                        "host_block_ids": metadata.block_ids,
-                        "status": "ok",
-                    }
-                else:
-                    error_str = handler.error or "timeout"
-                    logger.warning(
-                        f"[StoragePrefetch] rank={local_rank} prefetch failed for "
-                        f"request_id={request_id}: {error_str}"
-                    )
-                    done_msg = {
-                        "request_id": request_id,
-                        "host_block_ids": metadata.block_ids,
-                        "status": "error",
-                        "error": error_str,
-                    }
-
-                self._prefetch_done_client.send_pyobj(done_msg)
-
-            except Exception as e:
-                logger.error(
-                    f"[StoragePrefetch] rank={local_rank} prefetch_loop exception: " f"{e}\n{traceback.format_exc()}"
+            if completed and handler.error is None:
+                logger.info(
+                    f"[Debug][StoragePrefetch][Worker] rank={local_rank} prefetch OK for "
+                    f"request_id={request_id}, elapsed={elapsed:.3f}s"
                 )
+                done_msg = {
+                    "request_id": request_id,
+                    "host_block_ids": metadata.block_ids,
+                    "status": "ok",
+                }
+            else:
+                error_str = handler.error or "timeout"
+                logger.warning(
+                    f"[Debug][StoragePrefetch][Worker] rank={local_rank} prefetch failed for "
+                    f"request_id={request_id}: {error_str}, elapsed={elapsed:.3f}s"
+                )
+                done_msg = {
+                    "request_id": request_id,
+                    "host_block_ids": metadata.block_ids,
+                    "status": "error",
+                    "error": error_str,
+                }
+
+            self._prefetch_done_client.send_pyobj(done_msg)
+            logger.info(
+                f"[Debug][StoragePrefetch][Worker] rank={local_rank} sent done msg for "
+                f"request_id={request_id}, status={done_msg['status']}"
+            )
+
+        except Exception as e:
+            logger.error(
+                f"[StoragePrefetch] rank={local_rank} execute_prefetch exception for "
+                f"request_id={request_id}: {e}\n{traceback.format_exc()}"
+            )
+            try:
+                done_msg = {
+                    "request_id": request_id,
+                    "host_block_ids": metadata.block_ids,
+                    "status": "error",
+                    "error": str(e),
+                }
+                self._prefetch_done_client.send_pyobj(done_msg)
+            except Exception:
+                pass
 
     def init_health_status(self) -> None:
         """
@@ -670,6 +677,16 @@ class PaddleDisWorkerProc:
                 ), f"task_queue.get_tasks() should contain at least one tuple, [([req1, ...] ,real_bsz)], but got len(tasks)={len(tasks)}"
 
                 batch_request, control_reqs, max_occupied_batch_index = BatchRequest.from_tasks(tasks)
+
+                # Handle storage prefetch tasks from batch_request (async, non-blocking)
+                if batch_request.storage_prefetch_tasks:
+                    logger.info(
+                        f"[Debug][StoragePrefetch][Worker] rank={self.local_rank} received "
+                        f"{len(batch_request.storage_prefetch_tasks)} prefetch tasks: "
+                        f"request_ids={[t.request_id for t in batch_request.storage_prefetch_tasks]}"
+                    )
+                    self._handle_prefetch_tasks(batch_request.storage_prefetch_tasks)
+                    batch_request.storage_prefetch_tasks = None
 
                 if len(control_reqs) > 0:
                     logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")

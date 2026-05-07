@@ -34,7 +34,7 @@ from pydantic import BaseModel
 from typing_extensions import TypeVar
 
 from fastdeploy import envs
-from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
+from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata, PendingPrefetch
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import (
@@ -618,6 +618,7 @@ class BatchRequest:
 
         self.cache_swap_metadata: Optional[CacheSwapMetadata] = None
         self.cache_evict_metadata: Optional[CacheSwapMetadata] = None
+        self.storage_prefetch_tasks: Optional[List[PendingPrefetch]] = None
 
     def add_request(self, request):
         if hasattr(request, "cache_swap_metadata") and request.cache_swap_metadata:
@@ -659,9 +660,17 @@ class BatchRequest:
                     hash_values=meta.hash_values,
                 )
 
+    def append_prefetch_tasks(self, tasks: List[PendingPrefetch]):
+        if self.storage_prefetch_tasks is None:
+            self.storage_prefetch_tasks = []
+        self.storage_prefetch_tasks.extend(tasks)
+
     def __repr__(self):
         requests_repr = repr(self.requests)
-        return f"BatchRequest(requests={requests_repr}, swap_metadata={self.cache_swap_metadata}, evict_metadata={self.cache_evict_metadata})"
+        return (
+            f"BatchRequest(requests={requests_repr}, swap_metadata={self.cache_swap_metadata}, "
+            f"evict_metadata={self.cache_evict_metadata}, prefetch_tasks={self.storage_prefetch_tasks})"
+        )
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -688,7 +697,10 @@ class BatchRequest:
         return self.requests[index]
 
     def __len__(self):
-        return len(self.requests)
+        count = len(self.requests)
+        if self.storage_prefetch_tasks:
+            count += len(self.storage_prefetch_tasks)
+        return count
 
     def append(self, batch_request: "BatchRequest"):
         self.requests.extend(batch_request.requests)
@@ -696,6 +708,8 @@ class BatchRequest:
             self.append_swap_metadata([batch_request.cache_swap_metadata])
         if batch_request.cache_evict_metadata:
             self.append_evict_metadata([batch_request.cache_evict_metadata])
+        if batch_request.storage_prefetch_tasks:
+            self.append_prefetch_tasks(batch_request.storage_prefetch_tasks)
 
     def extend(self, batch_requests: list["BatchRequest"]):
         for br in batch_requests:

@@ -1176,6 +1176,12 @@ class EngineService:
                                 task.metrics.decode_inference_start_time = time.time()
                             elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
+                    if batch_request.storage_prefetch_tasks:
+                        self.llm_logger.info(
+                            f"[Debug][StoragePrefetch][Dispatch] put_tasks with "
+                            f"{len(batch_request.storage_prefetch_tasks)} prefetch tasks, "
+                            f"{len(batch_request.requests)} inference requests"
+                        )
                     self.engine_worker_queue.put_tasks((batch_request, self.resource_manager.real_bsz))
                 else:
                     # When there are no actual tasks to schedule, send an empty task batch to EP workers.
