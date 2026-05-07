@@ -294,7 +294,6 @@ async def handle_non_stream_response(
     # 非流式没有stream chunk
     # 非流式兼容stream benchmark逻辑
     # arrival_time:
-    # [fake_first_token, fake_second_token, fake_last_token]
     output.arrival_time = []
 
     has_text = output.generated_text.strip() or output.reasoning_content.strip()
