@@ -399,8 +399,12 @@ class Processor:
         )
         request["logits_processors_args"] = logits_processors_args
 
-        # Tokenization: multimodal or text-only path
-        if self.mm_processor is not None and self._has_multimodal_content(request):
+        # Step 6: messages → prompt + multimodal_data (通用预处理)
+        if request.get("messages") and not request.get("prompt") and not request.get("prompt_token_ids"):
+            self.process_messages(request)
+
+        # Step 7: tokenization (multimodal or text-only)
+        if self.mm_processor is not None:
             self.mm_processor.process(request)
         else:
             self._tokenize_text_request(request, max_model_len)
@@ -453,6 +457,74 @@ class Processor:
         log_request(RequestLogLevel.CONTENT, message="Processed request dict: {request}", request=request)
         return request
 
+    def process_messages(self, request):
+        """将 messages 格式转换为 prompt + multimodal_data（通用，与模型无关）。
+
+        职责：
+        1. 从 messages 中提取多模态内容（图片/视频）
+           → 写入 request["multimodal_data"] = {"image": [...], "video": [...]}
+        2. 调用 tokenizer.apply_chat_template(messages) 拼接 prompt
+           → 写入 request["prompt"]
+
+        调用时机：request 含 "messages" 且尚未有 "prompt"/"prompt_token_ids" 时。
+        """
+        messages = request.get("messages")
+
+        # Apply chat_template_kwargs
+        chat_template_kwargs = request.get("chat_template_kwargs", {})
+        if chat_template_kwargs:
+            if isinstance(chat_template_kwargs, dict):
+                for k, v in chat_template_kwargs.items():
+                    if k not in request or request[k] is None:
+                        request[k] = v
+            else:
+                raise ValueError("Invalid input: chat_template_kwargs must be a dict")
+
+        request.setdefault("enable_thinking", True)
+
+        # Step 1: 解析 messages（下载图片/视频，转为 MMItem 格式）
+        from fastdeploy.entrypoints.chat_utils import parse_chat_messages
+
+        parsed_messages = parse_chat_messages(messages)
+
+        # Step 2: 从解析后的 messages 中提取多模态内容（已是 MMItem 格式）
+        images, videos = [], []
+        for msg in parsed_messages:
+            content = msg.get("content") if isinstance(msg, dict) else None
+            if not isinstance(content, list):
+                continue
+            for item in content:
+                if isinstance(item, dict):
+                    if item.get("type") == "image":
+                        images.append(item)
+                    elif item.get("type") == "video":
+                        videos.append(item)
+
+        if images or videos:
+            request["multimodal_data"] = {"image": images, "video": videos}
+
+        # Step 3: apply_chat_template → prompt
+        if self.tokenizer.chat_template is None:
+            raise ValueError("This model does not support chat_template.")
+
+        if self.tokenizer_type == "ernie4_5":
+            prompt = self.tokenizer.apply_chat_template(
+                request,
+                tokenize=False,
+                add_generation_prompt=request.get("add_generation_prompt", True),
+                **chat_template_kwargs,
+            )
+        else:
+            prompt = self.tokenizer.apply_chat_template(
+                parsed_messages,
+                tokenize=False,
+                add_generation_prompt=request.get("add_generation_prompt", True),
+                **chat_template_kwargs,
+            )
+
+        request["prompt"] = prompt
+        request["prompt_tokens"] = prompt
+
     def _has_multimodal_content(self, request):
         """Check if request contains multimodal data."""
         # Check multimodal_data field (from prompt path)
@@ -492,17 +564,6 @@ class Processor:
                     if hasattr(token_ids, "tolist"):
                         token_ids = token_ids.tolist()
                     request["prompt_token_ids"] = token_ids
-            elif request.get("messages"):
-                chat_template_kwargs = request.get("chat_template_kwargs", {})
-                if chat_template_kwargs:
-                    if isinstance(chat_template_kwargs, dict):
-                        for k, v in chat_template_kwargs.items():
-                            if k not in request:
-                                request[k] = v
-                    else:
-                        raise ValueError("Invalid input: chat_template_kwargs must be a dict")
-                request.setdefault("enable_thinking", True)
-                request["prompt_token_ids"] = self.messages2ids(request, **chat_template_kwargs)
             else:
                 raise ValueError(f"Request must contain 'prompt_token_ids', 'prompt', or 'messages': {request}")
 
