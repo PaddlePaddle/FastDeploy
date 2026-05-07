@@ -12,10 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from .qwen import QwenImageProcessor
-from .qwen3 import Qwen3ImageProcessor
 from .ernie import AdaptiveImageProcessor
 from .paddleocr import PaddleOCRImageProcessor
+from .qwen import QwenImageProcessor
+from .qwen3 import Qwen3ImageProcessor
 
 __all__ = [
     "QwenImageProcessor",

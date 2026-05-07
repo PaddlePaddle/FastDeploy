@@ -19,7 +19,7 @@ class.  Multimodal support is opt-in via the ``mm_processor`` parameter.
 """
 
 from collections import OrderedDict
-from typing import Dict, Optional
+from typing import Dict
 
 import numpy as np
 from paddleformers.generation import GenerationConfig

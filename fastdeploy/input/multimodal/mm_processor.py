@@ -461,9 +461,7 @@ class MMProcessor(ABC):
                 if modality in self.limit_mm_per_prompt and data:
                     limit = self.limit_mm_per_prompt[modality]
                     if len(data) > limit:
-                        raise ValueError(
-                            f"Too many {modality} items in prompt, got {len(data)} but limit is {limit}"
-                        )
+                        raise ValueError(f"Too many {modality} items in prompt, got {len(data)} but limit is {limit}")
 
     def _init_extra(self, processor_kwargs):
         """Model-specific extra initialization. Override in subclass."""
