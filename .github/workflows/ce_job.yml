@@ -188,15 +188,15 @@ jobs:
       FD_VERSION: 0.0.0
       PADDLE_WHL_URL: https://paddle-qa.bj.bcebos.com/paddle-pipeline/Develop-TagBuild-Training-Linux-Gpu-Cuda12.9-Cudnn9.9-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
 
-  build_sm90100_rl:
-    name: BUILD_SM90100_RL
+  build_sm90_rl:
+    name: BUILD_SM90_RL
     needs: [clone, ce_job_pre_check]
     if: ${{ needs.ce_job_pre_check.outputs.sm8090_match == 'true' }}
     uses: ./.github/workflows/_build_linux_rl.yml
     with:
-      DOCKER_IMAGE: iregistry.baidu-int.com/paddlepaddle/base-images:paddlecloud-ubuntu24.04-gcc13.3-cuda12.9-cudnn9.9-bccl1.4.1.4-nccl2.26.5-openmpi4.1.5-FleetY13.4.1H-rc1
+      DOCKER_IMAGE: iregistry.baidu-int.com/paddlepaddle/base-images:paddlecloud-ubuntu24.04-gcc13.3-cuda12.9-cudnn9.9-bccl1.4.1.4-nccl2.26.5-openmpi4.1.5-FleetY13.5.0H-rc9
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      COMPILE_ARCH: "90,100"
+      COMPILE_ARCH: "90"
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
 
@@ -311,15 +311,15 @@ jobs:
           echo "commit wheel url is ${WHEEL_PATH}"
           echo "latest wheel url is ${WHEEL_PATH_LATEST}"
 
-  ce_upload_sm90100_rl:
+  ce_upload_sm90_rl:
     environment: CodeSync
-    name: CE_UPLOAD_90100RL
-    needs: build_sm90100_rl
+    name: CE_UPLOAD_90RL
+    needs: build_sm90_rl
     runs-on: ubuntu-latest
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm90100_rl.outputs.wheel_path_rl }}
+      FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm90_rl.outputs.wheel_path_rl }}
       COMPILE_ARCH: "90,100"
     steps:
       - uses: actions/setup-python@v6
@@ -327,9 +327,9 @@ jobs:
           python-version: '3.10'
       - name: Wheel Info Show and Upload
         run: |
-          echo "The wheel is located at: ${{ needs.build_sm90100_rl.outputs.wheel_path_rl }}"
-          wget -q --no-check-certificate ${{ needs.build_sm90100_rl.outputs.wheel_path_rl }}
-          filename=$(basename ${{ needs.build_sm90100_rl.outputs.wheel_path_rl }})
+          echo "The wheel is located at: ${{ needs.build_sm90_rl.outputs.wheel_path_rl }}"
+          wget -q --no-check-certificate ${{ needs.build_sm90_rl.outputs.wheel_path_rl }}
+          filename=$(basename ${{ needs.build_sm90_rl.outputs.wheel_path_rl }})
 
           commit_id=${{ github.sha }}
           branch_name=${{ github.ref_name }}
@@ -339,8 +339,8 @@ jobs:
           python -m pip install bce-python-sdk==0.9.29
 
           target_paths=(
-            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE_RL/cu129/SM_90100/${branch_name}/${commit_id}"
-            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE_RL/cu129/SM_90100/${branch_name}/latest"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE_RL/cu129/SM_90/${branch_name}/${commit_id}"
+            "paddle-qa/paddle-pipeline/FastDeploy_ActionCE_RL/cu129/SM_90/${branch_name}/latest"
           )
 
           for target_path in "${target_paths[@]}"; do
