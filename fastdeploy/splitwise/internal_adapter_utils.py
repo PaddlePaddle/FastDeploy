@@ -104,6 +104,22 @@ class InternalAdapter:
                     logger.debug(f"Response for task: {task_id_str}: is_health {is_health}")
                     with self.response_lock:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
+                elif task["cmd"] == "interrupt_requests":
+                    req_ids = task.get("req_ids", [])
+                    logger.info(f"Processing interrupt_requests for req_ids: {req_ids}")
+                    try:
+                        abort_result = self.engine._control_abort_requests(
+                            type("ControlRequest", (), {"get_args": lambda _: {"req_ids": req_ids}})()
+                        )
+                        result = {"task_id": task_id_str, "result": abort_result}
+                        logger.info(f"interrupt_requests completed for req_ids: {req_ids}, result: {abort_result}")
+                    except Exception as e:
+                        logger.error(
+                            f"interrupt_requests failed for req_ids: {req_ids}, error: {e}, {traceback.format_exc()!s}"
+                        )
+                        result = {"task_id": task_id_str, "result": {"error": str(e)}}
+                    with self.response_lock:
+                        self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
             except Exception as e:
                 logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
