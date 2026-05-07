@@ -14,7 +14,6 @@
 
 import os
 import signal
-import socket
 import subprocess
 import time
 import traceback
@@ -26,18 +25,6 @@ from fastdeploy import LLM, SamplingParams
 FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
 FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 MAX_WAIT_SECONDS = 60
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
 
 
 def format_chat_prompt(messages):
