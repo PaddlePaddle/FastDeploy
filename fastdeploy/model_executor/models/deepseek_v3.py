@@ -464,12 +464,6 @@ class DeepseekV3MLAAttention(nn.Layer):
                 forward_meta=forward_meta,
             )
 
-            # Gated by MLA_CHUNK_DEBUG=1 via logger.debug (see mla_attention_backend.py).
-            logger.debug(
-                f"[deepseek_v3 forward] key.shape={key.shape}, value.shape={value.shape}, "
-                f"full_k_pe.shape={full_k_pe.shape}"
-            )
-
             fmha_out.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
             fmha_out = fmha_out[:, :, : self.v_head_dim]
             fmha_out.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
