@@ -194,6 +194,8 @@ class ModelRegistry:
         elif model_impl == "auto" and is_fallback:
             # Auto mode fallback when no native implementation exists
             backend_arch = "PaddleFormersForCausalLM"
+        elif model_impl == "paddlefleet":
+            backend_arch = "PaddleFleetForCausalLM"
         elif model_impl == "fastdeploy":
             return None
         else:
@@ -201,7 +203,7 @@ class ModelRegistry:
 
         architectures = getattr(model_config, "architectures", None) or []
         if not architectures:
-            if model_impl == "paddleformers":
+            if model_impl == "paddleformers" or model_impl == "paddlefleet":
                 raise ValueError(
                     f"{model_impl} backend requested but no architectures were found in the pretrained configuration."
                 )
