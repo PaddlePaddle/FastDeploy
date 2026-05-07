@@ -173,9 +173,12 @@ class XPUModelRunner(ModelRunnerBase):
         self.share_inputs.init_share_inputs()
         self.max_num_seqs = self.fd_config.scheduler_config.max_num_seqs
 
+        self.increment_value = (
+            4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
+        )
         self.infer_seed_increment = paddle.full(
             shape=[self.scheduler_config.max_num_seqs, 1],
-            fill_value=4,
+            fill_value=self.increment_value,
             dtype="int64",
         ).cpu()
 
@@ -1344,6 +1347,7 @@ class XPUModelRunner(ModelRunnerBase):
                     self.sampling_metadata,
                     self.model_config.max_model_len,
                     self.share_inputs,
+                    self.increment_value,
                 )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
@@ -1445,8 +1449,9 @@ class XPUModelRunner(ModelRunnerBase):
                     self.proposer.run(share_inputs=self.share_inputs)
 
             # 7. Updata 'infer_seed' and step_paddle()
-            self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
-            self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
+            if not self.speculative_decoding:
+                self.share_inputs["infer_seed"].add_(self.infer_seed_increment)
+                self.share_inputs["infer_seed"][:] %= self.MAX_INFER_SEED
 
             if self.speculative_decoding:
                 speculate_schedule_cache(
