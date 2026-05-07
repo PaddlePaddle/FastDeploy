@@ -368,14 +368,13 @@ class MMProcessor(ABC):
     # ------------------------------------------------------------------
 
     def _update_cache(self, mm_context: MMContext, outputs: dict) -> None:
-        """Write newly-processed multimodal items to the processor cache.
+        """Compute mm_hashes for all items and optionally update processor cache.
 
         Hash computation is centralized here: use item.uuid if available,
         otherwise compute hash from the processed pixel_values.
+        outputs["mm_hashes"] is always populated (needed by downstream engine).
+        Processor cache is only updated when self._cache is enabled.
         """
-        if not self._cache:
-            return
-
         # Reconstruct interleaved item list using mm_order
         all_items = []
         img_idx, vid_idx = 0, 0
@@ -389,29 +388,28 @@ class MMProcessor(ABC):
 
         hashes_to_cache, items_to_cache = [], []
         for idx, item in enumerate(all_items):
-            # Items fetched from cache (data is tuple) should not be re-cached
-            if isinstance(item.data, tuple):
-                continue
-            # Build pixel_values and meta for this item
             if outputs["images"] is None or idx >= len(outputs["images"]):
                 continue
             pixel_values = outputs["images"][idx]
             # Compute hash: prefer uuid, fallback to content hash
             cache_key = item.uuid if item.uuid else MultimodalHasher.hash_features(pixel_values)
-            meta = {}
-            if idx < len(outputs.get("grid_thw", []) or []):
-                grid_thw = np.asarray(outputs["grid_thw"][idx]) if outputs["grid_thw"] is not None else None
-                if grid_thw is not None:
-                    if grid_thw.ndim > 1:
-                        t_val, h, w = grid_thw[0]
-                    else:
-                        t_val, h, w = grid_thw
-                    meta["thw"] = (int(t_val), int(h), int(w))
-            if "fps" in outputs and idx < len(outputs.get("fps", [])):
-                meta["fps"] = outputs["fps"][idx]
+            outputs["mm_hashes"].append(cache_key)
 
-            hashes_to_cache.append(cache_key)
-            items_to_cache.append((pixel_values, meta))
+            # Only cache newly-processed items (not those fetched from cache)
+            if self._cache and not isinstance(item.data, tuple):
+                meta = {}
+                if idx < len(outputs.get("grid_thw", []) or []):
+                    grid_thw = np.asarray(outputs["grid_thw"][idx]) if outputs["grid_thw"] is not None else None
+                    if grid_thw is not None:
+                        if grid_thw.ndim > 1:
+                            t_val, h, w = grid_thw[0]
+                        else:
+                            t_val, h, w = grid_thw
+                        meta["thw"] = (int(t_val), int(h), int(w))
+                if "fps" in outputs and idx < len(outputs.get("fps", [])):
+                    meta["fps"] = outputs["fps"][idx]
+                hashes_to_cache.append(cache_key)
+                items_to_cache.append((pixel_values, meta))
 
         if hashes_to_cache:
             self._cache.put(hashes_to_cache, items_to_cache)
@@ -464,6 +462,7 @@ class MMProcessor(ABC):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
             "mm_positions": [],
+            "mm_hashes": [],
         }
 
     # ------------------------------------------------------------------
