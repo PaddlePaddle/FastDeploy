@@ -806,7 +806,7 @@ class TokenProcessor:
             task = self.resource_manager.tasks_list[i]
             task_id = task.request_id
             is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
-            is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
+            # is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
 
             rid = task_id.split("_")[0]
             trace_carrier = task.trace_carrier
@@ -855,12 +855,12 @@ class TokenProcessor:
                 token_id = int(tokens[i, 0])
                 token_ids = [token_id]
                 recovery_stop = token_id == RECOVERY_STOP_SIGNAL
-                if recovery_stop:
-                    log_request(
-                        RequestLogLevel.STAGES,
-                        message="recovery stop signal found at task {request_id}",
-                        request_id=task_id,
-                    )
+                # if recovery_stop:
+                #     log_request(
+                #         RequestLogLevel.STAGES,
+                #         message="recovery stop signal found at task {request_id}",
+                #         request_id=task_id,
+                #     )
                 if not recovery_stop and token_id < 0:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if (
@@ -869,20 +869,20 @@ class TokenProcessor:
                         ):
                             self.resource_manager.recycle_abort_task(task_id)
                             self._put_abort_results(task)
-                            log_request(
-                                RequestLogLevel.STAGES,
-                                message="sync abortion for request_id {request_id} done.",
-                                request_id=task_id,
-                            )
+                            # log_request(
+                            #     RequestLogLevel.STAGES,
+                            #     message="sync abortion for request_id {request_id} done.",
+                            #     request_id=task_id,
+                            # )
                         if (
                             task_id in self.resource_manager.to_be_rescheduled_request_id_set
                             and token_id == PREEMPTED_TOKEN_ID
                         ):
-                            log_request(
-                                RequestLogLevel.STAGES,
-                                message="sync preemption for request_id {request_id} done.",
-                                request_id=task_id,
-                            )
+                            # log_request(
+                            #     RequestLogLevel.STAGES,
+                            #     message="sync preemption for request_id {request_id} done.",
+                            #     request_id=task_id,
+                            # )
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
             if self.cfg.scheduler_config.splitwise_role == "decode":
@@ -896,45 +896,45 @@ class TokenProcessor:
             if self.scheduler_metrics_logger and self._is_decode_stage(task):
                 self.scheduler_metrics_logger.on_decode_tokens(len(token_ids))
 
-            if task.get("prefill_chunk_info", None) is not None:
-                prefill_chunk_num = task.get("prefill_chunk_num", 0)
-                task.prefill_chunk_num = prefill_chunk_num + 1
+            # if task.get("prefill_chunk_info", None) is not None:
+            #     prefill_chunk_num = task.get("prefill_chunk_num", 0)
+            #     task.prefill_chunk_num = prefill_chunk_num + 1
 
-                if task.prefill_chunk_num < len(task.prefill_chunk_info):
-                    continue
+            #     if task.prefill_chunk_num < len(task.prefill_chunk_info):
+            #         continue
 
             self.total_step += 1
             if task.status == RequestStatus.RUNNING_PREFILL:
                 task.status = RequestStatus.RUNNING_DECODE
-            current_time = time.time()
+            # current_time = time.time()
             trace_carrier = None
-            if self.tokens_counter[task_id] == 0:
-                task.metrics.record_recv_first_token()
-                task.metrics.cal_cost_time()
-                metrics = copy.copy(task.metrics)
-                log_request(
-                    RequestLogLevel.STAGES,
-                    message="task:{request_id} start recode first token",
-                    request_id=task.request_id,
-                )
-                self._record_first_token_metrics(task, current_time)
+            # if self.tokens_counter[task_id] == 0:
+            #     task.metrics.record_recv_first_token()
+            #     task.metrics.cal_cost_time()
+            #     metrics = copy.copy(task.metrics)
+            #     log_request(
+            #         RequestLogLevel.STAGES,
+            #         message="task:{request_id} start recode first token",
+            #         request_id=task.request_id,
+            #     )
+            #     self._record_first_token_metrics(task, current_time)
 
-                tracing.trace_report_span(
-                    name=tracing.TraceSpanName.PREFILL,
-                    rid=rid,
-                    start_time_ns=int(task.metrics.inference_start_time * 1e9),
-                    end_time_ns=int(time.time() * 1e9),
-                    thread_finish_flag=False,
-                )
+            #     tracing.trace_report_span(
+            #         name=tracing.TraceSpanName.PREFILL,
+            #         rid=rid,
+            #         start_time_ns=int(task.metrics.inference_start_time * 1e9),
+            #         end_time_ns=int(time.time() * 1e9),
+            #         thread_finish_flag=False,
+            #     )
 
-            else:
-                task.metrics.record_recv_token()
-                if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
-                    task.metrics.record_decode_recv_second_token()
-                metrics = copy.copy(task.metrics)
+            # else:
+            #     task.metrics.record_recv_token()
+            #     if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
+            #         task.metrics.record_decode_recv_second_token()
+            #     metrics = copy.copy(task.metrics)
 
-            self.number_of_output_tokens += len(token_ids)
-            self._record_metrics(task, current_time, token_ids)
+            # self.number_of_output_tokens += len(token_ids)
+            # self._record_metrics(task, current_time, token_ids)
             result = RequestOutput(
                 request_id=task_id,
                 output_type=mtype,
@@ -993,66 +993,66 @@ class TokenProcessor:
                             result.outputs.top_logprobs.sampled_token_ranks.extend([sampled_rank])
                 if token_id in task.eos_token_ids or is_prefill or recovery_stop:
                     result.finished = True
-                    trace_carrier = tracing.trace_get_proc_propagate_context(rid=rid)
-                    result.trace_carrier = trace_carrier
-                    tracing.trace_report_span(
-                        name=tracing.TraceSpanName.DECODE,
-                        rid=rid,
-                        start_time_ns=int(task.metrics.inference_start_time * 1e9),
-                        end_time_ns=int(time.time() * 1e9),
-                        thread_finish_flag=True,
-                    )
-                    if recovery_stop:
-                        result.error_msg = "Recover is not supported, the result is incomplete!"
+                    # trace_carrier = tracing.trace_get_proc_propagate_context(rid=rid)
+                    # result.trace_carrier = trace_carrier
+                    # tracing.trace_report_span(
+                    #     name=tracing.TraceSpanName.DECODE,
+                    #     rid=rid,
+                    #     start_time_ns=int(task.metrics.inference_start_time * 1e9),
+                    #     end_time_ns=int(time.time() * 1e9),
+                    #     thread_finish_flag=True,
+                    # )
+                    # if recovery_stop:
+                    #     result.error_msg = "Recover is not supported, the result is incomplete!"
 
-                    # Calculate statistics for the combined log
-                    inference_start_time = task.metrics.get_inference_start_time(is_decode)
-                    task.metrics.cal_cost_time()
-                    e2e_time = current_time - inference_start_time
-                    token_ratio = self.tokens_counter[task_id] / e2e_time
+                    # # Calculate statistics for the combined log
+                    # inference_start_time = task.metrics.get_inference_start_time(is_decode)
+                    # task.metrics.cal_cost_time()
+                    # e2e_time = current_time - inference_start_time
+                    # token_ratio = self.tokens_counter[task_id] / e2e_time
 
-                    # Get cache information
-                    gpu_cache = getattr(task.metrics, "gpu_cache_token_num", 0)
-                    cpu_cache = getattr(task.metrics, "cpu_cache_token_num", 0)
-                    total_cached = gpu_cache + cpu_cache
+                    # # Get cache information
+                    # gpu_cache = getattr(task.metrics, "gpu_cache_token_num", 0)
+                    # cpu_cache = getattr(task.metrics, "cpu_cache_token_num", 0)
+                    # total_cached = gpu_cache + cpu_cache
 
-                    # Build cached detail dict
-                    cached_detail = f'{{"CachedToken": {total_cached}, "GPU": {gpu_cache}, "CPU": {cpu_cache}}}'
+                    # # Build cached detail dict
+                    # cached_detail = f'{{"CachedToken": {total_cached}, "GPU": {gpu_cache}, "CPU": {cpu_cache}}}'
 
-                    # Print combined log with all required information
-                    ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
-                    ttft_s = ttft + task.metrics.time_in_queue
-                    log_request(
-                        RequestLogLevel.LIFECYCLE,
-                        message=(
-                            "Request={request_id}, InputToken={input_tokens}, "
-                            "CachedDetail={cached_detail}, OutputToken={output_tokens}, "
-                            "TokenRatio={token_ratio}, TTFT={ttft}, TTFT_S={ttft_s}, "
-                            "E2E={e2e_time}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
-                            "PreemptedCount={preempted_count}"
-                        ),
-                        request_id=task_id,
-                        input_tokens=task.prompt_token_ids_len,
-                        cached_detail=cached_detail,
-                        output_tokens=self.tokens_counter[task_id],
-                        token_ratio=f"{token_ratio:.2f}",
-                        ttft=f"{ttft:.2f}",
-                        ttft_s=f"{ttft_s:.2f}",
-                        e2e_time=f"{e2e_time:.2f}",
-                        is_prefill=is_prefill,
-                        recovery_stop=recovery_stop,
-                        preempted_count=getattr(task.metrics, "preempted_count", 0),
-                    )
+                    # # Print combined log with all required information
+                    # ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
+                    # ttft_s = ttft + task.metrics.time_in_queue
+                    # log_request(
+                    #     RequestLogLevel.LIFECYCLE,
+                    #     message=(
+                    #         "Request={request_id}, InputToken={input_tokens}, "
+                    #         "CachedDetail={cached_detail}, OutputToken={output_tokens}, "
+                    #         "TokenRatio={token_ratio}, TTFT={ttft}, TTFT_S={ttft_s}, "
+                    #         "E2E={e2e_time}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
+                    #         "PreemptedCount={preempted_count}"
+                    #     ),
+                    #     request_id=task_id,
+                    #     input_tokens=task.prompt_token_ids_len,
+                    #     cached_detail=cached_detail,
+                    #     output_tokens=self.tokens_counter[task_id],
+                    #     token_ratio=f"{token_ratio:.2f}",
+                    #     ttft=f"{ttft:.2f}",
+                    #     ttft_s=f"{ttft_s:.2f}",
+                    #     e2e_time=f"{e2e_time:.2f}",
+                    #     is_prefill=is_prefill,
+                    #     recovery_stop=recovery_stop,
+                    #     preempted_count=getattr(task.metrics, "preempted_count", 0),
+                    # )
 
-                    main_process_metrics.request_token_ratio.observe(token_ratio)
-                    if self.cfg.speculative_config.method:
-                        self._compute_speculative_status(result)
-                    self._record_completion_metrics(task, current_time)
-                    log_request(
-                        RequestLogLevel.STAGES,
-                        message="task {request_id} received eos token. Recycling.",
-                        request_id=task_id,
-                    )
+                    # main_process_metrics.request_token_ratio.observe(token_ratio)
+                    # if self.cfg.speculative_config.method:
+                    #     self._compute_speculative_status(result)
+                    # self._record_completion_metrics(task, current_time)
+                    # log_request(
+                    #     RequestLogLevel.STAGES,
+                    #     message="task {request_id} received eos token. Recycling.",
+                    #     request_id=task_id,
+                    # )
                     if (
                         envs.ENABLE_V1_KVCACHE_SCHEDULER
                         and self.cfg.cache_config.enable_prefix_caching
@@ -1063,19 +1063,19 @@ class TokenProcessor:
                             task
                         )  # when enable prefix caching, cache kv cache for output tokens
                     self._recycle_resources(task_id, i, task, result, is_prefill)
-                    log_request(
-                        RequestLogLevel.STAGES,
-                        message="eos token {request_id} Recycle end.",
-                        request_id=task_id,
-                    )
-                    llm_logger.info(f"{self.resource_manager.info()}")
+                    # log_request(
+                    #     RequestLogLevel.STAGES,
+                    #     message="eos token {request_id} Recycle end.",
+                    #     request_id=task_id,
+                    # )
+                    # llm_logger.info(f"{self.resource_manager.info()}")
                     break
 
-            llm_logger.debug(f"get response from infer: {result}")
+            # llm_logger.debug(f"get response from infer: {result}")
             batch_result.append(result)
 
-        if self.cfg.speculative_config.method:
-            self._record_speculative_decoding_metrics(accept_num)
+        # if self.cfg.speculative_config.method:
+        #     self._record_speculative_decoding_metrics(accept_num)
         self.postprocess(batch_result, mtype)
 
     def _record_metrics(self, task, current_time, token_ids):
