@@ -48,6 +48,59 @@ struct enable_sm90_or_later : Kernel {
   }
 };
 
+// SM90: covers SM90 (Hopper) only
+template <typename Kernel>
+struct enable_sm90_only : Kernel {
+  template <typename... Args>
+  CUTLASS_DEVICE void operator()(Args &&...args) {
+#if defined __CUDA_ARCH__ && __CUDA_ARCH__ == 900
+    Kernel::operator()(std::forward<Args>(args)...);
+#endif
+  }
+};
+
+// SM100f: covers SM100 (Blackwell GB200) and SM103 (GB10x)
+template <typename Kernel>
+struct enable_sm100f_only : Kernel {
+  template <typename... Args>
+  CUTLASS_DEVICE void operator()(Args &&...args) {
+#if defined __CUDA_ARCH__ && (__CUDA_ARCH__ == 1000 || __CUDA_ARCH__ == 1030)
+    Kernel::operator()(std::forward<Args>(args)...);
+#endif
+  }
+};
+
+// SM120: covers SM120 (RTX 5090)
+template <typename Kernel>
+struct enable_sm120_only : Kernel {
+  template <typename... Args>
+  CUTLASS_DEVICE void operator()(Args &&...args) {
+#if defined __CUDA_ARCH__ && __CUDA_ARCH__ == 1200
+    Kernel::operator()(std::forward<Args>(args)...);
+#endif
+  }
+};
+
+// SM12x family: covers SM120 (RTX 5090) and SM121 (DGX Spark)
+template <typename Kernel>
+struct enable_sm120_family : Kernel {
+  template <typename... Args>
+  CUTLASS_DEVICE void operator()(Args &&...args) {
+#if defined __CUDA_ARCH__ && (__CUDA_ARCH__ >= 1200 && __CUDA_ARCH__ < 1300)
+    Kernel::operator()(std::forward<Args>(args)...);
+#endif
+  }
+};
+
+inline int32_t get_sm_version_num() {
+  int device = -1;
+  cudaGetDevice(&device);
+  int major = 0, minor = 0;
+  cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, device);
+  cudaDeviceGetAttribute(&minor, cudaDevAttrComputeCapabilityMinor, device);
+  return major * 10 + minor;
+}
+
 template <paddle::DataType D>
 class CutlassDtypeTraits;
 

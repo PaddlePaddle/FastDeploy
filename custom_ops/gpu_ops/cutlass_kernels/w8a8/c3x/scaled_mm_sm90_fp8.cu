@@ -21,10 +21,10 @@ void cutlass_scaled_mm_sm90_fp8(paddle::Tensor &out,
     PD_CHECK(bias->dtype() == out.dtype(),
              "currently bias dtype must match output dtype ",
              out.dtype());
-    return cutlass_scaled_mm_sm90_fp8_epilogue<c3x::ScaledEpilogueBias>(
+    return cutlass_scaled_mm_sm90_fp8_epilogue<true>(
         out, a, b, a_scales, b_scales, *bias);
   } else {
-    return cutlass_scaled_mm_sm90_fp8_epilogue<c3x::ScaledEpilogue>(
+    return cutlass_scaled_mm_sm90_fp8_epilogue<false>(
         out, a, b, a_scales, b_scales);
   }
 }

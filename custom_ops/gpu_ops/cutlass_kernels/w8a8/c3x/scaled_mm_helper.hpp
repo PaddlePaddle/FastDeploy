@@ -1,9 +1,11 @@
 // adapted from:
 // https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/c3x/scaled_mm_helper.hpp
 
+#pragma once
+
 #include "helper.h"
 
-template <typename Fp8Func, typename Int8Func>
+template <typename Fp8Func, typename Int8Func, typename BlockwiseFunc>
 void dispatch_scaled_mm(paddle::Tensor &c,
                         paddle::Tensor const &a,
                         paddle::Tensor const &b,
@@ -11,7 +13,8 @@ void dispatch_scaled_mm(paddle::Tensor &c,
                         paddle::Tensor const &b_scales,
                         paddle::optional<paddle::Tensor> const &bias,
                         Fp8Func fp8_func,
-                        Int8Func int8_func) {
+                        Int8Func int8_func,
+                        BlockwiseFunc blockwise_func) {
   PD_CHECK(a_scales.dtype() == paddle::DataType::FLOAT32);
   PD_CHECK(b_scales.dtype() == paddle::DataType::FLOAT32);
 
@@ -32,7 +35,32 @@ void dispatch_scaled_mm(paddle::Tensor &c,
       }
     }
   } else {
-    PADDLE_THROW(phi::errors::Unimplemented(
-        "No kernel for this combination of input dtypes is implemented."));
+    // Blockwise scaling (e.g. DeepSeek V3): a_scales [M, ceil(K/128)],
+    // b_scales [ceil(K/128), ceil(N/128)]
+    auto ceil_div = [](int x, int y) { return (x + y - 1) / y; };
+    PD_CHECK(a_scales.dims().size() == 2,
+             "Blockwise a_scales must be 2D, got shape ",
+             a_scales.dims());
+    PD_CHECK(b_scales.dims().size() == 2,
+             "Blockwise b_scales must be 2D, got shape ",
+             b_scales.dims());
+    PD_CHECK(
+        a_scales.dims()[0] == M, "Blockwise a_scales dim0 must equal M=", M);
+    PD_CHECK(a_scales.dims()[1] == ceil_div(K, 128),
+             "Blockwise a_scales dim1 must equal ceil(K/128)=",
+             ceil_div(K, 128));
+    PD_CHECK(b_scales.dims()[0] == ceil_div(K, 128),
+             "Blockwise b_scales dim0 must equal ceil(K/128)=",
+             ceil_div(K, 128));
+    PD_CHECK(b_scales.dims()[1] == ceil_div(N, 128),
+             "Blockwise b_scales dim1 must equal ceil(N/128)=",
+             ceil_div(N, 128));
+    PD_CHECK(!bias, "Bias not yet supported with blockwise scaled_mm");
+    if constexpr (!std::is_same_v<BlockwiseFunc, std::nullptr_t>) {
+      blockwise_func(c, a, b, a_scales, b_scales);
+    } else {
+      PADDLE_THROW(phi::errors::Unimplemented(
+          "Blockwise scaling not supported for this architecture"));
+    }
   }
 }

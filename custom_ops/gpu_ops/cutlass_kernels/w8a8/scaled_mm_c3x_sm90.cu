@@ -24,7 +24,8 @@ void cutlass_scaled_mm_sm90(paddle::Tensor& c,
                      b_scales,
                      bias,
                      fastdeploy::cutlass_scaled_mm_sm90_fp8,
-                     fastdeploy::cutlass_scaled_mm_sm90_int8);
+                     fastdeploy::cutlass_scaled_mm_sm90_int8,
+                     fastdeploy::cutlass_scaled_mm_blockwise_sm90_fp8);
 }
 
 void cutlass_scaled_mm_azp_sm90(paddle::Tensor& out,
