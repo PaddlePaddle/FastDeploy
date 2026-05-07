@@ -22,7 +22,11 @@ import unittest
 import numpy as np
 import paddle
 
-from fastdeploy.model_executor.ops.xpu import cuda_host_alloc, cuda_host_free, swap_cache_layout
+from fastdeploy.model_executor.ops.xpu import (
+    cuda_host_alloc,
+    cuda_host_free,
+    swap_cache_layout,
+)
 
 
 class TestAllocCachePinned(unittest.TestCase):

@@ -16,28 +16,30 @@
 #include "paddle/extension.h"
 
 /*
- * XPU KV cache layout  : layer_num * [block_num, head_num, block_size, head_dim]
- * CPU pinned buf layout: [block_num, layer_num, head_num, block_size, head_dim]
+ * XPU KV cache layout  : layer_num * [block_num, head_num, block_size,
+ * head_dim] CPU pinned buf layout: [block_num, layer_num, head_num, block_size,
+ * head_dim]
  *
  * mode 0 : XPU  -> CPU
  * mode 1 : CPU  -> XPU
  *
  * 地址计算
- *   cache_block_stride = head_num * block_size * head_dim   (= cache_shape[1]*[2]*[3])
- *   XPU ptr  = tensor[layer_idx].data() + xpu_block_id * cache_block_stride
- *   CPU ptr  = cpu_base_ptr
- *              + cpu_block_id * cache_block_stride * layer_number   // block 维度
- *              + layer_idx    * cache_block_stride                  // layer 维度
+ *   cache_block_stride = head_num * block_size * head_dim   (=
+ * cache_shape[1]*[2]*[3]) XPU ptr  = tensor[layer_idx].data() + xpu_block_id *
+ * cache_block_stride CPU ptr  = cpu_base_ptr
+ *              + cpu_block_id * cache_block_stride * layer_number   // block
+ * 维度
+ *              + layer_idx    * cache_block_stride                  // layer
+ * 维度
  */
 
 template <typename T>
-void SwapCacheImpLayout(
-    const std::vector<paddle::Tensor>& cache_xpu_tensors,
-    const int64_t& cache_cpu_pointer,
-    const std::vector<int64_t>& cache_shape,
-    const std::vector<int64_t>& xpu_block_ids,
-    const std::vector<int64_t>& cpu_block_ids,
-    int mode) {
+void SwapCacheImpLayout(const std::vector<paddle::Tensor>& cache_xpu_tensors,
+                        const int64_t& cache_cpu_pointer,
+                        const std::vector<int64_t>& cache_shape,
+                        const std::vector<int64_t>& xpu_block_ids,
+                        const std::vector<int64_t>& cpu_block_ids,
+                        int mode) {
   const int64_t layer_number = static_cast<int64_t>(cache_xpu_tensors.size());
 
   // cache_block_stride = product(cache_shape[1:])
@@ -60,32 +62,31 @@ void SwapCacheImpLayout(
       auto cur_cpu_block_id = cpu_block_ids[block_idx];
 
       auto* xpu_ptr_now = cache_xpu_ptr + cur_xpu_block_id * cache_block_stride;
-      auto* cpu_ptr_now =
-          cache_cpu_ptr +
-          cur_cpu_block_id * cache_block_stride * layer_number +
-          layer_idx * cache_block_stride;
+      auto* cpu_ptr_now = cache_cpu_ptr +
+                          cur_cpu_block_id * cache_block_stride * layer_number +
+                          layer_idx * cache_block_stride;
 
       void* dst = (mode == 0) ? static_cast<void*>(cpu_ptr_now)
-                               : static_cast<void*>(xpu_ptr_now);
+                              : static_cast<void*>(xpu_ptr_now);
       void* src = (mode == 0) ? static_cast<void*>(xpu_ptr_now)
-                               : static_cast<void*>(cpu_ptr_now);
+                              : static_cast<void*>(cpu_ptr_now);
 
       int ret = xpu_memcpy(dst, src, cache_block_stride * sizeof(T), copy_kind);
-      PD_CHECK(ret == XPU_SUCCESS,
-               "xpu_memcpy failed with error code: %d",
-               ret);
+      PD_CHECK(
+          ret == XPU_SUCCESS, "xpu_memcpy failed with error code: %d", ret);
     }
   }
 }
 
-void SwapCacheLayout(
-    const std::vector<paddle::Tensor>& cache_xpu_tensors,
-    const int64_t& cache_cpu_ptrs,
-    const std::vector<int64_t>& cache_shape,
-    const std::vector<int64_t>& gpu_block_ids,  // XPU 侧 block ids（复用 gpu_block_ids 参数名与 GPU 版接口一致）
-    const std::vector<int64_t>& cpu_block_ids,
-    int rank,
-    int mode) {
+void SwapCacheLayout(const std::vector<paddle::Tensor>& cache_xpu_tensors,
+                     const int64_t& cache_cpu_ptrs,
+                     const std::vector<int64_t>& cache_shape,
+                     const std::vector<int64_t>&
+                         gpu_block_ids,  // XPU 侧 block ids（复用 gpu_block_ids
+                                         // 参数名与 GPU 版接口一致）
+                     const std::vector<int64_t>& cpu_block_ids,
+                     int rank,
+                     int mode) {
   xpu_set_device(rank);  // used for distributed launch
   PD_CHECK(cache_xpu_tensors.size() > 0, "cache_xpu_tensors must not be empty");
 
