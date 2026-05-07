@@ -79,7 +79,12 @@ def llm(model_path):
         for pid in output.splitlines():
             os.kill(int(pid), signal.SIGKILL)
             print(f"Killed process on port {FD_ENGINE_QUEUE_PORT}, pid={pid}")
-    except subprocess.CalledProcessError:
+
+        # 清理/dev/shm中的临时文件
+        subprocess.run("rm -rf /dev/shm/*", shell=True)
+        print("Successfully cleaned up /dev/shm.")
+    except subprocess.CalledProcessError as e:
+        print(f"Failed to cleanup: {e}")
         pass
 
     try:
