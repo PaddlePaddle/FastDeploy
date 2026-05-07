@@ -355,8 +355,7 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
             MLAAttentionMetadata,
-            interleave_cached_and_new_latent,
-            read_latent_from_cache,
+            fused_read_cache_and_interleave,
         )
 
         attn_out = None
@@ -393,49 +392,26 @@ class DeepseekV3MLAAttention(nn.Layer):
                 has_prefix_cache = attn_meta.has_prefix_cache
                 total_cached_tokens = attn_meta.total_cached_kv_tokens
 
-            # Handle prefix cache: read and concatenate cached latent with new latent
+            # Handle prefix cache: read cached latent from paged cache and interleave
+            # with the new-token latent in a single fused kernel call.
+            full_compressed_kv = compressed_kv
+            full_k_pe = key_pe.squeeze(1)
             if has_prefix_cache and total_cached_tokens > 0:
-                # Get latent cache from forward_meta
                 layer_id = self.mla_attn.layer_id if hasattr(self.mla_attn, "layer_id") else 0
                 latent_cache = forward_meta.caches[layer_id] if hasattr(forward_meta, "caches") else None
-
                 if latent_cache is not None:
-                    # Read cached latent vectors
-                    cached_kv_c, cached_k_pe = read_latent_from_cache(
+                    block_size = self.mla_attn.block_size if hasattr(self.mla_attn, "block_size") else 64
+                    full_compressed_kv, full_k_pe = fused_read_cache_and_interleave(
                         latent_cache,
                         forward_meta.block_tables,
-                        forward_meta.seq_lens_decoder,  # cache_kv_lens
+                        compressed_kv,
+                        key_pe.squeeze(1),
                         attn_meta.cu_seqlens_cached_kv,
-                        total_cached_tokens,
-                        self.mla_attn.block_size if hasattr(self.mla_attn, "block_size") else 64,
+                        forward_meta.cu_seqlens_q,
                         self.kv_lora_rank,
                         self.qk_rope_head_dim,
+                        block_size,
                     )
-
-                    if cached_kv_c is not None and cached_k_pe is not None:
-                        # Interleave cached and new latent vectors per batch
-                        # This ensures correct ordering: [batch0_cached, batch0_new, batch1_cached, batch1_new, ...]
-                        # cached_k_pe already has RoPE applied (stored with RoPE)
-                        full_compressed_kv, full_k_pe = interleave_cached_and_new_latent(
-                            cached_kv_c,
-                            cached_k_pe,
-                            compressed_kv,
-                            key_pe.squeeze(1),
-                            attn_meta.cu_seqlens_cached_kv,
-                            forward_meta.seq_lens_encoder,
-                            forward_meta.cu_seqlens_q,
-                            self.kv_lora_rank,
-                            self.qk_rope_head_dim,
-                        )
-                    else:
-                        full_compressed_kv = compressed_kv
-                        full_k_pe = key_pe.squeeze(1)
-                else:
-                    full_compressed_kv = compressed_kv
-                    full_k_pe = key_pe.squeeze(1)
-            else:
-                full_compressed_kv = compressed_kv
-                full_k_pe = key_pe.squeeze(1)
 
             # Project latent KV to full key and value
             key_value = self.kv_b_proj(full_compressed_kv)
