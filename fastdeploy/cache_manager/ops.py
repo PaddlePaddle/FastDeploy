@@ -89,10 +89,10 @@ try:
             set_data_ipc,
             share_external_data,
             swap_cache_all_layers,
+            swap_cache_layout,
         )
 
         unset_data_ipc = None
-        swap_cache_layout = None
         memory_allocated = paddle.device.xpu.memory_allocated
 
         def get_data_ptr_ipc(*args, **kwargs):
