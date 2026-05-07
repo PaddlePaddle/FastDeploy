@@ -2900,6 +2900,13 @@ class GPUModelRunner(ModelRunnerBase):
         self.clear_cache()
         paddle.device.cuda.empty_cache()
 
+        # clear overlap status
+        self._cached_model_output_data = None
+        self._cached_sampler_output = None
+        self._cached_post_process_event = None
+        self._cached_launch_token_num = -1
+        self._cached_real_bsz = -1
+
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 
     def clear_requests(self):
