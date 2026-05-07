@@ -26,7 +26,7 @@ from fastdeploy.cache_manager.transfer_factory.kvcache_storage import (
     KVCacheStorage,
     logger,
 )
-from fastdeploy.cache_manager.v1.cache_utils import get_rdma_nics
+from fastdeploy.cache_manager.transfer_factory.utils import get_rdma_nics
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import get_host_ip
 

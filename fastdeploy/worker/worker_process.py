@@ -18,13 +18,11 @@ import argparse
 import asyncio
 import json
 import os
-import threading
 import time
 import traceback
 from typing import Tuple
 
 import numpy as np
-import zmq
 
 from fastdeploy.logger.logger import intercept_paddle_loggers
 
@@ -67,13 +65,11 @@ from fastdeploy.eplb.experts_manager import RedundantExpertManager
 from fastdeploy.inter_communicator import EngineWorkerQueue as TaskQueue
 from fastdeploy.inter_communicator import (
     ExistTaskStatus,
-    IPCLock,
     IPCSignal,
     ModelWeightsStatus,
     RearrangeExpertStatus,
 )
 from fastdeploy.inter_communicator.fmq import FMQ
-from fastdeploy.inter_communicator.zmq_client import ZmqIpcClient
 from fastdeploy.model_executor.layers.quantization import parse_quant_config
 from fastdeploy.model_executor.utils import v1_loader_support
 from fastdeploy.platforms import current_platform
@@ -146,7 +142,7 @@ def init_distributed_environment(seed: int = 20) -> Tuple[int, int]:
 
 def update_fd_config_for_mm(fd_config: FDConfig) -> None:
     architectures = fd_config.model_config.architectures
-    if fd_config.model_config.enable_mm and ErnieArchitectures.contains_ernie_arch(architectures):
+    if fd_config.enable_mm_runtime and ErnieArchitectures.contains_ernie_arch(architectures):
         fd_config.model_config.tensor_model_parallel_size = fd_config.parallel_config.tensor_parallel_size
         fd_config.model_config.tensor_parallel_rank = fd_config.parallel_config.tensor_parallel_rank
         fd_config.model_config.vision_config.dtype = fd_config.model_config.dtype
@@ -188,104 +184,6 @@ class PaddleDisWorkerProc:
         queue_name = f"ctrl_w2e_rank{self.local_rank}_{engine_worker_queue_port}"
         logger.info(f"Init Control Output Queue: {queue_name}(producer)")
         self._ctrl_output = FMQ().queue(queue_name, "producer")
-
-    def init_prefetch_zmq_clients(self) -> None:
-        """
-        Initialize ZMQ PULL/PUSH clients for storage prefetch communication.
-
-        Connects to the Scheduler-side PUSH/PULL servers for this worker's local_rank.
-        Starts a background thread that continuously receives prefetch commands,
-        executes storage→CPU transfers, and sends done notifications back.
-
-        Only initialized when storage backend is configured and cache_manager_v1 is enabled.
-        """
-        if not self.fd_config.cache_config.kvcache_storage_backend or not envs.ENABLE_V1_KVCACHE_MANAGER:
-            return
-
-        port = self.parallel_config.local_engine_worker_queue_port
-        local_rank = self.local_rank
-
-        cmd_name = f"prefetch_cmd_rank{local_rank}_{port}"
-        done_name = f"prefetch_done_rank{local_rank}_{port}"
-
-        self._prefetch_cmd_client = ZmqIpcClient(name=cmd_name, mode=zmq.PULL)
-        self._prefetch_cmd_client.connect()
-
-        self._prefetch_done_client = ZmqIpcClient(name=done_name, mode=zmq.PUSH)
-        self._prefetch_done_client.connect()
-
-        logger.info(f"[StoragePrefetch] rank={local_rank} ZMQ clients connected: " f"cmd={cmd_name}, done={done_name}")
-
-        self._prefetch_loop_thread = threading.Thread(
-            target=self._prefetch_loop,
-            daemon=True,
-            name=f"StoragePrefetchLoop_rank{local_rank}",
-        )
-        self._prefetch_loop_thread.start()
-
-    def _prefetch_loop(self) -> None:
-        """
-        Background thread: receive prefetch commands and execute storage→CPU transfers.
-
-        Runs indefinitely (daemon thread, exits with process).
-        For each received StorageMetadata:
-          1. Calls cache_controller.prefetch_from_storage(metadata) asynchronously.
-          2. Waits for the AsyncTaskHandler to complete.
-          3. Sends a done notification (with status ok/error) back to Scheduler via ZMQ.
-        """
-        local_rank = self.local_rank
-        logger.info(f"[StoragePrefetch] prefetch_loop started for rank={local_rank}")
-
-        while True:
-            try:
-                err, msg = self._prefetch_cmd_client.receive_pyobj_once(block=True)
-                if err:
-                    logger.warning(f"[StoragePrefetch] rank={local_rank} recv error: {err}")
-                    continue
-                if msg is None:
-                    continue
-
-                request_id = msg.get("request_id", "")
-                metadata = msg.get("metadata")
-
-                if metadata is None:
-                    logger.warning(
-                        f"[StoragePrefetch] rank={local_rank} received msg without metadata, "
-                        f"request_id={request_id}"
-                    )
-                    continue
-
-                cache_controller = self.worker.model_runner.cache_controller
-                handler = cache_controller.prefetch_from_storage(metadata)
-
-                # Block until this worker's transfer completes
-                completed = handler.wait(timeout=metadata.timeout)
-
-                if completed and handler.error is None:
-                    done_msg = {
-                        "request_id": request_id,
-                        "host_block_ids": metadata.block_ids,
-                        "status": "ok",
-                    }
-                else:
-                    error_str = handler.error or "timeout"
-                    logger.warning(
-                        f"[StoragePrefetch] rank={local_rank} prefetch failed for "
-                        f"request_id={request_id}: {error_str}"
-                    )
-                    done_msg = {
-                        "request_id": request_id,
-                        "host_block_ids": metadata.block_ids,
-                        "status": "error",
-                        "error": error_str,
-                    }
-
-                self._prefetch_done_client.send_pyobj(done_msg)
-
-            except Exception as e:
-                logger.error(
-                    f"[StoragePrefetch] rank={local_rank} prefetch_loop exception: " f"{e}\n{traceback.format_exc()}"
-                )
 
     def init_health_status(self) -> None:
         """
@@ -403,13 +301,6 @@ class PaddleDisWorkerProc:
             name="engine_forward_signal",
             array=engine_forward_signal_data,
             dtype=np.int32,
-            suffix=self.parallel_config.local_engine_worker_queue_port,
-            create=False,
-        )
-        # gpu_cache_lock: file-based lock for mutual exclusion between worker
-        # and CPU transfer when accessing GPU KV cache.
-        self.gpu_cache_lock = IPCLock(
-            name="gpu_cache_lock",
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
@@ -567,35 +458,6 @@ class PaddleDisWorkerProc:
                 self.rearrange_experts_signal.value[0] = RearrangeExpertStatus.DONE.value
             logger.info("redundant_expert: done")
 
-    def _acquire_kvcache_lock(self, tp_rank):
-        """Acquire the GPU KV cache lock for the worker process.
-
-        Uses a file-based lock (fcntl.flock) to ensure mutual exclusion
-        between the worker and the CPU transfer process during model
-        execution. Only rank 0 acquires the lock to avoid deadlock among
-        tensor-parallel workers.
-
-        Args:
-            tp_rank: Tensor parallel rank of the current worker. Only rank 0
-                acquires the lock.
-        """
-        if not envs.FD_USE_KVCACHE_LOCK:
-            return
-        if tp_rank == 0:
-            self.gpu_cache_lock.acquire()
-
-    def _release_kvcache_lock(self, tp_rank):
-        """Release the GPU KV cache lock held by the worker process.
-
-        Args:
-            tp_rank: Tensor parallel rank of the current worker. Only rank 0
-                releases the lock.
-        """
-        if not envs.FD_USE_KVCACHE_LOCK:
-            return
-        if tp_rank == 0:
-            self.gpu_cache_lock.release()
-
     def event_loop_normal(self) -> None:
         """Main event loop for Paddle Distributed Workers.
         TODO(gongshaotian): support remote calling of functions that control worker.
@@ -625,7 +487,7 @@ class PaddleDisWorkerProc:
             if tp_rank == 0:
                 if self.task_queue.exist_tasks():
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
-                        self.fd_config.model_config.enable_mm and self.worker.exist_prefill()
+                        self.fd_config.enable_mm_runtime and self.worker.exist_prefill()
                     ):
                         self._update_exist_task_flag(True)
                 else:
@@ -769,9 +631,7 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
 
-            self._acquire_kvcache_lock(tp_rank)
             self.worker.execute_model(req_dicts, max_occupied_batch_index)
-            self._release_kvcache_lock(tp_rank)
 
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -809,11 +669,6 @@ class PaddleDisWorkerProc:
             # 2. Calculate the appropriate number of blocks
             model_block_memory_used = self.worker.cal_theortical_kvcache()
             num_blocks_local = int(available_kv_cache_memory // model_block_memory_used)
-            # NOTE(liuzichang): Too many block will lead to illegal memory access
-            # We will develop dynamic limits in future.
-            if num_blocks_local > 40000:
-                logger.info(f"------- Reset num_blocks_local {num_blocks_local} to 40000")
-                num_blocks_local = min(40000, num_blocks_local)
             logger.info(f"------- model_block_memory_used:{model_block_memory_used / 1024**3} GB --------")
             logger.info(f"------- num_blocks_local:{num_blocks_local} --------")
 
@@ -979,6 +834,12 @@ def parse_args():
         help="Configuration of SpeculativeConfig.",
     )
     parser.add_argument(
+        "--enable_flashinfer_allreduce_fusion",
+        action="store_true",
+        default=False,
+        help="Flag to enable all reduce fusion kernel in flashinfer.",
+    )
+    parser.add_argument(
         "--max_num_batched_tokens",
         type=int,
         default=2048,
@@ -1131,6 +992,14 @@ def parse_args():
         type=str,
         default="default_v1",
         help="The format of the model weights to load. default/default_v1/dummy.",
+    )
+
+    parser.add_argument(
+        "--model_loader_extra_config",
+        type=json.loads,
+        default=None,
+        help="Additional configuration for model loader (JSON format). "
+        'e.g., \'{"enable_multithread_load": true, "num_threads": 8}\'',
     )
 
     parser.add_argument(
@@ -1437,7 +1306,7 @@ def run_worker_proc() -> None:
 
     # Enable batch-invariant mode for deterministic inference.
     # This must happen AFTER worker creation but BEFORE model loading,
-    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # because enable_batch_invariant_mode() calls paddle.enable_compat()
     # which makes torch appear available via proxy. If called before worker creation,
     # the gpu_model_runner import chain (image_processors → paddleformers →
     # transformers) will fail when transformers tries to query torch metadata.
@@ -1471,10 +1340,6 @@ def run_worker_proc() -> None:
 
     # Initialize health status
     worker_proc.init_health_status()
-
-    # Initialize storage prefetch ZMQ clients and start prefetch_loop thread.
-    # Must be called after model/cache initialization so cache_controller is ready.
-    worker_proc.init_prefetch_zmq_clients()
 
     worker_proc.start_task_queue_service()
 

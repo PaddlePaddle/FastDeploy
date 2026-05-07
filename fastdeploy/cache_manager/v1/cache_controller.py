@@ -18,7 +18,6 @@ import ctypes
 import os
 import threading
 import time
-import traceback
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -112,11 +111,6 @@ class CacheController(KVCacheBase):
             return self.cache_config.write_policy
         return None
 
-    @property
-    def storage_enabled(self) -> bool:
-        """Whether a storage connector is available for Host↔Storage transfers."""
-        return getattr(self._transfer_manager, "_storage_connector", None) is not None
-
     def _should_wait_for_swap_out(self) -> bool:
         """
         Determine if swap-out operations should wait synchronously.
@@ -153,17 +147,7 @@ class CacheController(KVCacheBase):
         # Note: evict returns LayerDoneCounter but we don't wait on it layer-by-layer
         # (except in write_back mode where we wait synchronously via wait_all)
         if evict_metadata is not None:
-            # Build StorageMetadata when storage is enabled and hash_values are available,
-            # so that D2H eviction is automatically followed by Host→Storage backup.
-            storage_metadata = None
-            if self.storage_enabled and evict_metadata.hash_values:
-                storage_metadata = StorageMetadata(
-                    hash_values=evict_metadata.hash_values,
-                    block_ids=evict_metadata.dst_block_ids,
-                    direction="evict",
-                )
-
-            evict_counter = self.evict_device_to_host(evict_metadata, storage_metadata)
+            evict_counter = self.evict_device_to_host(evict_metadata)
             self._pending_evict_counters.append(evict_counter)
 
             # Step 3: For write_back, wait for evict to complete before submitting swap-in
@@ -638,15 +622,6 @@ class CacheController(KVCacheBase):
         # Share host_cache_kvs_map with transfer manager
         self._transfer_manager.set_host_cache_kvs_map(self.host_cache_kvs_map)
 
-        # Propagate block shape so transfer manager can compute per-block byte offsets
-        # for prefetch_from_storage / backup_to_storage.
-        self._transfer_manager.set_host_block_shape(
-            key_shape=self._host_key_cache_shape,
-            value_shape=self._host_value_cache_shape,
-            scale_shape=self._host_cache_scale_shape,
-            cache_item_bytes=cache_item_bytes,
-        )
-
     def get_host_cache_kvs_map(self) -> Dict[str, Any]:
         """
         Get the Host KV Cache pointer dictionary.
@@ -666,7 +641,6 @@ class CacheController(KVCacheBase):
         transfer_fn_all: callable,
         transfer_fn_layer: callable,
         force_all_layers: bool = False,
-        on_success: callable = None,
     ) -> LayerDoneCounter:
         """
         Submit a single swap transfer task (internal method).
@@ -684,8 +658,6 @@ class CacheController(KVCacheBase):
             transfer_fn_all: All-layer transfer function, signature (src_ids, dst_ids) -> bool.
             transfer_fn_layer: Layer-by-layer transfer function, signature (layer_indices, on_layer_complete, src_ids, dst_ids) -> bool.
             force_all_layers: If True, always use all-layers mode (used for D2H evict).
-            on_success: Optional callback invoked after a successful transfer,
-                signature () -> None.  Runs in the same worker thread.
 
         Returns:
             LayerDoneCounter instance for tracking layer completion.
@@ -783,14 +755,9 @@ class CacheController(KVCacheBase):
                 meta.success = result.success
                 meta.error_message = result.error_message
 
-                # Chain next task on success
-                if result.success and on_success is not None:
-                    try:
-                        on_success()
-                    except Exception as cb_err:
-                        logger.error(f"[SwapTask] on_success callback failed: {cb_err}\n" f"{traceback.format_exc()}")
-
             except Exception as e:
+                import traceback
+
                 traceback.print_exc()
                 logger.error(
                     f"[SwapTask] {src_location.value}->{dst_location.value} "
@@ -840,7 +807,6 @@ class CacheController(KVCacheBase):
     def evict_device_to_host(
         self,
         swap_metadata: CacheSwapMetadata,
-        storage_metadata: Optional[StorageMetadata] = None,
     ) -> LayerDoneCounter:
         """
         Evict device cache to host (async).
@@ -852,24 +818,10 @@ class CacheController(KVCacheBase):
             swap_metadata: CacheSwapMetadata containing:
                 - src_block_ids: Source device block IDs
                 - dst_block_ids: Destination host block IDs
-            storage_metadata: Optional StorageMetadata. If provided, a
-                backup_host_to_storage task is automatically submitted
-                after the D2H transfer succeeds (chained in the same
-                worker thread).
 
         Returns:
             LayerDoneCounter for tracking layer completion.
         """
-        on_success = None
-        if storage_metadata is not None:
-            host_block_ids = swap_metadata.dst_block_ids
-
-            def _on_success_backup():
-                logger.debug(f"[EvictAndBackup] D2H done, chaining backup to storage " f"host_blocks={host_block_ids}")
-                self.backup_host_to_storage(host_block_ids, storage_metadata)
-
-            on_success = _on_success_backup
-
         layer_counter = self._submit_swap_task(
             meta=swap_metadata,
             src_location=CacheLevel.DEVICE,
@@ -877,7 +829,6 @@ class CacheController(KVCacheBase):
             transfer_fn_all=lambda src_ids, dst_ids: self._transfer_manager.evict_to_host_async(src_ids, dst_ids),
             transfer_fn_layer=None,
             force_all_layers=True,  # Eviction always uses output_stream for all-layers async transfer
-            on_success=on_success,
         )
         return layer_counter
 
@@ -903,43 +854,35 @@ class CacheController(KVCacheBase):
 
         handler = AsyncTaskHandler()
 
-        hash_values = metadata.hash_values
-        block_ids = metadata.block_ids
+        # TODO: Implement storage prefetch logic
+        handler.set_error("Storage prefetch not implemented yet")
 
-        if not hash_values or not block_ids:
-            logger.info(f"[StoragePrefetch] skip: empty hash_values={hash_values}, block_ids={block_ids}")
-            handler.set_error("Empty hash_values or block_ids in StorageMetadata")
-            return handler
+        return handler
 
-        def _do_prefetch():
-            try:
-                start_time = time.time()
-                results = self._transfer_manager.prefetch_from_storage(
-                    hash_list=hash_values,
-                    cpu_block_list=block_ids,
-                )
-                elapsed = time.time() - start_time
+    def backup_device_to_storage(
+        self,
+        device_block_ids: List[int],
+        metadata: StorageMetadata,
+    ) -> AsyncTaskHandler:
+        """
+        Backup device cache to storage (async).
 
-                success = all(results)
-                if success:
-                    logger.debug(
-                        f"[StoragePrefetch] success hash_values={hash_values} "
-                        f"block_ids={block_ids} elapsed={elapsed*1000:.3f}ms"
-                    )
-                    handler.set_result(results)
-                else:
-                    failed_indices = [i for i, ok in enumerate(results) if not ok]
-                    logger.warning(
-                        f"[StoragePrefetch] partial failure "
-                        f"failed_indices={failed_indices} elapsed={elapsed*1000:.3f}ms"
-                    )
-                    handler.set_error(f"Storage prefetch failed for blocks at indices {failed_indices}")
-            except Exception as e:
-                traceback.print_exc()
-                logger.error(f"[StoragePrefetch] EXCEPTION: {e}\n{traceback.format_exc()}")
-                handler.set_error(str(e))
+        Backup KV cache from device memory to external storage
+        for reuse by subsequent requests.
 
-        self._executor.submit(_do_prefetch)
+        Args:
+            device_block_ids: Device block IDs to backup.
+            metadata: Storage transfer metadata.
+
+        Returns:
+            AsyncTaskHandler for tracking the async transfer task.
+        """
+
+        handler = AsyncTaskHandler()
+
+        # TODO: Implement storage backup logic
+        handler.set_error("Storage backup not implemented yet")
+
         return handler
 
     def backup_host_to_storage(
@@ -962,42 +905,9 @@ class CacheController(KVCacheBase):
 
         handler = AsyncTaskHandler()
 
-        hash_values = metadata.hash_values
+        # TODO: Implement storage backup logic
+        handler.set_error("Storage backup not implemented yet")
 
-        if not host_block_ids or not hash_values:
-            logger.info(f"[StorageBackup] skip: empty host_block_ids={host_block_ids}, " f"hash_values={hash_values}")
-            handler.set_error("Empty host_block_ids or hash_values in StorageMetadata")
-            return handler
-
-        def _do_backup():
-            try:
-                start_time = time.time()
-                results = self._transfer_manager.backup_to_storage(
-                    cpu_block_list=host_block_ids,
-                    hash_list=hash_values,
-                )
-                elapsed = time.time() - start_time
-
-                success = all(results)
-                if success:
-                    logger.debug(
-                        f"[StorageBackup] success host_block_ids={host_block_ids} "
-                        f"hash_values={hash_values} elapsed={elapsed*1000:.3f}ms"
-                    )
-                    handler.set_result(results)
-                else:
-                    failed_indices = [i for i, ok in enumerate(results) if not ok]
-                    logger.warning(
-                        f"[StorageBackup] partial failure "
-                        f"failed_indices={failed_indices} elapsed={elapsed*1000:.3f}ms"
-                    )
-                    handler.set_error(f"Storage backup failed for blocks at indices {failed_indices}")
-            except Exception as e:
-                traceback.print_exc()
-                logger.error(f"[StorageBackup] EXCEPTION: {e}\n{traceback.format_exc()}")
-                handler.set_error(str(e))
-
-        self._executor.submit(_do_backup)
         return handler
 
     def send_to_node(
@@ -1077,7 +987,7 @@ class CacheController(KVCacheBase):
         except Exception:
             return False
 
-    def free_cache(self) -> bool:
+    def free_cache(self, clear_storage: bool = False) -> bool:
         """
         Free all cache storage (GPU memory + CPU pinned memory + storage).
 
@@ -1098,7 +1008,8 @@ class CacheController(KVCacheBase):
             self._free_host_cache()
 
             # Clear storage
-            self._clear_storage()
+            if clear_storage:
+                self._clear_storage()
 
             return True
         except Exception:

@@ -14,6 +14,36 @@
 # limitations under the License.
 """
 
-from fastdeploy.cache_manager.v1.cache_utils import get_rdma_nics
+import importlib
+import subprocess
 
-__all__ = ["get_rdma_nics"]
+from fastdeploy.platforms import current_platform
+from fastdeploy.utils import get_logger
+
+logger = get_logger("cache_messager", "cache_messager.log")
+
+
+def get_rdma_nics():
+    res = importlib.resources.files("fastdeploy.cache_manager.transfer_factory") / "get_rdma_nics.sh"
+    with importlib.resources.as_file(res) as path:
+        file_path = str(path)
+
+    nic_type = current_platform.device_name
+    command = ["bash", file_path, nic_type]
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    logger.info(f"get_rdma_nics command: {command}")
+    logger.info(f"get_rdma_nics output: {result.stdout}")
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to execute script `get_rdma_nics.sh`: {result.stderr.strip()}")
+
+    env_name, env_value = result.stdout.strip().split("=")
+    if env_name != "KVCACHE_RDMA_NICS":
+        raise ValueError(f"Unexpected variable name: {env_name}, expected 'KVCACHE_RDMA_NICS'")
+
+    return env_value

@@ -29,7 +29,6 @@ if TYPE_CHECKING:
 
 from .base import KVCacheBase
 from .block_pool import DeviceBlockPool, HostBlockPool
-from .cache_utils import storage_key_for_block
 from .metadata import BlockNode, CacheLevel, CacheStatus, CacheSwapMetadata, MatchResult
 from .radix_tree import RadixTree
 from .storage import create_storage_scheduler
@@ -106,10 +105,6 @@ class CacheManager(KVCacheBase):
         # Pending backup list: nodes waiting to be backed up, to be issued via request's cache_evict_metadata
         self._pending_backup: List[Tuple[List[BlockNode], List[int]]] = []
         self._pending_block_ids: List[int] = []
-
-        # Mapping from host_block_id -> BlockNode for LOADING_FROM_STORAGE blocks,
-        # used to quickly update status to HOST once prefetch completes.
-        self._prefetch_node_map: Dict[int, BlockNode] = {}
 
         # Storage scheduler (create using factory method if backend is configured)
         self._storage_scheduler = create_storage_scheduler(self.cache_config)
@@ -410,6 +405,18 @@ class CacheManager(KVCacheBase):
     # These methods provide backward compatibility with PrefixCacheManager interface
     # for resource_manager.py
 
+    def write_cache_to_storage(self, req: Any) -> None:
+        """
+        Write request cache to storage if storage is enabled.
+
+        Args:
+            req: The request object containing cache data to write
+        """
+        if self._storage_scheduler is None:
+            return
+        # TODO: Implement storage write logic when storage is enabled
+        pass
+
     @property
     def gpu_free_block_list(self) -> List[int]:
         """
@@ -419,7 +426,7 @@ class CacheManager(KVCacheBase):
         with PrefixCacheManager.gpu_free_block_list.
         """
         # Return list representation of available blocks
-        return list(range(self._device_pool.available_blocks()))
+        return list(self._device_pool._free_blocks)
 
     @property
     def available_gpu_resource(self) -> float:
@@ -474,7 +481,7 @@ class CacheManager(KVCacheBase):
     def match_prefix(
         self,
         request: Request,
-        skip_storage: bool = False,
+        skip_storage: bool = True,
     ) -> None:
         """
         Execute three-level cache matching (Device -> Host -> Storage).
@@ -491,6 +498,7 @@ class CacheManager(KVCacheBase):
             None. Match result is stored in request._match_result.
         """
         if not self.enable_prefix_caching or self._radix_tree is None:
+            request._match_result = MatchResult()
             return
 
         with self._lock:
@@ -524,13 +532,14 @@ class CacheManager(KVCacheBase):
                 if not (self._storage_scheduler and skip_storage):
                     self._radix_tree.increment_ref_nodes(matched_nodes)
 
-                matched_device_ids = [n.block_id for n in result.device_nodes]
-                matched_host_ids = [n.block_id for n in result.host_nodes]
                 logger.info(
                     f"match_prefix for request_id: {request.request_id} total_hashes: {len(block_hashes)}, "
                     f"total_matched: {result.total_matched_blocks} (device_blocks={result.matched_device_nums}, "
                     f"host_blocks={result.matched_host_nums}, storage_hashes={result.matched_storage_nums})"
                 )
+
+                matched_device_ids = [n.block_id for n in result.device_nodes]
+                matched_host_ids = [n.block_id for n in result.host_nodes]
                 logger.debug(
                     f"[match_prefix] request_id={request.request_id} "
                     f"matched_device_block_ids={matched_device_ids} "
@@ -544,51 +553,22 @@ class CacheManager(KVCacheBase):
         """
         Match hash values against storage.
 
-        Checks each hash for existence in storage and returns the longest
-        consecutive prefix of hashes that are all present (prefix semantics
-        are required because a cache miss in the middle breaks prefetch continuity).
-
-        Uses rank=0 key as a probe: if rank 0 has the block, all ranks
-        are assumed to have it (all ranks write storage synchronously).
-
-        Storage key format (see cache_utils.storage_key_for_block):
-            "{hash_value}_0_key"
-
         Args:
-            hash_values: List of block hash values to check, in prefix order.
+            hash_values: List of hash values to check
 
         Returns:
-            The leading sub-list of hash_values whose blocks all exist in storage.
-            For example, if hash_values = [h0, h1, h2, h3] and h2 is missing,
-            returns [h0, h1].
+            List of hashes that exist in storage
         """
         if not self._storage_scheduler:
             return []
 
         try:
             if not self._storage_scheduler.is_connected():
-                logger.warning("_match_storage: storage scheduler disconnected, skipping storage match")
-                return []
+                self._storage_scheduler.connect()
 
-            # Build probe keys using rank=0 (same format as storage_key_for_block)
-            probe_keys = [storage_key_for_block(h, 0, "key") for h in hash_values]
-
-            # batch_exists returns a bool list aligned with probe_keys
-            exist_flags = self._storage_scheduler.batch_exists(probe_keys)
-
-            # Return only the leading consecutive hit run
-            matched = []
-            for h, exists in zip(hash_values, exist_flags):
-                if not exists:
-                    break
-                matched.append(h)
-
-            logger.debug(
-                f"[CacheManager] _match_storage: probing {len(probe_keys)} keys, matched hashes: {len(matched)}"
-            )
-            return matched
+            existence_map = self._storage_scheduler.query(hash_values)
+            return [h for h, exists in existence_map.items() if exists]
         except Exception:
-            logger.warning("_match_storage failed", exc_info=True)
             return []
 
     # ============ Eviction Methods ============
@@ -788,7 +768,6 @@ class CacheManager(KVCacheBase):
 
                 all_device_block_ids = []
                 all_host_block_ids = []
-                all_hash_values = []
                 freed_host_ids = []
 
                 for nodes, host_block_ids in self._pending_backup:
@@ -813,10 +792,9 @@ class CacheManager(KVCacheBase):
                         # Mark nodes as backed up
                         self._radix_tree.backup_blocks(valid_nodes, valid_host_ids)
 
-                        # Collect device block IDs and hash values
+                        # Collect device block IDs
                         all_device_block_ids.extend([node.block_id for node in valid_nodes])
                         all_host_block_ids.extend(valid_host_ids)
-                        all_hash_values.extend([node.hash_value for node in valid_nodes])
 
                 # Release invalid host block allocations
                 if freed_host_ids:
@@ -833,7 +811,6 @@ class CacheManager(KVCacheBase):
                         dst_block_ids=all_host_block_ids,
                         src_type=CacheLevel.DEVICE,
                         dst_type=CacheLevel.HOST,
-                        hash_values=all_hash_values,
                     )
                     return evict_metadata
 
@@ -987,7 +964,7 @@ class CacheManager(KVCacheBase):
             (may differ from originally allocated if node was reused).
         """
         if not storage_hashes:
-            return []
+            return None
 
         try:
             with self._lock:
@@ -1008,78 +985,10 @@ class CacheManager(KVCacheBase):
                 if wasted_block_ids:
                     self._host_pool.release(wasted_block_ids)
 
-                # Register nodes in prefetch_node_map for fast status update on done
-                for node in prefetch_nodes:
-                    self._prefetch_node_map[node.block_id] = node
-
                 return prefetch_nodes
         except Exception as e:
             logger.error(f"prepare_prefetch_metadata error: {e}, {str(traceback.format_exc())}")
             return []
-
-    def update_storage_blocks_to_host(self, host_block_ids: List[int]) -> None:
-        """
-        Mark storage-prefetched blocks as HOST after data transfer completes.
-
-        Called by Scheduler when all TP workers report prefetch done for a batch
-        of blocks. Transitions block status LOADING_FROM_STORAGE → HOST so that
-        these blocks become eligible for swap-in scheduling.
-
-        Args:
-            host_block_ids: List of host block IDs that finished loading.
-        """
-        if not host_block_ids:
-            return
-        try:
-            with self._lock:
-                updated = 0
-                for block_id in host_block_ids:
-                    node = self._prefetch_node_map.pop(block_id, None)
-                    if node is None:
-                        logger.warning(
-                            f"[StoragePrefetch] update_storage_blocks_to_host: "
-                            f"block_id={block_id} not found in prefetch_node_map"
-                        )
-                        continue
-                    if node.cache_status == CacheStatus.LOADING_FROM_STORAGE:
-                        node.cache_status = CacheStatus.HOST
-                        updated += 1
-                    else:
-                        logger.warning(
-                            f"[StoragePrefetch] update_storage_blocks_to_host: "
-                            f"block_id={block_id} unexpected status={node.cache_status}"
-                        )
-                logger.info(
-                    f"[StoragePrefetch] update_storage_blocks_to_host: "
-                    f"requested={len(host_block_ids)}, updated={updated}"
-                )
-        except Exception as e:
-            logger.error(f"update_storage_blocks_to_host error: {e}, {str(traceback.format_exc())}")
-
-    def abort_prefetch_blocks(self, host_block_ids: List[int]) -> None:
-        """
-        Abort in-flight prefetch blocks on failure.
-
-        Removes nodes from the prefetch_node_map, deletes them from the RadixTree,
-        and releases their host pool blocks. Called when the storage→CPU transfer
-        fails so that LOADING_FROM_STORAGE blocks do not leak.
-
-        Args:
-            host_block_ids: List of host block IDs whose prefetch should be aborted.
-        """
-        if not host_block_ids:
-            return
-        try:
-            with self._lock:
-                for block_id in host_block_ids:
-                    node = self._prefetch_node_map.pop(block_id, None)
-                    if node is None:
-                        continue
-                    self._radix_tree._remove_node_from_tree(node)
-                self._host_pool.release(host_block_ids)
-            logger.warning(f"[StoragePrefetch] abort_prefetch_blocks: released {len(host_block_ids)} host blocks")
-        except Exception as e:
-            logger.error(f"abort_prefetch_blocks error: {e}, {str(traceback.format_exc())}")
 
     # ============ Reset Methods ============
 

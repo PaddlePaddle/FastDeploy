@@ -34,7 +34,7 @@ from pydantic import BaseModel
 from typing_extensions import TypeVar
 
 from fastdeploy import envs
-from fastdeploy.cache_manager.v1.metadata import CacheSwapMetadata
+from fastdeploy.cache_manager.v1.metadata import CacheLevel, CacheSwapMetadata
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import (
@@ -43,7 +43,11 @@ from fastdeploy.entrypoints.openai.protocol import (
     StructuralTagResponseFormat,
     ToolCall,
 )
-from fastdeploy.utils import data_processor_logger
+from fastdeploy.logger.request_logger import (
+    RequestLogLevel,
+    log_request,
+    log_request_error,
+)
 from fastdeploy.worker.output import (
     LogprobsLists,
     PromptLogprobs,
@@ -250,12 +254,8 @@ class Request:
         return self._prompt_hashes
 
     @property
-    def match_result(self) -> MatchResult:
+    def match_result(self) -> Optional[MatchResult]:
         return self._match_result
-
-    @match_result.setter
-    def match_result(self, value: Optional[MatchResult]) -> None:
-        self._match_result = value
 
     def set_block_hasher(self, block_hasher: callable):
         """Set the block hasher for dynamic hash computation."""
@@ -364,15 +364,13 @@ class Request:
             ), "The parameter `raw_request` is not supported now, please use completion api instead."
             for key, value in req.metadata.items():
                 setattr(request, key, value)
-            from fastdeploy.utils import api_server_logger
-
-            api_server_logger.warning("The parameter metadata is obsolete.")
+            log_request(RequestLogLevel.STAGES, message="The parameter metadata is obsolete.")
 
         return request
 
     @classmethod
     def from_dict(cls, d: dict):
-        data_processor_logger.debug(f"{d}")
+        log_request(RequestLogLevel.FULL, message="{request}", request=d)
         sampling_params: SamplingParams = None
         pooling_params: PoolingParams = None
         metrics: RequestMetrics = None
@@ -403,8 +401,11 @@ class Request:
                         ImagePosition(**mm_pos) if not isinstance(mm_pos, ImagePosition) else mm_pos
                     )
             except Exception as e:
-                data_processor_logger.error(
-                    f"Convert mm_positions to ImagePosition error: {e}, {str(traceback.format_exc())}"
+                log_request_error(
+                    message="request[{request_id}] Convert mm_positions to ImagePosition error: {error}, {traceback}",
+                    request_id=d.get("request_id"),
+                    error=str(e),
+                    traceback=traceback.format_exc(),
                 )
         return cls(
             request_id=d["request_id"],
@@ -639,8 +640,8 @@ class BatchRequest:
                 self.cache_swap_metadata = CacheSwapMetadata(
                     src_block_ids=meta.src_block_ids,
                     dst_block_ids=meta.dst_block_ids,
-                    src_type="host",
-                    dst_type="device",
+                    src_type=CacheLevel.HOST,
+                    dst_type=CacheLevel.DEVICE,
                     hash_values=meta.hash_values,
                 )
 
@@ -654,8 +655,8 @@ class BatchRequest:
                 self.cache_evict_metadata = CacheSwapMetadata(
                     src_block_ids=meta.src_block_ids,
                     dst_block_ids=meta.dst_block_ids,
-                    src_type="device",
-                    dst_type="host",
+                    src_type=CacheLevel.DEVICE,
+                    dst_type=CacheLevel.HOST,
                     hash_values=meta.hash_values,
                 )
 
