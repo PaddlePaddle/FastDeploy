@@ -1181,13 +1181,6 @@ class SpeculativeSampler(nn.Layer):
         share_inputs: List[paddle.Tensor],
     ) -> SamplerOutput:
         """Normal sampling for NAIVE mode on XPU."""
-        top_p, top_k, topp_seed = padding_sampling_params(
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            sampling_metadata.seed,
-            paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]),
-            paddle.reshape(share_inputs["seq_lens_encoder"], shape=[-1]),
-        )
         _, next_tokens = top_k_top_p_sampling(
             probs,
             top_p=top_p,
