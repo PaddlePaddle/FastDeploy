@@ -170,6 +170,13 @@ def setup_and_run_server():
     - Waits for server port to open (up to 30 seconds)
     - Tears down server after all tests finish
     """
+    # 清理/dev/shm中的临时文件
+    try:
+        subprocess.run("rm -rf /dev/shm/*", shell=True)
+        print("Successfully cleaned up /dev/shm.")
+    except Exception as e:
+        print(f"Failed to cleanup /dev/shm: {e}")
+
     print("Pre-test port cleanup...")
     clean_ports()
 

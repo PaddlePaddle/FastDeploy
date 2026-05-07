@@ -117,6 +117,13 @@ def clean_ports(ports=None):
             kill_process_on_port(port)
             time.sleep(1)
 
+    # 清理/dev/shm中的临时文件
+    try:
+        subprocess.run("rm -rf /dev/shm/*", shell=True)
+        print("Successfully cleaned up /dev/shm.")
+    except Exception as e:
+        print(f"Failed to cleanup /dev/shm: {e}")
+
 
 def clean(ports=None):
     """
