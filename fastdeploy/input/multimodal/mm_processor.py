@@ -22,15 +22,92 @@ pixel features, writing them back into the request dict.
 import pickle
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from typing import Any, Dict, Optional, Tuple
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import zmq
 
 from fastdeploy.input.utils import IDS_TYPE_FLAG
+from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
 _DEFAULT_MM_LIMITS = {"image": 1, "video": 1, "audio": 1}
+
+
+# ------------------------------------------------------------------
+# Data classes for structured multimodal context
+# ------------------------------------------------------------------
+
+
+class TokenizationPath(Enum):
+    """Processing path for multimodal requests."""
+
+    PRETOKENIZED = "pretokenized"  # request already has prompt_token_ids
+    FROM_TEXT = "from_text"  # prompt text + multimodal_data -> tokenize
+
+
+@dataclass
+class MMItem:
+    """A normalized multimodal element (image or video)."""
+
+    type: str  # "image" | "video"
+    data: Any = None  # raw data (PIL Image, frames, etc.) or None if pending cache fetch
+    uuid: Optional[str] = None
+
+
+@dataclass
+class MMContext:
+    """Normalized multimodal context passed between process() steps."""
+
+    images: List[MMItem] = field(default_factory=list)
+    videos: List[MMItem] = field(default_factory=list)
+    mm_order: List[str] = field(default_factory=list)  # interleaved type order: ["image", "video", ...]
+    path: TokenizationPath = TokenizationPath.FROM_TEXT
+    prompt_token_ids: Optional[List[int]] = None  # used by PRETOKENIZED path
+
+
+# ------------------------------------------------------------------
+# Cache client (centralized ZMQ connection management)
+# ------------------------------------------------------------------
+
+
+class _CacheClient:
+    """Lazy-initialized ZMQ DEALER client for processor cache."""
+
+    _IPC_ADDR = "ipc:///dev/shm/processor_cache.ipc"
+
+    def __init__(self):
+        self._socket = None
+
+    @property
+    def socket(self):
+        if self._socket is None:
+            ctx = zmq.Context()
+            self._socket = ctx.socket(zmq.DEALER)
+            self._socket.connect(self._IPC_ADDR)
+        return self._socket
+
+    def get(self, hashes: list) -> list:
+        """Retrieve cached multimodal data by hash list."""
+        req = pickle.dumps(hashes)
+        self.socket.send_multipart([b"", req])
+        _, resp = self.socket.recv_multipart()
+        items = pickle.loads(resp)
+        data_processor_logger.info(f"Get cache of mm_hashes: {hashes}")
+        return items
+
+    def put(self, hashes: list, items: list) -> None:
+        """Write processed multimodal items to cache."""
+        req = pickle.dumps((hashes, items))
+        self.socket.send_multipart([b"", req])
+        data_processor_logger.info(f"Update cache of mm_hashes: {hashes}")
+
+
+# ------------------------------------------------------------------
+# MMProcessor abstract base class
+# ------------------------------------------------------------------
 
 
 class MMProcessor(ABC):
@@ -71,6 +148,7 @@ class MMProcessor(ABC):
         self.model_name_or_path = model_name_or_path
         self.config = config
         self.enable_processor_cache = enable_processor_cache
+        self._cache = _CacheClient() if enable_processor_cache else None
 
         kw = processor_kwargs or {}
         self.fps = kw.get("video_fps", self.default_fps)
@@ -100,55 +178,114 @@ class MMProcessor(ABC):
             request["prompt_token_ids"]
             request["multimodal_inputs"]
         """
-        # Step 1: Route to tokenization path
-        outputs = self._route_tokenization(request)
-        # Step 2: Append completion tokens (speculative decoding)
+        # Step 1: Resolve and normalize multimodal data
+        mm_context = self._resolve_mm_data(request)
+        # Step 2: Fetch missing data from cache (if enabled)
+        self._fetch_from_cache(mm_context)
+        # Step 3: Core tokenization + preprocessing
+        outputs = self._tokenize_and_preprocess(request, mm_context)
+        # Step 4: Append completion tokens (speculative decoding)
         self._process_post_tokens(request, outputs)
-        # Step 3: Pack to numpy
+        # Step 5: Pack to numpy
         outputs = self._pack_outputs(outputs)
-        # Step 4: Write back (subclass can override)
+        # Step 6: Update cache with newly processed items (if enabled)
+        self._update_cache(mm_context, outputs)
+        # Step 7: Write back (subclass can override)
         self._write_back(request, outputs)
 
     # ------------------------------------------------------------------
-    # Write-back hook (subclass can override)
+    # Step 1: Resolve multimodal data
     # ------------------------------------------------------------------
 
-    def _write_back(self, request: dict, outputs: dict) -> None:
-        """Write processing results back to request.
+    def _resolve_mm_data(self, request: dict) -> MMContext:
+        """Parse request and build a normalized MMContext.
 
-        Default: unconditionally overwrite prompt_token_ids.
-        ErnieVLProcessor overrides to preserve original token_ids on Path A.
+        Multimodal data is read from request["multimodal_data"] (populated by
+        Processor.process_messages when messages are present).
+        Path is determined by whether prompt_token_ids exists.
         """
-        request["prompt_token_ids"] = outputs["input_ids"].tolist()
-        request["multimodal_inputs"] = outputs
+        if not request.get("prompt_token_ids") and not request.get("prompt"):
+            raise ValueError("Request must contain 'prompt_token_ids', 'prompt', or 'messages'")
 
-    # ------------------------------------------------------------------
-    # Routing
-    # ------------------------------------------------------------------
+        mm_data = request.get("multimodal_data") or {}
+        raw_images = mm_data.get("image", [])
+        raw_videos = mm_data.get("video", [])
+        self._check_mm_limits({"image": raw_images, "video": raw_videos})
 
-    def _route_tokenization(self, request: dict) -> dict:
-        """Route to one of two tokenization paths.
+        images = []
+        for img in raw_images:
+            if isinstance(img, dict):
+                images.append(MMItem(type="image", data=img.get("data"), uuid=img.get("uuid")))
+            else:
+                images.append(MMItem(type="image", data=img, uuid=None))
 
-        - Path A: already has prompt_token_ids -> _process_prompt_token_ids(request)
-        - Path B: prompt text + multimodal_data -> _text2ids(prompt, images, videos)
-        """
+        videos = []
+        for vid in raw_videos:
+            if isinstance(vid, dict):
+                videos.append(MMItem(type="video", data=vid.get("data"), uuid=vid.get("uuid")))
+            else:
+                videos.append(MMItem(type="video", data=vid, uuid=None))
+
+        # Interleaved type order: directly from mm_data, or default images-then-videos.
+        mm_order = mm_data.get("mm_order")
+        if not mm_order:
+            mm_order = ["image"] * len(images) + ["video"] * len(videos)
+
         if request.get("prompt_token_ids"):
-            return self._process_prompt_token_ids(request)
+            return MMContext(
+                images=images,
+                videos=videos,
+                mm_order=mm_order,
+                path=TokenizationPath.PRETOKENIZED,
+                prompt_token_ids=request["prompt_token_ids"],
+            )
+
+        if not request.get("prompt"):
+            raise ValueError("Request must contain 'prompt_token_ids', 'prompt', or 'messages'")
+
+        return MMContext(images=images, videos=videos, mm_order=mm_order, path=TokenizationPath.FROM_TEXT)
+
+    # ------------------------------------------------------------------
+    # Step 2: Fetch from cache
+    # ------------------------------------------------------------------
+
+    def _fetch_from_cache(self, mm_context: MMContext) -> None:
+        """Retrieve missing multimodal data from processor cache."""
+        missing_hashes = []
+        missing_items_ref = []
+
+        for item in mm_context.images + mm_context.videos:
+            if item.data is None and item.uuid is not None:
+                missing_hashes.append(item.uuid)
+                missing_items_ref.append(item)
+
+        if not missing_hashes:
+            return
+
+        if not self._cache:
+            raise ValueError("Missing items cannot be retrieved without processor cache.")
+
+        cached_data = self._cache.get(missing_hashes)
+        for i, data in enumerate(cached_data):
+            if not data:
+                raise ValueError(f"Missing item {i} not found in processor cache")
+            missing_items_ref[i].data = data
+
+    # ------------------------------------------------------------------
+    # Step 3: Tokenize and preprocess
+    # ------------------------------------------------------------------
+
+    def _tokenize_and_preprocess(self, request: dict, mm_context: MMContext) -> dict:
+        """Core tokenization and preprocessing, dispatching by path."""
+        if mm_context.path == TokenizationPath.PRETOKENIZED:
+            return self.prompt_token_ids2outputs(mm_context)
         else:
-            mm_data = request.get("multimodal_data") or {}
-            images = mm_data.get("image", [])
-            videos = mm_data.get("video", [])
-            self._check_mm_limits({"image": images, "video": videos})
-            return self._text2ids(request["prompt"], images, videos)
+            return self._build_outputs_from_text(request["prompt"], mm_context)
 
-    # ------------------------------------------------------------------
-    # Core tokenization loop (Path B)
-    # ------------------------------------------------------------------
+    def _build_outputs_from_text(self, text: str, mm_context: MMContext) -> dict:
+        """Build outputs by scanning text for placeholders and tokenizing segments.
 
-    def _text2ids(self, text, images, videos) -> dict:
-        """Scan text for image/video placeholders and build outputs.
-
-        Integrates with processor cache when enabled.
+        All multimodal data in mm_context is already resolved (no cache logic here).
         """
         outputs = self._make_outputs()
 
@@ -157,63 +294,6 @@ class MMProcessor(ABC):
         IMAGE_PLACEHOLDER_LEN = len(IMAGE_PLACEHOLDER)
         VIDEO_PLACEHOLDER_LEN = len(VIDEO_PLACEHOLDER)
 
-        # Handle cache: retrieve missing items
-        all_mm_items = []
-        image_uuid = []
-        video_uuid = []
-        for img in images:
-            if isinstance(img, dict):
-                all_mm_items.append(img)
-                image_uuid.append(img.get("uuid"))
-            else:
-                all_mm_items.append({"type": "image", "data": img, "uuid": None})
-                image_uuid.append(None)
-        for vid in videos:
-            if isinstance(vid, dict):
-                all_mm_items.append(vid)
-                video_uuid.append(vid.get("uuid"))
-            else:
-                all_mm_items.append({"type": "video", "data": vid, "uuid": None})
-                video_uuid.append(None)
-
-        # Retrieve from cache if needed
-        missing_hashes, missing_idx = [], []
-        for idx, item in enumerate(all_mm_items):
-            if not item.get("data"):
-                missing_hashes.append(item.get("uuid"))
-                missing_idx.append(idx)
-
-        dealer = None
-        if missing_hashes and not self.enable_processor_cache:
-            raise ValueError("Missing items cannot be retrieved without processor cache.")
-
-        if self.enable_processor_cache:
-            context = zmq.Context()
-            dealer = context.socket(zmq.DEALER)
-            dealer.connect("ipc:///dev/shm/processor_cache.ipc")
-            if missing_hashes:
-                missing_items = self._get_cached_mm_data(dealer, missing_hashes)
-                for idx_i in range(len(missing_items)):
-                    if not missing_items[idx_i]:
-                        raise ValueError(f"Missing item {idx_i} not found in processor cache")
-                    all_mm_items[missing_idx[idx_i]]["data"] = missing_items[idx_i]
-
-        # Rebuild images/videos lists with resolved data
-        resolved_images = []
-        resolved_videos = []
-        for item in all_mm_items:
-            if item.get("type") == "image" or (not item.get("type") and item in images):
-                resolved_images.append(item.get("data", item))
-            elif item.get("type") == "video":
-                resolved_videos.append(item.get("data", item))
-
-        # Use original lists if no dict items were present
-        if not any(isinstance(img, dict) for img in images):
-            resolved_images = images
-        if not any(isinstance(vid, dict) for vid in videos):
-            resolved_videos = videos
-
-        # Scan and process
         st, image_idx, video_idx = 0, 0, 0
         while st < len(text):
             image_pos = text.find(IMAGE_PLACEHOLDER, st)
@@ -227,117 +307,30 @@ class MMProcessor(ABC):
                 break
 
             if ed == image_pos:
-                image = resolved_images[image_idx]
-                uuid = image_uuid[image_idx] if image_idx < len(image_uuid) else None
-                if not isinstance(image, tuple):
-                    self.preprocess_image(image, outputs, uuid)
+                mm_item = mm_context.images[image_idx]
+                if not isinstance(mm_item.data, tuple):
+                    self.preprocess_image(mm_item.data, outputs, mm_item.uuid)
                 else:
-                    self.preprocess_cached_image(image, outputs, uuid)
+                    self.preprocess_cached_image(mm_item.data, outputs, mm_item.uuid)
                 image_idx += 1
                 st = ed + IMAGE_PLACEHOLDER_LEN
             else:
-                item = resolved_videos[video_idx]
-                uuid = video_uuid[video_idx] if video_idx < len(video_uuid) else None
-                if not isinstance(item, tuple):
-                    if isinstance(item, dict):
-                        frames, meta = self.load_video(item.get("video", item), item)
+                mm_item = mm_context.videos[video_idx]
+                if not isinstance(mm_item.data, tuple):
+                    if isinstance(mm_item.data, dict):
+                        frames, meta = self.load_video(mm_item.data.get("video", mm_item.data), mm_item.data)
                     else:
-                        frames, meta = self.load_video(item, {})
-                    self.preprocess_video(frames, outputs, uuid, meta=meta)
+                        frames, meta = self.load_video(mm_item.data, {})
+                    self.preprocess_video(frames, outputs, mm_item.uuid, meta=meta)
                 else:
-                    self.preprocess_cached_video(item, outputs, uuid)
+                    self.preprocess_cached_video(mm_item.data, outputs, mm_item.uuid)
                 video_idx += 1
                 st = ed + VIDEO_PLACEHOLDER_LEN
 
-        # Update cache with newly processed items
-        if self.enable_processor_cache and dealer:
-            self._update_mm_cache(dealer, missing_idx, all_mm_items, outputs)
-
         return outputs
 
     # ------------------------------------------------------------------
-    # Path A: prompt_token_ids
-    # ------------------------------------------------------------------
-
-    def _process_prompt_token_ids(self, request) -> dict:
-        """Handle pre-tokenized prompt_token_ids path."""
-        prompt_token_ids = request.get("prompt_token_ids", [])
-
-        if not request.get("messages"):
-            return self.prompt_token_ids2outputs(prompt_token_ids)
-
-        # Extract mm items from messages for cache
-        mm_items = self._extract_mm_items_from_messages(request)
-        outputs = self.prompt_token_ids2outputs(prompt_token_ids, mm_items)
-
-        if self.enable_processor_cache:
-            context = zmq.Context()
-            dealer = context.socket(zmq.DEALER)
-            dealer.connect("ipc:///dev/shm/processor_cache.ipc")
-            missing_idx_set = set()
-            for idx, item in enumerate(mm_items):
-                if not item.get("data"):
-                    missing_idx_set.add(idx)
-            self._update_mm_cache(dealer, list(missing_idx_set), mm_items, outputs)
-
-        return outputs
-
-    def _extract_mm_items_from_messages(self, request) -> list:
-        """Extract multimodal items from request messages."""
-        from fastdeploy.entrypoints.chat_utils import parse_chat_messages
-
-        messages = parse_chat_messages(request.get("messages"))
-        mm_items = []
-        for msg in messages:
-            role = msg.get("role")
-            if role not in self.role_prefixes:
-                raise ValueError(f"Unsupported role: {role}")
-            content = msg.get("content")
-            if not isinstance(content, list):
-                content = [content]
-            for item in content:
-                if isinstance(item, dict) and item.get("type") in ["image", "video"]:
-                    mm_items.append(item)
-
-        # Resolve missing via cache
-        missing_hashes, missing_idx = [], []
-        for idx, item in enumerate(mm_items):
-            if not item.get("data"):
-                missing_hashes.append(item.get("uuid"))
-                missing_idx.append(idx)
-
-        if missing_hashes:
-            if not self.enable_processor_cache:
-                raise ValueError("Missing items cannot be retrieved without processor cache.")
-            context = zmq.Context()
-            dealer = context.socket(zmq.DEALER)
-            dealer.connect("ipc:///dev/shm/processor_cache.ipc")
-            missing_items = self._get_cached_mm_data(dealer, missing_hashes)
-            for idx_i in range(len(missing_items)):
-                if not missing_items[idx_i]:
-                    raise ValueError(f"Missing item {idx_i} not found in processor cache")
-                mm_items[missing_idx[idx_i]]["data"] = missing_items[idx_i]
-
-        return mm_items
-
-    # ------------------------------------------------------------------
-    # Text tokenization helper
-    # ------------------------------------------------------------------
-
-    def _add_text(self, tokens, outputs):
-        """Tokenize text and add to outputs."""
-        if not tokens:
-            return
-        if isinstance(tokens, str):
-            tokens_str = self.tokenizer.tokenize(tokens)
-            tokens = self.tokenizer.convert_tokens_to_ids(tokens_str)
-        num_tokens = len(tokens)
-        outputs["input_ids"].extend(tokens)
-        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
-        self.add_text_positions(outputs, num_tokens)
-
-    # ------------------------------------------------------------------
-    # Post-tokens and packing
+    # Step 4: Post-tokens
     # ------------------------------------------------------------------
 
     def _process_post_tokens(self, request, outputs):
@@ -345,6 +338,10 @@ class MMProcessor(ABC):
         completion_token_ids = request.get("completion_token_ids") or request.get("generated_token_ids")
         if completion_token_ids:
             self.append_completion_tokens(outputs, completion_token_ids)
+
+    # ------------------------------------------------------------------
+    # Step 5: Pack outputs
+    # ------------------------------------------------------------------
 
     def _pack_outputs(self, outputs) -> dict:
         """Convert lists to numpy arrays."""
@@ -367,6 +364,88 @@ class MMProcessor(ABC):
         return outputs
 
     # ------------------------------------------------------------------
+    # Step 6: Update cache
+    # ------------------------------------------------------------------
+
+    def _update_cache(self, mm_context: MMContext, outputs: dict) -> None:
+        """Write newly-processed multimodal items to the processor cache.
+
+        Hash computation is centralized here: use item.uuid if available,
+        otherwise compute hash from the processed pixel_values.
+        """
+        if not self._cache:
+            return
+
+        # Reconstruct interleaved item list using mm_order
+        all_items = []
+        img_idx, vid_idx = 0, 0
+        for t in mm_context.mm_order:
+            if t == "image":
+                all_items.append(mm_context.images[img_idx])
+                img_idx += 1
+            else:
+                all_items.append(mm_context.videos[vid_idx])
+                vid_idx += 1
+
+        hashes_to_cache, items_to_cache = [], []
+        for idx, item in enumerate(all_items):
+            # Items fetched from cache (data is tuple) should not be re-cached
+            if isinstance(item.data, tuple):
+                continue
+            # Build pixel_values and meta for this item
+            if outputs["images"] is None or idx >= len(outputs["images"]):
+                continue
+            pixel_values = outputs["images"][idx]
+            # Compute hash: prefer uuid, fallback to content hash
+            cache_key = item.uuid if item.uuid else MultimodalHasher.hash_features(pixel_values)
+            meta = {}
+            if idx < len(outputs.get("grid_thw", []) or []):
+                grid_thw = np.asarray(outputs["grid_thw"][idx]) if outputs["grid_thw"] is not None else None
+                if grid_thw is not None:
+                    if grid_thw.ndim > 1:
+                        t_val, h, w = grid_thw[0]
+                    else:
+                        t_val, h, w = grid_thw
+                    meta["thw"] = (int(t_val), int(h), int(w))
+            if "fps" in outputs and idx < len(outputs.get("fps", [])):
+                meta["fps"] = outputs["fps"][idx]
+
+            hashes_to_cache.append(cache_key)
+            items_to_cache.append((pixel_values, meta))
+
+        if hashes_to_cache:
+            self._cache.put(hashes_to_cache, items_to_cache)
+
+    # ------------------------------------------------------------------
+    # Step 7: Write-back hook (subclass can override)
+    # ------------------------------------------------------------------
+
+    def _write_back(self, request: dict, outputs: dict) -> None:
+        """Write processing results back to request.
+
+        Default: unconditionally overwrite prompt_token_ids.
+        ErnieVLProcessor overrides to preserve original token_ids on PRETOKENIZED path.
+        """
+        request["prompt_token_ids"] = outputs["input_ids"].tolist()
+        request["multimodal_inputs"] = outputs
+
+    # ------------------------------------------------------------------
+    # Text tokenization helper
+    # ------------------------------------------------------------------
+
+    def _add_text(self, tokens, outputs):
+        """Tokenize text and add to outputs."""
+        if not tokens:
+            return
+        if isinstance(tokens, str):
+            tokens_str = self.tokenizer.tokenize(tokens)
+            tokens = self.tokenizer.convert_tokens_to_ids(tokens_str)
+        num_tokens = len(tokens)
+        outputs["input_ids"].extend(tokens)
+        outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
+        self.add_text_positions(outputs, num_tokens)
+
+    # ------------------------------------------------------------------
     # Outputs accumulator
     # ------------------------------------------------------------------
 
@@ -385,49 +464,7 @@ class MMProcessor(ABC):
             "num_input_image_tokens": 0,
             "num_input_video_tokens": 0,
             "mm_positions": [],
-            "mm_hashes": [],
         }
-
-    # ------------------------------------------------------------------
-    # Cache methods
-    # ------------------------------------------------------------------
-
-    def _get_cached_mm_data(self, socket, mm_hashes) -> list:
-        """Retrieve cached multimodal data via ZMQ."""
-        req = pickle.dumps(mm_hashes)
-        socket.send_multipart([b"", req])
-        _, resp = socket.recv_multipart()
-        mm_items = pickle.loads(resp)
-        data_processor_logger.info(f"Get cache of mm_hashes: {mm_hashes}")
-        return mm_items
-
-    def _update_mm_cache(self, dealer, missing_idx, mm_items, outputs):
-        """Write newly-processed multimodal items to the processor cache."""
-        missing_idx_set = set(missing_idx)
-        hashes_to_cache, items_to_cache = [], []
-        for idx in range(len(mm_items)):
-            if idx in missing_idx_set:
-                continue
-            meta = {}
-            if idx < len(outputs.get("grid_thw", [])):
-                grid_thw = np.asarray(outputs["grid_thw"][idx])
-                if grid_thw.ndim > 1:
-                    t, h, w = grid_thw[0]
-                else:
-                    t, h, w = grid_thw
-                meta["thw"] = (int(t), int(h), int(w))
-            if "fps" in outputs and idx < len(outputs.get("fps", [])):
-                meta["fps"] = outputs["fps"][idx]
-            if idx < len(outputs.get("mm_hashes", [])):
-                hashes_to_cache.append(outputs["mm_hashes"][idx])
-                if idx < len(outputs.get("images", []) or []):
-                    items_to_cache.append((outputs["images"][idx] if outputs["images"] else None, meta))
-                else:
-                    items_to_cache.append((None, meta))
-        if hashes_to_cache:
-            req = pickle.dumps((hashes_to_cache, items_to_cache))
-            dealer.send_multipart([b"", req])
-            data_processor_logger.info(f"Update cache of mm_hashes: {hashes_to_cache}")
 
     # ------------------------------------------------------------------
     # Init helpers
@@ -516,6 +553,6 @@ class MMProcessor(ABC):
     def mm_num_tokens(grid_thw) -> int:
         """Calculate number of multimodal tokens for given grid_thw."""
 
-    def prompt_token_ids2outputs(self, prompt_token_ids, mm_items=None) -> dict:
+    def prompt_token_ids2outputs(self, mm_context: "MMContext") -> dict:
         """Build outputs from pre-tokenized prompt_token_ids. Override if supported."""
         raise NotImplementedError(f"{type(self).__name__} does not support prompt_token_ids path")

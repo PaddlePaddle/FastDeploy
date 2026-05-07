@@ -25,7 +25,6 @@ from fastdeploy.engine.request import ImagePosition
 from fastdeploy.input.multimodal.image_processors import AdaptiveImageProcessor
 from fastdeploy.input.multimodal.mm_processor import MMProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG, MAX_IMAGE_DIMENSION
-from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
 class ErnieVLProcessor(MMProcessor):
@@ -139,10 +138,6 @@ class ErnieVLProcessor(MMProcessor):
             input_data_format=ChannelDimension.LAST,
         )
         outputs["images"].append(ret["pixel_values"])
-        if not uuid:
-            outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values"]))
-        else:
-            outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(ret["image_grid_thw"])
         outputs["image_type_ids"].append(0)
 
@@ -163,7 +158,6 @@ class ErnieVLProcessor(MMProcessor):
         outputs["cur_position"] = np.max(pos_ids) + 1
 
         outputs["images"].append(img)
-        outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(np.array([[1, h, w]]))
         outputs["image_type_ids"].append(0)
 
@@ -194,10 +188,6 @@ class ErnieVLProcessor(MMProcessor):
             input_data_format=ChannelDimension.LAST,
         )
         outputs["images"].append(ret["pixel_values_videos"])
-        if not uuid:
-            outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values_videos"]))
-        else:
-            outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(ret["video_grid_thw"])
         outputs["image_type_ids"].extend([1] * num_frames)
 
@@ -218,7 +208,6 @@ class ErnieVLProcessor(MMProcessor):
 
         t, h, w = meta["thw"]
         outputs["images"].append(frames)
-        outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(np.array([[t, h, w]]))
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
@@ -361,11 +350,12 @@ class ErnieVLProcessor(MMProcessor):
     # Prompt token IDs path
     # ------------------------------------------------------------------
 
-    def prompt_token_ids2outputs(self, prompt_token_ids, mm_items=None):
+    def prompt_token_ids2outputs(self, mm_context):
         outputs = self._make_outputs()
+        prompt_token_ids = mm_context.prompt_token_ids
         prompt_token_ids_len = len(prompt_token_ids)
 
-        if mm_items is None:
+        if not mm_context.images and not mm_context.videos:
             outputs["input_ids"].extend(prompt_token_ids)
             outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * prompt_token_ids_len)
             for i in range(prompt_token_ids_len):
@@ -373,15 +363,8 @@ class ErnieVLProcessor(MMProcessor):
             outputs["cur_position"] += prompt_token_ids_len
             return outputs
 
-        images, videos = [], []
-        image_uuid, video_uuid = [], []
-        for item in mm_items:
-            if item.get("type") == "image":
-                images.append(item["data"])
-                image_uuid.append(item.get("uuid"))
-            elif item.get("type") == "video":
-                videos.append(item["data"])
-                video_uuid.append(item.get("uuid"))
+        images = mm_context.images
+        videos = mm_context.videos
 
         image_start_id = self.tokenizer.convert_tokens_to_ids(self.IMG_START)
         image_end_id = self.tokenizer.convert_tokens_to_ids(self.IMG_END)
@@ -406,13 +389,12 @@ class ErnieVLProcessor(MMProcessor):
                     cur_idx += 1
                 if cur_idx >= prompt_token_ids_len:
                     raise ValueError("image token ids not complete")
-                image = images[image_idx]
-                uuid = image_uuid[image_idx] if image_uuid else None
+                item = images[image_idx]
                 token_len = cur_idx - st
-                if not isinstance(image, tuple):
-                    self.preprocess_image(image, outputs, uuid, token_len)
+                if not isinstance(item.data, tuple):
+                    self.preprocess_image(item.data, outputs, item.uuid, token_len)
                 else:
-                    self.preprocess_cached_image(image, outputs, uuid, token_len)
+                    self.preprocess_cached_image(item.data, outputs, item.uuid, token_len)
                 image_idx += 1
                 st = cur_idx
             elif cur_token_id == video_start_id:
@@ -430,17 +412,16 @@ class ErnieVLProcessor(MMProcessor):
                     cur_idx += 1
                 if cur_idx >= prompt_token_ids_len:
                     raise ValueError("video token ids not complete")
-                video = videos[video_idx]
-                uuid = video_uuid[video_idx] if video_uuid else None
+                item = videos[video_idx]
                 token_len = cur_idx - st
-                if not isinstance(video, tuple):
-                    if isinstance(video, dict):
-                        frames, _ = self.load_video(video["video"], video)
+                if not isinstance(item.data, tuple):
+                    if isinstance(item.data, dict):
+                        frames, _ = self.load_video(item.data["video"], item.data)
                     else:
-                        frames, _ = self.load_video(video, {})
-                    self.preprocess_video(frames, outputs, uuid, token_len=token_len)
+                        frames, _ = self.load_video(item.data, {})
+                    self.preprocess_video(frames, outputs, item.uuid, token_len=token_len)
                 else:
-                    self.preprocess_cached_video(video, outputs, uuid, token_len)
+                    self.preprocess_cached_video(item.data, outputs, item.uuid, token_len)
                 video_idx += 1
                 st = cur_idx
             else:

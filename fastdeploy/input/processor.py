@@ -400,7 +400,7 @@ class Processor:
         request["logits_processors_args"] = logits_processors_args
 
         # Step 6: messages → prompt + multimodal_data (通用预处理)
-        if request.get("messages") and not request.get("prompt") and not request.get("prompt_token_ids"):
+        if request.get("messages") and not request.get("prompt"):
             self.process_messages(request)
 
         # Step 7: tokenization (multimodal or text-only)
@@ -462,7 +462,7 @@ class Processor:
 
         职责：
         1. 从 messages 中提取多模态内容（图片/视频）
-           → 写入 request["multimodal_data"] = {"image": [...], "video": [...]}
+           → 写入 request["multimodal_data"] = {"image": [...], "video": [...], "mm_order": [...]}
         2. 调用 tokenizer.apply_chat_template(messages) 拼接 prompt
            → 写入 request["prompt"]
 
@@ -482,13 +482,13 @@ class Processor:
 
         request.setdefault("enable_thinking", True)
 
-        # Step 1: 解析 messages（下载图片/视频，转为 MMItem 格式）
+        # Step 1: 解析 messages（下载图片/视频，转为标准格式）
         from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 
         parsed_messages = parse_chat_messages(messages)
 
-        # Step 2: 从解析后的 messages 中提取多模态内容（已是 MMItem 格式）
-        images, videos = [], []
+        # Step 2: 从解析后的 messages 中提取多模态内容
+        images, videos, mm_order = [], [], []
         for msg in parsed_messages:
             content = msg.get("content") if isinstance(msg, dict) else None
             if not isinstance(content, list):
@@ -497,11 +497,13 @@ class Processor:
                 if isinstance(item, dict):
                     if item.get("type") == "image":
                         images.append(item)
+                        mm_order.append("image")
                     elif item.get("type") == "video":
                         videos.append(item)
+                        mm_order.append("video")
 
         if images or videos:
-            request["multimodal_data"] = {"image": images, "video": videos}
+            request["multimodal_data"] = {"image": images, "video": videos, "mm_order": mm_order}
 
         # Step 3: apply_chat_template → prompt
         if self.tokenizer.chat_template is None:

@@ -23,7 +23,6 @@ from fastdeploy.input.multimodal.qwen_vl import QwenVLProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.input.utils.video import read_video_decord
 from fastdeploy.input.utils.video import sample_frames_paddleocr as _sample_paddleocr
-from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
 class PaddleOCRVLProcessor(QwenVLProcessor):
@@ -91,10 +90,6 @@ class PaddleOCRVLProcessor(QwenVLProcessor):
         outputs["num_input_image_tokens"] += int(num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
-        if not uuid:
-            outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values"]))
-        else:
-            outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].append(0)
 
@@ -141,10 +136,6 @@ class PaddleOCRVLProcessor(QwenVLProcessor):
         outputs["num_input_video_tokens"] += int(num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
-        if not uuid:
-            outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values"]))
-        else:
-            outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].extend([1] * grid_thw[0])
 
@@ -170,7 +161,6 @@ class PaddleOCRVLProcessor(QwenVLProcessor):
 
         t, h, w = meta["thw"]
         outputs["images"].append(frames)
-        outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(np.array([[t, h, w]]))
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))

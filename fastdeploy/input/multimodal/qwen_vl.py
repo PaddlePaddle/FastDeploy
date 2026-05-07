@@ -26,7 +26,6 @@ from fastdeploy.input.multimodal.mm_processor import MMProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 from fastdeploy.input.utils.video import read_video_decord
 from fastdeploy.input.utils.video import sample_frames_qwen as _sample_qwen
-from fastdeploy.multimodal.hasher import MultimodalHasher
 
 
 class QwenVLProcessor(MMProcessor):
@@ -94,10 +93,6 @@ class QwenVLProcessor(MMProcessor):
         outputs["num_input_image_tokens"] += int(num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
-        if not uuid:
-            outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values"]))
-        else:
-            outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].append(0)
 
@@ -125,7 +120,6 @@ class QwenVLProcessor(MMProcessor):
         outputs["cur_position"] = pos_ids.max() + 1
 
         outputs["images"].append(img)
-        outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(np.array([[1, h, w]]))
         outputs["image_type_ids"].append(0)
 
@@ -154,10 +148,6 @@ class QwenVLProcessor(MMProcessor):
         outputs["num_input_video_tokens"] += int(num_tokens)
 
         outputs["images"].append(ret["pixel_values"])
-        if not uuid:
-            outputs["mm_hashes"].append(MultimodalHasher.hash_features(ret["pixel_values"]))
-        else:
-            outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(grid_thw)
         outputs["image_type_ids"].extend([1] * grid_thw[0])
 
@@ -178,7 +168,6 @@ class QwenVLProcessor(MMProcessor):
 
         t, h, w = meta["thw"]
         outputs["images"].append(frames)
-        outputs["mm_hashes"].append(uuid)
         outputs["grid_thw"].append(np.array([[t, h, w]]))
 
         outputs["mm_positions"].append(ImagePosition(len(outputs["input_ids"]), num_tokens))
@@ -281,14 +270,28 @@ class QwenVLProcessor(MMProcessor):
     # Prompt token IDs path
     # ------------------------------------------------------------------
 
-    def prompt_token_ids2outputs(self, prompt_token_ids, mm_items=None):
+    def prompt_token_ids2outputs(self, mm_context):
         """Build outputs from prompt_token_ids."""
         outputs = self._make_outputs()
+        prompt_token_ids = mm_context.prompt_token_ids
         prompt_token_ids_len = len(prompt_token_ids)
 
-        if mm_items is None:
+        if not mm_context.images and not mm_context.videos:
             self._add_text_tokens(prompt_token_ids, outputs)
             return outputs
+
+        # Reconstruct interleaved list using mm_order
+        mm_items = []
+        img_idx, vid_idx = 0, 0
+        for t in mm_context.mm_order:
+            if t == "image":
+                item = mm_context.images[img_idx]
+                mm_items.append(item)
+                img_idx += 1
+            else:
+                item = mm_context.videos[vid_idx]
+                mm_items.append(item)
+                vid_idx += 1
 
         st, mm_idx = 0, 0
         while st < prompt_token_ids_len:
@@ -308,26 +311,24 @@ class QwenVLProcessor(MMProcessor):
                 cur_idx += 1
 
             item = mm_items[mm_idx]
-            uuid = item.get("uuid")
+            uuid = item.uuid
             token_len = cur_idx - st
-            if item.get("type") == "image":
-                image = item.get("data")
-                if not isinstance(image, tuple):
-                    self.preprocess_image(image, outputs, uuid, token_len)
+            if item.type == "image":
+                if not isinstance(item.data, tuple):
+                    self.preprocess_image(item.data, outputs, uuid, token_len)
                 else:
-                    self.preprocess_cached_image(image, outputs, uuid, token_len)
-            elif item.get("type") == "video":
-                video = item.get("data")
-                if not isinstance(video, tuple):
-                    if isinstance(video, dict):
-                        frames, meta = self.load_video(video["video"], video)
+                    self.preprocess_cached_image(item.data, outputs, uuid, token_len)
+            elif item.type == "video":
+                if not isinstance(item.data, tuple):
+                    if isinstance(item.data, dict):
+                        frames, meta = self.load_video(item.data["video"], item.data)
                     else:
-                        frames, meta = self.load_video(video, {})
+                        frames, meta = self.load_video(item.data, {})
                     self.preprocess_video(frames, outputs, uuid, token_len=token_len, meta=meta)
                 else:
-                    self.preprocess_cached_video(video, outputs, uuid, token_len)
+                    self.preprocess_cached_video(item.data, outputs, uuid, token_len)
             else:
-                raise ValueError(f"Unsupported multimodal type: {item.get('type')}")
+                raise ValueError(f"Unsupported multimodal type: {item.type}")
             mm_idx += 1
             st = cur_idx
 
