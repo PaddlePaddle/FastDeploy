@@ -199,11 +199,10 @@ def parse_chat_messages(messages: List[ChatCompletionMessageParam]):
         role = message["role"]
         content = message["content"]
 
-        parsed_content = []
         if content is None:
-            parsed_content = []
+            parsed_content = content
         elif isinstance(content, str):
-            parsed_content = [{"type": "text", "text": content}]
+            parsed_content = content
         else:
             parsed_content = [parse_content_part(mm_parser, part) for part in content]
 
