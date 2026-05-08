@@ -1183,10 +1183,10 @@ class SpeculativeSampler(nn.Layer):
         """Normal sampling for NAIVE mode on XPU."""
         _, next_tokens = top_k_top_p_sampling(
             probs,
-            top_p=top_p,
-            top_k=top_k,
+            top_p=sampling_metadata.top_p,
+            top_k=sampling_metadata.top_k,
             top_k_list=sampling_metadata.top_k_list,
-            topp_seed=topp_seed,
+            topp_seed=sampling_metadata.topp_seed,
         )
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
         running_mask = (paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]) > 0).cast("int32")
