@@ -18,7 +18,6 @@
 //  Licensed under Apache License 2.0
 //  with further performance optimizations applied.
 
-
 #include <cooperative_groups.h>
 
 #include "helper.h"
@@ -44,7 +43,8 @@ __global__ void count_and_sort_expert_tokens_kernel(
 }
 
 #ifdef __CUDA_ARCH__
-__device__ __forceinline__ int warp_exclusive_scan(int v, unsigned mask = 0xffffffffu) {
+__device__ __forceinline__ int warp_exclusive_scan(
+    int v, unsigned mask = 0xffffffffu) {
   int original = v;
 #pragma unroll
   for (int offset = 1; offset < WARP_SIZE; offset <<= 1) {
@@ -235,7 +235,8 @@ __global__ void moe_align_block_size_kernel(
   }
 }
 
-// ===== Cooperative fused kernel for large batch (single launch, grid.sync) =====
+// ===== Cooperative fused kernel for large batch (single launch, grid.sync)
+// =====
 
 namespace cg = cooperative_groups;
 
@@ -303,11 +304,12 @@ __global__ void moe_align_block_size_cooperative_kernel(
     local_hist[i] = prefix_before;
   }
 
-  grid.sync();  // Single grid barrier: all histograms merged, global_counts has totals
+  grid.sync();  // Single grid barrier: all histograms merged, global_counts has
+                // totals
 
-  // ===== Stage 2: Redundant prefix sum per block (no grid barrier needed) =====
-  // Each block's thread 0 reads global_counts and computes expert starts locally.
-  // This is cheap (~64 iterations) and avoids an extra grid.sync().
+  // ===== Stage 2: Redundant prefix sum per block (no grid barrier needed)
+  // ===== Each block's thread 0 reads global_counts and computes expert starts
+  // locally. This is cheap (~64 iterations) and avoids an extra grid.sync().
   if (tid == 0) {
     int32_t running_sum = 0;
     for (int i = 0; i < num_experts; i++) {
@@ -332,7 +334,8 @@ __global__ void moe_align_block_size_cooperative_kernel(
     }
   }
 
-  // ===== Stage 3: Fill expert_ids via binary search (all blocks cooperate) =====
+  // ===== Stage 3: Fill expert_ids via binary search (all blocks cooperate)
+  // =====
   const int32_t num_blocks_out = s_total / block_size;
   for (int32_t i = bid * nthreads + tid; i < num_blocks_out;
        i += nblocks * nthreads) {
@@ -383,7 +386,8 @@ __global__ void moe_align_block_size_small_batch_expert_kernel(
   if (threadIdx.x < fill_threads) {
     // Initialize sorted_token_ids with numel
     if (pad_sorted_token_ids) {
-      for (int32_t it = threadIdx.x; it < max_num_tokens_padded; it += fill_threads) {
+      for (int32_t it = threadIdx.x; it < max_num_tokens_padded;
+           it += fill_threads) {
         sorted_token_ids[it] = numel;
       }
     }
@@ -415,7 +419,8 @@ __global__ void moe_align_block_size_small_batch_expert_kernel(
   if (tid < num_experts) {
     tokens_cnts[tid] = 0;
     for (int i = 1; i <= stride; ++i) {
-      tokens_cnts[i * num_experts + tid] += tokens_cnts[(i - 1) * num_experts + tid];
+      tokens_cnts[i * num_experts + tid] +=
+          tokens_cnts[(i - 1) * num_experts + tid];
     }
   }
 
@@ -424,7 +429,10 @@ __global__ void moe_align_block_size_small_batch_expert_kernel(
   if (tid == 0) {
     cumsum[0] = 0;
     for (int i = 1; i <= num_experts; ++i) {
-      cumsum[i] = cumsum[i - 1] + CEILDIV(tokens_cnts[stride * num_experts + i - 1], block_size) * block_size;
+      cumsum[i] =
+          cumsum[i - 1] +
+          CEILDIV(tokens_cnts[stride * num_experts + i - 1], block_size) *
+              block_size;
     }
     *total_tokens_post_pad = static_cast<int32_t>(cumsum[num_experts]);
   }
@@ -439,22 +447,22 @@ __global__ void moe_align_block_size_small_batch_expert_kernel(
 
   for (size_t i = tid; i < numel; i += stride) {
     int32_t expert_id = topk_ids[i] + 1;
-    int32_t rank_post_pad = tokens_cnts[tid * num_experts + expert_id] + cumsum[expert_id];
+    int32_t rank_post_pad =
+        tokens_cnts[tid * num_experts + expert_id] + cumsum[expert_id];
     sorted_token_ids[rank_post_pad] = i;
     ++tokens_cnts[tid * num_experts + expert_id];
   }
 }
 
 template <typename scalar_t>
-void moe_align_block_size(
-    const paddle::Tensor& topk_ids,
-    int64_t num_experts,
-    int64_t block_size,
-    paddle::Tensor& sorted_token_ids,
-    paddle::Tensor& experts_ids,
-    paddle::Tensor& num_tokens_post_pad,
-    paddle::Tensor& cumsum_buffer,
-    bool pad_sorted_token_ids) {
+void moe_align_block_size(const paddle::Tensor& topk_ids,
+                          int64_t num_experts,
+                          int64_t block_size,
+                          paddle::Tensor& sorted_token_ids,
+                          paddle::Tensor& experts_ids,
+                          paddle::Tensor& num_tokens_post_pad,
+                          paddle::Tensor& cumsum_buffer,
+                          bool pad_sorted_token_ids) {
   int threads = 1024;
   threads = ((threads + WARP_SIZE - 1) / WARP_SIZE) * WARP_SIZE;
   auto stream = topk_ids.stream();
@@ -467,19 +475,24 @@ void moe_align_block_size(
   if (small_batch_expert_mode) {
     const int32_t expert_threads = max((int32_t)num_experts, WARP_SIZE);
     constexpr int32_t fill_threads = 256;
-    const int32_t shared_mem_size = ((expert_threads + 1) * num_experts + (num_experts + 1)) * sizeof(int32_t);
+    const int32_t shared_mem_size =
+        ((expert_threads + 1) * num_experts + (num_experts + 1)) *
+        sizeof(int32_t);
 
-    auto small_batch_expert_kernel = moe_align_block_size_small_batch_expert_kernel<scalar_t, fill_threads>;
-    small_batch_expert_kernel<<<1, fill_threads + expert_threads, shared_mem_size, stream>>>(
-        topk_ids.data<scalar_t>(),
-        sorted_token_ids.data<int32_t>(),
-        experts_ids.data<int32_t>(),
-        num_tokens_post_pad.data<int32_t>(),
-        num_experts,
-        block_size,
-        numel,
-        pad_sorted_token_ids,
-        max_num_tokens_padded);
+    auto small_batch_expert_kernel =
+        moe_align_block_size_small_batch_expert_kernel<scalar_t, fill_threads>;
+    small_batch_expert_kernel<<<1,
+                                fill_threads + expert_threads,
+                                shared_mem_size,
+                                stream>>>(topk_ids.data<scalar_t>(),
+                                          sorted_token_ids.data<int32_t>(),
+                                          experts_ids.data<int32_t>(),
+                                          num_tokens_post_pad.data<int32_t>(),
+                                          num_experts,
+                                          block_size,
+                                          numel,
+                                          pad_sorted_token_ids,
+                                          max_num_tokens_padded);
   } else {
     // Use cooperative fused kernel for large inputs where multi-block
     // parallelism outweighs cooperative launch overhead
@@ -492,44 +505,50 @@ void moe_align_block_size(
       static int cached_max_blocks_per_sm = 0;
       static int cached_num_sms = 0;
       if (cached_num_sms == 0) {
-        cudaOccupancyMaxActiveBlocksPerMultiprocessor(
-            &cached_max_blocks_per_sm,
-            (void*)coop_kernel,
-            coop_threads,
-            coop_smem);
+        cudaOccupancyMaxActiveBlocksPerMultiprocessor(&cached_max_blocks_per_sm,
+                                                      (void*)coop_kernel,
+                                                      coop_threads,
+                                                      coop_smem);
         int device_id;
         cudaGetDevice(&device_id);
-        cudaDeviceGetAttribute(&cached_num_sms,
-            cudaDevAttrMultiProcessorCount, device_id);
+        cudaDeviceGetAttribute(
+            &cached_num_sms, cudaDevAttrMultiProcessorCount, device_id);
       }
 
       int max_coop_blocks = cached_max_blocks_per_sm * cached_num_sms;
-      int desired_blocks = std::max(1,
-          std::min(256, static_cast<int>(numel / (coop_threads * 4))));
+      int desired_blocks = std::max(
+          1, std::min(256, static_cast<int>(numel / (coop_threads * 4))));
       int coop_blocks = std::min(desired_blocks, max_coop_blocks);
       if (coop_blocks < 1) coop_blocks = 1;
 
-      const scalar_t* topk_ids_ptr       = topk_ids.data<scalar_t>();
-      int32_t* sorted_token_ids_ptr       = sorted_token_ids.data<int32_t>();
-      int32_t* experts_ids_ptr            = experts_ids.data<int32_t>();
-      int32_t* num_tokens_post_pad_ptr    = num_tokens_post_pad.data<int32_t>();
-      int32_t* cumsum_ptr                 = cumsum_buffer.data<int32_t>();
-      int32_t  num_experts_i32            = static_cast<int32_t>(num_experts);
-      int32_t  block_size_i32             = static_cast<int32_t>(block_size);
-      size_t   numel_val                  = numel;
-      bool     pad_val                    = pad_sorted_token_ids;
-      int32_t  max_padded_i32             = static_cast<int32_t>(max_num_tokens_padded);
+      const scalar_t* topk_ids_ptr = topk_ids.data<scalar_t>();
+      int32_t* sorted_token_ids_ptr = sorted_token_ids.data<int32_t>();
+      int32_t* experts_ids_ptr = experts_ids.data<int32_t>();
+      int32_t* num_tokens_post_pad_ptr = num_tokens_post_pad.data<int32_t>();
+      int32_t* cumsum_ptr = cumsum_buffer.data<int32_t>();
+      int32_t num_experts_i32 = static_cast<int32_t>(num_experts);
+      int32_t block_size_i32 = static_cast<int32_t>(block_size);
+      size_t numel_val = numel;
+      bool pad_val = pad_sorted_token_ids;
+      int32_t max_padded_i32 = static_cast<int32_t>(max_num_tokens_padded);
 
-      void* args[] = {
-          &topk_ids_ptr, &sorted_token_ids_ptr, &experts_ids_ptr,
-          &num_tokens_post_pad_ptr, &cumsum_ptr,
-          &num_experts_i32, &block_size_i32, &numel_val,
-          &pad_val, &max_padded_i32
-      };
+      void* args[] = {&topk_ids_ptr,
+                      &sorted_token_ids_ptr,
+                      &experts_ids_ptr,
+                      &num_tokens_post_pad_ptr,
+                      &cumsum_ptr,
+                      &num_experts_i32,
+                      &block_size_i32,
+                      &numel_val,
+                      &pad_val,
+                      &max_padded_i32};
 
-      cudaError_t err = cudaLaunchCooperativeKernel(
-          (void*)coop_kernel, dim3(coop_blocks), dim3(coop_threads),
-          args, coop_smem, stream);
+      cudaError_t err = cudaLaunchCooperativeKernel((void*)coop_kernel,
+                                                    dim3(coop_blocks),
+                                                    dim3(coop_threads),
+                                                    args,
+                                                    coop_smem,
+                                                    stream);
 
       if (err == cudaSuccess) {
         return;
@@ -540,8 +559,10 @@ void moe_align_block_size(
     // Original 2-kernel approach (for medium inputs or cooperative fallback)
     auto align_kernel = moe_align_block_size_kernel<scalar_t>;
 
-    const size_t scan_size = next_pow2(num_experts);
-    const size_t shared_mem_size = (num_experts + (num_experts + 1) + scan_size + WARP_SIZE) * sizeof(int32_t);
+    const size_t scan_size = next_pow_2(num_experts);
+    const size_t shared_mem_size =
+        (num_experts + (num_experts + 1) + scan_size + WARP_SIZE) *
+        sizeof(int32_t);
     align_kernel<<<2, threads, shared_mem_size, stream>>>(
         topk_ids.data<scalar_t>(),
         sorted_token_ids.data<int32_t>(),
@@ -569,10 +590,21 @@ void moe_align_block_size(
   }
 }
 
-// Explicit instantiations for use from other translation units (e.g. tritonmoe_preprocess.cu)
-template void moe_align_block_size<int32_t>(
-    const paddle::Tensor&, int64_t, int64_t,
-    paddle::Tensor&, paddle::Tensor&, paddle::Tensor&, paddle::Tensor&, bool);
-template void moe_align_block_size<int64_t>(
-    const paddle::Tensor&, int64_t, int64_t,
-    paddle::Tensor&, paddle::Tensor&, paddle::Tensor&, paddle::Tensor&, bool);
+// Explicit instantiations for use from other translation units (e.g.
+// tritonmoe_preprocess.cu)
+template void moe_align_block_size<int32_t>(const paddle::Tensor&,
+                                            int64_t,
+                                            int64_t,
+                                            paddle::Tensor&,
+                                            paddle::Tensor&,
+                                            paddle::Tensor&,
+                                            paddle::Tensor&,
+                                            bool);
+template void moe_align_block_size<int64_t>(const paddle::Tensor&,
+                                            int64_t,
+                                            int64_t,
+                                            paddle::Tensor&,
+                                            paddle::Tensor&,
+                                            paddle::Tensor&,
+                                            paddle::Tensor&,
+                                            bool);

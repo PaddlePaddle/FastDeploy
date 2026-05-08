@@ -74,11 +74,6 @@ using json = nlohmann::json;
 #endif
 
 #define CEILDIV(a, b) (((a + b - 1) / b))
-// Get the next power of 2 of a number
-inline uint32_t next_pow2(uint32_t x) noexcept {
-  if (x <= 1) return 1;
-  return 1u << (32 - __builtin_clz(x - 1));
-}
 
 #define CUDA_CHECK(call)                           \
   do {                                             \
