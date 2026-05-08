@@ -1276,17 +1276,16 @@ class ResourceManagerV1(ResourceManager):
             # Issue pending backup tasks to batch_request
             # This handles write_through_selective policy by attaching backup tasks
             # to the batch request, which will be processed by the worker
-            if self.enable_cache_manager_v1 and len(batch_request) > 0:
+            if self.enable_cache_manager_v1:
+                self.cache_manager.check_and_add_pending_backup()
+
                 evict_metadata = self.cache_manager.issue_pending_backup_to_batch_request()
                 if evict_metadata:
                     batch_request.append_evict_metadata([evict_metadata])
 
-            if self.enable_cache_manager_v1:
-                self.cache_manager.check_and_add_pending_backup()
-
-            # Dispatch any pending storage prefetch tasks via batch_request
-            if self.config.cache_config.kvcache_storage_backend:
-                self._dispatch_pending_prefetches(batch_request)
+                # Dispatch any pending storage prefetch tasks via batch_request
+                if self.config.cache_config.kvcache_storage_backend:
+                    self._dispatch_pending_prefetches(batch_request)
 
             return batch_request, error_reqs
 

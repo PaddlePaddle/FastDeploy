@@ -697,10 +697,17 @@ class BatchRequest:
         return self.requests[index]
 
     def __len__(self):
-        count = len(self.requests)
-        if self.storage_prefetch_tasks:
-            count += len(self.storage_prefetch_tasks)
-        return count
+        return len(self.requests)
+
+    @property
+    def has_pending_work(self) -> bool:
+        """Whether there is any pending work (inference requests, prefetch/swap/evict tasks)."""
+        return (
+            len(self.requests) > 0
+            or bool(self.storage_prefetch_tasks)
+            or bool(self.cache_swap_metadata)
+            or bool(self.cache_evict_metadata)
+        )
 
     def append(self, batch_request: "BatchRequest"):
         self.requests.extend(batch_request.requests)

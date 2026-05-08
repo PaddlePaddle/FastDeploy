@@ -688,6 +688,14 @@ class PaddleDisWorkerProc:
                     self._handle_prefetch_tasks(batch_request.storage_prefetch_tasks)
                     batch_request.storage_prefetch_tasks = None
 
+                # Handle swap/evict tasks from batch_request
+                if batch_request.cache_evict_metadata or batch_request.cache_swap_metadata:
+                    self.worker.model_runner.cache_controller.submit_swap_tasks(
+                        batch_request.cache_evict_metadata, batch_request.cache_swap_metadata
+                    )
+                    batch_request.cache_evict_metadata = None
+                    batch_request.cache_swap_metadata = None
+
                 if len(control_reqs) > 0:
                     logger.info(f"Rank: {self.local_rank} received {len(control_reqs)} control request.")
                     for control_req in control_reqs:

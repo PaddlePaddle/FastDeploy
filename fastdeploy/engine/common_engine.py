@@ -1120,7 +1120,7 @@ class EngineService:
                 batch_request, error_tasks = self.resource_manager.schedule()
 
                 # 3. Send to engine
-                if len(batch_request) > 0:
+                if batch_request.has_pending_work:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
                         for task in batch_request:
                             if task.task_type == RequestType.PREEMPTED:
@@ -1199,7 +1199,7 @@ class EngineService:
                             continue
                         self._send_error_response(request_id, failed)
 
-                if len(batch_request) <= 0 and not error_tasks:
+                if not batch_request.has_pending_work and not error_tasks:
                     time.sleep(0.005)
 
             except RuntimeError as e:

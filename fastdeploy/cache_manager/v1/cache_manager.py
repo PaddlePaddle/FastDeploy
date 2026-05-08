@@ -516,11 +516,10 @@ class CacheManager(KVCacheBase):
                 #   Split matched_nodes into device blocks and host blocks
                 if self.enable_host_cache:
                     for node in matched_nodes:
-                        pass
-                        # if node.is_on_device():
-                        #     result.device_nodes.append(node)
-                        # elif node.is_on_host():
-                        #     result.host_nodes.append(node)
+                        if node.is_on_device():
+                            result.device_nodes.append(node)
+                        elif node.is_on_host():
+                            result.host_nodes.append(node)
                 else:
                     result.device_nodes = matched_nodes
 

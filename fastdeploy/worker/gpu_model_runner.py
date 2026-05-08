@@ -803,13 +803,7 @@ class GPUModelRunner(ModelRunnerBase):
         }
         if self.enable_mm:
             # Sort by idx to ensure attention mask offsets are filled in order during mm prefill
-            req_dicts.requests.sort(key=lambda r: r.idx)
-        if self.enable_cache_manager_v1:
-            # submit_swap_tasks handles:
-            # 1. Waiting for pending evict handlers before submitting new evict
-            # 2. write_back policy: waiting for evict to complete before submitting swap-in
-            # 3. Adding handlers to pending lists appropriately
-            self.cache_controller.submit_swap_tasks(req_dicts.cache_evict_metadata, req_dicts.cache_swap_metadata)
+            req_dicts = sorted(req_dicts, key=lambda r: r.idx)
 
         for i in range(req_len):
             request = req_dicts[i]
