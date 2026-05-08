@@ -16,25 +16,32 @@
 
 """Generic PaddleFormers modeling backend base class."""
 
-import math
-from collections.abc import Iterable
-from typing import TYPE_CHECKING, Dict
+import logging
 
-import paddle
-from paddle import nn
-from paddlefleet.models.gpt.gpt_embedding import GPTEmbedding
-from paddlefleet.models.gpt.lm_head import GPTLMHead
-from paddlefleet.transformer.layer import FleetLayer
-from paddlefleet.transformer.transformer_config import TransformerConfig
-from paddleformers.trainer.trainer_utils import set_random_seed
-from paddleformers.transformers import AutoConfig
-from paddleformers.transformers.auto.modeling import AutoModelForCausalLM
-from paddleformers.utils.log import logger
+from fastdeploy.model_executor.utils import is_paddlefleet_available
 
-from fastdeploy.model_executor.forward_meta import ForwardMeta  # noqa: F401
-from fastdeploy.model_executor.graph_optimization.decorator import (
-    support_graph_optimization,
-)
+if not is_paddlefleet_available():
+    logging.warning("paddlefleet is not installed, skipping base_fleet module")
+else:
+    import math
+    from collections.abc import Iterable
+    from typing import TYPE_CHECKING, Dict
+
+    import paddle
+    from paddle import nn
+    from paddlefleet.models.gpt.gpt_embedding import GPTEmbedding
+    from paddlefleet.models.gpt.lm_head import GPTLMHead
+    from paddlefleet.transformer.layer import FleetLayer
+    from paddlefleet.transformer.transformer_config import TransformerConfig
+    from paddleformers.trainer.trainer_utils import set_random_seed
+    from paddleformers.transformers import AutoConfig
+    from paddleformers.transformers.auto.modeling import AutoModelForCausalLM
+    from paddleformers.utils.log import logger
+
+    from fastdeploy.model_executor.forward_meta import ForwardMeta  # noqa: F401
+    from fastdeploy.model_executor.graph_optimization.decorator import (
+        support_graph_optimization,
+    )
 
 if TYPE_CHECKING:
     from fastdeploy.config import FDConfig
