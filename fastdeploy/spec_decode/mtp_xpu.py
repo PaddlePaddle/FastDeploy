@@ -39,11 +39,6 @@ from fastdeploy.worker.input_batch import (
 
 from .mtp import MTPProposer
 
-try:
-    from fastdeploy.model_executor.ops.xpu import speculate_save_output_topk
-except ImportError:
-    speculate_save_output_topk = None
-
 
 class MTPProposerXPU(MTPProposer):
     """
@@ -168,7 +163,6 @@ class MTPProposerXPU(MTPProposer):
                     seed=self.model_inputs["infer_seed"],
                     step_idx=self.model_inputs["step_idx"],
                     token_ids_all=self.model_inputs["token_ids_all"],
-                    pre_token_ids=self.model_inputs["pre_ids"],
                     frequency_penalties=self.model_inputs["frequency_score"],
                     presence_penalties=self.model_inputs["presence_score"],
                     repetition_penalties=self.model_inputs["penalty_score"],
@@ -204,7 +198,6 @@ class MTPProposerXPU(MTPProposer):
                     recover_batch_index_for_sampler_output(
                         sampler_output,
                         self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder,
                     )
                     recover_model_output_map = recover_batch_index_for_output(
                         self.model_inputs,
@@ -212,8 +205,6 @@ class MTPProposerXPU(MTPProposer):
                         self.model_inputs.enable_pd_reorder,
                         ["batch_token_num", "cu_batch_token_offset"],
                     )
-                    if speculate_save_output_topk is None:
-                        raise NotImplementedError("Not support speculate_save_output_topk now.")
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
                         sampler_output.logprobs_tensors.logprob_token_ids,

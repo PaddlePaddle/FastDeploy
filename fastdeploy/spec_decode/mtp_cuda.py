@@ -293,7 +293,6 @@ class MTPProposerCUDA(MTPProposer):
                     recover_batch_index_for_sampler_output(
                         sampler_output,
                         self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder,
                     )
                     recover_model_output_map = recover_batch_index_for_output(
                         self.model_inputs,
