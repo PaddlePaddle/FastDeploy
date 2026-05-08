@@ -196,7 +196,7 @@ jobs:
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          pushd tests/ce/deploy
+          pushd tests/ci_validation/deploy
           ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           python3.10 deploy.py > dd.log 2>&1 &
@@ -208,7 +208,7 @@ jobs:
           curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
           popd
 
-          pushd tests/ce/accuracy_cases
+          pushd tests/ci_validation/accuracy_cases
           export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
           export TEMPLATE=TOKEN_LOGPROB
           export MODEL_SIZE=0.3B
