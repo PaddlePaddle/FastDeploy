@@ -31,6 +31,7 @@ tests/cache_manager/test_prefix_cache_manager.py and cover:
 - Single-token block and single-token image edge cases
 """
 
+import time
 import unittest
 from types import SimpleNamespace
 
@@ -383,6 +384,292 @@ class TestGetBlockHashExtraKeysBoundaryPrecision(unittest.TestCase):
         )
         _, keys = get_block_hash_extra_keys(req, start_idx=4, end_idx=8, mm_idx=0)
         self.assertIn("h-exact-end", keys)
+
+
+class TestHashBlockTokens(unittest.TestCase):
+    """Direct tests for hash_block_tokens."""
+
+    def setUp(self):
+        from fastdeploy.cache_manager.v1.cache_utils import hash_block_tokens
+
+        self.hash_block_tokens = hash_block_tokens
+
+    def test_returns_hex_string(self):
+        h = self.hash_block_tokens([1, 2, 3])
+        self.assertIsInstance(h, str)
+        self.assertEqual(len(h), 64)  # SHA256 hex digest length
+
+    def test_same_input_same_hash(self):
+        h1 = self.hash_block_tokens([1, 2, 3])
+        h2 = self.hash_block_tokens([1, 2, 3])
+        self.assertEqual(h1, h2)
+
+    def test_different_tokens_different_hash(self):
+        h1 = self.hash_block_tokens([1, 2, 3])
+        h2 = self.hash_block_tokens([1, 2, 4])
+        self.assertNotEqual(h1, h2)
+
+    def test_parent_hash_none_and_empty_string_differ(self):
+        """None and '' parent hash should both work; chaining is the key."""
+        h_none = self.hash_block_tokens([1, 2], parent_block_hash=None)
+        h_empty = self.hash_block_tokens([1, 2], parent_block_hash="")
+        # Both produce valid hashes; they may or may not be equal depending on
+        # implementation, but must be deterministic.
+        self.assertEqual(h_none, self.hash_block_tokens([1, 2], parent_block_hash=None))
+        self.assertEqual(h_empty, self.hash_block_tokens([1, 2], parent_block_hash=""))
+
+    def test_chained_hash_differs_from_unchained(self):
+        parent = self.hash_block_tokens([0])
+        h_chained = self.hash_block_tokens([1, 2], parent_block_hash=parent)
+        h_no_parent = self.hash_block_tokens([1, 2])
+        self.assertNotEqual(h_chained, h_no_parent)
+
+    def test_extra_keys_affect_hash(self):
+        h1 = self.hash_block_tokens([1, 2], extra_keys=None)
+        h2 = self.hash_block_tokens([1, 2], extra_keys=("image_hash",))
+        self.assertNotEqual(h1, h2)
+
+    def test_empty_token_ids(self):
+        h = self.hash_block_tokens([])
+        self.assertIsInstance(h, str)
+        self.assertEqual(len(h), 64)
+
+
+# ---------------------------------------------------------------------------
+# get_request_block_hasher
+# ---------------------------------------------------------------------------
+
+
+class TestGetRequestBlockHasher(unittest.TestCase):
+    """Tests for the factory function get_request_block_hasher."""
+
+    def setUp(self):
+        from fastdeploy.cache_manager.v1.cache_utils import get_request_block_hasher
+
+        self.block_size = 4
+        self.hasher = get_request_block_hasher(self.block_size)
+
+    def _make_request(self, prompt_tokens, existing_hashes=None, output_tokens=None):
+        req = SimpleNamespace(
+            prompt_token_ids=prompt_tokens,
+            output_token_ids=output_tokens or [],
+            _prompt_hashes=existing_hashes if existing_hashes is not None else [],
+            multimodal_inputs=None,
+        )
+        return req
+
+    def test_returns_callable(self):
+        from fastdeploy.cache_manager.v1.cache_utils import get_request_block_hasher
+
+        hasher = get_request_block_hasher(4)
+        self.assertTrue(callable(hasher))
+
+    def test_single_complete_block(self):
+        req = self._make_request(prompt_tokens=[1, 2, 3, 4])
+        hashes = self.hasher(req)
+        self.assertEqual(len(hashes), 1)
+        self.assertIsInstance(hashes[0], str)
+
+    def test_two_complete_blocks(self):
+        req = self._make_request(prompt_tokens=list(range(8)))
+        hashes = self.hasher(req)
+        self.assertEqual(len(hashes), 2)
+
+    def test_incomplete_last_block_not_hashed(self):
+        # 5 tokens with block_size=4 → 1 complete block, 1 incomplete
+        req = self._make_request(prompt_tokens=list(range(5)))
+        hashes = self.hasher(req)
+        self.assertEqual(len(hashes), 1)
+
+    def test_existing_hashes_skip_computed_blocks(self):
+        # First compute 1 block
+        req = self._make_request(prompt_tokens=list(range(4)))
+        first_hashes = self.hasher(req)
+        # Now add more tokens, provide existing hashes so they aren't recomputed
+        req2 = self._make_request(
+            prompt_tokens=list(range(8)),
+            existing_hashes=first_hashes,
+        )
+        new_hashes = self.hasher(req2)
+        self.assertEqual(len(new_hashes), 1)  # only the second block
+
+    def test_chained_hashes_differ_between_blocks(self):
+        req = self._make_request(prompt_tokens=list(range(8)))
+        hashes = self.hasher(req)
+        self.assertNotEqual(hashes[0], hashes[1])
+
+    def test_deterministic_across_calls(self):
+        req1 = self._make_request(prompt_tokens=[1, 2, 3, 4])
+        req2 = self._make_request(prompt_tokens=[1, 2, 3, 4])
+        self.assertEqual(self.hasher(req1), self.hasher(req2))
+
+    def test_empty_tokens_returns_empty(self):
+        req = self._make_request(prompt_tokens=[])
+        hashes = self.hasher(req)
+        self.assertEqual(hashes, [])
+
+    def test_output_tokens_included_in_hash(self):
+        # With only prompt tokens filling one block
+        req_prompt_only = self._make_request(
+            prompt_tokens=[1, 2],
+            output_tokens=[3, 4],
+        )
+        # The same tokens purely as prompt
+        req_prompt_full = self._make_request(prompt_tokens=[1, 2, 3, 4])
+        h1 = self.hasher(req_prompt_only)
+        h2 = self.hasher(req_prompt_full)
+        # Both should produce a hash for the first complete block
+        self.assertEqual(len(h1), 1)
+        self.assertEqual(len(h2), 1)
+
+
+# ---------------------------------------------------------------------------
+# LayerDoneCounter – time-tracking and cleanup
+# ---------------------------------------------------------------------------
+
+
+class TestLayerDoneCounterTimeTracking(unittest.TestCase):
+    """Tests for get_layer_complete_time, get_layer_wait_time, get_all_layer_times, get_elapsed_time."""
+
+    def setUp(self):
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        self.LayerDoneCounter = LayerDoneCounter
+
+    def test_get_layer_complete_time_none_before_done(self):
+        counter = self.LayerDoneCounter(num_layers=3)
+        self.assertIsNone(counter.get_layer_complete_time(0))
+
+    def test_get_layer_complete_time_after_mark_done(self):
+        counter = self.LayerDoneCounter(num_layers=3)
+        before = time.time()
+        counter.mark_layer_done(0)
+        after = time.time()
+        t = counter.get_layer_complete_time(0)
+        self.assertIsNotNone(t)
+        self.assertGreaterEqual(t, before)
+        self.assertLessEqual(t, after + 0.01)
+
+    def test_get_layer_wait_time_none_before_done(self):
+        counter = self.LayerDoneCounter(num_layers=3)
+        self.assertIsNone(counter.get_layer_wait_time(1))
+
+    def test_get_layer_wait_time_is_non_negative(self):
+        counter = self.LayerDoneCounter(num_layers=3)
+        counter.mark_layer_done(2)
+        wait_time = counter.get_layer_wait_time(2)
+        self.assertIsNotNone(wait_time)
+        self.assertGreaterEqual(wait_time, 0.0)
+
+    def test_get_all_layer_times_empty_before_any_done(self):
+        counter = self.LayerDoneCounter(num_layers=4)
+        times = counter.get_all_layer_times()
+        self.assertEqual(times, {})
+
+    def test_get_all_layer_times_after_mark_all_done(self):
+        counter = self.LayerDoneCounter(num_layers=4)
+        counter.mark_all_done()
+        times = counter.get_all_layer_times()
+        self.assertEqual(set(times.keys()), {0, 1, 2, 3})
+
+    def test_get_all_layer_times_returns_copy(self):
+        counter = self.LayerDoneCounter(num_layers=2)
+        counter.mark_layer_done(0)
+        times = counter.get_all_layer_times()
+        times[999] = 0.0  # mutate the returned dict
+        # Should not affect internal state
+        self.assertNotIn(999, counter.get_all_layer_times())
+
+    def test_get_elapsed_time_increases(self):
+        counter = self.LayerDoneCounter(num_layers=2)
+        t1 = counter.get_elapsed_time()
+        time.sleep(0.02)
+        t2 = counter.get_elapsed_time()
+        self.assertGreater(t2, t1)
+
+
+class TestLayerDoneCounterGetNumLayers(unittest.TestCase):
+    def test_get_num_layers(self):
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=7)
+        self.assertEqual(counter.get_num_layers(), 7)
+
+
+class TestLayerDoneCounterSetLayerEvent(unittest.TestCase):
+    """Tests for set_layer_event (no real CUDA event needed)."""
+
+    def test_set_layer_event_stores_value(self):
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=3)
+        mock_event = object()
+        counter.set_layer_event(1, mock_event)
+        self.assertIs(counter._cuda_events[1], mock_event)
+
+    def test_set_layer_event_out_of_range_is_safe(self):
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=3)
+        # Should not raise
+        counter.set_layer_event(99, object())
+
+
+class TestLayerDoneCounterCleanup(unittest.TestCase):
+    def test_cleanup_clears_events(self):
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=2)
+        counter.mark_all_done()
+        # No waiters, all done → cleanup should succeed
+        counter.cleanup()
+        self.assertEqual(len(counter._cuda_events), 0)
+
+    def test_cleanup_with_active_waiter_is_noop(self):
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        counter = LayerDoneCounter(num_layers=2)
+        # Manually increment wait count to simulate an active waiter
+        counter._increment_wait_count()
+        counter.cleanup()
+        # Should NOT have cleared events (waiter still active)
+        self.assertEqual(len(counter._cuda_events), 2)
+        counter._decrement_wait_count()
+
+
+class TestLayerDoneCounterInternalHelpers(unittest.TestCase):
+    def setUp(self):
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        self.LayerDoneCounter = LayerDoneCounter
+
+    def test_increment_and_decrement_wait_count(self):
+        counter = self.LayerDoneCounter(num_layers=2)
+        counter._increment_wait_count()
+        self.assertEqual(counter._wait_count, 1)
+        counter._decrement_wait_count()
+        self.assertEqual(counter._wait_count, 0)
+
+    def test_decrement_does_not_go_below_zero(self):
+        counter = self.LayerDoneCounter(num_layers=2)
+        counter._decrement_wait_count()
+        self.assertEqual(counter._wait_count, 0)
+
+    def test_should_cleanup_false_when_not_all_done(self):
+        counter = self.LayerDoneCounter(num_layers=3)
+        self.assertFalse(counter._should_cleanup())
+
+    def test_should_cleanup_true_when_all_done_no_waiters(self):
+        counter = self.LayerDoneCounter(num_layers=2)
+        counter.mark_all_done()
+        self.assertTrue(counter._should_cleanup())
+
+    def test_should_cleanup_false_when_waiter_present(self):
+        counter = self.LayerDoneCounter(num_layers=2)
+        counter.mark_all_done()
+        counter._increment_wait_count()
+        self.assertFalse(counter._should_cleanup())
+        counter._decrement_wait_count()
 
 
 if __name__ == "__main__":

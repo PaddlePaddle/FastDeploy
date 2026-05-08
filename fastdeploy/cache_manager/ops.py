@@ -49,12 +49,6 @@ try:
             raise RuntimeError("CUDA no need of get_peer_mem_addr!")
 
     elif current_platform.is_maca():
-        from fastdeploy.model_executor.ops.gpu import (
-            swap_cache_per_layer,  # 单层 KV cache 换入算子（同步）
-        )
-        from fastdeploy.model_executor.ops.gpu import (
-            swap_cache_per_layer_async,  # 单层 KV cache 换入算子（异步，无强制 sync）
-        )
         from fastdeploy.model_executor.ops.gpu import (  # get_output_kv_signal,; ipc_sent_key_value_cache_by_remote_ptr_block_sync,
             cuda_host_alloc,
             cuda_host_free,

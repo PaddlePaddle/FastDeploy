@@ -245,11 +245,11 @@ class ResourceManagerV1(ResourceManager):
         self.need_block_num_map = dict()
 
         self.encoder_cache = None
-        if config.model_config.enable_mm and config.cache_config.max_encoder_cache > 0:
+        if config.enable_mm_runtime and config.cache_config.max_encoder_cache > 0:
             self.encoder_cache = EncoderCacheManager(config.cache_config.max_encoder_cache)
 
         self.processor_cache = None
-        if config.model_config.enable_mm and config.cache_config.max_processor_cache > 0:
+        if config.enable_mm_runtime and config.cache_config.max_processor_cache > 0:
             max_processor_cache_in_bytes = int(config.cache_config.max_processor_cache * 1024 * 1024 * 1024)
             self.processor_cache = ProcessorCacheManager(max_processor_cache_in_bytes)
 
@@ -714,7 +714,7 @@ class ResourceManagerV1(ResourceManager):
             num_new_tokens = token_budget // self.config.cache_config.block_size * self.config.cache_config.block_size
         request.with_image = False
 
-        if not self.config.model_config.enable_mm:
+        if not self.config.enable_mm_runtime:
             return num_new_tokens
 
         inputs = request.multimodal_inputs
@@ -1948,13 +1948,7 @@ class ResourceManagerV1(ResourceManager):
                 request.block_tables[request.num_cached_blocks :], request.request_id
             )
         else:
-            if self.config.cache_config.enable_prefix_caching:
-                self.cache_manager.release_block_ids(request)
-                self.cache_manager.recycle_gpu_blocks(
-                    request.block_tables[request.num_cached_blocks :], request.request_id
-                )
-            else:
-                self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
+            self.cache_manager.recycle_gpu_blocks(request.block_tables, request.request_id)
         request.block_tables = []
 
         if request.request_id in self.using_extend_tables_req_id:

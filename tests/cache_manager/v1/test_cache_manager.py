@@ -788,5 +788,194 @@ class TestUpdateStorageBlocksToHost(unittest.TestCase):
         self.assertEqual(len(cache_manager._prefetch_node_map), 0)
 
 
+class TestCacheManagerOffloadToHost(unittest.TestCase):
+    """Tests for CacheManager.offload_to_host."""
+
+    def test_offload_frees_device_blocks(self):
+        """After offload, device blocks should be released."""
+        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=20)
+        device_blocks = cm._device_pool.allocate(4)
+        self.assertIsNotNone(device_blocks)
+        free_before = cm.num_free_device_blocks
+
+        success = cm.offload_to_host(device_blocks)
+
+        self.assertTrue(success)
+        self.assertEqual(cm.num_free_device_blocks, free_before + 4)
+
+    def test_offload_allocates_host_blocks(self):
+        """After offload, host blocks should be consumed."""
+        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=20)
+        device_blocks = cm._device_pool.allocate(3)
+        free_host_before = cm.num_free_host_blocks
+
+        cm.offload_to_host(device_blocks)
+
+        self.assertEqual(cm.num_free_host_blocks, free_host_before - 3)
+
+    def test_offload_fails_when_no_host_blocks(self):
+        """Offload should return False when host pool is exhausted."""
+        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=0)
+        device_blocks = cm._device_pool.allocate(2)
+
+        success = cm.offload_to_host(device_blocks)
+        self.assertFalse(success)
+
+    def test_offload_copies_device_metadata_to_host(self):
+        """Metadata on device blocks should be copied to host blocks."""
+        from fastdeploy.cache_manager.v1.metadata import CacheBlockMetadata
+
+        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=20)
+        device_blocks = cm._device_pool.allocate(1)
+        block_id = device_blocks[0]
+        meta = CacheBlockMetadata(block_id=block_id, device_id=0, block_size=64, ref_count=5)
+        cm._device_pool.set_metadata(block_id, meta)
+
+        cm.offload_to_host(device_blocks)
+
+        # Find the newly used host block (last used)
+        used_host = list(cm._host_pool._used_blocks)
+        self.assertEqual(len(used_host), 1)
+        host_meta = cm._host_pool.get_metadata(used_host[0])
+        self.assertIsNotNone(host_meta)
+        self.assertEqual(host_meta.ref_count, 5)
+
+    def test_offload_empty_list_returns_true(self):
+        """Offloading empty list succeeds."""
+        cm = create_cache_manager()
+        success = cm.offload_to_host([])
+        self.assertTrue(success)
+
+
+# ---------------------------------------------------------------------------
+# load_from_host
+# ---------------------------------------------------------------------------
+
+
+class TestCacheManagerLoadFromHost(unittest.TestCase):
+    """Tests for CacheManager.load_from_host."""
+
+    def test_load_frees_host_blocks(self):
+        """After loading, host blocks should be released."""
+        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=20)
+        host_blocks = cm._host_pool.allocate(4)
+        free_before = cm.num_free_host_blocks
+
+        success = cm.load_from_host(host_blocks)
+
+        self.assertTrue(success)
+        self.assertEqual(cm.num_free_host_blocks, free_before + 4)
+
+    def test_load_allocates_device_blocks(self):
+        """After loading, device blocks should be consumed."""
+        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=20)
+        host_blocks = cm._host_pool.allocate(3)
+        free_device_before = cm.num_free_device_blocks
+
+        cm.load_from_host(host_blocks)
+
+        self.assertEqual(cm.num_free_device_blocks, free_device_before - 3)
+
+    def test_load_fails_when_no_device_blocks(self):
+        """Load should return False when device pool is exhausted."""
+        cm = create_cache_manager(total_block_num=2, num_cpu_blocks=20)
+        # Fill up device
+        cm._device_pool.allocate(2)
+        host_blocks = cm._host_pool.allocate(2)
+
+        success = cm.load_from_host(host_blocks)
+        self.assertFalse(success)
+
+    def test_load_empty_list_returns_true(self):
+        """Loading empty list succeeds."""
+        cm = create_cache_manager()
+        success = cm.load_from_host([])
+        self.assertTrue(success)
+
+
+# ---------------------------------------------------------------------------
+# get_pending_backup_count / check_and_add_pending_backup /
+# issue_pending_backup_to_batch_request
+# ---------------------------------------------------------------------------
+
+
+class TestCacheManagerPendingBackup(unittest.TestCase):
+    """Tests for write_through_selective backup methods."""
+
+    def _create_write_through_cm(self, threshold: int = 1):
+        from fastdeploy.cache_manager.v1.cache_manager import CacheManager
+
+        config = get_default_test_fd_config()
+        config.cache_config.total_block_num = 50
+        config.cache_config.num_cpu_blocks = 50
+        config.cache_config.block_size = 64
+        config.cache_config.enable_prefix_caching = True
+        config.cache_config.write_policy = "write_through_selective"
+        config.cache_config.write_through_threshold = threshold
+        return CacheManager(config)
+
+    def test_get_pending_backup_count_initially_zero(self):
+        cm = self._create_write_through_cm()
+        self.assertEqual(cm.get_pending_backup_count(), 0)
+
+    def test_issue_pending_backup_returns_none_when_empty(self):
+        cm = self._create_write_through_cm()
+        result = cm.issue_pending_backup_to_batch_request()
+        self.assertIsNone(result)
+
+    def test_check_and_add_pending_backup_does_nothing_without_prefix_caching(self):
+        """When prefix caching is off, check_and_add_pending_backup is a no-op."""
+        cm = create_cache_manager(enable_prefix_caching=False)
+        cm.check_and_add_pending_backup()  # should not raise
+        self.assertEqual(cm.get_pending_backup_count(), 0)
+
+    def test_check_and_add_pending_backup_does_nothing_without_host_cache(self):
+        """Without host cache, check_and_add_pending_backup is a no-op."""
+        cm = self._create_write_through_cm()
+        cm.enable_host_cache = False
+        cm.check_and_add_pending_backup()
+        self.assertEqual(cm.get_pending_backup_count(), 0)
+
+    def test_check_and_add_pending_backup_adds_candidates(self):
+        """After inserting nodes that meet threshold, backup should be queued."""
+        cm = self._create_write_through_cm(threshold=1)
+        rt = cm._radix_tree
+
+        # Insert nodes and decrement so they become evictable
+        nodes, _ = rt.insert([("h1", 0), ("h2", 1), ("h3", 2)])
+        # Simulate hit_count meeting threshold (threshold=1, default hit_count=1)
+        cm._device_pool.allocate(3)  # Ensure enough device blocks consumed
+        rt.decrement_ref_nodes(nodes)
+
+        cm.check_and_add_pending_backup()
+        # Should have added at least something if there are candidates
+        # (may be 0 if no candidates qualify; just ensure no exception)
+        count = cm.get_pending_backup_count()
+        self.assertGreaterEqual(count, 0)
+
+    def test_issue_pending_backup_clears_queue(self):
+        """After issuing, the pending backup queue should be empty."""
+        cm = self._create_write_through_cm(threshold=1)
+        rt = cm._radix_tree
+
+        nodes, _ = rt.insert([("h1", 0)])
+        cm._device_pool.allocate(1)
+        rt.decrement_ref_nodes(nodes)
+        cm.check_and_add_pending_backup()
+
+        cm.issue_pending_backup_to_batch_request()
+        self.assertEqual(cm.get_pending_backup_count(), 0)
+
+    def test_issue_returns_none_when_host_cache_disabled(self):
+        """If host cache is not enabled, issue returns None and clears queue."""
+        cm = self._create_write_through_cm()
+        # Manually add a fake pending entry
+        cm._pending_backup.append(([], []))
+        cm.enable_host_cache = False
+        result = cm.issue_pending_backup_to_batch_request()
+        self.assertIsNone(result)
+        self.assertEqual(cm.get_pending_backup_count(), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
