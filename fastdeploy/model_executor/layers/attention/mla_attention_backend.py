@@ -83,7 +83,7 @@ def fused_read_cache_and_interleave_naive(
     block_tables: paddle.Tensor,
     new_compressed_kv: paddle.Tensor,
     new_k_pe: paddle.Tensor,
-    cu_seqlens_cached_kv: paddle.Tensor,
+    cu_seqlens_k: paddle.Tensor,
     cu_seqlens_q: paddle.Tensor,
     kv_lora_rank: int,
     qk_rope_head_dim: int,
@@ -91,15 +91,14 @@ def fused_read_cache_and_interleave_naive(
 ) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """Python/Paddle reference of the fused read+interleave path.
 
-    Returns ``(full_compressed_kv, full_k_pe)`` with per-batch layout
-    ``[cached_tokens, new_tokens]`` in token order.
+    Takes with-cache ``cu_seqlens_k`` (cumsum of ``cached + new``
+    per batch) plus ``cu_seqlens_q`` (new-only); the cached length of each
+    batch is derived as ``k_len - new_len``.
     """
-    bsz = cu_seqlens_cached_kv.shape[0] - 1
-    cu_cached = cu_seqlens_cached_kv.tolist()
+    bsz = cu_seqlens_k.shape[0] - 1
+    cu_total = cu_seqlens_k.tolist()
     cu_new = cu_seqlens_q.tolist()
-    total_cached = int(cu_cached[bsz])
-    total_new = new_compressed_kv.shape[0]
-    total_tokens = total_cached + total_new
+    total_tokens = int(cu_total[bsz])
 
     full_compressed_kv = paddle.empty([total_tokens, kv_lora_rank], dtype=new_compressed_kv.dtype)
     full_k_pe = paddle.empty([total_tokens, qk_rope_head_dim], dtype=new_k_pe.dtype)
@@ -108,8 +107,9 @@ def fused_read_cache_and_interleave_naive(
 
     out_pos = 0
     for b in range(bsz):
-        nc = int(cu_cached[b + 1]) - int(cu_cached[b])
+        k_len = int(cu_total[b + 1]) - int(cu_total[b])
         nn = int(cu_new[b + 1]) - int(cu_new[b])
+        nc = k_len - nn
         # cached tokens first
         for t in range(nc):
             block_idx = t // block_size
@@ -138,29 +138,62 @@ def _fused_read_interleave_kernel(
     latent_cache_ptr,  # [num_blocks, 1, block_size, LATENT_DIM]
     new_kv_c_ptr,  # [total_new, kv_lora_rank]
     new_k_pe_ptr,  # [total_new, qk_rope_head_dim]
-    is_cached_ptr,  # [total_tokens] int32 (1 = cached, 0 = new)
-    src_off_ptr,  # [total_tokens] int32
+    cu_total_ptr,  # [bsz+1] int32  (= forward_meta.cu_seqlens_k)
+    cu_new_ptr,  # [bsz+1] int32  (= cu_seqlens_q)
+    block_tables_ptr,  # [bsz, max_blocks_per_seq] int32
     out_kv_c_ptr,  # [total_tokens, kv_lora_rank]
     out_k_pe_ptr,  # [total_tokens, qk_rope_head_dim]
+    bsz,
+    max_blocks_per_seq: tl.constexpr,
+    block_size: tl.constexpr,
     kv_lora_rank: tl.constexpr,
     qk_rope_head_dim: tl.constexpr,
     LATENT_DIM: tl.constexpr,
 ):
+    """Single-kernel fused read+interleave.
+
+    Output tokens are laid out contiguously in batch-major order with per-batch
+    layout ``[cached, new]``. The owning batch ``b`` for each ``token_idx`` is
+    located via a linear scan on ``cu_total`` (bsz is small; O(bsz) overhead is
+    negligible next to per-token LATENT_DIM load/store). Per-batch cached
+    length is derived in-kernel as
+    ``nc = (cu_total[b+1] - cu_total[b]) - (cu_new[b+1] - cu_new[b])``.
+    """
     token_idx = tl.program_id(axis=0)
-    is_cached = tl.load(is_cached_ptr + token_idx)
-    src_off = tl.load(src_off_ptr + token_idx)
+
+    # Linear scan: largest b such that cu_total[b] <= token_idx.
+    b = 0
+    for i in range(bsz):
+        base_i = tl.load(cu_total_ptr + i)
+        if token_idx >= base_i:
+            b = i
+
+    ct_b = tl.load(cu_total_ptr + b)
+    ct_b1 = tl.load(cu_total_ptr + b + 1)
+    cn_b = tl.load(cu_new_ptr + b)
+    cn_b1 = tl.load(cu_new_ptr + b + 1)
+
+    k_len = ct_b1 - ct_b
+    nn = cn_b1 - cn_b
+    nc = k_len - nn
+    local_t = token_idx - ct_b
 
     kv_c_offs = tl.arange(0, kv_lora_rank)
     k_pe_offs = tl.arange(0, qk_rope_head_dim)
 
-    if is_cached != 0:
-        # src_off is a flat token offset into latent_cache: physical_block_id * block_size + block_offset
-        base = latent_cache_ptr + src_off * LATENT_DIM
+    if local_t < nc:
+        # cached token: walk paged latent_cache via block_tables
+        block_idx = local_t // block_size
+        block_off = local_t % block_size
+        pbid = tl.load(block_tables_ptr + b * max_blocks_per_seq + block_idx)
+        base = latent_cache_ptr + (pbid * block_size + block_off) * LATENT_DIM
         kv_c_val = tl.load(base + kv_c_offs)
         k_pe_val = tl.load(base + kv_lora_rank + k_pe_offs)
     else:
-        kv_c_val = tl.load(new_kv_c_ptr + src_off * kv_lora_rank + kv_c_offs)
-        k_pe_val = tl.load(new_k_pe_ptr + src_off * qk_rope_head_dim + k_pe_offs)
+        # new token: linear region in new_compressed_kv / new_k_pe
+        src = cn_b + (local_t - nc)
+        kv_c_val = tl.load(new_kv_c_ptr + src * kv_lora_rank + kv_c_offs)
+        k_pe_val = tl.load(new_k_pe_ptr + src * qk_rope_head_dim + k_pe_offs)
 
     tl.store(out_kv_c_ptr + token_idx * kv_lora_rank + kv_c_offs, kv_c_val)
     tl.store(out_k_pe_ptr + token_idx * qk_rope_head_dim + k_pe_offs, k_pe_val)
@@ -171,7 +204,7 @@ def fused_read_cache_and_interleave_triton(
     block_tables: paddle.Tensor,
     new_compressed_kv: paddle.Tensor,
     new_k_pe: paddle.Tensor,
-    cu_seqlens_cached_kv: paddle.Tensor,
+    cu_seqlens_k: paddle.Tensor,
     cu_seqlens_q: paddle.Tensor,
     kv_lora_rank: int,
     qk_rope_head_dim: int,
@@ -179,61 +212,33 @@ def fused_read_cache_and_interleave_triton(
 ) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """Triton-accelerated fused read+interleave.
 
-    Host-side builds ``is_cached[t]`` and ``src_off[t]`` (O(total_tokens) CPU
-    work) so the kernel body contains only a single branch with no table walk.
+    Single kernel launch with zero Python metadata computation. All per-batch
+    geometry is derived in-kernel from ``cu_seqlens_k`` and
+    ``cu_seqlens_q``. Only one scalar D2H is needed: the final cumsum entry,
+    used to size the output tensors.
     """
-    bsz = cu_seqlens_cached_kv.shape[0] - 1
-    cu_cached = cu_seqlens_cached_kv.tolist()
-    cu_new = cu_seqlens_q.tolist()
-    total_cached = int(cu_cached[bsz])
-    total_new = new_compressed_kv.shape[0]
-    total_tokens = total_cached + total_new
+    bsz = cu_seqlens_k.shape[0] - 1
+    total_tokens = int(cu_seqlens_k[-1])
 
     full_compressed_kv = paddle.empty([total_tokens, kv_lora_rank], dtype=new_compressed_kv.dtype)
     full_k_pe = paddle.empty([total_tokens, qk_rope_head_dim], dtype=new_k_pe.dtype)
     if total_tokens == 0:
         return full_compressed_kv, full_k_pe
 
-    # block_tables.tolist() is a one-shot D2H; acceptable since host-side loop
-    # already requires CPU iteration over total_tokens.
-    bt_list = block_tables.tolist()
+    max_blocks_per_seq = block_tables.shape[1]
 
-    is_cached_host = [0] * total_tokens
-    src_off_host = [0] * total_tokens
-    out_pos = 0
-    for b in range(bsz):
-        nc = int(cu_cached[b + 1]) - int(cu_cached[b])
-        nn = int(cu_new[b + 1]) - int(cu_new[b])
-        for t in range(nc):
-            block_idx = t // block_size
-            block_offset = t % block_size
-            physical_block_id = int(bt_list[b][block_idx])
-            is_cached_host[out_pos] = 1
-            src_off_host[out_pos] = physical_block_id * block_size + block_offset
-            out_pos += 1
-        new_base = int(cu_new[b])
-        for t in range(nn):
-            is_cached_host[out_pos] = 0
-            src_off_host[out_pos] = new_base + t
-            out_pos += 1
-
-    assert (
-        out_pos == total_tokens
-    ), f"fused_read_cache_and_interleave_triton: out_pos={out_pos} != total_tokens={total_tokens}"
-
-    dev = new_compressed_kv.place
-    is_cached_t = paddle.to_tensor(is_cached_host, dtype="int32", place=dev)
-    src_off_t = paddle.to_tensor(src_off_host, dtype="int32", place=dev)
-
-    grid = (total_tokens,)
-    _fused_read_interleave_kernel[grid](
+    _fused_read_interleave_kernel[(total_tokens,)](
         latent_cache,
         new_compressed_kv,
         new_k_pe,
-        is_cached_t,
-        src_off_t,
+        cu_seqlens_k,
+        cu_seqlens_q,
+        block_tables,
         full_compressed_kv,
         full_k_pe,
+        bsz,
+        max_blocks_per_seq=max_blocks_per_seq,
+        block_size=block_size,
         kv_lora_rank=kv_lora_rank,
         qk_rope_head_dim=qk_rope_head_dim,
         LATENT_DIM=kv_lora_rank + qk_rope_head_dim,
@@ -413,18 +418,9 @@ class MLAAttentionMetadata(AttentionMetadata):
     max_kv_len_this_time: Optional[paddle.Tensor] = None
 
     # For prefix cache and chunked prefill support
-    # Indicates whether any request has prefix cache (cached KV from previous requests)
-    has_prefix_cache: bool = False
-    # Total number of cached KV tokens across all requests with prefix cache
-    total_cached_kv_tokens: int = 0
-    # cu_seqlens for cached KV tokens (similar to cu_seqlens_k but for cached portion)
-    cu_seqlens_cached_kv: Optional[paddle.Tensor] = None
-    # Maximum cached KV length across all requests
-    max_cached_kv_len: int = 0
-    # cu_seqlens_k that includes cached tokens (for FlashAttention when prefix cache is present)
-    cu_seqlens_k_with_cache: Optional[paddle.Tensor] = None
-    # Maximum total KV length (cached + new) across all requests for FlashAttention
-    max_total_kv_len: int = 0
+    # ``cu_seqlens_k`` semantics produced by ``get_padding_offset``.
+    # forward_meta.cu_seqlens_k: Optional[paddle.Tensor] = None
+    max_seqlen_k: int = 0
 
 
 class MLAAttentionBackend(AttentionBackend):
@@ -558,65 +554,7 @@ class MLAAttentionBackend(AttentionBackend):
         metadata.max_enc_len_this_time = forward_meta.max_len_tensor_cpu[1]
         metadata.max_dec_len_this_time = forward_meta.max_len_tensor_cpu[2]
         metadata.max_kv_len_this_time = forward_meta.max_len_tensor_cpu[5]
-
-        # Prefix-cache metadata build.
-        # Fast path: max(seq_lens_decoder)==0 ⇔ no prefix cache this step. Reading from
-        # max_len_tensor_cpu (already CPU, populated by get_block_shape_and_split_kv_block)
-        # costs zero D2H, skipping all loops/H2D below.
-        if int(forward_meta.max_len_tensor_cpu[2]) == 0:
-            metadata.has_prefix_cache = False
-            metadata.total_cached_kv_tokens = 0
-            metadata.max_cached_kv_len = 0
-            metadata.max_total_kv_len = 0  # unused when has_prefix_cache=False
-        else:
-            # Slow path: per-batch K layout after interleave = [dec_len cached, seq_this_time new].
-            bsz = forward_meta.seq_lens_this_time.shape[0]
-            # Single batched D2H for both length tensors.
-            stacked = paddle.stack([forward_meta.seq_lens_decoder, forward_meta.seq_lens_this_time]).tolist()
-            dec_lens, seq_this_times = stacked[0], stacked[1]
-
-            total_cached_kv_tokens = 0
-            max_cached_kv_len = 0
-            max_total_kv_len = 0
-            cu_cached = [0] * (bsz + 1)
-            cu_total = [0] * (bsz + 1)
-            cumsum_cached = 0
-            cumsum_total = 0
-            for i in range(bsz):
-                dec_len = int(dec_lens[i])
-                seq_this = int(seq_this_times[i])
-                if dec_len > 0:
-                    total_cached_kv_tokens += dec_len
-                    if dec_len > max_cached_kv_len:
-                        max_cached_kv_len = dec_len
-                    cumsum_cached += dec_len
-                    cumsum_total += dec_len
-                cumsum_total += seq_this
-                per_batch_k = dec_len + seq_this
-                if per_batch_k > max_total_kv_len:
-                    max_total_kv_len = per_batch_k
-                cu_cached[i + 1] = cumsum_cached
-                cu_total[i + 1] = cumsum_total
-
-            # Entering slow path implies max_dec>0 ⇒ at least one batch has dec_len>0.
-            metadata.has_prefix_cache = True
-            metadata.total_cached_kv_tokens = total_cached_kv_tokens
-            metadata.max_cached_kv_len = max_cached_kv_len
-            metadata.max_total_kv_len = max_total_kv_len
-
-            # Single batched H2D: [2, bsz+1] → two zero-copy views.
-            dev = forward_meta.seq_lens_decoder.place
-            cu_pair = paddle.to_tensor([cu_cached, cu_total], dtype=paddle.int32, place=dev)
-            metadata.cu_seqlens_cached_kv = cu_pair[0]
-            metadata.cu_seqlens_k_with_cache = cu_pair[1]
-
-            # Cross-check precision guard: max_total_kv_len MUST dominate per-batch K length,
-            # otherwise FlashAttention tile-truncates the last K rows and silently corrupts output.
-            observed_max = max(cu_total[i + 1] - cu_total[i] for i in range(bsz)) if bsz > 0 else 0
-            assert max_total_kv_len >= observed_max, (
-                f"max_total_kv_len={max_total_kv_len} < observed per-batch max "
-                f"K length={observed_max}. FlashAttention would truncate K tiles."
-            )
+        metadata.max_seqlen_k = max(metadata.max_kv_len_this_time.item(), metadata.max_enc_len_this_time.item())
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -664,10 +602,10 @@ class MLAAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
-        Prefill阶段的前向传播，支持 prefix cache
+        Prefill阶段的前向传播，支持 chunk prefill /prefix cache
 
-        对于 MLA 模型的 prefix cache 支持：
-        1. 如果存在 prefix cache (metadata.has_prefix_cache = True)
+        对于 MLA 模型的 chunk prefill /prefix cache 支持：
+        1. 如果开启 chunk prefill /prefix cache
            - k 和 v 应该已经包含了 cached KV 和 new KV 的拼接
            - cu_seqlens_k 应该已经调整为包含 cached tokens
         2. 如果不存在 prefix cache，行为与之前相同
@@ -697,29 +635,14 @@ class MLAAttentionBackend(AttentionBackend):
             getattr(forward_meta, "max_input_length", -1),
         )
 
-        # Flash注意力计算
-        # 对于 prefix cache 场景：
-        # - k 和 v 应该已经包含了 cached + new tokens
-        # - cu_seqlens_k 应该已经调整
-        # - max_seqlen_k 应该是 cached_len + new_len 的最大值
-
-        # 获取正确的 cu_seqlens_k 和 max_seqlen_k
-        if metadata.has_prefix_cache and metadata.cu_seqlens_k_with_cache is not None:
-            # When prefix cache is present, use cu_seqlens_k that includes cached tokens
-            cu_seqlens_k = metadata.cu_seqlens_k_with_cache
-            max_seqlen_k = metadata.max_total_kv_len  # max(dec_len + enc_len)
-        else:
-            cu_seqlens_k = forward_meta.cu_seqlens_k
-            max_seqlen_k = metadata.max_enc_len_this_time
-
         fmha_out = self.flash_attn_func(
             q,
             k,
             v,
             forward_meta.cu_seqlens_q,
-            cu_seqlens_k,
-            metadata.max_enc_len_this_time,  # max_seqlen_q - only new tokens
-            max_seqlen_k,  # max_seqlen_k - may include cached tokens
+            forward_meta.cu_seqlens_k,
+            metadata.max_enc_len_this_time,
+            metadata.max_seqlen_k,
             causal=self.causal,
             **self.flash_attn_kwargs,
         )[0]
@@ -826,9 +749,9 @@ class MLAAttentionBackend(AttentionBackend):
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
         """
-        Mixed模式的前向传播，支持 prefix cache
+        Mixed模式的前向传播，支持 chunk prefill /prefix cache
 
-        对于 MLA 模型的 prefix cache 支持：
+        对于 MLA 模型的 chunk prefill /prefix cache 支持：
         1. Prefill 分支：k 和 v 应该已包含 cached + new tokens
         2. Decode 分支：保持原有 latent attention 逻辑
         """
@@ -846,13 +769,6 @@ class MLAAttentionBackend(AttentionBackend):
 
         # Prefill branch: k is not None
         if k is not None:
-            bsz = forward_meta.cu_seqlens_q.shape[0] - 1
-
-            # Write cache only for new tokens of prefill/chunked-prefill batches.
-            # Decode batches (seq_lens_encoder == 0) are intentionally skipped here — they
-            # are handled later by decode_mla_write_cache() via the k=None branch when
-            # need_do_decode is True. Using seq_lens_encoder keeps that separation correct
-            # and avoids double-writing decode tokens.
             prefill_mla_write_cache(
                 compressed_kv,
                 k_pe,
@@ -867,32 +783,15 @@ class MLAAttentionBackend(AttentionBackend):
                 self.max_seq_len,
             )
 
-            # Determine cu_seqlens_k and max_seqlen_k considering prefix cache
-            if metadata.has_prefix_cache and metadata.cu_seqlens_k_with_cache is not None:
-                cu_seqlens_k = metadata.cu_seqlens_k_with_cache
-                max_seqlen_k = metadata.max_total_kv_len  # max(dec_len + enc_len)
-            else:
-                cu_seqlens_k = forward_meta.cu_seqlens_k
-                max_seqlen_k = metadata.max_enc_len_this_time
-
-            # Shape consistency: k/v token count must match cu_seqlens_k terminal value
-            _expected_k = cu_seqlens_k[bsz].item() if hasattr(cu_seqlens_k[bsz], "item") else int(cu_seqlens_k[bsz])
-            assert (
-                k.shape[0] == _expected_k
-            ), f"forward_mixed: k.shape[0]={k.shape[0]} != cu_seqlens_k[-1]={_expected_k}"
-            assert (
-                v.shape[0] == _expected_k
-            ), f"forward_mixed: v.shape[0]={v.shape[0]} != cu_seqlens_k[-1]={_expected_k}"
-
             # FlashAttention for prefill
             fmha_out = self.flash_attn_func(
                 q,
                 k,
                 v,
                 forward_meta.cu_seqlens_q,
-                cu_seqlens_k,
-                metadata.max_enc_len_this_time,  # max_seqlen_q - only new tokens
-                max_seqlen_k,  # max_seqlen_k - may include cached tokens
+                forward_meta.cu_seqlens_k,
+                metadata.max_enc_len_this_time,
+                metadata.max_seqlen_k,
                 causal=self.causal,
                 **self.flash_attn_kwargs,
             )[0]

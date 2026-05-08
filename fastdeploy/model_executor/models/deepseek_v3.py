@@ -208,6 +208,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         super().__init__()
 
         self.fd_config = fd_config
+        self.layer_id = layer_id
         self.use_gated_attn = getattr(self.fd_config.model_config, "use_gated_attn", False)
         self.use_bias = getattr(self.fd_config.model_config, "use_bias", False)
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
@@ -354,7 +355,6 @@ class DeepseekV3MLAAttention(nn.Layer):
         """MLA attention forward with prefix cache support."""
 
         from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
-            MLAAttentionMetadata,
             fused_read_cache_and_interleave,
         )
 
@@ -383,35 +383,25 @@ class DeepseekV3MLAAttention(nn.Layer):
         need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
 
         if need_do_prefill:  # max_enc_len_this_time
-            # Check for prefix cache
-            attn_meta = forward_meta.attn_backend.attention_metadata if hasattr(forward_meta, "attn_backend") else None
-            has_prefix_cache = False
-            total_cached_tokens = 0
-
-            if attn_meta is not None and isinstance(attn_meta, MLAAttentionMetadata):
-                has_prefix_cache = attn_meta.has_prefix_cache
-                total_cached_tokens = attn_meta.total_cached_kv_tokens
-
             # Handle prefix cache: read cached latent from paged cache and interleave
             # with the new-token latent in a single fused kernel call.
             full_compressed_kv = compressed_kv
             full_k_pe = key_pe.squeeze(1)
-            if has_prefix_cache and total_cached_tokens > 0:
-                layer_id = self.mla_attn.layer_id if hasattr(self.mla_attn, "layer_id") else 0
-                latent_cache = forward_meta.caches[layer_id] if hasattr(forward_meta, "caches") else None
-                if latent_cache is not None:
-                    block_size = self.mla_attn.block_size if hasattr(self.mla_attn, "block_size") else 64
-                    full_compressed_kv, full_k_pe = fused_read_cache_and_interleave(
-                        latent_cache,
-                        forward_meta.block_tables,
-                        compressed_kv,
-                        key_pe.squeeze(1),
-                        attn_meta.cu_seqlens_cached_kv,
-                        forward_meta.cu_seqlens_q,
-                        self.kv_lora_rank,
-                        self.qk_rope_head_dim,
-                        block_size,
-                    )
+            if self.fd_config.cache_config.enable_chunked_prefill or self.fd_config.cache_config.enable_prefix_caching:
+                latent_cache = forward_meta.caches[self.layer_id] if hasattr(forward_meta, "caches") else None
+
+                block_size = self.mla_attn.block_size if hasattr(self.mla_attn, "block_size") else 64
+                full_compressed_kv, full_k_pe = fused_read_cache_and_interleave(
+                    latent_cache,
+                    forward_meta.block_tables,
+                    compressed_kv,
+                    key_pe.squeeze(1),
+                    forward_meta.cu_seqlens_k,
+                    forward_meta.cu_seqlens_q,
+                    self.kv_lora_rank,
+                    self.qk_rope_head_dim,
+                    block_size,
+                )
 
             # Project latent KV to full key and value
             key_value = self.kv_b_proj(full_compressed_kv)
