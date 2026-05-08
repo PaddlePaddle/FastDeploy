@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 import time
 import unittest
 from unittest.mock import Mock, patch
@@ -30,10 +31,21 @@ class TestFlashInferAllReduceResidualRMSNorm(unittest.TestCase):
     def setUpClass(cls):
         """Set up test environment"""
         if paddle.is_compiled_with_cuda():
-            paddle.set_device("gpu")
+            # Bind each rank to its own GPU explicitly; otherwise all ranks
+            # default to "gpu:0" and cudaIpcOpenMemHandle fails with
+            # "invalid device context".
+            local_rank = int(
+                os.environ.get("PADDLE_LOCAL_RANK", os.environ.get("FLAGS_selected_gpus", "0").split(",")[0])
+            )
+            paddle.set_device(f"gpu:{local_rank}")
         else:
             paddle.set_device("cpu")
         dist.init_parallel_env()
+        if paddle.is_compiled_with_cuda():
+            # Force the CUDA primary context to be created on the current
+            # device before flashinfer's cudart IPC calls run.
+            paddle.zeros([1]).cuda()
+            paddle.device.cuda.synchronize()
 
     def setUp(self):
         """Initialize each test case"""

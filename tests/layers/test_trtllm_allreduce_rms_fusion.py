@@ -21,10 +21,10 @@ import sys
 
 def test_run_distributed():
     """Launch multi-GPU distributed test via paddle.distributed.launch as subprocess"""
-    flashinfer_cache_dir = os.path.expanduser("~/.cache/flashinfer")
-    if os.path.exists(flashinfer_cache_dir):
-        print(f"=== Clearing flashinfer cache directory: {flashinfer_cache_dir} ===")
-        subprocess.run(["rm", "-rf", flashinfer_cache_dir], check=True)
+    # flashinfer_cache_dir = os.path.expanduser("~/.cache/flashinfer")
+    # if os.path.exists(flashinfer_cache_dir):
+    #     print(f"=== Clearing flashinfer cache directory: {flashinfer_cache_dir} ===")
+    #     subprocess.run(["rm", "-rf", flashinfer_cache_dir], check=True)
     current_dir = os.path.dirname(os.path.abspath(__file__))
     run_script = os.path.join(current_dir, "trtllm_allreduce_rms_fusion.py")
     os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
