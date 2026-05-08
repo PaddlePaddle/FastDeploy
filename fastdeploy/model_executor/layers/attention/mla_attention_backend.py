@@ -559,113 +559,64 @@ class MLAAttentionBackend(AttentionBackend):
         metadata.max_dec_len_this_time = forward_meta.max_len_tensor_cpu[2]
         metadata.max_kv_len_this_time = forward_meta.max_len_tensor_cpu[5]
 
-        # Compute prefix cache metadata
-        # For MLA, prefix cache is indicated by seq_lens_decoder > 0 when there are encoder tokens
-        # This means the request has cached KV from a previous prefix
-        bsz = forward_meta.seq_lens_this_time.shape[0]
-        has_prefix_cache = False
-        total_cached_kv_tokens = 0
-        max_cached_kv_len = 0
-        max_total_kv_len = 0  # max(dec_len + enc_len) for FlashAttention
+        # Prefix-cache metadata build.
+        # Fast path: max(seq_lens_decoder)==0 ⇔ no prefix cache this step. Reading from
+        # max_len_tensor_cpu (already CPU, populated by get_block_shape_and_split_kv_block)
+        # costs zero D2H, skipping all loops/H2D below.
+        if int(forward_meta.max_len_tensor_cpu[2]) == 0:
+            metadata.has_prefix_cache = False
+            metadata.total_cached_kv_tokens = 0
+            metadata.max_cached_kv_len = 0
+            metadata.max_total_kv_len = 0  # unused when has_prefix_cache=False
+        else:
+            # Slow path: per-batch K layout after interleave = [dec_len cached, seq_this_time new].
+            bsz = forward_meta.seq_lens_this_time.shape[0]
+            # Single batched D2H for both length tensors.
+            stacked = paddle.stack([forward_meta.seq_lens_decoder, forward_meta.seq_lens_this_time]).tolist()
+            dec_lens, seq_this_times = stacked[0], stacked[1]
 
-        # Check if any request has prefix cache
-        # Prefix cache exists when seq_lens_decoder > 0
-        # seq_lens_decoder stores the cached KV length for chunked prefill/prefix cache
-        for i in range(bsz):
-            # enc_len = (
-            #     forward_meta.seq_lens_encoder[i].item()
-            #     if hasattr(forward_meta.seq_lens_encoder[i], "item")
-            #     else forward_meta.seq_lens_encoder[i]
-            # )
-            dec_len = (
-                forward_meta.seq_lens_decoder[i].item()
-                if hasattr(forward_meta.seq_lens_decoder[i], "item")
-                else forward_meta.seq_lens_decoder[i]
-            )
-            seq_this_time = (
-                forward_meta.seq_lens_this_time[i].item()
-                if hasattr(forward_meta.seq_lens_this_time[i], "item")
-                else forward_meta.seq_lens_this_time[i]
-            )
-            # Per-batch K length after interleave = dec_len (cached) + seq_this_time (new).
-            # seq_this_time equals enc_len for prefill/chunked-prefill, and 1 for decode.
-            # Using enc_len here drops the decode-batch new token and yields a wrong
-            # max_seqlen_k for FlashAttention, which then tile-truncates the last K row.
-            per_batch_k = dec_len + seq_this_time
-            if dec_len > 0:
-                has_prefix_cache = True
-                total_cached_kv_tokens += dec_len
-                max_cached_kv_len = max(max_cached_kv_len, dec_len)
-            if per_batch_k > 0:
-                max_total_kv_len = max(max_total_kv_len, per_batch_k)
-
-        metadata.has_prefix_cache = has_prefix_cache
-        metadata.total_cached_kv_tokens = total_cached_kv_tokens
-        metadata.max_cached_kv_len = max_cached_kv_len
-        metadata.max_total_kv_len = max_total_kv_len
-
-        # Compute cu_seqlens_cached_kv if there's prefix cache
-        if has_prefix_cache and total_cached_kv_tokens > 0:
-            cu_seqlens_cached_kv = paddle.zeros([bsz + 1], dtype=paddle.int32)
-            cu_seqlens_k_with_cache = paddle.zeros([bsz + 1], dtype=paddle.int32)
+            total_cached_kv_tokens = 0
+            max_cached_kv_len = 0
+            max_total_kv_len = 0
+            cu_cached = [0] * (bsz + 1)
+            cu_total = [0] * (bsz + 1)
             cumsum_cached = 0
             cumsum_total = 0
-            # cu_seqlens layout must stay CONSISTENT with the input tensor layout used
-            # by the prefill FlashAttention call. The input `compressed_kv`/`key_pe` contains
-            # ALL tokens in the batch (prefill + decode), in seq_lens_this_time order.
-            #
-            # For each batch i, the interleaved layout writes: [cached_tokens, new_tokens_of_this_batch]
-            #   - new_tokens_of_this_batch = seq_lens_this_time[i] (== enc_len for prefill, == 1 for decode)
-            #   - cached_tokens = dec_len if dec_len > 0 else 0
-            # cu_seqlens_k_with_cache must reflect this sum per batch.
-            # cu_seqlens_cached_kv tracks only the cached portion consumed by
-            # fused_read_cache_and_interleave().
             for i in range(bsz):
-                # enc_len = (
-                #     forward_meta.seq_lens_encoder[i].item()
-                #     if hasattr(forward_meta.seq_lens_encoder[i], "item")
-                #     else forward_meta.seq_lens_encoder[i]
-                # )
-                dec_len = (
-                    forward_meta.seq_lens_decoder[i].item()
-                    if hasattr(forward_meta.seq_lens_decoder[i], "item")
-                    else forward_meta.seq_lens_decoder[i]
-                )
-                seq_this_time = (
-                    forward_meta.seq_lens_this_time[i].item()
-                    if hasattr(forward_meta.seq_lens_this_time[i], "item")
-                    else forward_meta.seq_lens_this_time[i]
-                )
+                dec_len = int(dec_lens[i])
+                seq_this = int(seq_this_times[i])
                 if dec_len > 0:
+                    total_cached_kv_tokens += dec_len
+                    if dec_len > max_cached_kv_len:
+                        max_cached_kv_len = dec_len
                     cumsum_cached += dec_len
                     cumsum_total += dec_len
-                # Add this batch's new tokens to cumsum_total. Use seq_lens_this_time to cover
-                # both prefill (== enc_len) and decode (== 1) correctly.
-                cumsum_total += seq_this_time
-                cu_seqlens_cached_kv[i + 1] = cumsum_cached
-                cu_seqlens_k_with_cache[i + 1] = cumsum_total
-            # Consistency checks: starts at 0, monotonic non-decreasing, final equals cumulative.
-            assert cu_seqlens_cached_kv[0].item() == 0, "cu_seqlens_cached_kv must start at 0"
-            assert cu_seqlens_k_with_cache[0].item() == 0, "cu_seqlens_k_with_cache must start at 0"
-            assert (
-                cu_seqlens_cached_kv[bsz].item() == cumsum_cached
-            ), f"cu_seqlens_cached_kv[-1]={cu_seqlens_cached_kv[bsz].item()} != cumsum_cached={cumsum_cached}"
-            assert (
-                cu_seqlens_k_with_cache[bsz].item() == cumsum_total
-            ), f"cu_seqlens_k_with_cache[-1]={cu_seqlens_k_with_cache[bsz].item()} != cumsum_total={cumsum_total}"
-            metadata.cu_seqlens_cached_kv = cu_seqlens_cached_kv
-            metadata.cu_seqlens_k_with_cache = cu_seqlens_k_with_cache
-            # Cross-check: max_total_kv_len MUST be >= max per-batch K length implied by
-            # cu_seqlens_k_with_cache. Otherwise FlashAttention will tile-truncate the
-            # last K rows of the longest batch and silently corrupt attention output.
-            if bsz > 0:
-                cu_k_list = cu_seqlens_k_with_cache.tolist()
-                observed_max = max(cu_k_list[i + 1] - cu_k_list[i] for i in range(bsz))
-                assert max_total_kv_len >= observed_max, (
-                    f"max_total_kv_len={max_total_kv_len} < observed per-batch max "
-                    f"K length={observed_max} from cu_seqlens_k_with_cache={cu_k_list}. "
-                    f"FlashAttention will truncate K tiles."
-                )
+                cumsum_total += seq_this
+                per_batch_k = dec_len + seq_this
+                if per_batch_k > max_total_kv_len:
+                    max_total_kv_len = per_batch_k
+                cu_cached[i + 1] = cumsum_cached
+                cu_total[i + 1] = cumsum_total
+
+            # Entering slow path implies max_dec>0 ⇒ at least one batch has dec_len>0.
+            metadata.has_prefix_cache = True
+            metadata.total_cached_kv_tokens = total_cached_kv_tokens
+            metadata.max_cached_kv_len = max_cached_kv_len
+            metadata.max_total_kv_len = max_total_kv_len
+
+            # Single batched H2D: [2, bsz+1] → two zero-copy views.
+            dev = forward_meta.seq_lens_decoder.place
+            cu_pair = paddle.to_tensor([cu_cached, cu_total], dtype=paddle.int32, place=dev)
+            metadata.cu_seqlens_cached_kv = cu_pair[0]
+            metadata.cu_seqlens_k_with_cache = cu_pair[1]
+
+            # Cross-check precision guard: max_total_kv_len MUST dominate per-batch K length,
+            # otherwise FlashAttention tile-truncates the last K rows and silently corrupts output.
+            observed_max = max(cu_total[i + 1] - cu_total[i] for i in range(bsz)) if bsz > 0 else 0
+            assert max_total_kv_len >= observed_max, (
+                f"max_total_kv_len={max_total_kv_len} < observed per-batch max "
+                f"K length={observed_max}. FlashAttention would truncate K tiles."
+            )
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
