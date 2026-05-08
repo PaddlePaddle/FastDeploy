@@ -179,6 +179,12 @@ def clean_ports(ports_to_clean: list[int]):
             print(f"Port {port} still in use, retrying cleanup...")
             kill_process_on_port(port)
             time.sleep(1)
+    # 清理/dev/shm中的临时文件
+    try:
+        subprocess.run("rm -rf /dev/shm/*", shell=True)
+        print("Successfully cleaned up /dev/shm.")
+    except Exception as e:
+        print(f"Failed to cleanup /dev/shm: {e}")
 
 
 def is_port_open(host: str, port: int, timeout=1.0):
