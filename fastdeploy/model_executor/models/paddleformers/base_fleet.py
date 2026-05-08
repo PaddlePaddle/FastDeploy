@@ -22,15 +22,10 @@ from typing import TYPE_CHECKING, Dict
 
 import paddle
 from paddle import nn
-
-from fastdeploy.model_executor.utils import is_paddlefleet_available
-
-if is_paddlefleet_available():
-    from paddlefleet.models.gpt.gpt_embedding import GPTEmbedding
-    from paddlefleet.models.gpt.lm_head import GPTLMHead
-    from paddlefleet.transformer.layer import FleetLayer
-    from paddlefleet.transformer.transformer_config import TransformerConfig
-
+from paddlefleet.models.gpt.gpt_embedding import GPTEmbedding
+from paddlefleet.models.gpt.lm_head import GPTLMHead
+from paddlefleet.transformer.layer import FleetLayer
+from paddlefleet.transformer.transformer_config import TransformerConfig
 from paddleformers.trainer.trainer_utils import set_random_seed
 from paddleformers.transformers import AutoConfig
 from paddleformers.transformers.auto.modeling import AutoModelForCausalLM
@@ -264,10 +259,8 @@ class PaddleFleetModelBase(nn.Layer):
         parallel_state internal variables.
         """
         from paddle.distributed import fleet
-
-        if is_paddlefleet_available():
-            from paddlefleet.parallel_state import get_tensor_model_parallel_group
-            from paddlefleet.training import initialize_fleet
+        from paddlefleet.parallel_state import get_tensor_model_parallel_group
+        from paddlefleet.training import initialize_fleet
 
         # Only call initialize_fleet when the TP group has not been initialized yet
         if get_tensor_model_parallel_group is not None and get_tensor_model_parallel_group(False) is None:
