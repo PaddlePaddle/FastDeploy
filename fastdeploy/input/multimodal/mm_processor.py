@@ -186,10 +186,10 @@ class MMProcessor(ABC):
         outputs = self._tokenize_and_preprocess(request, mm_context)
         # Step 4: Append completion tokens (speculative decoding)
         self._process_post_tokens(request, outputs)
-        # Step 5: Pack to numpy
-        outputs = self._pack_outputs(outputs)
-        # Step 6: Update cache with newly processed items (if enabled)
+        # Step 5: Compute mm_hashes and update processor cache (before packing)
         self._update_cache(mm_context, outputs)
+        # Step 6: Pack to numpy
+        outputs = self._pack_outputs(outputs)
         # Step 7: Write back (subclass can override)
         self._write_back(request, outputs)
 
@@ -340,7 +340,7 @@ class MMProcessor(ABC):
             self.append_completion_tokens(outputs, completion_token_ids)
 
     # ------------------------------------------------------------------
-    # Step 5: Pack outputs
+    # Step 6: Pack outputs
     # ------------------------------------------------------------------
 
     def _pack_outputs(self, outputs) -> dict:
@@ -364,7 +364,7 @@ class MMProcessor(ABC):
         return outputs
 
     # ------------------------------------------------------------------
-    # Step 6: Update cache
+    # Step 5: Compute hashes and update cache
     # ------------------------------------------------------------------
 
     def _update_cache(self, mm_context: MMContext, outputs: dict) -> None:
@@ -374,6 +374,9 @@ class MMProcessor(ABC):
         otherwise compute hash from the processed pixel_values.
         outputs["mm_hashes"] is always populated (needed by downstream engine).
         Processor cache is only updated when self._cache is enabled.
+
+        NOTE: Must run BEFORE _pack_outputs(), because outputs["images"] is
+        still a per-item list at this point (not yet vstack'd).
         """
         # Reconstruct interleaved item list using mm_order
         all_items = []
