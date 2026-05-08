@@ -52,6 +52,7 @@ from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 from fastdeploy import envs
 from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.logger.request_logger import RequestLogLevel, log_request
+from fastdeploy.model_executor.stop_string_checker import check_stop_strings
 from fastdeploy.utils import data_processor_logger
 
 _SAMPLING_EPS = 1e-5
@@ -274,7 +275,17 @@ class BaseTextProcessor(ABC):
         request = kwargs.get("request", None)
         direct_decode = kwargs.get("direct_decode", False)
 
-        if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
+        # Get stop strings from request if available
+        stop_strs = None
+        if request is not None:
+            stop_strs = getattr(request, "stop", None)
+            if stop_strs is not None:
+                # Normalize to list
+                if isinstance(stop_strs, str):
+                    stop_strs = [stop_strs]
+        include_stop_str_in_output = kwargs.get("include_stop_str_in_output", False)
+
+        if is_end and len(token_ids) > 0 and not include_stop_str_in_output:
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
 
@@ -286,6 +297,22 @@ class BaseTextProcessor(ABC):
 
         if is_end:
             full_text = previous_texts + delta_text
+
+            # Check for stop string matches and truncate if needed
+            if stop_strs and self.tokenizer is not None:
+                stop = check_stop_strings(
+                    output_text=full_text,
+                    new_char_count=len(full_text),
+                    stop=stop_strs,
+                    include_in_output=include_stop_str_in_output,
+                )
+                if stop is not None:
+                    stop_string, truncate_to = stop
+                    if truncate_to != -1:
+                        full_text = full_text[:truncate_to]
+                    # Update response to indicate stop reason
+                    response_dict["stop_reason"] = stop_string
+
             response_dict["outputs"]["completion_tokens"] = full_text
             response_dict["outputs"]["text"] = full_text
 
@@ -318,11 +345,45 @@ class BaseTextProcessor(ABC):
         token_ids = response_dict["outputs"]["token_ids"]
         request = kwargs.get("request", None)
 
-        if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
+        # Get stop strings from request if available
+        stop_strs = None
+        if request is not None:
+            stop_strs = getattr(request, "stop", None)
+            if stop_strs is not None:
+                # Normalize to list
+                if isinstance(stop_strs, str):
+                    stop_strs = [stop_strs]
+        include_stop_str_in_output = kwargs.get("include_stop_str_in_output", False)
+
+        if is_end and len(token_ids) > 0 and not include_stop_str_in_output:
             if token_ids[-1] in self.eos_token_ids:
                 token_ids = token_ids[:-1]
 
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
+
+        # Check for stop string matches (only if not already finished)
+        if not is_end and stop_strs and self.tokenizer is not None:
+            # Get accumulated text so far
+            accumulated_text = previous_texts + delta_text
+            stop = check_stop_strings(
+                output_text=accumulated_text,
+                new_char_count=len(delta_text),
+                stop=stop_strs,
+                include_in_output=include_stop_str_in_output,
+            )
+            if stop is not None:
+                stop_string, truncate_to = stop
+                if truncate_to != -1:
+                    delta_text = delta_text[: truncate_to - len(previous_texts)]
+                    if delta_text:
+                        # Update token_ids to only include chars up to stop string
+                        pass  # Keep token_ids as-is, just truncate text
+                    else:
+                        delta_text = ""
+                # Mark as finished
+                response_dict["finished"] = True
+                response_dict["stop_reason"] = stop_string
+                is_end = True
 
         response_dict["outputs"]["text"] = delta_text
         response_dict["outputs"]["completion_tokens"] = delta_text
