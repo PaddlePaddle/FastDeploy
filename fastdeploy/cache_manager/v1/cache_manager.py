@@ -431,7 +431,7 @@ class CacheManager(KVCacheBase):
         with PrefixCacheManager.gpu_free_block_list.
         """
         # Return list representation of available blocks
-        return list(range(self._device_pool.available_blocks()))
+        return list(self._device_pool._free_blocks)
 
     @property
     def available_gpu_resource(self) -> float:
@@ -536,13 +536,14 @@ class CacheManager(KVCacheBase):
                 if not (self._storage_scheduler and skip_storage):
                     self._radix_tree.increment_ref_nodes(matched_nodes)
 
-                matched_device_ids = [n.block_id for n in result.device_nodes]
-                matched_host_ids = [n.block_id for n in result.host_nodes]
                 logger.info(
                     f"match_prefix for request_id: {request.request_id} total_hashes: {len(block_hashes)}, "
                     f"total_matched: {result.total_matched_blocks} (device_blocks={result.matched_device_nums}, "
                     f"host_blocks={result.matched_host_nums}, storage_hashes={result.matched_storage_nums})"
                 )
+
+                matched_device_ids = [n.block_id for n in result.device_nodes]
+                matched_host_ids = [n.block_id for n in result.host_nodes]
                 logger.debug(
                     f"[match_prefix] request_id={request.request_id} "
                     f"matched_device_block_ids={matched_device_ids} "

@@ -664,8 +664,8 @@ class BatchRequest:
                 self.cache_evict_metadata = CacheSwapMetadata(
                     src_block_ids=meta.src_block_ids,
                     dst_block_ids=meta.dst_block_ids,
-                    src_type=CacheLevel.HOST,
-                    dst_type=CacheLevel.DEVICE,
+                    src_type=CacheLevel.DEVICE,
+                    dst_type=CacheLevel.HOST,
                     hash_values=meta.hash_values,
                 )
 
