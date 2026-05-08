@@ -107,7 +107,7 @@ while true; do
         echo -e "\nstart serving failed with timeout: $((TIMEOUT/60)) seconds"
         cat server.log
 	#ERNIE-4.5-21B-A3B-Paddle only has workerlog.0
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
 	#ERNIE-4.5-300B-A47B-Paddle (300B) will have 8 workerlog
 	if [  $ENABLE_TESTING_ERNIE45_300B_A47B_Paddle -eq 1 ]; then
             cat log/workerlog.1
@@ -145,8 +145,8 @@ ps -efww | grep -E $FD_API_PORT | grep -v grep | awk '{print $2}' | xargs kill -
 lsof -t -i :$FD_API_PORT | xargs kill -9 || true
 
 if [ ${exit_code} -ne 0 ]; then
-    echo "log/workerlog.0"
-    cat log/workerlog.0
+    echo "log/paddle/workerlog.0"
+    cat log/paddle/workerlog.0
     echo "mold testing failed, please help to do check for your PR source codeing"
     exit 1
 fi
