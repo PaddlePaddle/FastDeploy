@@ -87,7 +87,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
             seq_lens_output,
             None,
             None,
-            output_token_num.item(),
+            None,
+            int(output_token_num.item()),
         )
 
         # self.output_padding_offset = paddle.zeros([self.token_num], dtype="int32")
@@ -467,7 +468,8 @@ class TestReasoningPhaseTokenConstraint(unittest.TestCase):
             seq_lens_output,
             None,
             None,
-            output_token_num.item(),
+            None,
+            int(output_token_num.item()),
         )
 
         # ------------------------

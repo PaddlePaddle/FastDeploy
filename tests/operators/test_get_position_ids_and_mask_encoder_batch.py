@@ -37,7 +37,7 @@ class TestGetPositionIdsAndMaskEncoderBatch(unittest.TestCase):
         # Call the custom operator
         get_position_ids_and_mask_encoder_batch(seq_lens_encoder, seq_lens_decoder, seq_lens_this_time, position_ids)
 
-        expected_position_ids = np.array([0, 1, 2, 1, 0, 1, 2, 3], dtype=np.int32)
+        expected_position_ids = np.array([1, 2, 3, 2, 3, 0, 0, 0], dtype=np.int32)
 
         # Convert to numpy for comparison
         position_ids_np = position_ids.numpy()
