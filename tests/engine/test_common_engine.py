@@ -1089,6 +1089,32 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertEqual(result, ["proc"])
         self._detach_finalizer(eng)
 
+    def test_start_cache_service_returns_empty_when_v1_enabled(self):
+        """When ENABLE_V1_KVCACHE_MANAGER=1, start_cache_service should return [] without launching v0."""
+        eng = self._make_mixed_engine()
+        eng.resource_manager.cache_manager = Mock()
+        eng.resource_manager.cache_manager.launch_cache_manager = Mock(return_value=["proc"])
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_MANAGER", True):
+            result = eng.start_cache_service(["0"], 9999)
+
+        self.assertEqual(result, [])
+        eng.resource_manager.cache_manager.launch_cache_manager.assert_not_called()
+        self._detach_finalizer(eng)
+
+    def test_start_cache_service_launches_v0_when_v1_disabled(self):
+        """When ENABLE_V1_KVCACHE_MANAGER=0, start_cache_service should invoke launch_cache_manager normally."""
+        eng = self._make_mixed_engine()
+        eng.resource_manager.cache_manager = Mock()
+        eng.resource_manager.cache_manager.launch_cache_manager = Mock(return_value=["proc"])
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_MANAGER", False):
+            result = eng.start_cache_service(["0"], 9999)
+
+        self.assertEqual(result, ["proc"])
+        eng.resource_manager.cache_manager.launch_cache_manager.assert_called_once()
+        self._detach_finalizer(eng)
+
     def test_control_update_weights_success(self):
         eng = self._make_mixed_engine()
         eng.is_paused = True
