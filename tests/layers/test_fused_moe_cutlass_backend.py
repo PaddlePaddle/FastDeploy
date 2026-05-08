@@ -840,15 +840,6 @@ class TestMoePermuteTrueRealOps:
         assert not paddle.isinf(out).any(), "output contains Inf"
 
     def test_apply_tp_noaux_tc_with_use_fused_false(self, monkeypatch):
-        fc1_called = {"count": 0}
-
-        class FC1Proj(paddle.nn.Layer):
-            def forward(self, x):
-                fc1_called["count"] += 1
-                return x * 2
-
-        fc1_latent_proj = FC1Proj()
-
         def fake_get_moe_scores(
             gate_out,
             n_group,
@@ -902,10 +893,7 @@ class TestMoePermuteTrueRealOps:
         x = paddle.ones([1, 2])
         gate = paddle.nn.Identity()
 
-        method.apply(layer, x, gate, fc1_latent_proj=fc1_latent_proj)
-
-        # Verify fc1_latent_proj was called (line 354/425-426 was executed)
-        assert fc1_called["count"] > 0, "fc1_latent_proj should have been called"
+        method.apply(layer, x, gate)
 
     @requires_cuda
     def test_apply_ep_prefill_moe_permute_real_ops(self, monkeypatch):

@@ -340,7 +340,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         Paddle Cutlass compute Fused MoE.
         """
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
         if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
             if layer.topk_method == "noaux_tc":
                 use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
