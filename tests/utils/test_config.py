@@ -29,6 +29,7 @@ from fastdeploy.config import (
     CacheConfig,
     CommitConfig,
     DeviceConfig,
+    DeployModality,
     EarlyStopConfig,
     EPLBConfig,
     ErnieArchitectures,
@@ -38,6 +39,8 @@ from fastdeploy.config import (
     ModelConfig,
     MoEPhase,
     ParallelConfig,
+    PlasAttentionConfig,
+    RouterConfig,
     RoutingReplayConfig,
     SchedulerConfig,
     SpeculativeConfig,
@@ -129,6 +132,10 @@ class TestConfig(unittest.TestCase):
         assert not ErnieArchitectures.contains_ernie_arch(["LlamaForCausalLM"])
         assert not ErnieArchitectures.is_ernie_arch("ErnieUnknownForCausalLM")
         assert not ErnieArchitectures.is_ernie5_arch(["LlamaForCausalLM"])
+        assert DeployModality.from_str(" text ") is DeployModality.TEXT
+        assert DeployModality.from_str("MIXED") is DeployModality.MIXED
+        with self.assertRaisesRegex(ValueError, "Invalid deploy_modality.*'text'.*'mixed'"):
+            DeployModality.from_str("image")
         phase = MoEPhase()
         phase.phase = "decode"
         with self.assertRaises(ValueError):
@@ -263,6 +270,66 @@ class TestConfig(unittest.TestCase):
         assert "encode" in acfg.supported_tasks
         ecfg = _mmc(self.mp, self.tp, args={"runner": "pooling", "convert": "auto"}, reg=_fr(gen=False))
         assert ecfg.convert_type == "embed"
+
+    def test_plas_router_and_cache_helpers(self):
+        plas = PlasAttentionConfig(
+            {
+                "plas_encoder_top_k_left": 2,
+                "plas_encoder_top_k_right": 4,
+                "plas_decoder_top_k_left": 3,
+                "plas_decoder_top_k_right": 5,
+                "plas_block_size": 64,
+            }
+        )
+        assert plas.plas_use_encoder_seq_limit == 128
+        assert plas.plas_use_decoder_seq_limit == 192
+        explicit = PlasAttentionConfig(
+            {
+                "plas_encoder_top_k_left": 2,
+                "plas_encoder_top_k_right": 2,
+                "plas_use_encoder_seq_limit": 256,
+                "plas_block_size": 64,
+            }
+        )
+        assert explicit.plas_use_encoder_seq_limit == 256
+        with self.assertRaisesRegex(AssertionError, "plas_encoder_top_k_left"):
+            PlasAttentionConfig({"plas_encoder_top_k_left": 0})
+        with self.assertRaisesRegex(AssertionError, "plas_encoder_top_k_right"):
+            PlasAttentionConfig({"plas_encoder_top_k_left": 3, "plas_encoder_top_k_right": 2})
+        with self.assertRaises(AssertionError):
+            PlasAttentionConfig(
+                {
+                    "plas_encoder_top_k_left": 2,
+                    "plas_encoder_top_k_right": 2,
+                    "plas_use_encoder_seq_limit": 100,
+                    "plas_block_size": 64,
+                }
+            )
+
+        self.mp.setattr("fastdeploy.config.get_host_ip", lambda: "10.0.0.8")
+        router = RouterConfig({"router": "127.0.0.1:8188", "port": 8000, "metrics_port": None})
+        assert router.router == "http://127.0.0.1:8188"
+        assert router.api_server_host == "10.0.0.8"
+        assert router.metrics_port == 8000
+        secure_router = RouterConfig({"router": "https://router.example", "port": 8001, "metrics_port": 9100})
+        assert secure_router.router == "https://router.example"
+        assert secure_router.metrics_port == 9100
+
+        for dtype, byte_size in [
+            ("float32", 4),
+            ("fp16", 2),
+            ("float8_e4m3fn", 1),
+            ("int4", 0.5),
+        ]:
+            assert CacheConfig.get_cache_bytes(dtype) == byte_size
+        with self.assertRaisesRegex(ValueError, "Unsupported cache dtype"):
+            CacheConfig.get_cache_bytes("complex64")
+
+        cache = CacheConfig({"model_cfg": _mcfg(), "cache_dtype": "float16", "num_gpu_blocks_override": 8})
+        metrics = cache.metrics_info()
+        assert metrics["cache_dtype"] == "float16"
+        assert metrics["num_gpu_blocks_override"] == "8"
+        assert all(isinstance(value, str) for value in metrics.values())
 
 
 class TestFDConfig(unittest.TestCase):
