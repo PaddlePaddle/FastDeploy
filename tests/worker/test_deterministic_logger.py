@@ -42,26 +42,6 @@ for _pkg, _rel_path in [
         _mod.__package__ = _pkg
         sys.modules[_pkg] = _mod
 
-# Provide a lightweight fastdeploy.utils stub so that
-# ``from fastdeploy.utils import parse_choice_id`` inside
-# deterministic_logger.py does NOT trigger the real utils.py
-# (which re-exports from fastdeploy.logger and causes a circular import
-# against the bare namespace package above).
-_CHOICE_SEPARATOR = "::n::"
-
-
-def _parse_choice_id(compound_id: str) -> tuple:
-    if _CHOICE_SEPARATOR in compound_id:
-        base, idx = compound_id.rsplit(_CHOICE_SEPARATOR, 1)
-        return base, int(idx)
-    return compound_id, None
-
-
-_utils_stub = types.ModuleType("fastdeploy.utils")
-_utils_stub.parse_choice_id = _parse_choice_id
-_utils_stub.CHOICE_SEPARATOR = _CHOICE_SEPARATOR
-sys.modules["fastdeploy.utils"] = _utils_stub
-
 import fastdeploy.logger.deterministic_logger as _det_mod  # noqa: E402
 from fastdeploy.logger.deterministic_logger import (  # noqa: E402
     DeterministicLogger,
