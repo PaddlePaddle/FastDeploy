@@ -195,7 +195,18 @@ class ModelRegistry:
             # Auto mode fallback when no native implementation exists
             backend_arch = "PaddleFormersForCausalLM"
         elif model_impl == "paddlefleet":
-            backend_arch = "PaddleFleetForCausalLM"
+            from fastdeploy.model_executor.utils import is_paddlefleet_available
+
+            if is_paddlefleet_available():
+                backend_arch = "PaddleFleetForCausalLM"
+            else:
+                raise ImportError(
+                    "paddlefleet backend requires paddlefleet to be installed.\n"
+                    "Please install with [change cuda version if needed ]:\n"
+                    "python -m pip install paddlefleet==0.3.0.dev20260507' "
+                    "--extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ "
+                    "--extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/"
+                )
         elif model_impl == "fastdeploy":
             return None
         else:

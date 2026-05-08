@@ -22,10 +22,15 @@ from typing import TYPE_CHECKING, Dict
 
 import paddle
 from paddle import nn
-from paddlefleet.models.gpt.gpt_embedding import GPTEmbedding
-from paddlefleet.models.gpt.lm_head import GPTLMHead
-from paddlefleet.transformer.layer import FleetLayer
-from paddlefleet.transformer.transformer_config import TransformerConfig
+
+from fastdeploy.model_executor.utils import is_paddlefleet_available
+
+if is_paddlefleet_available():
+    from paddlefleet.models.gpt.gpt_embedding import GPTEmbedding
+    from paddlefleet.models.gpt.lm_head import GPTLMHead
+    from paddlefleet.transformer.layer import FleetLayer
+    from paddlefleet.transformer.transformer_config import TransformerConfig
+
 from paddleformers.trainer.trainer_utils import set_random_seed
 from paddleformers.transformers import AutoConfig
 from paddleformers.transformers.auto.modeling import AutoModelForCausalLM
@@ -200,8 +205,7 @@ class PaddleFleetModelBase(nn.Layer):
         # PaddleFleet's ColumnParallelLinear/RowParallelLinear obtains TP world_size/rank
         # via parallel_state. Without initialization, it defaults to 1, causing weights
         # to not be TP-sharded, which mismatches FastDeploy's KV cache (allocated per TP).
-        if parallel_config.tensor_parallel_size > 1:
-            self._init_paddlefleet_parallel_state(parallel_config)
+        self._init_paddlefleet_parallel_state(self.paddleformers_config)
 
         # The specific text model config
         # Sync important config values from text_config to model_config
@@ -260,8 +264,10 @@ class PaddleFleetModelBase(nn.Layer):
         parallel_state internal variables.
         """
         from paddle.distributed import fleet
-        from paddlefleet.parallel_state import get_tensor_model_parallel_group
-        from paddlefleet.training import initialize_fleet
+
+        if is_paddlefleet_available():
+            from paddlefleet.parallel_state import get_tensor_model_parallel_group
+            from paddlefleet.training import initialize_fleet
 
         # Only call initialize_fleet when the TP group has not been initialized yet
         if get_tensor_model_parallel_group is not None and get_tensor_model_parallel_group(False) is None:

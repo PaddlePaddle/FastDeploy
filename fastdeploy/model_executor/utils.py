@@ -559,6 +559,10 @@ def has_flashinfer():
     return importlib.util.find_spec("flashinfer") is not None
 
 
+def is_paddlefleet_available():
+    return importlib.util.find_spec("paddlefleet") is not None
+
+
 @cache
 def get_sm_version():
     if paddle.cuda.is_available():
