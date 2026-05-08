@@ -79,8 +79,9 @@ __global__ void set_value_by_flags(bool *stop_flags,
     // dealing stop_seqs
     const int stop_seq_len = (stop_seqs_len + bid * stop_seqs_bs)[tid];
     if (stop_seq_len <= 0) return;
-    const int64_t *stop_seq_now =
-        stop_seqs + bid * stop_seqs_bs + tid * stop_seqs_max_len;
+    const int64_t *stop_seq_now = stop_seqs +
+                                  bid * stop_seqs_bs * stop_seqs_max_len +
+                                  tid * stop_seqs_max_len;
     const int64_t *pre_ids_now =
         token_ids_all + bid * max_model_len + prompt_lens[bid];
     const int64_t step_idx_now = step_idx[bid];
