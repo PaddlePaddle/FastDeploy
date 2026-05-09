@@ -32,10 +32,7 @@ from fastdeploy.model_executor.xpu_pre_and_post_process import (
     xpu_pre_process,
     xpu_process_output,
 )
-from fastdeploy.worker.input_batch import (
-    recover_batch_index_for_output,
-    recover_batch_index_for_sampler_output,
-)
+from fastdeploy.worker.input_batch import recover_batch_index_for_output
 
 try:
     from fastdeploy.model_executor.ops.xpu import speculate_save_output_topk
@@ -202,29 +199,29 @@ class MTPProposerXPU(MTPProposer):
                         "MTP with logprobs is not supported on XPU yet. "
                         "Please disable logprobs when using MTP on XPU."
                     )
-                    real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
-                    recover_batch_index_for_sampler_output(
-                        sampler_output,
-                        self.model_inputs.index_to_batch_id,
-                    )
-                    recover_model_output_map = recover_batch_index_for_output(
-                        self.model_inputs,
-                        self.model_inputs.index_to_batch_id,
-                        self.model_inputs.enable_pd_reorder,
-                        ["batch_token_num", "cu_batch_token_offset"],
-                    )
-                    # speculate_save_output_topk not implemented for xpu yet.
-                    speculate_save_output_topk(
-                        sampler_output.sampled_token_ids,
-                        sampler_output.logprobs_tensors.logprob_token_ids,
-                        sampler_output.logprobs_tensors.logprobs,
-                        sampler_output.logprobs_tensors.selected_token_ranks,
-                        recover_model_output_map["batch_token_num"][:real_bsz],
-                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
-                        self.model_inputs["not_need_stop"],
-                        4,  # mtype
-                        self.local_rank,
-                    )
+                    # real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
+                    # recover_batch_index_for_sampler_output(
+                    #     sampler_output,
+                    #     self.model_inputs.index_to_batch_id,
+                    # )
+                    # recover_model_output_map = recover_batch_index_for_output(
+                    #     self.model_inputs,
+                    #     self.model_inputs.index_to_batch_id,
+                    #     self.model_inputs.enable_pd_reorder,
+                    #     ["batch_token_num", "cu_batch_token_offset"],
+                    # )
+                    # # speculate_save_output_topk not implemented for xpu yet.
+                    # speculate_save_output_topk(
+                    #     sampler_output.sampled_token_ids,
+                    #     sampler_output.logprobs_tensors.logprob_token_ids,
+                    #     sampler_output.logprobs_tensors.logprobs,
+                    #     sampler_output.logprobs_tensors.selected_token_ranks,
+                    #     recover_model_output_map["batch_token_num"][:real_bsz],
+                    #     recover_model_output_map["cu_batch_token_offset"][:real_bsz],
+                    #     self.model_inputs["not_need_stop"],
+                    #     4,  # mtype
+                    #     self.local_rank,
+                    # )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
