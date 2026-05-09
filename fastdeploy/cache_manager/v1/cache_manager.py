@@ -909,45 +909,6 @@ class CacheManager(KVCacheBase):
         except Exception as e:
             logger.error(f"check_and_add_pending_backup error: {e}, {str(traceback.format_exc())}")
 
-    # ============ Host/Device Transfer Coordination ============
-
-    def offload_to_host(self, block_indices: List[int]) -> bool:
-        """
-        Offload blocks from device to host memory.
-
-        This is a coordination method. Actual data transfer happens in Worker.
-
-        Args:
-            block_indices: List of block indices to offload
-
-        Returns:
-            True if successful, False otherwise
-        """
-        try:
-            with self._lock:
-                # Allocate host blocks
-                host_indices = self._host_pool.allocate(len(block_indices))
-                if host_indices is None or len(host_indices) != len(block_indices):
-                    # Not enough host memory, release what we allocated
-                    if host_indices:
-                        self._host_pool.release(host_indices)
-                    return False
-
-                # Perform the offload (actual data transfer would happen in Worker)
-                for i, dev_idx in enumerate(block_indices):
-                    host_idx = host_indices[i]
-                    metadata = self._device_pool.get_metadata(dev_idx)
-                    if metadata:
-                        self._host_pool.set_metadata(host_idx, metadata)
-
-                # Release device blocks
-                self._device_pool.release(block_indices)
-
-                return True
-        except Exception as e:
-            logger.error(f"offload_to_host error: {e}, {str(traceback.format_exc())}")
-            return False
-
     def load_from_host(self, block_indices: List[int]) -> bool:
         """
         Load blocks from host to device memory.
@@ -1063,9 +1024,9 @@ class CacheManager(KVCacheBase):
                 if not self.can_allocate_host_blocks(len(storage_hashes)):
                     return []
 
-                # Allocate host blocks for prefetch
-                host_block_ids = self._host_pool.allocate(len(storage_hashes))
-                if host_block_ids is None or len(host_block_ids) == 0:
+                # Allocate host blocks for prefetch (evicts evictable host blocks if needed)
+                host_block_ids = self.allocate_host_blocks(len(storage_hashes))
+                if not host_block_ids:
                     return []
 
                 blocks = list(zip(storage_hashes, host_block_ids))
