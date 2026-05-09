@@ -2868,16 +2868,16 @@ class GPUModelRunner(ModelRunnerBase):
         )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-        if create_cache_tensor:
-            if not profile:
+        if not profile:
+            if create_cache_tensor:
                 logger.info("Waiting for cache transfer manager to unlink cuda ipc")
                 while self.cache_ready_signal.value[local_rank] != 0:
                     time.sleep(0.1)
                 logger.info("Stop waiting! cache transfer manager has unlinked cuda ipc")
-        else:
-            for name, tensor in self.cache_kvs_map.items():
-                unset_data_ipc(tensor, name, True, False)
-            self.cache_ready_signal.value[local_rank] = 0
+            else:
+                for name, tensor in self.cache_kvs_map.items():
+                    unset_data_ipc(tensor, name, True, False)
+                self.cache_ready_signal.value[local_rank] = 0
 
         self.cache_kvs_map.clear()
         self.share_inputs.pop("caches", None)
