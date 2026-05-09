@@ -13,6 +13,7 @@
 # limitations under the License.
 
 import os
+import sys
 import time
 import traceback
 
@@ -22,6 +23,7 @@ from fastdeploy import LLM, SamplingParams
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+sys.path.insert(0, project_root)
 from e2e.utils.serving_utils import (
     FD_API_PORT,
     FD_CACHE_QUEUE_PORT,
