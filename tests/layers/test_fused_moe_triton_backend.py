@@ -57,6 +57,7 @@ class DummyFDConfig:
     def __init__(self, load_choices="default_v1"):
         self.load_config = DummyLoadConfig(load_choices)
         self.model_config = types.SimpleNamespace(enable_cache=False)
+        self.scheduler_config = types.SimpleNamespace(enable_moe_scores_elementwise_fuse=False)
 
 
 class DummyGate(paddle.nn.Layer):
@@ -696,7 +697,7 @@ class TestFusedMoeTritonBackend:
         assert len(quant_calls) > 0, "quant_weight_ue8m0 should have been called"
         assert len(transform_calls) > 0, "transform_scale_ue8m0 should have been called"
 
-    def test_triton_weight_only_apply_noaux_tc_with_fd_enable_rl(self, fake_ops, monkeypatch):
+    def test_triton_weight_only_apply_noaux_tc_with_use_fused_true(self, fake_ops, monkeypatch):
         quant_config = DummyQuantConfig(is_checkpoint_bf16=False)
         layer = DummyLayer(quant_config)
         layer.topk_method = "noaux_tc"
@@ -720,9 +721,9 @@ class TestFusedMoeTritonBackend:
         kernel = DummyKernel()
         monkeypatch.setattr(backend, "fused_moe_kernel_paddle", kernel, raising=False)
 
-        # Set FD_ENABLE_RL=True to trigger use_fused = False at line 313
-        # This should trigger gate_out.cast('float32') at line 315
-        monkeypatch.setattr(backend.fastdeploy.envs, "FD_ENABLE_RL", True)
+        # Enable enable_moe_scores_elementwise_fuse and force is_cuda=True to trigger use_fused = True
+        monkeypatch.setattr(backend, "current_platform", types.SimpleNamespace(is_cuda=lambda: True))
+        layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse = True
 
         x = paddle.randn([1, layer.hidden_size], dtype="float32")
         gate = DummyGate(layer.num_local_experts)

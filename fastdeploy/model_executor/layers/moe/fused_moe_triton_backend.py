@@ -308,7 +308,9 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
 
         if layer.topk_method == "noaux_tc":
-            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
             if not use_fused:
                 gate_out = gate_out.cast("float32")
             gate_out, topk_weights, topk_ids = get_moe_scores(

@@ -58,6 +58,7 @@ class DummyFDConfig:
     def __init__(self, load_choices="default_v1"):
         self.model_config = types.SimpleNamespace(model="dummy", prefix_layer_name="prefix")
         self.load_config = types.SimpleNamespace(load_choices=load_choices)
+        self.scheduler_config = types.SimpleNamespace(enable_moe_scores_elementwise_fuse=False)
 
 
 class DummyLayer(paddle.nn.Layer):
@@ -839,7 +840,7 @@ class TestMoePermuteTrueRealOps:
         assert not paddle.isnan(out).any(), "output contains NaN"
         assert not paddle.isinf(out).any(), "output contains Inf"
 
-    def test_apply_tp_noaux_tc_with_use_fused_false(self, monkeypatch):
+    def test_apply_tp_noaux_tc_with_use_fused_true(self, monkeypatch):
         def fake_get_moe_scores(
             gate_out,
             n_group,
@@ -878,11 +879,11 @@ class TestMoePermuteTrueRealOps:
         # Mock compute_ffn on the class to avoid real GPU op data type issues
         monkeypatch.setattr(backend.CutlassMoEMethod, "compute_ffn", fake_compute_ffn)
 
-        # Set FD_ENABLE_RL=True to trigger use_fused = False
-        monkeypatch.setattr(backend.fastdeploy.envs, "FD_ENABLE_RL", True)
-
+        # Enable enable_moe_scores_elementwise_fuse and force is_cuda=True to trigger use_fused = True
+        monkeypatch.setattr(backend, "current_platform", types.SimpleNamespace(is_cuda=lambda: True))
         layer = DummyLayer(with_bias=False)
         layer.topk_method = "noaux_tc"
+        layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse = True
         # Add necessary attributes for compute_ffn access
         layer.up_gate_proj_weight = paddle.zeros([2, 2 * 1], dtype="float16")
         layer.down_proj_weight = paddle.zeros([2, 2], dtype="float16")

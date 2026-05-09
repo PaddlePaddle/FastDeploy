@@ -106,7 +106,10 @@ class DummyFDConfig:
             # ep_size * this = max tokens buffer for masked GEMM; must be ≥ aligned M
             num_max_dispatch_tokens_per_rank=128,
         )
-        self.scheduler_config = types.SimpleNamespace(max_num_batched_tokens=NUM_TOKENS)
+        self.scheduler_config = types.SimpleNamespace(
+            max_num_batched_tokens=NUM_TOKENS,
+            enable_moe_scores_elementwise_fuse=False,
+        )
         self.parallel_config = types.SimpleNamespace(tensor_parallel_size=1)
 
 
@@ -206,8 +209,8 @@ class TestApplyTp:
         assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
 
     @requires_deepgemm
-    def test_apply_tp_noaux_tc_with_use_fused_false(self):
-        """noaux_tc path with FD_ENABLE_RL=True: triggers use_fused=False and gate_out.cast('float32')."""
+    def test_apply_tp_noaux_tc_with_use_fused_true(self):
+        """noaux_tc path with enable_moe_scores_elementwise_fuse=True: triggers use_fused=True (no gate_out.cast)."""
         layer = DummyLayer()
         layer.topk_method = "noaux_tc"
         gate = DummyGate(layer.num_local_experts)
@@ -215,16 +218,11 @@ class TestApplyTp:
 
         x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
 
-        import fastdeploy.envs as fd_envs
+        # Enable flag to exercise the fused path (use_fused=True)
+        layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse = True
 
-        original_fd_enable_rl = fd_envs.FD_ENABLE_RL
-        fd_envs.FD_ENABLE_RL = True
-
-        try:
-            out = method.apply(layer, x, gate)
-            assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
-        finally:
-            fd_envs.FD_ENABLE_RL = original_fd_enable_rl
+        out = method.apply(layer, x, gate)
+        assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
 
     @requires_deepgemm
     def test_apply_tp_aux_path(self):

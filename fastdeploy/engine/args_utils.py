@@ -337,6 +337,11 @@ class EngineArgs:
     Chunk size of moe input.
     """
 
+    enable_moe_scores_elementwise_fuse: bool = False
+    """
+    Flag to enable fused elementwise cast in get_moe_scores. Default is False (disabled).
+    """
+
     cache_transfer_protocol: str = "ipc,rdma"
     """
     Protocol to use for cache transfer.
@@ -1390,7 +1395,12 @@ class EngineArgs:
             default=EngineArgs.enable_overlap_schedule,
             help="Enable overlapping schedule.",
         )
-
+        scheduler_group.add_argument(
+            "--enable-moe-scores-elementwise-fuse",
+            action="store_true",
+            default=EngineArgs.enable_moe_scores_elementwise_fuse,
+            help="Enable fused elementwise cast in get_moe_scores for MoE routing.",
+        )
         model_group.add_argument(
             "--deploy-modality",
             type=str,
