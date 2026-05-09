@@ -172,8 +172,9 @@ def clean_ports(ports=None):
             time.sleep(1)
 
     # Clean unix socket, fd_task_queue_*.sock, for FD_ENGINE_TASK_QUEUE_WITH_SHM = 1
-    cleanup_unix_socket(f"/dev/shm/fd_task_queue_{FD_ENGINE_QUEUE_PORT}.sock")
-    cleanup_unix_socket(f"/dev/shm/fd_task_queue_{FD_CACHE_QUEUE_PORT}.sock")
+    print("Cleaning unix socket")
+    for port in ports:
+        cleanup_unix_socket(f"/dev/shm/fd_task_queue_{port}.sock")
 
 
 def clean(ports=None):
