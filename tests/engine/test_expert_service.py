@@ -99,6 +99,7 @@ class TestExpertService(unittest.TestCase):
     def test_start_method(self, mock_envs, mock_threading, mock_time, mock_engine_service):
         mock_envs.FD_ENABLE_RETURN_TEXT = False
         mock_envs.FD_ENABLE_MULTI_API_SERVER = False
+        mock_envs.ENABLE_V1_KVCACHE_MANAGER = False
 
         local_data_parallel_id = 0
 
