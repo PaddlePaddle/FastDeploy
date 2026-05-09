@@ -101,7 +101,7 @@ def kill_process_on_port(port: int):
 def kill_process_by_unix_socket(
     socket_path: str,
     force: bool = True,
-) -> int | None:
+):
     """
     根据 unix socket 文件路径杀掉对应进程
     cmd: ss -xlpn | grep /dev/shm/fd_task_queue_8664.sock

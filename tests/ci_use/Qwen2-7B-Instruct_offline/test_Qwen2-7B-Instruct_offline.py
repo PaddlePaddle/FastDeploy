@@ -22,10 +22,13 @@ from fastdeploy import LLM, SamplingParams
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
-from e2e.utils.serving_utils import clean_ports
+from e2e.utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    clean_ports,
+)
 
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
 MAX_WAIT_SECONDS = 60
 
 
@@ -71,6 +74,7 @@ def llm(model_path):
         llm = LLM(
             model=model_path,
             tensor_parallel_size=1,
+            port=FD_API_PORT,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
             cache_queue_port=FD_CACHE_QUEUE_PORT,
             max_model_len=32768,
