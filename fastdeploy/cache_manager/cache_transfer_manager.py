@@ -545,20 +545,21 @@ class CacheTransferManager:
             while self.cache_ready_signal.value[self.rank] != 0:
                 time.sleep(0.1)
             logger.debug("Stop waiting! gpu runner has unlinked cuda ipc")
-            self.gpu_cache_kvs.clear()
-            self.gpu_cache_k_tensors.clear()
-            self.gpu_cache_v_tensors.clear()
-            if hasattr(self, "gpu_cache_scales_k_tensors"):
-                self.gpu_cache_scales_k_tensors.clear()
-            if hasattr(self, "gpu_cache_scales_v_tensors"):
-                self.gpu_cache_scales_v_tensors.clear()
-            paddle.set_flags({"FLAGS_selected_gpus": f"{self.device}"})
-            paddle.device.cuda.empty_cache()
         else:
             for name, tensor in self.gpu_cache_kvs.items():
                 unset_data_ipc(tensor, name, True, False)
             logger.debug("Successfully unlinked gpu caches cuda ipc")
             self.cache_ready_signal.value[self.rank] = 0
+
+        self.gpu_cache_kvs.clear()
+        self.gpu_cache_k_tensors.clear()
+        self.gpu_cache_v_tensors.clear()
+        if hasattr(self, "gpu_cache_scales_k_tensors"):
+            self.gpu_cache_scales_k_tensors.clear()
+        if hasattr(self, "gpu_cache_scales_v_tensors"):
+            self.gpu_cache_scales_v_tensors.clear()
+        paddle.set_flags({"FLAGS_selected_gpus": f"{self.device}"})
+        paddle.device.cuda.empty_cache()
 
         while np.sum(self.cache_ready_signal.value) != 0:
             time.sleep(0.1)
