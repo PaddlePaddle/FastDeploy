@@ -38,6 +38,20 @@ class TestFlashInferAllReduceResidualRMSNorm(unittest.TestCase):
                 os.environ.get("PADDLE_LOCAL_RANK", os.environ.get("FLAGS_selected_gpus", "0").split(",")[0])
             )
             paddle.set_device(f"gpu:{local_rank}")
+
+            # paddle.distributed.launch remaps each rank's visible GPU to
+            # index 0 inside the worker process. flashinfer's IPC calls go
+            # through the cudart runtime API (cuda-python), which maintains
+            # its own primary context separate from Paddle's driver context.
+            # Explicitly activate cudart's primary context on device 0 here,
+            # otherwise cudaIpcOpenMemHandle reports "invalid device context".
+            try:
+                from cuda import cudart
+
+                cudart.cudaSetDevice(0)
+                cudart.cudaFree(0)  # force primary context creation
+            except ImportError:
+                pass
         else:
             paddle.set_device("cpu")
         dist.init_parallel_env()
