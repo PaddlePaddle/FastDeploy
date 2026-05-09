@@ -37,6 +37,10 @@ from fastdeploy.worker.input_batch import (
     recover_batch_index_for_sampler_output,
 )
 
+try:
+    from fastdeploy.model_executor.ops.xpu import speculate_save_output_topk
+except ImportError:
+    speculate_save_output_topk = None
 from .mtp import MTPProposer
 
 
@@ -194,6 +198,10 @@ class MTPProposerXPU(MTPProposer):
                 )
 
                 if substep == 0 and sampler_output.logprobs_tensors is not None:
+                    raise NotImplementedError(
+                        "MTP with logprobs is not supported on XPU yet. "
+                        "Please disable logprobs when using MTP on XPU."
+                    )
                     real_bsz = self.model_inputs["seq_lens_this_time"].shape[0]
                     recover_batch_index_for_sampler_output(
                         sampler_output,
@@ -205,6 +213,7 @@ class MTPProposerXPU(MTPProposer):
                         self.model_inputs.enable_pd_reorder,
                         ["batch_token_num", "cu_batch_token_offset"],
                     )
+                    # speculate_save_output_topk not implemented for xpu yet.
                     speculate_save_output_topk(
                         sampler_output.sampled_token_ids,
                         sampler_output.logprobs_tensors.logprob_token_ids,
