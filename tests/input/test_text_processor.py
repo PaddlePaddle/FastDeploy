@@ -77,6 +77,9 @@ class DummyTokenizer:
     def convert_tokens_to_ids(self, tokens):
         return [self._value(token) for token in tokens]
 
+    def encode(self, text, add_special_tokens=True, **kwargs):
+        return self.convert_tokens_to_ids(self.tokenize(text))
+
     def decode(self, token_ids, **kwargs):
         return " ".join(str(t) for t in token_ids)
 
@@ -129,8 +132,34 @@ def _create_dummy_modules():
         debug=lambda *args, **kwargs: None,
     )
 
+    CHOICE_SEPARATOR = "::n::"
+
+    def make_choice_id(request_id: str, index: int) -> str:
+        return f"{request_id}{CHOICE_SEPARATOR}{index}"
+
+    def parse_choice_id(compound_id: str) -> tuple:
+        if CHOICE_SEPARATOR in compound_id:
+            base, idx = compound_id.rsplit(CHOICE_SEPARATOR, 1)
+            return base, int(idx)
+        return compound_id, None
+
+    def get_base_request_id(compound_id: str) -> str:
+        if CHOICE_SEPARATOR in compound_id:
+            return compound_id.rsplit(CHOICE_SEPARATOR, 1)[0]
+        return compound_id
+
+    def get_choice_index(compound_id: str) -> int:
+        if CHOICE_SEPARATOR in compound_id:
+            return int(compound_id.rsplit(CHOICE_SEPARATOR, 1)[1])
+        raise ValueError(f"No choice index in request_id: {compound_id}")
+
     utils_module = types.ModuleType("fastdeploy.utils")
     utils_module.data_processor_logger = dummy_logger
+    utils_module.CHOICE_SEPARATOR = CHOICE_SEPARATOR
+    utils_module.make_choice_id = make_choice_id
+    utils_module.parse_choice_id = parse_choice_id
+    utils_module.get_base_request_id = get_base_request_id
+    utils_module.get_choice_index = get_choice_index
 
     envs_module = types.ModuleType("fastdeploy.envs")
     envs_module.FD_USE_HF_TOKENIZER = False
@@ -272,7 +301,7 @@ class DummyRequest:
         self.set(key, value)
 
 
-class DataProcessorTestCase(unittest.TestCase):
+class TextProcessorTestCase(unittest.TestCase):
     @staticmethod
     def create_dummy_reasoning(tokenizer, reasoning_content="think", content="content"):
         class DummyReasoning:
@@ -333,34 +362,7 @@ class DataProcessorTestCase(unittest.TestCase):
         module, cleanup = _import_text_processor()
         self.text_processor_module = module
         self.addCleanup(cleanup)
-        self.processor = self.text_processor_module.DataProcessor("stub-model")
-
-    def test_base_data_processor_contract(self):
-        text_processor_module = self.text_processor_module
-
-        class MinimalProcessor(text_processor_module.BaseDataProcessor):
-            def __init__(self):
-                self.generation_config = SimpleNamespace(
-                    top_p=0.5,
-                    temperature=0.6,
-                    repetition_penalty=1.1,
-                    frequency_penalty=0.2,
-                    presence_penalty=0.3,
-                )
-                super().__init__()
-
-            def _load_tokenizer(self):
-                return DummyTokenizer()
-
-        processor = MinimalProcessor()
-        defaults = processor._apply_default_parameters({})
-        self.assertAlmostEqual(defaults["top_p"], 0.5)
-        with self.assertRaises(NotImplementedError):
-            processor.text2ids("text")
-        with self.assertRaises(NotImplementedError):
-            processor.messages2ids([])
-        with self.assertRaises(NotImplementedError):
-            processor.ids2tokens([1], "task")
+        self.processor = self.text_processor_module.TextProcessor("stub-model")
 
     def test_process_request_dict_prompt_defaults(self):
         request = {"prompt": "hi", "temperature": 0, "top_p": 0, "stop": ["stop"]}
@@ -386,6 +388,89 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(processed["system"], "system prompt")
         self.assertTrue(processed["enable_thinking"])
         self.assertEqual(processed["prompt_tokens"], "system prompt hello")
+
+    def test_process_request_dict_messages_template_batch_encoding(self):
+        """encode() 返回 BatchEncoding-like 对象时，messages2ids 应正确提取 input_ids"""
+
+        class BatchEncodingLike:
+            """模拟 HuggingFace BatchEncoding (UserDict 子类，hasattr input_ids = True)"""
+
+            def __init__(self, ids):
+                self.input_ids = ids
+
+            def __getitem__(self, key):
+                return getattr(self, key)
+
+        class BatchEncodingTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return BatchEncodingLike([len(text)])
+
+        module = self.text_processor_module
+        processor = module.TextProcessor("stub-model")
+        processor.tokenizer = BatchEncodingTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+
+    def test_process_request_dict_messages_template_tensor(self):
+        """encode() 返回带 tolist() 的 tensor-like 对象时，messages2ids 应正确转换为 list"""
+
+        class TensorLike:
+            """模拟 numpy/paddle/torch tensor，有 tolist() 方法"""
+
+            def __init__(self, ids):
+                self._ids = ids
+
+            def tolist(self):
+                return self._ids
+
+        class TensorTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return TensorLike([len(text)])
+
+        module = self.text_processor_module
+        processor = module.TextProcessor("stub-model")
+        processor.tokenizer = TensorTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+
+    def test_process_request_dict_messages_template_plain_dict(self):
+        """encode() 返回 plain dict 时，messages2ids 应正确提取 input_ids 而非返回 key 列表"""
+
+        class PlainDictTokenizer(DummyTokenizer):
+            def encode(self, text, add_special_tokens=True, **kwargs):
+                return {"input_ids": [len(text)], "attention_mask": [1]}
+
+        module = self.text_processor_module
+        processor = module.TextProcessor("stub-model")
+        processor.tokenizer = PlainDictTokenizer()
+
+        request = {
+            "request_id": "chat",
+            "messages": [{"role": "user", "content": "hello"}],
+            "chat_template_kwargs": {"system": "system prompt"},
+        }
+        processed = processor.process_request_dict(request, max_model_len=100)
+        token_ids = processed["prompt_token_ids"]
+        self.assertIsInstance(token_ids, list)
+        self.assertTrue(all(isinstance(x, int) for x in token_ids))
+        # 确保不是 key 列表 ['input_ids', 'attention_mask']
+        self.assertNotIn("input_ids", token_ids)
 
     def test_process_request_dict_handles_sequences(self):
         request = {
@@ -418,6 +503,31 @@ class DataProcessorTestCase(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "chat_template_kwargs must be a dict"):
             self.processor.process_request_dict(request)
 
+    def test_process_request_dict_completion_token_ids_extend(self):
+        request = {"prompt": "hi", "completion_token_ids": [10, 11, 12], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # prompt "hi" is tokenized to [2] by DummyTokenizer, then extended with completion_token_ids
+        self.assertEqual(processed["prompt_token_ids"], [2, 10, 11, 12])
+
+    def test_process_request_dict_no_completion_token_ids(self):
+        request = {"prompt": "hi", "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # without completion_token_ids, prompt_token_ids should remain as tokenized result
+        self.assertEqual(processed["prompt_token_ids"], [2])
+
+    def test_process_request_dict_empty_completion_token_ids(self):
+        request = {"prompt": "hi", "completion_token_ids": [], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=20)
+        # empty list is falsy, should not extend prompt_token_ids
+        self.assertEqual(processed["prompt_token_ids"], [2])
+
+    def test_process_request_dict_completion_token_ids_truncated(self):
+        # prompt "hi" -> [2], extend [10,11,12] -> [2,10,11,12] (len=4)
+        # max_model_len=3, 4 > 3 triggers truncation: [:3-1] = [:2] -> [2, 10]
+        request = {"prompt": "hi", "completion_token_ids": [10, 11, 12], "temperature": 0, "top_p": 0}
+        processed = self.processor.process_request_dict(request, max_model_len=3)
+        self.assertEqual(processed["prompt_token_ids"], [2, 10])
+
     def test_ids2tokens_and_clear_request_status(self):
         delta, _, _ = self.processor.ids2tokens([3], "task-1")
         self.assertEqual(delta, "3")
@@ -431,7 +541,7 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_clear_request_status_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         processor.decode_status = {"task": [[], [], "transcript"]}
 
         self.assertEqual(processor.clear_request_status("task"), "transcript")
@@ -444,7 +554,7 @@ class DataProcessorTestCase(unittest.TestCase):
             "from_pretrained",
             side_effect=OSError("missing"),
         ):
-            processor = self.text_processor_module.DataProcessor("stub-model")
+            processor = self.text_processor_module.TextProcessor("stub-model")
         self.assertIsNone(processor.generation_config)
 
     def test_process_response_with_reasoning_and_tools(self):
@@ -560,7 +670,7 @@ class DataProcessorTestCase(unittest.TestCase):
         self.assertEqual(lengths.shape, (0,))
 
     def test_get_pad_id_prefers_eos_when_missing(self):
-        processor = self.text_processor_module.DataProcessor("stub-model")
+        processor = self.text_processor_module.TextProcessor("stub-model")
         llama_tokenizer = DummyLlamaTokenizer()
         llama_tokenizer.pad_token_id = None
         llama_tokenizer.eos_token = 99
@@ -571,18 +681,36 @@ class DataProcessorTestCase(unittest.TestCase):
     def test_load_tokenizer_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         self.assertIsInstance(processor.tokenizer, DummyTokenizer)
 
     def test_text2ids_hf_branch(self):
         module, cleanup = _import_text_processor(use_hf_tokenizer=True)
         self.addCleanup(cleanup)
-        processor = module.DataProcessor("stub-model")
+        processor = module.TextProcessor("stub-model")
         ids = processor.text2ids("hi", max_model_len=5)
         self.assertEqual(ids.tolist(), [2, 0, 0, 0, 0][: len(ids)])
 
     def test_process_logprob_response(self):
         self.assertEqual(self.processor.process_logprob_response([1, 2]), "1 2")
+
+    def test_process_logprob_response_single_token(self):
+        # Matches the [tid] call pattern in _build_logprobs_response
+        result = self.processor.process_logprob_response([1])
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "1")
+
+    def test_process_logprob_response_with_kwargs(self):
+        # Matches the serving_chat.py call: process_logprob_response([tid], clean_up_tokenization_spaces=False)
+        result = self.processor.process_logprob_response([1], clean_up_tokenization_spaces=False)
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "1")
+
+    def test_process_logprob_response_batch_token_id(self):
+        # Matches the _build_prompt_logprobs call: process_logprob_response(token_id) for a flat token_id
+        result = self.processor.process_logprob_response([42])
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "42")
 
     def test_process_request_dict_uses_existing_ids(self):
         request = {"prompt_token_ids": [1, 2, 3], "max_tokens": 5}

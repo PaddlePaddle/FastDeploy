@@ -20,7 +20,7 @@ import time
 
 import numpy as np
 
-from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
+from fastdeploy import envs
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import llm_logger
 
@@ -53,7 +53,17 @@ class ResourceManager:
         self.max_num_seqs = max_num_seqs
         self.stop_flags = [True] * max_num_seqs  # flag set to true if the slot has not been taken
         self.enable_prefix_cache = config.cache_config.enable_prefix_caching
-        self.cache_manager = PrefixCacheManager(config, tensor_parallel_size, splitwise_role, local_data_parallel_id)
+        self.enable_cache_manager_v1 = envs.ENABLE_V1_KVCACHE_MANAGER
+        if self.enable_cache_manager_v1:
+            from fastdeploy.cache_manager.v1 import CacheManager
+
+            self.cache_manager = CacheManager(config)
+        else:
+            from fastdeploy.cache_manager.prefix_cache_manager import PrefixCacheManager
+
+            self.cache_manager = PrefixCacheManager(
+                config, tensor_parallel_size, splitwise_role, local_data_parallel_id
+            )
         self.tasks_list = [None] * max_num_seqs  # task slots
         self.req_dict = dict()
         # current batch status of the engine
@@ -368,6 +378,12 @@ class ResourceManager:
         total_block_number = self.total_block_number()
         available_block_num = self.available_block_num()
         used_block_num = total_block_number - available_block_num
+        blocks_used_by_tasks = set()
+        for task in self.tasks_list:
+            if task is not None:
+                blocks_used_by_tasks.update(getattr(task, "block_tables", []))
+                blocks_used_by_tasks.update(getattr(task, "extend_block_tables", []))
+        evictable_block_num = used_block_num - len(blocks_used_by_tasks)
         block_usage = used_block_num / total_block_number * 100
         total_batch_number = len(self.stop_flags)
         available_batch_num = self.available_batch()
@@ -375,8 +391,8 @@ class ResourceManager:
         batch_usage = used_batch_num / total_batch_number * 100
         info = (
             f"ResourceManager info, "
-            f"total_block_number: {total_block_number}, total_batch_number: {total_batch_number}, "
-            f"available_block_num: {available_block_num}, available_batch: {available_batch_num},"
+            f"total_block_number: {total_block_number}, available_block_num: {available_block_num}, evictable_block_num: {evictable_block_num}, "
+            f"total_batch_number: {total_batch_number}, available_batch: {available_batch_num},"
             f"running_reqs: {used_batch_num}, block_usage: {block_usage:.2f}%, batch_usage: {batch_usage:.2f}%"
         )
         return info

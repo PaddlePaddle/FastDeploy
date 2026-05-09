@@ -250,9 +250,13 @@ class EngineArgs:
     """
     The storage backend for kvcache storage. If set, it will use the kvcache storage backend.
     """
-    write_policy: str = "write_through"
+    write_policy: str = "write_through_selective"
     """
-    The policy of write cache to storage.
+    The policy of write cache to storage. Options: write_through (alias for write_through_selective with threshold=1), write_through_selective, write_back.
+    """
+    write_through_threshold: int = 2
+    """
+    The threshold of hit count for write_through_selective policy. Only effective when write_policy is write_through_selective.
     """
 
     # System configuration parameters
@@ -264,7 +268,7 @@ class EngineArgs:
     """
     Flag to enable prefix caching.
     """
-    enable_output_caching: bool = True
+    enable_output_caching: bool = False
     """
     Flag to enable kv cache for output tokens, only valid in V1 scheduler.
     """
@@ -584,12 +588,7 @@ class EngineArgs:
             and not current_platform.is_maca()
         ):
             self.enable_prefix_caching = False
-        if (
-            not current_platform.is_cuda()
-            or (self.speculative_config is not None and self.enable_logprob)
-            or self.splitwise_role == "prefill"
-            or self.dynamic_load_weight
-        ):
+        if not current_platform.is_cuda() or self.splitwise_role == "prefill":
             self.enable_overlap_schedule = False
         if self.enable_logprob:
             if not current_platform.is_cuda() and not current_platform.is_xpu():
@@ -1168,9 +1167,16 @@ class EngineArgs:
         cache_group.add_argument(
             "--write-policy",
             type=str,
-            choices=["write_through"],
+            choices=["write_through", "write_through_selective", "write_back"],
             default=EngineArgs.write_policy,
             help="KVCache write policy",
+        )
+
+        cache_group.add_argument(
+            "--write-through-threshold",
+            type=int,
+            default=EngineArgs.write_through_threshold,
+            help="Hit count threshold for write_through_selective policy. Only effective when write_policy is write_through_selective.",
         )
 
         # Cluster system parameters group

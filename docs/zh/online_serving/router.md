@@ -8,30 +8,49 @@ FastDeploy提供Golang版本[Router](https://github.com/PaddlePaddle/FastDeploy/
 
 ## 安装
 
-### 1. 预编译库下载
+### 1. Python 命令行启动（推荐）
 
-在 FastDeploy v2.5.0 及之后版本中，官方 Docker 镜像将内置 Golang Router 编译所需的 Go 语言环境，并提供已编译完成的 Router 二进制文件。该二进制文件默认位于 `/usr/local/bin` 目录下，可直接使用。相关安装方式可参考 [FastDeploy 安装文档](../get_started/installation/nvidia_gpu.md)。
+`fd-router` 二进制已随 FastDeploy Python wheel 包一同打包发布。安装 FastDeploy 后，无需额外下载或编译，即可通过 Python 命令行直接启动 Router：
 
-若需单独下载 Golang router 二进制文件，可通过以下方式：
+```bash
+# 启动 mixed 模式 Router
+python -m fastdeploy.golang_router.launch --port 9000
+
+# 启动 PD 分离模式 Router
+python -m fastdeploy.golang_router.launch --port 9000 --splitwise
+
+# 使用配置文件启动
+python -m fastdeploy.golang_router.launch --config_path config.yaml
+
+# 查看版本
+python -m fastdeploy.golang_router.launch --version
 ```
+
+### 2. 下载预编译二进制（可选）
+
+如果需要直接运行 Router 二进制文件（例如不使用 Python 环境时），可以下载预编译二进制：
+
+```bash
 wget https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest/fd-router
+chmod +x fd-router
 mv fd-router /usr/local/bin/fd-router
 ```
 
-### 2. 编译安装
+在 FastDeploy v2.5.0 及之后版本中，官方 Docker 镜像也内置了编译好的 Router 二进制，默认位于 `/usr/local/bin` 目录。相关安装方式可参考 [FastDeploy 安装文档](../get_started/installation/nvidia_gpu.md)。
+
+### 3. 编译安装
 
 在以下场景中，需要从源码编译 Router：
 
-* 未使用官方 Docker 镜像
-* FastDeploy 版本早于 v2.5.0
 * 需要对 Router 进行定制化修改
+* 当前平台没有预编译二进制覆盖
 
 环境要求：
 
 * Go >= 1.21
 
 拉取FastDeploy最新代码，编译安装：
-```
+```bash
 git clone https://github.com/PaddlePaddle/FastDeploy.git
 cd FastDeploy/fastdeploy/golang_router
 bash build.sh
@@ -40,13 +59,12 @@ bash build.sh
 ## 集中式部署
 
 启动Router服务，其中`--port`参数指定集中式部署的调度端口.
-```
-/usr/local/bin/fd-router \
-  --port 30000
+```bash
+python -m fastdeploy.golang_router.launch --port 30000
 ```
 
 启动mixed实例。对比单机部署，增加`--router`参数指定Router的接口，其他参数和单机部署相同。
-```
+```bash
 export CUDA_VISIBLE_DEVICES=0
 export FD_LOG_DIR="log_mixed"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -58,14 +76,14 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ## PD分离部署
 
 启动Router服务，其中`--splitwise`参数指定为分离式部署的调度方式.
-```
-/usr/local/bin/fd-router \
+```bash
+python -m fastdeploy.golang_router.launch \
   --port 30000 \
   --splitwise
 ```
 
 启动Prefill实例。对比单机部署，增加`--splitwise-role`参数指定实例角色为Prefill，增加`--router`参数指定Router的接口，其他参数和单机部署相同。
-```
+```bash
 export CUDA_VISIBLE_DEVICES=0
 export FD_LOG_DIR="log_prefill"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -76,7 +94,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 启动Decode实例。
-```
+```bash
 export CUDA_VISIBLE_DEVICES=1
 export FD_LOG_DIR="log_decode"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -87,7 +105,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 Prefill和Decode实例启动成功，并且向Router注册成功后，可以发送请求。
-```
+```bash
 curl -X POST "http://0.0.0.0:30000/v1/chat/completions" \
 -H "Content-Type: application/json" \
 -d '{
@@ -113,8 +131,8 @@ popd
 ```
 
 在Router启动Router服务，其中`--config_path`参数指定配置路径.
-```
-/usr/local/bin/fd-router \
+```bash
+python -m fastdeploy.golang_router.launch \
   --port 30000 \
   --splitwise \
   --config_path examples/run_with_config/config/config.yaml
@@ -123,7 +141,7 @@ popd
 Prefill和Decode实例启动同PD分离部署。
 
 启动Prefill实例。
-```
+```bash
 export CUDA_VISIBLE_DEVICES=0
 export FD_LOG_DIR="log_prefill"
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -134,7 +152,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 ```
 
 启动Decode实例。
-```
+```bash
 export CUDA_VISIBLE_DEVICES=1
 export FD_LOG_DIR="log_decode"
 python -m fastdeploy.entrypoints.openai.api_server \

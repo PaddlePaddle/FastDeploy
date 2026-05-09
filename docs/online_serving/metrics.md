@@ -46,3 +46,81 @@ After FastDeploy is launched, it supports continuous monitoring of the FastDeplo
 
 - Access URL: `http://localhost:8000/metrics`
 - Metric Type: Prometheus format
+
+## Trace Events
+
+FastDeploy outputs structured trace events to `trace.log` at key stages of request processing, useful for diagnosing per-request latency bottlenecks. Each trace log entry contains fields such as `timestamp` (milliseconds), `request_id`, `event`, and `stage`.
+
+### Common Events (Mixed / All Instances)
+
+| Stage | Event | Description |
+| :---: | --- | --- |
+| PREPROCESSING | `PREPROCESSING_START` | API Server begins preprocessing the request |
+| PREPROCESSING | `PREPROCESSING_END` | Engine receives the request, preprocessing complete |
+| SCHEDULE | `REQUEST_SCHEDULE_START` | Request enters the scheduling flow |
+| SCHEDULE | `REQUEST_QUEUE_START` | Request enters the scheduling queue |
+| SCHEDULE | `REQUEST_QUEUE_END` | Request dequeued from the scheduling queue |
+| SCHEDULE | `RESOURCE_ALLOCATE_START` | Resource allocation begins for the request |
+| SCHEDULE | `PREPARE_PREFIX_CACHE_START` | Prefix cache block matching begins |
+| SCHEDULE | `PREPARE_PREFIX_CACHE_END` | Prefix cache block matching complete |
+| SCHEDULE | `RESOURCE_ALLOCATE_END` | Resource allocation complete |
+| SCHEDULE | `REQUEST_SCHEDULE_END` | Scheduling flow complete |
+| PREFILL | `INFERENCE_START` | Request sent to GPU for inference |
+| PREFILL | `FIRST_TOKEN_GENERATED` | First token generated |
+| DECODE | `DECODE_START` | Enters Decode phase |
+| DECODE | `INFERENCE_END` | Inference complete (all tokens generated) |
+| DECODE | `PREEMPTED` | Request preempted |
+| DECODE | `RESCHEDULED_INFERENCE_START` | Preempted request rescheduled for execution |
+| POSTPROCESSING | `WRITE_CACHE_TO_STORAGE_START` | Begins writing KV Cache to external storage |
+| POSTPROCESSING | `WRITE_CACHE_TO_STORAGE_END` | KV Cache written to external storage |
+| POSTPROCESSING | `POSTPROCESSING_START` | Post-processing begins |
+| POSTPROCESSING | `POSTPROCESSING_END` | Post-processing complete, response sent |
+
+### PD Disaggregation — Prefill (P) Instance Events
+
+| Stage | Event | Description |
+| :---: | --- | --- |
+| SCHEDULE | `ASK_DECODE_RESOURCE_START` | P begins requesting resources from D (sends ZMQ request) |
+| SCHEDULE | `ASK_DECODE_RESOURCE_END` | P receives resource allocation confirmation from D (with dest_block_ids) |
+| PREFILL | `PREFILL_INFERENCE_END` | P instance Prefill inference complete |
+| POSTPROCESSING | `CHECK_CACHE_TRANSFER_START` | P begins waiting for KV Cache transfer to complete |
+| POSTPROCESSING | `CHECK_CACHE_TRANSFER_END` | KV Cache transfer confirmed, ready to send first token to D |
+
+### PD Disaggregation — Decode (D) Instance Events
+
+| Stage | Event | Description |
+| :---: | --- | --- |
+| DECODE | `DECODE_PROCESS_PREALLOCATE_REQUEST_START` | D begins processing resource allocation request from P |
+| DECODE | `DECODE_PROCESS_PREALLOCATE_REQUEST_END` | D completes resource allocation and returns dest_block_ids to P |
+| DECODE | `DECODE_PROCESS_PREFILLED_REQUEST_START` | D receives first token from P, begins processing Prefilled request |
+| DECODE | `DECODE_PROCESS_PREFILLED_REQUEST_END` | D adds Prefilled request to running queue |
+| DECODE | `DECODE_INFERENCE_END` | D instance Decode inference complete |
+
+### Request Lifecycle Sequence
+
+**Mixed mode** (single instance, full inference):
+```
+PREPROCESSING_START → PREPROCESSING_END → REQUEST_QUEUE_START → REQUEST_QUEUE_END
+→ RESOURCE_ALLOCATE_START → RESOURCE_ALLOCATE_END → INFERENCE_START
+→ FIRST_TOKEN_GENERATED → DECODE_START → INFERENCE_END
+→ POSTPROCESSING_START → POSTPROCESSING_END
+```
+
+**PD Disaggregation — Prefill (P) Instance**:
+```
+PREPROCESSING_START → PREPROCESSING_END → REQUEST_QUEUE_START → REQUEST_QUEUE_END
+→ ASK_DECODE_RESOURCE_START → ASK_DECODE_RESOURCE_END
+→ RESOURCE_ALLOCATE_START → RESOURCE_ALLOCATE_END
+→ INFERENCE_START → PREFILL_INFERENCE_END
+→ CHECK_CACHE_TRANSFER_START → CHECK_CACHE_TRANSFER_END → [send first token to D]
+```
+
+**PD Disaggregation — Decode (D) Instance**:
+```
+PREPROCESSING_START → PREPROCESSING_END → REQUEST_QUEUE_START → REQUEST_QUEUE_END
+→ DECODE_PROCESS_PREALLOCATE_REQUEST_START → DECODE_PROCESS_PREALLOCATE_REQUEST_END
+→ [wait for P to complete prefill and transfer KV Cache]
+→ DECODE_PROCESS_PREFILLED_REQUEST_START → DECODE_PROCESS_PREFILLED_REQUEST_END
+→ INFERENCE_START → DECODE_INFERENCE_END
+→ POSTPROCESSING_START → POSTPROCESSING_END
+```

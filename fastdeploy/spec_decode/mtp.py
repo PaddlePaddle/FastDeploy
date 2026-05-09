@@ -245,10 +245,12 @@ class MTPProposer(Proposer):
 
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
-        # 2. If no need to profile, create kv cache if cache managers do not exist.
+        # 2. If no need to profile, create kv cache unless kvcache_storage_backend or
+        #    p/d disaggregation is enabled. Note: CPU cache (num_cpu_blocks > 0) does NOT
+        #    prevent GPU runner from creating GPU cache tensors; cache transfer manager
+        #    handles CPU<->GPU swap on top of the GPU tensors created here.
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
+            self.fd_config.cache_config.kvcache_storage_backend
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
 
@@ -426,8 +428,7 @@ class MTPProposer(Proposer):
         Clear allocated cacheKV
         """
         create_cache_tensor = profile or not (
-            self.fd_config.cache_config.num_cpu_blocks > 0
-            or self.fd_config.cache_config.kvcache_storage_backend
+            self.fd_config.cache_config.kvcache_storage_backend
             or self.fd_config.scheduler_config.splitwise_role != "mixed"
         )
         if not create_cache_tensor:
@@ -438,13 +439,20 @@ class MTPProposer(Proposer):
         if self.forward_meta is not None:
             del self.forward_meta.caches
 
-    def update_mtp_block_num(self, num_gpu_blocks) -> None:
+    def update_mtp_block_num(self, num_gpu_blocks, skip_cache_init: bool = False) -> None:
         """
         Update MTP block num by theoretical calculation
+
+        Args:
+            num_gpu_blocks: Main model GPU block count.
+            skip_cache_init: When True, skip internal initialize_kv_cache call.
+                Set this when the caller (e.g. gpu_model_runner with enable_cache_manager_v1)
+                has already re-created MTP cache via cache_controller.
         """
         # Reset block table and kv cache with global block num
         self.main_model_num_gpu_blocks = num_gpu_blocks
-        self.initialize_kv_cache(main_model_num_blocks=self.main_model_num_gpu_blocks)
+        if not skip_cache_init:
+            self.initialize_kv_cache(main_model_num_blocks=self.main_model_num_gpu_blocks)
 
         # Reset free list
         free_list = list(
@@ -887,7 +895,7 @@ class MTPProposer(Proposer):
                 token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
             else:
                 if substep == 0:
-                    token_num_cpu = real_bsz * (self.max_draft_token_num + 1)
+                    token_num_cpu = self.model_inputs["target_hidden_states"].shape[0]
                 else:
                     token_num_cpu = real_bsz
             if token_num_cpu > 0:
@@ -1108,7 +1116,7 @@ class MTPProposer(Proposer):
                     top_k=self.model_inputs["top_k"],
                     seed=self.model_inputs["infer_seed"],
                     step_idx=self.model_inputs["step_idx"],
-                    pre_token_ids=self.model_inputs["pre_ids"],
+                    token_ids_all=self.model_inputs["token_ids_all"],
                     frequency_penalties=self.model_inputs["frequency_score"],
                     presence_penalties=self.model_inputs["presence_score"],
                     repetition_penalties=self.model_inputs["penalty_score"],

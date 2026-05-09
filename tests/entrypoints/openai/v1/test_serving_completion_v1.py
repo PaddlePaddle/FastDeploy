@@ -191,7 +191,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_request_output1 = MagicMock()
         mock_request_output1.error_code = 200
         mock_request_output1.outputs = mock_output1
-        mock_request_output1.request_id = "test_request_id_0"
+        mock_request_output1.request_id = "test_request_id::n::0"
         mock_request_output1.prompt_token_ids = [4, 5, 6]
         mock_request_output1.prompt = "Test prompt"
 
@@ -532,7 +532,7 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
         self.assertIsNone(result)  # Should return None on success
         self.assertEqual(len(ctx.preprocess_requests), 1)
         self.assertEqual(ctx.preprocess_requests[0]["prompt"], "Hello world")
-        self.assertEqual(ctx.preprocess_requests[0]["request_id"], "test_request_id_0")
+        self.assertEqual(ctx.preprocess_requests[0]["request_id"], "test_request_id::n::0")
         self.assertIn("arrival_time", ctx.preprocess_requests[0])
 
     async def test_preprocess_valid_prompt_string_list(self):
@@ -548,9 +548,9 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
         self.assertIsNone(result)
         self.assertEqual(len(ctx.preprocess_requests), 2)
         self.assertEqual(ctx.preprocess_requests[0]["prompt"], "Hello")
-        self.assertEqual(ctx.preprocess_requests[0]["request_id"], "test_request_id_0")
+        self.assertEqual(ctx.preprocess_requests[0]["request_id"], "test_request_id::n::0")
         self.assertEqual(ctx.preprocess_requests[1]["prompt"], "World")
-        self.assertEqual(ctx.preprocess_requests[1]["request_id"], "test_request_id_1")
+        self.assertEqual(ctx.preprocess_requests[1]["request_id"], "test_request_id::n::1")
 
     async def test_preprocess_valid_prompt_int_list(self):
         """Test _preprocess with prompt as list of ints"""
@@ -753,7 +753,9 @@ class TestAsyncLLMOpenAIServingCompletionPreprocess(unittest.IsolatedAsyncioTest
                 self.assertEqual(len(ctx.preprocess_requests), expected_requests)
 
                 for i in range(expected_requests):
-                    expected_id = f"{request_id}_{i}" if request_id else f"_{i}"
+                    from fastdeploy.utils import make_choice_id
+
+                    expected_id = make_choice_id(request_id, i) if request_id else make_choice_id("", i)
                     self.assertEqual(ctx.preprocess_requests[i]["request_id"], expected_id)
 
     @patch("fastdeploy.entrypoints.openai.v1.serving_completion.log_request_error")

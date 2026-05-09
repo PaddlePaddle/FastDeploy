@@ -65,6 +65,7 @@ class TestFP8LinearWithUe8m0Scale(unittest.TestCase):
     def setUp(self):
         self.quant_config = BlockWiseFP8Config(weight_block_size=[128, 128], is_checkpoint_bf16=True)
         self.quant_config.deepgemm_scale_ue8m0 = True  # set deepgemm_scale_ue8m0 to True
+        self.quant_config.moe_blockwise_gemm_scale_ue8m0 = True
 
     def test_create_layer_with_ue8m0_scale(self):
         def fake_per_block_cast_to_fp8(x, use_ue8m0=True):
@@ -101,6 +102,7 @@ class TestFP8FusedMoeWithUe8m0Scale(unittest.TestCase):
     def setUp(self):
         self.quant_config = BlockWiseFP8Config(weight_block_size=[128, 128], is_checkpoint_bf16=True)
         self.quant_config.deepgemm_scale_ue8m0 = True  # set deepgemm_scale_ue8m0 to True
+        self.quant_config.moe_blockwise_gemm_scale_ue8m0 = True
 
     def test_create_layer_with_ue8m0_scale(self):
         # This test covers the quant_weight_ue8m0 branch in BlockWiseFP8MoEMethod.process_weights_after_loading

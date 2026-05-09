@@ -30,6 +30,13 @@ class TestTraceLogging(unittest.TestCase):
         """Inject pytest caplog fixture into unittest"""
         self._caplog = caplog
 
+    def setUp(self):
+        self.fd_trace_patcher = patch("fastdeploy.trace.trace_logger.envs.FD_TRACE", "local")
+        self.fd_trace_patcher.start()
+
+    def tearDown(self):
+        self.fd_trace_patcher.stop()
+
     @patch("fastdeploy.trace.trace_logger.get_trace_info_for_request")
     def test_trace_print_with_unknown_trace_id(self, mock_get_trace_info):
         """Test trace_print when get_trace_info_for_request returns None (line 40)"""

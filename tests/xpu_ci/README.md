@@ -495,6 +495,13 @@ def test_xxx(xpu_env):
 - PD 场景：`setup_pd_env()` / `restore_pd_env()`
 - PD + EP 场景：`setup_pd_ep_env()` / `restore_pd_ep_env()`
 - logprobs 特殊场景：`setup_logprobs_zmq_env()`
+测试失败时会自动打印 `server.log` 和 `log/paddle/workerlog.0` 的内容。
+你也可以在测试运行时手动查看:
+
+```bash
+tail -f server.log
+tail -f log/paddle/workerlog.0
+```
 
 这类 case 额外要注意：
 

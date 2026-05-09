@@ -77,7 +77,7 @@ def apply_penalty_multi_scores(
         from fastdeploy.model_executor.ops.xpu import get_token_penalty_multi_scores
 
         logits = get_token_penalty_multi_scores(
-            pre_token_ids,
+            token_ids_all,
             logits,
             repetition_penalties,
             frequency_penalties,
@@ -179,7 +179,6 @@ def apply_speculative_penalty_multi_scores(
     batch_id_per_token_output: paddle.Tensor,
     cu_seqlens_q_output: paddle.Tensor,
     max_len: int,
-    pre_token_ids: Optional[paddle.Tensor] = None,  # used in xpu
 ):
     """
     apply_speculative_penalty_multi_scores
@@ -213,7 +212,7 @@ def apply_speculative_penalty_multi_scores(
         )
 
         speculate_get_token_penalty_multi_scores(
-            pre_token_ids,
+            token_ids_all,
             logits,
             repetition_penalties,
             frequency_penalties,
@@ -257,24 +256,26 @@ def reasoning_phase_token_constraint(
     """
     if current_platform.is_cuda():
         from fastdeploy.model_executor.ops.gpu import reasoning_phase_token_constraint
-
-        reasoning_phase_token_constraint(
-            logits,
-            token_ids_all,
-            prompt_lens,
-            stop_flags,
-            seq_lens_this_time,
-            seq_lens_encoder,
-            step_idx,
-            reasoning_allowed_tokens,
-            reasoning_status,
-            batch_id_per_token_output,
-            cu_seqlens_q_output,
-            enable_thinking,
-            think_end_id,
-            line_break_id,
-        )
+    elif current_platform.is_xpu():
+        from fastdeploy.model_executor.ops.xpu import reasoning_phase_token_constraint
     else:
         raise NotImplementedError
+
+    reasoning_phase_token_constraint(
+        logits,
+        token_ids_all,
+        prompt_lens,
+        stop_flags,
+        seq_lens_this_time,
+        seq_lens_encoder,
+        step_idx,
+        reasoning_allowed_tokens,
+        reasoning_status,
+        batch_id_per_token_output,
+        cu_seqlens_q_output,
+        enable_thinking,
+        think_end_id,
+        line_break_id,
+    )
     # inplace
     return logits

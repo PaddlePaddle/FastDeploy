@@ -1089,6 +1089,32 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertEqual(result, ["proc"])
         self._detach_finalizer(eng)
 
+    def test_start_cache_service_returns_empty_when_v1_enabled(self):
+        """When ENABLE_V1_KVCACHE_MANAGER=1, start_cache_service should return [] without launching v0."""
+        eng = self._make_mixed_engine()
+        eng.resource_manager.cache_manager = Mock()
+        eng.resource_manager.cache_manager.launch_cache_manager = Mock(return_value=["proc"])
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_MANAGER", True):
+            result = eng.start_cache_service(["0"], 9999)
+
+        self.assertEqual(result, [])
+        eng.resource_manager.cache_manager.launch_cache_manager.assert_not_called()
+        self._detach_finalizer(eng)
+
+    def test_start_cache_service_launches_v0_when_v1_disabled(self):
+        """When ENABLE_V1_KVCACHE_MANAGER=0, start_cache_service should invoke launch_cache_manager normally."""
+        eng = self._make_mixed_engine()
+        eng.resource_manager.cache_manager = Mock()
+        eng.resource_manager.cache_manager.launch_cache_manager = Mock(return_value=["proc"])
+
+        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_MANAGER", False):
+            result = eng.start_cache_service(["0"], 9999)
+
+        self.assertEqual(result, ["proc"])
+        eng.resource_manager.cache_manager.launch_cache_manager.assert_called_once()
+        self._detach_finalizer(eng)
+
     def test_control_update_weights_success(self):
         eng = self._make_mixed_engine()
         eng.is_paused = True
@@ -2678,8 +2704,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                         # Verify trace_set_proc_propagate_context was called with correct args (lines 1165-1167)
                         mock_trace_set.assert_called_once()
                         call_args = mock_trace_set.call_args
-                        # request_id should be "test" (first part after split on "_") and trace_carrier
-                        self.assertEqual(call_args[0][0], "test")
+                        # request_id should be "test_req_123" (no ::n:: separator, so base is the full id)
+                        self.assertEqual(call_args[0][0], "test_req_123")
                         self.assertEqual(call_args[0][1], trace_carrier_data)
 
         # Reset and test without trace_carrier - should not call trace_set_proc_propagate_context
@@ -3607,10 +3633,10 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self._detach_finalizer(eng)
 
     def test_control_abort_requests_by_req_ids_with_suffix_match(self):
-        """req_ids match both exact and _0 suffix."""
+        """req_ids match both exact and ::n::0 suffix."""
         eng = self._make_abort_engine()
         eng.resource_manager.requests = {
-            "req-A_0": self._make_fake_request([1, 2, 3]),
+            "req-A::n::0": self._make_fake_request([1, 2, 3]),
             "req-B": self._make_fake_request([4, 5]),
         }
 
@@ -3632,7 +3658,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             result = eng._control_abort_requests(control_req)
 
         aborted_ids = {a["request_id"] for a in result["aborted"]}
-        self.assertIn("req-A_0", aborted_ids)  # matched via _0 suffix
+        self.assertIn("req-A::n::0", aborted_ids)  # matched via ::n::0 suffix
         self.assertIn("req-B", aborted_ids)  # exact match
         self.assertEqual(result["not_found"], ["req-C"])
         self._detach_finalizer(eng)
@@ -3700,6 +3726,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         """_wait_abort_complete exits when background thread cleans up."""
         eng = self._make_abort_engine()
         eng.resource_manager.waiting_abort_req_id_set = {"req-1_0"}
+        # Add the request to requests dict so it won't be filtered out
+        eng.resource_manager.requests = {"req-1_0": self._make_fake_request()}
 
         call_count = [0]
 
@@ -3718,6 +3746,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         """Stall timeout triggers force cleanup for requests in to_be_aborted_req_id_set."""
         eng = self._make_abort_engine()
         eng.resource_manager.to_be_aborted_req_id_set = {"req-1_0"}
+        # Add the request to requests dict so it won't be filtered out
+        eng.resource_manager.requests = {"req-1_0": self._make_fake_request()}
 
         def mock_recycle(req_id):
             eng.resource_manager.to_be_aborted_req_id_set.discard(req_id)

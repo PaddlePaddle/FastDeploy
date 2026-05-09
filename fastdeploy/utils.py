@@ -33,7 +33,7 @@ from enum import Enum
 from functools import cache
 from http import HTTPStatus
 from importlib.metadata import PackageNotFoundError, distribution
-from typing import Any, Literal, TypeVar, Union
+from typing import Any, Dict, Literal, TypeVar, Union
 
 import numpy as np
 import paddle
@@ -69,6 +69,40 @@ FASTDEPLOY_SUBCMD_PARSER_EPILOG = (
     "   - To list all groups:           --help=listgroup\n"
     "   - To view help with pager:      --help=page"
 )
+
+
+CHOICE_SEPARATOR = "::n::"
+
+
+def make_choice_id(request_id: str, index: int) -> str:
+    """Construct an internal request ID that encodes the choice index."""
+    return f"{request_id}{CHOICE_SEPARATOR}{index}"
+
+
+def parse_choice_id(compound_id: str) -> tuple:
+    """Parse an internal request ID back into (base_request_id, choice_index).
+    Returns (compound_id, None) if no choice index is encoded.
+    """
+    if CHOICE_SEPARATOR in compound_id:
+        base, idx = compound_id.rsplit(CHOICE_SEPARATOR, 1)
+        return base, int(idx)
+    return compound_id, None
+
+
+def get_base_request_id(compound_id: str) -> str:
+    """Extract the base request ID, stripping any choice index suffix."""
+    if CHOICE_SEPARATOR in compound_id:
+        return compound_id.rsplit(CHOICE_SEPARATOR, 1)[0]
+    return compound_id
+
+
+def get_choice_index(compound_id: str) -> int:
+    """Extract the choice index from a compound request ID.
+    Returns the index, or raises ValueError if not present.
+    """
+    if CHOICE_SEPARATOR in compound_id:
+        return int(compound_id.rsplit(CHOICE_SEPARATOR, 1)[1])
+    raise ValueError(f"No choice index in request_id: {compound_id}")
 
 
 def show_filtered_argument_or_group_from_help(parser: argparse.ArgumentParser, subcommand_name: list[str]):
@@ -428,7 +462,7 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
                         converted = action.type(str_value)
                     value = converted
                 except Exception as e:
-                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}")
+                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}, {traceback.format_exc()}")
             setattr(namespace, key, value)
         args = super().parse_args(args=remaining_args, namespace=namespace)
 
@@ -937,10 +971,14 @@ class StatefulSemaphore:
         }
 
 
-def parse_quantization(value: str):
+def parse_quantization(value: Union[Dict, str]) -> Dict:
     """
     Parse a JSON string into a dictionary.
     """
+    if isinstance(value, dict):
+        return value
+    if value is None:
+        value = "null"
     try:
         return json.loads(value)
     except ValueError:
@@ -1232,5 +1270,4 @@ from fastdeploy.logger import (  # noqa: F401
     scheduler_logger,
     spec_logger,
     trace_logger,
-    zmq_client_logger,
 )

@@ -74,7 +74,15 @@ from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import EngineError, console_logger, envs, get_logger, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    console_logger,
+    envs,
+    get_base_request_id,
+    get_logger,
+    llm_logger,
+    make_choice_id,
+)
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -83,11 +91,13 @@ except:
     from fastdeploy.output.token_processor import TokenProcessor
 
 
-def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
+def _read_latest_worker_traceback(paddle_log_dir: str) -> Optional[str]:
     """读取 workerlog.* 文件中的最新 traceback。"""
 
     try:
-        candidates = sorted(Path(log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True)
+        candidates = sorted(
+            Path(paddle_log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True
+        )
     except OSError:
         return None
 
@@ -105,10 +115,12 @@ def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
     return None
 
 
-def _format_worker_launch_failure_message(log_dir: str) -> str:
+def _format_worker_launch_failure_message(paddle_log_dir: str) -> str:
     """格式化 worker 启动失败的错误消息，包含 traceback 信息。"""
-    message = "Failed to launch worker processes, check log/workerlog.* for more details."
-    traceback_text = _read_latest_worker_traceback(log_dir)
+    message = (
+        "Failed to launch worker processes, check log/paddle/workerlog.* and log/worker_process.log for more details."
+    )
+    traceback_text = _read_latest_worker_traceback(paddle_log_dir)
     if traceback_text:
         return f"{message}\n{traceback_text}"
     return message
@@ -236,6 +248,11 @@ class EngineService:
             self.ipc_signal_suffix = None
             self.cache_manager_processes = None
 
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            from fastdeploy.cache_manager.v1.cache_utils import get_request_block_hasher
+
+            self._block_hasher = get_request_block_hasher(block_size=self.cfg.cache_config.block_size)
+
         self._finalizer = weakref.finalize(self, self._exit_sub_services)
 
     def start(self, async_llm_pid=None):
@@ -272,7 +289,11 @@ class EngineService:
         self.launch_components()
 
         # If block number is specified and model is deployed in splitwise mode, start cache manager first
-        if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
+        if (
+            not self.do_profile
+            and self.cfg.scheduler_config.splitwise_role != "mixed"
+            and not envs.ENABLE_V1_KVCACHE_MANAGER
+        ):
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 
@@ -285,7 +306,7 @@ class EngineService:
         def check_worker_initialize_status_func(res: dict):
             res["worker_is_alive"] = True
             if not self.check_worker_initialize_status():
-                self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+                self.llm_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
                 res["worker_is_alive"] = False
 
         self.check_worker_initialize_status_func_thread = threading.Thread(
@@ -304,14 +325,18 @@ class EngineService:
         # and then start the cache manager
         if self.do_profile:
             self._stop_profile()
-        elif self.cfg.scheduler_config.splitwise_role == "mixed" and self.cfg.cache_config.enable_prefix_caching:
+        elif (
+            self.cfg.scheduler_config.splitwise_role == "mixed"
+            and self.cfg.cache_config.enable_prefix_caching
+            and not envs.ENABLE_V1_KVCACHE_MANAGER
+        ):
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
         if not result_container["worker_is_alive"]:
-            self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+            self.llm_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
             return False
 
         # Start ZMQ service for communication with AsyncLLM
@@ -449,15 +474,19 @@ class EngineService:
         start queue service for engine worker communication
         """
         if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
-            address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
+            engine_worker_queue_address = (self.cfg.master_ip, self.cfg.parallel_config.local_engine_worker_queue_port)
+            engine_cache_queue_address = (self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port)
         else:
-            address = f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
+            engine_worker_queue_address = (
+                f"/dev/shm/fd_task_queue_{self.cfg.parallel_config.local_engine_worker_queue_port}.sock"
+            )
+            engine_cache_queue_address = f"/dev/shm/fd_task_queue_{self.cfg.cache_config.local_cache_queue_port}.sock"
 
         if self.cfg.host_ip == self.cfg.master_ip or self.cfg.master_ip == "0.0.0.0":
             if start_queue:
-                self.llm_logger.info(f"Starting engine worker queue server service at {address}")
+                self.llm_logger.info(f"Starting engine worker queue server service at {engine_worker_queue_address}")
                 self.engine_worker_queue_server = EngineWorkerQueue(
-                    address=address,
+                    address=engine_worker_queue_address,
                     is_server=True,
                     num_client=self.cfg.parallel_config.tensor_parallel_size,
                     local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
@@ -467,27 +496,29 @@ class EngineService:
                     self.cfg.parallel_config.local_engine_worker_queue_port = (
                         self.engine_worker_queue_server.get_server_port()
                     )
-                    address = (
+                    engine_worker_queue_address = (
                         self.cfg.master_ip,
                         self.cfg.parallel_config.local_engine_worker_queue_port,
                     )
 
-            if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
-                self.llm_logger.info(
-                    f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
-                )
-                self.cache_task_queue = EngineCacheQueue(
-                    address=(self.cfg.master_ip, self.cfg.cache_config.local_cache_queue_port),
-                    authkey=b"cache_queue_service",
-                    is_server=True,
-                    num_client=self.cfg.parallel_config.tensor_parallel_size,
-                    client_id=-1,
-                    local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
-                )
-                self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
+            if not envs.ENABLE_V1_KVCACHE_MANAGER:
+                if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+                    self.llm_logger.info(
+                        f"Starting engine cache queue server service at {self.cfg.cache_config.local_cache_queue_port}"
+                    )
+                    self.cache_task_queue = EngineCacheQueue(
+                        address=engine_cache_queue_address,
+                        authkey=b"cache_queue_service",
+                        is_server=True,
+                        num_client=self.cfg.parallel_config.tensor_parallel_size,
+                        client_id=-1,
+                        local_data_parallel_size=self.cfg.parallel_config.data_parallel_size,
+                    )
+                    if not envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+                        self.cfg.cache_config.local_cache_queue_port = self.cache_task_queue.get_server_port()
 
         self.engine_worker_queue = EngineWorkerQueue(
-            address=address,
+            address=engine_worker_queue_address,
             is_server=False,
             num_client=self.cfg.parallel_config.tensor_parallel_size,
             client_id=0,
@@ -507,7 +538,7 @@ class EngineService:
 
         need_delete_tasks = []
         for task in tasks:
-            rid = task.request_id.split("_")[0]
+            rid = get_base_request_id(task.request_id)
             trace_carrier = task.trace_carrier
             if trace_carrier:
                 tracing.trace_set_proc_propagate_context(rid, trace_carrier)
@@ -576,7 +607,7 @@ class EngineService:
                     task.metrics.inference_start_time = time.time()
                     tracing.trace_report_span(
                         tracing.TraceSpanName.SCHEDULE,
-                        task.request_id.split("_")[0],
+                        get_base_request_id(task.request_id),
                         int(task.metrics.scheduler_recv_req_time * 1e9),
                         int(task.metrics.inference_start_time * 1e9),
                         thread_finish_flag=True,
@@ -900,6 +931,10 @@ class EngineService:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
 
+                    # cache_manager_v1 set block_hasher to request
+                    if hasattr(self, "_block_hasher"):
+                        task.set_block_hasher(self._block_hasher)
+
                 if self.cfg.scheduler_config.splitwise_role == "decode":
                     # TODO: refine scheduler to remove this limitation
                     # Decode will process and schedule the request sent by prefill to engine,
@@ -925,6 +960,9 @@ class EngineService:
                             self.llm_logger.debug(
                                 f"P has allocated resources and then ask D resource for request: {task.request_id}"
                             )
+                            trace_print(
+                                LoggingEventName.ASK_DECODE_RESOURCE_START, task.request_id, getattr(task, "user", "")
+                            )
                             task.metrics.ask_decode_resource_start_time = time.time()
                             while True:
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
@@ -936,6 +974,11 @@ class EngineService:
                                     time.sleep(0.05)
                                 else:
                                     task.metrics.ask_decode_resource_finish_time = time.time()
+                                    trace_print(
+                                        LoggingEventName.ASK_DECODE_RESOURCE_END,
+                                        task.request_id,
+                                        getattr(task, "user", ""),
+                                    )
                                     break
                             self.llm_logger.debug(f"D has allocated resource for request: {task.request_id}")
                     else:
@@ -947,6 +990,9 @@ class EngineService:
                             self.llm_logger.debug(
                                 f"P has allocated resources and then ask D resource for req_id: {task.request_id}"
                             )
+                            trace_print(
+                                LoggingEventName.ASK_DECODE_RESOURCE_START, task.request_id, getattr(task, "user", "")
+                            )
                             task.metrics.ask_decode_resource_start_time = time.time()
                             self.split_connector.send_splitwise_tasks([task], task.idx)
 
@@ -954,18 +1000,26 @@ class EngineService:
                             # assure fetch block ids from D
                             status, msg = self.split_connector.check_decode_allocated(task)
                             task.metrics.ask_decode_resource_finish_time = time.time()
+                            trace_print(
+                                LoggingEventName.ASK_DECODE_RESOURCE_END, task.request_id, getattr(task, "user", "")
+                            )
                             if not status:
-                                self.llm_logger.error(f"{task.request_id} prefill failed with msg:{msg}.")
+                                error_msg = (
+                                    f"PD Error: prefill failed to apply for resource from decode, "
+                                    f"req: {task.request_id}, msg:{msg}."
+                                )
+                                self.llm_logger.error(error_msg)
                                 self.scheduler.put_results(
                                     [
                                         RequestOutput(
                                             request_id=task.request_id,
                                             finished=True,
                                             error_code=500,
-                                            error_msg=msg,
+                                            error_msg=error_msg,
                                         )
                                     ]
                                 )
+                                main_process_metrics.reschedule_req_num.inc()
                                 need_delete_tasks.append(task)
                                 continue
                     for tmp_task in need_delete_tasks:
@@ -1064,29 +1118,33 @@ class EngineService:
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
-                tasks, error_tasks = self.resource_manager.schedule()
+                batch_request, error_tasks = self.resource_manager.schedule()
 
                 # 3. Send to engine
-                if tasks:
+                if len(batch_request) > 0:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
-                        for task in tasks:
+                        for task in batch_request:
                             if task.task_type == RequestType.PREEMPTED:
-                                msg = f"{task.request_id} decode not enough blocks, need to be rescheduled."
+                                msg = (
+                                    f"PD Error: decode does not have enough blocks for "
+                                    f"preallocated request. req:{task.request_id} "
+                                )
                                 self.llm_logger.error(msg)
+                                main_process_metrics.reschedule_req_num.inc()
                                 self.scheduler.put_results(
                                     [
                                         RequestOutput(
                                             request_id=task.request_id,
                                             finished=True,
-                                            error_code=500,
+                                            error_code=502,
                                             error_msg=msg,
                                         )
                                     ]
                                 )
                     self.resource_manager.get_real_bsz()
-                    for task in tasks:
+                    for task in batch_request:
                         if task.task_type == RequestType.PREFILL:
-                            rid = task.request_id.split("_")[0]
+                            rid = get_base_request_id(task.request_id)
                             if isinstance(task, Request) and task.has_been_preempted_before:
                                 trace_print(
                                     LoggingEventName.RESCHEDULED_INFERENCE_START,
@@ -1119,13 +1177,13 @@ class EngineService:
                                 task.metrics.decode_inference_start_time = time.time()
                             elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
-                    self.engine_worker_queue.put_tasks((tasks, self.resource_manager.real_bsz))
+                    self.engine_worker_queue.put_tasks((batch_request, self.resource_manager.real_bsz))
                 else:
                     # When there are no actual tasks to schedule, send an empty task batch to EP workers.
                     # This helps EP workers barrier for syncing tasks not hang.
                     if self.cfg.parallel_config.enable_expert_parallel:
                         self.engine_worker_queue.put_tasks(
-                            ([], self.resource_manager.real_bsz)
+                            (batch_request, self.resource_manager.real_bsz)
                         )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
@@ -1136,7 +1194,7 @@ class EngineService:
                             continue
                         self._send_error_response(request_id, failed)
 
-                if not tasks and not error_tasks:
+                if len(batch_request) <= 0 and not error_tasks:
                     time.sleep(0.005)
 
             except RuntimeError as e:
@@ -1268,7 +1326,7 @@ class EngineService:
                         main_process_metrics.requests_number.inc()
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
-                            request_id = data["request_id"].split("_")[0]
+                            request_id = get_base_request_id(data["request_id"])
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
@@ -1428,22 +1486,25 @@ class EngineService:
             self._send_error_response(req.request_id, "Request is aborted since engine is paused.")
         self.scheduler.reset()
 
-        # pause cache transfer
-        if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-            self.llm_logger.info("Start to pause cache transfer.")
-            pause_transfer_request = ControlRequest(
-                request_id=f"{control_request.request_id}_pause_transfer", method="pause"
-            )
-            self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
-            # Wait for cache_transfer responses
-            asyncio.run(
-                self._wait_for_control_responses(
-                    f"{pause_transfer_request.request_id}", 60, executors=["cache_transfer"]
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            self.resource_manager.cache_manager.reset_cache()
+        else:
+            # pause cache transfer
+            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                self.llm_logger.info("Start to pause cache transfer.")
+                pause_transfer_request = ControlRequest(
+                    request_id=f"{control_request.request_id}_pause_transfer", method="pause"
                 )
-            )
-            self.llm_logger.info("Successfully paused cache transfer.")
+                self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, pause_transfer_request))
+                # Wait for cache_transfer responses
+                asyncio.run(
+                    self._wait_for_control_responses(
+                        f"{pause_transfer_request.request_id}", 60, executors=["cache_transfer"]
+                    )
+                )
+                self.llm_logger.info("Successfully paused cache transfer.")
 
-        self.resource_manager.cache_manager.reset()
+            self.resource_manager.cache_manager.reset()
         self.llm_logger.info("Successfully paused request generation.")
         return None
 
@@ -1564,8 +1625,8 @@ class EngineService:
                 if rid in now_reqs:
                     target_req_ids.append(rid)
                     matched_input_ids.add(rid)
-                elif f"{rid}_0" in now_reqs:
-                    target_req_ids.append(f"{rid}_0")
+                elif make_choice_id(rid, 0) in now_reqs:
+                    target_req_ids.append(make_choice_id(rid, 0))
                     matched_input_ids.add(rid)
 
         if not target_req_ids:
@@ -1593,13 +1654,14 @@ class EngineService:
                 engine_recv_first_token_time=request.metrics.engine_recv_first_token_time if request.metrics else now,
                 request_start_time=request.metrics.arrival_time if request.metrics else now,
             )
+            eos_token_ids = getattr(request, "eos_token_ids", [0])
             result = RequestOutput(
                 request_id=req_id,
                 finished=True,
                 outputs=CompletionOutput(
                     index=0,
                     send_idx=len(partial_token_ids),
-                    token_ids=[self.data_processor.eos_token_ids[0]],
+                    token_ids=[eos_token_ids[0]],
                 ),
                 metrics=abort_metrics,
                 error_code=200,
@@ -1643,14 +1705,24 @@ class EngineService:
           reset progress state if any, then continue monitoring
         """
         target_set = set(target_req_ids)
+        target_set = target_set & (set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys()))
         prev_remaining_count = len(target_set)
         last_progress_time = time.time()
         remaining = target_set & self.resource_manager.get_reqs_in_aborting()
         while remaining:
+            alive_reqs = set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys())
+            finished_reqs = target_set - alive_reqs
+            if finished_reqs:
+                self.llm_logger.info(f"abort targets already finished, skip: {finished_reqs}")
+                for req_id in finished_reqs:
+                    self.resource_manager.waiting_abort_req_id_set.discard(req_id)
+                    self.resource_manager.to_be_aborted_req_id_set.discard(req_id)
+                target_set -= finished_reqs
             remaining = target_set & self.resource_manager.get_reqs_in_aborting()
             if not remaining:
                 self.llm_logger.info(f"all {len(target_set)} abort reqs cleaned")
                 return
+            self.llm_logger.debug(f"remaining:{remaining}")
 
             current_count = len(remaining)
             if current_count < prev_remaining_count:
@@ -1726,10 +1798,14 @@ class EngineService:
             executors.add("worker")
         if "kv_cache" in tags:
             executors.add("worker")
-            if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
-                executors.add("cache_transfer")
-            if self.cfg.cache_config.enable_prefix_caching:
-                self.resource_manager.cache_manager.reset()
+            if envs.ENABLE_V1_KVCACHE_MANAGER:
+                if self.cfg.cache_config.enable_prefix_caching:
+                    self.resource_manager.cache_manager.reset_cache()
+            else:
+                if self.cfg.cache_config.num_cpu_blocks > 0 or self.cfg.cache_config.kvcache_storage_backend:
+                    executors.add("cache_transfer")
+                if self.cfg.cache_config.enable_prefix_caching:
+                    self.resource_manager.cache_manager.reset()
 
         # Dispatch sleep request to executors
         self.llm_logger.info(f"Dispatch sleep request to executors: {list(executors)}")
@@ -1875,7 +1951,9 @@ class EngineService:
             try:
                 response = task.result()
             except Exception as e:
-                self.llm_logger.error(f"Waiting for control response from {name} failed: {repr(e)}")
+                self.llm_logger.error(
+                    f"Waiting for control response from {name} failed: {repr(e)}, {traceback.format_exc()}"
+                )
                 raise
 
             if response.error_code != 200:
@@ -2055,6 +2133,7 @@ class EngineService:
             processed_indices = []
             for idx, task in enumerate(allocate_resource_requests):
                 is_success = False
+                trace_print(LoggingEventName.DECODE_PROCESS_PREALLOCATE_REQUEST_START, task.request_id, task.user)
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if self.resource_manager.preallocate_resource_in_d(task):
@@ -2064,6 +2143,7 @@ class EngineService:
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                         is_success = True
+                        main_process_metrics.decode_preallocated_req_num.inc()
                 else:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
                         self.llm_logger.debug(f"D Resource available, processing task {task.request_id}")
@@ -2083,6 +2163,11 @@ class EngineService:
                         break
 
             for idx in sorted(processed_indices, reverse=True):
+                trace_print(
+                    LoggingEventName.DECODE_PROCESS_PREALLOCAT_REQUEST_END,
+                    allocate_resource_requests[idx].request_id,
+                    allocate_resource_requests[idx].user,
+                )
                 allocate_resource_requests.pop(idx)
 
         def _process_prefilled_requests():
@@ -2098,6 +2183,7 @@ class EngineService:
                     continue
                 req_output.finished = False
                 ready_request_outputs.append(req_output)
+                trace_print(LoggingEventName.DECODE_PROCESS_PREFILLED_REQUEST_START, req_output.request_id, "")
                 self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
 
             prefilled_request_ouputs = waiting_request_outputs
@@ -2110,6 +2196,8 @@ class EngineService:
             else:
                 for req_output in ready_request_outputs:
                     request_id = req_output.request_id
+                    main_process_metrics.decode_preallocated_req_num.dec()
+                    trace_print(LoggingEventName.DECODE_PROCESS_PREFILLED_REQUEST_END, request_id, "")
                     if envs.FD_ENABLE_INTERNAL_ADAPTER and not req_output.outputs.token_ids:
                         # first token is eos in Prefill, just recycle resource and continue
                         self.llm_logger.warning(f"{request_id} need not decode after first token")
@@ -2123,6 +2211,7 @@ class EngineService:
                         self.llm_logger.warning(
                             f"{request_id} prefill failed with msg:{req_output.error_msg}, recycle resource."
                         )
+                        main_process_metrics.failed_recv_first_token_req_num.inc()
                         self.resource_manager.pre_recycle_resource(request_id)
                         if request_id in self.token_processor.tokens_counter:
                             del self.token_processor.tokens_counter[request_id]
@@ -2150,6 +2239,8 @@ class EngineService:
         threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            return []
         console_logger.debug("Start cache manager...")
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
@@ -2179,7 +2270,7 @@ class EngineService:
             self.llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:
-            self.llm_logger.error(f"Clear data error: {e}")
+            self.llm_logger.error(f"Clear data error: {e}, {traceback.format_exc()}")
             return False
 
     def _exit_sub_services(self):
@@ -2384,14 +2475,16 @@ class EngineService:
         start gpu worker service
 
         """
-        log_dir = os.getenv("FD_LOG_DIR", default="log")
+        self.log_dir = os.getenv("FD_LOG_DIR", default="log")
+        self.paddle_log_dir = os.path.join(self.log_dir, "paddle")
+        os.makedirs(self.paddle_log_dir, exist_ok=True)
         command_prefix = self._setting_environ_variables()
         current_file_path = os.path.abspath(__file__)
         current_dir_path = os.path.split(current_file_path)[0]
         # TODO
         uncache_worker_stdout = "" if os.getenv("UNCACHE_WORKER_STDOUT", "0") == "1" else "-u"
         pd_cmd = f"{command_prefix} {sys.executable} {uncache_worker_stdout} -m paddle.distributed.launch"
-        pd_cmd = pd_cmd + f" --log_dir {log_dir}"
+        pd_cmd = pd_cmd + f" --log_dir {self.paddle_log_dir}"
 
         worker_path = "../worker/worker_process.py"
         py_script = os.path.join(current_dir_path, worker_path)
@@ -2519,7 +2612,7 @@ class EngineService:
 
         if self.cfg.nnode > 1:
             pd_cmd = pd_cmd + f" --ips {ips} --nnodes {len(self.cfg.ips)}"
-        pd_cmd = pd_cmd + arguments + f" 2>{log_dir}/launch_worker.log"
+        pd_cmd = pd_cmd + arguments + f" 2>>{self.log_dir}/worker_process.log"
         self.llm_logger.info(f"Launch worker service command: {pd_cmd}")
         p = subprocess.Popen(
             pd_cmd,
@@ -2537,12 +2630,16 @@ class EngineService:
         while self.get_profile_block_num_signal.value[0] == 0:
             if hasattr(self, "worker_proc") and self.worker_proc is not None:
                 if self.worker_proc.poll() is not None:
-                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
+                    raise RuntimeError(
+                        "Worker process failed to start. Please check log/paddle/workerlog.* and log/worker_process.log for details."
+                    )
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
         self.resource_manager.reset_cache_config(self.cfg.cache_config)
         if self.cfg.cache_config.enable_prefix_caching or self.cfg.scheduler_config.splitwise_role != "mixed":
+            if envs.ENABLE_V1_KVCACHE_MANAGER:
+                return
             device_ids = self.cfg.parallel_config.device_ids.split(",")
             self.cache_manager_processes = self.start_cache_service(device_ids, self.ipc_signal_suffix)
 

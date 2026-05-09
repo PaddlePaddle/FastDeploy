@@ -32,7 +32,11 @@ import fastdeploy.envs as envs
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.stats import ZMQMetricsStats
-from fastdeploy.utils import FlexibleArgumentParser, api_server_logger
+from fastdeploy.utils import (
+    FlexibleArgumentParser,
+    api_server_logger,
+    get_base_request_id,
+)
 
 UVICORN_CONFIG = {
     "version": 1,
@@ -172,11 +176,11 @@ class DealerConnectionManager:
 
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
-                    request_id = request_id.rsplit("_", 1)[0]
+                    request_id = get_base_request_id(request_id)
                 elif "reward" == request_id[:6]:
-                    request_id = request_id.rsplit("_", 1)[0]
+                    request_id = get_base_request_id(request_id)
                 elif "chatcmpl" == request_id[:8]:
-                    request_id = request_id.rsplit("_", 1)[0]
+                    request_id = get_base_request_id(request_id)
                 async with self.lock:
                     if request_id in self.request_map:
                         await self.request_map[request_id].put(response)
@@ -239,7 +243,7 @@ class DealerConnectionManager:
                     last_output = outputs[-1]
                     req_id = last_output["request_id"] if isinstance(last_output, dict) else last_output.request_id
                     if req_id.startswith(("cmpl", "embd", "reward", "chatcmpl")):
-                        req_id = req_id.rsplit("_", 1)[0]
+                        req_id = get_base_request_id(req_id)
                     queue = self.request_map.get(req_id)
                     if queue is not None:
                         queue.put_nowait(outputs)
@@ -248,7 +252,7 @@ class DealerConnectionManager:
 
             except (ConnectionError, OSError) as e:
                 if self.running:
-                    api_server_logger.error(f"Dispatcher: connection lost, exiting: {e}")
+                    api_server_logger.error(f"Dispatcher: connection lost, exiting: {e}, {traceback.format_exc()}")
                 break
             except Exception as e:
                 consecutive_errors += 1
@@ -341,9 +345,10 @@ class DealerConnectionManager:
 
 
 def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
+    _is_multi_server = os.environ.get("FD_ENABLE_MULTI_API_SERVER") == "1"
     parser.add_argument("--port", default=8000, type=int, help="port to the http server")
     parser.add_argument("--host", default="0.0.0.0", type=str, help="host to the http server")
-    parser.add_argument("--workers", default=1, type=int, help="number of workers")
+    parser.add_argument("--workers", default=1 if _is_multi_server else 4, type=int, help="number of workers")
     parser.add_argument("--metrics-port", default=None, type=int, help="port for metrics server")
     parser.add_argument("--controller-port", default=-1, type=int, help="port for controller server")
     parser.add_argument(
@@ -352,7 +357,9 @@ def make_arg_parser(parser: FlexibleArgumentParser) -> FlexibleArgumentParser:
         type=int,
         help="max waiting time for connection, if set value -1 means no waiting time limit",
     )
-    parser.add_argument("--max-concurrency", default=512, type=int, help="max concurrency")
+    parser.add_argument(
+        "--max-concurrency", default=512 if _is_multi_server else 2048, type=int, help="max concurrency"
+    )
 
     parser.add_argument(
         "--enable-mm-output", action="store_true", help="Enable 'multimodal_content' field in response output. "

@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import traceback
+
 import paddle
 from paddleformers.utils.log import logger
 
@@ -216,11 +218,14 @@ class InputBatch:
             [-1, 1]
         )
 
-        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> 100973 or <response> 100975
-        # It is a hard code to cover up model's performance
+        # NOTE(liuzichang): token after \n</think>\n\n must be <tool_call> or <response>
         # Detailed notes can be found in FastDeploy/custom_ops/gpu_ops/reasoning_phase_token_constraint.cu
         self.reasoning_status = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
-        self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
+        self.reasoning_allowed_tokens = (
+            paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
+            if self.model_config.reasoning_allowed_token_ids
+            else paddle.to_tensor([], dtype="int64")
+        )
 
         # Initialize rotary position embedding
         if not self.enable_mm:
@@ -233,7 +238,11 @@ class InputBatch:
             )
             if self.is_mm_model:
                 self.image_features = None
+                self.image_grid_thws = None
                 self.image_features_list = None
+                self.video_features = None
+                self.video_grid_thws = None
+                self.video_infinity_scales = None
 
         # Set block tables
         pre_max_block_num = (
@@ -342,7 +351,26 @@ class InputBatch:
                 dtype="float32",
             )
             self.image_features = None  # Built before the forward
+            self.image_grid_thws = None
             self.image_features_list = None
+            self.video_features = None
+            self.video_grid_thws = None
+            self.video_infinity_scales = None
+
+            decode_states_len = self.speculative_config.num_speculative_tokens + 1 if self.speculative_decoding else 1
+            self.decode_states = paddle.full(
+                [self.scheduler_config.max_num_seqs, decode_states_len],
+                -1,
+                dtype="int32",
+            )
+            self.attn_mask_offsets = paddle.full(
+                shape=[self.scheduler_config.max_num_seqs * self.model_config.max_model_len],
+                fill_value=-1,
+                dtype="int32",
+            )
+            self.attn_mask_offsets_full = paddle.full(
+                [self.scheduler_config.max_num_seqs, self.model_config.max_model_len], -1, dtype="int32"
+            )
 
         # For logits processors
         self.logits_processors = build_logits_processors(self.fd_config)
@@ -409,6 +437,7 @@ class InputBatch:
         swap_data(self.ori_seq_lens_encoder, i1, i2)
         swap_data(self.system_lens, i1, i2)
         swap_data(self.system_ids, i1, i2)
+        swap_data(self.generated_modality, i1, i2)
         swap_data(self.enable_thinking, i1, i2)
         swap_data(self.max_think_lens, i1, i2)
         swap_data(self.limit_think_status, i1, i2)
@@ -451,6 +480,8 @@ class InputBatch:
                     self.image_features_list[i1],
                 )
             swap_data(self.share_inputs["rope_emb"], i1, i2)
+            swap_data(self.decode_states, i1, i2)
+            swap_data(self.attn_mask_offsets_full, i1, i2)
         # Swap mask rollback
         swap_data(self.mask_rollback, i1, i2)
 
@@ -557,7 +588,6 @@ class InputBatch:
             fill_paddle_tensor(self, "step_idx", 0)
             # fill_paddle_tensor(self, "not_need_stop", False)
             fill_paddle_tensor(self, "not_need_stop_device", False)
-            fill_paddle_tensor(self, "sampled_token_ids", -1)
             fill_paddle_tensor(self, "stop_flags", True)
 
             fill_paddle_tensor(self, "bad_tokens", -1)
@@ -578,6 +608,7 @@ class InputBatch:
             fill_paddle_tensor(self, "ori_seq_lens_encoder", 0)
             fill_paddle_tensor(self, "system_lens", 0)
             fill_paddle_tensor(self, "system_ids", -1)
+            fill_paddle_tensor(self, "generated_modality", -1)
 
             fill_paddle_tensor(self, "ids_remove_padding", 0)
             fill_paddle_tensor(self, "batch_id_per_token", 0)
@@ -591,8 +622,12 @@ class InputBatch:
 
             # Reset reasoning buffers
             fill_paddle_tensor(self, "reasoning_status", 0)
-            # Reset reasoning allowed tokens (not using fill_paddle_tensor since it's a fixed tensor)
-            self.reasoning_allowed_tokens = paddle.to_tensor([100973, 100975], dtype="int64")
+            # reasoning_allowed_tokens is a fixed tensor derived from config, no need to reset
+            self.reasoning_allowed_tokens = (
+                paddle.to_tensor(self.model_config.reasoning_allowed_token_ids, dtype="int64")
+                if self.model_config.reasoning_allowed_token_ids
+                else paddle.to_tensor([], dtype="int64")
+            )
 
             # Reset block tables
             fill_paddle_tensor(self, "block_tables", -1)
@@ -662,7 +697,14 @@ class InputBatch:
                     dtype="float32",
                 )
                 self.image_features = None
+                self.image_grid_thws = None
                 self.image_features_list = None
+                self.video_features = None
+                self.video_grid_thws = None
+                self.video_infinity_scales = None
+                fill_paddle_tensor(self, "decode_states", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets", -1)
+                fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
             else:
                 # Reset non-multimodal rope_emb
                 self.rope_emb = get_rope(
@@ -674,15 +716,27 @@ class InputBatch:
                 )
                 if self.is_mm_model:
                     self.image_features = None
+                    self.image_grid_thws = None
                     self.image_features_list = None
+                    self.video_features = None
+                    self.video_grid_thws = None
+                    self.video_infinity_scales = None
 
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
             fill_paddle_tensor(self, "preempted_idx", 0)
+            fill_paddle_tensor(self, "last_preempted_idx", 0)
+
+            # Reset tensors for overlap
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
 
             logger.info("share_inputs reset completed")
         except Exception as e:
-            logger.error(f"Resetting share inputs failed, skipping reset, error message is {e}")
+            logger.error(
+                f"Resetting share inputs failed, skipping reset, error message is {e}, {traceback.format_exc()}"
+            )
 
 
 class ProposerInputBatch(InputBatch):
@@ -718,7 +772,7 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_xpu():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             if "token_ids_all" in self.target_model_input_batch:
@@ -742,6 +796,7 @@ class ProposerInputBatch(InputBatch):
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -892,6 +947,8 @@ class ProposerInputBatch(InputBatch):
         swap_data(self.mask_rollback, i1, i2)
         swap_data(self.recompute_token_num, i1, i2)
         if self.enable_mm:
+            swap_data(self.decode_states, i1, i2)
+            swap_data(self.attn_mask_offsets, i1, i2)
             swap_data(self.attn_mask_offsets_full, i1, i2)
             swap_data(self.attn_mask_offsets_decoder, i1, i2)
 
@@ -1031,7 +1088,9 @@ class ProposerInputBatch(InputBatch):
 
             logger.info("model_inputs reset completed")
         except Exception as e:
-            logger.error(f"Resetting model inputs failed, skipping reset, error message is {e}")
+            logger.error(
+                f"Resetting model inputs failed, skipping reset, error message is {e}, {traceback.format_exc()}"
+            )
 
 
 def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch, target_model_input_batch: dict):
