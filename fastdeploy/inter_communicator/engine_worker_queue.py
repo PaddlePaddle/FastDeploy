@@ -853,6 +853,8 @@ class EngineWorkerQueue:
         try:
             self.manager.connect()
             return False
-        except ConnectionRefusedError:
+        except (ConnectionRefusedError, ConnectionResetError, BrokenPipeError, EOFError, OSError):
             llm_logger.error("Failed to connect to engine worker queue")
             return True
+        except Exception:
+            return False
