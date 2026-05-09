@@ -503,6 +503,7 @@ class CacheManager(KVCacheBase):
             None. Match result is stored in request._match_result.
         """
         if not self.enable_prefix_caching or self._radix_tree is None:
+            request._match_result = MatchResult()
             return
 
         with self._lock:

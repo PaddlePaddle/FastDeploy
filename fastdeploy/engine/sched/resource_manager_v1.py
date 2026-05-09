@@ -482,13 +482,13 @@ class ResourceManagerV1(ResourceManager):
                         del self.requests[preempted_req.request_id]
                     if preempted_req.request_id in self.req_dict:
                         del self.req_dict[preempted_req.request_id]
-                    if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
+                    if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST and not self.enable_cache_manager_v1:
                         if self.config.cache_config.kvcache_storage_backend:
                             self.cache_manager.write_cache_to_storage_decode(preempted_req)
                     self._free_blocks(preempted_req)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
-                    if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
+                    if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST and not self.enable_cache_manager_v1:
                         if self.config.cache_config.kvcache_storage_backend:
                             self.cache_manager.write_cache_to_storage(preempted_req)
                     self._free_blocks(preempted_req)
