@@ -205,18 +205,17 @@ class MTPProposerXPU(MTPProposer):
                         self.model_inputs.enable_pd_reorder,
                         ["batch_token_num", "cu_batch_token_offset"],
                     )
-                    # speculate_save_output_topk not implemented for xpu yet.
-                    # speculate_save_output_topk(
-                    #     sampler_output.sampled_token_ids,
-                    #     sampler_output.logprobs_tensors.logprob_token_ids,
-                    #     sampler_output.logprobs_tensors.logprobs,
-                    #     sampler_output.logprobs_tensors.selected_token_ranks,
-                    #     recover_model_output_map["batch_token_num"][:real_bsz],
-                    #     recover_model_output_map["cu_batch_token_offset"][:real_bsz],
-                    #     self.model_inputs["not_need_stop"],
-                    #     4,  # mtype
-                    #     self.local_rank,
-                    # )
+                    speculate_save_output_topk(
+                        sampler_output.sampled_token_ids,
+                        sampler_output.logprobs_tensors.logprob_token_ids,
+                        sampler_output.logprobs_tensors.logprobs,
+                        sampler_output.logprobs_tensors.selected_token_ranks,
+                        recover_model_output_map["batch_token_num"][:real_bsz],
+                        recover_model_output_map["cu_batch_token_offset"][:real_bsz],
+                        self.model_inputs["not_need_stop"],
+                        4,  # mtype
+                        self.local_rank,
+                    )
 
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
