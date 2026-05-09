@@ -401,7 +401,8 @@ class MMProcessor(ABC):
             # Only cache newly-processed items (not those fetched from cache)
             if self._cache and not isinstance(item.data, tuple):
                 meta = {}
-                if idx < len(outputs.get("grid_thw", []) or []):
+                grid_thw_list = outputs.get("grid_thw")
+                if grid_thw_list is not None and idx < len(grid_thw_list):
                     grid_thw = np.asarray(outputs["grid_thw"][idx]) if outputs["grid_thw"] is not None else None
                     if grid_thw is not None:
                         if grid_thw.ndim > 1:
