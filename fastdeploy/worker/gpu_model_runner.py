@@ -3012,10 +3012,11 @@ class GPUModelRunner(ModelRunnerBase):
 
             if not profile:
                 if create_cache_tensor:
-                    logger.info("Waiting for cache transfer manager to unlink cuda ipc")
-                    while self.cache_ready_signal.value[local_rank] != 0:
-                        time.sleep(0.1)
-                    logger.info("Stop waiting! cache transfer manager has unlinked cuda ipc")
+                    if self.fd_config.cache_config.num_cpu_blocks > 0:
+                        logger.info("Waiting for cache transfer manager to unlink cuda ipc")
+                        while self.cache_ready_signal.value[local_rank] != 0:
+                            time.sleep(0.1)
+                        logger.info("Stop waiting! cache transfer manager has unlinked cuda ipc")
                 else:
                     for name, tensor in self.cache_kvs_map.items():
                         unset_data_ipc(tensor, name, True, False)
