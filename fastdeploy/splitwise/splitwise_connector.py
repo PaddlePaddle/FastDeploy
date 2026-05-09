@@ -19,7 +19,7 @@ import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import zmq
 
@@ -108,8 +108,13 @@ class SplitwiseConnector:
                 self.logger.error(f"start_receiver: Receiver error: {e}, {str(traceback.format_exc())}")
                 time.sleep(1)
 
-    def _get_push_socket(self, addr):
-        """获取或创建 DEALER socket"""
+    def _get_push_socket(self, addr) -> Tuple[zmq.Socket, threading.Lock]:
+        """
+        获取或创建 DEALER socket 及其发送锁。
+
+        Returns:
+            Tuple[zmq.Socket, threading.Lock]: 目标地址对应的 socket 和保护 multipart 发送的锁。
+        """
 
         with self._push_sockets_meta_lock:
             if addr in self.push_sockets:
@@ -119,30 +124,39 @@ class SplitwiseConnector:
                 del self.push_sockets[addr]
                 self._push_socket_locks.pop(addr, None)
 
-            try:
-                self.logger.info(f"_get_push_socket: Establishing new connection to {addr}")
-                sock = self.zmq_ctx.socket(zmq.DEALER)
+        try:
+            self.logger.info(f"_get_push_socket: Establishing new connection to {addr}")
+            sock = self.zmq_ctx.socket(zmq.DEALER)
 
-                # 设置连接参数
-                sock.setsockopt(zmq.LINGER, 0)
-                sock.setsockopt(zmq.SNDHWM, 1000)
-                sock.setsockopt(zmq.RECONNECT_IVL, 1000)
-                sock.setsockopt(zmq.RECONNECT_IVL_MAX, 5000)
+            # 设置连接参数
+            sock.setsockopt(zmq.LINGER, 0)
+            sock.setsockopt(zmq.SNDHWM, 1000)
+            sock.setsockopt(zmq.RECONNECT_IVL, 1000)
+            sock.setsockopt(zmq.RECONNECT_IVL_MAX, 5000)
 
-                sock.setsockopt(zmq.TCP_KEEPALIVE, 1)
-                sock.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 60)
-                sock.setsockopt(zmq.TCP_KEEPALIVE_INTVL, 10)
+            sock.setsockopt(zmq.TCP_KEEPALIVE, 1)
+            sock.setsockopt(zmq.TCP_KEEPALIVE_IDLE, 60)
+            sock.setsockopt(zmq.TCP_KEEPALIVE_INTVL, 10)
 
-                sock.connect(f"tcp://{addr}")
+            sock.connect(f"tcp://{addr}")
+
+            with self._push_sockets_meta_lock:
+                if addr in self.push_sockets:
+                    existing_sock = self.push_sockets[addr]
+                    if not existing_sock.closed:
+                        sock.close()
+                        return existing_sock, self._push_socket_locks[addr]
+                    del self.push_sockets[addr]
+                    self._push_socket_locks.pop(addr, None)
 
                 self.push_sockets[addr] = sock
                 self._push_socket_locks[addr] = threading.Lock()
                 return sock, self._push_socket_locks[addr]
 
-            except zmq.ZMQError as e:
-                self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}")
+        except zmq.ZMQError as e:
+            self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}")
 
-                raise ConnectionError(f"Failed to connect to {addr}") from e
+            raise ConnectionError(f"Failed to connect to {addr}") from e
 
     def _send_message(self, addr, msg_type: str, payload):
         if not addr:
@@ -174,11 +188,19 @@ class SplitwiseConnector:
         """
         Close the connection to the specified address.
         """
+        sock = None
+        lock = None
         with self._push_sockets_meta_lock:
             if addr in self.push_sockets:
-                self.push_sockets[addr].close()
-                del self.push_sockets[addr]
-                self._push_socket_locks.pop(addr, None)
+                sock = self.push_sockets.pop(addr)
+                lock = self._push_socket_locks.pop(addr, None)
+
+        if sock is not None:
+            if lock is not None:
+                with lock:
+                    sock.close()
+            else:
+                sock.close()
 
     def send_splitwise_tasks(self, tasks: List[Request], current_id):
         """
