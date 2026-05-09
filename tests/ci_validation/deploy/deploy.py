@@ -218,13 +218,6 @@ def stop_server(signum=None, frame=None):
     if os.path.exists("gemm_profiles.json"):
         os.remove("gemm_profiles.json")
 
-    # 清理/dev/shm中的临时文件
-    try:
-        subprocess.run("rm -rf /dev/shm/*", shell=True)
-        print("Successfully cleaned up /dev/shm.")
-    except Exception as e:
-        print(f"Failed to cleanup /dev/shm: {e}")
-
     if signum:
         sys.exit(0)
 
