@@ -123,7 +123,7 @@ class TestGeneration(unittest.TestCase):
         self.assertEqual(len(self.PROMPTS), len(outputs))
 
     def test_consistency_single_prompt_tokens_chat(self):
-        """Test consistency between different prompt input formats"""
+        """Test deterministic output for prompt_token_ids via chat interface"""
         sampling_params = SamplingParams(temperature=1.0, top_p=0.0)
 
         for prompt_token_ids in self.TOKEN_IDS:

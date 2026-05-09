@@ -307,6 +307,8 @@ class MMProcessor(ABC):
                 break
 
             if ed == image_pos:
+                if image_idx >= len(mm_context.images):
+                    raise ValueError("prompt has more image placeholders than provided images")
                 mm_item = mm_context.images[image_idx]
                 if not isinstance(mm_item.data, tuple):
                     self.preprocess_image(mm_item.data, outputs, mm_item.uuid)
@@ -315,6 +317,8 @@ class MMProcessor(ABC):
                 image_idx += 1
                 st = ed + IMAGE_PLACEHOLDER_LEN
             else:
+                if video_idx >= len(mm_context.videos):
+                    raise ValueError("prompt has more video placeholders than provided videos")
                 mm_item = mm_context.videos[video_idx]
                 if not isinstance(mm_item.data, tuple):
                     if isinstance(mm_item.data, dict):
