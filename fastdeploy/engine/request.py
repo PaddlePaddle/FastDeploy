@@ -906,8 +906,8 @@ class RequestMetrics:
         """
         return {k: v for k, v in asdict(self).items()}
 
-    def record_recv_first_token(self):
-        cur_time = time.time()
+    def record_recv_first_token(self, cur_time: float = None):
+        cur_time = time.time() if cur_time is None else cur_time
         self.record_recv_token(cur_time)
         self.engine_recv_first_token_time = cur_time
 
@@ -919,8 +919,8 @@ class RequestMetrics:
         if self.inference_start_time:
             self.model_forward_time = cur_time - self.inference_start_time
 
-    def record_decode_recv_second_token(self):
-        cur_time = time.time()
+    def record_decode_recv_second_token(self, cur_time: float = None):
+        cur_time = time.time() if cur_time is None else cur_time
         self.record_recv_token(cur_time)
         self.decode_recv_second_token_time = cur_time
 

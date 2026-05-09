@@ -287,7 +287,7 @@ class TokenProcessor:
         task_id = task.request_id
         token_id_list = token_ids.tolist()
 
-        self._record_metrics(task, current_time, token_id_list)
+        self._record_prometheus_metrics_on_token(task, current_time, token_id_list)
         for token_id in token_id_list:
             recovery_stop = token_id == RECOVERY_STOP_SIGNAL
             if recovery_stop:
@@ -303,36 +303,14 @@ class TokenProcessor:
                     result.error_msg = "Recover is not supported, the result is incomplete!"
 
                 # Calculate statistics for the combined log
-                is_decode = self.cfg.scheduler_config.splitwise_role == "decode"
-                inference_start_time = task.metrics.get_inference_start_time(is_decode)
-                task.metrics.cal_cost_time()
-                e2e_time = current_time - inference_start_time
-                token_ratio = self.tokens_counter[task_id] / e2e_time
+                self._record_task_metrics_on_completion(task, current_time, recovery_stop)
+                self._record_trace_on_completion(task)
+                self._record_prometheus_metrics_on_completion(task, current_time)
+                self._log_request_on_completion(task, current_time, recovery_stop)
 
-                # Get cache information
-                gpu_cache = getattr(task.metrics, "gpu_cache_token_num", 0)
-                cpu_cache = getattr(task.metrics, "cpu_cache_token_num", 0)
-                total_cached = gpu_cache + cpu_cache
-
-                # Build cached detail dict
-                cached_detail = f'{{"CachedToken": {total_cached}, "GPU": {gpu_cache}, "CPU": {cpu_cache}}}'
-
-                # Print combined log with all required information
-                ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
-                llm_logger.info(
-                    f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
-                    f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
-                    f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, "
-                    f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
-                    f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
-                )
-
-                main_process_metrics.request_token_ratio.observe(token_ratio)
-                llm_logger.info(f"{self.resource_manager.info()}")
+                llm_logger.info(self.resource_manager.info())
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
-                self._record_completion_metrics(task, current_time)
-                self._finalize_routing(task_id, task, result, is_prefill)
                 self._recycle_resources(task_id, batch_id, task, result, is_prefill)
                 break
         return result
@@ -376,16 +354,14 @@ class TokenProcessor:
 
             current_time = time.time()
             if self.tokens_counter[task_id] == 0:
-                task.metrics.record_recv_first_token()
-                task.metrics.cal_cost_time()
-                metrics = copy.copy(task.metrics)
-                self._record_first_token_metrics(task, current_time)
+                rid = task_id.split("_")[0]
+                self._record_task_metrics_on_first_token(task, current_time)
+                self._record_trace_on_first_token(task, rid)
+                self._record_prometheus_metrics_on_first_token(task, current_time)
             else:
-                task.metrics.record_recv_token()
-                if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
-                    task.metrics.record_decode_recv_second_token()
-                metrics = copy.copy(task.metrics)
+                self._record_task_metrics_on_subsequent_token(task, current_time)
 
+            metrics = copy.copy(task.metrics)
             if task.pooling_params is not None:
                 pooler_output = stream_data.pooler_output
                 if isinstance(pooler_output, np.ndarray):
@@ -872,14 +848,8 @@ class TokenProcessor:
             task = self.resource_manager.tasks_list[i]
             task_id = task.request_id
             is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
-            is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
 
-            rid = task_id.split("_")[0]
-            trace_carrier = task.trace_carrier
-            metrics = task.metrics
-            t = metrics.inference_start_time
-            ts = int(t * 1_000_000_000) if t is not None else 0
-            tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
+            rid = self._setup_trace_context(task)
             if self.cfg.speculative_config.method:
                 self._record_speculative_decoding_accept_num_per_request(task_id, accept_num[i])
                 if accept_num[i] == PREEMPTED_TOKEN_ID:  # in MTP, means preemption has happened in worker
@@ -953,28 +923,16 @@ class TokenProcessor:
             current_time = time.time()
             trace_carrier = None
             if self.tokens_counter[task_id] == 0:
-                task.metrics.record_recv_first_token()
-                task.metrics.cal_cost_time()
-                metrics = copy.copy(task.metrics)
-                llm_logger.info(f"task:{task.request_id} start recode first token")
-                self._record_first_token_metrics(task, current_time)
-
-                tracing.trace_report_span(
-                    name=tracing.TraceSpanName.PREFILL,
-                    rid=rid,
-                    start_time_ns=int(task.metrics.inference_start_time * 1e9),
-                    end_time_ns=int(time.time() * 1e9),
-                    thread_finish_flag=False,
-                )
-
+                llm_logger.info(f"task: {task.request_id} start record first token")
+                self._record_task_metrics_on_first_token(task, current_time)
+                self._record_trace_on_first_token(task, rid)
+                self._record_prometheus_metrics_on_first_token(task, current_time)
             else:
-                task.metrics.record_recv_token()
-                if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
-                    task.metrics.record_decode_recv_second_token()
-                metrics = copy.copy(task.metrics)
+                self._record_task_metrics_on_subsequent_token(task, current_time)
+            self._record_prometheus_metrics_on_token(task, current_time, token_ids)
 
             self.number_of_output_tokens += len(token_ids)
-            self._record_metrics(task, current_time, token_ids)
+            metrics = copy.copy(task.metrics)
             result = RequestOutput(
                 request_id=task_id,
                 output_type=mtype,
@@ -1038,47 +996,19 @@ class TokenProcessor:
                     result.finished = True
                     trace_carrier = tracing.trace_get_proc_propagate_context(rid=rid)
                     result.trace_carrier = trace_carrier
-                    tracing.trace_report_span(
-                        name=tracing.TraceSpanName.DECODE,
-                        rid=rid,
-                        start_time_ns=int(task.metrics.inference_start_time * 1e9),
-                        end_time_ns=int(time.time() * 1e9),
-                        thread_finish_flag=True,
-                    )
+
                     if recovery_stop:
                         result.error_msg = "Recover is not supported, the result is incomplete!"
 
-                    # Calculate statistics for the combined log
-                    inference_start_time = task.metrics.get_inference_start_time(is_decode)
-                    task.metrics.cal_cost_time()
-                    e2e_time = current_time - inference_start_time
-                    token_ratio = self.tokens_counter[task_id] / e2e_time
+                    self._record_task_metrics_on_completion(task, current_time, recovery_stop)
+                    self._record_trace_on_completion(task, rid)
+                    self._record_prometheus_metrics_on_completion(task, current_time)
+                    self._log_request_on_completion(task, current_time, recovery_stop)
 
-                    # Get cache information
-                    gpu_cache = getattr(task.metrics, "gpu_cache_token_num", 0)
-                    cpu_cache = getattr(task.metrics, "cpu_cache_token_num", 0)
-                    total_cached = gpu_cache + cpu_cache
-
-                    # Build cached detail dict
-                    cached_detail = f'{{"CachedToken": {total_cached}, "GPU": {gpu_cache}, "CPU": {cpu_cache}}}'
-
-                    # Print combined log with all required information
-                    ttft = task.metrics.first_token_time if task.metrics.first_token_time else 0
-                    ttft_s = ttft + task.metrics.time_in_queue
-                    llm_logger.info(
-                        f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
-                        f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
-                        f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, TTFT_S={ttft_s:.2f}, "
-                        f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
-                        f"PreemptedCount={getattr(task.metrics, 'preempted_count', 0)}"
-                    )
-
-                    main_process_metrics.request_token_ratio.observe(token_ratio)
-                    llm_logger.info(f"{self.resource_manager.info()}")
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status(result)
-                    self._record_completion_metrics(task, current_time)
                     llm_logger.info(f"task {task_id} received eos token. Recycling.")
+
                     if (
                         envs.ENABLE_V1_KVCACHE_SCHEDULER
                         and self.cfg.cache_config.enable_prefix_caching
@@ -1099,8 +1029,96 @@ class TokenProcessor:
             self._record_speculative_decoding_metrics(accept_num)
         self.postprocess(batch_result, mtype)
 
-    def _record_metrics(self, task, current_time, token_ids):
-        """Record all metrics for a task"""
+    def _setup_trace_context(self, task):
+        """Set up trace propagation context for a task and return rid"""
+        task_id = task.request_id
+        rid = task_id.split("_")[0]
+        trace_carrier = task.trace_carrier
+        t = task.metrics.inference_start_time
+        ts = int(t * 1_000_000_000) if t is not None else 0
+        tracing.trace_set_proc_propagate_context(rid, trace_carrier, ts)
+        return rid
+
+    def _record_trace_on_first_token(self, task, rid):
+        """Emit trace events and report PREFILL span when first token is received"""
+        trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
+        trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
+        tracing.trace_report_span(
+            name=tracing.TraceSpanName.PREFILL,
+            rid=rid,
+            start_time_ns=int(task.metrics.inference_start_time * 1e9),
+            end_time_ns=int(time.time() * 1e9),
+            thread_finish_flag=False,
+        )
+
+    def _record_trace_on_completion(self, task, rid=None):
+        """Emit trace events when request completes"""
+        role = self.cfg.scheduler_config.splitwise_role
+        if role in ("mixed", "decode"):
+            trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
+        if role == "prefill":
+            trace_print(LoggingEventName.PREFILL_INFERENCE_END, task.request_id, getattr(task, "user", ""))
+        elif role == "decode":
+            trace_print(LoggingEventName.DECODE_INFERENCE_END, task.request_id, getattr(task, "user", ""))
+        trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
+        tracing.trace_report_span(
+            name=tracing.TraceSpanName.DECODE,
+            rid=rid,
+            start_time_ns=int(task.metrics.inference_start_time * 1e9),
+            end_time_ns=int(time.time() * 1e9),
+            thread_finish_flag=True,
+        )
+
+    def _record_task_metrics_on_first_token(self, task, current_time):
+        """Record first token arrival in task metrics"""
+        task.metrics.record_recv_first_token(current_time)
+        task.metrics.cal_cost_time(current_time)
+
+    def _record_task_metrics_on_subsequent_token(self, task, current_time):
+        """Record subsequent token arrival in task metrics"""
+        task_id = task.request_id
+        task.metrics.record_recv_token(current_time)
+        if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
+            task.metrics.record_decode_recv_second_token(current_time)
+
+    def _record_task_metrics_on_completion(self, task, current_time, recovery_stop=False):
+        """Record completion metrics into task.metrics"""
+        task.metrics.cal_cost_time()
+
+    def _log_request_on_completion(self, task, current_time, recovery_stop=False):
+        """Log LIFECYCLE info when request completes"""
+        task_id = task.request_id
+        metrics = task.metrics
+        role = self.cfg.scheduler_config.splitwise_role
+        is_prefill = task.disaggregate_info is not None and task.disaggregate_info["role"] == "prefill"
+
+        e2e_time = current_time - metrics.get_inference_start_time(role == "decode")
+        token_ratio = self.tokens_counter[task_id] / e2e_time
+
+        gpu_cache = getattr(metrics, "gpu_cache_token_num", 0)
+        cpu_cache = getattr(metrics, "cpu_cache_token_num", 0)
+        total_cached = gpu_cache + cpu_cache
+        cached_detail = f'{{"CachedToken": {total_cached}, "GPU": {gpu_cache}, "CPU": {cpu_cache}}}'
+
+        ttft = metrics.first_token_time if metrics.first_token_time else 0
+        ttft_s = ttft + metrics.time_in_queue
+        llm_logger.info(
+            f"Request={task_id}, InputToken={task.prompt_token_ids_len}, "
+            f"CachedDetail={cached_detail}, OutputToken={self.tokens_counter[task_id]}, "
+            f"TokenRatio={token_ratio:.2f}, TTFT={ttft:.2f}, TTFT_S={ttft_s:.2f}, "
+            f"E2E={e2e_time:.2f}, IsPrefill={is_prefill}, RecoveryStop={recovery_stop}, "
+            f"PreemptedCount={getattr(metrics, 'preempted_count', 0)}"
+        )
+
+    def _record_prometheus_metrics_on_first_token(self, task, current_time):
+        """Report prometheus metrics for first token"""
+        metrics = task.metrics
+        main_process_metrics.time_to_first_token.observe(current_time - metrics.arrival_time)
+        main_process_metrics.request_queue_time.observe(metrics.inference_start_time - metrics.preprocess_end_time)
+        main_process_metrics.request_prefill_time.observe(current_time - metrics.inference_start_time)
+
+    def _record_prometheus_metrics_on_token(self, task, current_time, token_ids):
+        """Report prometheus metrics per token generation"""
         if hasattr(task, "last_token_time") and task.last_token_time is not None:
             token_gen_time = current_time - task.last_token_time
             main_process_metrics.time_per_output_token.observe(token_gen_time)
@@ -1109,17 +1127,8 @@ class TokenProcessor:
         # Record generation metrics
         main_process_metrics.generation_tokens_total.inc(len(token_ids))
 
-    def _record_first_token_metrics(self, task, current_time):
-        """Record metrics for first token"""
-        metrics = task.metrics
-        trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
-        trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
-        main_process_metrics.time_to_first_token.observe(current_time - metrics.arrival_time)
-        main_process_metrics.request_queue_time.observe(metrics.inference_start_time - metrics.preprocess_end_time)
-        main_process_metrics.request_prefill_time.observe(current_time - metrics.inference_start_time)
-
-    def _record_completion_metrics(self, task, current_time):
-        """Record metrics when request completes"""
+    def _record_prometheus_metrics_on_completion(self, task, current_time):
+        """Report prometheus metrics when request completes"""
         role = self.cfg.scheduler_config.splitwise_role
         metrics = task.metrics
 
@@ -1127,17 +1136,13 @@ class TokenProcessor:
             if metrics.engine_recv_first_token_time:
                 decode_time = current_time - metrics.engine_recv_first_token_time
                 main_process_metrics.request_decode_time.observe(decode_time)
-            trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
 
-        if role == "prefill":
-            trace_print(LoggingEventName.PREFILL_INFERENCE_END, task.request_id, getattr(task, "user", ""))
-        elif role == "decode":
-            trace_print(LoggingEventName.DECODE_INFERENCE_END, task.request_id, getattr(task, "user", ""))
-
-        trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
+        e2e_time = current_time - metrics.get_inference_start_time(role == "decode")
+        token_ratio = self.tokens_counter[task.request_id] / e2e_time
         main_process_metrics.request_success_total.inc()
         main_process_metrics.request_inference_time.observe(current_time - metrics.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
+        main_process_metrics.request_token_ratio.observe(token_ratio)
 
     def _record_speculative_decoding_metrics(self, accept_num):
         """Record metrics of speculative decoding"""
