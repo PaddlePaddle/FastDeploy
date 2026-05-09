@@ -209,6 +209,10 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         self.fd_config = fd_config
         self.layer_id = layer_id
+        self.block_size: int = fd_config.cache_config.block_size
+        self.enable_chunked_prefill = self.fd_config.cache_config.enable_chunked_prefill
+        self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
+
         self.use_gated_attn = getattr(self.fd_config.model_config, "use_gated_attn", False)
         self.use_bias = getattr(self.fd_config.model_config, "use_bias", False)
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
@@ -382,17 +386,15 @@ class DeepseekV3MLAAttention(nn.Layer):
         need_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
         need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
 
-        if need_do_prefill:  # max_enc_len_this_time
+        if need_do_prefill:
             # Handle prefix cache: read cached latent from paged cache and interleave
             # with the new-token latent in a single fused kernel call.
             full_compressed_kv = compressed_kv
             full_k_pe = key_pe.squeeze(1)
-            if self.fd_config.cache_config.enable_chunked_prefill or self.fd_config.cache_config.enable_prefix_caching:
-                latent_cache = forward_meta.caches[self.layer_id] if hasattr(forward_meta, "caches") else None
+            if self.enable_chunked_prefill or self.enable_prefix_caching:
 
-                block_size = self.mla_attn.block_size if hasattr(self.mla_attn, "block_size") else 64
                 full_compressed_kv, full_k_pe = fused_read_cache_and_interleave(
-                    latent_cache,
+                    forward_meta.caches[self.layer_id],
                     forward_meta.block_tables,
                     compressed_kv,
                     key_pe.squeeze(1),
@@ -400,7 +402,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                     forward_meta.cu_seqlens_q,
                     self.kv_lora_rank,
                     self.qk_rope_head_dim,
-                    block_size,
+                    self.block_size,
                 )
 
             # Project latent KV to full key and value
