@@ -313,12 +313,12 @@ import pdb; pdb.set_trace()
 
 ### 2. 如何查看服务器日志?
 
-测试失败时会自动打印 `server.log` 和 `log/workerlog.0` 的内容。
+测试失败时会自动打印 `server.log` 和 `log/paddle/workerlog.0` 的内容。
 你也可以在测试运行时手动查看:
 
 ```bash
 tail -f server.log
-tail -f log/workerlog.0
+tail -f log/paddle/workerlog.0
 ```
 
 ### 3. 如何跳过某个测试?

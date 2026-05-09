@@ -213,16 +213,16 @@ jobs:
 
             if [ -d log ]; then
               echo ">>> grep error in ./log/"
-              grep -Rni --color=auto "error" log || true
+              grep -Rni --color=auto "error" log --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" || true
             else
               echo "log/ directory not found"
             fi
 
-            if [ -f log/workerlog.0 ]; then
-              echo ">>> tail -n 100 log/workerlog.0"
-              tail -n 100 log/workerlog.0
+            if [ -f log/paddle/workerlog.0 ]; then
+              echo ">>> tail -n 100 log/paddle/workerlog.0"
+              tail -n 100 log/paddle/workerlog.0
             else
-              echo "log/workerlog.0 not found"
+              echo "log/paddle/workerlog.0 not found"
             fi
 
             echo "======================================================="

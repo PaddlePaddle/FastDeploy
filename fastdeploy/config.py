@@ -2506,7 +2506,13 @@ class FDConfig:
             if paddle.is_compiled_with_xpu():
                 num_tokens = self.scheduler_config.max_num_batched_tokens
             else:
-                num_tokens = self.scheduler_config.max_num_seqs
+                # In MTP scenario, each sequence generates (num_speculative_tokens + 1) tokens per step
+                mtp_steps = (
+                    (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
+                    if self.speculative_config is not None and self.speculative_config.method is not None
+                    else 1
+                )
+                num_tokens = self.scheduler_config.max_num_seqs * mtp_steps
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
             if self.enable_mm_runtime and mm_max_tokens_per_item is not None:

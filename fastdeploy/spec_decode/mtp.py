@@ -1116,7 +1116,7 @@ class MTPProposer(Proposer):
                     top_k=self.model_inputs["top_k"],
                     seed=self.model_inputs["infer_seed"],
                     step_idx=self.model_inputs["step_idx"],
-                    pre_token_ids=self.model_inputs["pre_ids"],
+                    token_ids_all=self.model_inputs["token_ids_all"],
                     frequency_penalties=self.model_inputs["frequency_score"],
                     presence_penalties=self.model_inputs["presence_score"],
                     repetition_penalties=self.model_inputs["penalty_score"],
