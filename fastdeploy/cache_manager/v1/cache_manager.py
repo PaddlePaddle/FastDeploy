@@ -532,8 +532,8 @@ class CacheManager(KVCacheBase):
                     storage_matches = self._match_storage(remaining_hashes)
                     result.storage_nodes = self.prepare_prefetch_metadata(storage_matches)
 
-                # Step 3: Increment ref count for matched blocks(only first match node)
-                if not (self._storage_scheduler and skip_storage):
+                # Step 3: Increment ref count for matched blocks(only scheduling phase)
+                if skip_storage:
                     self._radix_tree.increment_ref_nodes(matched_nodes)
 
                 logger.info(
