@@ -14,7 +14,7 @@
 
 """Multimodal processors for FastDeploy."""
 
-from fastdeploy.input.multimodal.ernie_vl import ErnieVLProcessor
+from fastdeploy.input.multimodal.ernie4_5_vl import Ernie4_5VLProcessor
 from fastdeploy.input.multimodal.mm_processor import MMProcessor
 from fastdeploy.input.multimodal.paddleocr_vl import PaddleOCRVLProcessor
 from fastdeploy.input.multimodal.qwen3_vl import Qwen3VLProcessor
@@ -24,6 +24,6 @@ __all__ = [
     "MMProcessor",
     "QwenVLProcessor",
     "Qwen3VLProcessor",
-    "ErnieVLProcessor",
+    "Ernie4_5VLProcessor",
     "PaddleOCRVLProcessor",
 ]

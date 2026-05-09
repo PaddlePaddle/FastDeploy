@@ -430,7 +430,7 @@ class MMProcessor(ABC):
         """Write processing results back to request.
 
         Default: unconditionally overwrite prompt_token_ids.
-        ErnieVLProcessor overrides to preserve original token_ids on PRETOKENIZED path.
+        Subclasses can override to customize write-back behavior.
         """
         request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["multimodal_inputs"] = outputs

@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Unit tests for ErnieVLProcessor."""
+"""Unit tests for Ernie4_5VLProcessor."""
 
 import unittest
 from collections import defaultdict
@@ -20,15 +20,15 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
-from fastdeploy.input.multimodal.ernie_vl import ErnieVLProcessor
+from fastdeploy.input.multimodal.ernie4_5_vl import Ernie4_5VLProcessor
 from fastdeploy.input.multimodal.mm_processor import MMContext, MMItem, TokenizationPath
 from fastdeploy.input.utils import IDS_TYPE_FLAG
 
 
 def _make_ernie_processor(**overrides):
-    """Create an ErnieVLProcessor with mocked dependencies."""
-    with patch.object(ErnieVLProcessor, "__init__", return_value=None):
-        proc = ErnieVLProcessor.__new__(ErnieVLProcessor)
+    """Create an Ernie4_5VLProcessor with mocked dependencies."""
+    with patch.object(Ernie4_5VLProcessor, "__init__", return_value=None):
+        proc = Ernie4_5VLProcessor.__new__(Ernie4_5VLProcessor)
 
     proc.tokenizer = MagicMock()
     token_map = {
@@ -255,46 +255,21 @@ class TestErniePreprocessVideo(unittest.TestCase):
 class TestErnieMmNumTokens(unittest.TestCase):
     def test_image(self):
         # t=1: t*h*w//4
-        result = ErnieVLProcessor.mm_num_tokens([1, 4, 4])
+        result = Ernie4_5VLProcessor.mm_num_tokens([1, 4, 4])
         self.assertEqual(result, 1 * 4 * 4 // 4)
 
     def test_video(self):
         # t>1: t*h*w//4//2
-        result = ErnieVLProcessor.mm_num_tokens([4, 4, 4])
+        result = Ernie4_5VLProcessor.mm_num_tokens([4, 4, 4])
         self.assertEqual(result, 4 * 4 * 4 // 4 // 2)
 
     def test_list(self):
-        result = ErnieVLProcessor.mm_num_tokens([[1, 4, 4], [4, 4, 4]])
+        result = Ernie4_5VLProcessor.mm_num_tokens([[1, 4, 4], [4, 4, 4]])
         self.assertEqual(result, [4, 8])
 
     def test_empty(self):
-        result = ErnieVLProcessor.mm_num_tokens([])
+        result = Ernie4_5VLProcessor.mm_num_tokens([])
         self.assertEqual(result, 0)
-
-
-class TestErnieWriteBack(unittest.TestCase):
-    def test_pretokenized_preserves_original(self):
-        """PRETOKENIZED path preserves existing prompt_token_ids."""
-        proc = _make_ernie_processor()
-        request = {"prompt_token_ids": [1, 2, 3]}
-        outputs = {"input_ids": np.array([10, 20, 30], dtype=np.int64)}
-
-        proc._write_back(request, outputs)
-
-        # Original preserved
-        self.assertEqual(request["prompt_token_ids"], [1, 2, 3])
-        self.assertIs(request["multimodal_inputs"], outputs)
-
-    def test_from_text_writes_token_ids(self):
-        """FROM_TEXT path writes new token_ids."""
-        proc = _make_ernie_processor()
-        request = {}  # no prompt_token_ids
-        outputs = {"input_ids": np.array([10, 20, 30], dtype=np.int64)}
-
-        proc._write_back(request, outputs)
-
-        self.assertEqual(request["prompt_token_ids"], [10, 20, 30])
-        self.assertIs(request["multimodal_inputs"], outputs)
 
 
 class TestErniePromptTokenIds2Outputs(unittest.TestCase):

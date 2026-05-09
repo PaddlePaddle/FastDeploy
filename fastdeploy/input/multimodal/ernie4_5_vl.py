@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""ErnieVLProcessor — multimodal processor for ERNIE 4.5 VL."""
+"""Ernie4_5VLProcessor — multimodal processor for ERNIE 4.5 VL."""
 
 import copy
 from collections import defaultdict
@@ -27,7 +27,7 @@ from fastdeploy.input.multimodal.mm_processor import MMProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG, MAX_IMAGE_DIMENSION
 
 
-class ErnieVLProcessor(MMProcessor):
+class Ernie4_5VLProcessor(MMProcessor):
     """Multimodal processor for ERNIE 4.5 VL.
 
     Key differences from QwenVLProcessor:
@@ -92,18 +92,6 @@ class ErnieVLProcessor(MMProcessor):
             mapping[token] = IDS_TYPE_FLAG["image"]
         mapping[self.image_token_id] = IDS_TYPE_FLAG["image"]
         return mapping
-
-    # ------------------------------------------------------------------
-    # Write-back override: preserve original prompt_token_ids on Path A
-    # ------------------------------------------------------------------
-
-    def _write_back(self, request: dict, outputs: dict) -> None:
-        """Ernie: preserve original prompt_token_ids if they already existed."""
-        if request.get("prompt_token_ids"):
-            pass  # preserve existing prompt_token_ids
-        else:
-            request["prompt_token_ids"] = outputs["input_ids"].tolist()
-        request["multimodal_inputs"] = outputs
 
     # ------------------------------------------------------------------
     # Image processing

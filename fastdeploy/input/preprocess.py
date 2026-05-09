@@ -95,7 +95,7 @@ class InputPreprocessor:
                 )
             else:
                 from fastdeploy.input.multimodal import (
-                    ErnieVLProcessor,
+                    Ernie4_5VLProcessor,
                     PaddleOCRVLProcessor,
                     Qwen3VLProcessor,
                     QwenVLProcessor,
@@ -103,7 +103,7 @@ class InputPreprocessor:
 
                 # Determine mm_processor class and Processor-level flags
                 if ErnieArchitectures.contains_ernie_arch(architecture):
-                    mm_proc_cls = ErnieVLProcessor
+                    mm_proc_cls = Ernie4_5VLProcessor
                     force_disable_thinking = False
                     set_default_reasoning_max_tokens = True
                 elif "PaddleOCRVL" in architecture:
