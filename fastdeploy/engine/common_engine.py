@@ -1202,6 +1202,12 @@ class EngineService:
             except Exception as e:
                 err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
+                if self.engine_worker_queue.is_broken():
+                    self.llm_logger.error(
+                        "The communication between EngineWorkerQueue and Scheduler is broken, "
+                        "please check the configuration of the IPC communication channel."
+                    )
+                    break
 
     def _get_scheduler_unhandled_request_num(self) -> int:
         """

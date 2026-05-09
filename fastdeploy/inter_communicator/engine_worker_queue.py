@@ -848,3 +848,11 @@ class EngineWorkerQueue:
         """
         if self.manager is not None and self.is_server:
             self.manager.shutdown()
+
+    def is_broken(self):
+        try:
+            self.manager.connect()
+            return False
+        except ConnectionRefusedError:
+            llm_logger.error("Failed to connect to engine worker queue")
+            return True
