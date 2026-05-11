@@ -134,6 +134,9 @@ class TokenProcessor:
         self.accept_token_num_per_head_per_request = {}
         self.accept_token_num_per_head = [0] * MAX_DRAFT_TOKENS
 
+        # observability toggle
+        self._observability_enabled = envs.FD_ENABLE_OBSERVABILITY
+
         # health monitor
         self.timestamp_for_alive_before_handle_batch = None
         self.timestamp_for_alive_after_handle_batch = None
@@ -1033,6 +1036,8 @@ class TokenProcessor:
         """Set up trace propagation context for a task and return rid"""
         task_id = task.request_id
         rid = task_id.split("_")[0]
+        if not self._observability_enabled:
+            return rid
         trace_carrier = task.trace_carrier
         t = task.metrics.inference_start_time
         ts = int(t * 1_000_000_000) if t is not None else 0
@@ -1041,6 +1046,8 @@ class TokenProcessor:
 
     def _record_trace_on_first_token(self, task, rid):
         """Emit trace events and report PREFILL span when first token is received"""
+        if not self._observability_enabled:
+            return
         trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
         trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
         tracing.trace_report_span(
@@ -1053,6 +1060,8 @@ class TokenProcessor:
 
     def _record_trace_on_completion(self, task, rid=None):
         """Emit trace events when request completes"""
+        if not self._observability_enabled:
+            return
         role = self.cfg.scheduler_config.splitwise_role
         if role in ("mixed", "decode"):
             trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
@@ -1071,11 +1080,15 @@ class TokenProcessor:
 
     def _record_task_metrics_on_first_token(self, task, current_time):
         """Record first token arrival in task metrics"""
+        if not self._observability_enabled:
+            return
         task.metrics.record_recv_first_token(current_time)
-        task.metrics.cal_cost_time(current_time)
+        task.metrics.cal_cost_time()
 
     def _record_task_metrics_on_subsequent_token(self, task, current_time):
         """Record subsequent token arrival in task metrics"""
+        if not self._observability_enabled:
+            return
         task_id = task.request_id
         task.metrics.record_recv_token(current_time)
         if self.tokens_counter[task_id] == 1 and self.cfg.scheduler_config.splitwise_role == "decode":
@@ -1083,10 +1096,14 @@ class TokenProcessor:
 
     def _record_task_metrics_on_completion(self, task, current_time, recovery_stop=False):
         """Record completion metrics into task.metrics"""
+        if not self._observability_enabled:
+            return
         task.metrics.cal_cost_time()
 
     def _log_request_on_completion(self, task, current_time, recovery_stop=False):
         """Log LIFECYCLE info when request completes"""
+        if not self._observability_enabled:
+            return
         task_id = task.request_id
         metrics = task.metrics
         role = self.cfg.scheduler_config.splitwise_role
@@ -1112,6 +1129,8 @@ class TokenProcessor:
 
     def _record_prometheus_metrics_on_first_token(self, task, current_time):
         """Report prometheus metrics for first token"""
+        if not self._observability_enabled:
+            return
         metrics = task.metrics
         main_process_metrics.time_to_first_token.observe(current_time - metrics.arrival_time)
         main_process_metrics.request_queue_time.observe(metrics.inference_start_time - metrics.preprocess_end_time)
@@ -1119,6 +1138,8 @@ class TokenProcessor:
 
     def _record_prometheus_metrics_on_token(self, task, current_time, token_ids):
         """Report prometheus metrics per token generation"""
+        if not self._observability_enabled:
+            return
         if hasattr(task, "last_token_time") and task.last_token_time is not None:
             token_gen_time = current_time - task.last_token_time
             main_process_metrics.time_per_output_token.observe(token_gen_time)
@@ -1129,6 +1150,8 @@ class TokenProcessor:
 
     def _record_prometheus_metrics_on_completion(self, task, current_time):
         """Report prometheus metrics when request completes"""
+        if not self._observability_enabled:
+            return
         role = self.cfg.scheduler_config.splitwise_role
         metrics = task.metrics
 
@@ -1146,6 +1169,8 @@ class TokenProcessor:
 
     def _record_speculative_decoding_metrics(self, accept_num):
         """Record metrics of speculative decoding"""
+        if not self._observability_enabled:
+            return
         if not hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
             main_process_metrics._init_speculative_metrics(
                 self.cfg.speculative_config.method,
