@@ -66,7 +66,6 @@ from fastdeploy.worker.tbo import GLOBAL_ATTN_BUFFERS
 
 if current_platform.is_iluvatar():
     from fastdeploy.model_executor.ops.iluvatar import (
-        get_position_ids_and_mask_encoder_batch,
         recover_decode_task,
         set_data_ipc,
         set_value_by_flags_and_idx,
@@ -87,6 +86,7 @@ else:
         speculate_schedule_cache,
         set_data_ipc,
         unset_data_ipc,
+        get_position_ids_and_mask_encoder_batch,
         update_attn_mask_offsets,
     )
 
