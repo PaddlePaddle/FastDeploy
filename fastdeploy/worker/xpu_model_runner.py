@@ -38,6 +38,7 @@ from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
 )
+from fastdeploy.model_executor.guided_decoding import get_guided_backend
 from fastdeploy.model_executor.layers.attention import get_attention_backend
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
@@ -148,6 +149,12 @@ class XPUModelRunner(ModelRunnerBase):
             self.sampler = Sampler(fd_config)
         else:
             self.sampler = SpeculativeSampler(fd_config)
+
+        # Initialize guided decoding backend
+        self.guided_backend = None
+        if self.fd_config.structured_outputs_config.guided_decoding_backend != "off":
+            self.guided_backend = get_guided_backend(fd_config=self.fd_config)
+            self.sampler.set_reasoning_parser(self.guided_backend.get_reasoning_parser())
 
         # Lazy initialize kv cache after model loading
         # self.kv_caches: list[paddle.Tensor] = []
@@ -577,6 +584,31 @@ class XPUModelRunner(ModelRunnerBase):
         )
         return feature_positions
 
+    def _init_logits_processor(self, request):
+        """
+        init logits processor for guided decoding
+        """
+        assert self.guided_backend is not None, (
+            "guided_backend is None, use " "--guided-decoding-backend to specify the backend at server startup."
+        )
+
+        if request.guided_json is not None:
+            schemata_key = ("json", request.guided_json)
+        elif request.guided_regex is not None:
+            schemata_key = ("regex", request.guided_regex)
+        elif request.guided_grammar is not None:
+            schemata_key = ("grammar", request.guided_grammar)
+        elif request.structural_tag is not None:
+            schemata_key = ("structural_tag", request.structural_tag)
+
+        return (
+            self.guided_backend.get_logits_processor(
+                schemata_key=schemata_key,
+                enable_thinking=False,  # TODO cfg
+            ),
+            schemata_key,
+        )
+
     def insert_tasks_v1(self, req_dicts: List[Request], num_running_requests: int):
         """
         Process scheduler output tasks, used when ENABLE_V1_KVCACHE_SCHEDULER=1
@@ -594,6 +626,8 @@ class XPUModelRunner(ModelRunnerBase):
         for i in range(req_len):
             request = req_dicts[i]
             idx = request.idx
+            logits_info = None
+            prefill_tokens = []
             if request.task_type.value == RequestType.PREFILL.value:  # prefill task
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 prefill_start_index = request.prefill_start_index
@@ -620,6 +654,33 @@ class XPUModelRunner(ModelRunnerBase):
                         self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
                         self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                         self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+
+                # guided decoding
+                if (
+                    request.guided_json is not None
+                    or request.guided_regex is not None
+                    or request.structural_tag is not None
+                    or request.guided_grammar is not None
+                ):
+                    logits_info, schemata_key = self._init_logits_processor(request)
+                    request.schemata_key = schemata_key
+                    if (
+                        self.scheduler_config.splitwise_role == "decode"
+                        and hasattr(request, "prefill_end_index")
+                        and hasattr(request, "prompt_token_ids")
+                        and request.prefill_end_index > len(request.prompt_token_ids)
+                        and hasattr(request, "output_token_ids")
+                    ):
+                        prefill_tokens.extend(request.output_token_ids)
+
+                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
+                    # Enable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
+                else:
+                    # Disable thinking
+                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
+                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
                 if (
                     hasattr(request, "sampling_params")
@@ -739,6 +800,8 @@ class XPUModelRunner(ModelRunnerBase):
                 ] = np.array(request.get("stop_token_ids"), dtype="int64")
             else:
                 self.share_inputs["stop_seqs_len"][idx : idx + 1, :] = 0
+
+            self.sampler.apply_logits_processor(idx, logits_info, prefill_tokens)
 
         self._process_mm_features(req_dicts)
         if has_prefill_task or has_decode_task:
@@ -1184,6 +1247,31 @@ class XPUModelRunner(ModelRunnerBase):
             logger.info(f"SOT warmup the model with the batch size:{batch_size}")
         logger.info(f"SOT warmup took {time.perf_counter() - start_time} seconds")
 
+    def _get_p_done_idxs_gd(self, model_forward_batch, num_running_requests):
+        """
+        Get indices for guided decoding.
+        When Prefill is done, async compiled logits_processor must be joined.
+        """
+        if self.guided_backend is None or num_running_requests is None:
+            return []
+
+        prefill_done_idxs = []
+        for idx in range(0, num_running_requests):
+            if self.share_inputs["step_idx"][idx] == 0:
+                prefill_done_idxs.append(idx)
+
+        if model_forward_batch is None:
+            return prefill_done_idxs
+
+        for task in model_forward_batch:
+            if task.task_type.value != RequestType.PREFILL.value:
+                continue
+            if hasattr(task, "prefill_end_index") and hasattr(task, "prompt_token_ids"):
+                if len(task.prompt_token_ids) > task.prefill_end_index and task.idx in prefill_done_idxs:
+                    prefill_done_idxs.remove(task.idx)
+
+        return prefill_done_idxs
+
     def execute_model(
         self,
         model_forward_batch: Optional[List[Request]] = None,
@@ -1235,10 +1323,15 @@ class XPUModelRunner(ModelRunnerBase):
             hidden_states = xpu_process_output(model_output, self.forward_meta, self.share_inputs)
             # 4. Compute logits, Sample
             logits = self.model.compute_logits(hidden_states)
+
+            # Guided decoding: pre_process (compute bitmask before sampling)
+            p_done_idxs = self._get_p_done_idxs_gd(model_forward_batch, num_running_requests)
+            self.sampler.pre_process(p_done_idxs)
+
             sampler_output = None
 
             if not self.speculative_decoding:
-                sampler_output = self.sampler(logits, self.sampling_metadata)
+                sampler_output = self.sampler(logits, self.sampling_metadata, p_done_idxs)
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(
                         sampler_output.sampled_token_ids,
@@ -1273,6 +1366,10 @@ class XPUModelRunner(ModelRunnerBase):
                         self.parallel_config.data_parallel_rank * self.parallel_config.tensor_parallel_size,
                         group=self.parallel_config.tp_group,
                     )
+
+            # Guided decoding: post_process (advance grammar state machine)
+            if self.guided_backend is not None and sampler_output is not None:
+                self.sampler.post_process(sampler_output.sampled_token_ids)
 
             prompt_logprobs_list = None
             if not self.speculative_decoding:
