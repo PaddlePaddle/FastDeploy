@@ -34,8 +34,10 @@ std::vector<paddle::Tensor> BuildSamplingParams(
   auto dev_ctx = paddle::experimental::DeviceContextPool::Instance().Get(place);
   auto xpu_ctx = static_cast<const phi::XPUContext*>(dev_ctx);
   api::Context* ctx = xpu_ctx->x_context();
+  std::unique_ptr<api::Context> cpu_ctx;
   if (top_p.is_cpu()) {
-    ctx = new api::Context(api::kCPU);
+    cpu_ctx = std::make_unique<api::Context>(api::kCPU);
+    ctx = cpu_ctx.get();
   }
 
   int real_bsz = static_cast<int>(seq_lens_this_time.shape()[0]);
