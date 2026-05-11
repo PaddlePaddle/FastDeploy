@@ -288,25 +288,31 @@ class CacheController(KVCacheBase):
 
             logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
 
-            # Create key cache and value cache
+            # Create key cache
             key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=self.model_config.dtype)
             self.cache_kvs_map[cache_names["key"]] = key_cache
 
-            val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
-            self.cache_kvs_map[cache_names["value"]] = val_cache
-            cache_kvs_list.extend([key_cache, val_cache])
+            if value_cache_shape:
+                val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
+                self.cache_kvs_map[cache_names["value"]] = val_cache
+                cache_kvs_list.extend([key_cache, val_cache])
+            else:
+                cache_kvs_list.extend([key_cache])
 
             # Create scale caches for block_wise_fp8 quantization
             if self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
                 key_cache_scales = paddle.full(
                     shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                 )
-                val_cache_scales = paddle.full(
-                    shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
-                )
                 self.cache_kvs_map[cache_names["key_scale"]] = key_cache_scales
-                self.cache_kvs_map[cache_names["value_scale"]] = val_cache_scales
-                cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+                if value_cache_shape:
+                    val_cache_scales = paddle.full(
+                        shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                    )
+                    self.cache_kvs_map[cache_names["value_scale"]] = val_cache_scales
+                    cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+                else:
+                    cache_kvs_list.extend([key_cache_scales])
 
         paddle.device.cuda.empty_cache()
         logger.info("kv cache is initialized!")
@@ -366,20 +372,26 @@ class CacheController(KVCacheBase):
             key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=self.model_config.dtype)
             self.cache_kvs_map[cache_names["key"]] = key_cache
 
-            val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
-            self.cache_kvs_map[cache_names["value"]] = val_cache
-            cache_kvs_list.extend([key_cache, val_cache])
+            if value_cache_shape:
+                val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
+                self.cache_kvs_map[cache_names["value"]] = val_cache
+                cache_kvs_list.extend([key_cache, val_cache])
+            else:
+                cache_kvs_list.extend([key_cache])
 
             if self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
                 key_cache_scales = paddle.full(
                     shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
                 )
-                val_cache_scales = paddle.full(
-                    shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
-                )
                 self.cache_kvs_map[cache_names["key_scale"]] = key_cache_scales
-                self.cache_kvs_map[cache_names["value_scale"]] = val_cache_scales
-                cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+                if value_cache_shape:
+                    val_cache_scales = paddle.full(
+                        shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                    )
+                    self.cache_kvs_map[cache_names["value_scale"]] = val_cache_scales
+                    cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+                else:
+                    cache_kvs_list.extend([key_cache_scales])
 
         paddle.device.cuda.empty_cache()
         logger.info("[CacheController] MTP kv cache initialized!")
