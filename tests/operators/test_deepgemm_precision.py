@@ -362,6 +362,10 @@ class TestDeepDenseGemm(unittest.TestCase):
         # p.start()
         # p.step()
 
+        prop = paddle.device.cuda.get_device_properties()
+        if prop.major != 10:
+            return
+
         self.one_invoke(128 * 20, 2048, 4096)
         self.one_invoke(128 * 20, 2048, 2048)
 
