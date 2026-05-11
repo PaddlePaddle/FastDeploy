@@ -20,19 +20,9 @@ import paddle
 
 paddle.enable_compat(scope={"deep_gemm"})
 
-
-skip_test = False
-
 paddle.set_default_dtype("bfloat16")
-prop = paddle.device.cuda.get_device_properties()
-if prop.major != 10:
-    skip_test = True
-try:
-    import cutlass
-except ImportError:
-    skip_test = True
 
-
+import cutlass
 import cutlass.cute as cute
 import cutlass.pipeline as pipeline
 import cutlass.utils as utils
@@ -354,6 +344,9 @@ class TestDeepDenseGemm(unittest.TestCase):
         # assert (baseline_out - deepgemm_output).abs().max().item() < 0.1
 
     def test_main(self):
+        prop = paddle.device.cuda.get_device_properties()
+        if prop.major != 10:
+            return
         # import paddle.profiler as profiler
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
@@ -371,5 +364,4 @@ class TestDeepDenseGemm(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    if not skip_test:
-        unittest.main()
+    unittest.main()
