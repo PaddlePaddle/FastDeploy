@@ -728,8 +728,13 @@ class TestFreeCacheMethods(unittest.TestCase):
 # ============================================================================
 
 
-def make_mock_attn_backend(key_shape=(10, 4, 16, 64), val_shape=None):
+def make_mock_attn_backend(key_shape=(10, 4, 16, 64), val_shape=None, val_shape_is_none=False):
     """Create a mock attn_backend with a fixed get_kv_cache_shape."""
+    if val_shape_is_none:
+        # Simulate MLA variants (e.g., DeepSeek) that return None for value_cache_shape
+        backend = MagicMock()
+        backend.get_kv_cache_shape.return_value = (list(key_shape), None)
+        return backend
     if val_shape is None:
         val_shape = key_shape
     backend = MagicMock()
@@ -833,6 +838,37 @@ class TestInitializeKVCacheDtype(unittest.TestCase):
         for name, tensor in controller.cache_kvs_map.items():
             if "scale" not in name:
                 self.assertEqual(str(tensor.dtype), "paddle.uint8", f"wrong dtype for {name}")
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_kv_cache_null_value_cache_shape(self, mock_quant_type):
+        """MLA variant: when value_cache_shape is None, only key cache is created."""
+        mock_quant_type.return_value = None
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=2)
+        backend = make_mock_attn_backend(val_shape_is_none=True)
+
+        cache_list = controller.initialize_kv_cache(backend, num_gpu_blocks=10)
+
+        self.assertEqual(len(cache_list), 2)  # 2 layers * key only
+        for tensor in cache_list:
+            self.assertEqual(str(tensor.dtype), "paddle.bfloat16")
+        # Verify no value entries in cache_kvs_map
+        for name in controller.cache_kvs_map:
+            self.assertNotIn("value", name)
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_mtp_kv_cache_null_value_cache_shape(self, mock_quant_type):
+        """MLA variant: when value_cache_shape is None, only key cache is created for MTP."""
+        mock_quant_type.return_value = None
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=4)
+        backend = make_mock_attn_backend(val_shape_is_none=True)
+
+        cache_list = controller.initialize_mtp_kv_cache(
+            attn_backend=backend, num_gpu_blocks=10, num_mtp_layers=2, layer_offset=4
+        )
+
+        self.assertEqual(len(cache_list), 2)  # 2 mtp layers * key only
+        for tensor in cache_list:
+            self.assertEqual(str(tensor.dtype), "paddle.bfloat16")
 
 
 if __name__ == "__main__":
