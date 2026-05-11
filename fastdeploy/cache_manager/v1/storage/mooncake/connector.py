@@ -635,6 +635,15 @@ class MooncakeStorageConnector(StorageConnector):
 
         return final_results
 
+    def batch_exists(self, keys: List[str]) -> List[bool]:
+        """Batch check key existence."""
+        if not self._connected or self._base._store is None:
+            return [False] * len(keys)
+        if not keys:
+            return []
+        results, _ = self._base._batch_exists(keys)
+        return [r == 1 for r in results]
+
     # ------------------------------------------------------------------
     # Delete / clear
     # ------------------------------------------------------------------
@@ -660,6 +669,21 @@ class MooncakeStorageConnector(StorageConnector):
             time.sleep(1)
         self.logger.error(f"delete({key!r}) timed out after {timeout}s")
         return False
+
+    def batch_delete(self, keys: List[str]) -> List[bool]:
+        """
+        Delete multiple keys from the store (single attempt, no retry).
+
+        Used for cleaning up partial writes where some kinds succeeded
+        and others failed. Returns per-key success flags.
+        """
+        if not self._connected or self._base._store is None:
+            return [False] * len(keys)
+        results = []
+        for key in keys:
+            rc = self._base._store.remove(key)
+            results.append(rc == 0)
+        return results
 
     def clear(self) -> int:
         """

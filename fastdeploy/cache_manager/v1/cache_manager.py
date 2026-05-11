@@ -531,7 +531,8 @@ class CacheManager(KVCacheBase):
                 # Step 2: Match Storage (if enabled and not skipped)
                 if not skip_storage and self._storage_scheduler and remaining_hashes:
                     storage_matches = self._match_storage(remaining_hashes)
-                    result.storage_nodes = self.prepare_prefetch_metadata(storage_matches)
+                    start_node = matched_nodes[-1] if matched_nodes else None
+                    result.storage_nodes = self.prepare_prefetch_metadata(storage_matches, start_node=start_node)
 
                 # Step 3: Increment ref count for matched blocks(only scheduling phase)
                 if skip_storage:
@@ -562,11 +563,13 @@ class CacheManager(KVCacheBase):
         consecutive prefix of hashes that are all present (prefix semantics
         are required because a cache miss in the middle breaks prefetch continuity).
 
-        Uses rank=0 key as a probe: if rank 0 has the block, all ranks
-        are assumed to have it (all ranks write storage synchronously).
+        Probes both rank=0 "key" and "value" kinds: a block is considered present
+        only when both exist.  This avoids false positives from partial writes where
+        only one kind was stored, and prevents LRU asymmetry (probing only "key"
+        would keep it hot while "value" gets evicted by Mooncake).
 
         Storage key format (see cache_utils.storage_key_for_block):
-            "{hash_value}_0_key"
+            "{hash_value}_0_key"  /  "{hash_value}_0_value"
 
         Args:
             hash_values: List of block hash values to check, in prefix order.
@@ -584,21 +587,27 @@ class CacheManager(KVCacheBase):
                 logger.warning("_match_storage: storage scheduler disconnected, skipping storage match")
                 return []
 
-            # Build probe keys using rank=0 (same format as storage_key_for_block)
-            probe_keys = [storage_key_for_block(h, 0, "key") for h in hash_values]
+            # Probe both key and value kinds for rank=0.
+            # Interleaved: [h0_key, h0_value, h1_key, h1_value, ...]
+            probe_keys = []
+            for h in hash_values:
+                probe_keys.append(storage_key_for_block(h, 0, "key"))
+                probe_keys.append(storage_key_for_block(h, 0, "value"))
 
-            # batch_exists returns a bool list aligned with probe_keys
             exist_flags = self._storage_scheduler.batch_exists(probe_keys)
 
-            # Return only the leading consecutive hit run
+            # A block is present only when both key and value exist.
             matched = []
-            for h, exists in zip(hash_values, exist_flags):
-                if not exists:
+            for i, h in enumerate(hash_values):
+                key_ok = exist_flags[i * 2]
+                val_ok = exist_flags[i * 2 + 1]
+                if not (key_ok and val_ok):
                     break
                 matched.append(h)
 
             logger.debug(
-                f"[CacheManager] _match_storage: probing {len(probe_keys)} keys, matched hashes: {len(matched)}"
+                f"[CacheManager] _match_storage: probing {len(hash_values)} blocks "
+                f"({len(probe_keys)} keys), matched={len(matched)}"
             )
             return matched
         except Exception:
@@ -1001,6 +1010,7 @@ class CacheManager(KVCacheBase):
     def prepare_prefetch_metadata(
         self,
         storage_hashes: List[str],
+        start_node: Optional["BlockNode"] = None,
     ) -> Optional[List["BlockNode"]]:
         """
         Prepare metadata for storage prefetch operation.
@@ -1010,6 +1020,10 @@ class CacheManager(KVCacheBase):
 
         Args:
             storage_hashes: List of storage hash values to prefetch
+            start_node: Node to start insertion from in the radix tree.
+                        Must be the last matched node from find_prefix so that
+                        the new LOADING_FROM_STORAGE nodes are attached as proper
+                        extensions of the existing prefix chain.
 
         Returns:
             List of BlockNode objects if successful, None or empty list otherwise.
@@ -1032,17 +1046,24 @@ class CacheManager(KVCacheBase):
 
                 blocks = list(zip(storage_hashes, host_block_ids))
                 prefetch_nodes, wasted_block_ids = self._radix_tree.insert(
-                    blocks=blocks, cache_status=CacheStatus.LOADING_FROM_STORAGE
+                    blocks=blocks, cache_status=CacheStatus.LOADING_FROM_STORAGE, start_node=start_node
                 )
                 # Release any blocks that were wasted due to node reuse
                 if wasted_block_ids:
                     self._host_pool.release(wasted_block_ids)
 
-                # Register nodes in prefetch_node_map for fast status update on done
+                # Register only truly new LOADING_FROM_STORAGE nodes.
+                # insert() reuses existing nodes without updating their status, so nodes
+                # that were already HOST/DEVICE must be excluded — they don't need a
+                # storage transfer and would trigger a spurious "unexpected status" warning
+                # in update_storage_blocks_to_host.
+                actual_prefetch_nodes = []
                 for node in prefetch_nodes:
-                    self._prefetch_node_map[node.block_id] = node
+                    if node.cache_status == CacheStatus.LOADING_FROM_STORAGE:
+                        self._prefetch_node_map[node.block_id] = node
+                        actual_prefetch_nodes.append(node)
 
-                return prefetch_nodes
+                return actual_prefetch_nodes
         except Exception as e:
             logger.error(f"prepare_prefetch_metadata error: {e}, {str(traceback.format_exc())}")
             return []

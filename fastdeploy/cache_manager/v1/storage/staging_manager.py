@@ -298,9 +298,22 @@ class StagingManager:
 
             results = self._connector.batch_set(flat_keys, flat_ptrs, flat_sizes)
 
+            # Track which keys succeeded per block for partial-write cleanup.
+            block_ok_keys: Dict[int, List[str]] = {}
             for flat_idx, ok in enumerate(results):
-                if not ok:
-                    block_success[flat_index[flat_idx]] = False
+                bi = flat_index[flat_idx]
+                if ok:
+                    block_ok_keys.setdefault(bi, []).append(flat_keys[flat_idx])
+                else:
+                    block_success[bi] = False
+
+            # Rollback: if a block failed but some of its keys were written,
+            # delete those keys so the block appears fully absent in storage.
+            # This prevents _match_storage from finding a half-written block.
+            keys_to_rollback = [key for bi, keys in block_ok_keys.items() if not block_success[bi] for key in keys]
+            if keys_to_rollback:
+                logger.warning(f"[StagingManager] partial write on {len(keys_to_rollback)} key(s), rolling back")
+                self._connector.batch_delete(keys_to_rollback)
 
         return block_success
 

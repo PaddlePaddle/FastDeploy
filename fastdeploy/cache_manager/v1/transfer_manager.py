@@ -879,7 +879,58 @@ class CacheTransferManager:
             return [False] * len(hash_list)
 
         keys_per_kind, host_ptrs_per_kind = self._build_storage_io_args(hash_list)
-        return self._staging_manager.batch_get_block(keys_per_kind, host_ptrs_per_kind, cpu_block_list)
+        results = self._staging_manager.batch_get_block(keys_per_kind, host_ptrs_per_kind, cpu_block_list)
+
+        failed_indices = [i for i, ok in enumerate(results) if not ok]
+        if failed_indices and self._storage_connector is not None:
+            # For each failed block, check which storage keys are actually missing.
+            # keys_per_kind maps kind -> [key_for_block_0, key_for_block_1, ...]
+            probe_keys = []
+            probe_labels = []
+            for i in failed_indices:
+                for kind, keys in keys_per_kind.items():
+                    probe_keys.append(keys[i])
+                    probe_labels.append((i, cpu_block_list[i], hash_list[i], kind))
+
+            try:
+                exist_flags = self._storage_connector.batch_exists(probe_keys)
+
+                # Aggregate per-block: collect missing kinds and whether any kind exists
+                # block_idx -> {missing_kinds, existing_kinds}
+                block_diag: Dict[int, Dict] = {}
+                for (bi, cpu_bid, h, kind), ok in zip(probe_labels, exist_flags):
+                    if bi not in block_diag:
+                        block_diag[bi] = {"cpu_bid": cpu_bid, "hash": h, "missing": [], "existing": []}
+                    if ok:
+                        block_diag[bi]["existing"].append(kind)
+                    else:
+                        block_diag[bi]["missing"].append(kind)
+
+                # Blocks with at least one missing kind
+                partial_missing = {bi: v for bi, v in block_diag.items() if v["missing"]}
+                # Blocks where all kinds exist (pure transfer error)
+                pure_transfer_err = {bi: v for bi, v in block_diag.items() if not v["missing"]}
+
+                if partial_missing:
+                    detail = [
+                        f"cpu_block={v['cpu_bid']} hash={v['hash'][:16]}.. "
+                        f"missing_kinds={v['missing']} existing_kinds={v['existing']}"
+                        for v in partial_missing.values()
+                    ]
+                    logger.warning(
+                        f"[TransferManager] prefetch_from_storage: {len(partial_missing)} block(s) have missing keys — "
+                        + "; ".join(detail)
+                    )
+                if pure_transfer_err:
+                    detail = [f"cpu_block={v['cpu_bid']} hash={v['hash'][:16]}.." for v in pure_transfer_err.values()]
+                    logger.warning(
+                        f"[TransferManager] prefetch_from_storage: {len(pure_transfer_err)} block(s) keys exist but transfer failed — "
+                        + ", ".join(detail)
+                    )
+            except Exception as e:
+                logger.warning(f"[TransferManager] prefetch_from_storage: failed to probe missing keys: {e}")
+
+        return results
 
     def backup_to_storage(
         self,
@@ -924,4 +975,13 @@ class CacheTransferManager:
             return [False] * len(cpu_block_list)
 
         keys_per_kind, host_ptrs_per_kind = self._build_storage_io_args(hash_list)
-        return self._staging_manager.batch_set_block(keys_per_kind, host_ptrs_per_kind, cpu_block_list)
+        results = self._staging_manager.batch_set_block(keys_per_kind, host_ptrs_per_kind, cpu_block_list)
+
+        failed = [(cpu_block_list[i], hash_list[i]) for i, ok in enumerate(results) if not ok]
+        if failed:
+            logger.warning(
+                f"[TransferManager] backup_to_storage: {len(failed)}/{len(cpu_block_list)} block(s) failed — "
+                + ", ".join(f"cpu_block={cb} hash={h[:16]}.." for cb, h in failed)
+            )
+
+        return results

@@ -918,5 +918,65 @@ class TestCacheManagerPendingBackup(unittest.TestCase):
         self.assertEqual(cm.get_pending_backup_count(), 0)
 
 
+class TestPreparePrefixtMetadataStartNode(unittest.TestCase):
+    """Regression test for the start_node bug in prepare_prefetch_metadata.
+
+    Before the fix, prepare_prefetch_metadata called radix_tree.insert without
+    start_node, which inserted LOADING_FROM_STORAGE nodes as children of root
+    (using storage hashes h22..h29 at depth 1) instead of as extensions of the
+    existing device prefix chain (at depth 22..29). As a result, a subsequent
+    find_prefix on the full hash list would traverse root → h0 → ... → h21,
+    then fail to find h22 as a child of node(21), and stop at 22 nodes — never
+    reaching the HOST nodes even after update_storage_blocks_to_host.
+    """
+
+    def test_find_prefix_finds_host_blocks_after_prefetch(self):
+        """After prepare_prefetch_metadata + update_storage_blocks_to_host,
+        find_prefix must return all 30 nodes (22 DEVICE + 8 HOST)."""
+        from fastdeploy.cache_manager.v1.metadata import CacheStatus
+
+        cm = create_cache_manager(total_block_num=50, num_cpu_blocks=20)
+        rt = cm._radix_tree
+
+        # Build 30 hashes: 22 for device, 8 for storage
+        all_hashes = [f"h{i}" for i in range(30)]
+        device_hashes = all_hashes[:22]
+        storage_hashes = all_hashes[22:]
+
+        # Insert 22 device blocks into the radix tree
+        device_block_ids = cm._device_pool.allocate(22)
+        self.assertIsNotNone(device_block_ids)
+        device_nodes, _ = rt.insert(
+            blocks=list(zip(device_hashes, device_block_ids)),
+            cache_status=CacheStatus.DEVICE,
+        )
+        self.assertEqual(len(device_nodes), 22)
+
+        # The last device node is the correct start_node for the storage insertion
+        last_device_node = device_nodes[-1]
+
+        # prepare_prefetch_metadata should attach storage nodes AFTER the last device node
+        storage_nodes = cm.prepare_prefetch_metadata(storage_hashes, start_node=last_device_node)
+        self.assertEqual(len(storage_nodes), 8)
+        for node in storage_nodes:
+            self.assertEqual(node.cache_status, CacheStatus.LOADING_FROM_STORAGE)
+
+        # Simulate prefetch completion: transition LOADING_FROM_STORAGE → HOST
+        storage_block_ids = [n.block_id for n in storage_nodes]
+        for node in storage_nodes:
+            cm._prefetch_node_map[node.block_id] = node
+        cm.update_storage_blocks_to_host(storage_block_ids)
+        for node in storage_nodes:
+            self.assertEqual(node.cache_status, CacheStatus.HOST)
+
+        # Now find_prefix on all 30 hashes must return 30 nodes
+        found = rt.find_prefix(all_hashes)
+        self.assertEqual(len(found), 30, f"Expected 30 nodes, got {len(found)}")
+        device_found = [n for n in found if n.is_on_device()]
+        host_found = [n for n in found if n.is_on_host()]
+        self.assertEqual(len(device_found), 22)
+        self.assertEqual(len(host_found), 8)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -295,6 +295,20 @@ class StorageConnector(ABC):
         """Check if connected to storage."""
         return self._connected
 
+    def batch_exists(self, keys: List[str]) -> List[bool]:
+        """
+        Batch check key existence. Backends that support it should override.
+        Default returns False for all keys (conservative: assume missing).
+        """
+        return [False] * len(keys)
+
+    def batch_delete(self, keys: List[str]) -> List[bool]:
+        """
+        Delete multiple keys. Backends can override for efficiency.
+        Default falls back to calling delete() per key.
+        """
+        return [self.delete(k) for k in keys]
+
     def get_stats(self) -> Dict[str, Any]:
         """Get connector statistics."""
         return {
