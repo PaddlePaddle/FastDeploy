@@ -1245,10 +1245,6 @@ void SpeculateGetAcceptTokensAndLogits(
     const paddle::Tensor& accept_num,
     const paddle::Tensor& accept_tokens);
 
-void SpeculateComputeCuBatchOffset(paddle::Tensor& cu_batch_token_offset,
-                                   const paddle::Tensor& accept_num,
-                                   const int real_bsz);
-
 std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& ids_remove_padding,
     const paddle::Tensor& seq_lens_this_time,  // only on cpu
@@ -1988,10 +1984,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("speculate_get_accept_tokens_and_logits",
         &SpeculateGetAcceptTokensAndLogits,
         "speculate_get_accept_tokens_and_logits function");
-
-  m.def("speculate_compute_cu_batch_offset",
-        &SpeculateComputeCuBatchOffset,
-        "speculate_compute_cu_batch_offset function");
 #endif
 
   m.def("update_attn_mask_offsets",
