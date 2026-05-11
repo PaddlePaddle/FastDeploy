@@ -159,7 +159,7 @@ jobs:
               python -m pip install paddlepaddle-xpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/xpu-p800/
             else
               python -m pip uninstall paddlepaddle-xpu fastdeploy-xpu -y
-              python -m pip install --pre paddlepaddle-xpu -i https://www.paddlepaddle.org.cn/packages/nightly/xpu-p800/
+              python -m pip install https://paddle-whl.bj.bcebos.com/nightly/xpu-p800/paddlepaddle-xpu/paddlepaddle_xpu-3.5.0.dev20260507-cp310-cp310-linux_x86_64.whl
             fi
 
 
