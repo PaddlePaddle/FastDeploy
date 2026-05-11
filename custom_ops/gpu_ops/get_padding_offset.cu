@@ -51,7 +51,9 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
   for (int i = lane_id; i < bi + 1; i += WARP_SIZE) {
     const int q_inc = seq_lens[i];
     const int k_inc =
-        q_inc + (seq_lens_decoder != nullptr ? seq_lens_decoder[i] : 0);
+        q_inc + ((seq_lens_decoder[i] > 0 && seq_lens_encoder[i] > 0)
+                     ? seq_lens_decoder[i]
+                     : 0);
     cum_seq_len_q += q_inc;
     cum_seq_len_k += k_inc;
   }
@@ -147,8 +149,8 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       seq_len.data<int>(),
       max_seq_len,
       draft_tokens ? draft_tokens.get().data<int64_t>() : nullptr,
-      seq_lens_encoder ? seq_lens_encoder.get().data<int32_t>() : nullptr,
-      seq_lens_decoder ? seq_lens_decoder.get().data<int32_t>() : nullptr,
+      seq_lens_encoder.get().data<int32_t>(),
+      seq_lens_decoder.get().data<int32_t>(),
       max_draft_tokens_per_batch);
 
   return {x_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k};
