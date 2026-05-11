@@ -828,7 +828,6 @@ class MLAAttentionBackend(AttentionBackend):
                 )
                 return fmha_out
 
-            # FA
             # FlashAttention for prefill
             fmha_out = self.flash_attn_func(
                 q,
