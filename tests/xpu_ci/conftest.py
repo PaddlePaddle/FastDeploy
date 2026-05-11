@@ -206,9 +206,9 @@ def print_logs_on_failure():
         with open("server.log", "r") as f:
             print(f.read())
 
-    print("\n========== log/workerlog.0 ==========")
-    if os.path.exists("log/workerlog.0"):
-        with open("log/workerlog.0", "r") as f:
+    print("\n========== log/paddle/workerlog.0 ==========")
+    if os.path.exists("log/paddle/workerlog.0"):
+        with open("log/paddle/workerlog.0", "r") as f:
             print(f.read())
 
 

@@ -28,6 +28,7 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
                                 const int max_seq_len,
                                 const int64_t *draft_tokens,
                                 const int *seq_lens_encoder,
+                                const int *seq_lens_decoder,
                                 const int max_draft_tokens_per_batch) {
   const int bi = blockIdx.x;
   const int tid = threadIdx.x;
@@ -39,23 +40,37 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
   const int lane_id = threadIdx.x % 32;
 #endif
 
-  int cum_seq_len = 0;
+  // Independent q/k prefix sums:
+  //   cu_seqlens_q = Σ seq_lens[j]  (new tokens only, for Q/varlen indexing)
+  //   cu_seqlens_k = Σ (seq_lens[j] + seq_lens_decoder[j])  (cached + new, for
+  //   K/FA)
+  // When seq_lens_decoder == nullptr, cu_seqlens_k degenerates to cu_seqlens_q.
+  int cum_seq_len_q = 0;
+  int cum_seq_len_k = 0;
 
-  // compute sum of seq_lens[0,1,2,...,bi]
   for (int i = lane_id; i < bi + 1; i += WARP_SIZE) {
-    cum_seq_len += seq_lens[i];
+    const int q_inc = seq_lens[i];
+    const int k_inc =
+        q_inc + (seq_lens_decoder != nullptr ? seq_lens_decoder[i] : 0);
+    cum_seq_len_q += q_inc;
+    cum_seq_len_k += k_inc;
   }
 
   for (int offset = 1; offset < WARP_SIZE; offset <<= 1) {
-    const int tmp = __shfl_up_sync(0xffffffff, cum_seq_len, offset);
-    if (lane_id >= offset) cum_seq_len += tmp;
+    const int tmp_q = __shfl_up_sync(0xffffffff, cum_seq_len_q, offset);
+    const int tmp_k = __shfl_up_sync(0xffffffff, cum_seq_len_k, offset);
+    if (lane_id >= offset) {
+      cum_seq_len_q += tmp_q;
+      cum_seq_len_k += tmp_k;
+    }
   }
 
-  cum_seq_len = __shfl_sync(0xffffffff, cum_seq_len, WARP_SIZE - 1);
+  cum_seq_len_q = __shfl_sync(0xffffffff, cum_seq_len_q, WARP_SIZE - 1);
+  cum_seq_len_k = __shfl_sync(0xffffffff, cum_seq_len_k, WARP_SIZE - 1);
 
   if (tid == 0) {
-    cu_seqlens_q[bi + 1] = cum_seq_len;
-    cu_seqlens_k[bi + 1] = cum_seq_len;
+    cu_seqlens_q[bi + 1] = cum_seq_len_q;
+    cu_seqlens_k[bi + 1] = cum_seq_len_k;
   }
 
   if (bi == 0 && tid == 0) {
@@ -63,8 +78,9 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
     cu_seqlens_k[0] = 0;
   }
 
+  // Q-side token scatter uses cum_seq_len_q (new-tokens-only layout).
   for (int i = tid; i < seq_lens[bi]; i += blockDim.x) {
-    const int tgt_seq_id = cum_seq_len - seq_lens[bi] + i;
+    const int tgt_seq_id = cum_seq_len_q - seq_lens[bi] + i;
     if (max_draft_tokens_per_batch > 0 && seq_lens_encoder[bi] <= 0) {
       // speculative decoding
       const int src_seq_id = bi * max_draft_tokens_per_batch + i;
@@ -84,6 +100,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(
     const paddle::Tensor &seq_len,
     const paddle::optional<paddle::Tensor> &draft_tokens,
     const paddle::optional<paddle::Tensor> &seq_lens_encoder,
+    const paddle::optional<paddle::Tensor> &seq_lens_decoder,
     const int64_t cpu_token_num) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
   auto dev_ctx = static_cast<const phi::CustomContext *>(
@@ -131,6 +148,7 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       max_seq_len,
       draft_tokens ? draft_tokens.get().data<int64_t>() : nullptr,
       seq_lens_encoder ? seq_lens_encoder.get().data<int32_t>() : nullptr,
+      seq_lens_decoder ? seq_lens_decoder.get().data<int32_t>() : nullptr,
       max_draft_tokens_per_batch);
 
   return {x_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k};
@@ -156,7 +174,8 @@ PD_BUILD_STATIC_OP(get_padding_offset)
     .Inputs({"input_ids",
              "seq_len",
              paddle::Optional("draft_tokens"),
-             paddle::Optional("seq_lens_encoder")})
+             paddle::Optional("seq_lens_encoder"),
+             paddle::Optional("seq_lens_decoder")})
     .Outputs({"x_remove_padding",
               "batch_id_per_token",
               "cu_seqlens_q",

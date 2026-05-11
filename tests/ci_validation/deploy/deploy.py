@@ -491,8 +491,8 @@ def wait_for_infer():
                 result = f"服务启动超时，耗时：[{timeout}s]\n\n"
                 result += "==== server.log tail 50 ====\n"
                 result += tail_file("server.log")
-                result += "\n==== log/workerlog.0 tail 50 ====\n"
-                result += tail_file("log/workerlog.0")
+                result += "\n==== log/paddle/workerlog.0 tail 50 ====\n"
+                result += tail_file("log/paddle/workerlog.0")
 
                 yield result
                 break

@@ -32,7 +32,11 @@ import fastdeploy.envs as envs
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.metrics.stats import ZMQMetricsStats
-from fastdeploy.utils import FlexibleArgumentParser, api_server_logger
+from fastdeploy.utils import (
+    FlexibleArgumentParser,
+    api_server_logger,
+    get_base_request_id,
+)
 
 UVICORN_CONFIG = {
     "version": 1,
@@ -172,11 +176,11 @@ class DealerConnectionManager:
 
                 request_id = response[-1]["request_id"]
                 if request_id[:4] in ["cmpl", "embd"]:
-                    request_id = request_id.rsplit("_", 1)[0]
+                    request_id = get_base_request_id(request_id)
                 elif "reward" == request_id[:6]:
-                    request_id = request_id.rsplit("_", 1)[0]
+                    request_id = get_base_request_id(request_id)
                 elif "chatcmpl" == request_id[:8]:
-                    request_id = request_id.rsplit("_", 1)[0]
+                    request_id = get_base_request_id(request_id)
                 async with self.lock:
                     if request_id in self.request_map:
                         await self.request_map[request_id].put(response)
@@ -239,7 +243,7 @@ class DealerConnectionManager:
                     last_output = outputs[-1]
                     req_id = last_output["request_id"] if isinstance(last_output, dict) else last_output.request_id
                     if req_id.startswith(("cmpl", "embd", "reward", "chatcmpl")):
-                        req_id = req_id.rsplit("_", 1)[0]
+                        req_id = get_base_request_id(req_id)
                     queue = self.request_map.get(req_id)
                     if queue is not None:
                         queue.put_nowait(outputs)

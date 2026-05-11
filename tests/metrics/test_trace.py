@@ -1313,8 +1313,8 @@ class TestGetTraceInfoForRequest:
         """Test get_trace_info_for_request with rid suffix fallback to orig_rid"""
         trace.process_tracing_init()
 
-        # Note: split("_")[0] takes only the first part before ANY underscore
-        # So "test_0" -> "test", not the full string before the last underscore
+        # Note: get_base_request_id uses CHOICE_SEPARATOR (::n::) to split
+        # So "test::n::0" -> "test", preserving underscores in the base request_id
         rid = "testrid"
 
         # Create request context directly to avoid FastAPI instrumentation complications
@@ -1331,8 +1331,8 @@ class TestGetTraceInfoForRequest:
             root_span_context=None,
         )
 
-        # Request with _idx suffix should fallback to orig_rid (split on _ takes first part)
-        result = trace.get_trace_info_for_request("testrid_0")
+        # Request with ::n:: suffix should fallback to orig_rid via get_base_request_id
+        result = trace.get_trace_info_for_request("testrid::n::0")
 
         # Should find the request and return trace info
         assert result is not None
