@@ -132,8 +132,34 @@ def _create_dummy_modules():
         debug=lambda *args, **kwargs: None,
     )
 
+    CHOICE_SEPARATOR = "::n::"
+
+    def make_choice_id(request_id: str, index: int) -> str:
+        return f"{request_id}{CHOICE_SEPARATOR}{index}"
+
+    def parse_choice_id(compound_id: str) -> tuple:
+        if CHOICE_SEPARATOR in compound_id:
+            base, idx = compound_id.rsplit(CHOICE_SEPARATOR, 1)
+            return base, int(idx)
+        return compound_id, None
+
+    def get_base_request_id(compound_id: str) -> str:
+        if CHOICE_SEPARATOR in compound_id:
+            return compound_id.rsplit(CHOICE_SEPARATOR, 1)[0]
+        return compound_id
+
+    def get_choice_index(compound_id: str) -> int:
+        if CHOICE_SEPARATOR in compound_id:
+            return int(compound_id.rsplit(CHOICE_SEPARATOR, 1)[1])
+        raise ValueError(f"No choice index in request_id: {compound_id}")
+
     utils_module = types.ModuleType("fastdeploy.utils")
     utils_module.data_processor_logger = dummy_logger
+    utils_module.CHOICE_SEPARATOR = CHOICE_SEPARATOR
+    utils_module.make_choice_id = make_choice_id
+    utils_module.parse_choice_id = parse_choice_id
+    utils_module.get_base_request_id = get_base_request_id
+    utils_module.get_choice_index = get_choice_index
 
     envs_module = types.ModuleType("fastdeploy.envs")
     envs_module.FD_USE_HF_TOKENIZER = False

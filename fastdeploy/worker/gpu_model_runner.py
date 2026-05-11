@@ -806,7 +806,7 @@ class GPUModelRunner(ModelRunnerBase):
         }
         if self.enable_mm:
             # Sort by idx to ensure attention mask offsets are filled in order during mm prefill
-            req_dicts = sorted(req_dicts, key=lambda r: r.idx)
+            req_dicts.requests.sort(key=lambda r: r.idx)
         if self.enable_cache_manager_v1:
             # submit_swap_tasks handles:
             # 1. Waiting for pending evict handlers before submitting new evict
@@ -1983,6 +1983,7 @@ class GPUModelRunner(ModelRunnerBase):
         capture_prefill: bool = False,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
+        step_use_cudagraph=False,
     ) -> paddle.Tensor:
         """
         Use dummy inputs to run before formal execution.
@@ -2015,8 +2016,10 @@ class GPUModelRunner(ModelRunnerBase):
         while True:
             # 1. Initialize forward meta and attention meta data
             self._prepare_inputs(is_dummy_or_profile_run=True)
+
+            if not (in_capturing or step_use_cudagraph):
+                self.forward_meta.step_use_cudagraph = False
             # 2. Padding inputs for cuda graph
-            self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             self.padding_cudagraph_inputs()
             # Compute position_ids and slot_mapping
             self._compute_position_ids_and_slot_mapping()
@@ -3007,10 +3010,17 @@ class GPUModelRunner(ModelRunnerBase):
             )
             local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
-            if not create_cache_tensor:
-                for name, tensor in self.cache_kvs_map.items():
-                    unset_data_ipc(tensor, name, True, False)
-                self.cache_ready_signal.value[local_rank] = 0
+            if not profile:
+                if create_cache_tensor:
+                    if self.fd_config.cache_config.num_cpu_blocks > 0:
+                        logger.info("Waiting for cache transfer manager to unlink cuda ipc")
+                        while self.cache_ready_signal.value[local_rank] != 0:
+                            time.sleep(0.1)
+                        logger.info("Stop waiting! cache transfer manager has unlinked cuda ipc")
+                else:
+                    for name, tensor in self.cache_kvs_map.items():
+                        unset_data_ipc(tensor, name, True, False)
+                    self.cache_ready_signal.value[local_rank] = 0
 
         self.cache_kvs_map.clear()
         self.share_inputs.pop("caches", None)
@@ -3039,6 +3049,13 @@ class GPUModelRunner(ModelRunnerBase):
             self.proposer.clear_mtp_cache()
         self.clear_cache()
         paddle.device.cuda.empty_cache()
+
+        # clear overlap status
+        self._cached_model_output_data = None
+        self._cached_sampler_output = None
+        self._cached_post_process_event = None
+        self._cached_launch_token_num = -1
+        self._cached_real_bsz = -1
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager clear all memory")
 

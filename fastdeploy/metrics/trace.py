@@ -23,6 +23,7 @@ import os
 import random
 import threading
 import time
+import traceback
 import uuid
 from dataclasses import dataclass
 from enum import Enum, unique
@@ -31,6 +32,7 @@ from typing import Any, Dict, List, Optional
 
 from fastdeploy import envs
 from fastdeploy.utils import api_server_logger as logger
+from fastdeploy.utils import get_base_request_id
 
 opentelemetry_imported = False
 tracing_enabled = False
@@ -46,7 +48,6 @@ try:
 
     opentelemetry_imported = True
 except ImportError as e:
-    print(f"Failed to import opentelemetry, tracing disabled.{e}")
     logger.error(f"Failed to import opentelemetry, tracing disabled.{e}")
 
     class id_generator:
@@ -231,7 +232,7 @@ def __get_host_id() -> str:
 def process_tracing_init():
     global tracing_enabled
     global __get_cur_time_ns
-    tracing_enabled = envs.TRACES_ENABLE.lower() == "true"
+    tracing_enabled = envs.FD_TRACE in ("otel", "all")
 
     if not tracing_enabled:
         logger.warning("Opentelemetry is DISABLED.")
@@ -270,7 +271,7 @@ def process_tracing_init():
         # )
         trace.set_tracer_provider(tracer_provider)
     except Exception as e:
-        logger.error(f": initialize opentelemetry error:{e}")
+        logger.error(f": initialize opentelemetry error:{e}, {traceback.format_exc()}")
         logger.warning("please set correct otlp endpoint")
         tracing_enabled = False
         return
@@ -501,7 +502,7 @@ def trace_req_start(
             is_copy=False,
         )
 
-    orig_rid = rid.split("_")[0]
+    orig_rid = get_base_request_id(rid)
     role = "" if role == "null" else role
     attrs = {"rid": orig_rid}
 
@@ -779,8 +780,8 @@ def get_trace_info_for_request(rid: str) -> Optional[Dict[str, str]]:
         return None
     rid = str(rid)
     if rid not in reqs_context:
-        # Try using original rid (remove _idx suffix)
-        orig_rid = rid.split("_")[0]
+        # Try using original rid (remove choice index suffix)
+        orig_rid = get_base_request_id(rid)
         if orig_rid not in reqs_context:
             return None
         rid = orig_rid

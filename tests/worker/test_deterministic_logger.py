@@ -310,7 +310,7 @@ class TestLogBatchStart(unittest.TestCase):
 
     def test_logs_batch_start(self):
         logger = self._make_logger()
-        batch = [self._make_req("prompt_0")]
+        batch = [self._make_req("prompt::n::0")]
         with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
             logger.log_batch_start(batch)
         output = "\n".join(cm.output)
@@ -320,7 +320,7 @@ class TestLogBatchStart(unittest.TestCase):
 
     def test_batch_counter_increments(self):
         logger = self._make_logger()
-        batch = [self._make_req("prompt_0")]
+        batch = [self._make_req("prompt::n::0")]
         with self.assertLogs("fastdeploy.deterministic", level="INFO"):
             logger.log_batch_start(batch)
         with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
@@ -330,8 +330,8 @@ class TestLogBatchStart(unittest.TestCase):
 
     def test_run_id_change_resets_counter(self):
         logger = self._make_logger()
-        batch_0 = [self._make_req("prompt_0")]
-        batch_1 = [self._make_req("prompt_1")]
+        batch_0 = [self._make_req("prompt::n::0")]
+        batch_1 = [self._make_req("prompt::n::1")]
         with self.assertLogs("fastdeploy.deterministic", level="INFO"):
             logger.log_batch_start(batch_0)
             logger.log_batch_start(batch_0)  # Batch_2
@@ -344,7 +344,7 @@ class TestLogBatchStart(unittest.TestCase):
 
     def test_skips_none_requests(self):
         logger = self._make_logger()
-        batch = [None, self._make_req("req_5")]
+        batch = [None, self._make_req("req::n::5")]
         with self.assertLogs("fastdeploy.deterministic", level="INFO") as cm:
             logger.log_batch_start(batch)
         output = "\n".join(cm.output)

@@ -1,5 +1,8 @@
 FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:cuda126-dev
-RUN apt update && apt install -y jq psmisc
+RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
+    sed -i 's/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
+    apt update && \
+    apt install -y jq psmisc
 COPY ../../requirements.txt ./requirements.txt
 RUN python -m pip install --no-cache-dir -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 COPY ./unittest_requirement.txt ./unittest_requirement.txt
@@ -9,9 +12,6 @@ RUN python -m pip install --no-cache-dir -r requirements_paddle_nv.txt -i https:
 
 RUN wget -q --no-proxy https://paddle-qa.bj.bcebos.com/FastDeploy/MLNX_OFED_LINUX-24.10-2.1.8.0-ubuntu22.04-x86_64.tgz \
     && tar xf MLNX_OFED_LINUX-24.10-2.1.8.0-ubuntu22.04-x86_64.tgz
-
-RUN rm -f /etc/apt/sources.list  \
-    && echo "deb http://archive.ubuntu.com/ubuntu jammy main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu jammy-updates main restricted universe multiverse\ndeb http://archive.ubuntu.com/ubuntu jammy-security main restricted universe multiverse" | tee /etc/apt/sources.list > /dev/null
 
 RUN cd MLNX_OFED_LINUX-24.10-2.1.8.0-ubuntu22.04-x86_64  \
     && apt clean \

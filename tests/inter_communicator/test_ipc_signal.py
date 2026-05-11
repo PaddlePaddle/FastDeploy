@@ -17,6 +17,7 @@
 import time
 import unittest
 from multiprocessing.shared_memory import SharedMemory
+from unittest.mock import patch
 
 import numpy as np
 import pytest
@@ -45,6 +46,20 @@ class TestSharedMemoryExists(unittest.TestCase):
                 shm.unlink()
             except Exception:
                 pass
+
+    def test_shared_memory_exists_logs_error_on_unexpected_exception(self):
+        """Test shared_memory_exists logs error with traceback on unexpected exception."""
+        import fastdeploy.inter_communicator.ipc_signal as ipc_module
+
+        with patch("fastdeploy.inter_communicator.ipc_signal.SharedMemory", side_effect=OSError("unexpected")):
+            with patch.object(ipc_module.llm_logger, "error") as mock_error:
+                result = shared_memory_exists("any_name")
+
+        self.assertFalse(result)
+        mock_error.assert_called_once()
+        error_msg = mock_error.call_args[0][0]
+        self.assertIn("Unexpected error", error_msg)
+        self.assertIn("unexpected", error_msg)
 
 
 @pytest.mark.parametrize(

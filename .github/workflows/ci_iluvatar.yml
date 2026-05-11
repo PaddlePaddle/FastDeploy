@@ -21,7 +21,7 @@ jobs:
     needs: [clone]
     uses: ./.github/workflows/_iluvatar_cases.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0-20260312
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0-20260507
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}

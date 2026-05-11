@@ -483,7 +483,9 @@ class TestLLMEngineStopProfile(unittest.TestCase):
         eng.worker_proc = Mock(poll=lambda: 1)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            worker_log = os.path.join(temp_dir, "workerlog.0")
+            paddle_log_dir = os.path.join(temp_dir, "paddle")
+            os.makedirs(paddle_log_dir)
+            worker_log = os.path.join(paddle_log_dir, "workerlog.0")
             with open(worker_log, "w", encoding="utf-8") as fp:
                 fp.write(
                     "Traceback (most recent call last):\n"
