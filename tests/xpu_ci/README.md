@@ -14,20 +14,31 @@ XPU 主流程入口为 `/.github/workflows/ci_xpu.yml`，触发条件为：
 - `pull_request` 的 `opened` / `synchronize`
 - 目标分支为 `develop` 或 `release/**`
 
+同一 PR 同一 workflow 同时只能运行一个实例（concurrency group），后触发的会取消前一次正在运行的。
+
 整体执行链路如下：
 
-1. `clone`
-2. `xpu_build_test`
-3. `xpu_4cards_case_test`
-4. `xpu_8cards_case_test`
-5. `xpu_unit_test`
-6. `xpu_coverage_report`
+```text
+clone ──> xpu_build_test ──┬──> xpu_4cards_case_test ──┐
+                           ├──> xpu_8cards_case_test ──┼──> xpu_coverage_report
+                           └──> xpu_unit_test ─────────┘
+```
+
+1. `clone`：代码克隆 + 归档上传
+2. `xpu_build_test`：编译 wheel（依赖 clone）
+3. `xpu_4cards_case_test`：4 卡集成测试（依赖 clone + build，**并行**）
+4. `xpu_8cards_case_test`：8 卡集成测试（依赖 clone + build，**并行**）
+5. `xpu_unit_test`：XPU 单测（依赖 clone + build，**并行**）
+6. `xpu_coverage_report`：覆盖率汇总（依赖上述三个测试 job 全部结束）
 
 其中：
 
-- `xpu_build_test` 成功后，才会继续执行 4 卡 / 8 卡 case 测试和单测
-- `xpu_coverage_report` 会等待 4 卡 / 8 卡 / unit test 全部结束后再执行
+- `xpu_build_test` 成功后，4 卡 / 8 卡 / unit test **三个 job 并行**执行
+- `xpu_coverage_report` 使用 `if: always()` 条件，即使测试失败也会执行（只要 clone 成功）
+- 每个子 workflow 内部都有 `check_bypass` 机制，可通过标签跳过对应阶段
 - 整个流程运行在 self-hosted XPU runner 上，不是普通 CPU GitHub Hosted Runner
+- Docker 镜像：`ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci`
+- 测试 job 超时时间：60 分钟
 
 ## 2. 各个 workflow 的作用
 
@@ -35,54 +46,72 @@ XPU 主流程入口为 `/.github/workflows/ci_xpu.yml`，触发条件为：
 
 主编排入口，只负责组织任务依赖，不直接执行测试逻辑：
 
-- `clone`：准备代码归档
-- `xpu_build_test`：编译并产出 `fastdeploy-xpu` wheel
-- `xpu_4cards_case_test`：执行 4 卡集成 case
-- `xpu_8cards_case_test`：执行 8 卡集成 case
-- `xpu_unit_test`：执行 XPU 单测
-- `xpu_coverage_report`：汇总覆盖率并做增量覆盖率检查
+- `clone`：代码克隆、PR merge、归档上传到 BOS
+- `xpu_build_test`：编译并产出 `fastdeploy-xpu` wheel，上传到 BOS
+- `xpu_4cards_case_test`：执行 4 卡集成 case，收集覆盖率
+- `xpu_8cards_case_test`：执行 8 卡集成 case，收集覆盖率
+- `xpu_unit_test`：执行 XPU 自定义算子单测 + 模型功能单测，收集覆盖率
+- `xpu_coverage_report`：汇总三路覆盖率数据，执行增量覆盖率门禁检查，上传 Codecov
 
-### 2.2 `/_build_xpu.yml`
+### 2.2 `/_clone_linux.yml`
+
+职责：代码克隆、PR 合并、归档上传。
+
+主要工作：
+
+- checkout 目标分支代码（含 submodules，fetch-depth=1000）
+- 如果是 PR，fetch PR head 并 merge 到目标分支（模拟合入后的状态）
+- 将合并后的代码打包为 `FastDeploy.tar.gz` 上传到 BOS
+- 产出 `repo_archive_url` 供下游 workflow 使用
+
+### 2.3 `/_build_xpu.yml`
 
 职责：构建 XPU 版本 FastDeploy。
+
+- runner 标签：`XPU-P800`
 
 主要工作：
 
 - 拉取 CI Docker 镜像
 - 解压代码归档
-- 安装 Paddle XPU 依赖
+- 安装 Paddle XPU 依赖（支持 nightly / 指定版本 / 指定 wheel URL 三种模式）
 - 执行 `bash custom_ops/xpu_ops/download_dependencies.sh develop`
+- 设置 `CLANG_PATH` 和 `XVLLM_PATH`
 - 执行 `bash build.sh`
-- 上传生成的 `fastdeploy*.whl`
+- 上传生成的 `fastdeploy*.whl` 到 BOS
 
 本阶段的产物是后续 workflow 使用的 `FASTDEPLOY_WHEEL_URL`。
 
-### 2.3 `/_xpu_4cards_case_test.yml`
+### 2.4 `/_xpu_4cards_case_test.yml`
 
 职责：在 4 卡机器上运行 `tests/xpu_ci/4cards_cases/` 下的集成测试。
 
 主要特点：
 
 - runner 标签：`XPU-P800-4Cards`
+- 超时时间：60 分钟
+- 前置操作：下载安装 xre，通过 `xpu-smi -r` 重启 XPU 卡
 - 在容器里设置 `XPU_VISIBLE_DEVICES`
-- 根据 runner 名决定 `XPU_ID=0` 或 `XPU_ID=4`
-- 安装上游 build 阶段产出的 wheel
+- 根据 runner 名末位字符决定 `XPU_ID=0`（使用卡 0-3）或 `XPU_ID=4`（使用卡 4-7）
+- 安装上游 build 阶段产出的 wheel（两次安装：一次正常安装，一次 `--no-deps --target` 覆盖到源码目录）
 - 执行：
 
 ```bash
 python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short tests/xpu_ci/4cards_cases/
 ```
 
-- 归档 `case_logs/`
-- 上传 `coverage_4cards.tar.gz`
+- 归档 `case_logs/`（通过 `actions/upload-artifact`）
+- 上传 `coverage_4cards.tar.gz` 到 BOS
 
-### 2.4 `/_xpu_8cards_case_test.yml`
+### 2.5 `/_xpu_8cards_case_test.yml`
 
 职责：在 8 卡机器上运行 `tests/xpu_ci/8cards_cases/` 下的集成测试。
 
 主要特点：
 
 - runner 标签：`XPU-P800-8Cards`
+- 超时时间：60 分钟
+- 前置操作：下载安装 xre，通过 `xpu-smi -r` 重启 XPU 卡
 - 固定设置 `XPU_VISIBLE_DEVICES=0,1,2,3,4,5,6,7`
 - 安装上游 build 阶段产出的 wheel
 - 执行：
@@ -91,42 +120,52 @@ python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short te
 python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short tests/xpu_ci/8cards_cases/
 ```
 
-- 归档 `case_logs/`
-- 上传 `coverage_8cards.tar.gz`
+- 归档 `case_logs/`（通过 `actions/upload-artifact`）
+- 上传 `coverage_8cards.tar.gz` 到 BOS
 
-### 2.5 `/_xpu_unit_test.yml`
+### 2.6 `/_xpu_unit_test.yml`
 
 职责：执行 XPU 相关单测。
 
+- runner 标签：`XPU-P800-4Cards`
+- 超时时间：60 分钟
+- 前置操作：下载安装 xre，通过 `xpu-smi -r` 重启 XPU 卡
+
 当前包含两部分：
 
-1. 自定义算子单测
+1. XPU 自定义算子单测（`custom_ops/xpu_ops/test/` 整个目录）
 2. `tests/xpu_ci/unit_test/` 下的模型功能单测
 
 执行命令分别为：
 
 ```bash
-python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short custom_ops/xpu_ops/test/test_draft_model_postprocess.py
+python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short custom_ops/xpu_ops/test/
 python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short tests/xpu_ci/unit_test/
 ```
 
+两部分独立运行，任一失败则整体 job 失败。
+
 该 workflow 会上传：
 
-- `ut_logs/`
-- `coverage_unit_test.tar.gz`
+- `ut_logs/`（通过 `actions/upload-artifact`）
+- `coverage_unit_test.tar.gz` 到 BOS
 
-### 2.6 `/_xpu_coverage_report.yml`
+### 2.7 `/_xpu_coverage_report.yml`
 
 职责：汇总覆盖率并校验 PR 增量覆盖率。
 
+- runner 标签：`XPU-P800-4Cards`（合并阶段）+ `ubuntu-latest`（Codecov 上传阶段）
+- 超时时间：合并阶段 30 分钟，上传阶段 15 分钟
+
 主要工作：
 
-- 下载 4 卡 / 8 卡 / unit test 的覆盖率 tar 包
-- 合并为统一 coverage 数据
+- 从 BOS 下载 4 卡 / 8 卡 / unit test 的覆盖率 tar 包
+- 使用 `python -m coverage combine` 合并为统一 coverage 数据
 - 生成 `xpu_coverage_all.xml`
-- 对 PR 执行 `diff-cover`
-- 增量覆盖率阈值：`80%`
-- 上传 Codecov
+- 对 PR 执行 `diff-cover`，生成增量覆盖率报告 `xpu_diff_coverage.json`
+- 增量覆盖率阈值：**80%**（低于则 CI 失败）
+- 上传覆盖率报告到 BOS
+- 在独立的 `ubuntu-latest` runner 上将 XML 上传到 Codecov（flags: XPU）
 
 这一步的意义是：
 
@@ -210,7 +249,7 @@ python -m pytest -v -s --tb=short tests/xpu_ci/unit_test/
 #### 运行自定义算子单测
 
 ```bash
-python -m pytest -v -s --tb=short custom_ops/xpu_ops/test/test_draft_model_postprocess.py
+python -m pytest -v -s --tb=short custom_ops/xpu_ops/test/
 ```
 
 适用场景：
@@ -312,9 +351,11 @@ export PYTHONPATH=$(pwd):$(pwd)/tests/xpu_ci:$PYTHONPATH
 export COVERAGE_RCFILE=$(pwd)/scripts/.coveragerc_xpu
 mkdir -p ut_logs coveragedata
 
+# 自定义算子单测（整个目录）
 COVERAGE_FILE=$(pwd)/coveragedata/.coverage.unit_ops \
-python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short custom_ops/xpu_ops/test/test_draft_model_postprocess.py
+python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short custom_ops/xpu_ops/test/
 
+# 模型功能单测
 COVERAGE_FILE=$(pwd)/coveragedata/.coverage.unit_model \
 python -m coverage run --rcfile=${COVERAGE_RCFILE} -m pytest -v -s --tb=short tests/xpu_ci/unit_test/
 ```
