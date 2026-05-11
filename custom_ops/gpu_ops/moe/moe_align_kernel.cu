@@ -236,7 +236,6 @@ __global__ void moe_align_block_size_kernel(
 }
 
 // ===== Cooperative fused kernel for large batch (single launch, grid.sync)
-// =====
 
 namespace cg = cooperative_groups;
 
@@ -286,8 +285,6 @@ __global__ void moe_align_block_size_cooperative_kernel(
   }
   __syncthreads();
 
-  // No grid barrier needed: global_counts is pre-zeroed by the caller
-
   // ===== Stage 1: Local histogram + global atomic merge =====
   for (size_t i = (size_t)bid * nthreads + tid; i < numel;
        i += (size_t)nblocks * nthreads) {
@@ -304,12 +301,9 @@ __global__ void moe_align_block_size_cooperative_kernel(
     local_hist[i] = prefix_before;
   }
 
-  grid.sync();  // Single grid barrier: all histograms merged, global_counts has
-                // totals
+  grid.sync();  // all histograms merged, global_counts has totals
 
-  // ===== Stage 2: Redundant prefix sum per block (no grid barrier needed)
-  // ===== Each block's thread 0 reads global_counts and computes expert starts
-  // locally. This is cheap (~64 iterations) and avoids an extra grid.sync().
+  // ===== Stage 2: Redundant prefix sum per block   =====
   if (tid == 0) {
     int32_t running_sum = 0;
     for (int i = 0; i < num_experts; i++) {
@@ -321,7 +315,8 @@ __global__ void moe_align_block_size_cooperative_kernel(
     expert_starts_local[num_experts] = running_sum;  // total
     s_total = running_sum;
   }
-  __syncthreads();
+
+  grid.sync();
 
   // Block 0 writes total_tokens_post_pad and cumsum (global_counts)
   if (bid == 0) {
@@ -334,8 +329,7 @@ __global__ void moe_align_block_size_cooperative_kernel(
     }
   }
 
-  // ===== Stage 3: Fill expert_ids via binary search (all blocks cooperate)
-  // =====
+  // ===== Stage 3: Fill expert_ids (all blocks cooperate) =====
   const int32_t num_blocks_out = s_total / block_size;
   for (int32_t i = bid * nthreads + tid; i < num_blocks_out;
        i += nblocks * nthreads) {
