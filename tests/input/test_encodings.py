@@ -802,11 +802,11 @@ class TestErnieEncoding(unittest.TestCase):
 
         with (
             patch(
-                "fastdeploy.input.utils.video.read_video_decord",
+                "fastdeploy.input.utils.video.read_video_paddlecodec",
                 return_value=(mock_reader, mock_meta, mock_path),
             ) as mock_read_video,
             patch(
-                "fastdeploy.input.utils.video.read_frames_decord",
+                "fastdeploy.input.utils.video.read_frames_paddlecodec",
                 return_value=([mock_frame1, mock_frame2], None, [0.0, 0.5]),
             ) as mock_read_frames,
             patch(
@@ -840,11 +840,11 @@ class TestErnieEncoding(unittest.TestCase):
 
         with (
             patch(
-                "fastdeploy.input.utils.video.read_video_decord",
+                "fastdeploy.input.utils.video.read_video_paddlecodec",
                 return_value=(mock_reader, mock_meta, mock_path),
             ),
             patch(
-                "fastdeploy.input.utils.video.read_frames_decord",
+                "fastdeploy.input.utils.video.read_frames_paddlecodec",
                 return_value=([mock_frame1, mock_frame2, mock_frame3], None, [0.0, 0.5, 1.0]),
             ),
             patch(
@@ -870,11 +870,11 @@ class TestErnieEncoding(unittest.TestCase):
 
         with (
             patch(
-                "fastdeploy.input.utils.video.read_video_decord",
+                "fastdeploy.input.utils.video.read_video_paddlecodec",
                 return_value=(mock_reader, mock_meta, mock_path),
             ),
             patch(
-                "fastdeploy.input.utils.video.read_frames_decord",
+                "fastdeploy.input.utils.video.read_frames_paddlecodec",
                 return_value=([MagicMock(), MagicMock()], None, [0.0, 0.5]),
             ) as mock_read_frames,
             patch(
@@ -886,7 +886,7 @@ class TestErnieEncoding(unittest.TestCase):
             frames, meta = enc.load_video("http://example.com/video.mp4", item)
 
         self.assertEqual(len(frames), 2)
-        # Verify read_frames_decord got the overridden target_frames
+        # Verify read_frames_paddlecodec got the overridden target_frames
         call_kwargs = mock_read_frames.call_args
         self.assertEqual(
             call_kwargs[1].get("target_frames", call_kwargs[0][3] if len(call_kwargs[0]) > 3 else None), 20
