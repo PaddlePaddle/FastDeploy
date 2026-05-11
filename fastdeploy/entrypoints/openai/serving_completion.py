@@ -369,7 +369,7 @@ class OpenAIServingCompletion:
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
-                            start_time = data["metrics"]["engine_recv_latest_token_time"]
+                            start_time = data["metrics"]["engine_recv_latest_token_time"] or 0
                             tracing.trace_report_span(
                                 tracing.TraceSpanName.POSTPROCESSING,
                                 request_id,
@@ -561,10 +561,12 @@ class OpenAIServingCompletion:
 
                     await self._call_process_response_dict(res, request, stream=True)
                     if inference_start_time[idx] == 0:
-                        arrival_time = res["metrics"]["first_token_time"]
-                        inference_start_time[idx] = res["metrics"]["inference_start_time"]
+                        arrival_time = res["metrics"]["first_token_time"] or 0
+                        inference_start_time[idx] = res["metrics"]["inference_start_time"] or 0
                     else:
-                        arrival_time = res["metrics"]["engine_recv_latest_token_time"] - inference_start_time[idx]
+                        arrival_time = (res["metrics"]["engine_recv_latest_token_time"] or 0) - inference_start_time[
+                            idx
+                        ]
 
                     await self._process_echo_logic(request, idx, res["outputs"])
                     output = res["outputs"]
@@ -655,7 +657,7 @@ class OpenAIServingCompletion:
                         trace_carrier = res.get("trace_carrier")
                         if trace_carrier:
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
-                            start_time = res["metrics"]["engine_recv_latest_token_time"]
+                            start_time = res["metrics"]["engine_recv_latest_token_time"] or 0
                             tracing.trace_report_span(
                                 tracing.TraceSpanName.POSTPROCESSING,
                                 request_id,
