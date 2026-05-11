@@ -279,6 +279,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
     # enable kv cache manager v1
     "ENABLE_V1_KVCACHE_MANAGER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_MANAGER", "0")),
+    # run dummy run for profile
+    "FD_RUN_DUMMY_FOR_PROFILE": lambda: int(os.getenv("FD_RUN_DUMMY_FOR_PROFILE", "0")),
 }
 
 

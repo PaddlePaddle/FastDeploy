@@ -1173,7 +1173,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
         # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
-        if int(os.getenv("RUN_DUMMY_FOR_PROFILE", "0")) == 0:
+        if envs.FD_RUN_DUMMY_FOR_PROFILE:
             if self.fd_config.parallel_config.enable_expert_parallel:
                 input_length = min(input_length, 32)
 
@@ -2031,7 +2031,7 @@ class GPUModelRunner(ModelRunnerBase):
             if self.enable_mm:
                 model_inputs["image_features"] = self.share_inputs["image_features"]
 
-            if int(os.getenv("RUN_DUMMY_FOR_PROFILE", "0")) == 1:
+            if envs.FD_RUN_DUMMY_FOR_PROFILE:
                 import datetime
 
                 paddle.distributed.barrier()
@@ -2066,7 +2066,7 @@ class GPUModelRunner(ModelRunnerBase):
                 )
                 self._dummy_sampler_run(hidden_states, model_output, batch_size, accept_all_drafts, reject_all_drafts)
 
-            if int(os.getenv("RUN_DUMMY_FOR_PROFILE", "0")) == 1:
+            if envs.FD_RUN_DUMMY_FOR_PROFILE:
                 paddle.distributed.barrier()
                 endtime = datetime.datetime.now()
                 duringtime = endtime - starttime
