@@ -26,24 +26,19 @@ class TestNgramMatchOp(unittest.TestCase):
 
     def test_basic_match(self):
         """
-        Case 1: input_ids overlaps with token_ids_all, and can extract draft tokens.
+        Case 1: prompt overlaps with pre_ids, and can extract draft tokens.
         """
         batch_size = 1
-        seq_len = 6
 
-        # Input IDs
-        input_ids = paddle.to_tensor([[10, 20, 30, 40, 50, 60]], dtype="int64")
-        # Length of input IDs
-        input_ids_len = paddle.to_tensor([6], dtype="int64")
-        # Previous IDs
-        token_ids_all = paddle.to_tensor([[10, 20, 30, 40, 0, 0]], dtype="int64")
-        prompt_lens = paddle.zeros([4, 1], dtype="int64")
-        # Current step index
-        step_idx = paddle.to_tensor([3], dtype="int64")
+        # Combined prompt and generated IDs: prompt=[10,20,30,40,50,60], generated=[10,20,30,40,0,0]
+        token_ids_all = paddle.to_tensor([[10, 20, 30, 40, 50, 60, 10, 20, 30, 40, 0, 0]], dtype="int64")
+        prompt_lens = paddle.to_tensor([[6]], dtype="int64")
+        # Current step index: 4 tokens generated (positions 0-3 valid)
+        step_idx = paddle.to_tensor([4], dtype="int64")
         # Number of draft tokens
         draft_token_num = paddle.to_tensor([3], dtype="int32")
         # Placeholder for draft tokens
-        draft_tokens = paddle.zeros([batch_size, seq_len], dtype="int64")
+        draft_tokens = paddle.zeros([batch_size, 6], dtype="int64")
 
         # Sequence lengths for this time step
         seq_lens_this_time = paddle.zeros([batch_size], dtype="int32")
@@ -55,8 +50,6 @@ class TestNgramMatchOp(unittest.TestCase):
         max_dec_len = paddle.to_tensor([10], dtype="int64")
 
         ngram_match(
-            input_ids,
-            input_ids_len,
             token_ids_all,
             prompt_lens,
             step_idx,
@@ -80,14 +73,13 @@ class TestNgramMatchOp(unittest.TestCase):
 
     def test_no_match(self):
         """
-        Case 2: token_ids_all does not match input_ids, should only keep the current token.
+        Case 2: pre_ids does not match prompt, should only keep the current token.
         """
         batch_size = 1
-        input_ids = paddle.to_tensor([[100, 200, 300, 400]], dtype="int64")
-        input_ids_len = paddle.to_tensor([4], dtype="int64")
-        token_ids_all = paddle.to_tensor([[1, 2, 3, 4]], dtype="int64")
-        prompt_lens = paddle.zeros([4, 1], dtype="int64")
-        step_idx = paddle.to_tensor([3], dtype="int64")
+        # Combined prompt and generated IDs: prompt=[100,200,300,400], generated=[1,2,3,4]
+        token_ids_all = paddle.to_tensor([[100, 200, 300, 400, 1, 2, 3, 4]], dtype="int64")
+        prompt_lens = paddle.to_tensor([4], dtype="int64")
+        step_idx = paddle.to_tensor([4], dtype="int64")
         draft_token_num = paddle.to_tensor([2], dtype="int32")
         draft_tokens = paddle.zeros([batch_size, 4], dtype="int64")
 
@@ -97,8 +89,6 @@ class TestNgramMatchOp(unittest.TestCase):
         max_dec_len = paddle.to_tensor([6], dtype="int64")
 
         ngram_match(
-            input_ids,
-            input_ids_len,
             token_ids_all,
             prompt_lens,
             step_idx,
