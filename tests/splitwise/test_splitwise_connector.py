@@ -25,13 +25,8 @@ import paddle
 import pytest
 import zmq
 
-if not hasattr(paddle, "compat"):
-
-    class _CompatStub:
-        def enable_torch_proxy(self, scope=None):
-            return None
-
-    paddle.compat = _CompatStub()
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda scope=None: None
 
 from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput

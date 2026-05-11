@@ -18,7 +18,7 @@ from typing import Any, Optional
 
 import paddle
 
-paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+paddle.enable_compat(scope={"flashinfer"})
 
 
 def _dtype_str(dtype) -> str:

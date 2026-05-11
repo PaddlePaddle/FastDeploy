@@ -33,7 +33,7 @@ from fastdeploy.model_executor.utils import (
 
 from .quant_base import QuantConfigBase, QuantMethodBase
 
-paddle.compat.enable_torch_proxy(scope={"flashinfer"})
+paddle.enable_compat(scope={"flashinfer"})
 
 from fastdeploy.platforms import current_platform
 

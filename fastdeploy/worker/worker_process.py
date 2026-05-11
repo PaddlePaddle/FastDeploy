@@ -1317,7 +1317,7 @@ def run_worker_proc() -> None:
 
     # Enable batch-invariant mode for deterministic inference.
     # This must happen AFTER worker creation but BEFORE model loading,
-    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # because enable_batch_invariant_mode() calls paddle.enable_compat()
     # which makes torch appear available via proxy. If called before worker creation,
     # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
     # transformers) will fail when transformers tries to query torch metadata.
