@@ -2123,8 +2123,8 @@ class FDConfig:
             self.structured_outputs_config is not None
             and self.structured_outputs_config.guided_decoding_backend != "off"
         ):
-            if current_platform.is_xpu() or self.speculative_config.method is not None:
-                logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
+            if self.speculative_config.method is not None:
+                logger.warning("Speculative Decoding currently does not support Guided decoding, set off.")
                 self.structured_outputs_config.guided_decoding_backend = "off"
             elif self.structured_outputs_config.guided_decoding_backend in ["auto", "xgrammar"]:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
@@ -2381,9 +2381,6 @@ class FDConfig:
                 assert (
                     self.speculative_config.method is None
                 ), "speculative decoding currently do not support guided_decoding"
-
-                # TODO: xpu support guided_decoding
-                assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
 
                 try:
                     import xgrammar  # noqa

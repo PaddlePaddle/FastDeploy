@@ -868,7 +868,7 @@ class RowParallelLinear(LinearBase):
             with_bias (bool): Whether to include bias or not. Defaults to False.
             skip_quant (bool): Whether to skip quantization or not. Defaults to False.
             enable_all_reduce_fusion (bool, optional): Whether to enable all-reduce fusion.
-                If None, it is determined by the config flag and prefix. Defaults to None.
+                If None, it is determined by the config flag. Defaults to None.
         """
         self.fd_config = fd_config
         if enable_all_reduce_fusion is None:

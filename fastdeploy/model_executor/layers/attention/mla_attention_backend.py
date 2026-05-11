@@ -42,6 +42,7 @@ from fastdeploy.model_executor.layers.attention.ops import (
 )
 from fastdeploy.platforms import current_platform
 
+compiled_mla = None
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
         decode_mla_write_cache,
@@ -96,22 +97,20 @@ def fused_read_cache_and_interleave_naive(
     batch is derived as ``k_len - new_len``.
     """
     bsz = cu_seqlens_k.shape[0] - 1
-    cu_total = cu_seqlens_k.tolist()
-    cu_new = cu_seqlens_q.tolist()
-    total_tokens = int(cu_total[bsz])
+    cu_seqlens_k = cu_seqlens_k.tolist()
+    cu_seqlens_q = cu_seqlens_q.tolist()
+    total_tokens = cu_seqlens_k[bsz]
 
     full_compressed_kv = paddle.empty([total_tokens, kv_lora_rank], dtype=new_compressed_kv.dtype)
     full_k_pe = paddle.empty([total_tokens, qk_rope_head_dim], dtype=new_k_pe.dtype)
-    if total_tokens == 0:
-        return full_compressed_kv, full_k_pe
 
     out_pos = 0
     for b in range(bsz):
-        k_len = int(cu_total[b + 1]) - int(cu_total[b])
-        nn = int(cu_new[b + 1]) - int(cu_new[b])
-        nc = k_len - nn
+        k_len = cu_seqlens_k[b + 1] - cu_seqlens_k[b]
+        q_len = cu_seqlens_q[b + 1] - cu_seqlens_q[b]
+        cache_token = k_len - q_len
         # cached tokens first
-        for t in range(nc):
+        for t in range(cache_token):
             block_idx = t // block_size
             block_offset = t % block_size
             physical_block_id = block_tables[b, block_idx].item()
@@ -120,8 +119,8 @@ def fused_read_cache_and_interleave_naive(
             full_k_pe[out_pos] = latent_vec[kv_lora_rank:]
             out_pos += 1
         # new tokens after cached
-        new_base = int(cu_new[b])
-        for t in range(nn):
+        new_base = cu_seqlens_q[b]
+        for t in range(q_len):
             full_compressed_kv[out_pos] = new_compressed_kv[new_base + t]
             full_k_pe[out_pos] = new_k_pe[new_base + t]
             out_pos += 1
@@ -236,7 +235,7 @@ def fused_read_cache_and_interleave_triton(
     subprocesses during ``profile_run``).
     """
     bsz = cu_seqlens_k.shape[0] - 1
-    total_tokens = int(cu_seqlens_k[-1])
+    total_tokens = cu_seqlens_k[-1].item()
 
     full_compressed_kv = paddle.empty([total_tokens, kv_lora_rank], dtype=new_compressed_kv.dtype)
     full_k_pe = paddle.empty([total_tokens, qk_rope_head_dim], dtype=new_k_pe.dtype)
@@ -524,10 +523,11 @@ class MLAAttentionBackend(AttentionBackend):
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
 
         self.useless_tensor = paddle.randn([1]).cast("int32")
+        prop = paddle.device.cuda.get_device_properties()
+        cc = prop.major * 10 + prop.minor
+        self.is_blackwell = cc >= 100
 
         if self.flash_attn_func is None:
-            prop = paddle.device.cuda.get_device_properties()
-            cc = prop.major * 10 + prop.minor
             is_current_sm_supported = cc >= 90
             is_paddle_supported = any(num >= 90 for num in paddle.version.cuda_archs())
             if is_current_sm_supported and is_paddle_supported:
@@ -813,6 +813,19 @@ class MLAAttentionBackend(AttentionBackend):
                 self.max_seq_len,
             )
 
+            if self.is_blackwell:
+                # TODO support FA4
+                fmha_out = MLAAttentionBackend.mha_baseline(
+                    q,
+                    k,
+                    v,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.cu_seqlens_k,
+                    causal=self.causal,
+                    **self.flash_attn_kwargs,
+                )
+                return fmha_out
+
             # FlashAttention for prefill
             fmha_out = self.flash_attn_func(
                 q,
@@ -920,19 +933,28 @@ class MLAAttentionBackend(AttentionBackend):
                 assert new_cache_shape[1] == 1
                 new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
 
-                decoder_res, _ = flash_mla.flash_mla_with_kvcache(
-                    decoder_q,
-                    # 外面的开源仓库的kv cache存储格式和FD的不同
-                    # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
-                    latent_cache.view(new_cache_shape),
-                    metadata.block_tables,
-                    cache_seqlens,
-                    512,  # t.dv,
-                    tile_scheduler_metadata,
-                    num_splits,
-                    softmax_scale=self.attn_softmax_scale,
-                    causal=True,
-                )
+                if self.is_blackwell:
+                    decoder_res = MLAAttentionBackend.mla_blackwell(
+                        decoder_q,
+                        latent_cache,
+                        metadata.block_tables,
+                        cache_seqlens,
+                        attn_softmax_scale=self.attn_softmax_scale,
+                    )
+                else:
+                    decoder_res, _ = flash_mla.flash_mla_with_kvcache(
+                        decoder_q,
+                        # 外面的开源仓库的kv cache存储格式和FD的不同
+                        # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
+                        latent_cache.view(new_cache_shape),
+                        metadata.block_tables,
+                        cache_seqlens,
+                        512,  # t.dv,
+                        tile_scheduler_metadata,
+                        num_splits,
+                        softmax_scale=self.attn_softmax_scale,
+                        causal=True,
+                    )
                 if self.heads_need_padding:
                     decoder_res = decoder_res[:, :, : self.num_heads, :].contiguous()
 
@@ -947,8 +969,120 @@ class MLAAttentionBackend(AttentionBackend):
                 return final_res
 
     @staticmethod
+    def mla_blackwell(decoder_q, latent_cache, block_table, cache_seqlens, attn_softmax_scale):
+
+        page_size = latent_cache.shape[2]
+        q_num_heads = decoder_q.shape[2]
+        assert decoder_q.shape[1:] == [1, q_num_heads, 576]
+        assert latent_cache.shape[1:] == [1, page_size, 576]
+
+        import cutlass
+        import cutlass.cute as cute
+        from cutlass.cute.runtime import from_dlpack
+
+        q_latent = decoder_q[:, :, :, :512]
+        q_rope = decoder_q[:, :, :, 512:]
+
+        q_latent = from_dlpack(q_latent.transpose([2, 3, 1, 0]), assumed_align=16).mark_layout_dynamic(leading_dim=1)
+
+        q_rope = from_dlpack(q_rope.transpose([2, 3, 1, 0]), assumed_align=16).mark_layout_dynamic(leading_dim=1)
+
+        c_latent = latent_cache[:, 0, :, :512]
+        c_rope = latent_cache[:, 0, :, 512:]
+        c_latent = from_dlpack(c_latent.transpose([1, 2, 0])).mark_layout_dynamic(leading_dim=1)
+        c_rope = from_dlpack(c_rope.transpose([1, 2, 0])).mark_layout_dynamic(leading_dim=1)
+
+        page_table = from_dlpack(block_table.transpose([1, 0]))
+
+        paddle_output = paddle.zeros_like(decoder_q[:, :, :, :512]).contiguous()
+        output = from_dlpack(paddle_output.transpose([2, 3, 1, 0])).mark_layout_dynamic(leading_dim=1)
+
+        bsz = decoder_q.shape[0]
+        q_len = decoder_q.shape[1]
+        num_heads = decoder_q.shape[2]
+        lse = paddle.empty([bsz, q_len, num_heads], dtype="float32")
+        lse = from_dlpack(lse.transpose([2, 1, 0]))
+
+        workspace = paddle.empty([1024, 1024, 1024])
+        workspace = from_dlpack(workspace)
+
+        split_kv = 1
+        if split_kv == 1:
+            workspace = None
+        cache_seqs = from_dlpack(cache_seqlens)
+
+        block_split_kvs = paddle.zeros([bsz], dtype="int32") + 1
+        block_split_kvs = from_dlpack(block_split_kvs)
+        softmax_scale = attn_softmax_scale
+        output_scale = 1.0
+
+        import sys
+
+        sys.path.insert(
+            0, "/root/paddlejob/workspace/env_run/output/zkk/cutlass/examples/python/CuTeDSL/blackwell/mla"
+        )
+        from mla_decode_fp16 import BlackwellMultiHeadLatentAttentionForwardFP16
+
+        mla = BlackwellMultiHeadLatentAttentionForwardFP16(
+            cutlass.Float32,
+            cutlass.Float32,
+            mma_qk_tiler_mn=(128, 128),
+            mma_pv_tiler_mn=(128, 256),
+            max_active_clusters=74,
+            page_size=page_size,
+            skip_correction_threshold=0.0,
+            is_persistent=True,
+            is_var_seq=True,
+            is_var_split_kv=True,
+        )
+        import cuda.bindings.driver as cuda
+
+        stream = cuda.CUstream(paddle.cuda.current_stream().stream_base.raw_stream)
+
+        global compiled_mla
+
+        if compiled_mla is None:
+            compiled_mla = cute.compile(
+                mla,
+                q_latent,
+                q_rope,
+                c_latent,
+                c_rope,
+                page_table,
+                output,
+                lse,
+                workspace,
+                split_kv,
+                cache_seqs,
+                block_split_kvs,
+                softmax_scale,
+                output_scale,
+                stream,
+                options="--opt-level 2",
+            )
+
+        compiled_mla(
+            q_latent,
+            q_rope,
+            c_latent,
+            c_rope,
+            page_table,
+            output,
+            lse,
+            workspace,
+            split_kv,
+            cache_seqs,
+            block_split_kvs,
+            softmax_scale,
+            output_scale,
+            stream,
+        )
+
+        return paddle_output
+
+    @staticmethod
     def flashmla_baseline(decoder_q, latent_cache, block_table, cache_seqlens, attn_softmax_scale):
-        page_size = 64
+        page_size = latent_cache.shape[2]
         q_num_heads = decoder_q.shape[2]
         assert decoder_q.shape[1:] == [1, q_num_heads, 576]
         assert latent_cache.shape[1:] == [1, page_size, 576]
@@ -973,5 +1107,53 @@ class MLAAttentionBackend(AttentionBackend):
             p = p * attn_softmax_scale
             p = paddle.nn.functional.softmax(p, -1)
             res_baseline[batch_id, 0, :, :] = paddle.matmul(p, extract_v).contiguous()
+        return res_baseline
+
+    @staticmethod
+    def mha_baseline(q, k, v, cu_seqlens_q, cu_seqlens_k, causal, softmax_scale):
+
+        assert causal, "Only support causal attention for now"
+        bsz = cu_seqlens_q.shape[0] - 1
+        assert bsz + 1 == cu_seqlens_k.shape[0]
+
+        q_token_num = q.shape[0]
+        q_num_heads = q.shape[1]
+        head_dim_q = q.shape[2]
+        head_dim_v = v.shape[2]
+
+        assert q_num_heads == k.shape[1]
+        assert head_dim_q == k.shape[2]
+        assert q_num_heads == v.shape[1]
+
+        res_baseline = paddle.zeros([q_token_num, q_num_heads, head_dim_v], dtype=q.dtype)
+
+        for batch_id in range(bsz):
+            start = cu_seqlens_q[batch_id].item()
+            end = cu_seqlens_q[batch_id + 1].item()
+            this_q = q[start:end, :, :].contiguous()
+            q_len = end - start
+
+            start_k = cu_seqlens_k[batch_id].item()
+            end_k = cu_seqlens_k[batch_id + 1].item()
+            this_k = k[start_k:end_k, :, :].contiguous()
+            this_v = v[start_k:end_k, :, :].contiguous()
+            kv_len = end_k - start_k
+
+            p = paddle.einsum("ilk, jlk->lij", this_q, this_k)
+            p = p * softmax_scale
+
+            import numpy as np
+
+            tmp_zeros = np.zeros((q_len, kv_len)) - 1
+            for i in range(q_len):
+                tmp_zeros[i][: i + 1] = 0
+            mask = tmp_zeros * 1000
+            mask = paddle.to_tensor(mask, dtype=q.dtype)
+            p = p + mask[None, :]
+            p = paddle.nn.functional.softmax(p, -1)
+
+            out = paddle.einsum("lij, jlk->ilk", p, this_v).reshape([q_len, q_num_heads, head_dim_v])
+
+            res_baseline[start:end, :, :] = out
 
         return res_baseline
