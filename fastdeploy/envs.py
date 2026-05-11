@@ -210,15 +210,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
-    # Whether to use phi FP8 quantization,if 1,use paddle default.
-    "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
-    # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,
-    # intended for training alignment. Defaults to 0 (disabled).
-    "FD_USE_PHI_MOE_TOPK": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_TOPK", "0"))),
-    # Whether to use phi MOE permute,if 1,use paddle op.
-    "FD_USE_PHI_MOE_PERMUTE": lambda: bool(int(os.getenv("FD_USE_PHI_MOE_PERMUTE", "0"))),
-    # Control class SiluAndMul to use swiglu or fusid_bias_act operator in the forward_cuda function
-    "FD_SiluAndMul_USE_PHI_SWIGLU": lambda: bool(int(os.getenv("FD_SiluAndMul_USE_PHI_SWIGLU", "0"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
     "FD_INIT_NEW_TOKEN_RATIO": lambda: float(os.getenv("FD_INIT_NEW_TOKEN_RATIO", "0.7")),
     "FD_MIN_NEW_TOKEN_RATIO": lambda: float(os.getenv("FD_MIN_NEW_TOKEN_RATIO", "0.1")),
