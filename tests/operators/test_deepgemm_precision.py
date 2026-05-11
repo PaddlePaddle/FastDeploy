@@ -20,14 +20,17 @@ import paddle
 
 paddle.enable_compat(scope={"deep_gemm"})
 
+
+skip_test = False
+
 paddle.set_default_dtype("bfloat16")
 prop = paddle.device.cuda.get_device_properties()
 if prop.major != 10:
-    exit(0)
+    skip_test = True
 try:
     import cutlass
 except ImportError:
-    exit(0)
+    skip_test = True
 
 
 import cutlass.cute as cute
@@ -368,4 +371,5 @@ class TestDeepDenseGemm(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    if not skip_test:
+        unittest.main()
