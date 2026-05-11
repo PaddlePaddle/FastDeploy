@@ -97,22 +97,20 @@ def fused_read_cache_and_interleave_naive(
     batch is derived as ``k_len - new_len``.
     """
     bsz = cu_seqlens_k.shape[0] - 1
-    cu_total = cu_seqlens_k.tolist()
-    cu_new = cu_seqlens_q.tolist()
-    total_tokens = int(cu_total[bsz])
+    cu_seqlens_k = cu_seqlens_k.tolist()
+    cu_seqlens_q = cu_seqlens_q.tolist()
+    total_tokens = cu_seqlens_k[bsz]
 
     full_compressed_kv = paddle.empty([total_tokens, kv_lora_rank], dtype=new_compressed_kv.dtype)
     full_k_pe = paddle.empty([total_tokens, qk_rope_head_dim], dtype=new_k_pe.dtype)
-    if total_tokens == 0:
-        return full_compressed_kv, full_k_pe
 
     out_pos = 0
     for b in range(bsz):
-        k_len = int(cu_total[b + 1]) - int(cu_total[b])
-        nn = int(cu_new[b + 1]) - int(cu_new[b])
-        nc = k_len - nn
+        k_len = cu_seqlens_k[b + 1] - cu_seqlens_k[b]
+        q_len = cu_seqlens_q[b + 1] - cu_seqlens_q[b]
+        cache_token = k_len - q_len
         # cached tokens first
-        for t in range(nc):
+        for t in range(cache_token):
             block_idx = t // block_size
             block_offset = t % block_size
             physical_block_id = block_tables[b, block_idx].item()
@@ -121,8 +119,8 @@ def fused_read_cache_and_interleave_naive(
             full_k_pe[out_pos] = latent_vec[kv_lora_rank:]
             out_pos += 1
         # new tokens after cached
-        new_base = int(cu_new[b])
-        for t in range(nn):
+        new_base = cu_seqlens_q[b]
+        for t in range(q_len):
             full_compressed_kv[out_pos] = new_compressed_kv[new_base + t]
             full_k_pe[out_pos] = new_k_pe[new_base + t]
             out_pos += 1
@@ -237,7 +235,7 @@ def fused_read_cache_and_interleave_triton(
     subprocesses during ``profile_run``).
     """
     bsz = cu_seqlens_k.shape[0] - 1
-    total_tokens = int(cu_seqlens_k[-1])
+    total_tokens = cu_seqlens_k[-1].item()
 
     full_compressed_kv = paddle.empty([total_tokens, kv_lora_rank], dtype=new_compressed_kv.dtype)
     full_k_pe = paddle.empty([total_tokens, qk_rope_head_dim], dtype=new_k_pe.dtype)
