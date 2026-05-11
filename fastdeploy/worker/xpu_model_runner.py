@@ -1288,21 +1288,17 @@ class XPUModelRunner(ModelRunnerBase):
             num_running_requests: batch_size
             intermediate_tensors:
         """
-        execute_model_start = time.time()
         # 0. set debug level
         # self._set_debug_level(0x1, model_forward_batch, is_dummy_run)
         with kv_signal_sender_context_manager(self.pd_disaggregation_mode) as sender:
 
             self.share_inputs["kv_signal_sender"] = sender
             # 1. Prepare inputs of model and decoder.
-            prepare_inputs_start = time.time()
             self._prepare_inputs(is_dummy_run=is_dummy_run)
             if is_dummy_run:
                 self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             # 2. Padding inputs for cuda grph
-            padding_start = time.time()
             self.padding_cudagraph_inputs()
-            padding_time = time.time() - padding_start
 
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
             # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
@@ -1318,19 +1314,14 @@ class XPUModelRunner(ModelRunnerBase):
             if self.enable_mm:
                 model_inputs["image_features"] = self.share_inputs["image_features"]
             # 3. Execute model
-            model_forward_start = time.time()
             model_output = self.model(
                 model_inputs,
                 forward_meta=self.forward_meta,
             )
-            model_forward_time = time.time() - model_forward_start
             if self.use_cudagraph:
                 model_output = model_output[: self.real_token_num]
-            xpu_process_start = time.time()
             hidden_states = xpu_process_output(model_output, self.forward_meta, self.share_inputs)
-            xpu_process_time = time.time() - xpu_process_start
             # 4. Compute logits, Sample
-            logits_start = time.time()
             logits = self.model.compute_logits(hidden_states)
 
             # Guided decoding: pre_process (compute bitmask before sampling)
@@ -1420,7 +1411,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self.speculative_config.method == SpecMethod.MTP and self.scheduler_config.splitwise_role == "prefill"
             )
 
-            post_process_start = time.time()
             if self.speculative_decoding:
                 # base model post process
                 xpu_post_process_speculate(
@@ -1446,7 +1436,6 @@ class XPUModelRunner(ModelRunnerBase):
                     think_end_id=self.model_config.think_end_id,
                     splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 )
-            post_process_time = time.time() - post_process_start
 
             # 6. Draft model propose
             if self.speculative_decoding and self.proposer is not None:

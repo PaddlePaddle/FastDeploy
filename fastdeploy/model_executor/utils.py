@@ -15,9 +15,9 @@
 """
 
 import fnmatch
-import math
 import importlib
 import importlib.util
+import math
 import os
 import re
 from collections.abc import Mapping

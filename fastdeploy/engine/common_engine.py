@@ -929,11 +929,6 @@ class EngineService:
         tracing.trace_set_thread_info("Scheduler Task to Work")
         get_request_pool = ThreadPoolExecutor(max_workers=1)
         is_fetching = False
-        schedule_loop_start = time.time()
-        schedule_loop_count = 0
-        fetch_request_total_time = 0
-        schedule_total_time = 0
-        insert_tasks_total_time = 0
 
         def _fetch_request():
             try:
@@ -951,7 +946,6 @@ class EngineService:
                     max_num_batched_tokens = self.cfg.model_config.max_model_len
 
                 available_blocks = self.cfg.cache_config.max_block_num_per_seq
-                get_requests_start = time.time()
                 tasks = self.scheduler.get_requests(
                     available_blocks=available_blocks,
                     block_size=self.cfg.cache_config.block_size,
@@ -959,7 +953,6 @@ class EngineService:
                     max_num_batched_tokens=max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
-                get_requests_time = time.time() - get_requests_start
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
@@ -981,7 +974,6 @@ class EngineService:
                     )
 
                 if self.cfg.scheduler_config.splitwise_role == "prefill":
-                    preallocate_start = time.time()
                     for task in tasks:
                         # start async preprocess
                         self.resource_manager.apply_async_preprocess(task)
@@ -1061,19 +1053,10 @@ class EngineService:
                         # release resource in P
                         self.resource_manager.pre_recycle_resource(tmp_task.request_id)
 
-                    preallocate_time = time.time() - preallocate_start
-                    self.llm_logger.info(
-                        f"[SCHEDULER_V1_PREFILL] num_tasks={len(tasks)}, "
-                        f"preallocate_time={preallocate_time*1000:.2f}ms, "
-                        f"continuous_request_decode={envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES}"
-                    )
-
                     # to send cache info to cache messager
                     if tasks:
-                        send_cache_start = time.time()
                         need_check_req_ids = [task.request_id for task in tasks]
                         self.split_connector.send_cache_info_to_messager(tasks, 0)
-                        # send_cache_time = time.time() - send_cache_start
                         # ensure cache tasks has sent to cache_messager
                         need_check_req_ids = [task.request_id for task in tasks]
                         finished_ids, delete_tasks_list = [], []
@@ -1110,13 +1093,6 @@ class EngineService:
                             # release resource in P
                             self.resource_manager.pre_recycle_resource(tmp_task.request_id)
 
-                        send_cache_total_time = time.time() - send_cache_start
-                        self.llm_logger.info(
-                            f"[SCHEDULER_V1_CACHE] num_tasks={len(tasks)}, "
-                            f"send_cache_time={send_cache_total_time*1000:.2f}ms, "
-                            f"num_finished={len(delete_tasks_list)}"
-                        )
-
                 # Fetch requests and add them to the scheduling queue
                 if tasks:
                     for task in tasks:
@@ -1133,15 +1109,6 @@ class EngineService:
                         for task in tasks:
                             self.resource_manager.add_request(task)
 
-                # Log fetch request metrics
-                nonlocal fetch_request_total_time
-                fetch_request_total_time = get_requests_time
-                self.llm_logger.info(
-                    f"[SCHEDULER_V1_FETCH] num_tasks={len(tasks) if tasks else 0}, "
-                    f"get_requests_time={get_requests_time*1000:.2f}ms, "
-                    f"available_batch={self.resource_manager.available_batch()}, "
-                    f"available_blocks={self.resource_manager.available_block_num()}"
-                )
                 is_fetching = False
             except Exception as e:
                 self.llm_logger.error(f"fetching request error {e} {str(traceback.format_exc())}")
@@ -1245,30 +1212,6 @@ class EngineService:
                         self.engine_worker_queue.put_tasks(
                             (batch_request, self.resource_manager.real_bsz)
                         )  # Empty (as idle tasks for ep)
-                insert_tasks_time = time.time() - insert_tasks_start
-
-                # Log scheduler metrics periodically
-                schedule_loop_count += 1
-                if schedule_loop_count % 100 == 0:
-                    elapsed = time.time() - schedule_loop_start
-                    avg_loop_time = elapsed / schedule_loop_count
-                    avg_schedule_time = schedule_total_time / schedule_loop_count if schedule_loop_count > 0 else 0
-                    avg_insert_tasks_time = (
-                        insert_tasks_total_time / schedule_loop_count if schedule_loop_count > 0 else 0
-                    )
-                    self.llm_logger.info(
-                        f"[SCHEDULER_V1_METRICS] Loop count: {schedule_loop_count}, "
-                        f"avg loop time: {avg_loop_time*1000:.2f}ms, "
-                        f"avg schedule time: {avg_schedule_time*1000:.2f}ms, "
-                        f"last schedule time: {schedule_time*1000:.2f}ms, "
-                        f"avg insert_tasks time: {avg_insert_tasks_time*1000:.2f}ms, "
-                        f"last insert_tasks time: {insert_tasks_time*1000:.2f}ms, "
-                        f"avg fetch_request time: {(fetch_request_total_time/schedule_loop_count)*1000 if schedule_loop_count > 0 else 0:.2f}ms"
-                    )
-
-                # Accumulate time statistics
-                schedule_total_time += schedule_time
-                insert_tasks_total_time += insert_tasks_time
 
                 # 4. Response error tasks
                 if error_tasks:

@@ -472,12 +472,7 @@ class PaddleDisWorkerProc:
 
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
-        worker_loop_start = time.time()
-        worker_loop_count = 0
-        worker_get_tasks_total_time = 0
-        worker_execute_model_total_time = 0
         while True:
-            # loop_start_time = time.time()
             if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
@@ -557,10 +552,7 @@ class PaddleDisWorkerProc:
             if self._get_exist_task_flag():
                 logger.debug(f"Rank: {self.local_rank} Detected new requests.")
                 self.engine_forward_signal.value[0] = 1
-                get_tasks_start = time.time()
                 tasks, read_finish = self.task_queue.get_tasks()
-                get_tasks_time = time.time() - get_tasks_start
-                worker_get_tasks_total_time += get_tasks_time
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
                     self._update_exist_task_flag(False)
@@ -646,21 +638,6 @@ class PaddleDisWorkerProc:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
-            # Log worker loop metrics periodically
-            worker_loop_count += 1
-            if worker_loop_count % 100 == 0:
-                elapsed = time.time() - worker_loop_start
-                avg_loop_time = elapsed / worker_loop_count
-                avg_get_tasks_time = worker_get_tasks_total_time / worker_loop_count
-                avg_execute_model_time = worker_execute_model_total_time / worker_loop_count
-                logger.info(
-                    f"[WORKER_METRICS] Rank: {self.local_rank}, "
-                    f"Loop count: {worker_loop_count}, "
-                    f"avg loop time: {avg_loop_time*1000:.2f}ms, "
-                    f"avg get_tasks time: {avg_get_tasks_time*1000:.2f}ms, "
-                    f"avg execute_model time: {avg_execute_model_time*1000:.2f}ms, "
-                    f"last execute_model time: {execute_model_time*1000:.2f}ms"
-                )
             # run eplb
             self._run_eplb(tp_rank)
             self.engine_forward_signal.value[0] = 0
