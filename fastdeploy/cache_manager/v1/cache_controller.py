@@ -351,6 +351,12 @@ class CacheController(KVCacheBase):
         )
         cache_dtype = self.model_config.dtype
 
+        # NOTE: set_data_ipc pins tensor storage so paddle allocator cannot
+        # reuse/migrate it. Without pinning, CUDAGraph capture records a
+        # data_ptr that allocator may later mark reusable, corrupting replay.
+        # Align with V0 path (gpu_model_runner.initialize_kv_cache).
+        from fastdeploy.model_executor.ops.gpu import set_data_ipc
+
         logger.info(f"Initializing MLA kv cache: num_layers={self._num_layers}, " f"key_shape={key_cache_shape}")
         cache_kvs_list = []
 
@@ -358,6 +364,7 @@ class CacheController(KVCacheBase):
             cache_names = self._get_cache_names(i)
 
             key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_dtype)
+            set_data_ipc(key_cache, cache_names["key"])
             self.cache_kvs_map[cache_names["key"]] = key_cache
             cache_kvs_list.append(key_cache)
 
@@ -390,6 +397,12 @@ class CacheController(KVCacheBase):
         )
         cache_dtype = "uint8"
 
+        # NOTE: set_data_ipc pins tensor storage so paddle allocator cannot
+        # reuse/migrate it. Without pinning, CUDAGraph capture records a
+        # data_ptr that allocator may later mark reusable, corrupting replay.
+        # Align with V0 path (gpu_model_runner.initialize_kv_cache).
+        from fastdeploy.model_executor.ops.gpu import set_data_ipc
+
         logger.info(
             f"Initializing DSA kv cache: num_layers={self._num_layers}, "
             f"key_shape={key_cache_shape}, indexer_shape={indexer_cache_shape}"
@@ -400,9 +413,11 @@ class CacheController(KVCacheBase):
             cache_names = self._get_cache_names(i)
 
             key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_dtype)
+            set_data_ipc(key_cache, cache_names["key"])
             self.cache_kvs_map[cache_names["key"]] = key_cache
 
             indexer_cache = paddle.full(shape=indexer_cache_shape, fill_value=0, dtype=cache_dtype)
+            set_data_ipc(indexer_cache, cache_names["indexer"])
             self.cache_kvs_map[cache_names["indexer"]] = indexer_cache
 
             cache_kvs_list.extend([key_cache, indexer_cache])
