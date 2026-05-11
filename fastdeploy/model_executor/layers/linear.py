@@ -1010,6 +1010,23 @@ class KVBatchLinear(nn.Layer):
         # Override weight keys to use the combined kv_b_proj
         self.weight_key = f"{prefix}.weight"  # e.g., "kv_b_proj.weight"
 
+        if self.fd_config.load_config.load_choices == "dummy":
+            # Create K projection weight
+            self.k_b_proj_weight = self.create_parameter(
+                shape=[self.num_heads_per_partition, qk_nope_head_dim, kv_lora_rank],
+                dtype=self.weight_dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            # Create V projection weight
+            self.v_b_proj_weight = self.create_parameter(
+                shape=[self.num_heads_per_partition, kv_lora_rank, v_head_dim],
+                dtype=self.weight_dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
     def process_weights_after_loading(self):
         if self.fd_config.load_config.dynamic_load_weight:
             return
