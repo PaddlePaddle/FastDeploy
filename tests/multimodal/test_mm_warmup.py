@@ -16,18 +16,17 @@
   - ErnieMM45DataProcessor.prepare_mm_split_fuse_fields
   - Engine._build_mm_warmup_data
 """
-import queue
 import sys
 import types
 import unittest
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 import numpy as np
-
 
 # ---------------------------------------------------------------------------
 # 构造最小 Mock 模块，避免 import 重型依赖
 # ---------------------------------------------------------------------------
+
 
 def _make_paddle_mock():
     """返回一个能满足 prepare_mm_split_fuse_fields 中所有调用的 paddle mock。"""
@@ -35,6 +34,7 @@ def _make_paddle_mock():
 
     class _T:
         """统一的轻量 Tensor stub，支持 cast/cpu/cumsum/concat/squeeze/repeat_interleave/numpy/tolist。"""
+
         def __init__(self, data):
             self._data = np.array(data, dtype=np.float32)
 
@@ -100,6 +100,7 @@ def _setup_sys_mocks():
 
     # server.engine.config
     config_mod = types.ModuleType("server.engine.config")
+
     class VitMode:
         VIT_INCOMPLETE = MagicMock(name="VIT_INCOMPLETE")
         VIT_INCOMPLETE.name = "VIT_INCOMPLETE"
@@ -172,17 +173,19 @@ def _setup_sys_mocks():
 # 构造一个轻量的 ErnieMM45DataProcessor stub，仅含被测方法
 # ---------------------------------------------------------------------------
 
+
 def _make_processor_stub(env_cfg, get_mm_split_fuse_fn):
     """
     返回一个只有 prepare_mm_split_fuse_fields 的最小 processor 实例。
     image_preprocess、patch_size、temporal_patch_size 全部手动注入。
     """
+
     class _ImagePreprocess:
-        rescale_factor = 0.00392156862745098   # 1/255
+        rescale_factor = 0.00392156862745098  # 1/255
         image_mean = [0.485, 0.456, 0.406]
-        image_std  = [0.229, 0.224, 0.225]
+        image_std = [0.229, 0.224, 0.225]
         image_mean_tensor = np.array(image_mean, dtype="float32").reshape(1, 3, 1, 1)
-        image_std_tensor  = np.array(image_std,  dtype="float32").reshape(1, 3, 1, 1)
+        image_std_tensor = np.array(image_std, dtype="float32").reshape(1, 3, 1, 1)
 
     class _Processor:
         patch_size = 14
@@ -192,17 +195,18 @@ def _make_processor_stub(env_cfg, get_mm_split_fuse_fn):
         def prepare_mm_split_fuse_fields(self, data):
             # 直接从 ernie_45mm_processor 中复制，但注入 mock 的 get_mm_split_fuse
             import paddle as _paddle
-            input_ids = _paddle.to_tensor(data["input_ids"]).cast('int64')
+
+            input_ids = _paddle.to_tensor(data["input_ids"]).cast("int64")
             is_image_token = _paddle.where(input_ids == env_cfg.image_patch_id, 1, 0)
             image_token_sum = _paddle.cumsum(is_image_token)
-            image_token_sum = _paddle.concat([_paddle.zeros([1], dtype='int64'), image_token_sum])
-            grid_thw = _paddle.to_tensor(data.get("grid_thw_list", []), dtype='int64')
+            image_token_sum = _paddle.concat([_paddle.zeros([1], dtype="int64"), image_token_sum])
+            grid_thw = _paddle.to_tensor(data.get("grid_thw_list", []), dtype="int64")
             image_type_ids_tensor = _paddle.to_tensor(list(data["image_type_ids"])).cast("int32")
 
             image_chunk_selections_task, split_fuse_cur_seq_lens_task = get_mm_split_fuse_fn(
                 input_ids.cpu(),
                 image_type_ids_tensor.cpu(),
-                image_token_sum.cast('int32').cpu(),
+                image_token_sum.cast("int32").cpu(),
                 grid_thw.cpu(),
                 env_cfg.image_patch_id,
                 len(data.get("grid_thw_list", [])),
@@ -210,7 +214,7 @@ def _make_processor_stub(env_cfg, get_mm_split_fuse_fn):
                 len(data["input_ids"]),
                 env_cfg.split_fuse_size_image,
                 env_cfg.split_fuse_size,
-                2048
+                2048,
             )
             data["image_chunk_selections_task"] = image_chunk_selections_task.numpy().tolist()
             data["split_fuse_cur_seq_lens_task"] = split_fuse_cur_seq_lens_task.numpy().tolist()
@@ -218,14 +222,20 @@ def _make_processor_stub(env_cfg, get_mm_split_fuse_fn):
 
             data["rescale_factor"] = self.image_preprocess.rescale_factor
             if env_cfg.multi_modal_model_v45_turbo:
-                data["image_mean_tensor"] = _paddle.to_tensor(self.image_preprocess.image_mean_tensor) \
-                                            .squeeze([-2, -1]) \
-                                            .repeat_interleave(self.patch_size**2*self.temporal_patch_size, -1) \
-                                            .numpy().tolist()
-                data["image_std_tensor"] = _paddle.to_tensor(self.image_preprocess.image_std_tensor) \
-                                           .squeeze([-2, -1]) \
-                                           .repeat_interleave(self.patch_size**2*self.temporal_patch_size, -1) \
-                                           .numpy().tolist()
+                data["image_mean_tensor"] = (
+                    _paddle.to_tensor(self.image_preprocess.image_mean_tensor)
+                    .squeeze([-2, -1])
+                    .repeat_interleave(self.patch_size**2 * self.temporal_patch_size, -1)
+                    .numpy()
+                    .tolist()
+                )
+                data["image_std_tensor"] = (
+                    _paddle.to_tensor(self.image_preprocess.image_std_tensor)
+                    .squeeze([-2, -1])
+                    .repeat_interleave(self.patch_size**2 * self.temporal_patch_size, -1)
+                    .numpy()
+                    .tolist()
+                )
             else:
                 data["image_mean_tensor"] = self.image_preprocess.image_mean_tensor.numpy().tolist()
                 data["image_std_tensor"] = self.image_preprocess.image_std_tensor.numpy().tolist()
@@ -238,6 +248,7 @@ def _make_processor_stub(env_cfg, get_mm_split_fuse_fn):
 # ---------------------------------------------------------------------------
 # 辅助：构造合成 warmup data（模仿 _build_mm_warmup_data 的前半部分）
 # ---------------------------------------------------------------------------
+
 
 def _build_synthetic_warmup_data(image_patch_id):
     T, H, W = 1, 4, 4
@@ -259,20 +270,29 @@ def _build_synthetic_warmup_data(image_patch_id):
     for k in range(len(suffix_ids)):
         position_ids.append([next_pos + k] * 3)
 
-    return {
-        "input_ids": input_ids,
-        "grid_thw": [[T, H, W]],
-        "grid_thw_list": [[T, H, W]],
-        "image_type_ids": [0],
-        "position_ids": position_ids,
-        "image_dict": {},
-        "media_info": {},
-    }, T, H, W, H_eff, W_eff, num_img_tokens
+    return (
+        {
+            "input_ids": input_ids,
+            "grid_thw": [[T, H, W]],
+            "grid_thw_list": [[T, H, W]],
+            "image_type_ids": [0],
+            "position_ids": position_ids,
+            "image_dict": {},
+            "media_info": {},
+        },
+        T,
+        H,
+        W,
+        H_eff,
+        W_eff,
+        num_img_tokens,
+    )
 
 
 # ---------------------------------------------------------------------------
 # 测试类
 # ---------------------------------------------------------------------------
+
 
 class TestPrepareMmSplitFuseFields(unittest.TestCase):
     """单元测试 prepare_mm_split_fuse_fields。"""
@@ -296,8 +316,9 @@ class TestPrepareMmSplitFuseFields(unittest.TestCase):
             return self._chunk_sel_ret, self._seq_lens_ret
 
         self.processor = _make_processor_stub(self.env_cfg, fake_get_mm_split_fuse)
-        self.data, self.T, self.H, self.W, self.H_eff, self.W_eff, self.num_img_tokens = \
-            _build_synthetic_warmup_data(self.image_patch_id)
+        self.data, self.T, self.H, self.W, self.H_eff, self.W_eff, self.num_img_tokens = _build_synthetic_warmup_data(
+            self.image_patch_id
+        )
 
     def test_split_fuse_fields_populated(self):
         """调用后 image_chunk_selections_task / split_fuse_cur_seq_lens_task 必须存在且为列表。"""
@@ -333,9 +354,9 @@ class TestPrepareMmSplitFuseFields(unittest.TestCase):
         v45_turbo: mean/std 经 repeat_interleave(patch_size^2 * temporal_patch_size)
         展开后长度应为 3 * patch_size^2 * temporal_patch_size。
         """
-        patch_size = self.processor.patch_size           # 14
-        temporal = self.processor.temporal_patch_size    # 1
-        expected_len = 3 * patch_size ** 2 * temporal   # 3*196*1 = 588
+        patch_size = self.processor.patch_size  # 14
+        temporal = self.processor.temporal_patch_size  # 1
+        expected_len = 3 * patch_size**2 * temporal  # 3*196*1 = 588
         result = self.processor.prepare_mm_split_fuse_fields(self.data)
         self.assertEqual(len(result["image_mean_tensor"]), expected_len)
         self.assertEqual(len(result["image_std_tensor"]), expected_len)
@@ -431,7 +452,7 @@ class TestBuildMmWarmupData(unittest.TestCase):
         data, T, H, W, H_eff, W_eff, num_img_tokens = self._run_build()
         self.assertEqual(len(data["input_ids"]), 3 + num_img_tokens + 3)
         # image patch id 在中间
-        img_slice = data["input_ids"][3:3+num_img_tokens]
+        img_slice = data["input_ids"][3 : 3 + num_img_tokens]
         self.assertTrue(all(x == self.image_patch_id for x in img_slice))
 
     def test_position_ids_length(self):
@@ -443,7 +464,7 @@ class TestBuildMmWarmupData(unittest.TestCase):
         """文本 token 的 position_ids 三个维度相等（1D 编码）。"""
         data, T, H, W, H_eff, W_eff, num_img_tokens = self._run_build()
         prefix_pos = data["position_ids"][:3]
-        suffix_pos = data["position_ids"][3+num_img_tokens:]
+        suffix_pos = data["position_ids"][3 + num_img_tokens :]
         for pos in prefix_pos + suffix_pos:
             self.assertEqual(pos[0], pos[1], msg=f"text token pos not 1D: {pos}")
             self.assertEqual(pos[1], pos[2], msg=f"text token pos not 1D: {pos}")
@@ -455,14 +476,15 @@ class TestBuildMmWarmupData(unittest.TestCase):
         - 覆盖 H_eff × W_eff 不同的 (h, w) 坐标
         """
         data, T, H, W, H_eff, W_eff, num_img_tokens = self._run_build()
-        img_pos = data["position_ids"][3:3+num_img_tokens]
+        img_pos = data["position_ids"][3 : 3 + num_img_tokens]
         t_val = img_pos[0][0]
         for pos in img_pos:
             self.assertEqual(pos[0], t_val, msg=f"image t dim varies: {pos}")
 
         hw_pairs = {(pos[1], pos[2]) for pos in img_pos}
-        self.assertEqual(len(hw_pairs), H_eff * W_eff,
-                         msg=f"expected {H_eff*W_eff} unique (h,w) pairs, got {hw_pairs}")
+        self.assertEqual(
+            len(hw_pairs), H_eff * W_eff, msg=f"expected {H_eff*W_eff} unique (h,w) pairs, got {hw_pairs}"
+        )
 
     def test_grid_thw_and_grid_thw_list(self):
         """grid_thw 和 grid_thw_list 内容一致。"""
@@ -478,8 +500,13 @@ class TestBuildMmWarmupData(unittest.TestCase):
     def test_split_fuse_fields_not_none(self):
         """prepare_mm_split_fuse_fields 填充的字段不能为 None。"""
         data, *_ = self._run_build()
-        for key in ["image_chunk_selections_task", "split_fuse_cur_seq_lens_task",
-                    "rescale_factor", "image_mean_tensor", "image_std_tensor"]:
+        for key in [
+            "image_chunk_selections_task",
+            "split_fuse_cur_seq_lens_task",
+            "rescale_factor",
+            "image_mean_tensor",
+            "image_std_tensor",
+        ]:
             self.assertIsNotNone(data[key], msg=f"{key} should not be None")
 
     def test_vit_mode_and_use_vpd_split(self):
