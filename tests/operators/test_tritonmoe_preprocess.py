@@ -98,35 +98,8 @@ def _verify(topk_ids: paddle.Tensor, block_size: int, num_experts: int, label: s
     tag = f"[{label}] " if label else ""
     sep = "=" * 70
 
-    # # ------------------------------------------------------------------ #
-    # # Print inputs                                                        #
-    # # ------------------------------------------------------------------ #
-    # topk_ids = topk_ids.cuda()
-    # print(f"\n{sep}")
-    # print(f"{tag}INPUT")
-    # print(f"  shape        = {list(topk_ids.shape)}  dtype={topk_ids.dtype}")
-    # print(f"  block_size   = {block_size}")
-    # print(f"  num_experts  = {num_experts}")
-    # print(f"  {_fmt_tensor(topk_ids.flatten(), 'topk_ids_flat')}")
-
-    # # ------------------------------------------------------------------ #
-    # # Run kernel                                                          #
-    # # ------------------------------------------------------------------ #
     sorted_token_ids, expert_ids, num_tokens_post_pad = tritonmoe_preprocess(topk_ids, num_experts, block_size)
-    # print(f"  num_tokens_post_pad shape={num_tokens_post_pad.shape}, dtype={num_tokens_post_pad.dtype}")
 
-    # # ------------------------------------------------------------------ #
-    # # Print raw kernel outputs                                            #
-    # # ------------------------------------------------------------------ #
-    # print(f"\n{tag}KERNEL OUTPUT")
-    # print(f"  num_tokens_post_pad = {int(num_tokens_post_pad.item())}")
-    # print(f"  {_fmt_tensor(expert_ids, 'expert_ids')}")
-    # print(f"  {_fmt_tensor(sorted_token_ids, 'sorted_token_ids')}")
-
-    # ------------------------------------------------------------------ #
-    # Build golden references                                             #
-    # ------------------------------------------------------------------ #
-    # 固定在 CPU 上做所有 golden 计算，避免与 .cpu() 的 kernel 输出发生 device mismatch
     topk_ids_flat = topk_ids.flatten().cast("int64").cpu()
     num_tokens = topk_ids_flat.numel()
 
@@ -140,22 +113,6 @@ def _verify(topk_ids: paddle.Tensor, block_size: int, num_experts: int, label: s
         (aligned // block_size).cast("int32"),
     )
 
-    # expected_num_tokens_post_pad = cumsum[-1:]
-    # print(f"\n{tag}GOLDEN REFERENCE")
-    # print(f"  counts (per expert)  = {counts.tolist()}")
-    # print(f"  aligned (per expert) = {aligned.tolist()}")
-    # print(f"  cumsum (per expert)  = {cumsum.tolist()}")
-    # print(f"  expected num_tokens_post_pad = {int(expected_num_tokens_post_pad.item())}")
-    # print(f"  {_fmt_tensor(expected_expert_ids, 'expected_expert_ids')}")
-
-    # ------------------------------------------------------------------ #
-    # Check 1: num_tokens_post_padded equals cumsum[-1]                  #
-    # ------------------------------------------------------------------ #
-    # got_ntp = int(num_tokens_post_pad.item())
-    # want_ntp = int(expected_num_tokens_post_pad.item())
-    # match1 = got_ntp == want_ntp
-    # print(f"\n{tag}CHECK 1 – num_tokens_post_pad")
-    # print(f"  golden = {want_ntp}  |  kernel = {got_ntp}  |  {'PASS' if match1 else 'FAIL'}")
     np.testing.assert_array_equal(
         num_tokens_post_pad.cpu().numpy(),
         cumsum[-1:].cpu().numpy(),
@@ -166,11 +123,6 @@ def _verify(topk_ids: paddle.Tensor, block_size: int, num_experts: int, label: s
     # ------------------------------------------------------------------ #
     got_eids = expert_ids[:num_blocks].cpu()
     want_eids = expected_expert_ids.cpu()
-    # match2 = paddle.equal_all(got_eids, want_eids).item()
-    # print(f"\n{tag}CHECK 2 – expert_ids  (first {num_blocks} blocks)")
-    # print(f"  golden = {_fmt_tensor(want_eids, '')}")
-    # print(f"  kernel = {_fmt_tensor(got_eids, '')}")
-    # print(f"  {'PASS' if match2 else 'FAIL'}")
     np.testing.assert_array_equal(
         got_eids.numpy(),
         want_eids.numpy(),
@@ -179,7 +131,7 @@ def _verify(topk_ids: paddle.Tensor, block_size: int, num_experts: int, label: s
     # ------------------------------------------------------------------ #
     # Check 3: sorted_token_ids – routing correctness per expert         #
     # ------------------------------------------------------------------ #
-    # print(f"\n{tag}CHECK 3 – sorted_token_ids (per-expert routing)")
+
     start = 0
     for expert_id in range(num_experts):
         end = int(cumsum[expert_id].item())
@@ -190,28 +142,6 @@ def _verify(topk_ids: paddle.Tensor, block_size: int, num_experts: int, label: s
         want_count = int(counts[expert_id].item())
         got_count = valid_tokens.numel()
         count_ok = got_count == want_count
-
-        # if counts[expert_id] > 0 or not count_ok:
-        #     反查 topk_ids 验证路由是否正确
-        #     if counts[expert_id] > 0:
-        #         routed_experts = topk_ids_flat[valid_tokens.cast("int64")].tolist()
-        #         expected_route = [expert_id] * want_count
-        #         route_ok = routed_experts == expected_route
-        #     else:
-        #         route_ok = True
-        #         routed_experts = []
-        #         expected_route = []
-
-        #     print(
-        #         f"  expert {expert_id:>3d} | slot [{start:>6d}, {end:>6d})"
-        #         f" | want_count={want_count:>4d} got_count={got_count:>4d} {'OK' if count_ok else 'FAIL'}"
-        #         f" | routing {'OK' if route_ok else 'FAIL'}"
-        #     )
-        #     if not count_ok or not route_ok:
-        #         print(f"    valid_tokens    = {valid_tokens.tolist()}")
-        #         print(f"    routed_experts  = {routed_experts}")
-        #         print(f"    expected_route  = {expected_route}")
-        #         print(f"    padding_tokens  = {padding_tokens.tolist()}")
 
         assert count_ok, f"expert {expert_id}: expected {want_count} valid tokens, got {got_count}"
         if counts[expert_id] > 0:
@@ -225,11 +155,7 @@ def _verify(topk_ids: paddle.Tensor, block_size: int, num_experts: int, label: s
     if valid_length < sorted_token_ids.numel():
         padding_region = sorted_token_ids[valid_length:].cpu()
         sentinel_ok = paddle.all(padding_region >= num_tokens).item()
-        # print(
-        #     f"  padding sentinel check [valid_length={valid_length}..):"
-        #     f" {'PASS' if sentinel_ok else 'FAIL'}"
-        #     f" (numel={padding_region.numel()}, all>={num_tokens})"
-        # )
+
         assert sentinel_ok, "padding slots beyond valid_length contain non-sentinel values"
 
     print(f"\n{tag}ALL CHECKS PASSED")
