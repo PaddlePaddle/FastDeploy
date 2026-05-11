@@ -272,10 +272,10 @@ def tail_file(path, n=50):
 def dump_server_logs(tail_lines=50):
     """打印server日志"""
     log_files = [
-        "log/workerlog.0",
+        "log/paddle/workerlog.0",
         "log/fastdeploy.log",
         "log/log_0/fastdeploy.log",
-        "log/log_0/workerlog.0",
+        "log/log_0/paddle/workerlog.0",
     ]
 
     for path in log_files:

@@ -1213,7 +1213,7 @@ def main(args: argparse.Namespace):
     # 超参由yaml传入
     if args.hyperparameter_path:
         with open(args.hyperparameter_path, "r") as f:
-            hyper_parameters = yaml.safe_load(f)
+            hyper_parameters = yaml.safe_load(f) or {}
     else:
         hyper_parameters = {}
 

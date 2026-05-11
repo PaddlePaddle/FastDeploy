@@ -51,6 +51,7 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.utils import make_choice_id
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -189,7 +190,7 @@ class OpenAIServingChat(OpenAiServingBase):
     async def _preprocess(self, ctx: ServeContext[ChatCompletionRequest]) -> None:
         request = ctx.request
         request_id = ctx.request_id
-        current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
+        current_req_dict = request.to_dict_for_infer(make_choice_id(request_id, 0))
         current_req_dict["kwargs"] = {}
         current_req_dict["kwargs"]["enable_thinking"] = self._get_thinking_status(request)
         if "chat_template" not in current_req_dict:
