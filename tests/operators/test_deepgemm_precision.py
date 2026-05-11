@@ -22,7 +22,7 @@ paddle.enable_compat(scope={"deep_gemm"})
 
 paddle.set_default_dtype("bfloat16")
 prop = paddle.device.cuda.get_device_properties()
-if prop.major != 100:
+if prop.major != 10:
     exit(0)
 try:
     import cutlass
