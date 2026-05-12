@@ -1166,6 +1166,10 @@ class EngineService:
             except Exception as e:
                 err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
+                # Failed to connect to engine worker queue, retry after 5 seconds
+                if self.engine_worker_queue.is_broken():
+                    self.llm_logger.error("Failed to connect to engine worker queue, retry after 5 seconds")
+                    time.sleep(5)
 
     def _get_scheduler_unhandled_request_num(self) -> int:
         """
