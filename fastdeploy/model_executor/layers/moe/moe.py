@@ -46,9 +46,6 @@ except:
 
 import numpy as np
 
-if current_platform.is_cuda():
-    pass
-
 
 def get_moe_method(layer=None):
     """
