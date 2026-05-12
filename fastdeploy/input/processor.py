@@ -482,12 +482,12 @@ class Processor:
 
         request.setdefault("enable_thinking", True)
 
-        # Step 1: 解析 messages（下载图片/视频，转为标准格式）
+        # Step 1: Parse messages (download images/videos, normalize to standard format)
         from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 
         parsed_messages = parse_chat_messages(messages)
 
-        # Step 2: 从解析后的 messages 中提取多模态内容
+        # Step 2: Extract multimodal content from parsed messages
         images, videos, mm_order = [], [], []
         for msg in parsed_messages:
             content = msg.get("content") if isinstance(msg, dict) else None
