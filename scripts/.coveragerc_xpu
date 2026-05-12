@@ -8,8 +8,8 @@ include =
     */fastdeploy/platforms/xpu.py
     */fastdeploy/worker/xpu_*.py
     */fastdeploy/model_executor/xpu_*.py
-    */fastdeploy/model_executor/ops/xpu/*
-    */fastdeploy/model_executor/layers/backends/xpu/*
+    */fastdeploy/model_executor/ops/xpu/**
+    */fastdeploy/model_executor/layers/backends/xpu/**
 
 [paths]
 source =
