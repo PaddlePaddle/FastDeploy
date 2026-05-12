@@ -47,7 +47,7 @@ class DenseGemmKernel:
 
         self.mma_tiler = (128, 128, 64)
 
-        self.num_ab_stage = 1
+        self.num_ab_stage = 2
 
     @cute.jit
     def __call__(
@@ -55,10 +55,10 @@ class DenseGemmKernel:
         a: cute.Tensor,
         b: cute.Tensor,
         c: cute.Tensor,
-    ):  
+    ):
         M = a.shape[0]
         N = b.shape[0]
-        K = a.shape[1]
+
         tiled_mma = sm100_utils.make_trivial_tiled_mma(
             cutlass.BFloat16,
             tcgen05.OperandMajorMode.K,
@@ -75,8 +75,12 @@ class DenseGemmKernel:
         )
         # ((2),1,1,1):((1),0,0,0)
 
-        a_smem_layout_staged = sm100_utils.make_smem_layout_a(tiled_mma, self.mma_tiler, cutlass.BFloat16, 1)
-        b_smem_layout_staged = sm100_utils.make_smem_layout_b(tiled_mma, self.mma_tiler, cutlass.BFloat16, 1)
+        a_smem_layout_staged = sm100_utils.make_smem_layout_a(
+            tiled_mma, self.mma_tiler, cutlass.BFloat16, self.num_ab_stage
+        )
+        b_smem_layout_staged = sm100_utils.make_smem_layout_b(
+            tiled_mma, self.mma_tiler, cutlass.BFloat16, self.num_ab_stage
+        )
 
         a_op = sm100_utils.cluster_shape_to_tma_atom_A(self.cluster_shape_mn, tiled_mma.thr_id)
         a_smem_layout = cute.slice_(a_smem_layout_staged, (None, None, None, 0))
@@ -120,7 +124,7 @@ class DenseGemmKernel:
             tma_atom_b,
             self.cluster_layout_vmnk,
         ).launch(
-            grid=[M//self.mma_tiler[0], N//self.mma_tiler[1], 1],
+            grid=[M // self.mma_tiler[0], N // self.mma_tiler[1], 1],
             block=[128, 1, 1],
             cluster=self.cluster_shape_mnk,
         )
@@ -148,9 +152,7 @@ class DenseGemmKernel:
         bidx, bidy, bidz = cute.arch.block_idx()
         mma_tile_coord_v = bidx % cute.size(tiled_mma.thr_id.shape)
         is_leader_cta = mma_tile_coord_v == 0
-        cta_rank_in_cluster = cute.arch.make_warp_uniform(
-            cute.arch.block_idx_in_cluster()
-        )
+        cta_rank_in_cluster = cute.arch.make_warp_uniform(cute.arch.block_idx_in_cluster())
 
         cta_coord = (bidx, bidy, bidz)
         mma_tile_coord_mnl = (
@@ -158,7 +160,6 @@ class DenseGemmKernel:
             cta_coord[1],
             cta_coord[2],
         )
-
 
         if warp_idx == 0:
             cpasync.prefetch_descriptor(tma_atom_a)
@@ -188,29 +189,21 @@ class DenseGemmKernel:
             swizzle=b_smem_layout_staged.inner,
         )
 
-        gA = cute.local_tile(
-            tma_tensor_a, cute.slice_(self.mma_tiler, (None, 0, None)), (None, None)
-        )
+        gA = cute.local_tile(tma_tensor_a, cute.slice_(self.mma_tiler, (None, 0, None)), (None, None))
 
-        gB = cute.local_tile(
-            tma_tensor_b, cute.slice_(self.mma_tiler, (0, None, None)), (None, None)
-        )
-        
+        gB = cute.local_tile(tma_tensor_b, cute.slice_(self.mma_tiler, (0, None, None)), (None, None))
+
         # k_tile_cnt 表示k这个方向需要迭代的次数！
         k_tile_cnt = cute.size(gA, mode=[3])
         cute.printf("k_tile_cnt: %d\n", k_tile_cnt)
 
         thr_mma = tiled_mma.get_slice(mma_tile_coord_v)
         tCgA = thr_mma.partition_A(gA)
-
         tCgB = thr_mma.partition_B(gB)
 
-        a_cta_layout = cute.make_layout(
-            cute.slice_(cluster_layout_vmnk, (0, 0, None, 0)).shape
-        )
-        block_in_cluster_coord_vmnk = cluster_layout_vmnk.get_flat_coord(
-            cta_rank_in_cluster
-        )
+        block_in_cluster_coord_vmnk = cluster_layout_vmnk.get_flat_coord(cta_rank_in_cluster)
+
+        a_cta_layout = cute.make_layout(cute.slice_(cluster_layout_vmnk, (0, 0, None, 0)).shape)
 
         tAsA, tAgA = cpasync.tma_partition(
             tma_atom_a,
@@ -220,9 +213,7 @@ class DenseGemmKernel:
             cute.group_modes(tCgA, 0, 3),
         )
 
-        b_cta_layout = cute.make_layout(
-            cute.slice_(cluster_layout_vmnk, (0, None, 0, 0)).shape
-        )
+        b_cta_layout = cute.make_layout(cute.slice_(cluster_layout_vmnk, (0, None, 0, 0)).shape)
 
         tBsB, tBgB = cpasync.tma_partition(
             tma_atom_b,
@@ -232,17 +223,15 @@ class DenseGemmKernel:
             cute.group_modes(tCgB, 0, 3),
         )
 
+        # tensor<(0,0) o (((64,128),1),20,7):(((1@0,1@1),0),128@1,64@0)>
+        # tensor<(0,?{div=128}) o (((64,128),1),7):(((1@0,1@1),0),64@0)>
         tAgA = tAgA[(None, mma_tile_coord_mnl[0], None)]
-
         tBgB = tBgB[(None, mma_tile_coord_mnl[1], None)]
-
 
         # Initialize mainloop ab_pipeline (barrier) and states
         ab_pipeline_producer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread)
         num_tma_producer = 1
-        ab_pipeline_consumer_group = pipeline.CooperativeGroup(
-            pipeline.Agent.Thread, num_tma_producer
-        )
+        ab_pipeline_consumer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, num_tma_producer)
         ab_producer, ab_consumer = pipeline.PipelineTmaUmma.create(
             barrier_storage=storage.ab_full_mbar_ptr.data_ptr(),
             num_stages=self.num_ab_stage,
@@ -252,7 +241,6 @@ class DenseGemmKernel:
             cta_layout_vmnk=cluster_layout_vmnk,
             defer_sync=True,
         ).make_participants()
-
 
         # Initialize acc_pipeline (barrier) and states
         acc_pipeline_producer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread)
@@ -268,7 +256,6 @@ class DenseGemmKernel:
 
         acc_producer_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Producer, self.num_acc_stage)
         acc_consumer_state = pipeline.make_pipeline_state(pipeline.PipelineUserType.Consumer, self.num_acc_stage)
-
 
         tmem_alloc_barrier = pipeline.NamedBarrier(barrier_id=0, num_threads=self.threads_per_cta)
 
@@ -304,7 +291,7 @@ class DenseGemmKernel:
                 tma_bar_ptr=producer_handle.barrier,
                 mcast_mask=a_full_mcast_mask,
             )
-            
+
             b_full_mcast_mask = None
             cute.copy(
                 tma_atom_b,
@@ -351,7 +338,7 @@ class DenseGemmKernel:
                 c[tidx % 64 + 64 * bidx, i + tidx // 64 * 64] = (cutlass.BFloat16)(tTR_rAcc[i])
         else:
             for i in cutlass.range_constexpr(128):
-                c[bidx*128 + tidx, bidy*128+i] = (cutlass.BFloat16)(tTR_rAcc[i])
+                c[bidx * 128 + tidx, bidy * 128 + i] = (cutlass.BFloat16)(tTR_rAcc[i])
 
         pipeline.sync(barrier_id=2)
         tmem.relinquish_alloc_permit()
@@ -360,6 +347,7 @@ class DenseGemmKernel:
         #
         if warp_idx == 0:
             ab_producer.tail()
+
 
 class TestDeepDenseGemm(unittest.TestCase):
     def setUp(self):
@@ -465,7 +453,7 @@ class TestDeepDenseGemm(unittest.TestCase):
         self.one_invoke(128 * 20, 2048, 4096)
         self.one_invoke(128 * 20, 2048, 2048)
 
-        self.two_invoke(128*20, 128*15, 64)
+        self.two_invoke(128 * 20, 128 * 15, 64 * 1)
 
         # p.stop()
 
