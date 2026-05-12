@@ -653,82 +653,42 @@ class TestCacheKvsMapGetters(unittest.TestCase):
 
 
 class TestStorageKeyFormat(unittest.TestCase):
-    """Test _storage_key_for_block produces per-block keys (no layer index)."""
+    """Test storage_key_for_block produces per-layer keys."""
 
-    def setUp(self):
-        self.manager = create_transfer_manager()
+    def test_key_format_per_layer(self):
+        """Per-layer key: '{hash}_{rank}_key_{layer_idx}'."""
+        from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
+
+        key = storage_key_for_block("abc123", 0, "key", 5)
+        self.assertEqual(key, "abc123_0_key_5")
 
     def test_key_format_no_layer(self):
-        """Key should be '{hash}_{rank}_key' with no _l{layer} suffix."""
-        key = self.manager._storage_key_for_block("abc123", "key")
+        """Backward-compat: without layer_idx, key is '{hash}_{rank}_key'."""
+        from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
+
+        key = storage_key_for_block("abc123", 0, "key")
         self.assertEqual(key, "abc123_0_key")
-        self.assertNotIn("_l", key)
 
-    def test_value_format_no_layer(self):
-        key = self.manager._storage_key_for_block("abc123", "value")
-        self.assertEqual(key, "abc123_0_value")
-        self.assertNotIn("_l", key)
+    def test_value_format_per_layer(self):
+        from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
 
-    def test_scale_format_no_layer(self):
-        key = self.manager._storage_key_for_block("abc123", "key_scale")
-        self.assertEqual(key, "abc123_0_key_scale")
-        self.assertNotIn("_l", key)
+        key = storage_key_for_block("abc123", 1, "value", 3)
+        self.assertEqual(key, "abc123_1_value_3")
 
-    def test_value_scale_format_no_layer(self):
-        key = self.manager._storage_key_for_block("abc123", "value_scale")
-        self.assertEqual(key, "abc123_0_value_scale")
-        self.assertNotIn("_l", key)
+    def test_scale_format_per_layer(self):
+        from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
+
+        key = storage_key_for_block("abc123", 0, "key_scale", 0)
+        self.assertEqual(key, "abc123_0_key_scale_0")
 
 
 # ============================================================================
-# Build Staging Strides Tests
+# Build Per-Layer IO Args Tests
 # ============================================================================
 
 
-class TestBuildStagingStrides(unittest.TestCase):
-    """Test _build_staging_strides helper."""
-
-    def test_basic_strides(self):
-        manager = create_transfer_manager()
-        manager._host_key_block_stride_bytes = 1024
-        manager._host_value_block_stride_bytes = 1024
-        manager._host_scale_block_stride_bytes = 0
-
-        strides = manager._build_staging_strides()
-        self.assertEqual(strides, {"key": 1024, "value": 1024})
-
-    def test_fp8_strides(self):
-        from fastdeploy.cache_manager.v1.transfer_manager import CacheTransferManager
-
-        config = get_default_test_fd_config()
-        config.quant_config = Mock()
-        config.quant_config.kv_cache_quant_type = "block_wise_fp8"
-        config.cache_config.num_cpu_blocks = 50
-        config.cache_config.cache_dtype = "bfloat16"
-        manager = CacheTransferManager(config)
-
-        manager._host_key_block_stride_bytes = 1024
-        manager._host_value_block_stride_bytes = 1024
-        manager._host_scale_block_stride_bytes = 256
-
-        strides = manager._build_staging_strides()
-        self.assertIn("key_scale", strides)
-        self.assertIn("value_scale", strides)
-        self.assertEqual(strides["key_scale"], 256)
-
-    def test_zero_strides_returns_empty(self):
-        manager = create_transfer_manager()
-        strides = manager._build_staging_strides()
-        self.assertEqual(strides, {})
-
-
-# ============================================================================
-# Build Storage IO Args Tests
-# ============================================================================
-
-
-class TestBuildStorageIOArgs(unittest.TestCase):
-    """Test _build_storage_io_args helper."""
+class TestBuildPerLayerIOArgs(unittest.TestCase):
+    """Test _build_per_layer_io_args helper."""
 
     def setUp(self):
         self.manager = create_transfer_manager()
@@ -740,16 +700,52 @@ class TestBuildStorageIOArgs(unittest.TestCase):
 
     def test_basic_keys(self):
         hash_list = ["h1", "h2"]
-        keys_per_kind, ptrs_per_kind = self.manager._build_storage_io_args(hash_list)
+        cpu_block_list = [10, 20]
+        flat_keys, flat_ptrs, flat_sizes, flat_indices, flat_kinds = self.manager._build_per_layer_io_args(
+            hash_list, cpu_block_list
+        )
 
-        self.assertIn("key", keys_per_kind)
-        self.assertIn("value", keys_per_kind)
-        self.assertEqual(len(keys_per_kind["key"]), 2)
-        self.assertEqual(keys_per_kind["key"][0], "h1_0_key")
-        self.assertEqual(keys_per_kind["value"][1], "h2_0_value")
+        num_kinds = 2  # key, value
+        expected_len = len(hash_list) * self.manager._num_layers * num_kinds
+        self.assertEqual(len(flat_keys), expected_len)
+        self.assertEqual(len(flat_ptrs), expected_len)
+        self.assertEqual(len(flat_sizes), expected_len)
+        self.assertEqual(len(flat_indices), expected_len)
+        self.assertEqual(len(flat_kinds), expected_len)
 
-        self.assertIn("key", ptrs_per_kind)
-        self.assertEqual(len(ptrs_per_kind["key"]), self.manager._num_layers)
+        # First entry should be block 0, layer 0, kind "key"
+        self.assertEqual(flat_keys[0], "h1_0_key_0")
+        self.assertEqual(flat_sizes[0], 1024)
+        self.assertEqual(flat_indices[0], 0)
+        self.assertEqual(flat_kinds[0], "key")
+
+    def test_block_indices(self):
+        hash_list = ["h1", "h2"]
+        cpu_block_list = [10, 20]
+        flat_keys, flat_ptrs, flat_sizes, flat_indices, flat_kinds = self.manager._build_per_layer_io_args(
+            hash_list, cpu_block_list
+        )
+
+        per_block = self.manager._num_layers * 2
+        # First per_block entries belong to block 0
+        for i in range(per_block):
+            self.assertEqual(flat_indices[i], 0)
+        # Next per_block entries belong to block 1
+        for i in range(per_block, 2 * per_block):
+            self.assertEqual(flat_indices[i], 1)
+
+    def test_sizes_match_strides(self):
+        hash_list = ["h1"]
+        cpu_block_list = [0]
+        flat_keys, flat_ptrs, flat_sizes, flat_indices, flat_kinds = self.manager._build_per_layer_io_args(
+            hash_list, cpu_block_list
+        )
+
+        for i, kind in enumerate(flat_kinds):
+            if kind in ("key", "value"):
+                self.assertEqual(flat_sizes[i], 1024)
+            elif kind in ("key_scale", "value_scale"):
+                self.assertEqual(flat_sizes[i], 0)
 
 
 if __name__ == "__main__":

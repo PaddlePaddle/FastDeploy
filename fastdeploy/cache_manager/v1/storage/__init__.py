@@ -21,7 +21,6 @@ if TYPE_CHECKING:
 
 from ..metadata import StorageType
 from .base import StorageConnector, StorageScheduler
-from .staging_manager import StagingManager
 
 
 def create_storage_scheduler(
@@ -218,7 +217,6 @@ def _normalize_storage_type(storage_type: Any) -> Optional[str]:
 __all__ = [
     "StorageScheduler",
     "StorageConnector",
-    "StagingManager",
     "create_storage_scheduler",
     "create_storage_connector",
 ]

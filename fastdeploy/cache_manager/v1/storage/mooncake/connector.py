@@ -27,10 +27,10 @@ from fastdeploy.utils import get_host_ip
 from ..base import StorageConnector, StorageScheduler
 
 DEFAULT_GLOBAL_SEGMENT_SIZE = 1024 * 1024 * 1024  # 1 GiB
-# Zero-copy mode (batch_put_from / batch_get_into) does not use the local
-# intermediate buffer at all — data goes directly between registered memory
-# and the remote store.  16 MB is sufficient for connection bookkeeping.
-DEFAULT_LOCAL_BUFFER_SIZE = 16 * 1024 * 1024  # 16 MB
+DEFAULT_LOCAL_BUFFER_SIZE = 1024 * 1024  # 1 MB
+DEFAULT_MC_MAX_MR_SIZE = 4 * 1024 * 1024 * 1024  # 4 GB
+MIN_MC_MAX_MR_SIZE = 1024 * 1024 * 1024  # 1 GB
+MAX_MC_MAX_MR_SIZE = 6 * 1024 * 1024 * 1024  # 6 GB
 
 
 # ---------------------------------------------------------------------------
@@ -161,6 +161,7 @@ class _MooncakeStoreBase:
     def __init__(self, logger) -> None:
         self._store = None  # MooncakeDistributedStore instance
         self.logger = logger
+        self.mc_max_mr_size = DEFAULT_MC_MAX_MR_SIZE
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -211,6 +212,18 @@ class _MooncakeStoreBase:
 
         host_ip = get_host_ip()
         os.environ.setdefault("MC_TCP_BIND_ADDRESS", host_ip)
+
+        # Configure MC_MAX_MR_SIZE for buffer registration
+        raw_mr_size = int(os.environ.get("MC_MAX_MR_SIZE", 0))
+        if raw_mr_size == 0:
+            self.mc_max_mr_size = DEFAULT_MC_MAX_MR_SIZE
+        elif raw_mr_size < MIN_MC_MAX_MR_SIZE:
+            self.mc_max_mr_size = MIN_MC_MAX_MR_SIZE
+        elif raw_mr_size > MAX_MC_MAX_MR_SIZE:
+            self.mc_max_mr_size = MAX_MC_MAX_MR_SIZE
+        else:
+            self.mc_max_mr_size = raw_mr_size
+        os.environ["MC_MAX_MR_SIZE"] = str(self.mc_max_mr_size)
 
         self._store = MooncakeDistributedStore()
         ret = self._store.setup(
@@ -266,8 +279,14 @@ class _MooncakeStoreBase:
         elapsed = time.perf_counter() - tic
         success = results.count(0)
         total = len(keys)
-        if success != total:
+        if success == total:
+            self.logger.debug(f"batch_put {total} keys in {elapsed:.4f}s")
+        else:
             self.logger.error(f"batch_put: {total - success}/{total} keys failed, elapsed={elapsed:.4f}s")
+        if success > 0:
+            total_bytes = sum(s for r, s in zip(results, sizes) if r == 0)
+            speed_gbs = total_bytes / (elapsed * 1024**3) if elapsed > 0 else float("inf")
+            self.logger.debug(f"batch_put throughput: {total_bytes / 1024**3:.4f} GB @ {speed_gbs:.4f} GB/s")
         return results
 
     def _batch_get(
@@ -292,9 +311,9 @@ class _MooncakeStoreBase:
         else:
             self.logger.error(f"batch_get: {total - success}/{total} keys failed, elapsed={elapsed:.4f}s")
         if success > 0:
-            total_bytes = sum(r for r in results if r > 0)
+            total_bytes = sum(s for r, s in zip(results, sizes) if r > 0)
             speed_gbs = total_bytes / (elapsed * 1024**3) if elapsed > 0 else float("inf")
-            self.logger.info(f"batch_get throughput: {total_bytes / 1024**3:.4f} GB @ {speed_gbs:.4f} GB/s")
+            self.logger.debug(f"batch_get throughput: {total_bytes / 1024**3:.4f} GB @ {speed_gbs:.4f} GB/s")
         return results
 
     def _batch_exists(self, keys: List[str]) -> tuple:
@@ -535,6 +554,8 @@ class MooncakeStorageConnector(StorageConnector):
         Register a memory buffer with the Mooncake store for zero-copy RDMA.
 
         Must be called before using ``buffer_ptr`` in any get/set operation.
+        If buffer_size exceeds ``mc_max_mr_size`` the buffer is split into
+        multiple chunks, each registered separately.
 
         Args:
             buffer_ptr: Raw pointer (int) to the memory region start.
@@ -545,10 +566,28 @@ class MooncakeStorageConnector(StorageConnector):
         """
         if self._base._store is None:
             raise RuntimeError("MooncakeStorageConnector is not connected; call connect() first.")
-        ret = self._base._store.register_buffer(buffer_ptr, buffer_size)
-        if ret != 0:
-            raise RuntimeError(f"MooncakeDistributedStore.register_buffer() failed with error code {ret}")
-        self.logger.debug(f"Registered buffer ptr=0x{buffer_ptr:x} size={buffer_size} bytes.")
+
+        max_mr_size = self._base.mc_max_mr_size
+        if buffer_size <= max_mr_size:
+            ret = self._base._store.register_buffer(buffer_ptr, buffer_size)
+            if ret != 0:
+                raise RuntimeError(f"MooncakeDistributedStore.register_buffer() failed with error code {ret}")
+            self.logger.debug(f"Registered buffer ptr=0x{buffer_ptr:x} size={buffer_size} bytes.")
+        else:
+            num_chunks = (buffer_size + max_mr_size - 1) // max_mr_size
+            self.logger.info(
+                f"Registering buffer of {buffer_size / 1024**3:.2f} GB in {num_chunks} chunks "
+                f"(max_mr_size={max_mr_size / 1024**3:.2f} GB per chunk)"
+            )
+            for i in range(num_chunks):
+                chunk_ptr = buffer_ptr + i * max_mr_size
+                chunk_size = min(max_mr_size, buffer_size - i * max_mr_size)
+                ret = self._base._store.register_buffer(chunk_ptr, chunk_size)
+                if ret != 0:
+                    raise RuntimeError(
+                        f"MooncakeDistributedStore.register_buffer() chunk {i}/{num_chunks} failed "
+                        f"with error code {ret}"
+                    )
 
     # ------------------------------------------------------------------
     # Single-key operations (delegates to batch for consistency)

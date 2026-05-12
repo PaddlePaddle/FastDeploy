@@ -557,27 +557,24 @@ class CacheManager(KVCacheBase):
 
     def _match_storage(self, hash_values: List[str]) -> List[str]:
         """
-        Match hash values against storage.
+        Match hash values against storage using per-layer keys.
 
         Checks each hash for existence in storage and returns the longest
         consecutive prefix of hashes that are all present (prefix semantics
         are required because a cache miss in the middle breaks prefetch continuity).
 
-        Probes both rank=0 "key" and "value" kinds: a block is considered present
-        only when both exist.  This avoids false positives from partial writes where
-        only one kind was stored, and prevents LRU asymmetry (probing only "key"
-        would keep it hot while "value" gets evicted by Mooncake).
+        Probes rank=0 per-layer keys: a block is considered present only when
+        ALL of its ``2 * num_layers`` per-layer keys exist.  This avoids false
+        positives from partial writes where only some layers were stored.
 
         Storage key format (see cache_utils.storage_key_for_block):
-            "{hash_value}_0_key"  /  "{hash_value}_0_value"
+            "{hash_value}_0_key_{layer_idx}"  /  "{hash_value}_0_value_{layer_idx}"
 
         Args:
             hash_values: List of block hash values to check, in prefix order.
 
         Returns:
             The leading sub-list of hash_values whose blocks all exist in storage.
-            For example, if hash_values = [h0, h1, h2, h3] and h2 is missing,
-            returns [h0, h1].
         """
         if not self._storage_scheduler:
             return []
@@ -587,27 +584,32 @@ class CacheManager(KVCacheBase):
                 logger.warning("_match_storage: storage scheduler disconnected, skipping storage match")
                 return []
 
-            # Probe both key and value kinds for rank=0.
-            # Interleaved: [h0_key, h0_value, h1_key, h1_value, ...]
+            num_layers = self.model_config.num_hidden_layers
+            per_block_keys = 2 * num_layers  # key + value per layer
+
+            # Probe all per-layer keys for rank=0.
+            # Flat layout: [h0_key_0, h0_value_0, ..., h0_key_L-1, h0_value_L-1,
+            #               h1_key_0, h1_value_0, ...]
             probe_keys = []
             for h in hash_values:
-                probe_keys.append(storage_key_for_block(h, 0, "key"))
-                probe_keys.append(storage_key_for_block(h, 0, "value"))
+                for layer_idx in range(num_layers):
+                    probe_keys.append(storage_key_for_block(h, 0, "key", layer_idx))
+                    probe_keys.append(storage_key_for_block(h, 0, "value", layer_idx))
 
             exist_flags = self._storage_scheduler.batch_exists(probe_keys)
 
-            # A block is present only when both key and value exist.
+            # A block is present only when all per-layer keys exist.
             matched = []
-            for i, h in enumerate(hash_values):
-                key_ok = exist_flags[i * 2]
-                val_ok = exist_flags[i * 2 + 1]
-                if not (key_ok and val_ok):
+            for block_idx, h in enumerate(hash_values):
+                start = block_idx * per_block_keys
+                ok = all(exist_flags[start : start + per_block_keys])
+                if not ok:
                     break
                 matched.append(h)
 
             logger.debug(
                 f"[CacheManager] _match_storage: probing {len(hash_values)} blocks "
-                f"({len(probe_keys)} keys), matched={len(matched)}"
+                f"({len(probe_keys)} per-layer keys), matched={len(matched)}"
             )
             return matched
         except Exception:
