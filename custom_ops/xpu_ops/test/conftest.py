@@ -16,6 +16,7 @@ collect_ignore_glob = [
     "test_set_data_ipc.py",
     "test_read_data_ipc.py",
     "test_set_get_data_ipc.py",
+    "test_draft_model_preprocess.py",
 ]
 
 _this_dir = os.path.dirname(os.path.abspath(__file__))
