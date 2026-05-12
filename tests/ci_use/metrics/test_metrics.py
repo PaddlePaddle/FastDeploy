@@ -214,29 +214,28 @@ def test_metrics_with_clear_and_reset():
     """
     Test the metrics monitoring endpoint.
     """
-    pass  # not stable, uncomment after bug fix
-    # metrics_url = f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
+    metrics_url = f"http://0.0.0.0:{FD_METRICS_PORT}/metrics"
 
-    # async_concurrency(n=10)
+    async_concurrency(n=10)
 
-    # time.sleep(0.3)
+    time.sleep(0.3)
 
     # ===== clear_load_weight =====
-    # clear_url = f"http://0.0.0.0:{FD_API_PORT}/clear_load_weight"
-    # print("Calling clear_load_weight...")
-    # r = requests.get(clear_url, timeout=30)
-    # assert r.status_code == 200, f"clear_load_weight failed: {r.status_code}"
+    clear_url = f"http://0.0.0.0:{FD_API_PORT}/clear_load_weight"
+    print("Calling clear_load_weight...")
+    r = requests.get(clear_url, timeout=30)
+    assert r.status_code == 200, f"clear_load_weight failed: {r.status_code}"
 
-    # metrics = get_metrics_dict(metrics_url)
-    # running = metrics["fastdeploy:num_requests_running"]
-    # waiting = metrics["fastdeploy:num_requests_waiting"]
+    metrics = get_metrics_dict(metrics_url)
+    running = metrics["fastdeploy:num_requests_running"]
+    waiting = metrics["fastdeploy:num_requests_waiting"]
 
-    # print(
-    #     "ASSERT after the clear_load_weight operation, the value is 0 (Request interruption stopped inference, and related requests were cleared):",
-    #     running,
-    #     "waiting:",
-    #     waiting,
-    # )
+    print(
+        "ASSERT after the clear_load_weight operation, the value is 0 (Request interruption stopped inference, and related requests were cleared):",
+        running,
+        "waiting:",
+        waiting,
+    )
     # assert running == 0 and waiting == 0, "Expected both running and waiting to be 0 after clear_load_weight"
 
 
