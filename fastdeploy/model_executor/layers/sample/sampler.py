@@ -77,7 +77,10 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
     top_k_padding = paddle.repeat_interleave(top_k[:real_bsz], repeats).unsqueeze(1)
     topp_seed = paddle.repeat_interleave(infer_seed[:real_bsz], repeats).unsqueeze(1)
 
-    MAX_INFER_SEED = 9223372036854775806
+    if current_platform.is_xpu():
+        MAX_INFER_SEED = 2147483646
+    else:
+        MAX_INFER_SEED = 9223372036854775806
 
     token_lens = paddle.where(
         seq_lens_encoder[:real_bsz] == 0,
@@ -97,7 +100,7 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
 
     offsets = paddle.where(
         is_decoder,
-        local_pos * 4,
+        local_pos * (32 if current_platform.is_xpu() else 4),
         paddle.zeros_like(local_pos),
     )
 
@@ -525,7 +528,6 @@ class Sampler(nn.Layer):
 
         for proc in sampling_metadata.logits_processors or []:
             logits = proc.apply(logits)
-
         logits = apply_penalty_multi_scores(
             sampling_metadata.token_ids_all,
             logits,
@@ -729,9 +731,7 @@ class SpeculativeSampler(nn.Layer):
         if top_p_logprob is not None:
             last_logprobs = paddle.where(top_p_token_mask, top_p_logprob, last_logprobs)
 
-        # NOTE(huicongyao) temporarily used for slice last_logprobs to its real shape, remove in the future
-        real_token_num = batch_token_num.sum().item()
-        return last_logprobs[:real_token_num]
+        return last_logprobs
 
     def gather_logprobs(
         self,
@@ -1059,7 +1059,9 @@ class SpeculativeSampler(nn.Layer):
             )
             sampler_output.logprobs_tensors = logprobs_tensors
             if cu_batch_token_offset is not None:
-                sampler_output.cu_batch_token_offset = cu_batch_token_offset.cpu()
+                cu_batch_token_offset_cpu = paddle.empty_like(cu_batch_token_offset, device="cpu").pin_memory()
+                cu_batch_token_offset_cpu.copy_(cu_batch_token_offset, False)
+                sampler_output.cu_batch_token_offset = cu_batch_token_offset_cpu
         return sampler_output
 
     def _normal_sample_xpu(
@@ -1185,6 +1187,7 @@ class SpeculativeSampler(nn.Layer):
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
+
         logits = apply_speculative_penalty_multi_scores(
             sampling_metadata.token_ids_all,
             sampling_metadata.prompt_lens,
@@ -1202,7 +1205,6 @@ class SpeculativeSampler(nn.Layer):
             share_inputs["batch_id_per_token_output"],
             share_inputs["cu_seqlens_q_output"],
             max_model_len,
-            sampling_metadata.pre_token_ids,
         )
 
         if self.enf_gen_phase_tag:
@@ -1458,7 +1460,6 @@ class MTPSampler(nn.Layer):
             share_inputs["batch_id_per_token_output"],
             share_inputs["cu_seqlens_q_output"],
             max_model_len,
-            sampling_metadata.pre_token_ids,
         )
         probs = F.softmax(logits)
         next_tokens = paddle.argmax(probs, axis=-1)

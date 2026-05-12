@@ -52,8 +52,7 @@ Once the IP addresses and ports of the DP service instances are known, common we
 
 ### FastDeploy Router
 
-FastDeploy provides a Python-based [Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/router) to handle request reception and scheduling.
-A high-performance Router implementation is currently under development.
+FastDeploy provides a Golang-based [Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router) for high-performance request scheduling. The Router binary is bundled in the FastDeploy Python package and can be launched directly via the Python command line.
 
 The usage and request scheduling workflow is as follows:
 
@@ -70,11 +69,11 @@ The usage and request scheduling workflow is as follows:
 
 ### Launching the Router
 
-Start the Router service. Logs are written to `log_router/router.log`. `fd-router` installation instructions can be found in the [Router documentation](../online_serving/router.md).
+Start the Router service. Logs are written to `log_router/router.log`. For more Router options, refer to the [Router documentation](../online_serving/router.md).
 
 ```shell
 export FD_LOG_DIR="log_router"
-/usr/local/bin/fd-router \
+python -m fastdeploy.golang_router.launch \
     --port 30000
 ```
 

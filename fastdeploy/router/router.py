@@ -125,7 +125,7 @@ class Router:
         try:
             inst_info = InstanceInfo.from_dict(instance_info_dict)
         except Exception as e:
-            logger.error(f"register instance failed: {e}")
+            logger.error(f"register instance failed: {e}, {traceback.format_exc()}")
             raise
 
         if (self.splitwise and inst_info.role == InstanceRole.MIXED) or (

@@ -425,8 +425,9 @@ void GetBlockShapeAndSplitKVBlock(
 std::vector<paddle::Tensor> GetPaddingOffset(
     const paddle::Tensor& input_ids,
     const paddle::Tensor& seq_len,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
     const paddle::optional<paddle::Tensor>& draft_tokens,
-    const paddle::optional<paddle::Tensor>& seq_lens_encoder,
     const int64_t token_num_cpu);
 
 void SetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
@@ -690,6 +691,10 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     int topk,
                                     bool renormalize,
                                     float routed_scaling_factor);
+
+std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
+                                                 const paddle::Tensor& bias,
+                                                 std::string cast_type);
 
 std::vector<paddle::Tensor> NoauxTcRedundant(
     paddle::Tensor& scores,
@@ -1145,13 +1150,16 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
                                const paddle::Tensor& seq_lens_this_time,
                                const paddle::Tensor& seq_lens_encoder);
 
-void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
-                              const paddle::Tensor& logits,
-                              const paddle::Tensor& cu_batch_token_offset,
-                              const paddle::Tensor& ori_cu_batch_token_offset,
-                              const paddle::Tensor& seq_lens_this_time,
-                              const paddle::Tensor& seq_lens_encoder,
-                              const paddle::Tensor& accept_num);
+void SpeculateGetAcceptTokensAndLogits(
+    const paddle::Tensor& token_ids,
+    const paddle::Tensor& target_logits,
+    const paddle::Tensor& logits,
+    const paddle::Tensor& cu_batch_token_offset,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& accept_tokens);
 
 std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& ids_remove_padding,
@@ -1699,6 +1707,13 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
 
+  m.def("fused_cast_sigmoid_bias",
+        &FusedCastSigmoidBias,
+        "Fused cast+sigmoid+bias for MoE gating scores",
+        py::arg("input"),
+        py::arg("bias"),
+        py::arg("cast_type") = std::string("float32"));
+
   m.def("noaux_tc_redundant",
         &NoauxTcRedundant,
         "noaux_tc_redundant for MoE compute");
@@ -1879,9 +1894,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SpeculateInsertFirstToken,
         "speculate_insert_first_token function");
 
-  m.def("speculate_get_target_logits",
-        &SpeculateGetTargetLogits,
-        "speculate_get_target_logits function");
+  m.def("speculate_get_accept_tokens_and_logits",
+        &SpeculateGetAcceptTokensAndLogits,
+        "speculate_get_accept_tokens_and_logits function");
 #endif
 
   m.def("update_attn_mask_offsets",

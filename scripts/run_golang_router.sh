@@ -40,7 +40,7 @@ for test_file in "${test_files[@]}"; do
                 echo ">>>> Processing log directory: ${log_dir}"
 
                 # print all workerlog.0
-                worker_logs=("${log_dir}"/workerlog.0)
+                worker_logs=("${log_dir}"/paddle/workerlog.0)
                 if [ "${#worker_logs[@]}" -gt 0 ]; then
                     for worker_log in "${worker_logs[@]}"; do
                         if [ -f "${worker_log}" ]; then
@@ -54,7 +54,7 @@ for test_file in "${test_files[@]}"; do
                 fi
 
                 echo ">>> grep error in ${log_dir}"
-                grep -Rni --color=auto "error" "${log_dir}" || true
+                grep -Rni --color=auto "error" "${log_dir}" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" || true
             fi
         done
 
