@@ -47,7 +47,7 @@ class DenseGemmKernel:
 
         self.mma_tiler = (128, 128, 64)
 
-        self.num_ab_stage = 2
+        self.num_ab_stage = 1
 
     @cute.jit
     def __call__(
@@ -191,11 +191,10 @@ class DenseGemmKernel:
 
         gA = cute.local_tile(tma_tensor_a, cute.slice_(self.mma_tiler, (None, 0, None)), (None, None))
         gB = cute.local_tile(tma_tensor_b, cute.slice_(self.mma_tiler, (0, None, None)), (None, None))
-        # 上面gA是展开了的shape哦！
+        # local_tile后是flatten的shape哦！
 
         # k_tile_cnt 表示k这个方向需要迭代的次数！
         k_tile_cnt = cute.size(gA, mode=[3])
-        cute.printf("k_tile_cnt: %d\n", k_tile_cnt)
 
         thr_mma = tiled_mma.get_slice(mma_tile_coord_v)
         tCgA = thr_mma.partition_A(gA)
@@ -280,35 +279,36 @@ class DenseGemmKernel:
 
         if warp_idx == 0 and is_leader_cta:
 
-            producer_handle = ab_producer.acquire_and_advance()
+            for k_tile_idx in cutlass.range(k_tile_cnt, unroll=1):
 
-            a_full_mcast_mask = None
-            cute.copy(
-                tma_atom_a,
-                tAgA[(None, 0)],
-                tAsA[(None, 0)],
-                tma_bar_ptr=producer_handle.barrier,
-                mcast_mask=a_full_mcast_mask,
-            )
+                producer_handle = ab_producer.acquire_and_advance()
 
-            b_full_mcast_mask = None
-            cute.copy(
-                tma_atom_b,
-                tBgB[(None, 0)],
-                tBsB[(None, 0)],
-                tma_bar_ptr=producer_handle.barrier,
-                mcast_mask=b_full_mcast_mask,
-            )
+                a_full_mcast_mask = None
+                cute.copy(
+                    tma_atom_a,
+                    tAgA[(None, k_tile_idx)],
+                    tAsA[(None, 0)],
+                    tma_bar_ptr=producer_handle.barrier,
+                    mcast_mask=a_full_mcast_mask,
+                )
 
-            consumer_handle = ab_consumer.wait_and_advance()
-            consumer_handle.release()
+                b_full_mcast_mask = None
+                cute.copy(
+                    tma_atom_b,
+                    tBgB[(None, k_tile_idx)],
+                    tBsB[(None, 0)],
+                    tma_bar_ptr=producer_handle.barrier,
+                    mcast_mask=b_full_mcast_mask,
+                )
 
-            blk_count = tCrA.shape[2]
+                consumer_handle = ab_consumer.wait_and_advance()
+                consumer_handle.release()
 
-            tiled_mma.set(tcgen05.Field.ACCUMULATE, False)
-            for i in cutlass.range_constexpr(blk_count):
-                cute.gemm(tiled_mma, tCtAcc, tCrA[None, None, i, 0], tCrB[None, None, i, 0], tCtAcc)
-                tiled_mma.set(tcgen05.Field.ACCUMULATE, True)
+                blk_count = tCrA.shape[2]
+
+                for i in cutlass.range_constexpr(blk_count):
+                    cute.gemm(tiled_mma, tCtAcc, tCrA[None, None, i, 0], tCrB[None, None, i, 0], tCtAcc)
+                    tiled_mma.set(tcgen05.Field.ACCUMULATE, True)
 
             acc_pipeline.producer_commit(acc_producer_state)
 
@@ -448,10 +448,10 @@ class TestDeepDenseGemm(unittest.TestCase):
         # p.start()
         # p.step()
 
-        self.one_invoke(128 * 20, 2048, 4096)
-        self.one_invoke(128 * 20, 2048, 2048)
+        # self.one_invoke(128 * 20, 2048, 4096)
+        # self.one_invoke(128 * 20, 2048, 2048)
 
-        self.two_invoke(128 * 20, 128 * 15, 64 * 1)
+        self.two_invoke(128 * 20, 128 * 15, 64 * 4)
 
         # p.stop()
 
