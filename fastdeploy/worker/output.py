@@ -180,11 +180,6 @@ class SamplerOutput:
     cu_batch_token_offset: Optional[paddle.Tensor] = None
     logits: Optional[paddle.Tensor] = None
     # Sparse sampling mask for top_p/top_k:
-    #   Before sampling_mask_event sync: stored as a deferred tuple
-    #     (indices_window_cpu, mask_window_cpu, real_bsz) where the CPU tensors
-    #     are pinned-memory targets of async D2H copies.
-    #   After event sync + _extract_sparse_indices: converted to the final
-    #     List[np.ndarray] format below.
     #   - Non-speculative decoding: per-request mask. This is a list of length
     #     num_reqs, where element i is a 1-D int32 numpy array of vocab indices
     #     retained by top_p/top_k for request i. Replaces the previous dense
@@ -202,9 +197,6 @@ class SamplerOutput:
     # Used for renormalizing logprobs to match the truncated sampling distribution.
     # Shape: [num_reqs]
     logz_per_batch: Optional[np.ndarray] = None
-    # CUDA event that guards async D2H copy of sampling_mask / logz_per_batch.
-    # Must be synchronized before reading sampling_mask or logz_per_batch.
-    sampling_mask_event: Optional[object] = None
 
 
 @dataclass
