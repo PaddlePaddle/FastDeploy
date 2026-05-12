@@ -264,6 +264,11 @@ def process_final_after_loading(model, fd_config: FDConfig):
                 unquant_moe_cls = type(unquant_moe_layer)
             is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls
             is_offline_quantized_ckpt = not (fd_config.quant_config and fd_config.quant_config.is_checkpoint_bf16)
+            # Skip re-transposing weights that were already transposed by load_weights
+            # (marked with _torch_weight_transposed flag). This prevents double-transpose
+            # for torch-format models (e.g. MiniMax-M2.5 with FP8 checkpoint).
+            if is_unquant_cls and getattr(sublayer, "_torch_weight_transposed", False):
+                continue
             if is_unquant_cls or is_offline_quantized_ckpt:
                 if hasattr(quant_method, "process_weights_after_loading"):
                     quant_method.process_weights_after_loading(sublayer)

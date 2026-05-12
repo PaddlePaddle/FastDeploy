@@ -28,6 +28,7 @@ from fastdeploy.distributed.communication import (
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
+    get_sm_version,
     h2d_copy,
     process_weight_transpose,
     set_weight_attrs,
@@ -266,6 +267,13 @@ class LinearBase(nn.Layer):
         Raises:
             NotImplementedError: If the weight dtype is not float8 or act dtype is not equal to weight dtype.
         """
+        # SM80: append_attention may return a list. Extract first element
+        # to satisfy quant_method.apply()'s tensor type contract.
+        # Only active on SM80+CUDA; SM90+ will raise if a list is unexpectedly passed.
+        if current_platform.is_cuda() and get_sm_version() < 90 and isinstance(x, list):
+            if len(x) != 1:
+                raise RuntimeError(f"Expected single tensor from attention, got list of {len(x)}")
+            x = x[0]
         if self.weight_dtype == "float32":
             linear_out = self.quant_method.apply(self, x.cast("float32"))
         else:
@@ -949,6 +957,13 @@ class RowParallelLinear(LinearBase):
         return out
 
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
+        # SM80: append_attention may return a list. Extract first element
+        # to satisfy quant_method.apply()'s tensor type contract.
+        # Only active on SM80+CUDA; SM90+ will raise if a list is unexpectedly passed.
+        if current_platform.is_cuda() and get_sm_version() < 90 and isinstance(x, list):
+            if len(x) != 1:
+                raise RuntimeError(f"Expected single tensor from attention, got list of {len(x)}")
+            x = x[0]
         if self.split_token:
             x = self.all2all_transpose(x)
 

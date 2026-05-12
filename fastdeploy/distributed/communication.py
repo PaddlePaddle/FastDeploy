@@ -48,7 +48,7 @@ _TP_AR = None
 def capture_custom_allreduce():
     global _TP_AR
     ar_context = nullcontext()
-    if _TP_AR is not None:
+    if _TP_AR is not None and hasattr(_TP_AR, "_ptr"):
         ar_context = _TP_AR.capture()
     with ar_context:
         yield
