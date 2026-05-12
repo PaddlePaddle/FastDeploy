@@ -14,9 +14,8 @@
 
 import argparse
 import unittest
+from importlib.metadata import PackageNotFoundError
 from unittest.mock import MagicMock, patch
-
-import pkg_resources
 
 from fastdeploy.entrypoints.cli.benchmark.eval import (
     BenchmarkEvalSubcommand,
@@ -76,9 +75,8 @@ class TestBenchmarkEvalSubcommand(unittest.TestCase):
         self.assertEqual(args.model, "test_model")
 
     @patch("subprocess.run")
-    @patch("pkg_resources.get_distribution")
-    def test_cmd_basic(self, mock_get_dist, mock_run):
-        mock_get_dist.return_value.version = "0.4.9.1"
+    @patch("fastdeploy.entrypoints.cli.benchmark.eval.get_version", return_value="0.4.9.1")
+    def test_cmd_basic(self, mock_get_version, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
 
         args = argparse.Namespace(
@@ -117,9 +115,8 @@ class TestBenchmarkEvalSubcommand(unittest.TestCase):
         mock_run.assert_called_once()
 
     @patch("subprocess.run")
-    @patch("pkg_resources.get_distribution")
-    def test_cmd_with_complex_args(self, mock_get_dist, mock_run):
-        mock_get_dist.return_value.version = "0.4.9.1"
+    @patch("fastdeploy.entrypoints.cli.benchmark.eval.get_version", return_value="0.4.9.1")
+    def test_cmd_with_complex_args(self, mock_get_version, mock_run):
         mock_run.return_value = MagicMock(returncode=0)
         args = argparse.Namespace(
             model="hf",
@@ -157,9 +154,8 @@ class TestBenchmarkEvalSubcommand(unittest.TestCase):
         mock_run.assert_called_once()
 
     @patch("subprocess.run", side_effect=FileNotFoundError())
-    @patch("pkg_resources.get_distribution")
-    def test_cmd_lm_eval_not_found(self, mock_get_dist, mock_run):
-        mock_get_dist.return_value.version = "0.4.9.1"
+    @patch("fastdeploy.entrypoints.cli.benchmark.eval.get_version", return_value="0.4.9.1")
+    def test_cmd_lm_eval_not_found(self, mock_get_version, mock_run):
         args = argparse.Namespace(
             model="hf",
             tasks="test_task",
@@ -195,9 +191,8 @@ class TestBenchmarkEvalSubcommand(unittest.TestCase):
         with self.assertRaises(SystemExit):
             BenchmarkEvalSubcommand.cmd(args)
 
-    @patch("pkg_resources.get_distribution")
-    def test_cmd_wrong_lm_eval_version(self, mock_get_dist):
-        mock_get_dist.return_value.version = "0.4.8"
+    @patch("fastdeploy.entrypoints.cli.benchmark.eval.get_version", return_value="0.4.8")
+    def test_cmd_wrong_lm_eval_version(self, mock_get_version):
         args = argparse.Namespace(
             model="hf",
             tasks="test_task",
@@ -233,8 +228,8 @@ class TestBenchmarkEvalSubcommand(unittest.TestCase):
         with self.assertRaises(SystemExit):
             BenchmarkEvalSubcommand.cmd(args)
 
-    @patch("pkg_resources.get_distribution", side_effect=pkg_resources.DistributionNotFound)
-    def test_cmd_lm_eval_not_installed(self, mock_get_dist):
+    @patch("fastdeploy.entrypoints.cli.benchmark.eval.get_version", side_effect=PackageNotFoundError("lm_eval"))
+    def test_cmd_lm_eval_not_installed(self, mock_get_version):
         args = argparse.Namespace(
             model="hf",
             tasks="test_task",

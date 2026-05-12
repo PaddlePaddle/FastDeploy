@@ -21,8 +21,8 @@ docker compose -f examples/observability/tracing/tracing_compose.yaml up -d
 - FastDeploy设置环境变量
 
 ```shell
-# 开启Trace
-"TRACES_ENABLE": "true",
+# 开启Trace（off/local/otel/all）
+"FD_TRACE": "otel",
 # 服务名称
 "FD_SERVICE_NAME": "FastDeploy",
 # 实例名称

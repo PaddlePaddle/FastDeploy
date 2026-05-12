@@ -77,10 +77,11 @@ from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     EngineError,
     console_logger,
-    ensure_workerlog_alias,
     envs,
+    get_base_request_id,
     get_logger,
     llm_logger,
+    make_choice_id,
 )
 
 try:
@@ -90,11 +91,13 @@ except:
     from fastdeploy.output.token_processor import TokenProcessor
 
 
-def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
+def _read_latest_worker_traceback(paddle_log_dir: str) -> Optional[str]:
     """读取 workerlog.* 文件中的最新 traceback。"""
 
     try:
-        candidates = sorted(Path(log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True)
+        candidates = sorted(
+            Path(paddle_log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True
+        )
     except OSError:
         return None
 
@@ -112,10 +115,12 @@ def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
     return None
 
 
-def _format_worker_launch_failure_message(log_dir: str) -> str:
+def _format_worker_launch_failure_message(paddle_log_dir: str) -> str:
     """格式化 worker 启动失败的错误消息，包含 traceback 信息。"""
-    message = "Failed to launch worker processes, check log/workerlog.* for more details."
-    traceback_text = _read_latest_worker_traceback(log_dir)
+    message = (
+        "Failed to launch worker processes, check log/paddle/workerlog.* and log/worker_process.log for more details."
+    )
+    traceback_text = _read_latest_worker_traceback(paddle_log_dir)
     if traceback_text:
         return f"{message}\n{traceback_text}"
     return message
@@ -301,7 +306,7 @@ class EngineService:
         def check_worker_initialize_status_func(res: dict):
             res["worker_is_alive"] = True
             if not self.check_worker_initialize_status():
-                self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+                self.llm_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
                 res["worker_is_alive"] = False
 
         self.check_worker_initialize_status_func_thread = threading.Thread(
@@ -331,7 +336,7 @@ class EngineService:
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
         if not result_container["worker_is_alive"]:
-            self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+            self.llm_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
             return False
 
         # Start ZMQ service for communication with AsyncLLM
@@ -533,7 +538,7 @@ class EngineService:
 
         need_delete_tasks = []
         for task in tasks:
-            rid = task.request_id.split("_")[0]
+            rid = get_base_request_id(task.request_id)
             trace_carrier = task.trace_carrier
             if trace_carrier:
                 tracing.trace_set_proc_propagate_context(rid, trace_carrier)
@@ -602,7 +607,7 @@ class EngineService:
                     task.metrics.inference_start_time = time.time()
                     tracing.trace_report_span(
                         tracing.TraceSpanName.SCHEDULE,
-                        task.request_id.split("_")[0],
+                        get_base_request_id(task.request_id),
                         int(task.metrics.scheduler_recv_req_time * 1e9),
                         int(task.metrics.inference_start_time * 1e9),
                         thread_finish_flag=True,
@@ -955,6 +960,9 @@ class EngineService:
                             self.llm_logger.debug(
                                 f"P has allocated resources and then ask D resource for request: {task.request_id}"
                             )
+                            trace_print(
+                                LoggingEventName.ASK_DECODE_RESOURCE_START, task.request_id, getattr(task, "user", "")
+                            )
                             task.metrics.ask_decode_resource_start_time = time.time()
                             while True:
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
@@ -966,6 +974,11 @@ class EngineService:
                                     time.sleep(0.05)
                                 else:
                                     task.metrics.ask_decode_resource_finish_time = time.time()
+                                    trace_print(
+                                        LoggingEventName.ASK_DECODE_RESOURCE_END,
+                                        task.request_id,
+                                        getattr(task, "user", ""),
+                                    )
                                     break
                             self.llm_logger.debug(f"D has allocated resource for request: {task.request_id}")
                     else:
@@ -977,6 +990,9 @@ class EngineService:
                             self.llm_logger.debug(
                                 f"P has allocated resources and then ask D resource for req_id: {task.request_id}"
                             )
+                            trace_print(
+                                LoggingEventName.ASK_DECODE_RESOURCE_START, task.request_id, getattr(task, "user", "")
+                            )
                             task.metrics.ask_decode_resource_start_time = time.time()
                             self.split_connector.send_splitwise_tasks([task], task.idx)
 
@@ -984,6 +1000,9 @@ class EngineService:
                             # assure fetch block ids from D
                             status, msg = self.split_connector.check_decode_allocated(task)
                             task.metrics.ask_decode_resource_finish_time = time.time()
+                            trace_print(
+                                LoggingEventName.ASK_DECODE_RESOURCE_END, task.request_id, getattr(task, "user", "")
+                            )
                             if not status:
                                 error_msg = (
                                     f"PD Error: prefill failed to apply for resource from decode, "
@@ -1000,6 +1019,7 @@ class EngineService:
                                         )
                                     ]
                                 )
+                                main_process_metrics.reschedule_req_num.inc()
                                 need_delete_tasks.append(task)
                                 continue
                     for tmp_task in need_delete_tasks:
@@ -1110,6 +1130,7 @@ class EngineService:
                                     f"preallocated request. req:{task.request_id} "
                                 )
                                 self.llm_logger.error(msg)
+                                main_process_metrics.reschedule_req_num.inc()
                                 self.scheduler.put_results(
                                     [
                                         RequestOutput(
@@ -1123,7 +1144,7 @@ class EngineService:
                     self.resource_manager.get_real_bsz()
                     for task in batch_request:
                         if task.task_type == RequestType.PREFILL:
-                            rid = task.request_id.split("_")[0]
+                            rid = get_base_request_id(task.request_id)
                             if isinstance(task, Request) and task.has_been_preempted_before:
                                 trace_print(
                                     LoggingEventName.RESCHEDULED_INFERENCE_START,
@@ -1305,7 +1326,7 @@ class EngineService:
                         main_process_metrics.requests_number.inc()
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
-                            request_id = data["request_id"].split("_")[0]
+                            request_id = get_base_request_id(data["request_id"])
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
@@ -1604,8 +1625,8 @@ class EngineService:
                 if rid in now_reqs:
                     target_req_ids.append(rid)
                     matched_input_ids.add(rid)
-                elif f"{rid}_0" in now_reqs:
-                    target_req_ids.append(f"{rid}_0")
+                elif make_choice_id(rid, 0) in now_reqs:
+                    target_req_ids.append(make_choice_id(rid, 0))
                     matched_input_ids.add(rid)
 
         if not target_req_ids:
@@ -1701,6 +1722,7 @@ class EngineService:
             if not remaining:
                 self.llm_logger.info(f"all {len(target_set)} abort reqs cleaned")
                 return
+            self.llm_logger.debug(f"remaining:{remaining}")
 
             current_count = len(remaining)
             if current_count < prev_remaining_count:
@@ -1929,7 +1951,9 @@ class EngineService:
             try:
                 response = task.result()
             except Exception as e:
-                self.llm_logger.error(f"Waiting for control response from {name} failed: {repr(e)}")
+                self.llm_logger.error(
+                    f"Waiting for control response from {name} failed: {repr(e)}, {traceback.format_exc()}"
+                )
                 raise
 
             if response.error_code != 200:
@@ -2109,6 +2133,7 @@ class EngineService:
             processed_indices = []
             for idx, task in enumerate(allocate_resource_requests):
                 is_success = False
+                trace_print(LoggingEventName.DECODE_PROCESS_PREALLOCATE_REQUEST_START, task.request_id, task.user)
 
                 if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                     if self.resource_manager.preallocate_resource_in_d(task):
@@ -2118,6 +2143,7 @@ class EngineService:
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                         is_success = True
+                        main_process_metrics.decode_preallocated_req_num.inc()
                 else:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
                         self.llm_logger.debug(f"D Resource available, processing task {task.request_id}")
@@ -2137,6 +2163,11 @@ class EngineService:
                         break
 
             for idx in sorted(processed_indices, reverse=True):
+                trace_print(
+                    LoggingEventName.DECODE_PROCESS_PREALLOCAT_REQUEST_END,
+                    allocate_resource_requests[idx].request_id,
+                    allocate_resource_requests[idx].user,
+                )
                 allocate_resource_requests.pop(idx)
 
         def _process_prefilled_requests():
@@ -2152,6 +2183,7 @@ class EngineService:
                     continue
                 req_output.finished = False
                 ready_request_outputs.append(req_output)
+                trace_print(LoggingEventName.DECODE_PROCESS_PREFILLED_REQUEST_START, req_output.request_id, "")
                 self.llm_logger.debug(f"there are enough resource for prefilled request: {req_output.request_id}")
 
             prefilled_request_ouputs = waiting_request_outputs
@@ -2164,6 +2196,8 @@ class EngineService:
             else:
                 for req_output in ready_request_outputs:
                     request_id = req_output.request_id
+                    main_process_metrics.decode_preallocated_req_num.dec()
+                    trace_print(LoggingEventName.DECODE_PROCESS_PREFILLED_REQUEST_END, request_id, "")
                     if envs.FD_ENABLE_INTERNAL_ADAPTER and not req_output.outputs.token_ids:
                         # first token is eos in Prefill, just recycle resource and continue
                         self.llm_logger.warning(f"{request_id} need not decode after first token")
@@ -2177,6 +2211,7 @@ class EngineService:
                         self.llm_logger.warning(
                             f"{request_id} prefill failed with msg:{req_output.error_msg}, recycle resource."
                         )
+                        main_process_metrics.failed_recv_first_token_req_num.inc()
                         self.resource_manager.pre_recycle_resource(request_id)
                         if request_id in self.token_processor.tokens_counter:
                             del self.token_processor.tokens_counter[request_id]
@@ -2204,6 +2239,8 @@ class EngineService:
         threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            return []
         console_logger.debug("Start cache manager...")
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
@@ -2233,7 +2270,7 @@ class EngineService:
             self.llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:
-            self.llm_logger.error(f"Clear data error: {e}")
+            self.llm_logger.error(f"Clear data error: {e}, {traceback.format_exc()}")
             return False
 
     def _exit_sub_services(self):
@@ -2593,7 +2630,9 @@ class EngineService:
         while self.get_profile_block_num_signal.value[0] == 0:
             if hasattr(self, "worker_proc") and self.worker_proc is not None:
                 if self.worker_proc.poll() is not None:
-                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
+                    raise RuntimeError(
+                        "Worker process failed to start. Please check log/paddle/workerlog.* and log/worker_process.log for details."
+                    )
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
@@ -2736,7 +2775,4 @@ class EngineService:
             self.checking_worker_status_thread.join(timeout=1)
         except Exception:
             pass
-        # Create symlinks for paddle workerlog files after workers are ready
-        if hasattr(self, "log_dir") and hasattr(self, "paddle_log_dir"):
-            ensure_workerlog_alias(self.log_dir, self.paddle_log_dir)
         return True

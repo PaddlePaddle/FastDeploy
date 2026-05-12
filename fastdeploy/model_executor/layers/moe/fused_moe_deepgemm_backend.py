@@ -19,6 +19,7 @@ import threading
 from typing import Callable
 
 import paddle
+import paddle.nn.functional as F
 from paddle import nn
 from paddleformers.utils.log import logger
 
@@ -346,6 +347,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
+        if layer.routed_scaling_factor_learnable:
+            safe_topk_indices = paddle.clip(topk_idx, min=0)
+            gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+            topk_weights = topk_weights * gathered_scales
+
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
@@ -671,6 +677,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
+        if layer.routed_scaling_factor_learnable:
+            safe_topk_indices = paddle.clip(topk_idx, min=0)
+            gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+            topk_weights = topk_weights * gathered_scales
+
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
@@ -761,9 +772,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         below is TP compute method.
         """
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
 
         if layer.topk_method == "noaux_tc":
+            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -773,8 +786,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
                 topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,
@@ -782,6 +797,11 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 True,  # apply_norm_weight
                 False,
             )
+
+        if layer.routed_scaling_factor_learnable:
+            safe_topk_indices = paddle.clip(topk_ids, min=0)
+            gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+            topk_weights = topk_weights * gathered_scales
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_ids)

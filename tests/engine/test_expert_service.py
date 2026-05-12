@@ -99,6 +99,7 @@ class TestExpertService(unittest.TestCase):
     def test_start_method(self, mock_envs, mock_threading, mock_time, mock_engine_service):
         mock_envs.FD_ENABLE_RETURN_TEXT = False
         mock_envs.FD_ENABLE_MULTI_API_SERVER = False
+        mock_envs.ENABLE_V1_KVCACHE_MANAGER = False
 
         local_data_parallel_id = 0
 
@@ -284,6 +285,72 @@ class TestExpertService(unittest.TestCase):
         # Verify retry logic was triggered
         self.assertEqual(call_count[0], 3)  # Failed twice, succeeded on third try
         self.assertTrue(result)
+
+    @patch("fastdeploy.engine.expert_service.EngineService")
+    @patch("fastdeploy.engine.expert_service.time")
+    @patch("fastdeploy.engine.expert_service.threading")
+    @patch("fastdeploy.engine.expert_service.envs")
+    @patch("fastdeploy.engine.expert_service.IPCSignal")
+    def test_start_does_not_call_cache_service_when_v1_enabled(
+        self, mock_ipc_signal, mock_envs, mock_threading, mock_time, mock_engine_service
+    ):
+        """When ENABLE_V1_KVCACHE_MANAGER=1, start() must NOT call start_cache_service."""
+        mock_envs.FD_ENABLE_RETURN_TEXT = False
+        mock_envs.FD_ENABLE_MULTI_API_SERVER = False
+        mock_envs.ENABLE_V1_KVCACHE_MANAGER = True
+
+        mock_ipc_signal.return_value = Mock(value=[100])
+        mock_engine_instance = mock_engine_service.return_value
+
+        expert_service = ExpertService(self.mock_cfg, 0)
+        expert_service.start(None, 0)
+
+        mock_engine_instance.start_cache_service.assert_not_called()
+
+    @patch("fastdeploy.engine.expert_service.EngineService")
+    @patch("fastdeploy.engine.expert_service.time")
+    @patch("fastdeploy.engine.expert_service.threading")
+    @patch("fastdeploy.engine.expert_service.envs")
+    @patch("fastdeploy.engine.expert_service.IPCSignal")
+    def test_start_calls_cache_service_when_v1_disabled_prefix_caching(
+        self, mock_ipc_signal, mock_envs, mock_threading, mock_time, mock_engine_service
+    ):
+        """When ENABLE_V1_KVCACHE_MANAGER=0 and enable_prefix_caching=True, start_cache_service is called."""
+        mock_envs.FD_ENABLE_RETURN_TEXT = False
+        mock_envs.FD_ENABLE_MULTI_API_SERVER = False
+        mock_envs.ENABLE_V1_KVCACHE_MANAGER = False
+
+        self.mock_cfg.cache_config.enable_prefix_caching = True
+        mock_ipc_signal.return_value = Mock(value=[100])
+        mock_engine_instance = mock_engine_service.return_value
+        mock_engine_instance.start_cache_service.return_value = [Mock(pid=1234)]
+
+        expert_service = ExpertService(self.mock_cfg, 0)
+        expert_service.start(None, 0)
+
+        mock_engine_instance.start_cache_service.assert_called_once()
+
+    @patch("fastdeploy.engine.expert_service.EngineService")
+    @patch("fastdeploy.engine.expert_service.time")
+    @patch("fastdeploy.engine.expert_service.threading")
+    @patch("fastdeploy.engine.expert_service.envs")
+    @patch("fastdeploy.engine.expert_service.IPCSignal")
+    def test_start_skips_cache_service_when_v1_enabled_regardless_of_prefix_caching(
+        self, mock_ipc_signal, mock_envs, mock_threading, mock_time, mock_engine_service
+    ):
+        """ENABLE_V1_KVCACHE_MANAGER=1 takes precedence: even with enable_prefix_caching=True, no v0 launch."""
+        mock_envs.FD_ENABLE_RETURN_TEXT = False
+        mock_envs.FD_ENABLE_MULTI_API_SERVER = False
+        mock_envs.ENABLE_V1_KVCACHE_MANAGER = True
+
+        self.mock_cfg.cache_config.enable_prefix_caching = True
+        mock_ipc_signal.return_value = Mock(value=[100])
+        mock_engine_instance = mock_engine_service.return_value
+
+        expert_service = ExpertService(self.mock_cfg, 0)
+        expert_service.start(None, 0)
+
+        mock_engine_instance.start_cache_service.assert_not_called()
 
 
 if __name__ == "__main__":

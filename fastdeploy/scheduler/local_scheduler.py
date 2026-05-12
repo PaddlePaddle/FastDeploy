@@ -130,8 +130,11 @@ class LocalScheduler:
         if request_id is not None:
             self.requests.pop(request_id, None)
             self.responses.pop(request_id, None)
-            self.ids.pop(self.ids.index(request_id))
-            self.ids_read_cursor -= 1
+            idx = self.ids.index(request_id)
+            self.ids.pop(idx)
+            if idx < self.ids_read_cursor:
+                self.ids_read_cursor -= 1
+            scheduler_logger.debug(f"request_id : {request_id} has been recycled")
             return
 
         if self.max_size <= 0:

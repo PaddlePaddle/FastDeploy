@@ -1584,6 +1584,21 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         self.assertEqual(flush_task.gpu_block_ids, [])
         self.assertEqual(flush_task.start_write_block_idx, 2)
 
+    def test_free_nodes_directly_logs_error_and_raises_when_tree_normal(self):
+        """Test free_nodes_directly logs error with traceback when exception occurs and tree is NORMAL."""
+        manager = _create_manager(num_gpu_blocks=6)
+        manager.prefix_tree_status_signal = SimpleNamespace(value=np.array([PrefixTreeStatus.NORMAL]))
+
+        node = _make_block_node(manager, 42, [1, 2], block_size=2, cache_status=CacheStatus.GPU)
+        node.shared_count = 0
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.gpu_lru_leaf_set.add(node)
+
+        # Make _handle_free_gpu_node_without_cpu raise an exception
+        with patch.object(manager, "_handle_free_gpu_node_without_cpu", side_effect=RuntimeError("test error")):
+            with self.assertRaises(RuntimeError):
+                manager.free_nodes_directly(node)
+
 
 if __name__ == "__main__":
     unittest.main()

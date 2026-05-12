@@ -184,24 +184,65 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
       real_bsz);
 }
 
+template <int BLOCK_DIM, int ITEMS_PER_THREAD>
+__global__ void compute_cu_batch_offset_kernel(int* cu_batch_token_offset,
+                                               const int* accept_num,
+                                               const int real_bsz) {
+  using BlockScan = cub::BlockScan<int, BLOCK_DIM>;
+  __shared__ typename BlockScan::TempStorage temp_storage;
+
+  int tid = threadIdx.x;
+  if (tid == 0) cu_batch_token_offset[0] = 0;
+
+  int thread_data[ITEMS_PER_THREAD];
+
+  for (int i = 0; i < ITEMS_PER_THREAD; i++) {
+    int batch_id = tid * ITEMS_PER_THREAD + i;
+    thread_data[i] =
+        batch_id < real_bsz ? accept_num[tid * ITEMS_PER_THREAD + i] : 0;
+  }
+
+  BlockScan(temp_storage).InclusiveSum(thread_data, thread_data);
+  __syncthreads();
+
+  for (int i = 0; i < ITEMS_PER_THREAD; i++) {
+    int batch_id = tid * ITEMS_PER_THREAD + i;
+    if (batch_id < real_bsz) {
+      cu_batch_token_offset[batch_id + 1] = thread_data[i];
+    }
+  }
+}
+
 template <int VecSize>
-__global__ void speculate_get_target_logits_kernel(
+__global__ void speculate_get_accept_tokens_and_logits_kernel(
+    int64_t* token_ids,
     float* target_logits,
     const float* logits,
     const int* cu_batch_token_offset,
-    const int* ori_cu_batch_token_offset,
+    const int* cu_seqlens_q_output,
     const int* seq_lens_this_time,
     const int* seq_lens_encoder,
     const int* accept_num,
+    const int64_t* accept_tokens,
     const int vocab_size,
+    const int max_draft_tokens,
     const int real_bsz) {
   AlignedVector<float, VecSize> src_vec;
   const int bid = blockIdx.x;
   const int tid = threadIdx.x;
   if (bid < real_bsz) {
+    // get token_ids
+    if (tid == 0) {
+      auto* accept_tokens_now = accept_tokens + bid * max_draft_tokens;
+      for (int i = 0; i < accept_num[bid]; i++) {
+        token_ids[cu_batch_token_offset[bid] + i] = accept_tokens_now[i];
+      }
+    }
+
+    // get output_logits
     auto* target_logits_now =
         target_logits + cu_batch_token_offset[bid] * vocab_size;
-    auto* logits_now = logits + ori_cu_batch_token_offset[bid] * vocab_size;
+    auto* logits_now = logits + cu_seqlens_q_output[bid] * vocab_size;
     for (int i = tid * VecSize; i < vocab_size; i += blockDim.x * VecSize) {
       if (seq_lens_encoder[bid] > 0) {
         Load<float, VecSize>(&logits_now[i], &src_vec);
@@ -217,31 +258,64 @@ __global__ void speculate_get_target_logits_kernel(
   }
 }
 
-void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
-                              const paddle::Tensor& logits,
-                              const paddle::Tensor& cu_batch_token_offset,
-                              const paddle::Tensor& ori_cu_batch_token_offset,
-                              const paddle::Tensor& seq_lens_this_time,
-                              const paddle::Tensor& seq_lens_encoder,
-                              const paddle::Tensor& accept_num) {
+void SpeculateGetAcceptTokensAndLogits(
+    const paddle::Tensor& token_ids,
+    const paddle::Tensor& target_logits,
+    const paddle::Tensor& logits,
+    const paddle::Tensor& cu_batch_token_offset,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& accept_tokens) {
   auto cu_stream = seq_lens_this_time.stream();
   const int vocab_size = logits.shape()[1];
-  const int real_bsz = seq_lens_this_time.shape()[0];
+  const int max_occupied_slots = seq_lens_this_time.shape()[0];
+  const int max_draft_tokens = accept_tokens.shape()[1];
+
+  const int BLOCK_DIM = 512;
+  PADDLE_ENFORCE_LE(max_occupied_slots,
+                    2048,
+                    phi::errors::InvalidArgument(
+                        "Only support bsz <= 2048, but received bsz is ",
+                        max_occupied_slots));
+  if (max_occupied_slots <= 512) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 1>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            max_occupied_slots);
+  } else if (max_occupied_slots <= 1024) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 2>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            max_occupied_slots);
+  } else if (max_occupied_slots <= 2048) {
+    compute_cu_batch_offset_kernel<BLOCK_DIM, 4>
+        <<<1, BLOCK_DIM, 0, cu_stream>>>(
+            const_cast<int*>(cu_batch_token_offset.data<int>()),
+            accept_num.data<int>(),
+            max_occupied_slots);
+  }
 
   constexpr int PackSize = VEC_16B / sizeof(float);
-  dim3 grid_dim(real_bsz);
+  dim3 grid_dim(max_occupied_slots);
   dim3 block_dim(128);
-  speculate_get_target_logits_kernel<PackSize>
+  speculate_get_accept_tokens_and_logits_kernel<PackSize>
       <<<grid_dim, block_dim, 0, cu_stream>>>(
+          const_cast<int64_t*>(token_ids.data<int64_t>()),
           const_cast<float*>(target_logits.data<float>()),
           logits.data<float>(),
           cu_batch_token_offset.data<int>(),
-          ori_cu_batch_token_offset.data<int>(),
+          cu_seqlens_q_output.data<int>(),
           seq_lens_this_time.data<int>(),
           seq_lens_encoder.data<int>(),
           accept_num.data<int>(),
+          accept_tokens.data<int64_t>(),
           vocab_size,
-          real_bsz);
+          max_draft_tokens,
+          max_occupied_slots);
 }
 
 PD_BUILD_STATIC_OP(speculate_get_logits)
@@ -274,14 +348,20 @@ PD_BUILD_STATIC_OP(speculate_insert_first_token)
     .SetInplaceMap({{"token_ids", "token_ids_out"}})
     .SetKernelFn(PD_KERNEL(SpeculateInsertFirstToken));
 
-PD_BUILD_STATIC_OP(speculate_get_target_logits)
-    .Inputs({"target_logits",
+PD_BUILD_STATIC_OP(speculate_get_accept_tokens_and_logits)
+    .Inputs({"token_ids",
+             "target_logits",
              "logits",
              "cu_batch_token_offset",
-             "ori_cu_batch_token_offset",
+             "cu_seqlens_q_output",
              "seq_lens_this_time",
              "seq_lens_encoder",
-             "accept_num"})
-    .Outputs({"target_logits_out"})
-    .SetInplaceMap({{"target_logits", "target_logits_out"}})
-    .SetKernelFn(PD_KERNEL(SpeculateGetTargetLogits));
+             "accept_num",
+             "accept_tokens"})
+    .Outputs({"token_ids_out",
+              "target_logits_out",
+              "cu_batch_token_offset_out"})
+    .SetInplaceMap({{"token_ids", "token_ids_out"},
+                    {"target_logits", "target_logits_out"},
+                    {"cu_batch_token_offset", "cu_batch_token_offset_out"}})
+    .SetKernelFn(PD_KERNEL(SpeculateGetAcceptTokensAndLogits));

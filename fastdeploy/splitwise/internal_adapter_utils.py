@@ -105,6 +105,15 @@ class InternalAdapter:
                     with self.response_lock:
                         self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
 
+                elif task["cmd"] == "interrupt_requests":
+                    self.engine.resource_manager.add_abort_req_ids(task["req_ids"])
+                    result = {
+                        "task_id": task_id_str,
+                        "result": {"success": True, "interrupted_req_ids": task["req_ids"]},
+                    }
+                    with self.response_lock:
+                        self.recv_control_cmd_server.response_for_control_cmd(task_id_str, result)
+
             except Exception as e:
                 logger.error(f"handle_control_cmd got error: {e}, {traceback.format_exc()!s}")
 

@@ -792,7 +792,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 
     async def test_add_requests_with_n_parameter_multiple_requests(self):
         """Test add_requests with n parameter for multiple requests."""
-        task = {"request_id": "test-id_1", "prompt_token_ids": [1, 2, 3], "n": 3, "max_tokens": 100}
+        task = {"request_id": "test-id::n::1", "prompt_token_ids": [1, 2, 3], "n": 3, "max_tokens": 100}
 
         with patch.object(self.engine_client, "_send_task") as mock_send:
             await self.engine_client.add_requests(task)
@@ -1742,7 +1742,7 @@ def test_format_add_data_and_abort_paths(minimal_engine_client):
         minimal_engine_client._send_task = Mock()
         asyncio.run(minimal_engine_client.abort("broken-format", n=2))
         sent_ids = [call.args[0]["request_id"] for call in minimal_engine_client._send_task.call_args_list]
-        assert sent_ids == ["broken-format_0", "broken-format_1"]
+        assert sent_ids == ["broken-format::n::0", "broken-format::n::1"]
 
 
 def test_add_requests_uses_async_processor_and_tensor_send(minimal_engine_client):
@@ -2123,7 +2123,7 @@ def test_abort_n_non_positive_and_numeric_suffix(minimal_engine_client):
 
         asyncio.run(minimal_engine_client.abort("req_8", n=2))
         sent_ids = [c.args[0]["request_id"] for c in minimal_engine_client._send_task.call_args_list]
-        assert sent_ids[-2:] == ["req_0", "req_1"]
+        assert sent_ids[-2:] == ["req_8::n::0", "req_8::n::1"]
 
 
 class TestProcessMessages:
