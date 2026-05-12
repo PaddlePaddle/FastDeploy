@@ -1120,7 +1120,7 @@ class SpeculativeSampler(nn.Layer):
         logits_ori = None
         if FD_SAMPLING_CLASS.lower() == "triton":
             logits_ori = logits.clone()
-            top_p, top_k, topp_seed = build_sampling_params(
+            top_p, top_k, _ = build_sampling_params(
                 sampling_metadata.top_p,
                 sampling_metadata.top_k,
                 sampling_metadata.seed,
