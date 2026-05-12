@@ -16,7 +16,9 @@
 
 import glob
 import os
+import platform
 import re
+import shutil
 import subprocess
 import sys
 from functools import lru_cache
@@ -42,8 +44,98 @@ PLAT_TO_CMAKE = {
 }
 
 
+FD_ROUTER_BASE_URL = "https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest"
+
+# Map host architecture to binary filename and expected `file` output pattern.
+FD_ROUTER_ARCH_MAP = {
+    "x86_64": {
+        "filename": "fd-router",
+        "file_pattern": "x86-64",
+    },
+    "aarch64": {
+        "filename": "fd-router-aarch64",
+        "file_pattern": "aarch64|ARM aarch64",
+    },
+}
+
+
+def download_fd_router():
+    """Download fd-router binary if not already present.
+
+    Downloads the pre-compiled golang router binary into the source tree
+    so it gets packaged into the wheel. Skipped on non-Linux or unsupported
+    architectures. Download failure is non-fatal (golang router is optional).
+    """
+    host_arch = platform.machine()
+    arch_info = FD_ROUTER_ARCH_MAP.get(host_arch)
+    if arch_info is None:
+        print(
+            f"[golang_router] Unsupported architecture '{host_arch}', skipping download "
+            f"(please build from source: https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)"
+        )
+        return
+
+    router_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fastdeploy", "golang_router")
+    router_bin = os.path.join(router_dir, "fd-router")
+
+    if os.path.isfile(router_bin) and os.access(router_bin, os.X_OK):
+        print("[golang_router] fd-router already exists, skipping download")
+        return
+
+    if platform.system() != "Linux":
+        print(f"[golang_router] Skipping download on {platform.system()}")
+        return
+
+    download_url = f"{FD_ROUTER_BASE_URL}/{arch_info['filename']}"
+    print(f"[golang_router] Downloading fd-router binary for {host_arch}...")
+    os.makedirs(router_dir, exist_ok=True)
+
+    tmp_bin = router_bin + ".tmp"
+    try:
+        subprocess.run(
+            ["wget", "-q", "--no-proxy", download_url, "-O", tmp_bin],
+            check=True,
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        print("[golang_router] WARNING: Failed to download fd-router, skipping (golang router is optional)")
+        if os.path.exists(tmp_bin):
+            os.remove(tmp_bin)
+        return
+
+    # Sanity checks
+    try:
+        file_output = subprocess.run(["file", tmp_bin], capture_output=True, text=True, check=True).stdout
+        if "ELF" not in file_output:
+            print("[golang_router] WARNING: fd-router is not an ELF binary, skipping")
+            os.remove(tmp_bin)
+            return
+        if not re.search(arch_info["file_pattern"], file_output):
+            print(f"[golang_router] WARNING: fd-router architecture mismatch (expected {host_arch}), skipping")
+            os.remove(tmp_bin)
+            return
+
+        file_size = os.path.getsize(tmp_bin)
+        if file_size < 1_000_000:
+            print(f"[golang_router] WARNING: fd-router size too small ({file_size} bytes), skipping")
+            os.remove(tmp_bin)
+            return
+    except Exception as e:
+        print(f"[golang_router] WARNING: Sanity check failed: {e}, skipping")
+        if os.path.exists(tmp_bin):
+            os.remove(tmp_bin)
+        return
+
+    shutil.move(tmp_bin, router_bin)
+    os.chmod(router_bin, 0o755)
+    print("[golang_router] fd-router downloaded successfully")
+
+
 class CustomBdistWheel(bdist_wheel):
     """Custom wheel builder."""
+
+    def run(self):
+        download_fd_router()
+        super().run()
 
     def finalize_options(self):
         """Configure wheel as {python tag}-{abi tag}-{platform tag}."""
@@ -306,6 +398,7 @@ setup(
             "model_executor/ops/gcu/*",
             "model_executor/ops/gcu/fastdeploy_ops/*",
             "cache_manager/transfer_factory/get_rdma_nics.sh",
+            "golang_router/fd-router",
             "version.txt",
         ]
     },
@@ -321,7 +414,7 @@ setup(
         if rdma_comm_supported()
         else []
     ),
-    cmdclass=cmdclass_dict if rdma_comm_supported() else {},
+    cmdclass=cmdclass_dict,
     zip_safe=False,
     classifiers=[
         "Programming Language :: Python :: 3",

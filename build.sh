@@ -20,6 +20,7 @@ function show_help() {
   echo "BUILD_WHEEL modes:"
   echo "  0  Build custom ops only (no wheel packaging or pip install)"
   echo "  1  Full build: compile C++ ops + build wheel + pip install (default)"
+  echo "  2  Package wheel only (skip custom ops compilation, reuse existing .so files)"
   echo ""
   echo "Arguments:"
   echo "  PYTHON            Python executable (default: python)"
@@ -29,8 +30,9 @@ function show_help() {
   echo "  FD_COMMIT_ID      Commit ID for precompiled wheel lookup"
   echo ""
   echo "Examples:"
-  echo "  bash build.sh 1 python false \"[90]\"   # Full build for SM90"
-  echo "  bash build.sh 0 python false \"[80,90]\" # Build ops only"
+  echo "  bash build.sh 1 python false \"[90]\"       # Full build for SM90"
+  echo "  bash build.sh 0 python false \"[80,90]\"     # Build ops only"
+  echo "  bash build.sh 2 python                       # Package wheel only (skip ops compilation)"
   exit 0
 }
 
@@ -465,6 +467,39 @@ if [ "$BUILD_WHEEL" -eq 1 ]; then
   PYTHON_VERSION=`${python} -c "import platform; print(platform.python_version())"`
 
   echo -e "\n${GREEN}fastdeploy wheel compiled and checked success${NONE}
+          ${BLUE}Python version:${NONE} $PYTHON_VERSION
+          ${BLUE}Paddle version:${NONE} $PADDLE_VERSION ($PADDLE_COMMIT)
+          ${BLUE}fastdeploy branch:${NONE} $EFFLLM_BRANCH ($EFFLLM_COMMIT)\n"
+
+  echo -e "${GREEN}wheel saved under${NONE} ${RED}${BOLD}./dist${NONE}"
+
+  # install wheel
+  ${python} -m pip install ./dist/fastdeploy*.whl
+  echo -e "${GREEN}wheel install success${NONE}\n"
+
+  trap : 0
+elif [ "$BUILD_WHEEL" -eq 2 ]; then
+  trap 'abort' 0
+  set -e
+
+  init
+  version_info
+  echo -e "${BLUE}[MODE]${NONE} Packaging wheel only (skipping custom ops compilation)..."
+  build_and_install
+  cleanup
+
+  # get Paddle version
+  PADDLE_VERSION=`${python} -c "import paddle; print(paddle.version.full_version)"`
+  PADDLE_COMMIT=`${python} -c "import paddle; print(paddle.version.commit)"`
+
+  # get fastdeploy version
+  EFFLLM_BRANCH=`git rev-parse --abbrev-ref HEAD`
+  EFFLLM_COMMIT=`git rev-parse --short HEAD`
+
+  # get Python version
+  PYTHON_VERSION=`${python} -c "import platform; print(platform.python_version())"`
+
+  echo -e "\n${GREEN}fastdeploy wheel packaged successfully (ops not rebuilt)${NONE}
           ${BLUE}Python version:${NONE} $PYTHON_VERSION
           ${BLUE}Paddle version:${NONE} $PADDLE_VERSION ($PADDLE_COMMIT)
           ${BLUE}fastdeploy branch:${NONE} $EFFLLM_BRANCH ($EFFLLM_COMMIT)\n"

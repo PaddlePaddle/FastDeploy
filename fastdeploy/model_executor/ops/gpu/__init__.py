@@ -29,7 +29,9 @@ def decide_module():
     # to support all hardware platforms (NVIDIA, ILUVATAR, HPU, etc.)
     prop = paddle.device.get_device_properties()
     sm_version = prop.major * 10 + prop.minor
-    print(f"current sm_version={sm_version}")
+    import logging
+
+    logging.debug(f"current sm_version={sm_version}")
 
     curdir = os.path.dirname(os.path.abspath(__file__))
     sm_version_path = os.path.join(curdir, f"fastdeploy_ops_{sm_version}")
