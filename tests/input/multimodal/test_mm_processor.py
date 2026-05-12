@@ -280,7 +280,7 @@ class TestResolveMmData(unittest.TestCase):
         self.assertEqual(ctx.mm_order, ["video", "image"])
 
     def test_mm_order_missing_raises(self):
-        """Without mm_order, raises ValueError."""
+        """Without mm_order, raises ValueError when images/videos exist."""
         request = {
             "prompt": "test",
             "multimodal_data": {
@@ -290,6 +290,15 @@ class TestResolveMmData(unittest.TestCase):
         }
         with self.assertRaises(ValueError):
             self.proc._resolve_mm_data(request)
+
+    def test_mm_order_missing_no_mm_items_ok(self):
+        """Without mm_order but no images/videos, defaults to [] (pure text)."""
+        request = {
+            "prompt": "test",
+            "multimodal_data": {},
+        }
+        ctx = self.proc._resolve_mm_data(request)
+        self.assertEqual(ctx.mm_order, [])
 
     def test_videos_parsed(self):
         request = {

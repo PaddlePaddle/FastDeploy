@@ -226,12 +226,14 @@ class MMProcessor(ABC):
             else:
                 videos.append(MMItem(type="video", data=vid, uuid=None))
 
-        # Interleaved type order: must be provided in mm_data.
+        # Interleaved type order: must be provided when multimodal items exist.
         mm_order = mm_data.get("mm_order")
         if not mm_order:
-            raise ValueError(
-                "multimodal_data must contain 'mm_order' specifying the interleaved order of images and videos"
-            )
+            if images or videos:
+                raise ValueError(
+                    "multimodal_data must contain 'mm_order' specifying the interleaved order of images and videos"
+                )
+            mm_order = []
 
         if request.get("prompt_token_ids"):
             return MMContext(
