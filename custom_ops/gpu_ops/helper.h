@@ -73,6 +73,8 @@ namespace cub = hipcub;
 using json = nlohmann::json;
 #endif
 
+#define CEILDIV(a, b) (((a + b - 1) / b))
+
 #define CUDA_CHECK(call)                           \
   do {                                             \
     const cudaError_t error_code = call;           \
