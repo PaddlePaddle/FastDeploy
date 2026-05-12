@@ -236,7 +236,10 @@ class TestResolveMmData(unittest.TestCase):
             self.proc._resolve_mm_data({})
 
     def test_from_text_path(self):
-        request = {"prompt": "Hello <image>", "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}]}}
+        request = {
+            "prompt": "Hello <image>",
+            "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}], "mm_order": ["image"]},
+        }
         ctx = self.proc._resolve_mm_data(request)
         self.assertEqual(ctx.path, TokenizationPath.FROM_TEXT)
         self.assertEqual(len(ctx.images), 1)
@@ -244,7 +247,10 @@ class TestResolveMmData(unittest.TestCase):
         self.assertEqual(ctx.images[0].uuid, "u1")
 
     def test_pretokenized_path(self):
-        request = {"prompt_token_ids": [1, 2, 3], "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}]}}
+        request = {
+            "prompt_token_ids": [1, 2, 3],
+            "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}], "mm_order": ["image"]},
+        }
         ctx = self.proc._resolve_mm_data(request)
         self.assertEqual(ctx.path, TokenizationPath.PRETOKENIZED)
         self.assertEqual(ctx.prompt_token_ids, [1, 2, 3])
@@ -252,7 +258,7 @@ class TestResolveMmData(unittest.TestCase):
     def test_dict_images_parsed(self):
         request = {
             "prompt": "test",
-            "multimodal_data": {"image": [{"data": "img_data", "uuid": "img_uuid"}]},
+            "multimodal_data": {"image": [{"data": "img_data", "uuid": "img_uuid"}], "mm_order": ["image"]},
         }
         ctx = self.proc._resolve_mm_data(request)
         self.assertEqual(ctx.images[0].type, "image")
@@ -262,7 +268,7 @@ class TestResolveMmData(unittest.TestCase):
     def test_raw_images_parsed(self):
         """Non-dict images (e.g., PIL Image) get uuid=None."""
         raw_img = MagicMock()  # simulates PIL Image
-        request = {"prompt": "test", "multimodal_data": {"image": [raw_img]}}
+        request = {"prompt": "test", "multimodal_data": {"image": [raw_img], "mm_order": ["image"]}}
         ctx = self.proc._resolve_mm_data(request)
         self.assertEqual(ctx.images[0].data, raw_img)
         self.assertIsNone(ctx.images[0].uuid)
@@ -303,7 +309,7 @@ class TestResolveMmData(unittest.TestCase):
     def test_videos_parsed(self):
         request = {
             "prompt": "test",
-            "multimodal_data": {"video": [{"data": "vid_data", "uuid": "vid_uuid"}]},
+            "multimodal_data": {"video": [{"data": "vid_data", "uuid": "vid_uuid"}], "mm_order": ["video"]},
         }
         ctx = self.proc._resolve_mm_data(request)
         self.assertEqual(len(ctx.videos), 1)
@@ -313,7 +319,7 @@ class TestResolveMmData(unittest.TestCase):
 
     def test_raw_video_parsed(self):
         raw_vid = "http://example.com/video.mp4"
-        request = {"prompt": "test", "multimodal_data": {"video": [raw_vid]}}
+        request = {"prompt": "test", "multimodal_data": {"video": [raw_vid], "mm_order": ["video"]}}
         ctx = self.proc._resolve_mm_data(request)
         self.assertEqual(ctx.videos[0].data, raw_vid)
         self.assertIsNone(ctx.videos[0].uuid)
@@ -760,7 +766,7 @@ class TestProcessEndToEnd(unittest.TestCase):
     def test_full_pipeline_from_text(self):
         request = {
             "prompt": "Hello <image> world",
-            "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}]},
+            "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}], "mm_order": ["image"]},
         }
         self.proc.process(request)
 
@@ -786,7 +792,7 @@ class TestProcessEndToEnd(unittest.TestCase):
         with patch.object(proc, "prompt_token_ids2outputs", return_value=mock_outputs):
             request = {
                 "prompt_token_ids": [1, 2, 3],
-                "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}]},
+                "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}], "mm_order": ["image"]},
             }
             proc.process(request)
             self.assertIn("prompt_token_ids", request)
@@ -797,7 +803,7 @@ class TestProcessEndToEnd(unittest.TestCase):
 
         request = {
             "prompt": "<image>",
-            "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}]},
+            "multimodal_data": {"image": [{"data": "img", "uuid": "u1"}], "mm_order": ["image"]},
         }
         self.proc.process(request)
 
