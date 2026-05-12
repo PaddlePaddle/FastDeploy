@@ -458,15 +458,15 @@ class Processor:
         return request
 
     def process_messages(self, request):
-        """将 messages 格式转换为 prompt + multimodal_data（通用，与模型无关）。
+        """Convert messages format to prompt + multimodal_data (model-agnostic).
 
-        职责：
-        1. 从 messages 中提取多模态内容（图片/视频）
-           → 写入 request["multimodal_data"] = {"image": [...], "video": [...], "mm_order": [...]}
-        2. 调用 tokenizer.apply_chat_template(messages) 拼接 prompt
-           → 写入 request["prompt"]
+        Responsibilities:
+        1. Extract multimodal content (images/videos) from messages
+           → writes request["multimodal_data"] = {"image": [...], "video": [...], "mm_order": [...]}
+        2. Call tokenizer.apply_chat_template(messages) to build prompt
+           → writes request["prompt"]
 
-        调用时机：request 含 "messages" 且尚未有 "prompt"/"prompt_token_ids" 时。
+        Called when request contains "messages" but no "prompt"/"prompt_token_ids".
         """
         messages = request.get("messages")
 
