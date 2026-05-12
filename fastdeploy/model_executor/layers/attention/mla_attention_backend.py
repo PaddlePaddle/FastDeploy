@@ -608,10 +608,6 @@ class MLAAttentionBackend(AttentionBackend):
         """get_attention_meta"""
         return self.attention_metadata
 
-    # MLA's KV cache must be pinned via set_data_ipc; otherwise the paddle
-    # allocator may relocate it across cudagraph replays.
-    pin_kv_cache_for_cudagraph: bool = True
-
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
@@ -626,19 +622,54 @@ class MLAAttentionBackend(AttentionBackend):
 
     def create_kv_cache(
         self,
-        max_num_blocks: int,
+        num_layers: int,
+        num_blocks: int,
         cache_dtype,
         kv_cache_quant_type: Optional[str] = None,
+        layer_offset: int = 0,
     ):
         """
         MLA cache: compressed latent key cache only (no separate value, no scales).
         """
-        key_shape, _ = self.get_kv_cache_shape(max_num_blocks=max_num_blocks, kv_cache_quant_type=kv_cache_quant_type)
+        key_shape, _ = self.get_kv_cache_shape(max_num_blocks=num_blocks, kv_cache_quant_type=kv_cache_quant_type)
         logger.info(
-            f"[create_kv_cache][MLA] key_shape={key_shape} dtype={cache_dtype} "
-            f"kv_cache_quant_type={kv_cache_quant_type}"
+            f"[create_kv_cache][MLA] num_layers={num_layers} layer_offset={layer_offset} "
+            f"key_shape={key_shape} dtype={cache_dtype} kv_cache_quant_type={kv_cache_quant_type}"
         )
-        return {"key": paddle.full(shape=key_shape, fill_value=0, dtype=cache_dtype)}
+        caches = {}
+        for layer_idx in range(layer_offset, layer_offset + num_layers):
+            caches[("key", layer_idx)] = paddle.full(shape=key_shape, fill_value=0, dtype=cache_dtype)
+        return caches
+
+    def create_host_kv_cache(
+        self,
+        num_layers: int,
+        num_blocks: int,
+        cache_item_bytes: int,
+        kv_cache_quant_type: Optional[str] = None,
+        layer_offset: int = 0,
+    ):
+        """
+        MLA host cache: only the compressed latent key buffer, no value, no scales.
+        """
+        from fastdeploy.cache_manager.ops import cuda_host_alloc
+
+        if cuda_host_alloc is None:
+            raise RuntimeError("[create_host_kv_cache][MLA] cuda_host_alloc is not available")
+
+        key_shape, _ = self.get_kv_cache_shape(max_num_blocks=num_blocks, kv_cache_quant_type=kv_cache_quant_type)
+        key_elems = key_shape[1] * key_shape[2] * key_shape[3]
+        key_bytes = num_blocks * cache_item_bytes * key_elems
+
+        logger.info(
+            f"[create_host_kv_cache][MLA] num_layers={num_layers} layer_offset={layer_offset} "
+            f"num_blocks={num_blocks} key_bytes_per_layer={key_bytes}"
+        )
+
+        out = {}
+        for layer_idx in range(layer_offset, layer_offset + num_layers):
+            out[("key", layer_idx)] = cuda_host_alloc(key_bytes)
+        return out
 
     def forward_extend(
         self,
