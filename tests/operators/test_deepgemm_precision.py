@@ -40,7 +40,7 @@ class DenseGemmKernel:
         self.acc_dtype = cutlass.Float32
 
         self.num_acc_stage = 1
-        self.use_2cta_instrs = False
+        self.use_2cta_instrs = True
         self.cluster_shape_mnk = (2, 1, 1) if self.use_2cta_instrs else (1, 1, 1)
         self.cluster_shape_mn = (2, 1) if self.use_2cta_instrs else (1, 1)
         self.cta_group = tcgen05.CtaGroup.TWO if self.use_2cta_instrs else tcgen05.CtaGroup.ONE
@@ -74,6 +74,8 @@ class DenseGemmKernel:
             (tiled_mma.thr_id.shape,),
         )
         # ((2),1,1,1):((1),0,0,0)
+        self.num_mcast_ctas_a = cute.size(self.cluster_layout_vmnk.shape[2])
+        self.num_mcast_ctas_b = cute.size(self.cluster_layout_vmnk.shape[1])
 
         a_smem_layout_staged = sm100_utils.make_smem_layout_a(
             tiled_mma, self.mma_tiler, cutlass.BFloat16, self.num_ab_stage
@@ -124,7 +126,7 @@ class DenseGemmKernel:
             tma_atom_b,
             self.cluster_layout_vmnk,
         ).launch(
-            grid=[M // self.mma_tiler[0], N // self.mma_tiler[1], 1],
+            grid=[M // self.mma_tiler[0] * self.cluster_shape_mn[0], N // self.mma_tiler[1], 1],
             block=[128, 1, 1],
             cluster=self.cluster_shape_mnk,
         )
@@ -229,7 +231,7 @@ class DenseGemmKernel:
 
         # Initialize mainloop ab_pipeline (barrier) and states
         ab_pipeline_producer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread)
-        num_tma_producer = 1
+        num_tma_producer = self.num_mcast_ctas_a + self.num_mcast_ctas_b - 1
         ab_pipeline_consumer_group = pipeline.CooperativeGroup(pipeline.Agent.Thread, num_tma_producer)
         ab_producer, ab_consumer = pipeline.PipelineTmaUmma.create(
             barrier_storage=storage.ab_full_mbar_ptr.data_ptr(),
@@ -277,13 +279,24 @@ class DenseGemmKernel:
         tCtAcc_fake = tiled_mma.make_fragment_C(acc_shape)
         tCtAcc = cute.make_tensor(tmem_ptr, tCtAcc_fake.layout)
 
-        if warp_idx == 0 and is_leader_cta:
+        if warp_idx == 0:
 
             for k_tile_idx in cutlass.range(k_tile_cnt, unroll=1):
 
                 producer_handle = ab_producer.acquire_and_advance()
 
                 a_full_mcast_mask = None
+                b_full_mcast_mask = None
+
+                a_full_mcast_mask = cpasync.create_tma_multicast_mask(
+                    cluster_layout_vmnk, block_in_cluster_coord_vmnk, mcast_mode=2
+                )
+                b_full_mcast_mask = cpasync.create_tma_multicast_mask(
+                    cluster_layout_vmnk, block_in_cluster_coord_vmnk, mcast_mode=1
+                )
+                # cute.printf(a_full_mcast_mask)
+                # cute.printf(b_full_mcast_mask)
+
                 cute.copy(
                     tma_atom_a,
                     tAgA[(None, k_tile_idx)],
@@ -292,7 +305,6 @@ class DenseGemmKernel:
                     mcast_mask=a_full_mcast_mask,
                 )
 
-                b_full_mcast_mask = None
                 cute.copy(
                     tma_atom_b,
                     tBgB[(None, k_tile_idx)],
@@ -301,16 +313,19 @@ class DenseGemmKernel:
                     mcast_mask=b_full_mcast_mask,
                 )
 
-                consumer_handle = ab_consumer.wait_and_advance()
-                consumer_handle.release()
+                if is_leader_cta:
+                    blk_count = tCrA.shape[2]
 
-                blk_count = tCrA.shape[2]
+                    consumer_handle = ab_consumer.wait_and_advance()
 
-                for i in cutlass.range_constexpr(blk_count):
-                    cute.gemm(tiled_mma, tCtAcc, tCrA[None, None, i, 0], tCrB[None, None, i, 0], tCtAcc)
-                    tiled_mma.set(tcgen05.Field.ACCUMULATE, True)
+                    for i in cutlass.range_constexpr(blk_count):
+                        cute.gemm(tiled_mma, tCtAcc, tCrA[None, None, i, 0], tCrB[None, None, i, 0], tCtAcc)
+                        tiled_mma.set(tcgen05.Field.ACCUMULATE, True)
 
-            acc_pipeline.producer_commit(acc_producer_state)
+                    consumer_handle.release()
+
+            if is_leader_cta:
+                acc_pipeline.producer_commit(acc_producer_state)
 
         acc_pipeline.consumer_wait(acc_consumer_state)
 
@@ -451,7 +466,7 @@ class TestDeepDenseGemm(unittest.TestCase):
         # self.one_invoke(128 * 20, 2048, 4096)
         # self.one_invoke(128 * 20, 2048, 2048)
 
-        self.two_invoke(128 * 20, 128 * 15, 64 * 4)
+        self.two_invoke(128 * 2, 128, 64 * 4)
 
         # p.stop()
 
