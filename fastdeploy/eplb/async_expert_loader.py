@@ -28,7 +28,8 @@ try:
 
     _cuda_ver = getattr(_cuda_pkg, "__version__", None)
     if _cuda_ver is None:
-        # cuda-python >= 13.x 无顶层 __version__，通过 cuda-bindings 子包判断
+        # cuda-python >= 13.x does not expose a top-level __version__;
+        # detect the version via the cuda-bindings package.
         import importlib.metadata as _meta
 
         _cuda_ver = _meta.version("cuda-bindings")

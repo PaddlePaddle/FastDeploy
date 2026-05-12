@@ -1038,8 +1038,10 @@ class GPUModelRunner(ModelRunnerBase):
                 async_set_value(
                     self.share_inputs["stop_seqs_len"][idx : idx + 1, :], request.sampling_params.stop_seqs_len
                 )
-                # 每条 stop sequence pad 到 stop_seqs_max_len，凑齐空行后整块写入
-                # 避免对第 3 维做部分切片（非连续内存）导致 async_set_value stride 错位
+                # Pad each stop sequence to stop_seqs_max_len, then fill remaining rows
+                # and write the whole block at once to avoid partial slicing on the
+                # third dimension, which may cause async_set_value stride issues on
+                # non-contiguous memory.
                 stop_token_ids = request.get("stop_token_ids")
                 max_len = self.model_config.stop_seqs_max_len
                 padded = [seq + [-1] * (max_len - len(seq)) for seq in stop_token_ids]
