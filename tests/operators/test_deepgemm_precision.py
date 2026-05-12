@@ -190,8 +190,8 @@ class DenseGemmKernel:
         )
 
         gA = cute.local_tile(tma_tensor_a, cute.slice_(self.mma_tiler, (None, 0, None)), (None, None))
-
         gB = cute.local_tile(tma_tensor_b, cute.slice_(self.mma_tiler, (0, None, None)), (None, None))
+        # 上面gA是展开了的shape哦！
 
         # k_tile_cnt 表示k这个方向需要迭代的次数！
         k_tile_cnt = cute.size(gA, mode=[3])
@@ -280,10 +280,9 @@ class DenseGemmKernel:
 
         if warp_idx == 0 and is_leader_cta:
 
-            a_full_mcast_mask = None
-
             producer_handle = ab_producer.acquire_and_advance()
 
+            a_full_mcast_mask = None
             cute.copy(
                 tma_atom_a,
                 tAgA[(None, 0)],
@@ -344,7 +343,6 @@ class DenseGemmKernel:
         tmem.relinquish_alloc_permit()
         tmem.free(tmem_ptr)
 
-        #
         if warp_idx == 0:
             ab_producer.tail()
 
