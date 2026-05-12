@@ -99,7 +99,7 @@ def setup_and_run_server(api_url):
         "--tensor-parallel-size",
         "1",
         "--data-parallel-size",
-        "4",
+        "2",
         "--max-model-len",
         "65536",
         "--max-num-seqs",
