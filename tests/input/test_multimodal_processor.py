@@ -498,18 +498,18 @@ class TestApplyReasoningParser(unittest.TestCase):
         self.assertTrue(request["enable_thinking"])
 
     def test_compound_request_id(self):
-        """request_id with underscore is split."""
+        """request_id with ::n:: separator is split."""
         proc = _make_processor(QWEN_VL)
         proc.reasoning_parser = MagicMock()
         proc.reasoning_parser.get_model_status.return_value = "think_end"
         proc.model_status_dict = {}
 
-        request = {"request_id": "req1_2", "prompt_token_ids": [1, 2], "n": 3}
+        request = {"request_id": "req1::n::2", "prompt_token_ids": [1, 2], "n": 3}
         proc._apply_reasoning_parser(request)
 
         # index=2, n=3 → range(6, 9)
         for idx in [6, 7, 8]:
-            self.assertEqual(proc.model_status_dict[f"req1_{idx}"], "think_end")
+            self.assertEqual(proc.model_status_dict[f"req1::n::{idx}"], "think_end")
         self.assertFalse(request["enable_thinking"])
 
     def test_compound_request_id_default_n(self):
@@ -519,10 +519,10 @@ class TestApplyReasoningParser(unittest.TestCase):
         proc.reasoning_parser.get_model_status.return_value = "think_start"
         proc.model_status_dict = {}
 
-        request = {"request_id": "req1_0", "prompt_token_ids": [1]}
+        request = {"request_id": "req1::n::0", "prompt_token_ids": [1]}
         proc._apply_reasoning_parser(request)
 
-        self.assertIn("req1_0", proc.model_status_dict)
+        self.assertIn("req1::n::0", proc.model_status_dict)
         self.assertTrue(request["enable_thinking"])
 
 

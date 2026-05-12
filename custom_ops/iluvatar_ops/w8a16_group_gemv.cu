@@ -81,7 +81,6 @@ std::vector<paddle::Tensor> W8A16GroupGemv(
   cust_host_param.size = sizeof(cuinferQuantGEMMHostParam);
   cust_host_param.persistent = 0;
   cust_host_param.groupSize = group_size;
-  // cust_host_param.strideScaleA = n;
   cust_host_param.expertCount = n_experts;
   cust_host_param.type = 2;
 

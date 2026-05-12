@@ -54,7 +54,9 @@ from fastdeploy.utils import (
     ParameterError,
     api_server_logger,
     clamp_prompt_logprobs,
+    get_choice_index,
     get_host_ip,
+    make_choice_id,
 )
 from fastdeploy.worker.output import (
     Logprob,
@@ -193,7 +195,7 @@ class OpenAIServingCompletion:
         try:
             try:
                 for idx, prompt in enumerate(request_prompts):
-                    request_id_idx = f"{request_id}_{idx}"
+                    request_id_idx = make_choice_id(request_id, idx)
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["metrics"]["arrival_time"] = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
@@ -252,8 +254,8 @@ class OpenAIServingCompletion:
                     log_request_error(message=error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
         except asyncio.CancelledError as e:
-            await self.engine_client.abort(f"{request_id}_0", num_choices)
-            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            await self.engine_client.abort(make_choice_id(request_id, 0), num_choices)
+            error_msg = f"request[{make_choice_id(request_id, 0)}] client disconnected: {str(e)}, {str(traceback.format_exc())}"
             log_request_error(message=error_msg)
             return ErrorResponse(
                 error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
@@ -282,7 +284,7 @@ class OpenAIServingCompletion:
                 request_id, num_choices
             )
             if not envs.ZMQ_SEND_BATCH_DATA:
-                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                request_ids = [make_choice_id(request_id, i) for i in range(num_choices)]
                 for rid in request_ids:
                     dealer.write([b"", rid.encode("utf-8")])
 
@@ -324,7 +326,7 @@ class OpenAIServingCompletion:
                     continue
 
                 for data in response:
-                    rid = int(data["request_id"].split("_")[-1])
+                    rid = get_choice_index(data["request_id"])
                     if data.get("error_code", 200) != 200:
                         data["outputs"] = {
                             "text": "",
@@ -465,7 +467,7 @@ class OpenAIServingCompletion:
                 request_id, num_choices
             )
             if not envs.ZMQ_SEND_BATCH_DATA:
-                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                request_ids = [make_choice_id(request_id, i) for i in range(num_choices)]
                 for rid in request_ids:
                     dealer.write([b"", rid.encode("utf-8")])
 
@@ -513,7 +515,7 @@ class OpenAIServingCompletion:
                     continue
 
                 for res in response:
-                    idx = int(res["request_id"].split("_")[-1])
+                    idx = get_choice_index(res["request_id"])
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
                     prompt_logprobs_res: Optional[PromptLogprobs] = None
@@ -697,8 +699,8 @@ class OpenAIServingCompletion:
                         )
 
         except asyncio.CancelledError as e:
-            await self.engine_client.abort(f"{request_id}_0", num_choices)
-            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            await self.engine_client.abort(make_choice_id(request_id, 0), num_choices)
+            error_msg = f"request[{make_choice_id(request_id, 0)}] client disconnected: {str(e)}, {str(traceback.format_exc())}"
             log_request_error(message=error_msg)
         except Exception as e:
             log_request_error(

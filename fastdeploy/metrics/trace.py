@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional
 
 from fastdeploy import envs
 from fastdeploy.utils import api_server_logger as logger
+from fastdeploy.utils import get_base_request_id
 
 opentelemetry_imported = False
 tracing_enabled = False
@@ -501,7 +502,7 @@ def trace_req_start(
             is_copy=False,
         )
 
-    orig_rid = rid.split("_")[0]
+    orig_rid = get_base_request_id(rid)
     role = "" if role == "null" else role
     attrs = {"rid": orig_rid}
 
@@ -779,8 +780,8 @@ def get_trace_info_for_request(rid: str) -> Optional[Dict[str, str]]:
         return None
     rid = str(rid)
     if rid not in reqs_context:
-        # Try using original rid (remove _idx suffix)
-        orig_rid = rid.split("_")[0]
+        # Try using original rid (remove choice index suffix)
+        orig_rid = get_base_request_id(rid)
         if orig_rid not in reqs_context:
             return None
         rid = orig_rid

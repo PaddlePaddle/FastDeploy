@@ -194,7 +194,7 @@ class TestOpenAiServingBaseClass(unittest.IsolatedAsyncioTestCase):
 
         self.assertIsNotNone(ctx.preprocess_requests)
         self.assertEqual(len(ctx.preprocess_requests), 1)
-        self.assertIn("test_request_id_0", str(ctx.preprocess_requests[0]))
+        self.assertIn("test_request_id::n::0", str(ctx.preprocess_requests[0]))
 
     async def test_prepare_generators(self):
         """Test _prepare_generators method."""

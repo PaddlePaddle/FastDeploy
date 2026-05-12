@@ -361,7 +361,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         response_processor = MagicMock()
         response_processor.enable_multimodal_content.return_value = True
         data = {
-            "request_id": "req_0",
+            "request_id": "req::n::0",
             "metrics": {"request_start_time": 1.0},
             "error_msg": "Recover by flag",
             "num_cached_tokens": 0,
@@ -514,7 +514,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Create mock response with prompt_logprobs data
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -622,7 +622,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Create mock response with logprobs data
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -758,7 +758,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             "skipped": True,
         }
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -876,7 +876,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Create mock response without logprobs data
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -970,7 +970,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Create mock response with prompt_logprobs data
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -1073,7 +1073,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Create mock response with logprobs data
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -1173,7 +1173,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Create mock response with both logprobs data
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -1284,7 +1284,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         # Create mock response without logprobs data
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -1419,7 +1419,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         async def mock_async_generator_with_cancel():
             # Simulate some normal response first
             yield {
-                "request_id": f"{request_id}_0",
+                "request_id": f"{request_id}::n::0",
                 "error_code": 200,
                 "metrics": {
                     "first_token_time": 1234567890,
@@ -1494,7 +1494,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_response_queue = AsyncMock()
 
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -1549,7 +1549,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 results.append(chunk)
 
         # Lines 262-264: dealer.write should be called for each request_id
-        mock_dealer.write.assert_called_once_with([b"", f"{request_id}_0".encode("utf-8")])
+        mock_dealer.write.assert_called_once_with([b"", f"{request_id}::n::0".encode("utf-8")])
         self.assertGreater(len(results), 0)
 
     async def test_chat_completion_stream_generator_cancelled_error_in_wait(self):
@@ -1608,7 +1608,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_response_queue = AsyncMock()
 
         mock_response = {
-            "request_id": f"{request_id}_0",
+            "request_id": f"{request_id}::n::0",
             "error_code": 200,
             "metrics": {
                 "first_token_time": 1234567890,
@@ -1664,7 +1664,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             )
 
         # Lines 559-561: dealer.write should be called for each request_id
-        mock_dealer.write.assert_called_once_with([b"", f"{request_id}_0".encode("utf-8")])
+        mock_dealer.write.assert_called_once_with([b"", f"{request_id}::n::0".encode("utf-8")])
 
 
 class TestLogprobsWithMultiModalProcessor(unittest.TestCase):

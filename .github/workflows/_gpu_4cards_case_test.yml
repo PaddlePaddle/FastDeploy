@@ -218,7 +218,7 @@ jobs:
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
 
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.5.0.dev20260509 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt

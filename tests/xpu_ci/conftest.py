@@ -101,6 +101,13 @@ def stop_processes():
     for cmd in commands:
         safe_kill_cmd(cmd)
 
+    try:
+        # 清理/dev/shm下的所有文件
+        subprocess.run("rm -rf /dev/shm/*", shell=True, check=True)
+    except subprocess.CalledProcessError:
+        print("Failed to remove files from /dev/shm")
+        pass
+
 
 def cleanup_resources():
     """
@@ -206,9 +213,9 @@ def print_logs_on_failure():
         with open("server.log", "r") as f:
             print(f.read())
 
-    print("\n========== log/workerlog.0 ==========")
-    if os.path.exists("log/workerlog.0"):
-        with open("log/workerlog.0", "r") as f:
+    print("\n========== log/paddle/workerlog.0 ==========")
+    if os.path.exists("log/paddle/workerlog.0"):
+        with open("log/paddle/workerlog.0", "r") as f:
             print(f.read())
 
 

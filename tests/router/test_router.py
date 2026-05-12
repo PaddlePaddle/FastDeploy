@@ -208,7 +208,7 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
                 "request_id": "control-p",
                 "status": "success",
                 "error_message": None,
-                "result": {"aborted": [{"request_id": "req-1_0", "output_token_count": 0}], "not_found": []},
+                "result": {"aborted": [{"request_id": "req-1::n::0", "output_token_count": 0}], "not_found": []},
             }
         )
         decode_resp = AsyncMock()
@@ -218,7 +218,7 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
                 "request_id": "control-d",
                 "status": "success",
                 "error_message": None,
-                "result": {"aborted": [{"request_id": "req-1_0", "output_token_count": 15}], "not_found": []},
+                "result": {"aborted": [{"request_id": "req-1::n::0", "output_token_count": 15}], "not_found": []},
             }
         )
 
