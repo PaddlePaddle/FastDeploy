@@ -8,7 +8,7 @@ on:
         description: "Build Images"
         required: true
         type: string
-        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:cuda126-py310"
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux"
       FASTDEPLOY_ARCHIVE_URL:
         description: "URL of the compressed FastDeploy code archive."
         required: true
@@ -53,6 +53,11 @@ on:
         required: false
         type: string
         default: ""
+      PYTHON_VERSION:
+        description: "Python version to use (3.10, 3.11, 3.12)"
+        required: false
+        type: string
+        default: "3.10"
     outputs:
       wheel_path:
         description: "Output path of the generated wheel"
@@ -138,6 +143,7 @@ jobs:
           PADDLE_WHL_URL: ${{ inputs.PADDLE_WHL_URL }}
           WITH_NIGHTLY_BUILD: ${{ inputs.WITH_NIGHTLY_BUILD }}
           FD_UNIFY_BUILD: ${{ inputs.FD_UNIFY_BUILD }}
+          PYTHON_VERSION: ${{ inputs.PYTHON_VERSION }}
         run: |
             set -x
             runner_name="${{ runner.name }}"
@@ -173,8 +179,22 @@ jobs:
             -e "PADDLE_WHL_URL=${PADDLE_WHL_URL}" \
             -e "BRANCH_REF=${BRANCH_REF}" \
             -e "CCACHE_MAXSIZE=50G" \
+            -e "PYTHON_VERSION=${PYTHON_VERSION}" \
             -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
             --gpus "\"device=${gpu_id}\"" ${docker_image} /bin/bash -c '
+            # Switch Python environment based on PYTHON_VERSION
+            if [[ "${PYTHON_VERSION}" == "3.11" ]]; then
+              export LD_LIBRARY_PATH=/opt/_internal/cpython-3.11.0/lib/:${LD_LIBRARY_PATH}
+              export PATH=/opt/_internal/cpython-3.11.0/bin/:${PATH}
+            elif [[ "${PYTHON_VERSION}" == "3.12" ]]; then
+              export LD_LIBRARY_PATH=/opt/_internal/cpython-3.12.0/lib/:${LD_LIBRARY_PATH}
+              export PATH=/opt/_internal/cpython-3.12.0/bin/:${PATH}
+            else
+              # Default to Python 3.10
+              export LD_LIBRARY_PATH=/opt/_internal/cpython-3.10.0/lib/:${LD_LIBRARY_PATH}
+              export PATH=/opt/_internal/cpython-3.10.0/bin/:${PATH}
+            fi
+
             if [[ -n "${FD_VERSION}" ]]; then
               export FASTDEPLOY_VERSION=${FD_VERSION}
               echo "Custom FastDeploy version: ${FASTDEPLOY_VERSION}"

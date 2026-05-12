@@ -16,26 +16,26 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 
-#  build_310:
-#    name: FD-Build-Linux-Py310
-#    needs: clone
-#    uses: ./.github/workflows/_build_linux.yml
-#    with:
-#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
-#      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-#      COMPILE_ARCH: "90"
-#      WITH_NIGHTLY_BUILD: "OFF"
-#      FD_VERSION: "0.0.0"
-#      PYTHON_VERSION: "3.10"
-#    secrets:
-#      github-token: ${{ secrets.GITHUB_TOKEN }}
+  build_310:
+    name: FD-Build-Linux-Py310
+    needs: clone
+    uses: ./.github/workflows/_build_linux_cu130.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda130-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "90"
+      WITH_NIGHTLY_BUILD: "OFF"
+      FD_VERSION: "0.0.0"
+      PYTHON_VERSION: "3.10"
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
   build_311:
     name: FD-Build-Linux-Py311
     needs: clone
-    uses: ./.github/workflows/_build_linux.yml
+    uses: ./.github/workflows/_build_linux_cu130.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda130-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "90"
       WITH_NIGHTLY_BUILD: "OFF"
@@ -47,9 +47,9 @@ jobs:
   build_312:
     name: FD-Build-Linux-Py312
     needs: clone
-    uses: ./.github/workflows/_build_linux.yml
+    uses: ./.github/workflows/_build_linux_cu130.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda130-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "90"
       WITH_NIGHTLY_BUILD: "OFF"
