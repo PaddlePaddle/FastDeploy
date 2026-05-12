@@ -339,18 +339,10 @@ def post_process_normal(
 
     # Routing replay
     if routing_replay_manager is not None:
-        # Trigger lazy SharedMemory attach if not yet attempted
-        routing_replay_manager._try_attach_routing_host_view()
-        # GPU transient buffer → SharedMemory routing_host_buffer
-        slot_mapping_flat = routing_replay_manager.compute_slot_mapping_flat(
-            positions=routing_replay_manager.pending_update_positions
-        )
-        num_tokens = len(slot_mapping_flat)
+        slot_mapping_gpu = share_inputs["slot_mapping_buffer"]
+        num_tokens = int(share_inputs["ids_remove_padding"].shape[0])
         if routing_replay_manager.tp_rank == 0:
-            routing_replay_manager.save_captured_routing(
-                num_tokens=num_tokens,
-                slot_mapping=slot_mapping_flat,
-            )
+            routing_replay_manager.prepare_pending_save(num_tokens, slot_mapping_gpu)
 
     # 2. Update the input buffer of the model
     with paddle.framework._no_check_dy2st_diff():
@@ -521,18 +513,10 @@ def post_process_speculate(
 
     # Routing replay
     if routing_replay_manager is not None:
-        # Trigger lazy SharedMemory attach if not yet attempted
-        routing_replay_manager._try_attach_routing_host_view()
-        # GPU transient buffer → SharedMemory routing_host_buffer
-        slot_mapping_flat = routing_replay_manager.compute_slot_mapping_flat(
-            positions=routing_replay_manager.pending_update_positions
-        )
-        num_tokens = len(slot_mapping_flat)
+        slot_mapping_gpu = share_inputs["slot_mapping_buffer"]
+        num_tokens = int(share_inputs["ids_remove_padding"].shape[0])
         if routing_replay_manager.tp_rank == 0:
-            routing_replay_manager.save_captured_routing(
-                num_tokens=num_tokens,
-                slot_mapping=slot_mapping_flat,
-            )
+            routing_replay_manager.prepare_pending_save(num_tokens, slot_mapping_gpu)
 
     # Unified state update: merges speculate_update + speculate_set_value_by_flags_and_idx
     # into a single kernel launch. Handles EOS detection, max_dec_len truncation, step_idx

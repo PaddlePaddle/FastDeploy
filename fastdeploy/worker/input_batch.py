@@ -1208,3 +1208,13 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id, en
         logits = sampler_output.logits
         real_logits = _recover_tensor(logits, src_order)
         sampler_output.logits = real_logits
+
+    if sampler_output.sampling_mask is not None:
+        sampling_mask = sampler_output.sampling_mask
+        sort_len = len(src_order)
+        real_sampling_mask = [None] * len(sampling_mask)
+        for i in range(sort_len):
+            real_sampling_mask[i] = sampling_mask[src_order[i]]
+        for i in range(sort_len, len(sampling_mask)):
+            real_sampling_mask[i] = sampling_mask[i]
+        sampler_output.sampling_mask = real_sampling_mask

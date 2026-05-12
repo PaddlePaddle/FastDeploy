@@ -22,6 +22,9 @@ from unittest import mock
 
 import paddle
 
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda *args, **kwargs: None
+
 import fastdeploy.model_executor.layers.quantization.nvfp4 as nvfp4_module
 from fastdeploy.model_executor.layers.linear import QKVParallelLinear
 from fastdeploy.model_executor.layers.moe import FusedMoE
@@ -133,7 +136,7 @@ class TestModelOptNvFp4ModuleInit(unittest.TestCase):
         """Test module reloading when flashinfer is available."""
         mock_flashinfer = types.ModuleType("flashinfer")
         with mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer}):
-            with mock.patch("paddle.compat.enable_torch_proxy"):
+            with mock.patch("paddle.enable_compat"):
                 importlib.reload(nvfp4_module)
 
 

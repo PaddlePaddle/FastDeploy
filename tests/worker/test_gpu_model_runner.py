@@ -689,6 +689,7 @@ class TestExecuteModel(unittest.TestCase):
         runner._execute_empty_mtp_input = Mock()
         runner._cached_launch_token_num = 0
         runner._cached_real_bsz = 0
+        runner.routing_replay_manager = Mock()
 
         class _ShareInputs(dict):
             pass

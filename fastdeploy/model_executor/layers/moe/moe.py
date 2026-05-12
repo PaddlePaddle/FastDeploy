@@ -724,11 +724,11 @@ class FusedMoE(nn.Layer):
         topk_ids_hookfunc = None
         if self.enable_routing_replay:
             # When execute empty_input_forward forward_meta is None. When execute mtp layer routing_replay_table is None.
-            if forward_meta is not None and forward_meta.gpu_routing_buffer is not None:
+            if forward_meta is not None and forward_meta.device_routing_buffer is not None:
                 moe_layer_idx = self.layer_idx - self.fd_config.model_config.moe_layer_start_index
                 topk_ids_hookfunc = partial(
                     save_routing_to_buffer_v2,
-                    gpu_routing_buffer=forward_meta.gpu_routing_buffer,
+                    device_routing_buffer=forward_meta.device_routing_buffer,
                     layer_idx=moe_layer_idx,
                     tp_size=self.fd_config.parallel_config.tensor_parallel_size,
                     ep_size=self.fd_config.parallel_config.expert_parallel_size,

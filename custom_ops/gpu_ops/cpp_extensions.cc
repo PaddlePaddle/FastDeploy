@@ -540,10 +540,10 @@ std::vector<paddle::Tensor> count_tokens_per_expert_func(
     const paddle::Tensor& topk_ids,
     int64_t num_experts,
     bool compute_padded_cumsum = false);
-void GetPositionIdsAndMaskEncoderBatch(const paddle::Tensor& seq_lens_encoder,
-                                       const paddle::Tensor& seq_lens_decoder,
-                                       const paddle::Tensor& seq_lens_this_time,
-                                       const paddle::Tensor& position_ids);
+void GetPositionIds(const paddle::Tensor& seq_lens_encoder,
+                    const paddle::Tensor& seq_lens_decoder,
+                    const paddle::Tensor& seq_lens_this_time,
+                    const paddle::Tensor& position_ids);
 
 std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const paddle::Tensor& kv_nope,
@@ -1639,9 +1639,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("is_zp_float"));
 #endif
 
-  m.def("get_position_ids_and_mask_encoder_batch",
-        &GetPositionIdsAndMaskEncoderBatch,
-        "get_position_ids_and_mask_encoder_batch function");
+  m.def("get_position_ids", &GetPositionIds, "get_position_ids function");
 
   /**
    * cutlass_scaled_mm.cu

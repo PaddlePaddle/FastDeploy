@@ -1225,9 +1225,9 @@ class MetaxModelRunner(ModelRunnerBase):
         Initialize forward meta, attention meta data and update some config.
         """
         # Initialize forward meta
-        gpu_routing_buffer = None
+        device_routing_buffer = None
         if self.routing_replay_manager is not None:
-            gpu_routing_buffer = self.routing_replay_manager.get_gpu_routing_buffer()
+            device_routing_buffer = self.routing_replay_manager.get_device_routing_buffer()
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
@@ -1255,7 +1255,7 @@ class MetaxModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=None,
-            gpu_routing_buffer=gpu_routing_buffer,
+            device_routing_buffer=device_routing_buffer,
         )
 
         dist_status = self.collect_distributed_status()

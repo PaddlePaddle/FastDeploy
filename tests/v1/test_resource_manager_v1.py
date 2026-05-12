@@ -24,8 +24,8 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import paddle
 
-if not hasattr(paddle, "compat"):
-    paddle.compat = SimpleNamespace(enable_torch_proxy=lambda scope: None)
+if not hasattr(paddle, "enable_compat"):
+    paddle.enable_compat = lambda scope=None: None
 
 from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig, SchedulerConfig
 from fastdeploy.engine.args_utils import EngineArgs
