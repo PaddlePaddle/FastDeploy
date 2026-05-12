@@ -78,14 +78,15 @@ os.environ["AISTUDIO_LOG"] = "critical"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 # suppress noisy warnings from third-party libraries
 warnings.filterwarnings("ignore", message="Setuptools is replacing distutils")
-warnings.filterwarnings("ignore", message="Due to potential compatibility issues between PaddlePaddle and PyTorch")
+_PADDLEFORMERS_COMPAT_WARNING = "Due to potential compatibility issues between PaddlePaddle and PyTorch"
+warnings.filterwarnings("ignore", message=_PADDLEFORMERS_COMPAT_WARNING)
 
 
 class _PaddleFormersFilter(logging.Filter):
     """Suppress paddleformers compatibility warning logged at import time."""
 
     def filter(self, record):
-        return "Due to potential compatibility" not in record.getMessage()
+        return record.getMessage() != _PADDLEFORMERS_COMPAT_WARNING
 
 
 # Pre-register filter on PaddleFormers logger BEFORE it gets imported,
