@@ -53,8 +53,13 @@ else:
     merge_prefill_decode_output = None
 
 from fastdeploy.model_executor.utils import get_sm_version
-
-
+blackwell_ops = None
+if current_platform.is_cuda() and get_sm_version() >= 100:
+    try:
+        import blackwell_ops
+    except ImportError:
+        blackwell_ops = None
+        
 @dataclass
 class FlashMaskAttentionMetadata(AttentionMetadata):
     """
@@ -143,7 +148,29 @@ class FlashMaskAttentionBackend(AttentionBackend):
         value_cache_shape = key_cache_shape
         return key_cache_shape, value_cache_shape
 
+    def init_blackwell_attention_metadata(self, forward_meta: ForwardMeta):
+        _, _, max_token_num = blackwell_ops.flash_attn_get_qk_token(
+            forward_meta.seq_lens_encoder,
+            forward_meta.seq_lens_decoder, 
+            forward_meta.cu_seqlens_q, 
+            forward_meta.cu_seqlens_k,
+            forward_meta.actual_cu_seq_k,
+            forward_meta.seq_lens_kv,
+        )
+        self.max_enc_len = max_token_num[0]
+        self.max_dec_len = max_token_num[1]
+        self.q_token_num = max_token_num[2]
+        self.kv_token_num = max_token_num[3]
+        if self.max_enc_len > 0:
+            self.q_input_encoder = paddle.zeros([self.q_token_num, self.num_heads, self.head_dim], dtype=paddle.bfloat16)
+            self.k_input_encoder = paddle.zeros([self.kv_token_num, self.kv_num_heads, self.head_dim], dtype=paddle.bfloat16)
+            self.v_input_encoder = paddle.zeros([self.kv_token_num, self.kv_num_heads, self.head_dim], dtype=paddle.bfloat16)
+            
+    
     def init_attention_metadata(self, forward_meta: ForwardMeta):
+        if blackwell_ops is not None:
+            self.init_blackwell_attention_metadata(forward_meta)
+            return
         metadata = FlashMaskAttentionMetadata()
         # metadata only save pd_disaggregation info.
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -170,6 +197,83 @@ class FlashMaskAttentionBackend(AttentionBackend):
 
         self.attention_metadata = metadata
 
+    def forward_mixed_blackwell(
+        self,
+        qkv: paddle.Tensor,
+        layer: Attention,
+        forward_meta: ForwardMeta,
+    ):
+        q_norm_weight = getattr(layer, "q_norm_weight", None)
+        k_norm_weight = getattr(layer, "k_norm_weight", None)
+        attn_out = paddle.empty([qkv.shape[0], self.num_heads * self.head_dim], qkv.dtype)
+        if self.max_enc_len > 0:
+            blackwell_ops.flash_attn_write_cache_kv_encoder(
+                qkv, 
+                forward_meta.cu_seqlens_q,
+                forward_meta.actual_cu_seq_k, 
+                forward_meta.rotary_embs,
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.caches[2 * layer.layer_id], 
+                forward_meta.caches[2 * layer.layer_id  + 1],  
+                forward_meta.block_tables,
+                self.q_input_encoder,
+                self.k_input_encoder,
+                self.v_input_encoder,
+                q_norm_weight, 
+                k_norm_weight,
+                self.num_heads, 
+                self.kv_num_heads, 
+                self.head_dim, 
+                self.max_enc_len,
+                self.max_dec_len,
+                self.max_seq_len
+            )
+            blackwell_ops.flash_encoder_attn_fwd(
+                self.q_input_encoder, 
+                self.k_input_encoder, 
+                self.v_input_encoder, 
+                forward_meta.cu_seqlens_q, 
+                forward_meta.actual_cu_seq_k, 
+                attn_out, 
+                None)
+
+        if self.max_dec_len > 0:
+            q_input_decoder = blackwell_ops.flash_attn_write_cache_kv_decoder(
+                qkv,
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.rotary_embs,
+                forward_meta.caches[2 * layer.layer_id], 
+                forward_meta.caches[2 * layer.layer_id  + 1],  
+                forward_meta.block_tables,
+                q_norm_weight, 
+                k_norm_weight,
+                self.num_heads, 
+                self.kv_num_heads, 
+                self.head_dim, 
+                self.max_seq_len
+            )
+            
+            blackwell_ops.flash_decoder_attn_fwd(
+                q_input_decoder,
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_kv,
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.caches[2 * layer.layer_id], 
+                forward_meta.caches[2 * layer.layer_id  + 1],
+                forward_meta.block_tables,
+                attn_out,
+                self.num_heads, 
+                self.kv_num_heads, 
+                self.head_dim, 
+                self.max_seq_len,
+                self.speculate_max_draft_token_num,
+                "none"
+            )
+        return attn_out
     def forward_mixed(
         self,
         q: paddle.Tensor,
@@ -181,6 +285,12 @@ class FlashMaskAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ):
+        if blackwell_ops is not None:
+            return self.forward_mixed_blackwell(
+                qkv,
+                layer,
+                forward_meta
+            )
         metadata = self.attention_metadata
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
