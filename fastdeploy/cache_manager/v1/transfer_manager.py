@@ -130,6 +130,10 @@ class CacheTransferManager:
         self._storage_connector = create_storage_connector(self.cache_config)
         self._transfer_connector = create_transfer_connector(self.cache_config)
 
+        # ============ MLA & DSA ============
+        self._is_mla = getattr(config.model_config, "kv_lora_rank", 0) > 0
+        self._is_dsa = self._is_mla and getattr(config.model_config, "index_head_dim", 0) > 0
+
     # ============ Cache Map Setters ============
 
     @property
@@ -169,17 +173,24 @@ class CacheTransferManager:
         self._device_value_scales = []
 
         for layer_idx in range(self._num_layers):
-            key_name = f"key_caches_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
-            val_name = f"value_caches_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
-            key_scale_name = f"key_cache_scales_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
-            val_scale_name = f"value_cache_scales_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
-
+            key_name = f"key_cache_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
             self._device_key_caches.append(self._cache_kvs_map.get(key_name))
-            self._device_value_caches.append(self._cache_kvs_map.get(val_name))
 
-            if self._is_fp8_quantization():
-                self._device_key_scales.append(self._cache_kvs_map.get(key_scale_name))
-                self._device_value_scales.append(self._cache_kvs_map.get(val_scale_name))
+            if self._is_dsa:
+                # DSA: indexer treated as "value" for swap purposes
+                idx_name = f"indexer_caches_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
+                self._device_value_caches.append(self._cache_kvs_map.get(idx_name))
+            elif not self._is_mla:
+                # GQA: has value caches
+                val_name = f"value_caches_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
+                self._device_value_caches.append(self._cache_kvs_map.get(val_name))
+
+                if self._is_fp8_quantization():
+                    key_scale_name = f"key_cache_scales_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
+                    val_scale_name = f"value_cache_scales_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
+                    self._device_key_scales.append(self._cache_kvs_map.get(key_scale_name))
+                    self._device_value_scales.append(self._cache_kvs_map.get(val_scale_name))
+            # MLA: no value caches to add
 
     @property
     def host_cache_kvs_map(self) -> Dict[str, Any]:
@@ -215,17 +226,24 @@ class CacheTransferManager:
         self._host_value_scales_ptrs = []
 
         for layer_idx in range(self._num_layers):
-            key_name = f"key_caches_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
-            val_name = f"value_caches_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
-            key_scale_name = f"key_cache_scales_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
-            val_scale_name = f"value_cache_scales_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
-
+            key_name = f"key_cache_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
             self._host_key_ptrs.append(self._host_cache_kvs_map.get(key_name, 0))
-            self._host_value_ptrs.append(self._host_cache_kvs_map.get(val_name, 0))
 
-            if self._is_fp8_quantization():
-                self._host_key_scales_ptrs.append(self._host_cache_kvs_map.get(key_scale_name, 0))
-                self._host_value_scales_ptrs.append(self._host_cache_kvs_map.get(val_scale_name, 0))
+            if self._is_dsa:
+                # DSA: indexer treated as "value" for swap purposes
+                idx_name = f"indexer_caches_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
+                self._host_value_ptrs.append(self._host_cache_kvs_map.get(idx_name, 0))
+            elif not self._is_mla:
+                # GQA: has value host cache
+                val_name = f"value_caches_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
+                self._host_value_ptrs.append(self._host_cache_kvs_map.get(val_name, 0))
+
+                if self._is_fp8_quantization():
+                    key_scale_name = f"key_cache_scales_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
+                    val_scale_name = f"value_cache_scales_{layer_idx}_rank{self._local_rank}.device{self._device_id}"
+                    self._host_key_scales_ptrs.append(self._host_cache_kvs_map.get(key_scale_name, 0))
+                    self._host_value_scales_ptrs.append(self._host_cache_kvs_map.get(val_scale_name, 0))
+            # MLA: no value host pointers to add
 
     # ============ Metadata Properties ============
 
@@ -329,16 +347,24 @@ class CacheTransferManager:
                 self._device_id,
                 mode,
             )
-            swap_cache_all_layers(
-                self._device_value_caches,
-                self._host_value_ptrs,
-                self._num_host_blocks,
-                device_block_ids,
-                host_block_ids,
-                self._device_id,
-                mode,
-            )
-            if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+            # Value cache is only used in GQA
+            if not self._is_mla and self._device_value_caches:
+                swap_cache_all_layers(
+                    self._device_value_caches,
+                    self._host_value_ptrs,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
+                )
+            # Scale cache is only used in GQA + fp8 quantization
+            if (
+                not self._is_mla
+                and self._is_fp8_quantization()
+                and self._device_key_scales
+                and self._host_key_scales_ptrs
+            ):
                 swap_cache_all_layers(
                     self._device_key_scales,
                     self._host_key_scales_ptrs,
@@ -389,13 +415,10 @@ class CacheTransferManager:
 
         try:
             key_cache = self.get_device_key_cache(layer_idx)
-            value_cache = self.get_device_value_cache(layer_idx)
-            if key_cache is None or value_cache is None:
+            if key_cache is None:
                 return False
-
             key_ptr = self.get_host_key_ptr(layer_idx)
-            value_ptr = self.get_host_value_ptr(layer_idx)
-            if key_ptr == 0 or value_ptr == 0:
+            if key_ptr == 0:
                 return False
 
             swap_cache_per_layer(
@@ -407,15 +430,21 @@ class CacheTransferManager:
                 self._device_id,
                 mode,
             )
-            swap_cache_per_layer(
-                value_cache,
-                value_ptr,
-                self._num_host_blocks,
-                device_block_ids,
-                host_block_ids,
-                self._device_id,
-                mode,
-            )
+
+            if not self._is_mla or self._is_dsa:
+                value_cache = self.get_device_value_cache(layer_idx)
+                value_ptr = self.get_host_value_ptr(layer_idx)
+                if value_cache is None or value_ptr == 0:
+                    return False
+                swap_cache_per_layer(
+                    value_cache,
+                    value_ptr,
+                    self._num_host_blocks,
+                    device_block_ids,
+                    host_block_ids,
+                    self._device_id,
+                    mode,
+                )
             return True
         except Exception:
             import traceback
@@ -466,16 +495,24 @@ class CacheTransferManager:
                         self._device_id,
                         mode,
                     )
-                    swap_cache_all_layers(
-                        self._device_value_caches,
-                        self._host_value_ptrs,
-                        self._num_host_blocks,
-                        device_block_ids,
-                        host_block_ids,
-                        self._device_id,
-                        mode,
-                    )
-                    if self._is_fp8_quantization() and self._device_key_scales and self._host_key_scales_ptrs:
+                    # Value/indexer cache: GQA has value, DSA has indexer (both in _device_value_caches)
+                    # MLA has neither, so _device_value_caches is empty
+                    if self._device_value_caches and self._host_value_ptrs:
+                        swap_cache_all_layers(
+                            self._device_value_caches,
+                            self._host_value_ptrs,
+                            self._num_host_blocks,
+                            device_block_ids,
+                            host_block_ids,
+                            self._device_id,
+                            mode,
+                        )
+                    if (
+                        not self._is_mla
+                        and self._is_fp8_quantization()
+                        and self._device_key_scales
+                        and self._host_key_scales_ptrs
+                    ):
                         swap_cache_all_layers(
                             self._device_key_scales,
                             self._host_key_scales_ptrs,
@@ -527,13 +564,10 @@ class CacheTransferManager:
 
         stream = self._output_stream if mode == 0 else self._input_stream
         key_cache = self.get_device_key_cache(layer_idx)
-        value_cache = self.get_device_value_cache(layer_idx)
-        if key_cache is None or value_cache is None:
+        if key_cache is None:
             return False
-
         key_ptr = self.get_host_key_ptr(layer_idx)
-        value_ptr = self.get_host_value_ptr(layer_idx)
-        if key_ptr == 0 or value_ptr == 0:
+        if key_ptr == 0:
             return False
 
         try:
@@ -548,15 +582,22 @@ class CacheTransferManager:
                         self._device_id,
                         mode,
                     )
-                    swap_cache_per_layer_async(
-                        value_cache,
-                        value_ptr,
-                        self._num_host_blocks,
-                        device_block_ids,
-                        host_block_ids,
-                        self._device_id,
-                        mode,
-                    )
+
+                    if not self._is_mla or self._is_dsa:
+                        # GQA: swap value; DSA: swap indexer (stored in value slot)
+                        value_cache = self.get_device_value_cache(layer_idx)
+                        value_ptr = self.get_host_value_ptr(layer_idx)
+                        if value_cache is None or value_ptr == 0:
+                            return False
+                        swap_cache_per_layer_async(
+                            value_cache,
+                            value_ptr,
+                            self._num_host_blocks,
+                            device_block_ids,
+                            host_block_ids,
+                            self._device_id,
+                            mode,
+                        )
             return True
         except Exception:
             import traceback
