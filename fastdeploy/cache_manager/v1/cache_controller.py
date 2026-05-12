@@ -285,6 +285,7 @@ class CacheController(KVCacheBase):
             cache_kvs_list: Flat list of allocated tensors in layer/role order.
         """
         kv_cache_quant_type = self._get_kv_cache_quant_type()
+        cache_dtype = "uint8" if kv_cache_quant_type is not None else self.model_config.dtype
 
         logger.info(
             f"[CacheController] Initializing kv cache: num_layers={self._num_layers}, "
@@ -294,7 +295,7 @@ class CacheController(KVCacheBase):
         caches = attn_backend.create_kv_cache(
             num_layers=self._num_layers,
             num_blocks=num_gpu_blocks,
-            cache_dtype=self.model_config.dtype,
+            cache_dtype=cache_dtype,
             kv_cache_quant_type=kv_cache_quant_type,
         )
 
@@ -344,6 +345,7 @@ class CacheController(KVCacheBase):
             cache_kvs_list: Flat list of allocated tensors in layer/role order.
         """
         kv_cache_quant_type = self._get_kv_cache_quant_type()
+        cache_dtype = "uint8" if kv_cache_quant_type is not None else self.model_config.dtype
 
         logger.info(
             f"[CacheController] Initializing MTP kv cache for {num_mtp_layers} layers "
@@ -354,7 +356,7 @@ class CacheController(KVCacheBase):
         caches = attn_backend.create_kv_cache(
             num_layers=num_mtp_layers,
             num_blocks=num_gpu_blocks,
-            cache_dtype=self.model_config.dtype,
+            cache_dtype=cache_dtype,
             kv_cache_quant_type=kv_cache_quant_type,
             layer_offset=layer_offset,
         )
