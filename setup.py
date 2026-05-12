@@ -45,6 +45,8 @@ PLAT_TO_CMAKE = {
 
 
 FD_ROUTER_BASE_URL = "https://paddle-qa.bj.bcebos.com/paddle-pipeline/FastDeploy_ActionCE/develop/latest"
+FD_ROUTER_SOURCE_HINT = "https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router"
+MIN_FD_ROUTER_SIZE_BYTES = 1_000_000
 
 # Map host architecture to binary filename and expected `file` output pattern.
 FD_ROUTER_ARCH_MAP = {
@@ -71,7 +73,7 @@ def download_fd_router():
     if arch_info is None:
         print(
             f"[golang_router] Unsupported architecture '{host_arch}', skipping download "
-            f"(please build from source: https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)"
+            f"(please build from source: {FD_ROUTER_SOURCE_HINT})"
         )
         return
 
@@ -115,7 +117,7 @@ def download_fd_router():
             return
 
         file_size = os.path.getsize(tmp_bin)
-        if file_size < 1_000_000:
+        if file_size < MIN_FD_ROUTER_SIZE_BYTES:
             print(f"[golang_router] WARNING: fd-router size too small ({file_size} bytes), skipping")
             os.remove(tmp_bin)
             return
