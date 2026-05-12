@@ -18,7 +18,6 @@ import asyncio
 import inspect
 import json
 import os
-import re
 import time
 import traceback
 import uuid
@@ -63,7 +62,10 @@ from fastdeploy.utils import (
     ParameterError,
     StatefulSemaphore,
     api_server_logger,
+    get_base_request_id,
+    make_choice_id,
     obj_logger,
+    parse_choice_id,
     to_tensor,
 )
 
@@ -342,7 +344,7 @@ class EngineClient:
                         obj_logger.info(f"  {item}")
 
         task["metrics"]["preprocess_start_time"] = time.time()
-        request_id = task.get("request_id").split("_")[0]
+        request_id = get_base_request_id(task.get("request_id"))
         tracing.trace_slice_start(tracing.TraceSpanName.PREPROCESSING, request_id)
         trace_print(LoggingEventName.PREPROCESSING_START, task["request_id"], task.get("user", ""))
         try:
@@ -442,20 +444,20 @@ class EngineClient:
         n = task.get("n", 1)
         try:
             request_id_idx = task.get("request_id")
-            parts = request_id_idx.rsplit("_", 1)
-            if len(parts) == 1:
+            base_id, index = parse_choice_id(request_id_idx)
+            if index is None:
                 self._send_task(task)
             else:
-                request_id = parts[0]
-                index = int(parts[1])
-                trace_carrier = tracing.trace_get_proc_propagate_context(request_id)
+                trace_carrier = tracing.trace_get_proc_propagate_context(base_id)
                 task["trace_carrier"] = trace_carrier
                 for i in range(index * n, (index + 1) * n):
                     child_task = copy(task)
-                    child_task["request_id"] = f"{request_id}_{i}"
+                    child_task["request_id"] = make_choice_id(base_id, i)
                     self._send_task(child_task)
             tracing.trace_slice_end(
-                tracing.TraceSpanName.PREPROCESSING, task.get("request_id").split("_")[0], thread_finish_flag=True
+                tracing.TraceSpanName.PREPROCESSING,
+                get_base_request_id(task.get("request_id")),
+                thread_finish_flag=True,
             )
         except Exception as e:
             log_request_error(
@@ -1108,15 +1110,8 @@ class EngineClient:
             if n <= 0:
                 api_server_logger.warning("Abort function called with non-positive n: %d. No requests aborted.", n)
                 return
-            match = re.search(r"_\d+$", request_id)
-            if match:
-                prefix = request_id[: match.start()]
-            else:
-                api_server_logger.warning(
-                    "request_id format error: %s does not end with _<number>. Using it as prefix.", request_id
-                )
-                prefix = request_id
-            request_ids = [f"{prefix}_{i}" for i in range(n)]
+            base_id = get_base_request_id(request_id)
+            request_ids = [make_choice_id(base_id, i) for i in range(n)]
             for req_id in request_ids:
                 data = {
                     "request_id": req_id,

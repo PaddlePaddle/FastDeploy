@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from threading import Lock
 from typing import Any, Dict, List
 from unittest.mock import Mock, patch
 
@@ -84,6 +85,10 @@ def _build_connector() -> SplitwiseConnector:
     connector = SplitwiseConnector(cfg=DummyCfg(), worker_queue=DummyWorkerQueue(), resource_manager=None)
     if not hasattr(connector, "push_sockets"):
         connector.push_sockets = {}
+    if not hasattr(connector, "_push_socket_locks"):
+        connector._push_socket_locks = {}
+    if not hasattr(connector, "_push_sockets_meta_lock"):
+        connector._push_sockets_meta_lock = Lock()
     return connector
 
 
@@ -240,6 +245,7 @@ def test_init_non_mixed_creates_network_state():
     assert connector.local_data_parallel_id == 1
     assert connector.pull_socket is None
     assert connector.push_sockets == {}
+    assert connector._push_socket_locks == {}
     mock_init.assert_called_once_with()
 
 
@@ -248,9 +254,11 @@ def test_get_push_socket_reuses_existing_and_handles_zmq_error():
     open_socket = Mock()
     open_socket.closed = False
     connector.push_sockets["127.0.0.1:8000"] = open_socket
+    connector._push_socket_locks["127.0.0.1:8000"] = Lock()
 
-    same_socket = connector._get_push_socket("127.0.0.1:8000")
+    same_socket, same_lock = connector._get_push_socket("127.0.0.1:8000")
     assert same_socket is open_socket
+    assert same_lock is connector._push_socket_locks["127.0.0.1:8000"]
 
     connector.zmq_ctx = Mock()
     connector.zmq_ctx.socket.side_effect = zmq.ZMQError("boom")
@@ -265,9 +273,10 @@ def test_get_push_socket_creates_and_configures_socket():
     new_socket.closed = False
     connector.zmq_ctx.socket.return_value = new_socket
 
-    socket = connector._get_push_socket("127.0.0.1:7000")
+    socket, lock = connector._get_push_socket("127.0.0.1:7000")
 
     assert socket is new_socket
+    assert lock is connector._push_socket_locks["127.0.0.1:7000"]
     new_socket.connect.assert_called_once_with("tcp://127.0.0.1:7000")
     assert connector.push_sockets["127.0.0.1:7000"] is new_socket
 
@@ -275,7 +284,8 @@ def test_get_push_socket_creates_and_configures_socket():
 def test_send_message_serializes_and_sends_payload():
     connector = _build_connector()
     mock_socket = Mock()
-    connector._get_push_socket = Mock(return_value=mock_socket)
+    mock_socket.closed = False
+    connector._get_push_socket = Mock(return_value=(mock_socket, Lock()))
     request = Request(
         request_id="req-send",
         prompt=None,
@@ -312,16 +322,20 @@ def test_send_message_handles_missing_addr_and_errors():
     connector._send_message("127.0.0.1:7000", "prefill", [])
 
     failing_socket = Mock()
+    failing_socket.closed = False
     failing_socket.send_multipart.side_effect = zmq.Again()
-    connector._get_push_socket = Mock(return_value=failing_socket)
+    connector._get_push_socket = Mock(return_value=(failing_socket, Lock()))
     connector._send_message("127.0.0.1:7001", "prefill", [])
 
     crash_socket = Mock()
+    crash_socket.closed = False
     crash_socket.send_multipart.side_effect = RuntimeError("boom")
-    connector._get_push_socket = Mock(return_value=crash_socket)
+    connector._get_push_socket = Mock(return_value=(crash_socket, Lock()))
     connector.push_sockets["127.0.0.1:7002"] = crash_socket
+    connector._push_socket_locks["127.0.0.1:7002"] = Lock()
     connector._send_message("127.0.0.1:7002", "prefill", [])
     assert "127.0.0.1:7002" not in connector.push_sockets
+    assert "127.0.0.1:7002" not in connector._push_socket_locks
 
 
 def test_send_splitwise_tasks_updates_roles_and_tracks_ids():

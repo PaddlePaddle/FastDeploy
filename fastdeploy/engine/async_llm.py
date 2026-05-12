@@ -39,7 +39,7 @@ from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.inter_communicator.zmq_client import ZmqIpcClient
 from fastdeploy.logger.request_logger import log_request_error
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.utils import EngineError, envs, llm_logger
+from fastdeploy.utils import EngineError, envs, llm_logger, make_choice_id
 
 
 class AsyncOutputProcessor:
@@ -510,7 +510,7 @@ class AsyncLLM(EngineServiceClient):
             # can merge cmpl-xxx_0, cmpl-xxx_1, ... back to the same response queue.
             user_request_id = request_id or str(uuid.uuid4())
             conn_request_id = f"cmpl-{user_request_id}"
-            child_request_ids = [f"{conn_request_id}_{i}" for i in range(num_choices)]
+            child_request_ids = [make_choice_id(conn_request_id, i) for i in range(num_choices)]
 
         try:
             # 1) Send all sub-requests to engine

@@ -180,7 +180,7 @@ jobs:
           -e TZ="Asia/Shanghai" \
           -e "no_proxy=localhost,127.0.0.1,0.0.0.0,bcebos.com,.bcebos.com,bj.bcebos.com,su.bcebos.com,paddle-ci.gz.bcebos.com,apiin.im.baidu.com,baidu-int.com,.baidu.com,aliyun.com,gitee.com,pypi.tuna.tsinghua.edu.cn,.tuna.tsinghua.edu.cn" \
           --gpus '"device='"${DEVICES}"'"' ${docker_image} /bin/bash -xc '
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip install paddlepaddle-gpu==3.5.0.dev20260509 -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
@@ -196,7 +196,7 @@ jobs:
 
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          pushd tests/ce/deploy
+          pushd tests/ci_validation/deploy
           ps -ef | grep "${FD_CACHE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           ps -ef | grep "${FD_ENGINE_QUEUE_PORT}" | grep -v grep | awk "{print \$2}" | xargs -r kill -9
           python3.10 deploy.py > dd.log 2>&1 &
@@ -208,7 +208,7 @@ jobs:
           curl -X POST http://localhost:${FLASK_PORT}/wait_for_infer?timeout=90
           popd
 
-          pushd tests/ce/accuracy_cases
+          pushd tests/ci_validation/accuracy_cases
           export URL=http://localhost:${FD_API_PORT}/v1/chat/completions
           export TEMPLATE=TOKEN_LOGPROB
           export MODEL_SIZE=0.3B
