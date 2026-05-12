@@ -186,7 +186,7 @@ jobs:
       COMPILE_ARCH: "80,90"
       WITH_NIGHTLY_BUILD: OFF
       FD_VERSION: 0.0.0
-      PADDLE_WHL_URL: https://paddle-qa.bj.bcebos.com/paddle-pipeline/Develop-TagBuild-Training-Linux-Gpu-Cuda12.9-Cudnn9.9-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/latest/paddlepaddle_gpu-0.0.0-cp310-cp310-linux_x86_64.whl
+      PADDLE_WHL_URL: https://paddle-qa.bj.bcebos.com/paddle-pipeline/Develop-TagBuild-Training-Linux-Gpu-Cuda12.9-Cudnn9.9-Trt10.5-Mkl-Avx-Gcc11-SelfBuiltPypiUse/1cd167558dfae7461abb2450811ef6369190369c/paddlepaddle_gpu-3.5.0.dev20260509-cp310-cp310-linux_x86_64.whl
 
   build_sm90_rl:
     name: BUILD_SM90_RL

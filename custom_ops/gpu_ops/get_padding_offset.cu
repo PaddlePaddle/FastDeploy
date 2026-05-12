@@ -51,7 +51,9 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
   for (int i = lane_id; i < bi + 1; i += WARP_SIZE) {
     const int q_inc = seq_lens[i];
     const int k_inc =
-        q_inc + (seq_lens_decoder != nullptr ? seq_lens_decoder[i] : 0);
+        q_inc + ((seq_lens_decoder[i] > 0 && seq_lens_encoder[i] > 0)
+                     ? seq_lens_decoder[i]
+                     : 0);
     cum_seq_len_q += q_inc;
     cum_seq_len_k += k_inc;
   }
@@ -98,9 +100,9 @@ __global__ void PrefixSumKernel(int64_t *ids_remove_padding,
 std::vector<paddle::Tensor> GetPaddingOffset(
     const paddle::Tensor &input_ids,
     const paddle::Tensor &seq_len,
+    const paddle::Tensor &seq_lens_encoder,
+    const paddle::Tensor &seq_lens_decoder,
     const paddle::optional<paddle::Tensor> &draft_tokens,
-    const paddle::optional<paddle::Tensor> &seq_lens_encoder,
-    const paddle::optional<paddle::Tensor> &seq_lens_decoder,
     const int64_t cpu_token_num) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
   auto dev_ctx = static_cast<const phi::CustomContext *>(
@@ -147,8 +149,8 @@ std::vector<paddle::Tensor> GetPaddingOffset(
       seq_len.data<int>(),
       max_seq_len,
       draft_tokens ? draft_tokens.get().data<int64_t>() : nullptr,
-      seq_lens_encoder ? seq_lens_encoder.get().data<int32_t>() : nullptr,
-      seq_lens_decoder ? seq_lens_decoder.get().data<int32_t>() : nullptr,
+      seq_lens_encoder.data<int32_t>(),
+      seq_lens_decoder.data<int32_t>(),
       max_draft_tokens_per_batch);
 
   return {x_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k};
@@ -173,9 +175,9 @@ std::vector<paddle::DataType> GetPaddingOffsetInferDtype(
 PD_BUILD_STATIC_OP(get_padding_offset)
     .Inputs({"input_ids",
              "seq_len",
-             paddle::Optional("draft_tokens"),
-             paddle::Optional("seq_lens_encoder"),
-             paddle::Optional("seq_lens_decoder")})
+             "seq_lens_encoder",
+             "seq_lens_decoder",
+             paddle::Optional("draft_tokens")})
     .Outputs({"x_remove_padding",
               "batch_id_per_token",
               "cu_seqlens_q",
