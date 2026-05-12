@@ -423,6 +423,8 @@ __global__ void grouped_topk_fused_kernel(
       (reinterpret_cast<uintptr_t>(smem_buf + val_aligned + idx_bytes) + 15) &
       ~static_cast<uintptr_t>(15);
   float* s_group_scores = reinterpret_cast<float*>(ptr);
+  float* s_topk_value =
+      reinterpret_cast<float*>(smem_buf);  // val_staging (256B-aligned)
 
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   asm volatile("griddepcontrol.wait;");
@@ -453,7 +455,7 @@ __global__ void grouped_topk_fused_kernel(
       for (int i = lane_id; i < num_experts_per_group; i += WARP_SIZE)
         largest = sigmoid_to_float(gate_g[i]) + bias_g[i];
     }
-
+    __syncwarp();
     float max1 = cg::reduce(tile, largest, cg::greater<float>());
     float max2 = max1;
     int cnt = __popc(__ballot_sync(FUSED_FULL_WARP_MASK, largest == max1));
@@ -464,97 +466,122 @@ __global__ void grouped_topk_fused_kernel(
     if (lane_id == 0) s_group_scores[warp_id] = max1 + max2;
   }
 
-  __syncthreads();
+  __syncthreads();  // __syncwarp() maybe better?
 
   // ------------------------------------------------------------------
   // Phase 2 (warp0 only): group selection → expert selection → output
   // ------------------------------------------------------------------
   if (warp_id != 0) return;
 
-  topk_values += (int64_t)token_id * topk;
-  topk_indices += (int64_t)token_id * topk;
-
-  // Select top-topk_group groups
-  warp_topk_fused::WarpSelect<WARP_SIZE, true, float, int32_t, true> group_sel(
-      topk_group_i32, neg_inf<float>());
-
-  float gscore =
-      (lane_id < n_group_i32) ? s_group_scores[lane_id] : neg_inf<float>();
-  group_sel.add(gscore, lane_id);
-  group_sel.done();  // no __syncthreads() — only warp0 is active here
-
-  // Check if enough valid groups exist
-  bool proceed = false;
-  if (topk_group_i32 > 0) {
-    float kth = __shfl_sync(
-        FUSED_FULL_WARP_MASK, group_sel.get_val(0), topk_group_i32 - 1);
-    proceed = (kth != neg_inf<float>());
-  }
-
-  if (!proceed) {
-    // Fallback: zero scores, uniform topk
-    for (int i = lane_id; i < static_cast<int32_t>(num_experts); i += WARP_SIZE)
-      scores_token[i] = 0.0f;
-    __syncwarp();
-    for (int i = lane_id; i < topk_i32; i += WARP_SIZE) {
-      topk_indices[i] = static_cast<IdxT>(i);
-      topk_values[i] = 1.0f / static_cast<float>(topk_i32);
+  float value = neg_inf<float>();
+  float topk_group_value = neg_inf<float>();
+  int32_t num_equalto_topkth_group;
+  if (token_id < num_tokens) {
+    int32_t want_neg_inf_num = WARP_SIZE - n_group + topk_group;
+    if (lane_id < n_group && (isfinite(s_group_scores[lane_id]))) {
+      value = s_group_scores[lane_id];
     }
-#if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
-    asm volatile("griddepcontrol.launch_dependents;");
-#endif
-    return;
-  }
 
-  // Select top-topk experts from selected groups (using biased scores as
-  // candidates)
-  warp_topk_fused::WarpSelect<WARP_SIZE, true, float, int32_t, true> expert_sel(
-      topk_i32, neg_inf<float>());  // reuses same smem — group_sel is done
-
-  int32_t sel_gid = (lane_id < topk_group_i32) ? group_sel.get_idx(0) : 0;
-  for (int32_t g = 0; g < topk_group_i32; ++g) {
-    int32_t gid = __shfl_sync(FUSED_FULL_WARP_MASK, sel_gid, g);
-    int32_t offset = gid * num_experts_per_group;
-    for (int32_t i = lane_id; i < align_epg; i += WARP_SIZE) {
-      float cand = neg_inf<float>();
-      int32_t idx = 0;
-      if (i < num_experts_per_group) {
-        idx = offset + i;
-        float biased =
-            sigmoid_to_float(gate_token[idx]) + e_score_correction_bias[idx];
-        if (is_finite_val(biased)) cand = biased;
+    int neg_inf_num = WARP_SIZE - n_group;
+    int last_neg_inf_num = 0;
+    // Use loop to find the largset top_group
+    while (neg_inf_num < want_neg_inf_num) {
+      __syncwarp();  // Ensure all threads have valid data before reduction
+      topk_group_value = cg::reduce(tile, value, cg::greater<float>());
+      if (value == topk_group_value) {
+        value = neg_inf<float>();
       }
-      expert_sel.add(cand, idx);
+      last_neg_inf_num = neg_inf_num;
+
+      neg_inf_num = __popc(
+          __ballot_sync(FUSED_FULL_WARP_MASK, (value == neg_inf<float>())));
     }
+    // There is a possible case:
+    // may have many different group holding the same score!
+    // but we only accept some of them!
+    num_equalto_topkth_group = want_neg_inf_num - last_neg_inf_num;
   }
-  expert_sel.done();
-
-  // Compute routing weights from unbiased scores
-  float lane_score = 0.0f;
-  IdxT lane_idx = 0;
-  if (lane_id < topk_i32) {
-    lane_idx = static_cast<IdxT>(expert_sel.get_idx(0));
-    lane_score = sigmoid_to_float(gate_token[static_cast<int32_t>(lane_idx)]);
-  }
-
-  float topk_sum = 1e-20f;
-  if (renormalize) topk_sum += cg::reduce(tile, lane_score, cg::plus<float>());
-
-  float scale = static_cast<float>(routed_scaling_factor);
-  if (renormalize) scale /= topk_sum;
-
-  // Fill sparse scores: first zero out, then write selected experts' weights
-  for (int i = lane_id; i < static_cast<int32_t>(num_experts); i += WARP_SIZE)
-    scores_token[i] = 0.0f;
   __syncwarp();
 
-  if (lane_id < topk_i32) {
-    float val = lane_score * scale;
-    scores_token[static_cast<int32_t>(lane_idx)] = val;
-    topk_indices[lane_id] = lane_idx;
-    topk_values[lane_id] = val;
+  warp_topk_fused::WarpSelect</*capability*/ WARP_SIZE,
+                              /*greater*/ true,
+                              float,
+                              int32_t,
+                              /* is_stable */ true>
+      queue((int32_t)topk, neg_inf<float>());
+  int count_equalto_topkth_group = 0;
+  bool if_proceed_next_topk = (topk_group_value != neg_inf<float>());
+  if (token_id < num_tokens && if_proceed_next_topk) {
+    for (int i_group = 0; i_group < n_group; i_group++) {
+      if ((s_group_scores[i_group] > topk_group_value) ||
+          ((s_group_scores[i_group] == topk_group_value) &&
+           (count_equalto_topkth_group < num_equalto_topkth_group))) {
+        int32_t offset = i_group * num_experts_per_group;
+        for (int32_t i = lane_id; i < align_epg; i += WARP_SIZE) {
+          float candidates = neg_inf<float>();
+          if (i < num_experts_per_group) {
+            float biased = sigmoid_to_float(gate_token[offset + i]) +
+                           e_score_correction_bias[offset + i];
+            if (is_finite_val(biased)) candidates = biased;
+          }
+          queue.add(candidates, offset + i);
+        }
+        if (s_group_scores[i_group] == topk_group_value) {
+          count_equalto_topkth_group++;
+        }
+      }
+    }
+    queue.done();
+    __syncwarp();
   }
 
+  float topk_sum = 1e-20;
+  if (token_id < num_tokens && if_proceed_next_topk) {
+    for (int i = lane_id;
+         i < warp_topk_fused::round_up_to_multiple_of<WARP_SIZE>(topk);
+         i += WARP_SIZE) {
+      int32_t idx = i / WARP_SIZE;
+      float value =
+          i < topk ? sigmoid_to_float(gate_token[queue.get_idx(idx)]) : 0.0f;
+      if (i < topk) {
+        s_topk_value[i] = value;
+      }
+      topk_sum += cg::reduce(tile, value, cg::plus<float>());
+    }
+  }
+  __syncwarp();
+
+  if (token_id < num_tokens && if_proceed_next_topk) {
+    for (int i = lane_id; i < num_experts; i += WARP_SIZE) {
+      scores_token[i] = 0;
+    }
+  }
+  __syncwarp();
+
+  topk_values += (int64_t)token_id * topk;
+  topk_indices += (int64_t)token_id * topk;
+  if (token_id < num_tokens) {
+    if (if_proceed_next_topk) {
+      for (int i = lane_id; i < topk; i += WARP_SIZE) {
+        float value;
+        if (renormalize) {
+          value = s_topk_value[i] / topk_sum * routed_scaling_factor;
+        } else {
+          value = s_topk_value[i] * routed_scaling_factor;
+        }
+        int32_t idx = i / WARP_SIZE;  // topk may be bigger than WARP_SIZE
+        scores_token[queue.get_idx(idx)] = value;
+        topk_indices[i] = queue.get_idx(idx);
+        topk_values[i] = value;
+      }
+    } else {
+      for (int i = lane_id; i < topk; i += WARP_SIZE) {
+        int32_t idx = i / WARP_SIZE;
+        topk_indices[i] = queue.get_idx(idx);
+        topk_values[i] = static_cast<float>(1.0f / topk);
+      }
+    }
+  }
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   asm volatile("griddepcontrol.launch_dependents;");
 #endif
