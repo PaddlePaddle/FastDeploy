@@ -89,6 +89,7 @@ class TestFlashMLA(unittest.TestCase):
             )
 
         max_diff = (decoder_res - baseline_out).abs().max().item()
+        print(decoder_res - baseline_out)
         self.assertLessEqual(max_diff, 0.1)
 
 
