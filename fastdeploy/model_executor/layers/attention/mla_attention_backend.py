@@ -608,6 +608,10 @@ class MLAAttentionBackend(AttentionBackend):
         """get_attention_meta"""
         return self.attention_metadata
 
+    # MLA's KV cache must be pinned via set_data_ipc; otherwise the paddle
+    # allocator may relocate it across cudagraph replays.
+    pin_kv_cache_for_cudagraph: bool = True
+
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
@@ -619,6 +623,22 @@ class MLAAttentionBackend(AttentionBackend):
         key_cache_shape = [max_num_blocks, 1, self.block_size, self.kv_lora_rank + self.qk_rope_head_dim]
         value_cache_shape = []
         return key_cache_shape, value_cache_shape
+
+    def create_kv_cache(
+        self,
+        max_num_blocks: int,
+        cache_dtype,
+        kv_cache_quant_type: Optional[str] = None,
+    ):
+        """
+        MLA cache: compressed latent key cache only (no separate value, no scales).
+        """
+        key_shape, _ = self.get_kv_cache_shape(max_num_blocks=max_num_blocks, kv_cache_quant_type=kv_cache_quant_type)
+        logger.info(
+            f"[create_kv_cache][MLA] key_shape={key_shape} dtype={cache_dtype} "
+            f"kv_cache_quant_type={kv_cache_quant_type}"
+        )
+        return {"key": paddle.full(shape=key_shape, fill_value=0, dtype=cache_dtype)}
 
     def forward_extend(
         self,

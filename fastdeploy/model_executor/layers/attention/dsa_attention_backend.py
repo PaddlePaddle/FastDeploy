@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.platforms import current_platform
 
@@ -262,6 +263,9 @@ class DSAAttentionBackend(AttentionBackend):
         """get_attention_meta"""
         return self.attention_metadata
 
+    # DSA's KV and indexer caches must be pinned for cudagraph compatibility.
+    pin_kv_cache_for_cudagraph: bool = True
+
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,
@@ -285,6 +289,27 @@ class DSAAttentionBackend(AttentionBackend):
         indexer_cache_shape = [max_num_blocks, self.block_size, fp8_indexer_dim]
 
         return key_cache_shape, value_cache_shape, indexer_cache_shape
+
+    def create_kv_cache(
+        self,
+        max_num_blocks: int,
+        cache_dtype=None,
+        kv_cache_quant_type: Optional[str] = None,
+    ):
+        """
+        DSA cache: uint8 key cache + uint8 indexer cache (no separate value, no scales).
+
+        `cache_dtype` is ignored; DSA always stores packed fp8+scales as uint8.
+        `kv_cache_quant_type` is coerced to "uint8" internally.
+        """
+        key_shape, _, indexer_shape = self.get_kv_cache_shape(
+            max_num_blocks=max_num_blocks, kv_cache_quant_type="uint8"
+        )
+        logger.info(f"[create_kv_cache][DSA] key_shape={key_shape} indexer_shape={indexer_shape} dtype=uint8")
+        return {
+            "key": paddle.full(shape=key_shape, fill_value=0, dtype="uint8"),
+            "indexer": paddle.full(shape=indexer_shape, fill_value=0, dtype="uint8"),
+        }
 
     def forward_mixed(
         self,

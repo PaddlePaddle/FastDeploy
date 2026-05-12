@@ -21,9 +21,10 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, Optional
 
 import paddle
+from paddleformers.utils.log import logger
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -37,10 +38,58 @@ class AttentionMetadata(ABC):
 class AttentionBackend(ABC):
     """The base class of attention backends"""
 
+    # Whether KV cache tensors produced by `create_kv_cache` must be pinned via
+    # `set_data_ipc` so the paddle allocator cannot relocate them during
+    # CUDAGraph capture/replay. Variant backends (MLA/DSA) override to True.
+    pin_kv_cache_for_cudagraph: bool = False
+
     @abstractmethod
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize the forward metadata."""
         raise NotImplementedError
+
+    def create_kv_cache(
+        self,
+        max_num_blocks: int,
+        cache_dtype: Any,
+        kv_cache_quant_type: Optional[str] = None,
+    ) -> Dict[str, paddle.Tensor]:
+        """
+        Allocate KV cache tensors for a single layer.
+
+        Default implementation is GQA/MHA: `key` + `value` (+ fp8 scales when
+        `kv_cache_quant_type == "block_wise_fp8"`). MLA/DSA backends override.
+
+        Args:
+            max_num_blocks: Block count used to size the cache tensors.
+            cache_dtype: Paddle dtype (or string) for key/value tensors.
+                Ignored by backends that hard-code their dtype (e.g. DSA uint8).
+            kv_cache_quant_type: KV cache quantization type, or None.
+
+        Returns:
+            Dict mapping role names (`key`, `value`, `key_scale`,
+            `value_scale`, `indexer`, ...) to allocated tensors. Callers
+            translate roles into storage names and register them.
+        """
+        key_shape, value_shape = self.get_kv_cache_shape(
+            max_num_blocks=max_num_blocks, kv_cache_quant_type=kv_cache_quant_type
+        )
+        logger.info(
+            f"[create_kv_cache][{type(self).__name__}] key_shape={key_shape} "
+            f"value_shape={value_shape} dtype={cache_dtype} "
+            f"kv_cache_quant_type={kv_cache_quant_type}"
+        )
+        caches: Dict[str, paddle.Tensor] = {
+            "key": paddle.full(shape=key_shape, fill_value=0, dtype=cache_dtype),
+        }
+        if value_shape:
+            caches["value"] = paddle.full(shape=value_shape, fill_value=0, dtype=cache_dtype)
+        if kv_cache_quant_type == "block_wise_fp8":
+            scale_shape = [key_shape[0], key_shape[1], key_shape[2]]
+            caches["key_scale"] = paddle.full(shape=scale_shape, fill_value=0, dtype=paddle.get_default_dtype())
+            if value_shape:
+                caches["value_scale"] = paddle.full(shape=scale_shape, fill_value=0, dtype=paddle.get_default_dtype())
+        return caches
 
     def forward(
         self,
