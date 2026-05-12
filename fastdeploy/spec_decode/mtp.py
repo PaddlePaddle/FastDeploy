@@ -167,6 +167,10 @@ class MTPProposer(Proposer):
         if not self.use_attn_mask_offset:
             self.model_config.causal = True
 
+        if getattr(self.model_config, "use_dense_mtp", False):
+            # Dense MTP uses Ernie5MLP instead of Ernie5MoE
+            self.model_config.moe_num_experts = None
+
     def _load_model(self):
         """
         Load MTP Layer
