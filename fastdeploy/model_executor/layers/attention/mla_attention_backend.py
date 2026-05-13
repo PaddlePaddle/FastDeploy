@@ -1020,11 +1020,6 @@ class MLAAttentionBackend(AttentionBackend):
         softmax_scale = attn_softmax_scale
         output_scale = 1.0
 
-        import sys
-
-        sys.path.insert(
-            0, "/root/paddlejob/workspace/env_run/output/zkk/cutlass/examples/python/CuTeDSL/blackwell/mla"
-        )
         from mla_decode_fp16 import BlackwellMultiHeadLatentAttentionForwardFP16
 
         mla = BlackwellMultiHeadLatentAttentionForwardFP16(
