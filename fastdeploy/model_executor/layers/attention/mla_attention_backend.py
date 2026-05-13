@@ -525,6 +525,7 @@ class MLAAttentionBackend(AttentionBackend):
         self.useless_tensor = paddle.randn([1]).cast("int32")
         prop = paddle.device.cuda.get_device_properties()
         cc = prop.major * 10 + prop.minor
+        self.prop = prop
         self.is_blackwell = cc >= 100
 
         if self.flash_attn_func is None:
@@ -813,7 +814,7 @@ class MLAAttentionBackend(AttentionBackend):
                 self.max_seq_len,
             )
 
-            if self.is_blackwell:
+            if self.prop.major == 10:
                 # TODO support FA4
                 fmha_out = MLAAttentionBackend.mha_baseline(
                     q,
@@ -857,7 +858,7 @@ class MLAAttentionBackend(AttentionBackend):
                 speculate_decoder,
             )
 
-            if int(os.getenv("USE_FLASH_MLA", "0")) == 0:
+            if int(os.getenv("USE_FLASH_MLA", "0")) == 0 and self.prop.major == 9:
                 assert self.num_heads <= 64, "paddle mla attention support failed"
                 if self.heads_need_padding:
                     q = paddle.nn.functional.pad(
@@ -910,7 +911,6 @@ class MLAAttentionBackend(AttentionBackend):
 
                 return fmha_out
             else:
-                import flash_mla
 
                 decoder_q, cache_seqlens = extract_decoder_token_from_q(
                     q,
@@ -918,8 +918,6 @@ class MLAAttentionBackend(AttentionBackend):
                     forward_meta.seq_lens_encoder,
                     forward_meta.seq_lens_decoder,
                 )
-
-                tile_scheduler_metadata, num_splits = flash_mla.get_mla_metadata()
                 token_num = q.shape[0]
                 decoder_q.reshape_([-1, 1, self.num_heads, 576])
                 if self.heads_need_padding:
@@ -942,6 +940,11 @@ class MLAAttentionBackend(AttentionBackend):
                         attn_softmax_scale=self.attn_softmax_scale,
                     )
                 else:
+
+                    import flash_mla
+
+                    tile_scheduler_metadata, num_splits = flash_mla.get_mla_metadata()
+
                     decoder_res, _ = flash_mla.flash_mla_with_kvcache(
                         decoder_q,
                         # 外面的开源仓库的kv cache存储格式和FD的不同

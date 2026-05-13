@@ -294,8 +294,9 @@ class DenseGemmKernel:
                 b_full_mcast_mask = cpasync.create_tma_multicast_mask(
                     cluster_layout_vmnk, block_in_cluster_coord_vmnk, mcast_mode=1
                 )
-                # cute.printf(a_full_mcast_mask)
-                # cute.printf(b_full_mcast_mask)
+
+                # if is_leader_cta:
+                #     cute.printf(b_full_mcast_mask)
 
                 cute.copy(
                     tma_atom_a,
@@ -349,7 +350,7 @@ class DenseGemmKernel:
 
         if self.use_2cta_instrs:
             for i in cutlass.range_constexpr(64):
-                c[tidx % 64 + 64 * bidx, i + tidx // 64 * 64] = (cutlass.BFloat16)(tTR_rAcc[i])
+                c[tidx % 64 + 64 * bidx, i + tidx // 64 * 64 + bidy * 128] = (cutlass.BFloat16)(tTR_rAcc[i])
         else:
             for i in cutlass.range_constexpr(128):
                 c[bidx * 128 + tidx, bidy * 128 + i] = (cutlass.BFloat16)(tTR_rAcc[i])
@@ -388,7 +389,8 @@ class TestDeepDenseGemm(unittest.TestCase):
             my_res,
             options="--opt-level 2",
         )
-        compiled_mm(my_a, my_b, my_res)
+        for i in range(100):
+            compiled_mm(my_a, my_b, my_res)
 
         print(my_tensor)
 
@@ -455,20 +457,21 @@ class TestDeepDenseGemm(unittest.TestCase):
         prop = paddle.device.cuda.get_device_properties()
         if prop.major != 10:
             return
-        # import paddle.profiler as profiler
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        # )
-        # p.start()
-        # p.step()
+        import paddle.profiler as profiler
+
+        p = profiler.Profiler(
+            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        )
+        p.start()
+        p.step()
 
         # self.one_invoke(128 * 20, 2048, 4096)
         # self.one_invoke(128 * 20, 2048, 2048)
 
-        self.two_invoke(128 * 2, 128, 64 * 4)
+        self.two_invoke(128 * 200, 128 * 200, 64 * 4)
 
-        # p.stop()
+        p.stop()
 
 
 if __name__ == "__main__":
