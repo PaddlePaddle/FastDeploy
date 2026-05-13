@@ -931,7 +931,8 @@ class MLAAttentionBackend(AttentionBackend):
                 assert new_cache_shape[1] == 1
                 new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
 
-                if self.is_blackwell:
+                if self.prop.major == 10:
+                    # blackwell
                     decoder_res = MLAAttentionBackend.mla_blackwell(
                         decoder_q,
                         latent_cache,
