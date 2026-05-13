@@ -39,10 +39,10 @@ user_invocable: true
 
 | 参数 | 键名 | 默认值 | 说明 |
 |------|------|--------|------|
-| 模型路径 | `MODEL_PATH` | `/root/paddlejob/share-storage/gpfs/system-public/changwenbin/models/GLM/GLM-4.7-Flash` | 模型权重目录 |
+| 模型路径 | `MODEL_PATH` | `<path_to_model>` | 模型权重目录 |
 | 并发数 | `CONCURRENCY` | `32` | 最大并发请求数 |
 | 是否量化 | `QUANTIZATION` | `none` | `none` / `block_wise_fp8`(FD) + `fp8`(SG) / `wint4` / `wint8`。注意：用户说"FP8"时，FD 实际使用 Block-Wise FP8（`--quantization block_wise_fp8`），SG 使用 per-tensor FP8（`--quantization fp8`），两者量化粒度不同，报告中需明确标注 |
-| 数据集路径 | `DATASET_PATH` | `/root/paddlejob/share-storage/gpfs/system-public/yangrongjin/Downloads/Dataset/20260302_browsecomp_plus_processed_num_830_fd.jsonl` | JSONL 格式 |
+| 数据集路径 | `DATASET_PATH` | `<path_to_dataset>` | JSONL 格式 |
 | TP 大小 | `TP_SIZE` | `1` | tensor-parallel-size |
 | DP 大小 | `DP_SIZE` | `1` | data-parallel-size（仅 FD 支持） |
 | 部署模式 | `DEPLOY_MODE` | `single` | `single` / `tp` / `pd` / `multi-node` |
@@ -125,17 +125,6 @@ nvidia-smi --query-gpu=index,memory.used --format=csv,noheader
 
 ## 步骤 2-3：环境检查与安装
 
-### 网络代理
-
-所有涉及外网的操作（git clone、pip install）前必须设置：
-```bash
-export no_proxy=localhost,bj.bcebos.com,su.bcebos.com,pypi.tuna.tsinghua.edu.cn,paddle-ci.gz.bcebos.com,0.0.0.0,baidu-int.com,aliyun.com,127.0.0.1,.baidu.com,.bcebos.com
-export http_proxy=http://agent.baidu.com:8891
-export https_proxy=http://agent.baidu.com:8891
-git config --global http.proxy http://agent.baidu.com:8891
-git config --global https.proxy http://agent.baidu.com:8891
-```
-
 ### 检查已安装
 
 ```bash
@@ -161,7 +150,7 @@ cd FastDeploy
 uv venv --python /usr/bin/python3.10
 source .venv/bin/activate
 uv pip install pip
-python -m pip install https://paddle-whl.bj.bcebos.com/nightly/cu129/paddlepaddle-gpu/paddlepaddle_gpu-3.4.0.dev20260127-cp310-cp310-linux_x86_64.whl
+python -m pip install <paddle_gpu_whl_url>
 pip install -r requirements.txt
 ```
 

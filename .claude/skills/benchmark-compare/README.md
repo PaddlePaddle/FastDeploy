@@ -12,8 +12,8 @@
 
 ```
 根据benchmark_compare_skill，完成FastDeploy和SGLang性能测试对比：
-模型：/root/paddlejob/share-storage/gpfs/system-public/changwenbin/models/GLM/GLM-4.7-Flash
-数据集：/root/paddlejob/share-storage/gpfs/system-public/yangrongjin/Downloads/Dataset/20260302_browsecomp_plus_processed_num_830_fd.jsonl
+模型：<path_to_model>
+数据集：<path_to_dataset>
 并发：64，512
 量化：不量化（BF16），FP8
 使用GPU5和GPU6
