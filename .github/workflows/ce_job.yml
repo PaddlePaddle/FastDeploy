@@ -194,7 +194,7 @@ jobs:
     if: ${{ needs.ce_job_pre_check.outputs.sm8090_match == 'true' }}
     uses: ./.github/workflows/_build_linux_rl.yml
     with:
-      DOCKER_IMAGE: iregistry.baidu-int.com/paddlepaddle/base-images:paddlecloud-ubuntu24.04-gcc13.3-cuda12.9-cudnn9.9-bccl1.4.1.4-nccl2.26.5-openmpi4.1.5-FleetY13.5.0H-rc9
+      DOCKER_IMAGE: iregistry.baidu-int.com/paddlepaddle/base-images:paddlecloud-ubuntu24.04-gcc13.3-cuda12.9-cudnn9.9-bccl1.4.1.4-nccl2.26.5-openmpi4.1.5-FleetY13.4.1H-rc2
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "90"
       WITH_NIGHTLY_BUILD: OFF
