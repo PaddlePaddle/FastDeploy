@@ -1610,6 +1610,9 @@ class XPUModelRunner(ModelRunnerBase):
             # 2. Padding inputs for cuda grph
             self.padding_cudagraph_inputs()
 
+            if self.share_inputs["ids_remove_padding"].shape[0] <= 0:
+                return None
+
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
             # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
             # when there is data on other runner, the current runner is required to execute part of the model.
