@@ -471,8 +471,8 @@ class DeepseekV3MLAAttention(nn.Layer):
 
                 forward_meta.cache_seqlens = cache_seqlens
 
-            query_nope = decoder_query_nope.reshape([0, -1, self.qk_nope_head_dim])
-            query_pe = decoder_query_pe.reshape([0, -1, self.qk_rope_head_dim])
+                query_nope = decoder_query_nope.reshape([0, -1, self.qk_nope_head_dim])
+                query_pe = decoder_query_pe.reshape([0, -1, self.qk_rope_head_dim])
 
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
