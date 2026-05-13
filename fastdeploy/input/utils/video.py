@@ -137,6 +137,7 @@ class VideoReaderWrapper:
                     seek_mode="exact",
                     num_ffmpeg_threads=PADDLECODEC_NUM_THREADS,
                     device=kwargs.get("device", "cpu"),
+                    dimension_order="NHWC",
                 )
 
     def __len__(self):
