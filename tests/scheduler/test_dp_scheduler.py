@@ -453,6 +453,20 @@ class TestDPLocalScheduler(unittest.TestCase):
         self.assertEqual(len(requests), 1)
         self.assertEqual(requests[0].request_id, "test_req")
 
+    def test_get_requests_respects_batch_size(self):
+        """Test get_requests returns up to the requested batch size."""
+        request_ids = ["test_req_1", "test_req_2", "test_req_3"]
+        for request_id in request_ids:
+            self.scheduler.requests[request_id] = MockRequest(request_id, prompt_tokens_ids_len=10)
+        self.scheduler.ids = request_ids.copy()
+
+        requests = self.scheduler.get_requests(
+            available_blocks=20, block_size=16, reserved_output_blocks=10, max_num_batched_tokens=1024, batch=2
+        )
+
+        self.assertEqual([request.request_id for request in requests], request_ids[:2])
+        self.assertEqual(self.scheduler.ids_read_cursor, 2)
+
     @patch("time.time")
     @patch.object(dp_scheduler_module, "envs")
     def test_get_requests_timeout(self, mock_envs, mock_time):

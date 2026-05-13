@@ -218,6 +218,7 @@ class Ernie4_5_MoE(nn.Layer):
             gate_correction_bias=None,
             redundant_table_manger=redundant_table_manger,
             weight_key_map=weight_key_map,
+            prefix=f"{prefix}.experts",
         )
 
         if fd_config.model_config.moe_use_aux_free:
@@ -597,6 +598,7 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
             ("attn.cache_k_scale", "cachek_matmul.in_scale", None, None),
             ("attn.cache_v_scale", "cachev_matmul.in_scale", None, None),
             ("up_gate_proj_in_scale", "up_gate_proj.in_scale", None, None),
+            ("down_proj_in_scale", "down_proj.in_scale", None, None),
         ]
 
         expert_params_mapping = []

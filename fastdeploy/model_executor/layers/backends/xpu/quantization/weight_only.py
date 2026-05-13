@@ -118,8 +118,6 @@ class XPUWeightOnlyLinearMethod(WeightOnlyLinearMethod):
         layer.weight_scale.set_value(weight_scale)
 
     def process_weights_after_loading(self, layer) -> None:
-        if not self.quant_config.is_checkpoint_bf16:
-            return
 
         quanted_weight, weight_scale = self._quantize_weight_in_blocks(layer.weight)
         free_tensor(layer.weight)

@@ -179,8 +179,8 @@ class XPUAttentionBackend(AttentionBackend):
         cache_v_scale = getattr(layer, "cache_v_scale", None)
         cache_k_out_scale = getattr(layer, "cache_k_out_scale", None)
         cache_v_out_scale = getattr(layer, "cache_v_out_scale", None)
-        cache_k_zp = getattr(self, "cache_k_zp", None)
-        cache_v_zp = getattr(self, "cache_v_zp", None)
+        cache_k_zp = getattr(layer, "cache_k_zp", None)
+        cache_v_zp = getattr(layer, "cache_v_zp", None)
 
         if layer.use_qk_norm:
             q_norm_weight = layer.q_norm_weight
@@ -220,8 +220,8 @@ class XPUAttentionBackend(AttentionBackend):
             cache_v_scale,
             cache_k_out_scale,
             cache_v_out_scale,
-            cache_k_zp,
-            cache_v_zp,
+            cache_k_zp.astype("bfloat16") if cache_k_zp is not None else None,  # for C8
+            cache_v_zp.astype("bfloat16") if cache_v_zp is not None else None,  # for C8
             None,  # shift
             None,  # smooth
             q_norm_weight,

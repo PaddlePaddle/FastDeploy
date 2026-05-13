@@ -268,6 +268,14 @@ class XPUMoEMethod(MoEMethodBase):
                         default_initializer=paddle.nn.initializer.Constant(0),
                     ),
                 )
+                set_weight_attrs(
+                    getattr(layer, self.added_scale_attrs[0]),
+                    {
+                        "weight_loader": extra_weight_attrs.get(
+                            "weight_loader", default_weight_loader(layer.fd_config)
+                        ),
+                    },
+                )
                 setattr(
                     layer,
                     self.added_scale_attrs[1],
@@ -276,6 +284,31 @@ class XPUMoEMethod(MoEMethodBase):
                         dtype=self.scale_dtype,
                         default_initializer=paddle.nn.initializer.Constant(0),
                     ),
+                )
+                set_weight_attrs(
+                    getattr(layer, self.added_scale_attrs[1]),
+                    {
+                        "weight_loader": extra_weight_attrs.get(
+                            "weight_loader", default_weight_loader(layer.fd_config)
+                        ),
+                    },
+                )
+
+                set_weight_attrs(
+                    layer.up_gate_proj_weight,
+                    {
+                        "weight_loader": extra_weight_attrs.get(
+                            "weight_loader", default_weight_loader(layer.fd_config)
+                        ),
+                    },
+                )
+                set_weight_attrs(
+                    layer.down_proj_weight,
+                    {
+                        "weight_loader": extra_weight_attrs.get(
+                            "weight_loader", default_weight_loader(layer.fd_config)
+                        ),
+                    },
                 )
 
             if self.moe_quant_type in ["w8a8", "w4a8"]:
@@ -289,6 +322,25 @@ class XPUMoEMethod(MoEMethodBase):
                             default_initializer=paddle.nn.initializer.Constant(0),
                         ),
                     )
+                set_weight_attrs(
+                    layer.down_proj_in_scale,
+                    {
+                        "SHARD_ID_TO_SHARDED_DIM": {"gate": None, "up": None, "down": None},
+                        "weight_loader": extra_weight_attrs.get(
+                            "weight_loader", default_weight_loader(layer.fd_config)
+                        ),
+                    },
+                )
+
+                set_weight_attrs(
+                    layer.up_gate_proj_in_scale,
+                    {
+                        "SHARD_ID_TO_SHARDED_DIM": {"gate": None, "up": None, "down": None},
+                        "weight_loader": extra_weight_attrs.get(
+                            "weight_loader", default_weight_loader(layer.fd_config)
+                        ),
+                    },
+                )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
@@ -616,8 +668,6 @@ class XPUWeightOnlyMoEMethod(XPUMoEMethod):
 
     def process_weights_after_loading(self, layer):
         """ """
-        if not self.quant_config.is_checkpoint_bf16:
-            return
         weight_id_map = {"gate_up": 0, "down": 1}
         if (
             hasattr(layer.up_gate_proj_weight, "tensor_track")

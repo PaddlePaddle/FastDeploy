@@ -209,6 +209,8 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     if quantization == "modelopt_fp4":
         from .nvfp4 import ModelOptNvFp4Config
 
+    from fastdeploy.platforms import current_platform
+
     from .tensor_wise_fp8 import TensorWiseFP8Config
     from .w4a8 import W4A8Config
     from .w4afp8 import W4AFP8Config
@@ -238,5 +240,13 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         method_to_config["mxfp4"] = MXFP4Config
     if quantization == "modelopt_fp4":
         method_to_config["modelopt_fp4"] = ModelOptNvFp4Config
+
+    # For XPU platform, use XPUKvCacheQuantConfig instead of KvCacheQuantConfig
+    if quantization == "kvcache" and current_platform.is_xpu():
+        from fastdeploy.model_executor.layers.backends.xpu.quantization.kv_cache import (
+            XPUKvCacheQuantConfig,
+        )
+
+        method_to_config["kvcache"] = XPUKvCacheQuantConfig
 
     return method_to_config[quantization]

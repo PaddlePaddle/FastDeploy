@@ -30,7 +30,7 @@ from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     save_routing_to_buffer,
 )
-from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.layers.utils import get_tensor, modules_to_convert
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
@@ -182,6 +182,7 @@ class FusedMoE(nn.Layer):
         with_bias: bool = False,
         activation="swiglu",
         model_format: Optional[str] = None,
+        prefix: str = "",
         topk_reduce_func: Callable = lambda x: x.sum(axis=-1, keepdim=True)
         + 1e-20,  # only used when FD_USE_PHI_MOE_TOPK=1, default is same as noaux_tc kernel
     ):
@@ -207,7 +208,7 @@ class FusedMoE(nn.Layer):
         if self.ep_size > 1:
             self.tp_size = 1
             self.tp_rank = 0
-
+        self.prefix = prefix
         self.attn_tp_size = fd_config.parallel_config.tensor_parallel_size
         self.attn_tp_rank = fd_config.parallel_config.tensor_parallel_rank
 
@@ -259,7 +260,7 @@ class FusedMoE(nn.Layer):
         moe_quant_config = fd_config.quant_config
         self.moe_quant_config = moe_quant_config
         self.moe_quant_type = None
-        if moe_quant_config and moe_quant_config.get_quant_method(self):
+        if moe_quant_config and moe_quant_config.get_quant_method(self) and modules_to_convert(prefix, self.fd_config):
             self.quant_method = moe_quant_config.get_quant_method(self)
             self.moe_quant_type = moe_quant_config.name()
         else:
@@ -301,6 +302,19 @@ class FusedMoE(nn.Layer):
             tp_size={self.tp_size}."
         )
 
+    def _load_in_scale_weight(self, param, expert_id, loaded_weight):
+        # only spport ernie now
+        expert_param = param[expert_id - self.expert_id_offset]
+        loaded_weight = get_tensor(loaded_weight)
+        if len(expert_param.shape) != len(loaded_weight.shape):
+            loaded_weight = loaded_weight.reshape(expert_param.shape)
+        assert expert_param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
+        )
+        if expert_param.dtype != loaded_weight.dtype:
+            loaded_weight = loaded_weight.cast(expert_param.dtype)
+        param[expert_id - self.expert_id_offset].copy_(loaded_weight, False)
+
     def weight_loader(
         self,
         param,
@@ -332,6 +346,11 @@ class FusedMoE(nn.Layer):
 
         if weight_need_transpose:
             loaded_weight = loaded_weight.transpose([1, 0])
+
+        if SHARD_ID_TO_SHARDED_DIM["gate"] is None and SHARD_ID_TO_SHARDED_DIM["up"] is None:
+            # in scale
+            self._load_in_scale_weight(param, expert_id, loaded_weight)
+            return
 
         if shard_id is None:
             # 1.gate up fused in disk

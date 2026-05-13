@@ -831,6 +831,8 @@ class EngineService:
         """
         tracing.trace_set_thread_info("Scheduler Task to Work")
         current_id = 0
+        schedule_loop_start = time.time()
+        schedule_loop_count = 0
         while getattr(self, "running", True):
             try:
                 if self.resource_manager.available_batch() == 0:
@@ -859,6 +861,7 @@ class EngineService:
                 )
 
                 self.resource_manager.check_and_free_block_tables()
+                get_requests_start = time.time()
                 tasks = self.scheduler.get_requests(
                     available_blocks=self.resource_manager.available_block_num(),
                     block_size=self.cfg.cache_config.block_size,
@@ -866,6 +869,8 @@ class EngineService:
                     max_num_batched_tokens=self.cfg.scheduler_config.max_num_batched_tokens,
                     batch=num_prefill_batch,
                 )
+                get_requests_time = time.time() - get_requests_start
+
                 for task in tasks:
                     task.metrics.engine_get_req_time = time.time()
                     trace_print(LoggingEventName.REQUEST_QUEUE_END, task.request_id, getattr(task, "user", ""))
@@ -878,13 +883,34 @@ class EngineService:
                     # so the same request sent by the decode api server will be ignored
                     continue
 
+                schedule_loop_count += 1
+                if schedule_loop_count % 100 == 0:
+                    elapsed = time.time() - schedule_loop_start
+                    avg_loop_time = elapsed / schedule_loop_count
+                    self.llm_logger.info(
+                        f"[SCHEDULER_METRICS] Loop count: {schedule_loop_count}, "
+                        f"avg loop time: {avg_loop_time*1000:.2f}ms, "
+                        f"last get_requests time: {get_requests_time*1000:.2f}ms, "
+                        f"available_batch: {self.resource_manager.available_batch()}, "
+                        f"available_blocks: {self.resource_manager.available_block_num()}"
+                    )
+
                 self.llm_logger.debug(f"get tasks from scheduler: {tasks}")
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     for task in tasks:
                         task.metrics.ask_decode_resource_start_time = time.time()
                     self.split_connector.send_splitwise_tasks(tasks, current_id)
 
+                insert_tasks_start = time.time()
                 insert_successful = self.insert_tasks(tasks, current_id)
+                insert_tasks_time = time.time() - insert_tasks_start
+                self.llm_logger.info(
+                    f"[SCHEDULER_METRICS] insert_tasks: num_tasks={len(tasks)}, "
+                    f"time={insert_tasks_time*1000:.2f}ms, "
+                    f"get_requests_time={get_requests_time*1000:.2f}ms, "
+                    f"current_id={current_id}"
+                )
+
                 if insert_successful:
                     current_id = current_id + 1
                 else:
@@ -1082,6 +1108,7 @@ class EngineService:
                     else:
                         for task in tasks:
                             self.resource_manager.add_request(task)
+
                 is_fetching = False
             except Exception as e:
                 self.llm_logger.error(f"fetching request error {e} {str(traceback.format_exc())}")
