@@ -102,8 +102,6 @@ def get_moe_scores(
     compute moe scores using e_score_correction_bias.
     """
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
-    use_fused = use_fused_cast and current_platform.is_cuda()
-
     if envs.FD_USE_PHI_MOE_TOPK:
         # calculate renormalize and routed_scaling_factor value outside the noaux_tc
         original_renormalize = renormalize
@@ -111,7 +109,7 @@ def get_moe_scores(
         renormalize = False
         routed_scaling_factor = 1.0
 
-    if expert_id_to_ep_rank_array is None and not use_fused:
+    if expert_id_to_ep_rank_array is None and not use_fused_cast:
         scores = paddle.nn.functional.sigmoid(gating_output)
         scores_with_bias = scores + e_score_correction_bias
         scores, topk_values, topk_idx = noaux_tc(
@@ -123,7 +121,7 @@ def get_moe_scores(
             renormalize,
             routed_scaling_factor,
         )
-    elif expert_id_to_ep_rank_array is None and use_fused:
+    elif expert_id_to_ep_rank_array is None and use_fused_cast:
         # fused kernel: cast + sigmoid + add + noaux_tc
         scores, topk_values, topk_idx = grouped_topk(
             gating_output,
