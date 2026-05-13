@@ -98,6 +98,60 @@ def kill_process_on_port(port: int):
         pass
 
 
+def kill_process_by_unix_socket(
+    socket_path: str,
+    force: bool = True,
+):
+    """
+    根据 unix socket 文件路径杀掉对应进程
+    cmd: ss -xlpn | grep /dev/shm/fd_task_queue_8664.sock
+    Args:
+        socket_path: 例如 /dev/shm/fd_task_queue_8664.sock
+        force:
+            True -> SIGKILL
+            False -> SIGTERM
+    Returns:
+        pid 或 None
+    """
+    try:
+        output = subprocess.check_output(
+            ["ss", "-xlpn"],
+            text=True,
+        )
+        for line in output.splitlines():
+            if socket_path not in line:
+                continue
+            m = re.search(r"pid=(\d+)", line)
+            if not m:
+                continue
+            pid = int(m.group(1))
+            os.kill(
+                pid,
+                signal.SIGKILL if force else signal.SIGTERM,
+            )
+            return pid
+    except Exception:
+        pass
+    return None
+
+
+def cleanup_unix_socket(socket_path: str):
+    if not os.path.exists(socket_path):
+        return
+    try:
+        pid = kill_process_by_unix_socket(socket_path)
+        print(f"Killed process by unix socket: {socket_path}, pid={pid}")
+    except Exception as e:
+        print(f"Failed to kill process by unix socket: {socket_path}, error={e}")
+    finally:
+        try:
+            if os.path.exists(socket_path):
+                os.remove(socket_path)
+                print(f"Cleaned unix socket: {socket_path}")
+        except Exception:
+            pass
+
+
 def clean_ports(ports=None):
     """
     Kill all processes occupying the ports
@@ -116,6 +170,11 @@ def clean_ports(ports=None):
             print(f"Port {port} still in use, retrying cleanup...")
             kill_process_on_port(port)
             time.sleep(1)
+
+    # Clean unix socket, fd_task_queue_*.sock, for FD_ENGINE_TASK_QUEUE_WITH_SHM = 1
+    print("Cleaning unix socket")
+    for port in ports:
+        cleanup_unix_socket(f"/dev/shm/fd_task_queue_{port}.sock")
 
 
 def clean(ports=None):
