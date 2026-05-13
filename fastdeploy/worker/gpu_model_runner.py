@@ -2303,6 +2303,7 @@ class GPUModelRunner(ModelRunnerBase):
                 model_output_data, sampler_output = self._make_preempted_batch_output()
                 self.share_inputs["last_preempted_idx"].copy_(self.share_inputs["preempted_idx"])
                 self.share_inputs["preempted_idx"][:] = 0
+                self._cached_post_process_event.synchronize()
                 self._save_model_output(model_output_data, sampler_output)
 
             self._cached_model_output_data = None
