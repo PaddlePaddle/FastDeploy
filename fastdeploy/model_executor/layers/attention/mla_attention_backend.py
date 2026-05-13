@@ -399,7 +399,7 @@ def insert_decoder_result_back(
     max_bsz = seq_lens_encoder.shape[0]
 
     hidden_dim = decoder_result.shape[-2] * decoder_result.shape[-1]
-    out = paddle.zeros([mixed_token_num, hidden_dim], dtype=decoder_result.dtype)
+    out = paddle.empty([mixed_token_num, hidden_dim], dtype=decoder_result.dtype)
 
     BLOCK_SIZE = triton.next_power_of_2(hidden_dim)
 
