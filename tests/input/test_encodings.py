@@ -1023,6 +1023,86 @@ class TestErnieEncoding(unittest.TestCase):
     # ------------------------------------------------------------------
     # prompt_token_ids2outputs — with raw image (non-tuple)
     # ------------------------------------------------------------------
+    def test_load_video_qwen_with_sampling_updates_meta(self):
+        enc, _ = _make_encoding(QWEN_VL, {"video_fps": -1, "target_frames": -1})
+        reader = MagicMock()
+        reader.__getitem__.side_effect = [
+            MagicMock(asnumpy=MagicMock(return_value=np.full((2, 2, 3), idx, dtype=np.uint8))) for idx in range(2)
+        ]
+        meta = {"num_of_frame": 5, "fps": 10, "duration": 0.5}
+
+        from unittest.mock import patch
+
+        with (
+            patch(
+                "fastdeploy.input.encodings.qwen_encoding.read_video_paddlecodec", return_value=(reader, meta, None)
+            ),
+            patch(
+                "fastdeploy.input.encodings.qwen_encoding._sample_qwen", return_value=np.array([1, 3], dtype=np.int32)
+            ) as mock_sample,
+        ):
+            frames, out_meta = enc.load_video(
+                "video.mp4", {"target_frames": 2, "fps": 5, "min_frames": 2, "max_frames": 4}
+            )
+
+        mock_sample.assert_called_once()
+        self.assertEqual(frames.shape, (2, 2, 2, 3))
+        self.assertEqual(out_meta["num_of_frame"], 2)
+        self.assertEqual(out_meta["fps"], 5)
+        self.assertEqual(out_meta["duration"], 0.4)
+        self.assertEqual(reader.__getitem__.call_args_list[0][0][0], 1)
+        self.assertEqual(reader.__getitem__.call_args_list[1][0][0], 3)
+
+    def test_load_video_qwen_without_sampling_reads_all_frames(self):
+        enc, _ = _make_encoding(QWEN_VL, {"video_fps": -1, "target_frames": -1})
+        reader = MagicMock()
+        reader.__getitem__.side_effect = [
+            MagicMock(asnumpy=MagicMock(return_value=np.full((2, 2, 3), idx, dtype=np.uint8))) for idx in range(3)
+        ]
+        meta = {"num_of_frame": 3, "fps": 6, "duration": 0.5}
+
+        from unittest.mock import patch
+
+        with patch(
+            "fastdeploy.input.encodings.qwen_encoding.read_video_paddlecodec", return_value=(reader, meta, None)
+        ):
+            frames, out_meta = enc.load_video("video.mp4", {})
+
+        self.assertEqual(frames.shape, (3, 2, 2, 3))
+        self.assertEqual(out_meta["num_of_frame"], 3)
+        self.assertEqual([call[0][0] for call in reader.__getitem__.call_args_list], [0, 1, 2])
+
+    def test_load_video_paddleocr_with_sampling_updates_meta(self):
+        enc, _ = _make_encoding(PADDLEOCR_VL, {"video_fps": -1, "target_frames": -1})
+        reader = MagicMock()
+        reader.__getitem__.side_effect = [
+            MagicMock(asnumpy=MagicMock(return_value=np.full((2, 2, 3), idx, dtype=np.uint8))) for idx in range(2)
+        ]
+        meta = {"num_of_frame": 5, "fps": 10, "duration": 0.5}
+
+        from unittest.mock import patch
+
+        with (
+            patch(
+                "fastdeploy.input.encodings.paddleocr_encoding.read_video_paddlecodec",
+                return_value=(reader, meta, None),
+            ),
+            patch(
+                "fastdeploy.input.encodings.paddleocr_encoding._sample_paddleocr",
+                return_value=np.array([0, 4], dtype=np.int32),
+            ) as mock_sample,
+        ):
+            frames, out_meta = enc.load_video(
+                "video.mp4", {"target_frames": 2, "fps": 5, "min_frames": 2, "max_frames": 4}
+            )
+
+        mock_sample.assert_called_once()
+        self.assertEqual(frames.shape, (2, 2, 2, 3))
+        self.assertEqual(out_meta["num_of_frame"], 2)
+        self.assertEqual(out_meta["fps"], 5)
+        self.assertEqual(out_meta["duration"], 0.4)
+        self.assertEqual([call[0][0] for call in reader.__getitem__.call_args_list], [0, 4])
+
     def test_prompt_token_ids2outputs_with_raw_image(self):
         """prompt_token_ids with raw image (non-tuple) triggers add_image."""
         enc, mock_proc = self._make_enc()

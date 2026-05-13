@@ -135,6 +135,35 @@ class TestVideoReaderWrapper(unittest.TestCase):
         arr = frame.asnumpy()
         self.assertEqual(arr.shape, (480, 640, 3))
 
+    def test_getitem_slice_returns_numpyframe(self):
+        decoder = _make_mock_reader()
+        frame_data = MagicMock()
+        frame_data.numpy.return_value = np.zeros((2, 480, 640, 3), dtype=np.uint8)
+        frames_result = MagicMock()
+        frames_result.data = frame_data
+        decoder.get_frames_at.return_value = frames_result
+        wrapper = self._make_wrapper("/fake/video.mp4", decoder)
+
+        frames = wrapper[1:3]
+
+        self.assertTrue(hasattr(frames, "asnumpy"))
+        self.assertEqual(frames.asnumpy().shape, (2, 480, 640, 3))
+        decoder.get_frames_at.assert_called_with(indices=[1, 2])
+
+    def test_init_reraises_torchcodec_import_error(self):
+        from fastdeploy.input.utils.video import VideoReaderWrapper
+
+        original_import = __import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "torchcodec.decoders":
+                raise RuntimeError("backend missing")
+            return original_import(name, *args, **kwargs)
+
+        with self._paddle_patch(), patch("builtins.__import__", side_effect=mock_import):
+            with self.assertRaisesRegex(RuntimeError, "backend missing"):
+                VideoReaderWrapper("/fake/video.mp4")
+
     def test_get_avg_fps(self):
         decoder = _make_mock_reader(fps=30.0)
         wrapper = self._make_wrapper("/fake/video.mp4", decoder)
