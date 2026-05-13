@@ -1709,12 +1709,15 @@ class ResourceManagerV1(ResourceManager):
             # Do not block the main thread here
             # Write cache to storage if kvcache_storage_backend is enabled
             for req in need_postprocess_reqs:
-                if self.config.scheduler_config.splitwise_role == "decode":
-                    # D instance uses simplified write method (does not rely on Radix Tree)
-                    self.cache_manager.write_cache_to_storage_decode(req)
-                else:
-                    # P instance / Mixed instance uses standard write method (relies on Radix Tree)
-                    self.cache_manager.write_cache_to_storage(req)
+                try:
+                    if self.config.scheduler_config.splitwise_role == "decode":
+                        # D instance uses simplified write method (does not rely on Radix Tree)
+                        self.cache_manager.write_cache_to_storage_decode(req)
+                    else:
+                        # P instance / Mixed instance uses standard write method (relies on Radix Tree)
+                        self.cache_manager.write_cache_to_storage(req)
+                except Exception as e:
+                    llm_logger.error(f"write_cache_to_storage failed req_id={req.request_id}: {e}")
 
             with self.lock:
                 for req in need_postprocess_reqs:
