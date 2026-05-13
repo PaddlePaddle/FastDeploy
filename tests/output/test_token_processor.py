@@ -25,7 +25,12 @@ import paddle
 import pytest
 
 from fastdeploy import envs
-from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
+from fastdeploy.engine.request import (
+    Request,
+    RequestMetrics,
+    RequestOutput,
+    RequestStatus,
+)
 from fastdeploy.output import token_processor
 from fastdeploy.output.token_processor import (
     MAX_BSZ,
@@ -671,6 +676,7 @@ def test_process_batch_output_consumes_tokens_and_finishes_task():
         prompt_token_ids_len=0,
         num_total_tokens=1,
         block_tables=[1],
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     task.get = lambda key, default=None: getattr(task, key, default)
@@ -708,6 +714,7 @@ def test_process_batch_output_logprob_records_topk_and_caching():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     rm.tasks_list[0] = task
@@ -784,6 +791,7 @@ def test_process_batch_output_speculative_recovery_stop_finishes():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     rm.tasks_list[0] = task
@@ -911,6 +919,7 @@ def test_process_batch_output_speculative_logprob_targets_topk_scores():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     rm.tasks_list[0] = task
@@ -1076,6 +1085,7 @@ def test_process_batch_output_records_second_decode_token():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     task.metrics.inference_start_time = time.time()
@@ -1145,6 +1155,7 @@ def test_process_batch_output_prefill_sets_draft_tokens():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     rm.tasks_list[0] = task
@@ -1186,6 +1197,7 @@ def test_process_batch_output_logs_recovery_stop_for_non_speculative():
         prompt_token_ids_len=0,
         num_total_tokens=1,
         block_tables=[1],
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     task.get = lambda k, d=None: getattr(task, k, d)
@@ -1223,6 +1235,7 @@ def test_process_batch_output_sets_multimodal_token_counts():
         num_total_tokens=1,
         block_tables=[1],
         multimodal_inputs={"num_input_image_tokens": 4, "num_input_video_tokens": 5},
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     task.get = lambda key, default=None: getattr(task, key, default)

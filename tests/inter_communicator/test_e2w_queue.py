@@ -301,15 +301,15 @@ class TestEngineWorkerQueue(unittest.TestCase):
             client.get_finished_req()
             thread.join()
 
-            client.can_put_next_add_task_finished_flag.set(0)
-            thread = self._set_value_after_delay(client.can_put_next_add_task_finished_flag, 1)
-            client.put_finished_add_cache_task_req(["req-wait"])
+            client.can_put_next_send_cache_finished_flag.set(0)
+            thread = self._set_value_after_delay(client.can_put_next_send_cache_finished_flag, 1)
+            client.put_finished_req([["req-wait", {"status": "ok"}]])
             thread.join()
 
-            client.finished_add_cache_task_list.append(["req-wait"])
-            client.client_get_finished_add_cache_task_flag[:] = [0]
-            thread = self._set_list_after_delay(client.client_get_finished_add_cache_task_flag, [1])
-            client.get_finished_add_cache_task_req()
+            client.finished_send_cache_list.append(["req-wait", {"error": "bad"}])
+            client.client_get_finish_send_cache_flag[:] = [0]
+            thread = self._set_list_after_delay(client.client_get_finish_send_cache_flag, [1])
+            client.get_finished_req()
             thread.join()
         finally:
             paddle.set_device(previous_device)
@@ -358,18 +358,6 @@ class TestEngineWorkerQueue(unittest.TestCase):
             self.assertEqual(response, [["req-1", {"error": "bad"}]])
             self.assertEqual(client.get_finished_req(), [])
             self.assertEqual(client.can_put_next_send_cache_finished_flag.get(), 1)
-        finally:
-            self._cleanup_queue_pair(server)
-
-    def test_finished_add_cache_task_req(self):
-        server, client = self._build_queue_pair()
-        try:
-            req_ids = ["req-2"]
-            self.assertTrue(client.put_finished_add_cache_task_req(req_ids))
-            client.finished_add_cache_task_list.append(req_ids)
-            self.assertEqual(client.get_finished_add_cache_task_req(), req_ids)
-            self.assertEqual(client.get_finished_add_cache_task_req(), [])
-            self.assertEqual(client.can_put_next_add_task_finished_flag.get(), 1)
         finally:
             self._cleanup_queue_pair(server)
 

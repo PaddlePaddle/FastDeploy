@@ -853,6 +853,7 @@ class RowParallelLinear(LinearBase):
         skip_quant: bool = False,
         weight_dtype: str = "",
         layer_id: int = -1,
+        enable_all_reduce_fusion: bool = None,
     ):
         """
         Initialize a linear layer with additional parameters for inference and quantization.
@@ -864,9 +865,17 @@ class RowParallelLinear(LinearBase):
             input_size (int): Number of input features. Defaults to None.
             output_size (int): Number of output features. Defaults to None.
             with_bias (bool): Whether to include bias or not. Defaults to False.
-            skip_quant (bool): Whether to skip quantization. Defaults to False.
+            skip_quant (bool): Whether to skip quantization or not. Defaults to False.
+            enable_all_reduce_fusion (bool, optional): Whether to enable all-reduce fusion.
+                If None, it is determined by the config flag and prefix. Defaults to None.
         """
         self.fd_config = fd_config
+        if enable_all_reduce_fusion is None:
+            self.enable_all_reduce_fusion = False
+        else:
+            self.enable_all_reduce_fusion = (
+                fd_config.parallel_config.enable_flashinfer_allreduce_fusion and enable_all_reduce_fusion
+            )
         self.ep_size = fd_config.parallel_config.expert_parallel_size
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.tp_group = fd_config.parallel_config.tp_group
@@ -944,7 +953,10 @@ class RowParallelLinear(LinearBase):
 
         out = self.quant_method.apply(self, x)
 
-        if self.reduce_results and self.tp_size > 1:
+        need_tp_all_reduce = (
+            self.reduce_results and self.tp_size > 1 and not (self.enable_all_reduce_fusion and out.shape[0] <= 2048)
+        )
+        if need_tp_all_reduce:
             out = tensor_model_parallel_all_reduce(out, self.tp_group)
 
         return out

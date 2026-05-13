@@ -28,6 +28,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     weight_fully_copied,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import ceil_div, register_custom_python_op
 
 from ..quantization.quant_base import QuantMethodBase
@@ -299,7 +300,7 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
+
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
@@ -307,6 +308,11 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
 
         if layer.topk_method == "noaux_tc":
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             gate_out, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -315,8 +321,10 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,

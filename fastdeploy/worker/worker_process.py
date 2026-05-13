@@ -850,6 +850,12 @@ def parse_args():
         help="Configuration of SpeculativeConfig.",
     )
     parser.add_argument(
+        "--enable_flashinfer_allreduce_fusion",
+        action="store_true",
+        default=False,
+        help="Flag to enable all reduce fusion kernel in flashinfer.",
+    )
+    parser.add_argument(
         "--max_num_batched_tokens",
         type=int,
         default=2048,
@@ -899,6 +905,11 @@ def parse_args():
         "--enable_chunked_moe",
         action="store_true",
         help="enable chunked moe",
+    )
+    parser.add_argument(
+        "--enable_moe_scores_elementwise_fuse",
+        action="store_true",
+        help="enable fused elementwise cast in get_moe_scores",
     )
     parser.add_argument(
         "--chunked_moe_size",

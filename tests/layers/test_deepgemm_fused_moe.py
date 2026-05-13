@@ -106,7 +106,10 @@ class DummyFDConfig:
             # ep_size * this = max tokens buffer for masked GEMM; must be ≥ aligned M
             num_max_dispatch_tokens_per_rank=128,
         )
-        self.scheduler_config = types.SimpleNamespace(max_num_batched_tokens=NUM_TOKENS)
+        self.scheduler_config = types.SimpleNamespace(
+            max_num_batched_tokens=NUM_TOKENS,
+            enable_moe_scores_elementwise_fuse=False,
+        )
         self.parallel_config = types.SimpleNamespace(tensor_parallel_size=1)
 
 
@@ -203,6 +206,22 @@ class TestApplyTp:
         out = method.apply_tp(layer, x, gate, topk_ids_hookfunc=hook)
 
         assert "topk_ids" in captured
+        assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
+
+    @requires_deepgemm
+    def test_apply_tp_noaux_tc_with_use_fused_true(self):
+        """noaux_tc path with enable_moe_scores_elementwise_fuse=True: triggers use_fused=True (no gate_out.cast)."""
+        layer = DummyLayer()
+        layer.topk_method = "noaux_tc"
+        gate = DummyGate(layer.num_local_experts)
+        method = _make_method()
+
+        x = paddle.randn([NUM_TOKENS, HIDDEN_SIZE], dtype="bfloat16")
+
+        # Enable flag to exercise the fused path (use_fused=True)
+        layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse = True
+
+        out = method.apply(layer, x, gate)
         assert list(out.shape) == [NUM_TOKENS, HIDDEN_SIZE]
 
     @requires_deepgemm

@@ -238,9 +238,7 @@ def _extract_sparse_indices(
     """
     Extract per-request sparse retained-token indices from CPU numpy arrays.
 
-    This is the CPU-side counterpart of _compute_sampling_mask. It should be
-    called after the sampling_mask_event has been synchronized, so that the
-    async D2H copy is guaranteed to be complete.
+    This is the CPU-side counterpart of _compute_sampling_mask.
 
     Args:
         indices_window_cpu: [B, max_k] int64 numpy array of sorted vocab indices.
@@ -708,9 +706,7 @@ class Sampler(nn.Layer):
         # All GPU ops; D2H is done via async copy_ with event sync in save_output.
         sampling_mask = None
         logz_per_batch = None
-        sampling_mask_event = None
         if sampling_metadata.keep_sampling_mask:
-            sampling_mask_event = paddle.device.cuda.create_event()
             indices_window_gpu, mask_window_gpu, logz_per_batch, mask_bsz = _compute_sampling_mask(
                 probs,
                 sampling_metadata.top_p,
@@ -726,8 +722,6 @@ class Sampler(nn.Layer):
             ).pin_memory()
             indices_window_cpu.copy_(indices_window_gpu, False)
             mask_window_cpu.copy_(mask_window_gpu, False)
-            # Record event — sync this event before reading CPU buffers
-            sampling_mask_event.record()
             # Store deferred GPU→CPU data; sparse extraction happens in save_output
             sampling_mask = (indices_window_cpu, mask_window_cpu, mask_bsz)
 
@@ -756,7 +750,6 @@ class Sampler(nn.Layer):
             logits=logits,
             sampling_mask=sampling_mask,
             logz_per_batch=logz_per_batch,
-            sampling_mask_event=sampling_mask_event,
         )
 
         return sampler_output
@@ -1245,20 +1238,16 @@ class SpeculativeSampler(nn.Layer):
                 target_logits = target_logits[: accept_nums.sum()]
                 # Derive target probs from already-extracted target_logits; avoids a second kernel call.
                 target_probs = F.softmax(target_logits, axis=-1)
-                # Compute sampling mask at accepted token positions.
-                # Expand top_p from [batch, 1] to [total_accepted, 1].
-                accept_top_p = (
-                    sampling_metadata.top_p[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
+                accept_top_p, accept_top_k, _ = build_sampling_params(
+                    sampling_metadata.top_p,
+                    sampling_metadata.top_k,
+                    sampling_metadata.seed,
+                    share_inputs["seq_lens_this_time"],
+                    share_inputs["cu_seqlens_q_output"],
+                    token_num_output_cpu,
+                    increment_value,
                 )
-                accept_top_k = None
-                if (
-                    sampling_metadata.top_k is not None
-                    and sampling_metadata.top_k_list
-                    and any(x > 0 for x in sampling_metadata.top_k_list)
-                ):
-                    accept_top_k = (
-                        sampling_metadata.top_k[:real_bsz].squeeze(1).repeat_interleave(accept_nums).unsqueeze(1)
-                    )
+
                 indices_window_gpu, mask_window_gpu, logz_per_batch, mask_bsz = _compute_sampling_mask(
                     target_probs,
                     accept_top_p,
@@ -1274,11 +1263,8 @@ class SpeculativeSampler(nn.Layer):
                 ).pin_memory()
                 indices_window_cpu.copy_(indices_window_gpu, False)
                 mask_window_cpu.copy_(mask_window_gpu, False)
-                sampling_mask_event = paddle.device.cuda.create_event()
-                sampling_mask_event.record()
                 sampler_output.sampling_mask = (indices_window_cpu, mask_window_cpu, mask_bsz)
                 sampler_output.logz_per_batch = logz_per_batch
-                sampler_output.sampling_mask_event = sampling_mask_event
         return sampler_output
 
     def forward_xpu(

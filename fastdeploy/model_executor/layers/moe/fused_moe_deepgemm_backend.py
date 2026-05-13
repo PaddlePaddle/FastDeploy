@@ -742,9 +742,13 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         below is TP compute method.
         """
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
 
         if layer.topk_method == "noaux_tc":
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -754,8 +758,10 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
                 topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,

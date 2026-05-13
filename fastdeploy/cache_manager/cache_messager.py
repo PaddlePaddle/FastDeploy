@@ -613,12 +613,16 @@ class CacheMessagerV1:
                 )
 
         self.gpu_id = gpu_id
-        self.cache_info = dict()
+        self.cache_info = dict()  # {'request_id': cache_info_dict}
         self.rank_id = self.rank + local_data_parallel_id * self.nranks
         self.engine_cache_task_thread_lock = threading.Lock()
-        self.engine_cache_tasks = [dict() for _ in range(512)]
-        self.idx_cache_task_dict = {}
-        self.cache_prefilled_engine_ids_queue = queue.Queue()  # keep batch slot index for each prefill step
+        self.engine_cache_tasks = [
+            dict() for _ in range(512)
+        ]  # {'layer_id': {'prefilled_layer_idx': xx, 'prefilled_block_num': xx}}
+        self.idx_cache_task_dict = {}  # {'slot_idx': cache_info_dict}
+        self.cache_prefilled_engine_ids_queue = (
+            queue.Queue()
+        )  # [(slot_idx1, prefilled_token_num1), (slot_idx2, prefilled_token_num2)]
         if splitwise_role == "prefill":
             consume_signals_thread = threading.Thread(target=self.consume_signals)
             consume_signals_thread.daemon = True
@@ -638,7 +642,6 @@ class CacheMessagerV1:
         while True:
             try:
                 cache_info = self.engine_worker_queue.get_cache_info()
-                finished_add_cache_task_req_ids = []
                 if cache_info:
                     logger.debug(f"Get cache info from engine worker queue, {cache_info}")
                     self.engine_worker_queue.cache_info_barrier.wait()
@@ -647,7 +650,6 @@ class CacheMessagerV1:
                             self.cache_info[info["request_id"]].update(info)
                             current_info = self.cache_info[info["request_id"]]
                             assert "dest_block_ids" in current_info and "src_block_ids" in current_info
-                            finished_add_cache_task_req_ids.append(info["request_id"])
                             decode_cached_block_num = len(current_info["src_block_ids"]) - len(
                                 current_info["dest_block_ids"]
                             )
@@ -659,17 +661,13 @@ class CacheMessagerV1:
                             current_info["sended_layer_id"] = -1
                             current_info["sended_block_num"] = current_info["decode_cached_tokens"] // self.block_size
                             current_info["status"] = "init"
-                            logger.info(f"Get cache info from D: finish add cache task: {current_info}")
+                            logger.info(f"Get cache info and finish add cache task: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
                             self.idx_cache_task_dict[current_info["current_id"]] = current_info
                         else:
-                            logger.info(f"Get cache info from P: {info}")
+                            logger.info(f"Get cache info: {info}")
                             self.cache_info[info["request_id"]] = info
 
-                    if finished_add_cache_task_req_ids:
-                        logger.info(f"Put processed tasks into engine worker queue: {finished_add_cache_task_req_ids}")
-                        self.engine_worker_queue.put_finished_add_cache_task_req(finished_add_cache_task_req_ids)
-                    self.engine_worker_queue.finish_add_cache_task_barrier.wait()
                 else:
                     time.sleep(0.001)
             except Exception as e:
@@ -687,10 +685,12 @@ class CacheMessagerV1:
                 block_start_end_list = []
                 current_prefilled_token_num_list = []
                 for engine_index, current_step_prefilled_token_num in batch_engine_signals:
+                    self._maybe_wait_for_cache_task(engine_index)
                     assert (
                         engine_index in self.idx_cache_task_dict
                     ), f"engine_index {engine_index} not in self.idx_cache_task_dict {self.idx_cache_task_dict}"
                     block_id_start = self.idx_cache_task_dict[engine_index]["sended_block_num"]
+
                     prefilled_token_num = current_step_prefilled_token_num
                     if (
                         prefilled_token_num == self.idx_cache_task_dict[engine_index]["need_prefill_tokens"]
@@ -916,6 +916,20 @@ class CacheMessagerV1:
                 logger.debug(f"_handle_connect_task send response: {response}")
             except Exception as e:
                 logger.error(f"handle_connect_task has exception: {e}, {traceback.format_exc()}")
+
+    def _maybe_wait_for_cache_task(self, engine_index):
+        # If cache messager does not get cache task from engine, just hang here for now
+        wait_step = 1
+        sleep_seconds = 0.005
+
+        while engine_index not in self.idx_cache_task_dict:
+            time.sleep(sleep_seconds)
+            wait_step += 1
+
+            if wait_step % 400 == 0:
+                logger.warning(
+                    f"waiting cache task for engine_index: {engine_index}, cost_time: {wait_step * 0.005:.2f} s"
+                )
 
 
 def main():

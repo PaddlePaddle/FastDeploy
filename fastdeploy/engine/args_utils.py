@@ -274,6 +274,11 @@ class EngineArgs:
     Flag to disable the custom all-reduce kernel.
     """
 
+    enable_flashinfer_allreduce_fusion: bool = False
+    """
+    Flag to enable all reduce fusion kernel in flashinfer.
+    """
+
     use_internode_ll_two_stage: bool = False
     """
     Flag to use the internode_ll_two_stage kernel.
@@ -330,6 +335,11 @@ class EngineArgs:
     chunked_moe_size: int = 256
     """
     Chunk size of moe input.
+    """
+
+    enable_moe_scores_elementwise_fuse: bool = False
+    """
+    Flag to enable fused elementwise cast in get_moe_scores. Default is False (disabled).
     """
 
     cache_transfer_protocol: str = "ipc,rdma"
@@ -1001,6 +1011,12 @@ class EngineArgs:
             help="Flag to disable custom all-reduce.",
         )
         parallel_group.add_argument(
+            "--enable-flashinfer-allreduce-fusion",
+            action="store_true",
+            default=EngineArgs.enable_flashinfer_allreduce_fusion,
+            help="Flag to enable all reduce fusion kernel in flashinfer.",
+        )
+        parallel_group.add_argument(
             "--use-internode-ll-two-stage",
             action="store_true",
             default=EngineArgs.use_internode_ll_two_stage,
@@ -1379,7 +1395,12 @@ class EngineArgs:
             default=EngineArgs.enable_overlap_schedule,
             help="Enable overlapping schedule.",
         )
-
+        scheduler_group.add_argument(
+            "--enable-moe-scores-elementwise-fuse",
+            action="store_true",
+            default=EngineArgs.enable_moe_scores_elementwise_fuse,
+            help="Enable fused elementwise cast in get_moe_scores for MoE routing.",
+        )
         model_group.add_argument(
             "--deploy-modality",
             type=str,

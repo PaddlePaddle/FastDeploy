@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib.util
+import os
 import sys
 import types
 
@@ -22,7 +24,21 @@ import pytest
 if not hasattr(paddle, "enable_compat"):
     paddle.enable_compat = lambda *args, **kwargs: None
 
-from fastdeploy.cache_manager import cache_messager
+# Import the legacy cache_messager module directly from the .py file,
+# because the cache_messager/ package shadows it and the legacy
+# fallback (cache_messager_legacy) does not exist locally.
+_cm_py_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "fastdeploy",
+    "cache_manager",
+    "cache_messager.py",
+)
+_spec = importlib.util.spec_from_file_location(
+    "fastdeploy.cache_manager.cache_messager_py",
+    _cm_py_path,
+)
+cache_messager = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(cache_messager)
 
 
 class _DummyBarrier:
@@ -40,12 +56,10 @@ class _DummyEngineWorkerQueue:
         self.cache_info_calls = 0
         self.connect_task_calls = 0
         self.cache_info_barrier = _DummyBarrier()
-        self.finish_add_cache_task_barrier = _DummyBarrier()
         self.finish_send_cache_barrier = _DummyBarrier()
         self.connect_task_barrier = _DummyBarrier()
         self.connect_task_response_barrier = _DummyBarrier()
         self.begin_send_cache_barrier = _DummyBarrier()
-        self.finished_add_cache_task_req_ids = []
         self.finished_req_payloads = []
         self.connect_task_responses = []
 
@@ -55,9 +69,6 @@ class _DummyEngineWorkerQueue:
         info = self.cache_info_sequence[self.cache_info_calls]
         self.cache_info_calls += 1
         return info
-
-    def put_finished_add_cache_task_req(self, req_ids):
-        self.finished_add_cache_task_req_ids.append(req_ids)
 
     def put_finished_req(self, payload):
         self.finished_req_payloads.append(payload)
@@ -376,7 +387,6 @@ def test_cache_messager_v1_add_cache_task_thread(monkeypatch):
     }
     with pytest.raises(SystemExit):
         messager._add_cache_task_thread()
-    assert dummy_queue.finished_add_cache_task_req_ids == [["req-2"]]
     assert messager.cache_info["req-2"]["status"] == "init"
 
 

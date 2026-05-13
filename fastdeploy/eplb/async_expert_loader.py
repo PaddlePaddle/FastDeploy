@@ -24,8 +24,24 @@ import numpy as np
 import paddle
 
 try:
-    from cuda import cudart
-except ImportError:
+    import cuda as _cuda_pkg
+
+    _cuda_ver = getattr(_cuda_pkg, "__version__", None)
+    if _cuda_ver is None:
+        # cuda-python >= 13.x does not expose a top-level __version__;
+        # detect the version via the cuda-bindings package.
+        import importlib.metadata as _meta
+
+        _cuda_ver = _meta.version("cuda-bindings")
+    _cuda_major = int(_cuda_ver.split(".")[0])
+    if _cuda_major >= 13:
+        from cuda.bindings import runtime as cudart
+    else:
+        from cuda import cudart
+except Exception as _e:
+    import warnings
+
+    warnings.warn(f"cuda-python import failed, async_expert_loader will be unavailable: {_e}")
     cudart = None
 
 from fastdeploy.config import EPLBConfig
@@ -98,6 +114,7 @@ def create_mmap(model_name: List, ep_rank: int, ep_size: int, shm_uuid: str, epl
             raise ImportError(
                 "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
                 "  CUDA 12.x → pip install cuda-python==12.*\n"
+                "  CUDA 13.x → pip install cuda-python cuda-bindings\n"
             )
 
         # Register memory with CUDA

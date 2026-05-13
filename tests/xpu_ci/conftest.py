@@ -101,6 +101,13 @@ def stop_processes():
     for cmd in commands:
         safe_kill_cmd(cmd)
 
+    try:
+        # 清理/dev/shm下的所有文件
+        subprocess.run("rm -rf /dev/shm/*", shell=True, check=True)
+    except subprocess.CalledProcessError:
+        print("Failed to remove files from /dev/shm")
+        pass
+
 
 def cleanup_resources():
     """

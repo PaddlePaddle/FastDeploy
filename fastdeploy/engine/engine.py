@@ -667,6 +667,8 @@ class LLMEngine:
             "ep_prefill_use_worst_num_tokens": self.cfg.parallel_config.ep_prefill_use_worst_num_tokens,
             "enable_overlap_schedule": self.cfg.scheduler_config.enable_overlap_schedule,
             "enable_keep_sampling_mask": self.cfg.model_config.enable_keep_sampling_mask,
+            "enable_flashinfer_allreduce_fusion": self.cfg.parallel_config.enable_flashinfer_allreduce_fusion,
+            "enable_moe_scores_elementwise_fuse": self.cfg.scheduler_config.enable_moe_scores_elementwise_fuse,
         }
         for worker_flag, value in worker_store_true_flag.items():
             if value:

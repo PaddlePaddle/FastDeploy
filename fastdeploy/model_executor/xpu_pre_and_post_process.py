@@ -55,6 +55,29 @@ if current_platform.is_xpu():
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
 
+def async_set_value(tgt, src):
+    if isinstance(src, (int, float, bool)):
+        src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
+    elif isinstance(src, (list, np.ndarray)):
+        dtype_str = str(tgt.dtype).split(".")[1]
+        np_dtype = dtype_str if dtype_str != "bfloat16" else "float32"
+        if isinstance(src, list):
+            src = np.array(src, dtype=np_dtype)
+        # TODO: support async_numpy_to_tensor
+        src = paddle.to_tensor(src, dtype=tgt.dtype)
+    elif isinstance(src, paddle.Tensor):
+        pass
+    else:
+        raise ValueError("async_set_value unsupported src type: {}".format(type(src)))
+    if src.shape != tgt.shape:
+        src = src.reshape(tgt.shape)
+    if src.dtype != tgt.dtype:
+        src = src.cast(tgt.dtype)
+    if src.place != tgt.place:
+        src = src.to(tgt.place)
+    tgt.copy_(src, blocking=False)
+
+
 def _build_stream_transfer_data(
     output_tokens: paddle.Tensor,
     pooler_outputs: List = None,
