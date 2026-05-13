@@ -103,7 +103,7 @@ def setup_and_run_server(api_url):
     # Build env with block-wise CUDA graph enabled
     env = os.environ.copy()
     env["FD_USE_BLOCK_WISE_CUDA_GRAPH"] = "1"
-    env["FD_BLOCK_WISE_CUDA_GRAPH_SIZES"] = "1,2,4,8,16,32,64,128,256,512,1024,2048,4096"
+    env["FD_BLOCK_WISE_CUDA_GRAPH_SIZES"] = "4096"
     env["CUDA_VISIBLE_DEVICES"] = "0,1"
 
     if os.path.exists("log"):
