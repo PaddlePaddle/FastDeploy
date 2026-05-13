@@ -41,7 +41,7 @@ user_invocable: true
 |------|------|--------|------|
 | 模型路径 | `MODEL_PATH` | `/root/paddlejob/share-storage/gpfs/system-public/changwenbin/models/GLM/GLM-4.7-Flash` | 模型权重目录 |
 | 并发数 | `CONCURRENCY` | `32` | 最大并发请求数 |
-| 是否量化 | `QUANTIZATION` | `none` | `none` / `block_wise_fp8`(FD) + `fp8`(SG) / `wint4` / `wint8` |
+| 是否量化 | `QUANTIZATION` | `none` | `none` / `block_wise_fp8`(FD) + `fp8`(SG) / `wint4` / `wint8`。注意：用户说"FP8"时，FD 实际使用 Block-Wise FP8（`--quantization block_wise_fp8`），SG 使用 per-tensor FP8（`--quantization fp8`），两者量化粒度不同，报告中需明确标注 |
 | 数据集路径 | `DATASET_PATH` | `/root/paddlejob/share-storage/gpfs/system-public/yangrongjin/Downloads/Dataset/20260302_browsecomp_plus_processed_num_830_fd.jsonl` | JSONL 格式 |
 | TP 大小 | `TP_SIZE` | `1` | tensor-parallel-size |
 | DP 大小 | `DP_SIZE` | `1` | data-parallel-size（仅 FD 支持） |
@@ -423,6 +423,8 @@ kill $(lsof -t -i :$SG_PORT) 2>/dev/null
 | 10 | 代码修改位置 | `backend_request_func.py` 和 `_swe.py` 都要改 |
 | 11 | 多卡 TP GPU 数 | 需要 `2×TP` 张空闲 GPU（FD + SG 各 TP 张） |
 | 12 | PD 分离 | 仅 FD 支持，SG 作为标准模式基线 |
+| 13 | FP8 量化类型差异 | FD 使用 `block_wise_fp8`（分块量化，粒度更细），SG 使用 `fp8`（per-tensor）。报告中需明确标注为 "Block-Wise FP8"，避免用户误解为同一种 FP8 实现 |
+| 14 | FP8 并发限制 | FD 的 FP8 模式下 `--max-num-seqs` 建议设为 32（设 64 会导致 MoE 模型 worker crash）。benchmark 的 `--max-concurrency` 可以更高（请求在服务端排队） |
 
 ---
 
