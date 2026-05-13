@@ -390,6 +390,8 @@ class ModelConfig:
         """
         self.max_stop_seqs_num = envs.FD_MAX_STOP_SEQS_NUM
         self.stop_seqs_max_len = envs.FD_STOP_SEQS_MAX_LEN
+        self.max_bad_words_num = envs.FD_MAX_BDA_WORDS_NUM
+        self.bad_words_max_len = envs.FD_BDA_WORDS_MAX_LEN
 
         def reset_config_value(key, value):
             if not hasattr(self, key.lower()):
