@@ -536,6 +536,11 @@ class DeepseekV3MLAAttention(nn.Layer):
                 attn_out = attn_out * ((F.softsign(gate_out) + 1.0) / 2.0)
             else:
                 raise NotImplementedError(f"{gated_attn_act} not implemented")
+        if attn_out is None:
+            attn_out = paddle.zeros(
+                [hidden_states.shape[0], self.num_attention_heads_tp * self.v_head_dim],
+                dtype=hidden_states.dtype,
+            )
         output = self.o_proj(attn_out)
         return output
 

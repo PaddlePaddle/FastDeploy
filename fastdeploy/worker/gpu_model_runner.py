@@ -51,6 +51,9 @@ from fastdeploy.model_executor.layers.attention.dsa_attention_backend import (
 from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
     MLAAttentionBackend,
 )
+from fastdeploy.model_executor.layers.attention.triton_mla_attention_backend import (
+    TritonMLAAttentionBackend,
+)
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
@@ -285,7 +288,7 @@ class GPUModelRunner(ModelRunnerBase):
 
         # NOTE:(changwenbin) Determine whether it is Multi-Head Latent Attention,
         # To rationalize the allocation of kvcache.
-        self.mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        self.mla_cache = envs.FD_ATTENTION_BACKEND in ("MLA_ATTN", "TRITON_MLA_ATTN")
         self.dsa_cache = envs.FD_ATTENTION_BACKEND == "DSA_ATTN"
 
         self.enable_cache_manager_v1 = envs.ENABLE_V1_KVCACHE_MANAGER
@@ -1383,7 +1386,7 @@ class GPUModelRunner(ModelRunnerBase):
         Results are stored in self.forward_meta.
         """
         # NOTE(zhushengguang): Only support MLAAttentionBackend and DSAAttentionBackend currently.
-        if not isinstance(self.attn_backends[0], (MLAAttentionBackend, DSAAttentionBackend)):
+        if not isinstance(self.attn_backends[0], (MLAAttentionBackend, DSAAttentionBackend, TritonMLAAttentionBackend)):
             return
         current_total_tokens = self.forward_meta.ids_remove_padding.shape[0]
         position_ids = self.share_inputs["position_ids_buffer"][:current_total_tokens]
