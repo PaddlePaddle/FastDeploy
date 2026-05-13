@@ -907,6 +907,11 @@ def parse_args():
         help="enable chunked moe",
     )
     parser.add_argument(
+        "--enable_moe_scores_elementwise_fuse",
+        action="store_true",
+        help="enable fused elementwise cast in get_moe_scores",
+    )
+    parser.add_argument(
         "--chunked_moe_size",
         type=int,
         default=256,
