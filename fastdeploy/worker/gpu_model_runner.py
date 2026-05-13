@@ -2249,7 +2249,9 @@ class GPUModelRunner(ModelRunnerBase):
             PREEMPTED_TOKEN_ID,
             -1,
         ).astype("int64")
-        self.share_inputs["sampled_token_ids"][:bsz].copy_(fake_sampled_token_ids, False)
+        sampled_token_ids = self.share_inputs["sampled_token_ids"].cpu()
+        sampled_token_ids[:bsz].copy_(fake_sampled_token_ids, True)
+        self.share_inputs["sampled_token_ids"].copy_(sampled_token_ids, True)
 
         fake_logprobs_tensors = None
         if self.enable_logprob:
@@ -2260,10 +2262,12 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
         if self.speculative_decoding:
-            self.share_inputs["accept_tokens_cpu"][:bsz].fill_(0)
-            self.share_inputs["accept_num_cpu"][:bsz].fill_(0)
-            self.share_inputs["seq_lens_decoder_cpu"][:bsz].copy_(self.share_inputs["seq_lens_decoder"][:bsz], False)
-            self.share_inputs["prompt_lens_cpu"][:bsz].copy_(self.share_inputs["prompt_lens"][:bsz], False)
+            self.share_inputs["accept_tokens"][:bsz].fill_(0)
+            self.share_inputs["accept_num"][:bsz].fill_(0)
+            self.share_inputs["accept_tokens_cpu"].copy_(self.share_inputs["accept_tokens"], True)
+            self.share_inputs["accept_num_cpu"].copy_(self.share_inputs["accept_num"], True)
+            self.share_inputs["seq_lens_decoder_cpu"].copy_(self.share_inputs["seq_lens_decoder"], True)
+            self.share_inputs["prompt_lens_cpu"].copy_(self.share_inputs["prompt_lens"], True)
             sampler_output = SamplerOutput(
                 sampled_token_ids=fake_sampled_token_ids,
                 logprobs_tensors=fake_logprobs_tensors,
