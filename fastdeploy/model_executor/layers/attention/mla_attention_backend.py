@@ -326,6 +326,7 @@ def extract_decoder_token_from_q(
     assert len(cu_seqlens_q.shape) == 1
     assert len(seq_lens_encoder.shape) == 1
     assert len(seq_lens_decoder.shape) == 1
+    assert seq_lens_encoder.shape == seq_lens_decoder.shape
 
     max_bsz = seq_lens_decoder.shape[0]
 
@@ -911,14 +912,7 @@ class MLAAttentionBackend(AttentionBackend):
 
                 return fmha_out
             else:
-
-                decoder_q, cache_seqlens = extract_decoder_token_from_q(
-                    q,
-                    forward_meta.cu_seqlens_q,
-                    forward_meta.seq_lens_encoder,
-                    forward_meta.seq_lens_decoder,
-                )
-                token_num = q.shape[0]
+                decoder_q = q
                 decoder_q.reshape_([-1, 1, self.num_heads, 576])
                 if self.heads_need_padding:
                     padded_q = paddle.zeros(
@@ -937,7 +931,7 @@ class MLAAttentionBackend(AttentionBackend):
                         decoder_q,
                         latent_cache,
                         metadata.block_tables,
-                        cache_seqlens,
+                        forward_meta.cache_seqlens,
                         attn_softmax_scale=self.attn_softmax_scale,
                     )
                 else:
@@ -952,7 +946,7 @@ class MLAAttentionBackend(AttentionBackend):
                         # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
                         latent_cache.view(new_cache_shape),
                         metadata.block_tables,
-                        cache_seqlens,
+                        forward_meta.cache_seqlens,
                         512,  # t.dv,
                         tile_scheduler_metadata,
                         num_splits,
@@ -962,15 +956,7 @@ class MLAAttentionBackend(AttentionBackend):
                 if self.heads_need_padding:
                     decoder_res = decoder_res[:, :, : self.num_heads, :].contiguous()
 
-                final_res = insert_decoder_result_back(
-                    decoder_res,
-                    forward_meta.cu_seqlens_q,
-                    forward_meta.seq_lens_encoder,
-                    forward_meta.seq_lens_decoder,
-                    token_num,
-                )
-
-                return final_res
+                return decoder_res
 
     @staticmethod
     def mla_blackwell(decoder_q, latent_cache, block_table, cache_seqlens, attn_softmax_scale):
