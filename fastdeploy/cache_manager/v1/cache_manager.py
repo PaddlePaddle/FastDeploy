@@ -276,7 +276,14 @@ class CacheManager(KVCacheBase):
                 if self.enable_host_cache and match_result.matched_host_nums > 0:
                     device_blocks = allocated[: match_result.matched_host_nums]
 
+                    host_refs_before = [(n.block_id, n.ref_count) for n in match_result.host_nodes]
                     free_host_block_ids = self._radix_tree.swap_to_device(match_result.host_nodes, device_blocks)
+                    host_refs_after = [(n.block_id, n.ref_count) for n in match_result.host_nodes]
+                    logger.info(
+                        f"[Debug][allocate_device_blocks] request_id={request.request_id} "
+                        f"swap host->device: host_refs: {host_refs_before} -> {host_refs_after}, "
+                        f"host_blocks_released={free_host_block_ids}, device_blocks={device_blocks}"
+                    )
                     logger.debug(
                         f"[allocate_device_blocks] request_id={request.request_id} "
                         f"swap host->device: host_block_ids={free_host_block_ids} -> device_block_ids={device_blocks}"
@@ -311,6 +318,11 @@ class CacheManager(KVCacheBase):
 
                         device_nodes, wasted_block_ids = self._radix_tree.insert(blocks=blocks, start_node=start_node)
                         match_result.device_nodes.extend(device_nodes)
+                        logger.info(
+                            f"[Debug][allocate_device_blocks] request_id={request.request_id} "
+                            f"insert uncached: nodes={[(n.block_id, n.cache_status.name, n.ref_count) for n in device_nodes]}, "
+                            f"wasted={wasted_block_ids}"
+                        )
 
                         inserted_block_ids = [n.block_id for n in device_nodes]
                         logger.debug(
@@ -513,6 +525,11 @@ class CacheManager(KVCacheBase):
 
                 # Step 1: Match Device and Host cache via RadixTree
                 matched_nodes = self._radix_tree.find_prefix(block_hashes)
+                logger.info(
+                    f"[Debug][match_prefix] request_id={request.request_id} skip_storage={skip_storage} "
+                    f"find_prefix matched={len(matched_nodes)} nodes, "
+                    f"refs={[(n.block_id, n.cache_status.name, n.ref_count) for n in matched_nodes]}"
+                )
 
                 #   Split matched_nodes into device blocks and host blocks
                 if self.enable_host_cache:
@@ -537,6 +554,10 @@ class CacheManager(KVCacheBase):
                 # Step 3: Increment ref count for matched blocks(only scheduling phase)
                 if skip_storage:
                     self._radix_tree.increment_ref_nodes(matched_nodes)
+                    logger.info(
+                        f"[Debug][match_prefix] request_id={request.request_id} "
+                        f"after increment_ref: refs={[(n.block_id, n.cache_status.name, n.ref_count) for n in matched_nodes]}"
+                    )
 
                 logger.info(
                     f"match_prefix for request_id: {request.request_id} total_hashes: {len(block_hashes)}, "
@@ -746,8 +767,17 @@ class CacheManager(KVCacheBase):
                     uncached_blocks.extend(request.block_tables[match_result.matched_device_nums :])
 
                     # Decrement ref count - blocks become evictable if ref_count reaches 0
+                    refs_before = [(n.block_id, n.cache_status.name, n.ref_count) for n in match_result.device_nodes]
                     self._radix_tree.decrement_ref_nodes(match_result.device_nodes)
+                    refs_after = [(n.block_id, n.cache_status.name, n.ref_count) for n in match_result.device_nodes]
                     self._device_pool.release(uncached_blocks)
+                    logger.info(
+                        f"[Debug][request_finish] request_id={request.request_id} "
+                        f"decrement device_nodes: before={refs_before}, after={refs_after}, "
+                        f"evictable_device={len(self._radix_tree._evictable_device)}, "
+                        f"evictable_host={len(self._radix_tree._evictable_host)}, "
+                        f"available_device={self._device_pool.available_blocks()}"
+                    )
 
                     cached_block_ids = [n.block_id for n in match_result.device_nodes]
                     logger.debug(
@@ -1009,6 +1039,31 @@ class CacheManager(KVCacheBase):
             self._pending_prefetch_list = []
             return items
 
+    def cancel_pending_prefetch(self, request_id: str) -> List[int]:
+        """
+        Cancel a pending prefetch by request ID.
+
+        Removes the matching entry from the pending list (not yet dispatched to
+        workers) and returns its pre-allocated host block IDs for cleanup.
+
+        Args:
+            request_id: The request ID to cancel.
+
+        Returns:
+            List of host block IDs that were pre-allocated, or empty list if
+            no matching pending prefetch was found.
+        """
+        with self._pending_prefetch_lock:
+            host_block_ids: List[int] = []
+            remaining = []
+            for item in self._pending_prefetch_list:
+                if item.request_id == request_id:
+                    host_block_ids = item.host_block_ids
+                else:
+                    remaining.append(item)
+            self._pending_prefetch_list = remaining
+            return host_block_ids
+
     def prepare_prefetch_metadata(
         self,
         storage_hashes: List[str],
@@ -1049,6 +1104,11 @@ class CacheManager(KVCacheBase):
                 blocks = list(zip(storage_hashes, host_block_ids))
                 prefetch_nodes, wasted_block_ids = self._radix_tree.insert(
                     blocks=blocks, cache_status=CacheStatus.LOADING_FROM_STORAGE, start_node=start_node
+                )
+                logger.info(
+                    f"[Debug][prepare_prefetch_metadata] after insert: "
+                    f"prefetch_nodes={[(n.block_id, n.cache_status.name, n.ref_count) for n in prefetch_nodes]}, "
+                    f"wasted={wasted_block_ids}"
                 )
                 # Release any blocks that were wasted due to node reuse
                 if wasted_block_ids:
@@ -1095,8 +1155,16 @@ class CacheManager(KVCacheBase):
                         )
                         continue
                     if node.cache_status == CacheStatus.LOADING_FROM_STORAGE:
+                        old_ref = node.ref_count
                         node.cache_status = CacheStatus.HOST
                         updated += 1
+                        # Balance the ref_count from insert() in prepare_prefetch_metadata.
+                        # The prefetch is complete, the node should be in idle-cached state (ref=0).
+                        self._radix_tree.decrement_ref_nodes([node])
+                        logger.info(
+                            f"[Debug][update_storage_blocks_to_host] block_id={block_id} "
+                            f"LFS->HOST, ref: {old_ref}->{node.ref_count}"
+                        )
                     else:
                         logger.warning(
                             f"[StoragePrefetch] update_storage_blocks_to_host: "

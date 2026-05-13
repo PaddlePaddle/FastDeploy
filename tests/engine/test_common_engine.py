@@ -41,6 +41,7 @@ from fastdeploy.engine.common_engine import (
     _read_latest_worker_traceback,
 )
 from fastdeploy.engine.request import (
+    BatchRequest,
     ControlRequest,
     ControlResponse,
     Request,
@@ -325,7 +326,11 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
             def schedule(self):
                 eng.running = False
-                return schedule_result
+                tasks, error_tasks = schedule_result
+                br = BatchRequest()
+                for t in tasks:
+                    br.add_request(t)
+                return br, error_tasks
 
             def get_real_bsz(self):
                 return self.real_bsz

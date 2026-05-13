@@ -252,7 +252,11 @@ class RadixTree:
                     break
 
                 node = node.children[block_hash]
-                if node.cache_status in (CacheStatus.DELETING, CacheStatus.SWAP_TO_HOST):
+                if node.cache_status in (
+                    CacheStatus.DELETING,
+                    CacheStatus.SWAP_TO_HOST,
+                    CacheStatus.LOADING_FROM_STORAGE,
+                ):
                     break
 
                 node.touch()

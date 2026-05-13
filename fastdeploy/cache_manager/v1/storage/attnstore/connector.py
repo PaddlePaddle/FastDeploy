@@ -51,33 +51,12 @@ class AttnStoreScheduler(StorageScheduler):
         """Disconnect from AttnStore."""
         self._connected = False
 
-    def exists(self, key: str) -> bool:
-        """Check if key exists in AttnStore."""
+    def batch_exists(self, keys: List[str]) -> List[bool]:
+        """Batch check existence of multiple keys."""
         if not self._connected:
-            return False
+            return [False] * len(keys)
         # Placeholder implementation
-        return False
-
-    def query(self, keys: List[str]) -> Dict[str, bool]:
-        """Query multiple keys for existence."""
-        if not self._connected:
-            return {k: False for k in keys}
-        # Placeholder implementation
-        return {k: False for k in keys}
-
-    def get_metadata(self, key: str) -> Optional[Dict[str, Any]]:
-        """Get metadata for a key."""
-        if not self._connected:
-            return None
-        # Placeholder implementation
-        return None
-
-    def list_keys(self, prefix: str = "") -> List[str]:
-        """List keys with a given prefix."""
-        if not self._connected:
-            return []
-        # Placeholder implementation
-        return []
+        return [False] * len(keys)
 
 
 class AttnStoreConnector(StorageConnector):
@@ -111,30 +90,26 @@ class AttnStoreConnector(StorageConnector):
         """Disconnect from AttnStore."""
         self._connected = False
 
-    def get(self, key: str, dst_buffer: Any) -> bool:
-        """Get data from AttnStore."""
+    def batch_get(
+        self,
+        keys: List[str],
+        dst_ptrs: List[int],
+        sizes: List[int],
+    ) -> List[bool]:
+        """Batch get multiple objects from storage via zero-copy."""
         if not self._connected:
-            return False
+            return [False] * len(keys)
         # Placeholder implementation
-        return False
+        return [False] * len(keys)
 
-    def set(self, key: str, src_buffer: Any, size: int) -> bool:
-        """Set data in AttnStore."""
+    def batch_set(
+        self,
+        keys: List[str],
+        src_ptrs: List[int],
+        sizes: List[int],
+    ) -> List[bool]:
+        """Batch set multiple objects into storage via zero-copy."""
         if not self._connected:
-            return False
+            return [False] * len(keys)
         # Placeholder implementation
-        return False
-
-    def delete(self, key: str) -> bool:
-        """Delete data from AttnStore."""
-        if not self._connected:
-            return False
-        # Placeholder implementation
-        return False
-
-    def clear(self, prefix: str = "") -> int:
-        """Clear data from AttnStore."""
-        if not self._connected:
-            return 0
-        # Placeholder implementation
-        return 0
+        return [False] * len(keys)

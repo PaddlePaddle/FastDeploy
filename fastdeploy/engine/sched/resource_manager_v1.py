@@ -1553,14 +1553,7 @@ class ResourceManagerV1(ResourceManager):
 
         # Also check pending list (not yet dispatched)
         if not host_block_ids:
-            with self.cache_manager._pending_prefetch_lock:
-                remaining = []
-                for item in self.cache_manager._pending_prefetch_list:
-                    if item.request_id == request_id:
-                        host_block_ids = item.host_block_ids
-                    else:
-                        remaining.append(item)
-                self.cache_manager._pending_prefetch_list = remaining
+            host_block_ids = self.cache_manager.cancel_pending_prefetch(request_id)
 
         if host_block_ids:
             self.cache_manager.abort_prefetch_blocks(host_block_ids)

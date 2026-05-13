@@ -252,9 +252,11 @@ class _MooncakeStoreBase:
         key = f"{prefix}_mooncake_warmup_{uuid.uuid4().hex}"
         value = bytes(1 * 1024 * 1024)  # 1 MB
         rc = self._store.put(key, value)
-        assert rc == 0, f"Warmup put failed for key={key}, rc={rc}"
+        if rc != 0:
+            raise RuntimeError(f"Warmup put failed for key={key}, rc={rc}")
         rc = self._store.is_exist(key)
-        assert rc == 1, f"Warmup exists check failed for key={key}, rc={rc}"
+        if rc != 1:
+            raise RuntimeError(f"Warmup exists check failed for key={key}, rc={rc}")
         self._store.get(key)
         self._store.remove(key)
 
@@ -435,17 +437,6 @@ class MooncakeStorageScheduler(StorageScheduler):
                 count += 1
 
         return count
-
-    def list_keys(self, prefix: str = "") -> List[str]:
-        """
-        List keys with a given prefix.
-
-        Note: ``MooncakeDistributedStore`` does not natively expose a key-listing
-        API.  This method returns an empty list as a safe default; subclasses may
-        override it if a complementary metadata service is available.
-        """
-        self.logger.warning("list_keys is not supported by MooncakeDistributedStore; returning []")
-        return []
 
     # ------------------------------------------------------------------
     # Helpers

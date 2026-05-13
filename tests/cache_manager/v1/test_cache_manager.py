@@ -435,9 +435,9 @@ class TestCacheManagerRadixTreeIntegration(unittest.TestCase):
         )
         cache_manager.match_prefix(req2)
 
-        # Ref count should be incremented, nodes not evictable
+        # Ref count not incremented in non-scheduling match_prefix (skip_storage=False by default)
         stats2 = cache_manager.radix_tree.get_stats()
-        self.assertEqual(stats2.evictable_device_count, 0)
+        self.assertEqual(stats2.evictable_device_count, 2)
 
     def test_insert_and_find_prefix(self):
         """Test inserting blocks and finding prefix."""

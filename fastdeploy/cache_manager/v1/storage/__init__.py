@@ -64,16 +64,8 @@ def create_storage_scheduler(
 
         scheduler = MooncakeStorageScheduler(config)
 
-    elif config.kvcache_storage_backend == "attention_store":
-        from .attnstore.connector import AttnStoreScheduler
-
-        scheduler = AttnStoreScheduler(config)
-
     else:
-        raise ValueError(
-            f"Unsupported storage type: {config.kvcache_storage_backend}. "
-            f"Supported types: mooncake, attention_store, local"
-        )
+        raise ValueError(f"Unsupported storage type: {config.kvcache_storage_backend}. " "Supported types: mooncake")
 
     # Attempt connection
     if scheduler is not None:
@@ -121,16 +113,8 @@ def create_storage_connector(
 
         connector = MooncakeStorageConnector(config, tp_rank=tp_rank)
 
-    elif config.kvcache_storage_backend == "attention_store":
-        from .attnstore.connector import AttnStoreConnector
-
-        connector = AttnStoreConnector(config)
-
     else:
-        raise ValueError(
-            f"Unsupported storage type: {config.kvcache_storage_backend}. "
-            f"Supported types: mooncake, attention_store, local"
-        )
+        raise ValueError(f"Unsupported storage type: {config.kvcache_storage_backend}. " "Supported types: mooncake")
 
     return connector
 
