@@ -28,8 +28,6 @@ if TYPE_CHECKING:
     from fastdeploy.config import FDConfig
 
 # Import ops for CPU cache allocation
-from fastdeploy.cache_manager.ops import cuda_host_free
-
 from .base import KVCacheBase
 from .cache_utils import LayerDoneCounter
 from .metadata import (
@@ -103,6 +101,9 @@ class CacheController(KVCacheBase):
 
         # NUMA binding flag
         self._numa_bound = False
+
+        # Attention backend
+        self.attn_backend = None
 
     @property
     def write_policy(self) -> Optional[str]:
@@ -284,15 +285,17 @@ class CacheController(KVCacheBase):
         Returns:
             cache_kvs_list: Flat list of allocated tensors in layer/role order.
         """
+        self.attn_backend = attn_backend
+
         kv_cache_quant_type = self._get_kv_cache_quant_type()
         cache_dtype = "uint8" if kv_cache_quant_type is not None else self.model_config.dtype
 
         logger.info(
             f"[CacheController] Initializing kv cache: num_layers={self._num_layers}, "
-            f"backend={type(attn_backend).__name__}, kv_cache_quant_type={kv_cache_quant_type}"
+            f"backend={type(self.attn_backend).__name__}, kv_cache_quant_type={kv_cache_quant_type}"
         )
 
-        caches = attn_backend.create_kv_cache(
+        caches = self.attn_backend.create_kv_cache(
             num_layers=self._num_layers,
             num_blocks=num_gpu_blocks,
             cache_dtype=cache_dtype,
@@ -312,7 +315,7 @@ class CacheController(KVCacheBase):
         self._transfer_manager.set_cache_kvs_map(self.cache_kvs_map)
 
         # Initialize host cache
-        self.initialize_host_cache(attn_backend)
+        self.initialize_host_cache(self.attn_backend)
 
         return cache_kvs_list
 
@@ -1022,19 +1025,21 @@ class CacheController(KVCacheBase):
             pass
 
     def _free_host_cache(self) -> None:
-        """Free pinned host memory allocated for swap space."""
-        if not hasattr(self, "host_cache_kvs_map"):
+        """Free pinned host memory allocated for swap space.
+
+        Delegates the actual deallocation to
+        ``self.attn_backend.free_host_kv_cache`` so that backend-specific
+        buffer ownership lives with the backend. Controller only owns the
+        name->ptr bookkeeping; the backend reference is captured at
+        ``initialize_host_cache`` time.
+        """
+        if not getattr(self, "host_cache_kvs_map", None):
             return
 
-        if not self.host_cache_kvs_map:
+        if self.attn_backend is None:
+            logger.warning("[CacheController] No attention backend recorded for host cache; " "leaking pinned memory.")
+            self.host_cache_kvs_map.clear()
             return
 
-        logger.info(f"[CacheController] Freeing host cache memory, {len(self.host_cache_kvs_map)} tensors.")
-        for name, ptr in list(self.host_cache_kvs_map.items()):
-            if ptr != 0:
-                try:
-                    cuda_host_free(ptr)
-                except Exception as e:
-                    logger.warning(f"[CacheController] Failed to free host cache {name}: {e}")
-        self.host_cache_kvs_map.clear()
+        self.attn_backend.free_host_kv_cache(self.host_cache_kvs_map)
         logger.info("[CacheController] Host cache memory released.")

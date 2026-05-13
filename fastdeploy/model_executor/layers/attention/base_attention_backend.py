@@ -27,9 +27,10 @@ import paddle
 from paddleformers.utils.log import logger
 
 try:
-    from fastdeploy.cache_manager.ops import cuda_host_alloc
+    from fastdeploy.cache_manager.ops import cuda_host_alloc, cuda_host_free
 except Exception:  # pragma: no cover - host alloc unavailable on some platforms
     cuda_host_alloc = None
+    cuda_host_free = None
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -173,6 +174,42 @@ class AttentionBackend(ABC):
                 if is_fp8:
                     out[("value_scale", layer_idx)] = cuda_host_alloc(scale_bytes)
         return out
+
+    def free_host_kv_cache(self, host_caches: Dict[Any, Any]) -> None:
+        """
+        Release pinned-memory host KV cache buffers.
+
+        Accepts the dict returned by :meth:`create_host_kv_cache` or any
+        mapping whose values are pinned-memory pointers (ints) produced by
+        ``cuda_host_alloc``. Zero/None pointers are skipped. Individual
+        frees that raise are logged and swallowed so one stale pointer
+        does not block the rest. The input mapping is cleared on return.
+
+        Args:
+            host_caches: Mapping whose values are pinned-memory pointers.
+        """
+        if not host_caches:
+            return
+
+        if cuda_host_free is None:
+            logger.warning(
+                f"[free_host_kv_cache][{type(self).__name__}] cuda_host_free "
+                "is not available on this platform; leaking pinned memory."
+            )
+            host_caches.clear()
+            return
+
+        logger.info(f"[free_host_kv_cache][{type(self).__name__}] freeing " f"{len(host_caches)} host cache buffers.")
+        for name, ptr in list(host_caches.items()):
+            if not ptr:
+                continue
+            try:
+                cuda_host_free(ptr)
+            except Exception as e:  # pragma: no cover - defensive
+                logger.warning(
+                    f"[free_host_kv_cache][{type(self).__name__}] failed to " f"free host cache {name}: {e}"
+                )
+        host_caches.clear()
 
     def forward(
         self,
