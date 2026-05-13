@@ -28,7 +28,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 
 import numpy as np
 import paddle
-from e2e.utils.serving_utils import clean_ports
+from e2e.utils.serving_utils import PORTS_TO_CLEAN, clean_ports
 
 if not hasattr(paddle, "enable_compat"):
     paddle.enable_compat = lambda scope=None: None
@@ -511,6 +511,21 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         if dp and dp > 1:
             engine_worker_queue_port = [engine_worker_queue_port + 21 + i for i in range(dp // nnode)]
             cache_queue_port = [cache_queue_port + 21 + i for i in range(dp // nnode)]
+
+        # Add ports to cleanup list
+        ports_to_add = []
+        if isinstance(engine_worker_queue_port, list):
+            ports_to_add.extend(engine_worker_queue_port)
+        else:
+            ports_to_add.append(engine_worker_queue_port)
+        if isinstance(cache_queue_port, list):
+            ports_to_add.extend(cache_queue_port)
+        else:
+            ports_to_add.append(cache_queue_port)
+
+        for port in ports_to_add:
+            if port not in PORTS_TO_CLEAN:
+                PORTS_TO_CLEAN.append(port)
 
         if kwargs.get("num_gpu_blocks_override") is not None and "kv_cache_ratio" not in kwargs:
             kwargs["kv_cache_ratio"] = 1
@@ -1477,7 +1492,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.metrics.scheduler_recv_req_time = time.time()
 
         eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
-        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False), put_tasks=Mock(), num_tasks=Mock(return_value=0)
+        )
         eng._send_error_response = Mock()
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], [("rid_x", None), ("rid_y", "bad")]))
@@ -1511,7 +1528,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.metrics.scheduler_recv_req_time = time.time()
 
         eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
-        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False), put_tasks=Mock(), num_tasks=Mock(return_value=0)
+        )
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], []))
 
@@ -1542,7 +1561,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.metrics.scheduler_recv_req_time = time.time()
 
         eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
-        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False), put_tasks=Mock(), num_tasks=Mock(return_value=0)
+        )
         eng._send_error_response = Mock()
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], [("rid_none", None)]))
