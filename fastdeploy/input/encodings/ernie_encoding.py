@@ -176,7 +176,10 @@ class ErnieEncoding(BaseEncoding):
 
     def load_video(self, url, item):
         from fastdeploy.input.utils.render_timestamp import render_frame_timestamp
-        from fastdeploy.input.utils.video import read_frames_paddlecodec, read_video_paddlecodec
+        from fastdeploy.input.utils.video import (
+            read_frames_paddlecodec,
+            read_video_paddlecodec,
+        )
 
         reader, meta, path = read_video_paddlecodec(url, save_to_disk=False)
 
