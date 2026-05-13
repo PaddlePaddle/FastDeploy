@@ -746,9 +746,7 @@ def make_mock_attn_backend(key_shape=(10, 4, 16, 64), val_shape=None, val_shape_
 
     key_shape_list = list(key_shape)
 
-    def fake_create_kv_cache(
-        num_layers, num_blocks, cache_dtype, kv_cache_quant_type, layer_offset=0
-    ):
+    def fake_create_kv_cache(num_layers, num_blocks, cache_dtype, kv_cache_quant_type, layer_offset=0):
         caches = {}
         for i in range(num_layers):
             layer_idx = layer_offset + i
