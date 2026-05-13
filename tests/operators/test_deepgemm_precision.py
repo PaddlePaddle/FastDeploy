@@ -457,21 +457,21 @@ class TestDeepDenseGemm(unittest.TestCase):
         prop = paddle.device.cuda.get_device_properties()
         if prop.major != 10:
             return
-        import paddle.profiler as profiler
+        # import paddle.profiler as profiler
 
-        p = profiler.Profiler(
-            targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-            on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        )
-        p.start()
-        p.step()
+        # p = profiler.Profiler(
+        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # )
+        # p.start()
+        # p.step()
 
         # self.one_invoke(128 * 20, 2048, 4096)
         # self.one_invoke(128 * 20, 2048, 2048)
 
-        self.two_invoke(128 * 200, 128 * 200, 64 * 4)
+        self.two_invoke(128 * 20, 128 * 20, 64 * 4)
 
-        p.stop()
+        # p.stop()
 
 
 if __name__ == "__main__":
