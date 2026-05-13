@@ -1717,7 +1717,7 @@ class ResourceManagerV1(ResourceManager):
                         # P instance / Mixed instance uses standard write method (relies on Radix Tree)
                         self.cache_manager.write_cache_to_storage(req)
                 except Exception as e:
-                    llm_logger.error(f"write_cache_to_storage failed req_id={req.request_id}: {e}")
+                    llm_logger.warning(f"write_cache_to_storage failed req_id={req.request_id}: {e}")
 
             with self.lock:
                 for req in need_postprocess_reqs:
