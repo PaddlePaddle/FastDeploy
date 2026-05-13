@@ -731,6 +731,8 @@ class PrefixCacheManager:
             req_id = task.request_id
             last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
             can_cache_computed_tokens = num_computed_tokens - num_computed_tokens % block_size
+            if can_cache_computed_tokens <= num_cached_tokens:
+                return
             if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
                 self.leaf_req_map[last_node].remove(req_id)
             logger.debug(
