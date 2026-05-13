@@ -26,7 +26,7 @@ using manual addHandler for better performance.
 Log channels:
 - main: Main logs -> fastdeploy.log
 - request: Request logs -> request.log
-- console: Console logs -> console.log + terminal
+- console: Console logs -> fastdeploy.log + terminal (stdout/stderr)
 """
 
 import json
@@ -101,14 +101,6 @@ def _build_default_config(log_dir, log_level, backup_count):
                 "filename": os.path.join(log_dir, "fastdeploy.log"),
                 "backupCount": backup_count,
             },
-            # Console log file
-            "console_file": {
-                "class": "fastdeploy.logger.handlers.LazyFileHandler",
-                "level": log_level,
-                "formatter": "standard",
-                "filename": os.path.join(log_dir, "console.log"),
-                "backupCount": backup_count,
-            },
             # Request log file
             "request_file": {
                 "class": "fastdeploy.logger.handlers.LazyFileHandler",
@@ -130,13 +122,13 @@ def _build_default_config(log_dir, log_level, backup_count):
             # Default logger
             "fastdeploy": {
                 "level": "DEBUG",
-                "handlers": ["main_file", "console_file", "error_file", "console_stderr"],
+                "handlers": ["main_file", "error_file", "console_stderr"],
                 "propagate": False,
             },
             # Main channel
             "fastdeploy.main": {
                 "level": "DEBUG",
-                "handlers": ["main_file", "console_file", "error_file", "console_stderr"],
+                "handlers": ["main_file", "error_file", "console_stderr"],
                 "propagate": False,
             },
             # Request channel - only output to request.log and error.log
@@ -145,10 +137,10 @@ def _build_default_config(log_dir, log_level, backup_count):
                 "handlers": ["request_file", "error_file", "console_stderr"],
                 "propagate": False,
             },
-            # Console channel - output to console.log and terminal
+            # Console channel - terminal output + merged into fastdeploy.log
             "fastdeploy.console": {
                 "level": "DEBUG",
-                "handlers": ["console_file", "console_stdout", "error_file", "console_stderr"],
+                "handlers": ["main_file", "console_stdout", "error_file", "console_stderr"],
                 "propagate": False,
             },
         },

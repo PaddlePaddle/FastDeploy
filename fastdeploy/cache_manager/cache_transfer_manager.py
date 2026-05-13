@@ -540,24 +540,28 @@ class CacheTransferManager:
         logger.info("GPU KV cache is initialized")
 
     def _clear_gpu_cache(self):
+
         if self.create_cache_tensor:
             logger.debug("Waiting for gpu runner to unlink cuda ipc")
             while self.cache_ready_signal.value[self.rank] != 0:
                 time.sleep(0.1)
             logger.debug("Stop waiting! gpu runner has unlinked cuda ipc")
-            self.gpu_cache_kvs.clear()
-            self.gpu_cache_k_tensors.clear()
-            self.gpu_cache_v_tensors.clear()
-            if hasattr(self, "gpu_cache_scales_k_tensors"):
-                self.gpu_cache_scales_k_tensors.clear()
-            if hasattr(self, "gpu_cache_scales_v_tensors"):
-                self.gpu_cache_scales_v_tensors.clear()
-            paddle.set_flags({"FLAGS_selected_gpus": f"{self.device}"})
-            paddle.device.cuda.empty_cache()
         else:
             for name, tensor in self.gpu_cache_kvs.items():
                 unset_data_ipc(tensor, name, True, False)
             logger.debug("Successfully unlinked gpu caches cuda ipc")
+
+        self.gpu_cache_kvs.clear()
+        self.gpu_cache_k_tensors.clear()
+        self.gpu_cache_v_tensors.clear()
+        if hasattr(self, "gpu_cache_scales_k_tensors"):
+            self.gpu_cache_scales_k_tensors.clear()
+        if hasattr(self, "gpu_cache_scales_v_tensors"):
+            self.gpu_cache_scales_v_tensors.clear()
+        paddle.set_flags({"FLAGS_selected_gpus": f"{self.device}"})
+        paddle.device.cuda.empty_cache()
+
+        if not self.create_cache_tensor:
             self.cache_ready_signal.value[self.rank] = 0
 
         while np.sum(self.cache_ready_signal.value) != 0:
@@ -1339,7 +1343,7 @@ class CacheTransferManager:
             except (BrokenPipeError, EOFError, ConnectionResetError) as e:
                 # When a cache_transfer_manager process remains, it keeps printing error logs and may exhaust disk space.
                 # Add a check to see if the worker process is alive; if it has ended, exit the loop to stop continuous logging.
-                logger.error(f"[CacheTransferManager] Connection broken: {e}")
+                logger.error(f"[CacheTransferManager] Connection broken: {e}, {traceback.format_exc()}")
                 consecutive_error_count += 1
                 if consecutive_error_count > max_errors:
                     try:
@@ -1464,7 +1468,7 @@ class CacheTransferManager:
                     f"transfer data: Get unexpected event type {event_type}, only SWAP2CPU and SWAP2GPU supported"
                 )
         except Exception as e:
-            logger.error(f"transfer data: error: {e}")
+            logger.error(f"transfer data: error: {e}, {traceback.format_exc()}")
             raise e
         end_time = time.time()
         elasped_time = end_time - start_time
@@ -1503,7 +1507,7 @@ class CacheTransferManager:
                     self.kv_cache_status_signal.value[0] = KVCacheStatus.CLEARED
                     self._log_memory("check_cache_status: after clearing caches")
                 except Exception as e:
-                    logger.error(f"check_cache_status: failed to clear caches: {e}")
+                    logger.error(f"check_cache_status: failed to clear caches: {e}, {traceback.format_exc()}")
 
             elif self.kv_cache_status_signal.value[0] == KVCacheStatus.UPDATING:
                 assert args.splitwise_role == "mixed", "Only mixed mode supports updating cache."
@@ -1523,7 +1527,7 @@ class CacheTransferManager:
                     self._log_memory("check_cache_status: after restoring caches")
 
                 except Exception as e:
-                    logger.error(f"check_cache_status: failed to restore caches: {e}")
+                    logger.error(f"check_cache_status: failed to restore caches: {e}, {traceback.format_exc()}")
 
             time.sleep(0.1)
 

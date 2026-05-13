@@ -12,6 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from fastdeploy import envs
 from fastdeploy.metrics.trace import get_trace_info_for_request
 from fastdeploy.trace.constants import EVENT_TO_STAGE_MAP
 from fastdeploy.utils import trace_logger
@@ -25,6 +26,9 @@ def print(event, request_id, user):
         request_id: Request ID.
         user: User identifier.
     """
+    if envs.FD_TRACE not in ("local", "all"):
+        return
+
     try:
         attributes = {
             "request_id": f"{request_id}",

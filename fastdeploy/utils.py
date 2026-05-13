@@ -16,7 +16,6 @@
 
 import argparse
 import asyncio
-import glob
 import hashlib
 import importlib
 import json
@@ -70,6 +69,40 @@ FASTDEPLOY_SUBCMD_PARSER_EPILOG = (
     "   - To list all groups:           --help=listgroup\n"
     "   - To view help with pager:      --help=page"
 )
+
+
+CHOICE_SEPARATOR = "::n::"
+
+
+def make_choice_id(request_id: str, index: int) -> str:
+    """Construct an internal request ID that encodes the choice index."""
+    return f"{request_id}{CHOICE_SEPARATOR}{index}"
+
+
+def parse_choice_id(compound_id: str) -> tuple:
+    """Parse an internal request ID back into (base_request_id, choice_index).
+    Returns (compound_id, None) if no choice index is encoded.
+    """
+    if CHOICE_SEPARATOR in compound_id:
+        base, idx = compound_id.rsplit(CHOICE_SEPARATOR, 1)
+        return base, int(idx)
+    return compound_id, None
+
+
+def get_base_request_id(compound_id: str) -> str:
+    """Extract the base request ID, stripping any choice index suffix."""
+    if CHOICE_SEPARATOR in compound_id:
+        return compound_id.rsplit(CHOICE_SEPARATOR, 1)[0]
+    return compound_id
+
+
+def get_choice_index(compound_id: str) -> int:
+    """Extract the choice index from a compound request ID.
+    Returns the index, or raises ValueError if not present.
+    """
+    if CHOICE_SEPARATOR in compound_id:
+        return int(compound_id.rsplit(CHOICE_SEPARATOR, 1)[1])
+    raise ValueError(f"No choice index in request_id: {compound_id}")
 
 
 def show_filtered_argument_or_group_from_help(parser: argparse.ArgumentParser, subcommand_name: list[str]):
@@ -152,44 +185,6 @@ def _output_with_pager(text: str):
 
     # No pager worked, fall back to normal print
     print(text)
-
-
-def ensure_workerlog_alias(log_dir: str, paddle_log_dir: str) -> None:
-    """
-    Create symlinks in log_dir pointing to paddle workerlog files.
-
-    This consolidates paddle distributed launch logs (workerlog.*) into the main log directory
-    for easier access while keeping the original files in paddle_log_dir.
-
-    Args:
-        log_dir: Main log directory (e.g., "log/")
-        paddle_log_dir: Paddle log directory (e.g., "log/paddle/")
-    """
-    try:
-
-        def ensure_alias_for_target(target_path: str) -> None:
-            if not target_path:
-                return
-            link_path = os.path.join(log_dir, os.path.basename(target_path))
-            abs_target_path = os.path.abspath(target_path)
-            if os.path.islink(link_path):
-                current_target = os.readlink(link_path)
-                abs_current_target = os.path.abspath(os.path.join(os.path.dirname(link_path), current_target))
-                if abs_current_target == abs_target_path:
-                    return
-                os.remove(link_path)
-            elif os.path.isfile(link_path):
-                os.remove(link_path)
-            elif os.path.exists(link_path):
-                return
-            os.symlink(abs_target_path, link_path)
-
-        ensure_alias_for_target(os.path.join(paddle_log_dir, "workerlog.0"))
-        for target_path in glob.glob(os.path.join(paddle_log_dir, "workerlog.*")):
-            if os.path.isfile(target_path):
-                ensure_alias_for_target(target_path)
-    except OSError:
-        pass
 
 
 class EngineError(Exception):
@@ -467,7 +462,7 @@ class FlexibleArgumentParser(argparse.ArgumentParser):
                         converted = action.type(str_value)
                     value = converted
                 except Exception as e:
-                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}")
+                    llm_logger.error(f"Error converting '{key}' with value '{value}': {e}, {traceback.format_exc()}")
             setattr(namespace, key, value)
         args = super().parse_args(args=remaining_args, namespace=namespace)
 
@@ -558,6 +553,12 @@ def is_port_available(host, port):
     import errno
     import socket
 
+    # If FD_ENGINE_TASK_QUEUE_WITH_SHM is enabled, then check the file socket is available
+    if envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+        socket_path = f"/dev/shm/fd_task_queue_{port}.sock"
+        if not is_file_socket_available(socket_path):
+            return False
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -567,6 +568,35 @@ def is_port_available(host, port):
             if e.errno == errno.EADDRINUSE:
                 return False
             return True
+
+
+def is_file_socket_available(socket_path):
+    """
+    Check the Unix domain socket (file socket) is available.
+
+    Args:
+        socket_path: Path to the socket file, e.g. /dev/shm/fd_task_queue_8000.sock
+
+    Returns:
+        True if the socket is available (not in use), False otherwise.
+    """
+    import errno
+    import os
+    import socket
+
+    if not os.path.exists(socket_path):
+        return True
+
+    # File exists, try to connect to see if someone is listening
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        try:
+            s.connect(socket_path)
+            return False
+        except OSError as e:
+            if e.errno in (errno.ECONNREFUSED, errno.ENOENT):
+                # Stale socket file: exists but nobody is listening
+                return True
+            return False
 
 
 def find_free_ports(
@@ -1275,5 +1305,4 @@ from fastdeploy.logger import (  # noqa: F401
     scheduler_logger,
     spec_logger,
     trace_logger,
-    zmq_client_logger,
 )

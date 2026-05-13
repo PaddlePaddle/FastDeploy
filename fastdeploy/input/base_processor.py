@@ -52,7 +52,7 @@ from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 from fastdeploy import envs
 from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.logger.request_logger import RequestLogLevel, log_request
-from fastdeploy.utils import data_processor_logger
+from fastdeploy.utils import data_processor_logger, make_choice_id, parse_choice_id
 
 _SAMPLING_EPS = 1e-5
 
@@ -383,7 +383,6 @@ class BaseTextProcessor(ABC):
 
     def process_request_dict(self, request, max_model_len=None, **kwargs):
         """Unified request pre-processing shared by all processors."""
-        log_request(RequestLogLevel.CONTENT, message="Start processing request dict: {request}", request=request)
         request = self._apply_default_parameters(request)
         if not request.get("eos_token_ids"):
             request["eos_token_ids"] = self.eos_token_ids
@@ -473,13 +472,11 @@ class BaseTextProcessor(ABC):
     def _apply_reasoning_parser(self, request):
         """Apply reasoning parser to determine model thinking status."""
         model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-        parts = request["request_id"].split("_")
-        if len(parts) > 1:
-            real_req_id = parts[0]
-            index = int(parts[1])
+        real_req_id, index = parse_choice_id(request["request_id"])
+        if index is not None:
             n = request.get("n", 1)
             for idx in range(index * n, (index + 1) * n):
-                self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+                self.model_status_dict[make_choice_id(real_req_id, idx)] = model_status
         else:
             self.model_status_dict[request["request_id"]] = model_status
         request["enable_thinking"] = model_status == "think_start"
@@ -686,6 +683,10 @@ class BaseTextProcessor(ABC):
                 seq_len = np.array(seq_len, dtype=np.int64).reshape(-1, 1)
             return padded_insts, seq_len
         return padded_insts
+
+    def process_logprob_response(self, token_ids, **kwargs):
+        """Decode a list of token ids to a string for logprob responses."""
+        return self.tokenizer.decode(token_ids, **kwargs)
 
     def get_mm_max_tokens_per_item(self, seq_len: int):
         """Return the maximum number of tokens per item for each modality.

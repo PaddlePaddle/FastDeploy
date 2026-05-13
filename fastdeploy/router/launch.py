@@ -20,6 +20,13 @@ from fastdeploy.utils import router_logger as logger
 
 
 def main() -> None:
+    print(
+        "\033[33m[WARNING]\033[0m Python Router is intended for testing only. "
+        "For production use, please use the Golang Router: "
+        "\033[1mpython -m fastdeploy.golang_router.launch\033[0m  "
+        "Docs: https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/online_serving/router.md"
+    )
+
     parser = FlexibleArgumentParser()
     parser = RouterArgs.add_cli_args(parser)
     args = parser.parse_args()

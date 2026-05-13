@@ -296,6 +296,8 @@ class PrefixCacheManager:
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
             storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
+            if not self.enable_splitwise:
+                storage_arg_str += " --create_cache_tensor"
         else:
             storage_arg_str = " "
 
@@ -326,7 +328,6 @@ class PrefixCacheManager:
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
                     + storage_arg_str
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
@@ -700,6 +701,8 @@ class PrefixCacheManager:
             req_id = task.request_id
             last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
             can_cache_computed_tokens = num_computed_tokens - num_computed_tokens % block_size
+            if can_cache_computed_tokens <= num_cached_tokens:
+                return
             if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
                 self.leaf_req_map[last_node].remove(req_id)
             logger.debug(
@@ -922,7 +925,9 @@ class PrefixCacheManager:
                         f"request_match_blocks: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
-                    logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
+                    logger.error(
+                        f"request_match_blocks: request_block_ids: error: {type(e)} {e}, {traceback.format_exc()}"
+                    )
                     raise e
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
@@ -1006,6 +1011,11 @@ class PrefixCacheManager:
                 # 3. update metrics
                 if matched_block_num > 0:
                     self.metrics.hit_req_count += 1
+                    # Record CACHE_HIT trace event
+                    trace_print(LoggingEventName.CACHE_HIT, req_id, "")
+                else:
+                    # Record CACHE_MISS trace event
+                    trace_print(LoggingEventName.CACHE_MISS, req_id, "")
                 self.metrics.calculate_hit_metrics(
                     req_id,
                     cpu_match_token_num,
@@ -1327,7 +1337,7 @@ class PrefixCacheManager:
                         f"free_nodes_directly: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
-                    logger.error(f"free_nodes_directly: error: {type(e)} {e}")
+                    logger.error(f"free_nodes_directly: error: {type(e)} {e}, {traceback.format_exc()}")
                     raise e
 
     def _handle_free_gpu_node_without_cpu(self, node):

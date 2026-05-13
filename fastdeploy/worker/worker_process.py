@@ -466,7 +466,7 @@ class PaddleDisWorkerProc:
         self._init_eplb_signal()
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
-        self.nnode = (tp_size + self.max_chips_per_node) // self.max_chips_per_node
+        self.nnode = (tp_size + self.max_chips_per_node - 1) // self.max_chips_per_node
         max_occupied_batch_index = 0
         tp_rank = self.local_rank % tp_size
 
@@ -480,6 +480,8 @@ class PaddleDisWorkerProc:
 
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
+
+            self._tp_barrier_wait() if tp_size > 1 else None
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
@@ -1325,6 +1327,16 @@ def run_worker_proc() -> None:
 
     # Trigger CUDAGraph capture
     worker_proc.graph_optimize_and_warm_up_model()
+
+    # Note(ZKK):
+    # In some scenarios, we need to evaluate the performance of various model based on a fixed batch size and input length.
+    # Instead of doing end to end tests which is very unstable, we can profile the following line of code to pick the best model.
+    # so we add an environment variable RUN_DUMMY_FOR_PROFILE to control whether to run dummy run for profile.
+    # Any Question refer to ChangWenBin.
+    if int(os.getenv("RUN_DUMMY_FOR_PROFILE", "0")) == 1:
+        worker_proc.worker.model_runner._dummy_run(
+            num_tokens=100, batch_size=1, expected_decode_len=10, step_use_cudagraph=True
+        )
 
     # Initialize health status
     worker_proc.init_health_status()

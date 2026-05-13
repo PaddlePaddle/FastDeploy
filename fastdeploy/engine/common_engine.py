@@ -77,10 +77,11 @@ from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
     EngineError,
     console_logger,
-    ensure_workerlog_alias,
     envs,
+    get_base_request_id,
     get_logger,
     llm_logger,
+    make_choice_id,
 )
 
 try:
@@ -90,11 +91,13 @@ except:
     from fastdeploy.output.token_processor import TokenProcessor
 
 
-def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
+def _read_latest_worker_traceback(paddle_log_dir: str) -> Optional[str]:
     """读取 workerlog.* 文件中的最新 traceback。"""
 
     try:
-        candidates = sorted(Path(log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True)
+        candidates = sorted(
+            Path(paddle_log_dir).glob("workerlog.*"), key=lambda path: path.stat().st_mtime, reverse=True
+        )
     except OSError:
         return None
 
@@ -112,10 +115,12 @@ def _read_latest_worker_traceback(log_dir: str) -> Optional[str]:
     return None
 
 
-def _format_worker_launch_failure_message(log_dir: str) -> str:
+def _format_worker_launch_failure_message(paddle_log_dir: str) -> str:
     """格式化 worker 启动失败的错误消息，包含 traceback 信息。"""
-    message = "Failed to launch worker processes, check log/workerlog.* for more details."
-    traceback_text = _read_latest_worker_traceback(log_dir)
+    message = (
+        "Failed to launch worker processes, check log/paddle/workerlog.* and log/worker_process.log for more details."
+    )
+    traceback_text = _read_latest_worker_traceback(paddle_log_dir)
     if traceback_text:
         return f"{message}\n{traceback_text}"
     return message
@@ -301,7 +306,7 @@ class EngineService:
         def check_worker_initialize_status_func(res: dict):
             res["worker_is_alive"] = True
             if not self.check_worker_initialize_status():
-                self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+                self.llm_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
                 res["worker_is_alive"] = False
 
         self.check_worker_initialize_status_func_thread = threading.Thread(
@@ -331,7 +336,7 @@ class EngineService:
         # Worker launched
         self.check_worker_initialize_status_func_thread.join()
         if not result_container["worker_is_alive"]:
-            self.llm_logger.error(_format_worker_launch_failure_message(envs.FD_LOG_DIR))
+            self.llm_logger.error(_format_worker_launch_failure_message(os.path.join(envs.FD_LOG_DIR, "paddle")))
             return False
 
         # Start ZMQ service for communication with AsyncLLM
@@ -533,7 +538,7 @@ class EngineService:
 
         need_delete_tasks = []
         for task in tasks:
-            rid = task.request_id.split("_")[0]
+            rid = get_base_request_id(task.request_id)
             trace_carrier = task.trace_carrier
             if trace_carrier:
                 tracing.trace_set_proc_propagate_context(rid, trace_carrier)
@@ -602,7 +607,7 @@ class EngineService:
                     task.metrics.inference_start_time = time.time()
                     tracing.trace_report_span(
                         tracing.TraceSpanName.SCHEDULE,
-                        task.request_id.split("_")[0],
+                        get_base_request_id(task.request_id),
                         int(task.metrics.scheduler_recv_req_time * 1e9),
                         int(task.metrics.inference_start_time * 1e9),
                         thread_finish_flag=True,
@@ -1139,7 +1144,7 @@ class EngineService:
                     self.resource_manager.get_real_bsz()
                     for task in batch_request:
                         if task.task_type == RequestType.PREFILL:
-                            rid = task.request_id.split("_")[0]
+                            rid = get_base_request_id(task.request_id)
                             if isinstance(task, Request) and task.has_been_preempted_before:
                                 trace_print(
                                     LoggingEventName.RESCHEDULED_INFERENCE_START,
@@ -1197,6 +1202,10 @@ class EngineService:
             except Exception as e:
                 err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
+                # Failed to connect to engine worker queue, retry after 5 seconds
+                if self.engine_worker_queue.is_broken():
+                    self.llm_logger.error("Failed to connect to engine worker queue, retry after 5 seconds")
+                    time.sleep(5)
 
     def _get_scheduler_unhandled_request_num(self) -> int:
         """
@@ -1321,7 +1330,7 @@ class EngineService:
                         main_process_metrics.requests_number.inc()
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
-                            request_id = data["request_id"].split("_")[0]
+                            request_id = get_base_request_id(data["request_id"])
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
@@ -1620,8 +1629,8 @@ class EngineService:
                 if rid in now_reqs:
                     target_req_ids.append(rid)
                     matched_input_ids.add(rid)
-                elif f"{rid}_0" in now_reqs:
-                    target_req_ids.append(f"{rid}_0")
+                elif make_choice_id(rid, 0) in now_reqs:
+                    target_req_ids.append(make_choice_id(rid, 0))
                     matched_input_ids.add(rid)
 
         if not target_req_ids:
@@ -1946,7 +1955,9 @@ class EngineService:
             try:
                 response = task.result()
             except Exception as e:
-                self.llm_logger.error(f"Waiting for control response from {name} failed: {repr(e)}")
+                self.llm_logger.error(
+                    f"Waiting for control response from {name} failed: {repr(e)}, {traceback.format_exc()}"
+                )
                 raise
 
             if response.error_code != 200:
@@ -2232,6 +2243,8 @@ class EngineService:
         threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            return []
         console_logger.debug("Start cache manager...")
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
@@ -2261,7 +2274,7 @@ class EngineService:
             self.llm_logger.info("Clear Data: Successfully")
             return True
         except Exception as e:
-            self.llm_logger.error(f"Clear data error: {e}")
+            self.llm_logger.error(f"Clear data error: {e}, {traceback.format_exc()}")
             return False
 
     def _exit_sub_services(self):
@@ -2621,7 +2634,9 @@ class EngineService:
         while self.get_profile_block_num_signal.value[0] == 0:
             if hasattr(self, "worker_proc") and self.worker_proc is not None:
                 if self.worker_proc.poll() is not None:
-                    raise RuntimeError("Worker process failed to start." "Please check log/workerlog.* for details.")
+                    raise RuntimeError(
+                        "Worker process failed to start. Please check log/paddle/workerlog.* and log/worker_process.log for details."
+                    )
             time.sleep(1)
         num_gpu_blocks = self.get_profile_block_num_signal.value[0]
         self.cfg.cache_config.reset(num_gpu_blocks)
@@ -2764,7 +2779,4 @@ class EngineService:
             self.checking_worker_status_thread.join(timeout=1)
         except Exception:
             pass
-        # Create symlinks for paddle workerlog files after workers are ready
-        if hasattr(self, "log_dir") and hasattr(self, "paddle_log_dir"):
-            ensure_workerlog_alias(self.log_dir, self.paddle_log_dir)
         return True

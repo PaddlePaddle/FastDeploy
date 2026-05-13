@@ -498,18 +498,18 @@ class TestApplyReasoningParser(unittest.TestCase):
         self.assertTrue(request["enable_thinking"])
 
     def test_compound_request_id(self):
-        """request_id with underscore is split."""
+        """request_id with ::n:: separator is split."""
         proc = _make_processor(QWEN_VL)
         proc.reasoning_parser = MagicMock()
         proc.reasoning_parser.get_model_status.return_value = "think_end"
         proc.model_status_dict = {}
 
-        request = {"request_id": "req1_2", "prompt_token_ids": [1, 2], "n": 3}
+        request = {"request_id": "req1::n::2", "prompt_token_ids": [1, 2], "n": 3}
         proc._apply_reasoning_parser(request)
 
         # index=2, n=3 → range(6, 9)
         for idx in [6, 7, 8]:
-            self.assertEqual(proc.model_status_dict[f"req1_{idx}"], "think_end")
+            self.assertEqual(proc.model_status_dict[f"req1::n::{idx}"], "think_end")
         self.assertFalse(request["enable_thinking"])
 
     def test_compound_request_id_default_n(self):
@@ -519,10 +519,10 @@ class TestApplyReasoningParser(unittest.TestCase):
         proc.reasoning_parser.get_model_status.return_value = "think_start"
         proc.model_status_dict = {}
 
-        request = {"request_id": "req1_0", "prompt_token_ids": [1]}
+        request = {"request_id": "req1::n::0", "prompt_token_ids": [1]}
         proc._apply_reasoning_parser(request)
 
-        self.assertIn("req1_0", proc.model_status_dict)
+        self.assertIn("req1::n::0", proc.model_status_dict)
         self.assertTrue(request["enable_thinking"])
 
 
@@ -1811,6 +1811,56 @@ class TestExtractMmItemsWithCache(unittest.TestCase):
         request = {"messages": [{"role": "user", "content": "test"}]}
         with self.assertRaisesRegex(ValueError, "Missing item 0 not found in processor cache"):
             proc._extract_mm_items(request)
+
+
+class TestProcessLogprobResponse(unittest.TestCase):
+    """Verify process_logprob_response is accessible from MultiModalProcessor.
+
+    Regression test: the method was originally only defined in TextProcessor
+    and missing from BaseTextProcessor. MultiModalProcessor inherits from
+    BaseTextProcessor directly (not via TextProcessor), so it would raise
+    AttributeError on any logprob path in serving_chat.py.
+    """
+
+    def _make_proc(self, decode_side_effect=None):
+        proc = _make_processor(QWEN_VL)
+        if decode_side_effect is not None:
+            proc.tokenizer.decode.side_effect = decode_side_effect
+        else:
+            proc.tokenizer.decode.side_effect = lambda token_ids, **kw: " ".join(str(t) for t in token_ids)
+        return proc
+
+    def test_method_exists_on_multimodal_processor(self):
+        proc = _make_processor(QWEN_VL)
+        self.assertTrue(hasattr(proc, "process_logprob_response"))
+        self.assertTrue(callable(proc.process_logprob_response))
+
+    def test_single_token_decode(self):
+        # Matches the [tid] call pattern in _build_logprobs_response
+        proc = self._make_proc()
+        result = proc.process_logprob_response([42])
+        self.assertEqual(result, "42")
+
+    def test_with_clean_up_tokenization_spaces_kwarg(self):
+        # Matches the exact serving_chat.py call signature
+        proc = self._make_proc()
+        proc.tokenizer.decode.side_effect = None
+        proc.tokenizer.decode.return_value = "token"
+        result = proc.process_logprob_response([1], clean_up_tokenization_spaces=False)
+        self.assertEqual(result, "token")
+        proc.tokenizer.decode.assert_called_once_with([1], clean_up_tokenization_spaces=False)
+
+    def test_multi_token_decode(self):
+        # Matches the _build_prompt_logprobs path: process_logprob_response(token_id)
+        proc = self._make_proc()
+        result = proc.process_logprob_response([1, 2, 3])
+        self.assertEqual(result, "1 2 3")
+
+    def test_ernie_vl_processor_has_method(self):
+        # Ensure the fix applies to all model_types, not just QWEN_VL
+        proc = _make_processor(ERNIE4_5_VL)
+        self.assertTrue(hasattr(proc, "process_logprob_response"))
+        self.assertTrue(callable(proc.process_logprob_response))
 
 
 if __name__ == "__main__":

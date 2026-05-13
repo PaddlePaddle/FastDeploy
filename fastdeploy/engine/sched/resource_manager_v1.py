@@ -802,7 +802,7 @@ class ResourceManagerV1(ResourceManager):
             num_new_tokens = new_end_idx - pre_end_idx
 
             image_mask = input_ids[pre_end_idx:new_end_idx] == image_patch_id
-            request.with_image = image_mask.any()
+            request.with_image = bool(image_mask.any())
             if request.with_image:
                 pre_boundary_idx = np.searchsorted(img_boundaries_idx, pre_end_idx, side="left").item()
                 if pre_boundary_idx == len(img_boundaries_idx):
@@ -1316,7 +1316,7 @@ class ResourceManagerV1(ResourceManager):
             try:
                 self.bos_client = init_bos_client()
             except Exception as e:
-                error_msg = f"request {request.request_id} init bos client error: {str(e)}"
+                error_msg = f"request {request.request_id} init bos client error: {str(e)}, {traceback.format_exc()}"
                 llm_logger.error(error_msg)
                 request.error_message = error_msg
                 request.error_code = 540

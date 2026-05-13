@@ -883,7 +883,7 @@ class CacheMessagerV1:
                         )
                         self.cache_prefilled_engine_ids_queue.put(batch_engine_signals)
             except Exception as e:
-                logger.error(f"Consume signals get exception: {e}")
+                logger.error(f"Consume signals get exception: {e}, {traceback.format_exc()}")
 
     def _handle_connect_task(self):
         while True:

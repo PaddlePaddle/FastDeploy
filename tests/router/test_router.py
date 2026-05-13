@@ -102,6 +102,20 @@ class TestRouterRegistration(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(RuntimeError):
             await router.register_instance(_make_instance_dict(role="mixed"))
 
+    @patch("fastdeploy.router.router.logger")
+    async def test_register_instance_logs_error_on_invalid_dict(self, mock_logger):
+        """Test register_instance logs error with traceback when InstanceInfo.from_dict fails."""
+        router = Router(_make_args(splitwise=False))
+        # Pass invalid dict that will cause InstanceInfo.from_dict to fail
+        invalid_dict = {"invalid_key": "value"}
+
+        with self.assertRaises(Exception):
+            await router.register_instance(invalid_dict)
+
+        mock_logger.error.assert_called_once()
+        error_msg = mock_logger.error.call_args[0][0]
+        self.assertIn("register instance failed", error_msg)
+
 
 class TestRouterSelection(unittest.IsolatedAsyncioTestCase):
     async def test_select_mixed_no_servers_raises(self):
@@ -194,7 +208,7 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
                 "request_id": "control-p",
                 "status": "success",
                 "error_message": None,
-                "result": {"aborted": [{"request_id": "req-1_0", "output_token_count": 0}], "not_found": []},
+                "result": {"aborted": [{"request_id": "req-1::n::0", "output_token_count": 0}], "not_found": []},
             }
         )
         decode_resp = AsyncMock()
@@ -204,7 +218,7 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
                 "request_id": "control-d",
                 "status": "success",
                 "error_message": None,
-                "result": {"aborted": [{"request_id": "req-1_0", "output_token_count": 15}], "not_found": []},
+                "result": {"aborted": [{"request_id": "req-1::n::0", "output_token_count": 15}], "not_found": []},
             }
         )
 

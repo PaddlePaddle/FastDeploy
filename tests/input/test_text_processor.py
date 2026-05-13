@@ -132,8 +132,34 @@ def _create_dummy_modules():
         debug=lambda *args, **kwargs: None,
     )
 
+    CHOICE_SEPARATOR = "::n::"
+
+    def make_choice_id(request_id: str, index: int) -> str:
+        return f"{request_id}{CHOICE_SEPARATOR}{index}"
+
+    def parse_choice_id(compound_id: str) -> tuple:
+        if CHOICE_SEPARATOR in compound_id:
+            base, idx = compound_id.rsplit(CHOICE_SEPARATOR, 1)
+            return base, int(idx)
+        return compound_id, None
+
+    def get_base_request_id(compound_id: str) -> str:
+        if CHOICE_SEPARATOR in compound_id:
+            return compound_id.rsplit(CHOICE_SEPARATOR, 1)[0]
+        return compound_id
+
+    def get_choice_index(compound_id: str) -> int:
+        if CHOICE_SEPARATOR in compound_id:
+            return int(compound_id.rsplit(CHOICE_SEPARATOR, 1)[1])
+        raise ValueError(f"No choice index in request_id: {compound_id}")
+
     utils_module = types.ModuleType("fastdeploy.utils")
     utils_module.data_processor_logger = dummy_logger
+    utils_module.CHOICE_SEPARATOR = CHOICE_SEPARATOR
+    utils_module.make_choice_id = make_choice_id
+    utils_module.parse_choice_id = parse_choice_id
+    utils_module.get_base_request_id = get_base_request_id
+    utils_module.get_choice_index = get_choice_index
 
     envs_module = types.ModuleType("fastdeploy.envs")
     envs_module.FD_USE_HF_TOKENIZER = False
@@ -667,6 +693,24 @@ class TextProcessorTestCase(unittest.TestCase):
 
     def test_process_logprob_response(self):
         self.assertEqual(self.processor.process_logprob_response([1, 2]), "1 2")
+
+    def test_process_logprob_response_single_token(self):
+        # Matches the [tid] call pattern in _build_logprobs_response
+        result = self.processor.process_logprob_response([1])
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "1")
+
+    def test_process_logprob_response_with_kwargs(self):
+        # Matches the serving_chat.py call: process_logprob_response([tid], clean_up_tokenization_spaces=False)
+        result = self.processor.process_logprob_response([1], clean_up_tokenization_spaces=False)
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "1")
+
+    def test_process_logprob_response_batch_token_id(self):
+        # Matches the _build_prompt_logprobs call: process_logprob_response(token_id) for a flat token_id
+        result = self.processor.process_logprob_response([42])
+        self.assertIsInstance(result, str)
+        self.assertEqual(result, "42")
 
     def test_process_request_dict_uses_existing_ids(self):
         request = {"prompt_token_ids": [1, 2, 3], "max_tokens": 5}

@@ -196,7 +196,15 @@ def test_speculative_sampler():
     increment_value = (max_draft_token_num + 1) * 4
 
     sampler = SpeculativeSampler(fd_config)
-    sampler(logits, sampling_metadata, max_model_len, share_inputs, token_num_output_cpu, increment_value)
+    sampler(
+        logits,
+        sampling_metadata,
+        max_model_len,
+        share_inputs,
+        token_num_output_cpu,
+        increment_value,
+        real_bsz=batch_size,
+    )
 
 
 def test_speculative_sampler_logprobs():

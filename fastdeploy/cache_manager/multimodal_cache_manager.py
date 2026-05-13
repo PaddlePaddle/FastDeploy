@@ -16,6 +16,7 @@
 
 import pickle
 import threading
+import traceback
 from abc import ABC, abstractmethod
 from collections import OrderedDict
 from typing import Any, Tuple
@@ -157,4 +158,4 @@ class ProcessorCacheManager(MultimodalLRUCache):
                         logger.info(f"Get processor cache of mm_hashes: {req}")
                         self.router.send_multipart([client, b"", pickle.dumps(resp)])
         except Exception as e:
-            logger.error(f"Error happened while handling processor cache request: {e}")
+            logger.error(f"Error happened while handling processor cache request: {e}, {traceback.format_exc()}")

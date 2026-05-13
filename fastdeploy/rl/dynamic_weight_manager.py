@@ -74,10 +74,10 @@ class DynamicWeightManager:
     def update_weights_by_rdma(self, version: str = None, verify_checksum: bool = False):
         def valid_parameters(old_state_dict, new_state_dict):
             is_valid = True
-            for key in old_state_dict:
-                if key not in new_state_dict:
+            for key in new_state_dict:
+                if key not in old_state_dict:
                     is_valid = False
-                    logger.error(f"Invalid parameter: {key} not in new_state_dict")
+                    logger.error(f"Invalid parameter: {key} not in old_state_dict")
                 elif old_state_dict[key].shape != new_state_dict[key].shape:
                     is_valid = False
                     logger.error(
@@ -128,8 +128,8 @@ class DynamicWeightManager:
             raise ValueError(error_msg)
 
         update_start = time.perf_counter()
-        for name, target_param in old_state_dict.items():
-            new_param = new_state_dict[name]
+        for name, new_param in new_state_dict.items():
+            target_param = old_state_dict[name]
             if bootstrap_load and not target_param._is_initialized():
                 new_param = new_param.cuda()
                 new_param._share_buffer_to(target_param)
