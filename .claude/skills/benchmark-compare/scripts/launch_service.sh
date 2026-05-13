@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # launch_service.sh — 通用推理框架服务启动脚本
-# 支持 FastDeploy / SGLang，支持单卡/多卡 TP/PD 分离模式
+# 支持 FastDeploy / SGLang，支持单卡/多卡 TP/DP/EP/PD 分离模式
 set -euo pipefail
 
 # ============================================================
@@ -12,6 +12,7 @@ PORT=""
 GPUS=""
 TP=1
 DP=1
+EP=0
 CONCURRENCY=32
 MAX_MODEL_LEN=65536
 QUANTIZATION="none"
@@ -30,12 +31,15 @@ usage() {
   --framework <fd|sg>         推理框架 (fd=FastDeploy, sg=SGLang)
   --model <PATH>              模型权重路径
   --port <PORT>               服务端口
-  --gpus <DEVICES>            CUDA_VISIBLE_DEVICES (如 "0" 或 "0,1,2,3")
+  --gpus <DEVICES>            CUDA_VISIBLE_DEVICES (如 "0" 或 "0,1,2,3,4,5,6,7")
   --venv <PATH>               虚拟环境路径 (.venv 目录)
 
 可选参数:
   --tp <N>                    tensor-parallel-size (默认: 1)
-  --dp <N>                    data-parallel-size, 仅 FD (默认: 1)
+  --dp <N>                    data-parallel-size (默认: 1)
+  --ep <N>                    expert-parallel-size, MoE 模型专用 (默认: 0, 不启用)
+                              FD: 映射为 --enable-expert-parallel (EP=TP×DP 隐式)
+                              SG: 映射为 --ep-size N
   --concurrency <N>           max-num-seqs / max-running-requests (默认: 32)
   --max-model-len <N>         最大序列长度 (默认: 65536)
   --quantization <TYPE>       量化方式: none|block_wise_fp8|fp8|wint4|wint8 (默认: none)
@@ -50,9 +54,13 @@ usage() {
   bash launch_service.sh --framework fd --model /path/to/model --port 8180 \
     --gpus 0 --venv /path/to/FastDeploy/.venv
 
-  # 多卡 TP=4 启动 SGLang
+  # TP=4 + DP=2 + EP=8 启动 FastDeploy (MoE, 8卡)
+  bash launch_service.sh --framework fd --model /path/to/model --port 8180 \
+    --gpus 0,1,2,3,4,5,6,7 --tp 4 --dp 2 --ep 8 --venv /path/to/FastDeploy/.venv
+
+  # TP=4 + DP=2 + EP=8 启动 SGLang (MoE, 8卡)
   bash launch_service.sh --framework sg --model /path/to/model --port 8280 \
-    --gpus 0,1,2,3 --tp 4 --venv /path/to/sglang_env/.venv
+    --gpus 0,1,2,3,4,5,6,7 --tp 4 --dp 2 --ep 8 --venv /path/to/sglang_env/.venv
 EOF
     exit "${1:-0}"
 }
@@ -65,6 +73,7 @@ while [[ $# -gt 0 ]]; do
         --gpus)            GPUS="$2"; shift 2 ;;
         --tp)              TP="$2"; shift 2 ;;
         --dp)              DP="$2"; shift 2 ;;
+        --ep)              EP="$2"; shift 2 ;;
         --concurrency)     CONCURRENCY="$2"; shift 2 ;;
         --max-model-len)   MAX_MODEL_LEN="$2"; shift 2 ;;
         --quantization)    QUANTIZATION="$2"; shift 2 ;;
@@ -111,7 +120,7 @@ launch_fastdeploy() {
     echo "[INFO] 启动 FastDeploy 服务..."
     echo "  模型: $MODEL"
     echo "  端口: $PORT"
-    echo "  GPU: $GPUS (TP=$TP, DP=$DP)"
+    echo "  GPU: $GPUS (TP=$TP, DP=$DP, EP=$EP)"
     echo "  并发: $CONCURRENCY"
     echo "  量化: $QUANTIZATION"
     echo "  日志: $LOG_FILE"
@@ -156,6 +165,11 @@ else:
         CMD+=" --data-parallel-size $DP"
     fi
 
+    # EP (expert parallelism) — FD 只有 flag，EP size 隐式 = TP×DP
+    if [[ "$EP" -gt 0 ]]; then
+        CMD+=" --enable-expert-parallel"
+    fi
+
     # 量化
     if [[ "$QUANTIZATION" != "none" ]]; then
         CMD+=" --quantization $QUANTIZATION"
@@ -184,7 +198,7 @@ launch_sglang() {
     echo "[INFO] 启动 SGLang 服务..."
     echo "  模型: $MODEL"
     echo "  端口: $PORT"
-    echo "  GPU: $GPUS (TP=$TP)"
+    echo "  GPU: $GPUS (TP=$TP, DP=$DP, EP=$EP)"
     echo "  并发: $CONCURRENCY"
     echo "  量化: $QUANTIZATION"
     echo "  日志: $LOG_FILE"
@@ -207,6 +221,16 @@ launch_sglang() {
     CMD+=" --context-length $MAX_MODEL_LEN"
     CMD+=" --max-running-requests $CONCURRENCY"
     CMD+=" --attention-backend $ATTENTION_BACKEND"
+
+    # DP (data parallelism)
+    if [[ "$DP" -gt 1 ]]; then
+        CMD+=" --dp-size $DP"
+    fi
+
+    # EP (expert parallelism) — SG 使用显式 --ep-size
+    if [[ "$EP" -gt 0 ]]; then
+        CMD+=" --ep-size $EP"
+    fi
 
     # 量化
     if [[ "$QUANTIZATION" != "none" ]]; then

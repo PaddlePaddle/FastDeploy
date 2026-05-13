@@ -15,7 +15,7 @@
 模型：<path_to_model>
 数据集：<path_to_dataset>
 并发：64，512
-量化：不量化（BF16），FP8
+量化：不量化（BF16），FP8（Block-Wise）
 使用GPU5和GPU6
 ```
 
@@ -26,9 +26,11 @@
 | 模型路径 | 是 | 模型权重目录的完整路径 | `/path/to/GLM-4.7-Flash` |
 | 数据集 | 否（有默认值） | JSONL 格式的测试数据集 | `/path/to/data.jsonl` |
 | 并发 | 否（默认 32） | 一个或多个并发数，逗号分隔 | `64，512` |
-| 量化 | 否（默认 BF16） | 一种或多种量化方式 | `不量化（BF16），FP8` |
-| GPU | 否（自动选空闲卡） | 指定使用哪些 GPU | `使用GPU5和GPU6` |
+| 量化 | 否（默认 BF16） | 一种或多种量化方式，FD 使用 Block-Wise FP8，SG 使用 Per-Tensor FP8 | `不量化（BF16），FP8` |
+| GPU | 否（自动选空闲卡） | 指定使用哪些 GPU | `使用GPU0-7` |
 | TP | 否（默认 1） | tensor-parallel 大小 | `TP=4` |
+| DP | 否（默认 1） | data-parallel 大小 | `DP=2` |
+| EP | 否（默认不启用） | expert-parallel 大小，MoE 模型专用 | `EP=8` |
 
 ### 使用示例
 
@@ -42,9 +44,14 @@
 帮我跑 benchmark，模型用 /path/to/Qwen2.5-72B，TP=4，并发 64
 ```
 
+**TP+DP+EP 组合**（MoE 模型 8 卡全并行）：
+```
+对比测试 GLM-4.7-Flash，TP=4，DP=2，EP=8，并发 64 和 512，量化 BF16 和 FP8
+```
+
 **多场景对比**（多种量化 × 多种并发）：
 ```
-对比测试 GLM-4.7-Flash，并发 64 和 512，量化 BF16 和 FP8
+对比测试 GLM-4.7-Flash，并发 64 和 512，量化 BF16 和 FP8（Block-Wise）
 ```
 
 **仅生成报告**（已有测试数据）：
@@ -74,7 +81,7 @@ Agent 会自动执行以下步骤：
 ## 输出结果
 
 - **HTML 报告**：`benchmark_results/benchmark_report.html`
-  - 支持量化方式切换（BF16 / FP8）
+  - 支持量化方式切换（BF16 / FP8 Block-Wise）
   - 支持并发数切换（64 / 512 等）
   - 明暗主题切换
   - Chart.js 可视化图表
@@ -105,6 +112,7 @@ benchmark-compare/
 |------|------|----------|----------|
 | single | 单卡部署，FD 和 SG 各一张 | 2 张 | TP=1（默认） |
 | tp | 多卡 Tensor Parallel | 2 × TP 张 | TP > 1 |
+| tp_dp_ep | TP + DP + EP 全并行（MoE 模型） | TP × DP 张（两框架共用同批卡） | TP > 1 且 DP > 1 且 EP > 0 |
 | pd | PD 分离（仅 FD），SG 标准模式 | TP + 1 + TP 张 | 用户指定 pd |
 | multi-node | 多机部署 | 用户指定 | 用户提供节点 IP |
 
@@ -117,6 +125,10 @@ benchmark-compare/
 
 ## 注意事项
 
+- **EP 并行映射差异**：
+  - FastDeploy：`--enable-expert-parallel` 为 flag，EP size 隐式等于 TP × DP
+  - SGLang：`--ep-size N` 为显式数值参数
+  - 典型配置：TP=4, DP=2, EP=8 表示 8 卡全部参与 expert 并行
 - **FP8 量化类型**：用户说"FP8"时，实际对应两种不同实现：
   - FastDeploy 使用 `--quantization block_wise_fp8`（Block-Wise FP8，按 block 粒度量化，精度损失更小）
   - SGLang 使用 `--quantization fp8`（Per-Tensor FP8，粗粒度量化）

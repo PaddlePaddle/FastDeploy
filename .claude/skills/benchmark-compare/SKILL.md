@@ -44,8 +44,9 @@ user_invocable: true
 | 是否量化 | `QUANTIZATION` | `none` | `none` / `block_wise_fp8`(FD) + `fp8`(SG) / `wint4` / `wint8`。注意：用户说"FP8"时，FD 实际使用 Block-Wise FP8（`--quantization block_wise_fp8`），SG 使用 per-tensor FP8（`--quantization fp8`），两者量化粒度不同，报告中需明确标注 |
 | 数据集路径 | `DATASET_PATH` | `<path_to_dataset>` | JSONL 格式 |
 | TP 大小 | `TP_SIZE` | `1` | tensor-parallel-size |
-| DP 大小 | `DP_SIZE` | `1` | data-parallel-size（仅 FD 支持） |
-| 部署模式 | `DEPLOY_MODE` | `single` | `single` / `tp` / `pd` / `multi-node` |
+| DP 大小 | `DP_SIZE` | `1` | data-parallel-size |
+| EP 大小 | `EP_SIZE` | `0` | expert-parallel-size，MoE 模型专用。FD 映射为 `--enable-expert-parallel`（EP size 隐式=TP×DP），SG 映射为 `--ep-size N` |
+| 部署模式 | `DEPLOY_MODE` | `single` | `single` / `tp` / `tp_dp_ep` / `pd` / `multi-node` |
 | FD 端口 | `FD_PORT` | `8180` | FastDeploy 服务端口 |
 | SG 端口 | `SG_PORT` | `8280` | SGLang 服务端口 |
 | GPU 列表 | `GPU_LIST` | 自动选择空闲卡 | 逗号分隔，如 `0,1,2,3` |
