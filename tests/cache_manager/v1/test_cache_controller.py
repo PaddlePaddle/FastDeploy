@@ -729,16 +729,39 @@ class TestFreeCacheMethods(unittest.TestCase):
 
 
 def make_mock_attn_backend(key_shape=(10, 4, 16, 64), val_shape=None, val_shape_is_none=False):
-    """Create a mock attn_backend with a fixed get_kv_cache_shape."""
+    """Create a mock attn_backend with a fixed get_kv_cache_shape and create_kv_cache."""
+    import paddle
+
+    backend = MagicMock()
+
     if val_shape_is_none:
         # Simulate MLA variants (e.g., DeepSeek) that return None for value_cache_shape
-        backend = MagicMock()
         backend.get_kv_cache_shape.return_value = (list(key_shape), None)
-        return backend
-    if val_shape is None:
-        val_shape = key_shape
-    backend = MagicMock()
-    backend.get_kv_cache_shape.return_value = (list(key_shape), list(val_shape))
+        resolved_val_shape = None
+    else:
+        if val_shape is None:
+            val_shape = key_shape
+        backend.get_kv_cache_shape.return_value = (list(key_shape), list(val_shape))
+        resolved_val_shape = list(val_shape)
+
+    key_shape_list = list(key_shape)
+
+    def fake_create_kv_cache(
+        num_layers, num_blocks, cache_dtype, kv_cache_quant_type, layer_offset=0
+    ):
+        caches = {}
+        for i in range(num_layers):
+            layer_idx = layer_offset + i
+            caches[("key", layer_idx)] = paddle.zeros(key_shape_list, dtype=cache_dtype)
+            if resolved_val_shape is not None:
+                caches[("value", layer_idx)] = paddle.zeros(resolved_val_shape, dtype=cache_dtype)
+            if kv_cache_quant_type == "block_wise_fp8":
+                caches[("key_scale", layer_idx)] = paddle.zeros([1], dtype="float32")
+                if resolved_val_shape is not None:
+                    caches[("value_scale", layer_idx)] = paddle.zeros([1], dtype="float32")
+        return caches
+
+    backend.create_kv_cache.side_effect = fake_create_kv_cache
     return backend
 
 
