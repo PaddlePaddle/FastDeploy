@@ -785,8 +785,8 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             stride_am=x_q.strides[0],
             stride_ak=x_q.strides[1],
             stride_be=layer.up_gate_proj_weight.strides[0],
-            stride_bk=layer.up_gate_proj_weight.strides[1],
-            stride_bn=layer.up_gate_proj_weight.strides[2],
+            stride_bk=layer.up_gate_proj_weight.strides[2],
+            stride_bn=layer.up_gate_proj_weight.strides[1],
             stride_cm=up_gate_proj_out.strides[0],
             stride_cn=up_gate_proj_out.strides[1],
             #
@@ -1991,7 +1991,9 @@ class TritonMoEMethod(UnquantizedFusedMoEMethod):
         gate_out = gate(x)
 
         if layer.topk_method == "noaux_tc":
-            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
             if not use_fused:
                 gate_out = gate_out.cast("float32")
 
