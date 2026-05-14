@@ -148,6 +148,7 @@ class EngineService:
 
         self.is_paused = False  # pause request generation
         self._pause_cond = threading.Condition()
+        self._rejecting_new_requests = False  # blocks new requests during abort drain
 
         self._ctrl_output_queues = {}
         self._ctrl_response_mailboxes = collections.defaultdict(collections.OrderedDict)
@@ -1333,7 +1334,7 @@ class EngineService:
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
                         self.llm_logger.debug(f"Receive request from api server: {request}")
 
-                        if self.is_paused:
+                        if self.is_paused or self._rejecting_new_requests:
                             self.llm_logger.warning(f"Engine is paused, drop request: {request}")
                             self._send_error_response(
                                 request.request_id,
@@ -1453,38 +1454,19 @@ class EngineService:
             if self.is_paused:
                 self.llm_logger.info("Engine is already paused, no need to pause again.")
                 return
+            self._rejecting_new_requests = True
+        self.resource_manager.log_status()
+
+        # Scheduling loop picks them up via _trigger_abort when they enter resource_manager
+        all_req_ids = list(set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys()))
+        self.llm_logger.info(f"Pause: aborting {len(all_req_ids)} total requests.")
+        if all_req_ids:
+            self.resource_manager.add_abort_req_ids(all_req_ids)
+        self._wait_inflight_drained()
+
+        with self._pause_cond:
             self.is_paused = True
-
-        self.llm_logger.info("Abort running requests.")
-
         self.resource_manager.log_status()
-        # preempted all running reqs. preempted reqs will be append to ResourceManager.waiting queue
-        timeout, count = 60, 0
-        while self.engine_worker_queue.exist_tasks():
-            time.sleep(0.001)
-            count += 1
-            if count >= timeout * 1000:
-                break
-        if count >= timeout * 1000:
-            error_msg = f"Emptying engine worker queue timed out after {timeout} seconds, worker may hanged!"
-            self.llm_logger.error(error_msg)
-            raise Exception(error_msg)
-        running_reqs = self.resource_manager.preempted_all()
-        if len(running_reqs) > 0:
-            self.llm_logger.info(f"Total {len(running_reqs)} requests need to be aborted.")
-            self.resource_manager.get_real_bsz()
-            self.engine_worker_queue.put_tasks((running_reqs, self.resource_manager.real_bsz))
-            self.resource_manager.wait_worker_inflight_requests_finish(timeout=60)
-        # self.engine_worker_queue.clear_data()
-        self.token_processor.clear_data()
-        self.resource_manager.log_status()
-
-        # abort inflight requests to user
-        inflight_requests = self.scheduler.get_inflight_requests()
-        self.llm_logger.info(f"Abort inflight requests (total {len(inflight_requests)}).")
-        for req in inflight_requests:
-            self._send_error_response(req.request_id, "Request is aborted since engine is paused.")
-        self.scheduler.reset()
 
         if envs.ENABLE_V1_KVCACHE_MANAGER:
             self.resource_manager.cache_manager.reset_cache()
@@ -1508,6 +1490,21 @@ class EngineService:
         self.llm_logger.info("Successfully paused request generation.")
         return None
 
+    def _wait_inflight_drained(self):
+        """
+        Wait until resource_manager.requests is completely empty.
+        No timeout — abort pipeline will complete. Aligned with SGLang's poll-until-drained.
+        """
+        start_time = time.time()
+        while (
+            self.resource_manager.requests
+            or self.scheduler.requests
+            or self.resource_manager.waiting_abort_req_id_set
+            or self.resource_manager.to_be_aborted_req_id_set
+        ):
+            time.sleep(0.005)
+        self.llm_logger.info(f"All inflight requests drained, take time: {time.time() - start_time:.3f} seconds")
+
     def _control_resume(self, control_request: ControlRequest) -> Optional[dict]:
         """Control function for resuming request generation.
 
@@ -1523,6 +1520,7 @@ class EngineService:
                 self.llm_logger.info("Engine is not paused, no need to resume.")
                 return None
             self.is_paused = False
+            self._rejecting_new_requests = False
             self._pause_cond.notify_all()
 
         # resume cache transfer
