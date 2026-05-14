@@ -140,10 +140,15 @@ def setup_and_run_server(api_url):
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
-        time.sleep(10)
-        print(f"server (pid={process.pid}) terminated")
+        try:
+            process.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=10)
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
+
+    clean_ports(PORTS_TO_CLEAN)
 
 
 @pytest.fixture(scope="session")
