@@ -479,7 +479,9 @@ elif paddle.is_compiled_with_cuda():
         has_sm100 = 100 in sm_versions and nvcc_version >= 12.9
         has_generic_fp8 = not has_sm90 and not has_sm100  # SM89 or other
 
-        if has_sm90 or has_sm100:
+        has_sm120 = any(v >= 120 for v in sm_versions)
+
+        if has_sm90 or has_sm100 or has_sm120:
             nvcc_compile_args += [
                 "-O3",
                 "-DNDEBUG",
@@ -500,20 +502,30 @@ elif paddle.is_compiled_with_cuda():
                 "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_fp8.cu",
                 "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_int8.cu",
                 "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_blockwise_sm90_fp8.cu",
             ]
 
         if has_sm100:
             print("SM100 (Blackwell): Applying SM100 configurations.")
-            # Placeholder for SM100-specific kernel auto-generation scripts
-            # These might be needed if Blackwell has new FP8 hardware features
-            # not covered by existing generic CUTLASS templates or SM90 scripts.
-            # print("SM100: Running SM100-specific FP8 kernel auto-generation (if any).")
-            # os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm100.py") # Example
-            # os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm100.py") # Example
+            nvcc_compile_args += [
+                "-DENABLE_SCALED_MM_SM100=1",
+            ]
+            sources += [
+                "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c3x_sm100.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm100_fp8.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_blockwise_sm100_fp8.cu",
+            ]
 
-            # Add SM100 specific sources if any, e.g., for new hardware intrinsics
-            # sources += ["gpu_ops/cutlass_kernels/w8a8/c4x_sm100.cu"] # Example
-            pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
+        if has_sm120:
+            print("SM120 (Blackwell RTX 5090): Applying SM120 configurations.")
+            nvcc_compile_args += [
+                "-DENABLE_SCALED_MM_SM120=1",
+            ]
+            sources += [
+                "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c3x_sm120.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm120_fp8.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_blockwise_sm120_fp8.cu",
+            ]
 
         if has_generic_fp8:
             # For SM89 (Ada) or other architectures without dedicated paths

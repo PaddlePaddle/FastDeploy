@@ -1,7 +1,6 @@
 // adapted from:
 // https://github.com/vllm-project/vllm/blob/118ff921118cc81061a2af865a1e13840ceb6792/csrc/quantization/cutlass_w8a8/scaled_mm_entry.cu
 
-#pragma once
 #include "helper.h"
 #include <iostream>
 
@@ -33,6 +32,24 @@ void cutlass_scaled_mm_sm90(paddle::Tensor& c,
                             paddle::Tensor const& a_scales,
                             paddle::Tensor const& b_scales,
                             paddle::optional<paddle::Tensor> const& bias);
+#endif
+
+#if defined ENABLE_SCALED_MM_SM100 && ENABLE_SCALED_MM_SM100
+void cutlass_scaled_mm_sm100(paddle::Tensor& c,
+                             paddle::Tensor const& a,
+                             paddle::Tensor const& b,
+                             paddle::Tensor const& a_scales,
+                             paddle::Tensor const& b_scales,
+                             paddle::optional<paddle::Tensor> const& bias);
+#endif
+
+#if defined ENABLE_SCALED_MM_SM120 && ENABLE_SCALED_MM_SM120
+void cutlass_scaled_mm_sm120(paddle::Tensor& c,
+                             paddle::Tensor const& a,
+                             paddle::Tensor const& b,
+                             paddle::Tensor const& a_scales,
+                             paddle::Tensor const& b_scales,
+                             paddle::optional<paddle::Tensor> const& bias);
 #endif
 
 void cutlass_scaled_mm_azp_sm75(paddle::Tensor& c,
@@ -72,6 +89,8 @@ void cutlass_scaled_mm_azp_sm90(paddle::Tensor& c,
                                 paddle::optional<paddle::Tensor> const& azp,
                                 paddle::optional<paddle::Tensor> const& bias);
 #endif
+
+// SM100/SM120 do not support AZP (int8 only), so no azp declarations needed
 
 bool cutlass_scaled_mm_supports_fp8(int64_t cuda_device_capability) {
   // CUTLASS FP8 kernels need at least
@@ -113,6 +132,24 @@ void CutlassScaledMm(paddle::Tensor& c,
   }
 
   int32_t version_num = GetGPUComputeCapability(a.place().GetDeviceId());
+
+  // Guard against compilation issues for sm120 kernels
+#if defined ENABLE_SCALED_MM_SM120 && ENABLE_SCALED_MM_SM120
+  if (version_num >= 120) {
+    // Blackwell (RTX 5090 / SM120 family)
+    cutlass_scaled_mm_sm120(c, a, b, a_scales, b_scales, bias);
+    return;
+  }
+#endif
+
+  // Guard against compilation issues for sm100 kernels
+#if defined ENABLE_SCALED_MM_SM100 && ENABLE_SCALED_MM_SM100
+  if (version_num >= 100 && version_num < 120) {
+    // Blackwell (SM100)
+    cutlass_scaled_mm_sm100(c, a, b, a_scales, b_scales, bias);
+    return;
+  }
+#endif
 
   // Guard against compilation issues for sm90 kernels
 #if defined ENABLE_SCALED_MM_SM90 && ENABLE_SCALED_MM_SM90
@@ -192,7 +229,7 @@ void CutlassScaledMmAzp(paddle::Tensor& c,
   int32_t version_num = GetGPUComputeCapability(a.place().GetDeviceId());
 
 #if defined ENABLE_SCALED_MM_SM90 && ENABLE_SCALED_MM_SM90
-  if (version_num >= 90) {
+  if (version_num >= 90 && version_num < 100) {
     cutlass_scaled_mm_azp_sm90(c, a, b, a_scales, b_scales, azp_adj, azp, bias);
     return;
   }

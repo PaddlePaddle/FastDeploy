@@ -42,7 +42,6 @@
 #include "cute/algorithm/gemm.hpp"
 #include "cute/atom/mma_atom.hpp"
 #include "cute/numeric/arithmetic_tuple.hpp"
-#include "cute/tensor_predicate.hpp"
 #include "cutlass/epilogue/thread/activation.h"
 #include "cutlass/gemm/collective/fp8_accumulation.hpp"
 #include "cutlass/trace.h"
@@ -72,8 +71,7 @@ template <int Stages,
           class SmemLayoutAtomB_,
           class SmemCopyAtomB_,
           class TransformB_,
-          template <class /* ElementCompute */>
-          class Activation_,
+          template <class /* ElementCompute */> class Activation_,
           bool SwapAB_>
 struct CollectiveMmaGated<
     MainloopSm90TmaGmmaWarpSpecializedFP8<Stages, ClusterShape, KernelSchedule>,
@@ -617,16 +615,14 @@ struct CollectiveMmaGated<
       } else {
         return thread_mma.partition_B(sAux);
       }
-    }
-    ();
+    }();
     auto tCrAux = [&]() -> auto {
       if constexpr (SwapAB) {
         return thread_mma.make_fragment_A(tCsAux);
       } else {
         return thread_mma.make_fragment_B(tCsAux);
       }
-    }
-    ();
+    }();
 
     CUTE_STATIC_ASSERT_V(size<1>(tCsA) == size<1>(accum0));  // M
     CUTE_STATIC_ASSERT_V(size<1>(tCsB) == size<2>(accum0));  // N
