@@ -52,6 +52,8 @@ namespace cub = hipcub;
 #include "env.h"
 #include "paddle/extension.h"
 #include "paddle/phi/core/allocator.h"
+#include "paddle/phi/core/memory/allocation/allocator_facade.h"
+#include "paddle/phi/backends/gpu/cuda/cuda_graph.h"
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
 #include "paddle/phi/backends/custom/custom_context.h"
 #else
@@ -87,7 +89,7 @@ using json = nlohmann::json;
 
 #ifdef PADDLE_WITH_HIP
 template <size_t kBlockSize = 256, size_t kNumWaves = 16>
-inline hipError_t GetNumBlocks(int64_t n, int *num_blocks) {
+inline hipError_t GetNumBlocks(int64_t n, int* num_blocks) {
   int dev;
   {
     hipError_t err = hipGetDevice(&dev);
@@ -119,7 +121,7 @@ inline hipError_t GetNumBlocks(int64_t n, int *num_blocks) {
 }
 #else
 template <size_t kBlockSize = 256, size_t kNumWaves = 16>
-inline cudaError_t GetNumBlocks(int64_t n, int *num_blocks) {
+inline cudaError_t GetNumBlocks(int64_t n, int* num_blocks) {
   int dev;
   {
     cudaError_t err = cudaGetDevice(&dev);
@@ -267,41 +269,41 @@ template <typename T, int Size>
 struct alignas(sizeof(T) * Size) AlignedVector {
   T val[Size];
 
-  HOSTDEVICE inline const T &operator[](int i) const { return val[i]; }
-  HOSTDEVICE inline T &operator[](int i) { return val[i]; }
+  HOSTDEVICE inline const T& operator[](int i) const { return val[i]; }
+  HOSTDEVICE inline T& operator[](int i) { return val[i]; }
 };
 
 template <typename T, int Size>
-HOSTDEVICE inline void Load(const T *addr, AlignedVector<T, Size> *vec) {
-  const AlignedVector<T, Size> *addr_vec =
-      reinterpret_cast<const AlignedVector<T, Size> *>(addr);
+HOSTDEVICE inline void Load(const T* addr, AlignedVector<T, Size>* vec) {
+  const AlignedVector<T, Size>* addr_vec =
+      reinterpret_cast<const AlignedVector<T, Size>*>(addr);
   *vec = *addr_vec;
 }
 
 template <typename T, int Size>
-HOSTDEVICE inline void Store(const AlignedVector<T, Size> &vec, T *addr) {
-  AlignedVector<T, Size> *addr_vec =
-      reinterpret_cast<AlignedVector<T, Size> *>(addr);
+HOSTDEVICE inline void Store(const AlignedVector<T, Size>& vec, T* addr) {
+  AlignedVector<T, Size>* addr_vec =
+      reinterpret_cast<AlignedVector<T, Size>*>(addr);
   *addr_vec = vec;
 }
 
 #ifdef PADDLE_WITH_HIP
 template <int Size>
-HOSTDEVICE inline void Store(const AlignedVector<hip_bfloat16, Size> &vec,
-                             int8_t *addr) {
+HOSTDEVICE inline void Store(const AlignedVector<hip_bfloat16, Size>& vec,
+                             int8_t* addr) {
   printf("Error: Store hip_bfloat16 to int8_t is not supported!");
 }
 #else
 template <int Size>
-HOSTDEVICE inline void Store(const AlignedVector<__nv_bfloat16, Size> &vec,
-                             int8_t *addr) {
+HOSTDEVICE inline void Store(const AlignedVector<__nv_bfloat16, Size>& vec,
+                             int8_t* addr) {
   printf("Error: Store __nv_bfloat16 to int8_t is not supported!");
 }
 #endif
 
 template <int Size>
-HOSTDEVICE inline void Store(const AlignedVector<half, Size> &vec,
-                             int8_t *addr) {
+HOSTDEVICE inline void Store(const AlignedVector<half, Size>& vec,
+                             int8_t* addr) {
   printf("Error: Store half to int8_t is not supported!");
 }
 
@@ -314,7 +316,7 @@ __device__ T max_func(const T a, const T b) {
 
 template <typename T>
 struct MaxOp {
-  __device__ __forceinline__ T operator()(const T &a, const T &b) const {
+  __device__ __forceinline__ T operator()(const T& a, const T& b) const {
     return max_func(a, b);
   }
 };
@@ -322,7 +324,7 @@ struct MaxOp {
 template <>
 struct MaxOp<float> {
   // This is slightly faster
-  __device__ __forceinline__ float operator()(float const &x, float const &y) {
+  __device__ __forceinline__ float operator()(float const& x, float const& y) {
     return max(x, y);
   }
 };
@@ -342,7 +344,7 @@ inline int GetBlockSize(int vocab_size) {
 }
 
 #ifndef PADDLE_WITH_COREX
-inline json readJsonFromFile(const std::string &filePath) {
+inline json readJsonFromFile(const std::string& filePath) {
   std::ifstream file(filePath);
   if (!file.is_open()) {
     throw std::runtime_error("Unable to open file: " + filePath);
@@ -368,10 +370,21 @@ inline json readJsonFromFile(const std::string &filePath) {
 // paddle::GPUPlace()
 
 #ifdef PADDLE_DEV
-inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
-                                     const paddle::DataType &dtype,
-                                     const paddle::Place &place) {
-  auto *allocator = paddle::GetAllocator(place);
+inline paddle::Tensor GetEmptyTensor(const common::DDim& dims,
+                                     const paddle::DataType& dtype,
+                                     const paddle::Place& place) {
+  phi::Allocator* allocator = nullptr;
+#if defined(PADDLE_WITH_CUDA)
+  if (phi::backends::gpu::CUDAGraph::IsThisThreadCapturing()) {
+    allocator = paddle::memory::allocation::AllocatorFacade::Instance()
+                    .GetAllocator(place)
+                    .get();
+  } else {
+    allocator = paddle::GetAllocator(place);
+  }
+#else
+  allocator = paddle::GetAllocator(place);
+#endif
   phi::DenseTensor dense_tensor;
   dense_tensor.Resize(dims);
   dense_tensor.AllocateFrom(
@@ -379,11 +392,22 @@ inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
   return paddle::Tensor(std::make_shared<phi::DenseTensor>(dense_tensor));
 }
 
-inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
-                                     const common::DDim &strides,
-                                     const paddle::DataType &dtype,
-                                     const paddle::Place &place) {
-  auto *allocator = paddle::GetAllocator(place);
+inline paddle::Tensor GetEmptyTensor(const common::DDim& dims,
+                                     const common::DDim& strides,
+                                     const paddle::DataType& dtype,
+                                     const paddle::Place& place) {
+  phi::Allocator* allocator = nullptr;
+#if defined(PADDLE_WITH_CUDA)
+  if (phi::backends::gpu::CUDAGraph::IsThisThreadCapturing()) {
+    allocator = paddle::memory::allocation::AllocatorFacade::Instance()
+                    .GetAllocator(place)
+                    .get();
+  } else {
+    allocator = paddle::GetAllocator(place);
+  }
+#else
+  allocator = paddle::GetAllocator(place);
+#endif
   phi::DenseTensor dense_tensor;
   dense_tensor.Resize(dims);
   dense_tensor.AllocateFrom(
@@ -393,67 +417,67 @@ inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
 }
 #endif
 
-__global__ void free_and_dispatch_block(bool *stop_flags,
-                                        int *seq_lens_this_time,
-                                        int *seq_lens_decoder,
-                                        int *block_tables,
-                                        int *encoder_block_lens,
-                                        bool *is_block_step,
-                                        int *step_block_list,  // [bsz]
-                                        int *step_len,
-                                        int *recover_block_list,
-                                        int *recover_len,
-                                        int *need_block_list,
-                                        int *need_block_len,
-                                        int *used_list_len,
-                                        int *free_list,
-                                        int *free_list_len,
-                                        int64_t *first_token_ids,
+__global__ void free_and_dispatch_block(bool* stop_flags,
+                                        int* seq_lens_this_time,
+                                        int* seq_lens_decoder,
+                                        int* block_tables,
+                                        int* encoder_block_lens,
+                                        bool* is_block_step,
+                                        int* step_block_list,  // [bsz]
+                                        int* step_len,
+                                        int* recover_block_list,
+                                        int* recover_len,
+                                        int* need_block_list,
+                                        int* need_block_len,
+                                        int* used_list_len,
+                                        int* free_list,
+                                        int* free_list_len,
+                                        int64_t* first_token_ids,
                                         const int bsz,
                                         const int block_size,
                                         const int block_num_per_seq,
                                         const int max_decoder_block_num);
 
 __global__ void speculate_free_and_dispatch_block(
-    bool *stop_flags,
-    int *seq_lens_this_time,
-    int *seq_lens_decoder,
-    int *block_tables,
-    int *encoder_block_lens,
-    bool *is_block_step,
-    int *step_block_list,  // [bsz]
-    int *step_len,
-    int *recover_block_list,
-    int *recover_len,
-    int *need_block_list,
-    int *need_block_len,
-    int *used_list_len,
-    int *free_list,
-    int *free_list_len,
-    int64_t *first_token_ids,
-    int *accept_num,
+    bool* stop_flags,
+    int* seq_lens_this_time,
+    int* seq_lens_decoder,
+    int* block_tables,
+    int* encoder_block_lens,
+    bool* is_block_step,
+    int* step_block_list,  // [bsz]
+    int* step_len,
+    int* recover_block_list,
+    int* recover_len,
+    int* need_block_list,
+    int* need_block_len,
+    int* used_list_len,
+    int* free_list,
+    int* free_list_len,
+    int64_t* first_token_ids,
+    int* accept_num,
     const int bsz,
     const int block_size,
     const int block_num_per_seq,
     const int max_decoder_block_num,
     const int max_draft_tokens);
 
-__device__ bool speculate_free_and_dispatch_block(const int &qid,
-                                                  int *need_block_list,
-                                                  const int &need_block_len);
+__device__ bool speculate_free_and_dispatch_block(const int& qid,
+                                                  int* need_block_list,
+                                                  const int& need_block_len);
 
 static std::string global_base64_chars =  // NOLINT
     "Tokp9lA/BjimRVKx32edMPFftOzsbNQ8C15Xn+YUEGc4WD0uLIq7hyJ6vZaHSwrg";
 
 // Base64 编码函数
-inline std::string base64_encode(const std::string &input) {
+inline std::string base64_encode(const std::string& input) {
   std::string ret;
   int i = 0;
   int j = 0;
   unsigned char char_array_3[3];
   unsigned char char_array_4[4];
 
-  for (const auto &c : input) {
+  for (const auto& c : input) {
     char_array_3[i++] = c;
     if (i == 3) {
       char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
@@ -495,7 +519,7 @@ inline std::string base64_encode(const std::string &input) {
 }
 
 // Base64 解码函数
-inline std::string base64_decode(const std::string &encoded_string) {
+inline std::string base64_decode(const std::string& encoded_string) {
   int in_len = encoded_string.size();
   int i = 0;
   int j = 0;
@@ -550,9 +574,9 @@ inline std::string base64_decode(const std::string &encoded_string) {
 
 #ifndef PADDLE_WITH_COREX
 template <typename T>
-inline T get_relative_best(nlohmann::json *json_data,
-                           const std::string &target_key,
-                           const T &default_value) {
+inline T get_relative_best(nlohmann::json* json_data,
+                           const std::string& target_key,
+                           const T& default_value) {
   if (json_data->contains(target_key)) {
     return json_data->at(target_key);
   } else {
@@ -564,7 +588,7 @@ inline T get_relative_best(nlohmann::json *json_data,
 #endif
 
 __device__ inline bool is_in_end(const int64_t id,
-                                 const int64_t *end_ids,
+                                 const int64_t* end_ids,
                                  int length) {
   bool flag = false;
   for (int i = 0; i < length; i++) {
@@ -588,7 +612,7 @@ __device__ __inline__ T ClipFunc(const T v, const T min, const T max) {
 }
 
 template <typename T>
-static void PrintMatrix3(const T *mat_d, int num, std::string name) {
+static void PrintMatrix3(const T* mat_d, int num, std::string name) {
   std::vector<T> tmp(num);
 #ifdef PADDLE_WITH_HIP
   hipMemcpy(tmp.data(), mat_d, sizeof(T) * num, hipMemcpyDeviceToHost);
@@ -613,7 +637,7 @@ static void PrintMatrix3(const T *mat_d, int num, std::string name) {
 
 #ifndef PADDLE_WITH_HIP
 #ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
-__forceinline__ __device__ uint32_t ld_flag_acquire(uint32_t *flag_addr,
+__forceinline__ __device__ uint32_t ld_flag_acquire(uint32_t* flag_addr,
                                                     int mode = 0) {
   uint32_t flag;
   if (mode == 0) {
@@ -632,7 +656,7 @@ __forceinline__ __device__ uint32_t ld_flag_acquire(uint32_t *flag_addr,
   return flag;
 }
 
-__forceinline__ __device__ void st_flag_release(uint32_t *flag_addr,
+__forceinline__ __device__ void st_flag_release(uint32_t* flag_addr,
                                                 uint32_t flag,
                                                 int mode = 0) {
   if (mode == 0) {
@@ -674,12 +698,12 @@ inline bool GetMlaUseTensorcore() {
   return mla_use_tensorcore;
 }
 
-inline const char *getEnvVar(const char *varName) {
+inline const char* getEnvVar(const char* varName) {
   return std::getenv(varName);
 }
 
 inline bool checkAttentionBackend() {
-  const char *backend = getEnvVar("FD_ATTENTION_BACKEND");
+  const char* backend = getEnvVar("FD_ATTENTION_BACKEND");
   if (backend && (std::strcmp(backend, "MLA_ATTN") == 0 ||
                   std::strcmp(backend, "DSA_ATTN") == 0)) {
     return true;
@@ -691,17 +715,17 @@ inline bool checkAttentionBackend() {
 #define GPU_MEMORY_CHECKER_H
 class GPUMemoryChecker {
  public:
-  static GPUMemoryChecker *getInstance() {
+  static GPUMemoryChecker* getInstance() {
     static GPUMemoryChecker instance;
     return &instance;
   }
 
-  void addCheckPoint(const char *call_file, int call_line);
+  void addCheckPoint(const char* call_file, int call_line);
   unsigned int getGPUCount() const { return deviceCount_; }
   void getCUDAVisibleDevice();
 
-  GPUMemoryChecker(const GPUMemoryChecker &) = delete;
-  void operator=(const GPUMemoryChecker &) = delete;
+  GPUMemoryChecker(const GPUMemoryChecker&) = delete;
+  void operator=(const GPUMemoryChecker&) = delete;
 
  private:
   GPUMemoryChecker();
@@ -737,8 +761,8 @@ __device__ __forceinline__ float blockReduceMax(float value) {
 
   return value;
 }
-inline bool getBoolEnv(char const *name) {
-  char const *env = std::getenv(name);
+inline bool getBoolEnv(char const* name) {
+  char const* env = std::getenv(name);
   return env && env[0] == '1' && env[1] == '\0';
 }
 
@@ -761,7 +785,7 @@ inline void launchWithPdlWhenEnabled(KernelFn kernelFn,
                                      dim3 block,
                                      size_t dynamicShmSize,
                                      cudaStream_t stream,
-                                     Args &&...args) {
+                                     Args&&... args) {
 #ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
   (*kernelFn)<<<grid, block, dynamicShmSize, stream>>>(
       std::forward<Args>(args)...);
