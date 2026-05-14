@@ -3496,7 +3496,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertGreaterEqual(call_count[0], 1)
         self._detach_finalizer(eng)
 
-    # ── _control_abort_requests / _wait_abort_complete ───────────────
+    # ── _resolve_abort_targets / _build_abort_results ───────────────
 
     def _make_abort_engine(self, splitwise_role="mixed"):
         """Create an engine wired up for abort tests."""
@@ -3537,179 +3537,21 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         req.metrics.engine_recv_first_token_time = 1000.2
         return req
 
-    def test_control_abort_requests_not_v1_raises(self):
-        """abort_requests raises when ENABLE_V1_KVCACHE_SCHEDULER is off."""
-        eng = self._make_abort_engine()
-        control_req = ControlRequest("ctrl-1", "abort_requests", {"abort_all": True, "req_ids": []})
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 0):
-            with self.assertRaises(Exception) as ctx:
-                eng._control_abort_requests(control_req)
-            self.assertIn("only supported", str(ctx.exception))
-        self._detach_finalizer(eng)
-
-    def test_control_abort_requests_abort_all(self):
-        """abort_all=True aborts all requests in resource_manager + scheduler."""
+    def test_resolve_abort_targets_abort_all(self):
+        """abort_all=True returns all requests in resource_manager + scheduler."""
         eng = self._make_abort_engine()
         eng.resource_manager.requests = {"req-1_0": self._make_fake_request([10, 20])}
         eng.scheduler.requests = {"req-2_0": MagicMock(raw=self._make_fake_request([30]))}
 
-        control_req = ControlRequest("ctrl-1", "abort_requests", {"abort_all": True, "req_ids": []})
-
-        def clear_abort_sets(req_id):
-            # Simulate immediate abort completion
-            eng.resource_manager.waiting_abort_req_id_set.discard(req_id)
-
-        eng.resource_manager.add_abort_req_ids = MagicMock(side_effect=clear_abort_sets)
-
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
-            result = eng._control_abort_requests(control_req)
-
-        self.assertEqual(len(result["aborted"]), 2)
-        self.assertEqual(result["not_found"], [])
-        ids = {a["request_id"] for a in result["aborted"]}
-        self.assertEqual(ids, {"req-1_0", "req-2_0"})
-        # put_results should have been called (not prefill)
-        eng.scheduler.put_results.assert_called_once()
+        target = eng._resolve_abort_targets(abort_all=True, req_ids=[])
+        self.assertEqual(set(target), {"req-1_0", "req-2_0"})
         self._detach_finalizer(eng)
 
-    def test_control_abort_requests_by_req_ids_with_suffix_match(self):
-        """req_ids match both exact and _0 suffix."""
+    def test_resolve_abort_targets_no_match(self):
+        """No matching request ids returns empty list."""
         eng = self._make_abort_engine()
-        eng.resource_manager.requests = {
-            "req-A_0": self._make_fake_request([1, 2, 3]),
-            "req-B": self._make_fake_request([4, 5]),
-        }
-
-        control_req = ControlRequest(
-            "ctrl-1",
-            "abort_requests",
-            {
-                "abort_all": False,
-                "req_ids": ["req-A", "req-B", "req-C"],
-            },
-        )
-
-        def clear_abort_sets(req_id):
-            eng.resource_manager.waiting_abort_req_id_set.discard(req_id)
-
-        eng.resource_manager.add_abort_req_ids = MagicMock(side_effect=clear_abort_sets)
-
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
-            result = eng._control_abort_requests(control_req)
-
-        aborted_ids = {a["request_id"] for a in result["aborted"]}
-        self.assertIn("req-A_0", aborted_ids)  # matched via _0 suffix
-        self.assertIn("req-B", aborted_ids)  # exact match
-        self.assertEqual(result["not_found"], ["req-C"])
-        self._detach_finalizer(eng)
-
-    def test_control_abort_requests_no_match(self):
-        """No requests found returns empty aborted and all in not_found."""
-        eng = self._make_abort_engine()
-        control_req = ControlRequest(
-            "ctrl-1",
-            "abort_requests",
-            {
-                "abort_all": False,
-                "req_ids": ["nonexistent"],
-            },
-        )
-
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
-            result = eng._control_abort_requests(control_req)
-
-        self.assertEqual(result["aborted"], [])
-        self.assertEqual(result["not_found"], ["nonexistent"])
-        self._detach_finalizer(eng)
-
-    def test_control_abort_requests_prefill_skips_wait_and_put(self):
-        """Prefill role skips _wait_abort_complete and put_results."""
-        eng = self._make_abort_engine(splitwise_role="prefill")
-        eng.resource_manager.requests = {"req-1_0": self._make_fake_request()}
-
-        control_req = ControlRequest("ctrl-1", "abort_requests", {"abort_all": True, "req_ids": []})
-        eng.resource_manager.add_abort_req_ids = MagicMock()
-
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
-            result = eng._control_abort_requests(control_req)
-
-        self.assertEqual(len(result["aborted"]), 1)
-        eng.scheduler.put_results.assert_not_called()
-        self._detach_finalizer(eng)
-
-    def test_control_abort_requests_output_token_count(self):
-        """output_token_count reflects partial_token_ids length."""
-        eng = self._make_abort_engine()
-        eng.resource_manager.requests = {"req-1_0": self._make_fake_request([10, 20, 30, 40, 50])}
-
-        control_req = ControlRequest("ctrl-1", "abort_requests", {"abort_all": True, "req_ids": []})
-
-        def clear_abort_sets(req_id):
-            eng.resource_manager.waiting_abort_req_id_set.discard(req_id)
-
-        eng.resource_manager.add_abort_req_ids = MagicMock(side_effect=clear_abort_sets)
-
-        with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", 1):
-            result = eng._control_abort_requests(control_req)
-
-        self.assertEqual(result["aborted"][0]["output_token_count"], 5)
-        self._detach_finalizer(eng)
-
-    def test_wait_abort_complete_immediate(self):
-        """_wait_abort_complete returns immediately when all requests already cleaned."""
-        eng = self._make_abort_engine()
-        # Empty abort sets → remaining is empty → returns immediately
-        eng._wait_abort_complete(["req-1_0"])
-        self._detach_finalizer(eng)
-
-    def test_wait_abort_complete_progress(self):
-        """_wait_abort_complete exits when background thread cleans up."""
-        eng = self._make_abort_engine()
-        eng.resource_manager.waiting_abort_req_id_set = {"req-1_0"}
-        # Add the request to requests dict so it won't be filtered out
-        eng.resource_manager.requests = {"req-1_0": self._make_fake_request()}
-
-        call_count = [0]
-
-        def fake_sleep(s):
-            call_count[0] += 1
-            # Simulate background thread cleaning up after first sleep
-            eng.resource_manager.waiting_abort_req_id_set.discard("req-1_0")
-
-        with patch("fastdeploy.engine.common_engine.time.sleep", fake_sleep):
-            eng._wait_abort_complete(["req-1_0"])
-
-        self.assertGreaterEqual(call_count[0], 1)
-        self._detach_finalizer(eng)
-
-    def test_wait_abort_complete_force_cleanup_stuck_in_to_be_aborted(self):
-        """Stall timeout triggers force cleanup for requests in to_be_aborted_req_id_set."""
-        eng = self._make_abort_engine()
-        eng.resource_manager.to_be_aborted_req_id_set = {"req-1_0"}
-        # Add the request to requests dict so it won't be filtered out
-        eng.resource_manager.requests = {"req-1_0": self._make_fake_request()}
-
-        def mock_recycle(req_id):
-            eng.resource_manager.to_be_aborted_req_id_set.discard(req_id)
-
-        eng.resource_manager.recycle_abort_task = MagicMock(side_effect=mock_recycle)
-
-        # Make time.time() advance past stall_timeout
-        time_values = [100.0, 100.0, 102.0, 102.0, 102.0]
-        time_idx = [0]
-
-        def fake_time():
-            idx = min(time_idx[0], len(time_values) - 1)
-            time_idx[0] += 1
-            return time_values[idx]
-
-        with (
-            patch("fastdeploy.engine.common_engine.time.time", fake_time),
-            patch("fastdeploy.engine.common_engine.time.sleep", lambda s: None),
-        ):
-            eng._wait_abort_complete(["req-1_0"], stall_timeout=1)
-
-        eng.resource_manager.recycle_abort_task.assert_called_with("req-1_0")
+        target = eng._resolve_abort_targets(abort_all=False, req_ids=["nonexistent"])
+        self.assertEqual(target, [])
         self._detach_finalizer(eng)
 
 

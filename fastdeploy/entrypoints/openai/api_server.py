@@ -486,13 +486,8 @@ async def abort_requests(request: Request):
     if not abort_all and not req_ids:
         return JSONResponse(status_code=400, content={"error": "must provide abort_all=true or req_ids"})
 
-    control_request = ControlRequest(
-        request_id=f"control-{uuid.uuid4()}",
-        method="abort_requests",
-        args={"abort_all": abort_all, "req_ids": req_ids or []},
-    )
-    control_response = await app.state.engine_client.run_control_method(control_request)
-    return control_response.to_api_json_response()
+    await app.state.engine_client.abort_reqs(req_ids=req_ids or [], abort_all=abort_all)
+    return Response(status_code=200)
 
 
 def wrap_streaming_generator(original_generator: AsyncGenerator):

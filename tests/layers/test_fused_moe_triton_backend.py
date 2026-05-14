@@ -20,6 +20,7 @@ import importlib
 import sys
 import types
 
+import numpy as np
 import paddle
 import pytest
 
@@ -37,6 +38,7 @@ class DummyQuantConfig:
         self.weight_block_size = weight_block_size
         self._name_value = name_value
         self.deepgemm_scale_ue8m0 = False
+        self.moe_blockwise_gemm_scale_ue8m0 = False
 
     def name(self):
         return self._name_value
@@ -57,7 +59,12 @@ class DummyFDConfig:
     def __init__(self, load_choices="default_v1"):
         self.load_config = DummyLoadConfig(load_choices)
         self.model_config = types.SimpleNamespace(enable_cache=False)
-        self.scheduler_config = types.SimpleNamespace(enable_moe_scores_elementwise_fuse=False)
+        self.scheduler_config = types.SimpleNamespace(
+            enable_moe_scores_elementwise_fuse=False,
+            splitwise_role="mixed",
+            max_num_seqs=8,
+            max_num_batched_tokens=256,
+        )
 
 
 class DummyGate(paddle.nn.Layer):
@@ -89,9 +96,14 @@ class DummyLayer(paddle.nn.Layer):
         self.n_group = 1
         self.topk_group = 1
         self.routed_scaling_factor = 1.0
+        self.routed_scaling_factor_learnable = False
         self.renormalize = True
         self.gate_correction_bias = paddle.zeros([num_local_experts], dtype="float32")
         self.topk_method = "noaux_tc"
+        self.with_bias = False
+        self.ep_size = 1
+        self.activation = "swiglu"
+        self.moe_quant_config = types.SimpleNamespace()
         self.fd_config = DummyFDConfig(load_choices)
         self.weight_dtype = weight_dtype
         self.quant_method = DummyQuantMethod(quant_config)
@@ -210,10 +222,15 @@ class TestFusedMoeTritonBackend:
         monkeypatch.setitem(
             sys.modules,
             "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
-            types.SimpleNamespace(fused_moe_kernel_paddle=kernel),
+            types.SimpleNamespace(fused_moe_kernel_paddle=kernel, fused_moe_kernel_bf16=kernel),
         )
         reloaded = importlib.reload(backend)
         assert hasattr(reloaded, "fused_moe_kernel_paddle")
+        # Restore the real module: reload() permanently rebinds module-level names
+        # (e.g. fused_moe_kernel_bf16) to the fake, and monkeypatch cannot undo that.
+        # A second reload after monkeypatch restores sys.modules fixes the binding.
+        monkeypatch.undo()
+        importlib.reload(backend)
 
     def test_triton_weight_only_create_and_apply(self, fake_ops, monkeypatch):
         quant_config = DummyQuantConfig(is_checkpoint_bf16=False)
@@ -322,7 +339,7 @@ class TestFusedMoeTritonBackend:
         monkeypatch.setitem(
             sys.modules,
             "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
-            types.SimpleNamespace(fused_moe_kernel_paddle=kernel),
+            types.SimpleNamespace(fused_moe_kernel_paddle=kernel, fused_moe_kernel_bf16=kernel),
         )
         monkeypatch.setattr(backend, "fused_moe_kernel_paddle", kernel, raising=False)
 
@@ -396,7 +413,7 @@ class TestFusedMoeTritonBackend:
         monkeypatch.setitem(
             sys.modules,
             "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
-            types.SimpleNamespace(fused_moe_kernel_paddle=kernel),
+            types.SimpleNamespace(fused_moe_kernel_paddle=kernel, fused_moe_kernel_bf16=kernel),
         )
 
         _ = method.apply(
@@ -436,7 +453,7 @@ class TestFusedMoeTritonBackend:
         monkeypatch.setitem(
             sys.modules,
             "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
-            types.SimpleNamespace(fused_moe_kernel_paddle=kernel),
+            types.SimpleNamespace(fused_moe_kernel_paddle=kernel, fused_moe_kernel_bf16=kernel),
         )
         monkeypatch.setattr(backend, "fused_moe_kernel_paddle", kernel, raising=False)
 
@@ -459,7 +476,7 @@ class TestFusedMoeTritonBackend:
         monkeypatch.setitem(
             sys.modules,
             "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
-            types.SimpleNamespace(fused_moe_kernel_paddle=kernel),
+            types.SimpleNamespace(fused_moe_kernel_paddle=kernel, fused_moe_kernel_bf16=kernel),
         )
         monkeypatch.setattr(
             paddle.static,
@@ -643,6 +660,7 @@ class TestFusedMoeTritonBackend:
         """Test the quant_weight_ue8m0 branch in BlockWiseFP8MoEMethod.process_weights_after_loading."""
         quant_config = DummyQuantConfig(is_checkpoint_bf16=True, weight_block_size=(128, 128))
         quant_config.deepgemm_scale_ue8m0 = True
+        quant_config.moe_blockwise_gemm_scale_ue8m0 = True
         layer = DummyLayer(quant_config, weight_dtype="bfloat16")
         method = backend.BlockWiseFP8MoEMethod(quant_config)
         method.create_weights(layer, model_format="torch")
@@ -697,7 +715,7 @@ class TestFusedMoeTritonBackend:
         assert len(quant_calls) > 0, "quant_weight_ue8m0 should have been called"
         assert len(transform_calls) > 0, "transform_scale_ue8m0 should have been called"
 
-    def test_triton_weight_only_apply_noaux_tc_with_use_fused_true(self, fake_ops, monkeypatch):
+    def test_triton_weight_only_apply_noaux_tc_with_fd_enable_rl(self, fake_ops, monkeypatch):
         quant_config = DummyQuantConfig(is_checkpoint_bf16=False)
         layer = DummyLayer(quant_config)
         layer.topk_method = "noaux_tc"
@@ -721,9 +739,9 @@ class TestFusedMoeTritonBackend:
         kernel = DummyKernel()
         monkeypatch.setattr(backend, "fused_moe_kernel_paddle", kernel, raising=False)
 
-        # Enable enable_moe_scores_elementwise_fuse and force is_cuda=True to trigger use_fused = True
-        monkeypatch.setattr(backend, "current_platform", types.SimpleNamespace(is_cuda=lambda: True))
-        layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse = True
+        # Set FD_ENABLE_RL=True to trigger use_fused = False at line 313
+        # This should trigger gate_out.cast('float32') at line 315
+        monkeypatch.setattr(backend.fastdeploy.envs, "FD_ENABLE_RL", True)
 
         x = paddle.randn([1, layer.hidden_size], dtype="float32")
         gate = DummyGate(layer.num_local_experts)
@@ -736,39 +754,555 @@ class TestFusedMoeTritonBackend:
         _ = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
         assert "topk_ids" in captured
 
-    def test_triton_weight_only_apply_noaux_tc_with_non_cuda(self, fake_ops, monkeypatch):
-        quant_config = DummyQuantConfig(is_checkpoint_bf16=False)
+    def test_python_op_learnable_scaling(self, fake_ops, monkeypatch):
+        """routed_scaling_factor_learnable=True: per_expert_scale applied to topk_weights inside python_op."""
+        quant_config = DummyQuantConfig(is_checkpoint_bf16=False, weight_block_size=(2, 2))
         layer = DummyLayer(quant_config)
-        # Ensure topk_method is "noaux_tc" to enter the target branch
-        layer.topk_method = "noaux_tc"
-        method = backend.TritonWeightOnlyMoEMethod(quant_config)
-        method.create_weights(layer, model_format="torch")
-
-        layer._up_weights = [
-            paddle.arange(layer.hidden_size * layer.moe_intermediate_size * 2, dtype="float32").reshape(
-                [layer.hidden_size, layer.moe_intermediate_size * 2]
-            )
-            for _ in range(layer.num_local_experts)
-        ]
-        layer._down_weights = [
-            paddle.arange(layer.moe_intermediate_size * layer.hidden_size, dtype="float32").reshape(
-                [layer.moe_intermediate_size, layer.hidden_size]
-            )
-            for _ in range(layer.num_local_experts)
-        ]
-        method.process_loaded_weights(layer, state_dict={})
+        layer.routed_scaling_factor_learnable = True
+        layer.per_expert_scale = paddle.ones([layer.num_local_experts], dtype="float32")
 
         kernel = DummyKernel()
-        monkeypatch.setattr(backend, "fused_moe_kernel_paddle", kernel, raising=False)
-
-        # Mock current_platform.is_cuda() to return False to trigger use_fused = False at line 313
-        # This should trigger gate_out.cast("float32") at line 315
-        monkeypatch.setattr(backend, "current_platform", types.SimpleNamespace(is_cuda=lambda: False))
+        monkeypatch.setitem(
+            sys.modules,
+            "fastdeploy.model_executor.layers.moe.triton_moe_kernels",
+            types.SimpleNamespace(fused_moe_kernel_paddle=kernel, fused_moe_kernel_bf16=kernel),
+        )
+        monkeypatch.setattr(
+            paddle.static,
+            "MetaTensor",
+            lambda shape, dtype: types.SimpleNamespace(shape=shape, dtype=dtype),
+            raising=False,
+        )
 
         x = paddle.randn([2, layer.hidden_size], dtype="float32")
         gate = DummyGate(layer.num_local_experts)
+        gate_out = gate(x)
 
-        def fake_get_moe_scores(*args, **kwargs):
+        up_weight = paddle.randn(
+            [layer.num_local_experts, layer.moe_intermediate_size * 2, layer.hidden_size], dtype="float32"
+        )
+        down_weight = paddle.randn(
+            [layer.num_local_experts, layer.hidden_size, layer.moe_intermediate_size], dtype="float32"
+        )
+        up_scale = paddle.ones([layer.num_local_experts, 2, 2], dtype="float32")
+        down_scale = paddle.ones([layer.num_local_experts, 2, 2], dtype="float32")
+
+        captured = {}
+
+        def hook(topk_ids):
+            captured["topk"] = topk_ids
+
+        config = {"BLOCK_SIZE_M": 32, "BLOCK_SIZE_N": 64, "BLOCK_SIZE_K": 64, "GROUP_SIZE_M": 1}
+
+        _ = backend.python_op_fused_moe_kernel_paddle(
+            x,
+            up_weight,
+            up_scale,
+            down_weight,
+            down_scale,
+            gate_out,
+            layer.gate_correction_bias,
+            layer.top_k,
+            up_weight.shape[1],
+            down_weight.shape[1],
+            layer.num_local_experts,
+            layer.moe_intermediate_size,
+            layer.hidden_size,
+            config,
+            quant_config,
+            hook,
+        )
+
+        assert "topk" in captured
+
+
+class DummyBF16Kernel:
+    """
+    Simulates fused_moe_kernel_bf16[grid](...).
+    Writes zeros into the output tensor (3rd positional argument).
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    def __getitem__(self, grid):
+        def _runner(*args, **kwargs):
+            # output tensor is the 3rd positional argument (index 2)
+            if len(args) > 2 and isinstance(args[2], paddle.Tensor):
+                args[2].set_value(paddle.zeros_like(args[2]))
+            self.calls.append({"grid": grid, "kwargs": kwargs})
+
+        return _runner
+
+
+class DummyTL:
+    """Minimal stub for triton.language so tests don't need a real Triton install."""
+
+    bfloat16 = "bfloat16"
+    float16 = "float16"
+
+
+class TestTritonMoEMethod:
+    """Unit tests for TritonMoEMethod.
+
+    Pattern mirrors TestFusedMoeTritonBackend:
+    - DummyLayer / DummyGate / DummyFDConfig (reused from module top)
+    - fake_ops fixture patches routing + preprocess ops
+    - DummyBF16Kernel patches fused_moe_kernel_bf16
+    - No real GPU kernels are executed; output shapes / attributes are verified
+    """
+
+    # ------------------------------------------------------------------
+    # helpers
+    # ------------------------------------------------------------------
+
+    def _make_layer(self, num_experts=2, hidden_size=8, intermediate_size=4, top_k=2):
+        layer = DummyLayer(
+            quant_config=None,
+            num_local_experts=num_experts,
+            hidden_size=hidden_size,
+            moe_intermediate_size=intermediate_size,
+            top_k=top_k,
+            weight_dtype="bfloat16",
+        )
+        return layer
+
+    def _create_weights(self, method, layer):
+        """Call create_weights with the mandatory kwargs that the real MoE layer supplies.
+
+        TritonMoEMethod targets the CUDA non-torch weight layout:
+          up_gate_proj_weight: [E, hidden_size, inter*2]  (K-major)
+          down_proj_weight:    [E, inter, hidden_size]    (K-major)
+        Therefore we must NOT pass model_format="torch"; any non-"torch" value
+        (or omitting the key) lets UnquantizedFusedMoEMethod take the CUDA branch.
+        """
+        method.create_weights(
+            layer,
+            model_format="default",
+            num_experts=layer.num_local_experts,
+            hidden_size=layer.hidden_size,
+            moe_intermediate_size=layer.moe_intermediate_size,
+        )
+
+    def _patch_bf16_kernel(self, monkeypatch):
+        kernel = DummyBF16Kernel()
+        monkeypatch.setattr(backend, "fused_moe_kernel_bf16", kernel, raising=False)
+        # Patch tl so that `compute_type=tl.bfloat16` inside apply() does not
+        # raise NameError when triton is not installed in the test environment.
+        monkeypatch.setattr(backend, "tl", DummyTL(), raising=False)
+        return kernel
+
+    # ------------------------------------------------------------------
+    # __init__ / basic construction
+    # ------------------------------------------------------------------
+
+    def test_init_sets_weight_attrs(self):
+        """TritonMoEMethod.__init__ must expose the two weight attr names."""
+        method = backend.TritonMoEMethod()
+        assert "up_gate_proj_weight" in method.added_weight_attrs
+        assert "down_proj_weight" in method.added_weight_attrs
+
+    def test_init_none_quant_config(self):
+        method = backend.TritonMoEMethod(quant_config=None)
+        assert method.quant_config is None
+
+    # ------------------------------------------------------------------
+    # create_weights
+    # ------------------------------------------------------------------
+
+    def test_create_weights_registers_parameters(self):
+        """After create_weights the layer should have up_gate_proj_weight and down_proj_weight."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer()
+        self._create_weights(method, layer)
+        assert hasattr(layer, "up_gate_proj_weight")
+        assert hasattr(layer, "down_proj_weight")
+
+    def test_create_weights_shapes(self):
+        """Weight tensors must have the correct [E, K, N] / [E, N, K] layout."""
+        E, H, N = 3, 8, 4
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(num_experts=E, hidden_size=H, intermediate_size=N)
+        self._create_weights(method, layer)
+        # up_gate: [E, hidden_size, intermediate*2]
+        assert list(layer.up_gate_proj_weight.shape) == [E, H, N * 2]
+        # down: [E, intermediate, hidden_size]
+        assert list(layer.down_proj_weight.shape) == [E, N, H]
+
+    # ------------------------------------------------------------------
+    # process_loaded_weights
+    # ------------------------------------------------------------------
+
+    def test_process_loaded_weights_stacks_experts(self):
+        """process_loaded_weights must stack per-expert tensors into the stacked param."""
+        E, H, N = 2, 8, 4
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(num_experts=E, hidden_size=H, intermediate_size=N)
+        self._create_weights(method, layer)
+
+        # Provide per-expert tensors via extract_moe_ffn_weights
+        up_weights = [paddle.ones([H, N * 2], dtype="bfloat16") * (i + 1) for i in range(E)]
+        down_weights = [paddle.ones([N, H], dtype="bfloat16") * (i + 1) for i in range(E)]
+        layer._up_weights = up_weights
+        layer._down_weights = down_weights
+
+        method.process_loaded_weights(layer, state_dict={})
+
+        # After stacking, shape should be [E, ...]
+        assert list(layer.up_gate_proj_weight.shape) == [E, H, N * 2]
+        assert list(layer.down_proj_weight.shape) == [E, N, H]
+        # Verify each expert's data is correctly stacked (expert i has value i+1)
+        for i in range(E):
+            expected_up = float(i + 1)
+            expected_down = float(i + 1)
+            actual_up = float(layer.up_gate_proj_weight[i].cast("float32").mean())
+            actual_down = float(layer.down_proj_weight[i].cast("float32").mean())
+            assert (
+                abs(actual_up - expected_up) < 1e-3
+            ), f"Expert {i} up_gate weight mean={actual_up}, expected {expected_up}"
+            assert (
+                abs(actual_down - expected_down) < 1e-3
+            ), f"Expert {i} down_proj weight mean={actual_down}, expected {expected_down}"
+
+    # ------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # _get_default_config — tile heuristic
+    # ------------------------------------------------------------------
+
+    def test_get_default_config_decode(self):
+        """M<=32 decode path → 16x64x64."""
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=4, E=8)
+        assert cfg["BLOCK_SIZE_M"] == 16
+        assert cfg["BLOCK_SIZE_N"] == 64
+        assert cfg["BLOCK_SIZE_K"] == 64
+
+    def test_get_default_config_mid(self):
+        """96 < M <= 512 mid path → 64x128x64."""
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=128, E=8)
+        assert cfg["BLOCK_SIZE_M"] == 64
+        assert cfg["BLOCK_SIZE_N"] == 128
+        assert cfg["BLOCK_SIZE_K"] == 64
+
+    def test_get_default_config_prefill(self):
+        """M > 512 prefill path → 128x128x64."""
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=1024, E=8)
+        assert cfg["BLOCK_SIZE_M"] == 128
+        assert cfg["BLOCK_SIZE_N"] == 128
+        assert cfg["BLOCK_SIZE_K"] == 64
+
+    def test_get_default_config_boundary_32(self):
+        """M==32 is decode (<=32)."""
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=32, E=8)
+        assert cfg["BLOCK_SIZE_M"] == 16
+
+    def test_get_default_config_boundary_96(self):
+        """M==96 is small-mid (32 < M <= 96) → BLOCK_SIZE_M=32."""
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=96, E=8)
+        assert cfg["BLOCK_SIZE_M"] == 32
+
+    def test_get_default_config_boundary_512(self):
+        """M==512 is mid (<=512) → BLOCK_SIZE_M=64."""
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=512, E=8)
+        assert cfg["BLOCK_SIZE_M"] == 64
+
+    def test_get_default_config_has_group_size_m(self):
+        """All configs must include GROUP_SIZE_M key."""
+        method = backend.TritonMoEMethod()
+        for M in (1, 64, 1024):
+            cfg = method._get_default_config(M=M, E=8)
+            assert "GROUP_SIZE_M" in cfg
+
+    def test_get_default_config_block_n_boundary(self):
+        """M<=64 → BLOCK_SIZE_N=64; M>64 → BLOCK_SIZE_N=128."""
+        method = backend.TritonMoEMethod()
+        cfg64 = method._get_default_config(M=64, E=8)
+        assert cfg64["BLOCK_SIZE_N"] == 64
+        cfg65 = method._get_default_config(M=65, E=8)
+        assert cfg65["BLOCK_SIZE_N"] == 128
+
+    def test_get_default_config_group_m_16(self):
+        """tokens_per_expert > 128 → GROUP_SIZE_M=16."""
+        method = backend.TritonMoEMethod()
+        # M=1024, E=1 → tokens_per_expert=1024 > 128 → group_m=16
+        cfg = method._get_default_config(M=1024, E=1)
+        assert cfg["GROUP_SIZE_M"] == 16
+
+    def test_get_default_config_group_m_1(self):
+        """tokens_per_expert <= 128 → GROUP_SIZE_M=1."""
+        method = backend.TritonMoEMethod()
+        # M=128, E=8 → tokens_per_expert=16 <= 128 → group_m=1
+        cfg = method._get_default_config(M=128, E=8)
+        assert cfg["GROUP_SIZE_M"] == 1
+
+    def test_get_default_config_num_warps(self):
+        """M<=128 → num_warps=4; M>128 → num_warps=8."""
+        method = backend.TritonMoEMethod()
+        cfg128 = method._get_default_config(M=128, E=8)
+        assert cfg128["num_warps"] == 4
+        cfg256 = method._get_default_config(M=256, E=8)
+        assert cfg256["num_warps"] == 8
+
+    def test_get_default_config_num_stages(self):
+        """M<=32 → num_stages=4; M>32 → num_stages=3."""
+        method = backend.TritonMoEMethod()
+        cfg32 = method._get_default_config(M=32, E=8)
+        assert cfg32["num_stages"] == 4
+        cfg33 = method._get_default_config(M=33, E=8)
+        assert cfg33["num_stages"] == 3
+
+    # ------------------------------------------------------------------
+    # apply — empty-batch fast path
+    # ------------------------------------------------------------------
+
+    def test_apply_empty_batch_returns_zero_tensor(self, fake_ops, monkeypatch):
+        """apply() with 0 tokens must return a zero tensor of shape [0, hidden_size]."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        self._create_weights(method, layer)
+        self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.zeros([0, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        out = method.apply(layer, x, gate)
+
+        assert list(out.shape) == [0, layer.hidden_size]
+
+    # ------------------------------------------------------------------
+    # apply — normal forward (noaux_tc routing path)
+    # ------------------------------------------------------------------
+
+    def test_apply_noaux_tc_output_shape(self, fake_ops, monkeypatch):
+        """apply() noaux_tc path: output shape must be [token_num, hidden_size]."""
+        T, H = 4, 8
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=H)
+        self._create_weights(method, layer)
+        self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([T, H], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        out = method.apply(layer, x, gate)
+
+        assert list(out.shape) == [T, H]
+
+    def test_apply_noaux_tc_topk_hook_called(self, fake_ops, monkeypatch):
+        """topk_ids_hookfunc must be called with topk_ids kwarg during apply()."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        self._create_weights(method, layer)
+        self._patch_bf16_kernel(monkeypatch)
+
+        captured = {}
+
+        def hook(topk_ids):
+            captured["topk_ids"] = topk_ids
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        method.apply(layer, x, DummyGate(layer.num_local_experts), topk_ids_hookfunc=hook)
+
+        assert "topk_ids" in captured
+
+    def test_apply_noaux_tc_kernel_called_twice(self, fake_ops, monkeypatch):
+        """fused_moe_kernel_bf16 must be launched twice (GEMM1 + GEMM2) per forward pass."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        self._create_weights(method, layer)
+        kernel = self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        method.apply(layer, x, DummyGate(layer.num_local_experts))
+
+        assert len(kernel.calls) == 2, f"Expected 2 kernel launches (GEMM1 + GEMM2), got {len(kernel.calls)}"
+
+    # ------------------------------------------------------------------
+    # apply — non-noaux routing path (moe_topk_select)
+    # ------------------------------------------------------------------
+
+    def test_apply_aux_routing_path(self, fake_ops, monkeypatch):
+        """When topk_method != 'noaux_tc', the moe_topk_select path is used."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        layer.topk_method = "aux"
+        self._create_weights(method, layer)
+        self._patch_bf16_kernel(monkeypatch)
+
+        captured = {}
+
+        def hook(topk_ids):
+            captured["ids"] = topk_ids
+
+        x = paddle.randn([3, layer.hidden_size], dtype="bfloat16")
+        out = method.apply(layer, x, DummyGate(layer.num_local_experts), topk_ids_hookfunc=hook)
+
+        assert list(out.shape) == [3, layer.hidden_size]
+        assert "ids" in captured
+
+    # ------------------------------------------------------------------
+    # apply_tp delegates to apply
+    # ------------------------------------------------------------------
+
+    def test_apply_tp_delegates_to_apply(self, fake_ops, monkeypatch):
+        """apply_tp() must produce the same output shape as apply()."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        self._create_weights(method, layer)
+        self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        out = method.apply_tp(layer, x, gate)
+
+        assert list(out.shape) == [2, layer.hidden_size]
+
+    # ------------------------------------------------------------------
+    # EP methods raise NotImplementedError
+    # ------------------------------------------------------------------
+
+    def test_apply_ep_prefill_raises(self):
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer()
+        with pytest.raises(NotImplementedError):
+            method.apply_ep_prefill(layer, None, None)
+
+    def test_apply_ep_decode_raises(self):
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer()
+        with pytest.raises(NotImplementedError):
+            method.apply_ep_decode(layer, None, None)
+
+    # ------------------------------------------------------------------
+    # apply — kernel argument verification
+    # ------------------------------------------------------------------
+
+    def test_apply_kernel_even_ks_true(self, fake_ops, monkeypatch):
+        """When hidden_size is divisible by BLOCK_SIZE_K, even_Ks=True in GEMM1."""
+        method = backend.TritonMoEMethod()
+        # hidden_size=64, BLOCK_SIZE_K=64 → even_Ks=True for GEMM1
+        layer = self._make_layer(hidden_size=64, intermediate_size=32)
+        self._create_weights(method, layer)
+        kernel = self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        method.apply(layer, x, gate)
+
+        assert len(kernel.calls) == 2
+        assert kernel.calls[0]["kwargs"]["even_Ks"] is True
+
+    def test_apply_kernel_even_ks_false(self, fake_ops, monkeypatch):
+        """When hidden_size is NOT divisible by BLOCK_SIZE_K, even_Ks=False in GEMM1."""
+        method = backend.TritonMoEMethod()
+        # hidden_size=8, BLOCK_SIZE_K=64 → even_Ks=False for GEMM1
+        layer = self._make_layer(hidden_size=8, intermediate_size=4)
+        self._create_weights(method, layer)
+        kernel = self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        method.apply(layer, x, gate)
+
+        assert len(kernel.calls) == 2
+        assert kernel.calls[0]["kwargs"]["even_Ks"] is False
+
+    def test_apply_gemm2_top_k_always_1(self, fake_ops, monkeypatch):
+        """GEMM2 must always be called with top_k=1 (flat token-expert pairs)."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8, top_k=4)
+        self._create_weights(method, layer)
+        kernel = self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        method.apply(layer, x, gate)
+
+        assert len(kernel.calls) == 2
+        assert kernel.calls[0]["kwargs"]["top_k"] == layer.top_k
+        assert kernel.calls[1]["kwargs"]["top_k"] == 1
+
+    def test_apply_gemm1_no_mul_weight_gemm2_mul_weight(self, fake_ops, monkeypatch):
+        """GEMM1 has MUL_ROUTED_WEIGHT=False, GEMM2 has MUL_ROUTED_WEIGHT=True."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        self._create_weights(method, layer)
+        kernel = self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        method.apply(layer, x, gate)
+
+        assert kernel.calls[0]["kwargs"]["MUL_ROUTED_WEIGHT"] is False
+        assert kernel.calls[1]["kwargs"]["MUL_ROUTED_WEIGHT"] is True
+
+    def test_apply_large_batch_config(self, fake_ops, monkeypatch):
+        """Large token count picks larger tile config (BLOCK_SIZE_M=128, num_warps=8)."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        self._create_weights(method, layer)
+        kernel = self._patch_bf16_kernel(monkeypatch)
+
+        # 1024 tokens → prefill config: BLOCK_SIZE_M=128
+        x = paddle.randn([1024, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        method.apply(layer, x, gate)
+
+        assert len(kernel.calls) == 2
+        assert kernel.calls[0]["kwargs"]["BLOCK_SIZE_M"] == 128
+        assert kernel.calls[0]["kwargs"]["num_warps"] == 8
+
+    def test_apply_single_token_output_shape(self, fake_ops, monkeypatch):
+        """Single token decode scenario."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(num_experts=128, hidden_size=16, intermediate_size=8, top_k=8)
+        self._create_weights(method, layer)
+        self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([1, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        out = method.apply(layer, x, gate)
+
+        assert list(out.shape) == [1, layer.hidden_size]
+
+    def test_get_moe_method_triton_branch(self, monkeypatch):
+        """get_moe_method() returns TritonMoEMethod when FD_MOE_BACKEND='triton' and is_cuda()."""
+        from fastdeploy.model_executor.layers.moe import moe as moe_module
+
+        monkeypatch.setattr(moe_module, "current_platform", types.SimpleNamespace(is_cuda=lambda: True))
+        monkeypatch.setattr(moe_module.envs, "FD_MOE_BACKEND", "triton")
+        result = moe_module.get_moe_method()
+        assert isinstance(result, backend.TritonMoEMethod)
+
+    def test_apply_use_fused_false(self, fake_ops, monkeypatch):
+        """FD_ENABLE_RL=True triggers use_fused=False branch (gate_out.cast('float32'))."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        self._create_weights(method, layer)
+        self._patch_bf16_kernel(monkeypatch)
+
+        monkeypatch.setattr(backend.fastdeploy.envs, "FD_ENABLE_RL", True)
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        out = method.apply(layer, x, gate)
+        assert list(out.shape) == [2, layer.hidden_size]
+
+    def test_apply_tp_with_topk_reduce_func(self, fake_ops, monkeypatch):
+        """topk_reduce_func attribute is passed through to get_moe_scores."""
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        layer.topk_reduce_func = lambda x: x
+        self._create_weights(method, layer)
+        self._patch_bf16_kernel(monkeypatch)
+
+        scores_kwargs = {}
+
+        def tracking_get_moe_scores(*args, **kwargs):
+            scores_kwargs.update(kwargs)
             gate_out = args[0]
             token_num = gate_out.shape[0]
             top_k = args[3]
@@ -776,12 +1310,187 @@ class TestFusedMoeTritonBackend:
             topk_weights = paddle.ones([token_num, top_k], dtype="float32")
             return gate_out, topk_weights, topk_ids
 
-        monkeypatch.setattr(backend, "get_moe_scores", fake_get_moe_scores)
+        monkeypatch.setattr(backend, "get_moe_scores", tracking_get_moe_scores)
 
-        captured = {}
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        method.apply(layer, x, gate)
 
-        def hook(topk_ids):
-            captured["topk_ids"] = topk_ids
+        assert "topk_reduce_func" in scores_kwargs
 
-        _ = method.apply(layer, x, gate, topk_ids_hookfunc=hook)
-        assert "topk_ids" in captured
+
+# ===========================================================================
+# Precision tests: TritonMoEMethod vs. CutlassMoEMethod (BF16)
+# ===========================================================================
+
+
+def _make_precision_layer_pair(num_experts, hidden_size, intermediate_size, top_k):
+    """
+    Build a DummyLayer with random BF16 weights and a TritonMoEMethod.
+
+    Weight layout (CUDA non-torch): [E, H, 2N] for up_gate_proj, [E, N, H] for down_proj.
+    Returns (layer, None, triton_method) for compatibility with existing test signatures.
+    """
+    layer = DummyLayer(
+        quant_config=None,
+        num_local_experts=num_experts,
+        hidden_size=hidden_size,
+        moe_intermediate_size=intermediate_size,
+        top_k=top_k,
+        weight_dtype="bfloat16",
+    )
+
+    triton_method = backend.TritonMoEMethod()
+
+    # Create weight parameters (CUDA non-torch layout)
+    triton_method.create_weights(
+        layer,
+        model_format="default",
+        num_experts=num_experts,
+        hidden_size=hidden_size,
+        moe_intermediate_size=intermediate_size,
+    )
+
+    # Fill with Xavier-like random BF16 weights to produce meaningful output magnitudes.
+    # W1: [E, H, 2N] — scale by 1/sqrt(H) so GEMM1 output ~O(1)
+    # W2: [E, N, H] — scale by 1/sqrt(N) so GEMM2 output ~O(1)
+    paddle.seed(42)
+    w1_scale = 1.0 / (hidden_size**0.5)
+    w2_scale = 1.0 / (intermediate_size**0.5)
+    layer.up_gate_proj_weight.set_value((paddle.randn(layer.up_gate_proj_weight.shape) * w1_scale).cast("bfloat16"))
+    layer.down_proj_weight.set_value((paddle.randn(layer.down_proj_weight.shape) * w2_scale).cast("bfloat16"))
+    return layer, None, triton_method
+
+
+def _uniform_gate(layer):
+    """Gate that outputs uniform logits so every expert gets equal probability."""
+
+    class _Gate(paddle.nn.Layer):
+        def __init__(self, num_experts):
+            super().__init__()
+            self.num_experts = num_experts
+
+        def forward(self, x):
+            return paddle.ones([x.shape[0], self.num_experts], dtype="float32")
+
+    return _Gate(layer.num_local_experts)
+
+
+# Shapes to exercise: (token_num, hidden_size, intermediate_size, num_experts, top_k)
+# Small/medium sizes to keep test runtime reasonable.
+_PRECISION_SHAPES = [
+    pytest.param(1, 64, 32, 8, 2, id="decode_T1_H64"),
+    pytest.param(16, 64, 32, 8, 2, id="decode_T16_H64"),
+    pytest.param(64, 128, 64, 8, 2, id="mid_T64_H128"),
+    pytest.param(128, 128, 64, 8, 2, id="mid_T128_H128_E8"),
+    pytest.param(256, 256, 128, 8, 4, id="prefill_T256_H256"),
+]
+
+
+@pytest.mark.skipif(not paddle.is_compiled_with_cuda(), reason="requires CUDA")
+# @pytest.mark.skipif(not _triton_ops_available(), reason="triton MoE ops not available (custom ops not compiled)")
+class TestTritonMoEPrecision:
+    """
+    Precision tests: Triton BF16 path vs. Cutlass BF16 path.
+
+    Both paths are activated in production via the FD_MOE_BACKEND env var
+    (triton vs cutlass). This test verifies they produce numerically equivalent
+    results on the same shared BF16 weights and identical inputs.
+
+    All tests run real GPU kernels (no mocking).
+    Tolerance: atol=1e-2, rtol=1e-2  (both kernels use BF16 arithmetic with
+    fp32 accumulation; differences come from tile ordering / rounding).
+    """
+
+    # Tolerance for comparing two independent BF16 GEMM implementations.
+    # BF16 has ~7-bit mantissa (eps ~0.008). After GEMM1 + SwiGLU + GEMM2,
+    # rounding differences accumulate. Use np.allclose style:
+    #   |triton - cutlass| <= ATOL + RTOL * |cutlass|
+    ATOL = 1e-3
+    RTOL = 1e-3
+
+    @pytest.mark.parametrize("T,H,N,E,K", _PRECISION_SHAPES)
+    def test_triton_vs_cutlass(self, T, H, N, E, K):
+        """Triton BF16 MoE output must agree with CUTLASS BF16 MoE output.
+
+        Both paths use the same weight layout, routing logic, and BF16 arithmetic.
+        Differences should only come from tile ordering / rounding in GEMM.
+        """
+        from fastdeploy.model_executor.layers.moe.fused_moe_cutlass_backend import (
+            CutlassMoEMethod,
+        )
+
+        layer, _, triton_method = _make_precision_layer_pair(E, H, N, K)
+
+        # CUTLASS method shares the same weights (already created by _make_precision_layer_pair)
+        cutlass_method = CutlassMoEMethod(None)
+
+        paddle.seed(0)
+        x = (paddle.randn([T, H]) * 0.1).cast("bfloat16")
+
+        # Use a deterministic non-uniform gate to ensure consistent routing
+        # across multiple calls of noaux_tc (avoids tie-breaking ambiguity)
+        class _DeterministicGate(paddle.nn.Layer):
+            def __init__(self, num_experts, T):
+                super().__init__()
+                self.num_experts = num_experts
+                paddle.seed(123)
+                self._scores = paddle.randn([T, num_experts], dtype="float32") * 2.0
+
+            def forward(self, x):
+                return self._scores[: x.shape[0]]
+
+        gate = _DeterministicGate(E, T)
+
+        # --- Run Triton path ---
+        triton_out = triton_method.apply(layer, x, gate).cast("float32").numpy()
+
+        # --- Run CUTLASS path ---
+        cutlass_out = cutlass_method.apply(layer, x, gate).cast("float32").numpy()
+
+        # np.allclose style: |a - b| <= atol + rtol * |b|
+        tol = self.ATOL + self.RTOL * np.abs(cutlass_out)
+        violations = np.abs(triton_out - cutlass_out) > tol
+        num_violations = int(violations.sum())
+        total_elements = triton_out.size
+
+        assert num_violations == 0, (
+            f"[T={T},H={H},N={N},E={E},K={K}] "
+            f"{num_violations}/{total_elements} elements exceed tolerance "
+            f"(atol={self.ATOL}, rtol={self.RTOL}). "
+            f"Max abs diff: {float(np.abs(triton_out - cutlass_out).max()):.2e}, "
+            f"max |cutlass|: {float(np.abs(cutlass_out).max()):.2e}"
+        )
+
+    @pytest.mark.parametrize("T,H,N,E,K", _PRECISION_SHAPES)
+    def test_triton_output_shape(self, T, H, N, E, K):
+        """Output shape must always be [T, H] regardless of batch size."""
+        layer, _, triton_method = _make_precision_layer_pair(E, H, N, K)
+        x = (paddle.randn([T, H]) * 0.1).cast("bfloat16")
+        gate = _uniform_gate(layer)
+        out = triton_method.apply(layer, x, gate)
+        assert list(out.shape) == [T, H], f"Expected [{T}, {H}], got {list(out.shape)}"
+
+    @pytest.mark.parametrize("T,H,N,E,K", _PRECISION_SHAPES)
+    def test_triton_output_dtype_is_bfloat16(self, T, H, N, E, K):
+        """Output dtype must match input dtype (bfloat16)."""
+        layer, _, triton_method = _make_precision_layer_pair(E, H, N, K)
+        x = (paddle.randn([T, H]) * 0.1).cast("bfloat16")
+        gate = _uniform_gate(layer)
+        out = triton_method.apply(layer, x, gate)
+        assert out.dtype == paddle.bfloat16, f"Expected bfloat16, got {out.dtype}"
+
+    def test_zero_input_gives_zero_output(self):
+        """All-zero input must produce all-zero output."""
+        T, H, N, E, K = 8, 64, 32, 8, 2
+        layer, _, triton_method = _make_precision_layer_pair(E, H, N, K)
+        x = paddle.zeros([T, H], dtype="bfloat16")
+        gate = _uniform_gate(layer)
+
+        out = triton_method.apply(layer, x, gate).cast("float32").numpy()
+        np.testing.assert_allclose(
+            out,
+            np.zeros_like(out),
+            atol=1e-6,
+            err_msg="triton: zero input should produce zero output",
+        )
