@@ -73,6 +73,8 @@ def allocate_launch_related_buffer(
     num_heads,
     kv_num_heads,
     block_size,
+    head_dim=128,
+    dtype="bfloat16",
 ):
     # Initialize AttentionBackend buffers
     assert num_heads % kv_num_heads == 0
@@ -107,6 +109,28 @@ def allocate_launch_related_buffer(
     res["kv_batch_ids"] = paddle.full([kv_max_tile_size], 0, dtype="int32")
     res["kv_tile_ids_per_batch"] = paddle.full([kv_max_tile_size], 0, dtype="int32")
     res["kv_num_blocks_x_cpu"] = paddle.full([1], 0, dtype="int32").cpu()
+
+    # Decode unified attention split ops buffers
+    if envs.USE_DECODE_UNIFIED_ATTENTION:
+        min_chunk_size = 128
+        max_num_chunk = (max_model_len + min_chunk_size - 1) // min_chunk_size
+        q_tile_size = 16
+        q_tile_num = (decoder_step_token_num * group_size + q_tile_size - 1) // q_tile_size
+        res["decode_block_indices"] = paddle.full(
+            [max_batch_size * kv_num_heads * max_num_chunk * q_tile_num, 4], 0, dtype="int32"
+        )
+        res["decode_num_blocks"] = paddle.full([1], 0, dtype="int32")
+        res["decode_chunk_size"] = paddle.full([1], 0, dtype="int32")
+        res["decode_tmp_workspace"] = paddle.full(
+            [max_batch_size * decoder_step_token_num, max_num_chunk, num_heads * head_dim], 0, dtype=dtype
+        )
+        res["decode_tmp_m"] = paddle.full(
+            [max_batch_size * decoder_step_token_num, max_num_chunk, num_heads], 0, dtype="float32"
+        )
+        res["decode_tmp_d"] = paddle.full(
+            [max_batch_size * decoder_step_token_num, max_num_chunk, num_heads], 0, dtype="float32"
+        )
+
     return res
 
 

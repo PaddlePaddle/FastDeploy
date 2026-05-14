@@ -268,6 +268,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Whether to align RoPE and moe gate precision with training
     "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),
+
+    # Whether to use unified attention for decodeing in mix
+    "USE_DECODE_UNIFIED_ATTENTION": lambda: bool(int(os.getenv("USE_DECODE_UNIFIED_ATTENTION", "0"))),
 }
 
 
