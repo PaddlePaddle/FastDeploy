@@ -108,6 +108,7 @@ def setup_and_run_server(api_url):
     env["FD_BLOCK_WISE_CUDA_GRAPH_SIZES"] = "128"
     env["FD_USE_PHI_FP8_QUANT"] = "0"
     env["CUDA_VISIBLE_DEVICES"] = "0,1"
+    env["FD_BLOCK_WISE_DEBUG"] = "1"
 
     if os.path.exists("log"):
         shutil.rmtree("log")
