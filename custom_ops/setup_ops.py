@@ -174,6 +174,12 @@ def get_gencode_flags(archs):
                 "-gencode",
                 f"arch=compute_{arch_code},code=sm_{arch_code}",
             ]
+        elif cc_val == 103:
+            arch_code = "103a"
+            flags += [
+                "-gencode",
+                f"arch=compute_{arch_code},code=sm_{arch_code}",
+            ]
         else:
             flags += ["-gencode", f"arch=compute_{cc_val},code=sm_{cc_val}"]
     return flags
@@ -478,9 +484,10 @@ elif paddle.is_compiled_with_cuda():
         # of them instead of only the highest one.
         has_sm90 = 90 in sm_versions
         has_sm100 = 100 in sm_versions and nvcc_version >= 12.9
-        has_generic_fp8 = not has_sm90 and not has_sm100  # SM89 or other
+        has_sm103 = 103 in sm_versions and nvcc_version >= 13.0
+        has_generic_fp8 = not has_sm90 and not has_sm100 and not has_sm103  # SM89 or other
 
-        if has_sm90 or has_sm100:
+        if has_sm90 or has_sm100 or has_sm103:
             nvcc_compile_args += [
                 "-O3",
                 "-DNDEBUG",
@@ -503,8 +510,8 @@ elif paddle.is_compiled_with_cuda():
                 "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
             ]
 
-        if has_sm100:
-            print("SM100 (Blackwell): Applying SM100 configurations.")
+        if has_sm100 or has_sm103:
+            print("SM100 / 103 (Blackwell): Applying SM100 / SM103 configurations.")
             # Placeholder for SM100-specific kernel auto-generation scripts
             # These might be needed if Blackwell has new FP8 hardware features
             # not covered by existing generic CUTLASS templates or SM90 scripts.
