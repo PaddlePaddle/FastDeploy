@@ -18,7 +18,7 @@
 
 namespace fd_xpu3 {
 
-constexpr int64_t BUILD_SAMPLING_MAX_INFER_SEED = 9223372036854775806LL;
+constexpr int64_t BUILD_SAMPLING_MAX_INFER_SEED = 2147483646LL;
 
 // Each cluster handles one batch item (bi = cluster_id).
 // Within the cluster, core 0 reads the per-batch scalars and broadcasts via

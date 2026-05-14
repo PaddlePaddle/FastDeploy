@@ -30,7 +30,7 @@ import numpy as np
 import paddle
 
 DEVICE_PLACE = paddle.XPUPlace(0) if paddle.is_compiled_with_xpu() else paddle.CPUPlace()
-MAX_INFER_SEED = 9223372036854775806
+MAX_INFER_SEED = 2147483646
 
 
 # ---------------------------------------------------------------------------

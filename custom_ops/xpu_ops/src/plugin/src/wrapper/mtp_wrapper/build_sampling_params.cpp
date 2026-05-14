@@ -33,7 +33,7 @@ __attribute__((global)) void build_sampling_params_kernel(
 namespace fastdeploy {
 namespace plugin {
 
-constexpr int64_t BUILD_SAMPLING_MAX_INFER_SEED = 9223372036854775806LL;
+constexpr int64_t BUILD_SAMPLING_MAX_INFER_SEED = 2147483646LL;
 
 static int cpu_wrapper(api::Context* ctx,
                        float* top_p_padding,
