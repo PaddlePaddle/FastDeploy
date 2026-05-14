@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from typing import Dict
 
@@ -344,6 +345,9 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         self.prefix = prefix
 
+        prop = paddle.device.cuda.get_device_properties()
+        self.prop = prop
+
     @staticmethod
     def yarn_get_mscale(scale=1, mscale=1):
         """ """
@@ -361,6 +365,8 @@ class DeepseekV3MLAAttention(nn.Layer):
         from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
             fused_read_cache_and_interleave,
         )
+
+        q_total_token_num = hidden_states.shape[0]
 
         attn_out = None
         if self.use_gated_attn:
@@ -439,6 +445,36 @@ class DeepseekV3MLAAttention(nn.Layer):
             attn_out = fmha_out
 
         if need_do_decode:  # max_dec_len_this_time
+
+            if int(os.getenv("USE_FLASH_MLA", "0")) == 0 and self.prop.major == 9:
+                pass
+            else:
+                from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
+                    extract_decoder_token_from_q,
+                    insert_decoder_result_back,
+                )
+
+                decoder_query_nope, cache_seqlens = extract_decoder_token_from_q(
+                    query_nope.reshape([0, -1]),
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                )
+
+                decoder_query_pe, cache_seqlens = extract_decoder_token_from_q(
+                    query_pe.reshape([0, -1]),
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                )
+                assert decoder_query_nope.shape[0] == forward_meta.seq_lens_encoder.shape[0]
+                assert decoder_query_pe.shape[0] == forward_meta.seq_lens_encoder.shape[0]
+
+                forward_meta.cache_seqlens = cache_seqlens
+
+                query_nope = decoder_query_nope.reshape([0, -1, self.qk_nope_head_dim])
+                query_pe = decoder_query_pe.reshape([0, -1, self.qk_rope_head_dim])
+
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
@@ -466,6 +502,17 @@ class DeepseekV3MLAAttention(nn.Layer):
                 .transpose([1, 0, 2])
                 .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
+
+            if int(os.getenv("USE_FLASH_MLA", "0")) == 0 and self.prop.major == 9:
+                pass
+            else:
+                fmqa_out = insert_decoder_result_back(
+                    fmqa_out.reshape([0, 1, self.num_attention_heads_tp, self.v_head_dim]),
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    q_total_token_num,
+                )
 
             if need_do_prefill:
                 merge_prefill_decode_output(
