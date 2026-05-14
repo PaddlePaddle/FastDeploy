@@ -39,6 +39,7 @@ class DenseGemmKernel:
         self.b_dtype = cutlass.BFloat16
         self.acc_dtype = cutlass.Float32
 
+        self.num_ab_stage = 4
         self.num_acc_stage = 1
         self.use_2cta_instrs = True
         self.cluster_shape_mnk = (2, 1, 1) if self.use_2cta_instrs else (1, 1, 1)
@@ -46,8 +47,6 @@ class DenseGemmKernel:
         self.cta_group = tcgen05.CtaGroup.TWO if self.use_2cta_instrs else tcgen05.CtaGroup.ONE
 
         self.mma_tiler = (128, 128, 64)
-
-        self.num_ab_stage = 1
 
     @cute.jit
     def __call__(
@@ -298,10 +297,11 @@ class DenseGemmKernel:
                 # if is_leader_cta:
                 #     cute.printf(b_full_mcast_mask)
 
+                # 把东西拷贝到producer_handle.index这个槽位吧！
                 cute.copy(
                     tma_atom_a,
                     tAgA[(None, k_tile_idx)],
-                    tAsA[(None, 0)],
+                    tAsA[(None, producer_handle.index)],
                     tma_bar_ptr=producer_handle.barrier,
                     mcast_mask=a_full_mcast_mask,
                 )
@@ -309,7 +309,7 @@ class DenseGemmKernel:
                 cute.copy(
                     tma_atom_b,
                     tBgB[(None, k_tile_idx)],
-                    tBsB[(None, 0)],
+                    tBsB[(None, producer_handle.index)],
                     tma_bar_ptr=producer_handle.barrier,
                     mcast_mask=b_full_mcast_mask,
                 )
@@ -320,7 +320,13 @@ class DenseGemmKernel:
                     consumer_handle = ab_consumer.wait_and_advance()
 
                     for i in cutlass.range_constexpr(blk_count):
-                        cute.gemm(tiled_mma, tCtAcc, tCrA[None, None, i, 0], tCrB[None, None, i, 0], tCtAcc)
+                        cute.gemm(
+                            tiled_mma,
+                            tCtAcc,
+                            tCrA[None, None, i, consumer_handle.index],
+                            tCrB[None, None, i, consumer_handle.index],
+                            tCtAcc,
+                        )
                         tiled_mma.set(tcgen05.Field.ACCUMULATE, True)
 
                     consumer_handle.release()
@@ -348,7 +354,7 @@ class DenseGemmKernel:
         tTR_rAcc = cute.make_fragment_like(tTR_tS, self.acc_dtype)
         cute.copy(tmem_tiled_copy, tTR_tAcc, tTR_rAcc)
 
-        if self.use_2cta_instrs:
+        if cutlass.const_expr(self.use_2cta_instrs):
             for i in cutlass.range_constexpr(64):
                 c[tidx % 64 + 64 * bidx, i + tidx // 64 * 64 + bidy * 128] = (cutlass.BFloat16)(tTR_rAcc[i])
         else:
