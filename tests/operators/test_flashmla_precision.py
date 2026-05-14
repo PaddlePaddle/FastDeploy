@@ -39,19 +39,18 @@ class TestFlashMLA(unittest.TestCase):
         # p.step()
 
         bsz = 128
-        kv_len = 1000
+        kv_len = 1024 * 128
         page_size = 64
         decoder_q = paddle.randn([bsz, 1, 128, 576], dtype="bfloat16")
         cache_seqlens = paddle.zeros([bsz], dtype="int32") + kv_len
         block_tables = paddle.arange((kv_len // page_size + 1) * bsz, dtype="int32").reshape([bsz, -1])
-        latent_cache = paddle.randn([10000, 1, page_size, 576], dtype="bfloat16")
+        latent_cache = paddle.randn([bsz * block_tables.shape[1], 1, page_size, 576], dtype="bfloat16")
         # copy from dsv3
         attn_softmax_scale = 0.1352337788608801
 
-        for i in range(10):
-            baseline_out = MLAAttentionBackend.flashmla_baseline(
-                decoder_q, latent_cache, block_tables, cache_seqlens, attn_softmax_scale
-            )
+        baseline_out = MLAAttentionBackend.flashmla_baseline(
+            decoder_q, latent_cache, block_tables, cache_seqlens, attn_softmax_scale
+        )
 
         prop = paddle.device.cuda.get_device_properties()
         if prop.major == 10:
@@ -87,7 +86,7 @@ class TestFlashMLA(unittest.TestCase):
                 softmax_scale=attn_softmax_scale,
                 causal=True,
             )
-
+        # p.stop()
         max_diff = (decoder_res - baseline_out).abs().max().item()
         print(decoder_res - baseline_out)
         self.assertLessEqual(max_diff, 0.1)
