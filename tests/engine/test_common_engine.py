@@ -579,7 +579,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng._process_splitwise_task = lambda: None
         eng._schedule_request_to_worker = lambda: None
         eng._schedule_request_to_worker_v1 = lambda: None
-        eng._prepare_request_v1 = lambda: None
 
         started_cache = {}
 
@@ -625,7 +624,6 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng._process_splitwise_task = lambda: None
         eng._schedule_request_to_worker = lambda: None
         eng._schedule_request_to_worker_v1 = lambda: None
-        eng._prepare_request_v1 = lambda: None
 
         started_cache = {}
 
@@ -1388,18 +1386,21 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task = Request(request_id="v1_r0", prompt_token_ids=[1], prompt_token_ids_len=1)
         task.metrics.scheduler_recv_req_time = time.time()
 
-        eng.scheduler = Mock(put_results=Mock())
+        eng.scheduler = Mock(get_requests=Mock(return_value=[task]), put_results=Mock())
         eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
 
-        eng.resource_manager = self._make_v1_decode_rm(eng, ([task], []), with_add_request=True)
+        eng.resource_manager = self._make_v1_decode_rm(eng, ([], []), with_add_request=True)
 
         try:
-            with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+            with (
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+                patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+            ):
                 eng._schedule_request_to_worker_v1()
         finally:
             eng.running = False
 
-        eng.engine_worker_queue.put_tasks.assert_called_once()
+        eng.resource_manager.add_request.assert_called_once_with(task)
         self._detach_finalizer(eng)
 
     def test_schedule_request_to_worker_v1_prefill_decode_alloc_error_safe(self):
@@ -1419,6 +1420,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.scheduler = Mock(get_requests=Mock(return_value=[task]), put_results=Mock())
         eng.engine_worker_queue = Mock(
             exist_tasks=Mock(return_value=False),
+            get_finished_add_cache_task_req=Mock(return_value=[]),
         )
 
         eng.resource_manager = self._make_v1_prefill_continuous_rm(eng, waiting_async_result=False)
@@ -1430,13 +1432,11 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         try:
             with (
-                patch(
-                    "fastdeploy.engine.common_engine_prepare_mixin.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES",
-                    False,
-                ),
-                patch("fastdeploy.engine.common_engine_prepare_mixin.time.sleep", lambda *_: None),
+                patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", False),
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+                patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
             ):
-                eng._fetch_request_prefill()
+                eng._schedule_request_to_worker_v1()
         finally:
             eng.running = False
 
@@ -1457,14 +1457,17 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.task_type = RequestType.PREEMPTED
         task.metrics.scheduler_recv_req_time = time.time()
 
-        eng.scheduler = Mock(put_results=Mock())
+        eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
         eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
         eng._send_error_response = Mock()
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], [("rid_x", None), ("rid_y", "bad")]))
 
         try:
-            with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+            with (
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+                patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+            ):
                 eng._schedule_request_to_worker_v1()
         finally:
             eng.running = False
@@ -1488,13 +1491,16 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.trace_carrier = {}
         task.metrics.scheduler_recv_req_time = time.time()
 
-        eng.scheduler = Mock(put_results=Mock())
+        eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
         eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], []))
 
         try:
-            with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+            with (
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+                patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+            ):
                 eng._schedule_request_to_worker_v1()
         finally:
             eng.running = False
@@ -1516,20 +1522,23 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         task.trace_carrier = {}
         task.metrics.scheduler_recv_req_time = time.time()
 
-        eng.scheduler = Mock(put_results=Mock())
+        eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
         eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
         eng._send_error_response = Mock()
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([task], [("rid_none", None)]))
 
-        with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+        with (
+            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
             eng._schedule_request_to_worker_v1()
 
         eng.engine_worker_queue.put_tasks.assert_called_once()
         eng._send_error_response.assert_not_called()
         self._detach_finalizer(eng)
 
-    def test_schedule_request_to_worker_v1_no_tasks_sleeps(self):
+    def test_schedule_request_to_worker_v1_threadpool_shutdown_breaks(self):
         eng = self._make_mixed_engine()
         self._setup_v1_engine(eng)
 
@@ -1537,7 +1546,17 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.resource_manager = self._make_v1_decode_rm(eng, ([], []))
 
-        with patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None):
+        class DummyExecutor:
+            def __init__(self, max_workers=None):
+                pass
+
+            def submit(self, fn):
+                raise RuntimeError("cannot schedule new futures after shutdown")
+
+        with (
+            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", DummyExecutor),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+        ):
             eng._schedule_request_to_worker_v1()
 
         self._detach_finalizer(eng)
@@ -1560,8 +1579,17 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.resource_manager = self._make_v1_prefill_continuous_rm(eng, waiting_async_result=False)
 
+        calls = {"n": 0}
+
+        def get_finished_add_cache_task_req():
+            if calls["n"] == 0:
+                calls["n"] += 1
+                return ["pc_ok"]
+            return []
+
         eng.engine_worker_queue = Mock(
             exist_tasks=Mock(return_value=False),
+            get_finished_add_cache_task_req=Mock(side_effect=get_finished_add_cache_task_req),
         )
 
         eng.split_connector = Mock(
@@ -1571,12 +1599,11 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         )
 
         with (
-            patch(
-                "fastdeploy.engine.common_engine_prepare_mixin.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", True
-            ),
-            patch("fastdeploy.engine.common_engine_prepare_mixin.time.sleep", lambda *_: None),
+            patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", True),
+            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
-            eng._fetch_request_prefill()
+            eng._schedule_request_to_worker_v1()
 
         eng.split_connector.send_splitwise_tasks.assert_called()
         eng.split_connector.send_cache_info_to_messager.assert_called_once()
@@ -1604,8 +1631,17 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.resource_manager = self._make_v1_prefill_continuous_rm(eng, waiting_async_result=None)
 
+        calls = {"n": 0}
+
+        def get_finished_add_cache_task_req():
+            if calls["n"] == 0:
+                calls["n"] += 1
+                return ["pc_fail"]
+            return []
+
         eng.engine_worker_queue = Mock(
             exist_tasks=Mock(return_value=False),
+            get_finished_add_cache_task_req=Mock(side_effect=get_finished_add_cache_task_req),
         )
 
         eng.split_connector = Mock(
@@ -1615,12 +1651,11 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         )
 
         with (
-            patch(
-                "fastdeploy.engine.common_engine_prepare_mixin.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", True
-            ),
-            patch("fastdeploy.engine.common_engine_prepare_mixin.time.sleep", lambda *_: None),
+            patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", True),
+            patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+            patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
         ):
-            eng._fetch_request_prefill()
+            eng._schedule_request_to_worker_v1()
 
         eng.scheduler.put_results.assert_called_once()
         eng.resource_manager.pre_recycle_resource.assert_called_once_with("pc_fail")
