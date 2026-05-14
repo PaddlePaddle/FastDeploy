@@ -147,7 +147,10 @@ class VideoReaderWrapper:
         if isinstance(key, (int, np.integer)):
             frame = self._decoder.get_frames_at(indices=[int(key)]).data[0]
             return _NumpyFrame(frame.numpy())
-        indices = list(key) if not isinstance(key, list) else key
+        if isinstance(key, slice):
+            indices = list(range(*key.indices(len(self))))
+        else:
+            indices = list(key) if not isinstance(key, list) else key
         frames = self._decoder.get_frames_at(indices=indices).data
         return _NumpyFrame(frames.numpy())
 
