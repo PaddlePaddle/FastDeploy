@@ -394,7 +394,7 @@ jobs:
               wget -O ${filename} ${diff_cov_result_json_url} || echo "Download cov json file failed, but continuing..."
             fi
             if [ -f "${filename}" ];then
-              echo "Failed test cases:"
+              echo "GPU Patch Coverage Details:"
               if command -v jq >/dev/null 2>&1; then
                   jq . "${filename}"
               else
