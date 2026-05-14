@@ -291,20 +291,6 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
-        # init engine forward signal
-        # If engine is being forward, engine_forward_signal_data should be 1.
-        # If engine is out of forward, engine_forward_signal_data should be 0.
-        # In pd disaggregation + EP parallel, only when engine is out of forward, scheduler send next batch to worker.
-        # When engine is out of forward, engine_forward_signal_data must be 0, otherwise scheduler will not schedule next batch.
-        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
-        self.engine_forward_signal = IPCSignal(
-            name="engine_forward_signal",
-            array=engine_forward_signal_data,
-            dtype=np.int32,
-            suffix=self.parallel_config.local_engine_worker_queue_port,
-            create=False,
-        )
-
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -473,6 +459,9 @@ class PaddleDisWorkerProc:
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
+            # run eplb
+            self._run_eplb(tp_rank)
+
             if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
@@ -551,22 +540,11 @@ class PaddleDisWorkerProc:
 
             if self._get_exist_task_flag():
                 logger.debug(f"Rank: {self.local_rank} Detected new requests.")
-                self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
                     self._update_exist_task_flag(False)
                 self._tp_barrier_wait() if tp_size > 1 else None
-
-                # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
-                # Only EP + DP prefill should barrier for data arrival.
-                # In mixed mode and decoder in D, we should not barrier to influence decoding.
-                if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
-                    paddle.distributed.barrier(self.parallel_config.ep_group)
-
-                assert (
-                    len(tasks) > 0
-                ), f"task_queue.get_tasks() should contain at least one tuple, [([req1, ...] ,real_bsz)], but got len(tasks)={len(tasks)}"
 
                 batch_request, control_reqs, max_occupied_batch_index = BatchRequest.from_tasks(tasks)
 
@@ -594,12 +572,6 @@ class PaddleDisWorkerProc:
 
                     # Process prefill inputs
                     self.worker.preprocess_new_task(batch_request, max_occupied_batch_index)
-            else:
-                if self.scheduler_config.splitwise_role == "prefill":
-                    if tp_size > 1:
-                        # Synchronize the signal for other workers
-                        self._tp_barrier_wait()
-                    continue
 
             # Let the ep group run control method synchronically
             if envs.FD_ENABLE_V1_UPDATE_WEIGHTS and self.parallel_config.use_ep:
@@ -614,7 +586,6 @@ class PaddleDisWorkerProc:
                 and not self.worker.model_runner.not_need_stop()
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
-                self.engine_forward_signal.value[0] = 0
                 time.sleep(0.001)
                 continue
 
@@ -637,9 +608,6 @@ class PaddleDisWorkerProc:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
-            # run eplb
-            self._run_eplb(tp_rank)
-            self.engine_forward_signal.value[0] = 0
 
             if (
                 not self.parallel_config.use_ep

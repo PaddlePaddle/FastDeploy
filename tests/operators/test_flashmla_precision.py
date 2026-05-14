@@ -30,47 +30,66 @@ class TestFlashMLA(unittest.TestCase):
         pass
 
     def test_flashmla(self):
+        # import paddle.profiler as profiler
+        # p = profiler.Profiler(
+        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
+        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
+        # )
+        # p.start()
+        # p.step()
+
         bsz = 128
         kv_len = 1000
+        page_size = 64
         decoder_q = paddle.randn([bsz, 1, 128, 576], dtype="bfloat16")
         cache_seqlens = paddle.zeros([bsz], dtype="int32") + kv_len
-        block_tables = paddle.arange((kv_len // 64 + 1) * bsz, dtype="int32").reshape([bsz, -1])
-        latent_cache = paddle.randn([10000, 1, 64, 576], dtype="bfloat16")
+        block_tables = paddle.arange((kv_len // page_size + 1) * bsz, dtype="int32").reshape([bsz, -1])
+        latent_cache = paddle.randn([10000, 1, page_size, 576], dtype="bfloat16")
         # copy from dsv3
         attn_softmax_scale = 0.1352337788608801
 
-        baseline_out = MLAAttentionBackend.flashmla_baseline(
-            decoder_q, latent_cache, block_tables, cache_seqlens, attn_softmax_scale
-        )
+        for i in range(10):
+            baseline_out = MLAAttentionBackend.flashmla_baseline(
+                decoder_q, latent_cache, block_tables, cache_seqlens, attn_softmax_scale
+            )
 
-        paddle.enable_compat(scope={"flash_mla"})  # Enable paddle.enable_compat before importing flash_mla
-        try:
-            import flash_mla
-        except ImportError:
-            print(100 * "Please install flash_mla first")
-            return
+        prop = paddle.device.cuda.get_device_properties()
+        if prop.major == 10:
 
-        tile_scheduler_metadata, num_splits = flash_mla.get_mla_metadata()
+            for i in range(10):
+                decoder_res = MLAAttentionBackend.mla_blackwell(
+                    decoder_q, latent_cache, block_tables, cache_seqlens, attn_softmax_scale
+                )
+        elif prop.major == 9:
+            paddle.enable_compat(scope={"flash_mla"})  # Enable paddle.enable_compat before importing flash_mla
+            try:
+                import flash_mla
+            except ImportError:
+                print(100 * "Please install flash_mla first")
+                return
 
-        new_cache_shape = latent_cache.shape
-        assert new_cache_shape[1] == 1
-        new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
+            tile_scheduler_metadata, num_splits = flash_mla.get_mla_metadata()
 
-        decoder_res, _ = flash_mla.flash_mla_with_kvcache(
-            decoder_q,
-            # 外面的开源仓库的kv cache存储格式和FD的不同
-            # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
-            latent_cache.view(new_cache_shape),
-            block_tables,
-            cache_seqlens,
-            512,  # t.dv,
-            tile_scheduler_metadata,
-            num_splits,
-            softmax_scale=attn_softmax_scale,
-            causal=True,
-        )
+            new_cache_shape = latent_cache.shape
+            assert new_cache_shape[1] == 1
+            new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
+
+            decoder_res, _ = flash_mla.flash_mla_with_kvcache(
+                decoder_q,
+                # 外面的开源仓库的kv cache存储格式和FD的不同
+                # 幸好这里缓存的头是1，直接view即可，否则上上下下要改很多！
+                latent_cache.view(new_cache_shape),
+                block_tables,
+                cache_seqlens,
+                512,  # t.dv,
+                tile_scheduler_metadata,
+                num_splits,
+                softmax_scale=attn_softmax_scale,
+                causal=True,
+            )
 
         max_diff = (decoder_res - baseline_out).abs().max().item()
+        print(decoder_res - baseline_out)
         self.assertLessEqual(max_diff, 0.1)
 
 

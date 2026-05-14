@@ -16,7 +16,6 @@ import os
 import queue
 import shutil
 import signal
-import socket
 import subprocess
 import sys
 import time
@@ -30,6 +29,7 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from ci_use.EB_Lite_with_adapter.zmq_client import LLMControlClient, LLMReqClient
+from e2e.utils.serving_utils import clean_ports, is_port_open
 
 env = os.environ.copy()
 
@@ -79,88 +79,6 @@ def zmq_control_client():
     return client
 
 
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
-
-
-def kill_process_on_port(port: int):
-    """
-    Kill processes that are listening on the given port.
-    Uses multiple methods to ensure thorough cleanup.
-    """
-    current_pid = os.getpid()
-    parent_pid = os.getppid()
-
-    # Method 1: Use lsof to find processes
-    try:
-        output = subprocess.check_output(f"lsof -i:{port} -t", shell=True).decode().strip()
-        for pid in output.splitlines():
-            pid = int(pid)
-            if pid in (current_pid, parent_pid):
-                print(f"Skip killing current process (pid={pid}) on port {port}")
-                continue
-            try:
-                # First try SIGTERM for graceful shutdown
-                os.kill(pid, signal.SIGTERM)
-                time.sleep(1)
-                # Then SIGKILL if still running
-                os.kill(pid, signal.SIGKILL)
-                print(f"Killed process on port {port}, pid={pid}")
-            except ProcessLookupError:
-                pass  # Process already terminated
-    except subprocess.CalledProcessError:
-        pass
-
-    # Method 2: Use netstat and fuser as backup
-    try:
-        # Find processes using netstat and awk
-        cmd = f"netstat -tulpn 2>/dev/null | grep :{port} | awk '{{print $7}}' | cut -d'/' -f1"
-        output = subprocess.check_output(cmd, shell=True).decode().strip()
-        for pid in output.splitlines():
-            if pid and pid.isdigit():
-                pid = int(pid)
-                if pid in (current_pid, parent_pid):
-                    continue
-                try:
-                    os.kill(pid, signal.SIGKILL)
-                    print(f"Killed process (netstat) on port {port}, pid={pid}")
-                except ProcessLookupError:
-                    pass
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        pass
-
-    # Method 3: Use fuser if available
-    try:
-        subprocess.run(f"fuser -k {port}/tcp", shell=True, timeout=5)
-    except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-        pass
-
-
-def clean_ports():
-    """
-    Kill all processes occupying the ports listed in PORTS_TO_CLEAN.
-    """
-    print(f"Cleaning ports: {PORTS_TO_CLEAN}")
-    for port in PORTS_TO_CLEAN:
-        kill_process_on_port(port)
-
-    # Double check and retry if ports are still in use
-    time.sleep(2)
-    for port in PORTS_TO_CLEAN:
-        if is_port_open("127.0.0.1", port, timeout=0.1):
-            print(f"Port {port} still in use, retrying cleanup...")
-            kill_process_on_port(port)
-            time.sleep(1)
-
-
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
     """
@@ -170,8 +88,15 @@ def setup_and_run_server():
     - Waits for server port to open (up to 30 seconds)
     - Tears down server after all tests finish
     """
+    # 清理/dev/shm中的临时文件
+    try:
+        subprocess.run("rm -rf /dev/shm/*", shell=True)
+        print("Successfully cleaned up /dev/shm.")
+    except Exception as e:
+        print(f"Failed to cleanup /dev/shm: {e}")
+
     print("Pre-test port cleanup...")
-    clean_ports()
+    clean_ports(PORTS_TO_CLEAN)
 
     base_path = os.getenv("MODEL_PATH")
     if base_path:
@@ -236,7 +161,7 @@ def setup_and_run_server():
     print("\n===== Post-test server cleanup... =====")
     try:
         os.killpg(process.pid, signal.SIGTERM)
-        clean_ports()
+        clean_ports(PORTS_TO_CLEAN)
         print(f"API server (pid={process.pid}) terminated")
     except Exception as e:
         print(f"Failed to terminate API server: {e}")
