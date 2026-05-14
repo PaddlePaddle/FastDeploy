@@ -18,7 +18,6 @@ import unittest
 
 import numpy as np
 import paddle
-from paddle.incubate.nn.functional import fused_rms_norm
 
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
@@ -37,88 +36,10 @@ np.random.seed(seed)
 paddle.seed(seed)
 
 
-def fp8_e4m3_to_float(uint8_vals):
-    """Convert fp8 e4m3 uint8 bytes to float32 numpy array.
-
-    FP8 E4M3 layout: sign(1) | exponent(4) | mantissa(3), bias=7.
-    Max representable = 448.0. NaN only when exp=15 and mantissa=7.
-    """
-    vals = np.asarray(uint8_vals, dtype=np.uint8)
-    sign = (vals >> 7).astype(np.float32)
-    exp = ((vals >> 3) & 0x0F).astype(np.float32)
-    mant = (vals & 0x07).astype(np.float32)
-
-    # Normal: exp in [1, 15], value = (-1)^s * 2^(exp-7) * (1 + mant/8)
-    # Subnormal: exp == 0, value = (-1)^s * 2^(-6) * (mant/8)
-    result = np.where(
-        exp > 0,
-        np.power(2.0, exp - 7.0) * (1.0 + mant / 8.0),
-        np.power(2.0, -6.0) * (mant / 8.0),
-    )
-    result = np.where(sign > 0, -result, result)
-
-    # NaN: exp==15 and mant==7 -> set to 0 for safety
-    is_nan = (exp == 15) & (mant == 7)
-    result = np.where(is_nan, 0.0, result)
-
-    # Zero: exp==0 and mant==0
-    is_zero = (exp == 0) & (mant == 0)
-    result = np.where(is_zero, 0.0, result)
-
-    return result
-
-
-def block_cache_to_naive_cache_c8(
-    cache_k, cache_v, bsz, block_tables, cache_seq_len, cache_k_dequant_scale, cache_v_dequant_scale
-):
-    """Read K/V from paged uint8 (fp8) cache, dequantize, return as [batch, num_head, seq_len, dim_head].
-
-    K layout: [block, head, pos, dim]  (same as Python tensor shape)
-    V layout: [block, head, dim, pos]  (transposed! C++ write uses kv_d_stride=BLOCK_SIZE)
-    """
-    _, num_head, blocksize, dim_head = cache_k.shape
-    k_dequant_scale = cache_k_dequant_scale.astype("float32").numpy()  # [num_head]
-    v_dequant_scale = cache_v_dequant_scale.astype("float32").numpy()  # [num_head]
-    block_tables_np = block_tables.numpy()
-
-    out_cache_k = np.zeros([bsz, num_head, cache_seq_len, dim_head], dtype=np.float32)
-    out_cache_v = np.zeros([bsz, num_head, cache_seq_len, dim_head], dtype=np.float32)
-    cache_k_np = cache_k.numpy()
-    # V is stored transposed: reshape from [block, head, block_size, head_dim]
-    # to [block, head, head_dim, block_size] to match the actual C++ memory layout
-    cache_v_transposed = cache_v.numpy().reshape(cache_v.shape[0], num_head, dim_head, blocksize)
-
-    for i in range(bsz):
-        for j in range(cache_seq_len):
-            block_id = block_tables_np[i, j // blocksize]
-            # K layout: [block, head, pos, dim]
-            k_fp8_bytes = cache_k_np[block_id, :, j % blocksize, :]
-            out_cache_k[i, :, j, :] = fp8_e4m3_to_float(k_fp8_bytes) * k_dequant_scale[:, None]
-            # V layout: [block, head, dim, pos] (transposed)
-            v_fp8_bytes = cache_v_transposed[block_id, :, :, j % blocksize]
-            out_cache_v[i, :, j, :] = fp8_e4m3_to_float(v_fp8_bytes) * v_dequant_scale[:, None]
-
-    return paddle.to_tensor(out_cache_k, dtype="bfloat16"), paddle.to_tensor(out_cache_v, dtype="bfloat16")
-
-
 class RopeEmbedding:
     def __init__(self, use_neox_rotary_style=False):
         self.use_neox_rotary_style = use_neox_rotary_style
         self.base = 10000
-
-    def get_neox_style_position_embedding(self, position_ids, head_dim):
-        bsz, max_seq_len = position_ids.shape[:2]
-        rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, head_dim), dtype="float32")
-        inv_freq = self.base ** (-paddle.arange(0, head_dim, 2, dtype="float32") / head_dim)
-
-        # shape: [B, S, D/2]
-        freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
-        # shape: [B, S, 1, D]
-        emb = paddle.concat([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, 1, head_dim))
-
-        rot_emb[0] = paddle.cos(emb)
-        rot_emb[1] = paddle.sin(emb)
-        return rot_emb
 
     def get_rotary_position_embedding(self, position_ids, head_dim):
         bsz, max_seq_len = position_ids.shape[:2]
@@ -136,138 +57,6 @@ class RopeEmbedding:
         rot_emb[1] = paddle.sin(emb)
         return rot_emb
 
-    def _apply_rope(self, rotary_emb, q, k, cache_len):
-        # sin [sequence_length, embed_size_per_head//2]
-        # cos [sequence_length, embed_size_per_head//2]
-        # sin, cos = paddle.chunk(rp, 2, axis=-1)
-        seq, head_dim = q.shape[2], q.shape[3]
-        cos, sin = paddle.chunk(rotary_emb, 2, axis=0)
-        cos = cos[:, :, cache_len : cache_len + seq, ...]
-        sin = sin[:, :, cache_len : cache_len + seq, ...]
-        cos = paddle.squeeze(cos, axis=0).transpose([0, 2, 1, 3])[:, :, :seq, :]
-        sin = paddle.squeeze(sin, axis=0).transpose([0, 2, 1, 3])[:, :, :seq, :]
-        # sin [θ0,θ1,θ2......θd/2-1] -> sin_pos [θ0,θ0,θ1,θ1,θ2,θ2......θd/2-1,θd/2-1]
-
-        if self.use_neox_rotary_style:
-            sin_pos = sin
-            cos_pos = cos
-            # NeoX Stype：前后半部分分块旋转
-            rotate_half_q = paddle.reshape(
-                paddle.concat(
-                    [
-                        -q[:, :, :, q.shape[-1] // 2 :],
-                        q[:, :, :, : q.shape[-1] // 2],
-                    ],
-                    axis=-1,
-                ),
-                paddle.shape(q),
-            )
-            rotate_half_k = paddle.reshape(
-                paddle.concat(
-                    [
-                        -k[:, :, :, k.shape[-1] // 2 :],
-                        k[:, :, :, : k.shape[-1] // 2],
-                    ],
-                    axis=-1,
-                ),
-                paddle.shape(k),
-            )
-        else:
-            sin_pos = paddle.reshape(paddle.stack([sin, sin], axis=-1), [1, 1, seq, head_dim])
-            # cos [θ0,θ1,θ2......θd/2-1] -> cos_pos [θ0,θ0,θ1,θ1,θ2,θ2......θd/2-1,θd/2-1]
-            cos_pos = paddle.reshape(paddle.stack([cos, cos], axis=-1), [1, 1, seq, head_dim])
-            # GPT Stype：奇偶位置分块旋转
-            rotate_half_q = paddle.reshape(
-                paddle.stack([-q[:, :, :, 1::2], q[:, :, :, 0::2]], axis=-1),
-                paddle.shape(q),
-            )
-            rotate_half_k = paddle.reshape(
-                paddle.stack([-k[:, :, :, 1::2], k[:, :, :, 0::2]], axis=-1),
-                paddle.shape(k),
-            )
-
-        query = paddle.add(paddle.multiply(q, cos_pos), paddle.multiply(rotate_half_q, sin_pos))
-
-        key = paddle.add(paddle.multiply(k, cos_pos), paddle.multiply(rotate_half_k, sin_pos))
-
-        return paddle.cast(query, q.dtype), paddle.cast(key, k.dtype)
-
-
-def create_attn_mask(mask_type, batch_size, seq_lens, pre_cache_length=0, sliding_window=0):
-    max_seq_len = max(seq_lens)
-    mask = paddle.zeros(
-        # [batch_size, 1, max_seq_len, max_seq_len + pre_cache_length],
-        [batch_size, 1, max_seq_len, max_seq_len],
-        dtype=mask_type,
-    )
-    mask[:, :, :, :pre_cache_length] = 1
-    for i in range(batch_size):
-        seq_len = seq_lens[i]
-        ones_tensor = paddle.ones(shape=(seq_len, seq_len), dtype=mask_type)
-        if sliding_window <= 0:
-            mask[i, 0, :seq_len, :seq_len] = (paddle.tril(ones_tensor) - 1) * 1e4
-        else:
-            tmp_triu = paddle.triu(ones_tensor, -(sliding_window - 1))
-            mask[i, 0, :seq_len, :seq_len] = (paddle.tril(ones_tensor) * tmp_triu - 1) * 1e4
-    return mask
-
-
-def naive_attention_impl(
-    query,
-    key,
-    value,
-    pre_key=None,
-    pre_value=None,
-    mask=None,
-    scale=1.0,
-    cache_k_dequant_scales=None,
-    cache_v_dequant_scales=None,
-    use_cachekv_int8="None",
-    q_norm_weight=None,
-    k_norm_weight=None,
-    sinks=None,
-):
-    batch = query.shape[0]
-    heads = query.shape[1]
-    seq_len = query.shape[2]
-    head_dim = query.shape[3]
-    kv_head = key.shape[1]
-
-    key = key.reshape([batch, kv_head, 1, seq_len, head_dim])
-    key = paddle.tile(key, [1, 1, heads // kv_head, 1, 1])
-    key = key.reshape([batch, heads, seq_len, head_dim])
-
-    if pre_key is not None:
-        pre_key = pre_key.reshape([batch, kv_head, 1, -1, head_dim])
-        pre_key = paddle.tile(pre_key, [1, 1, heads // kv_head, 1, 1])
-        pre_key = pre_key.reshape([batch, heads, -1, head_dim])
-        key = paddle.concat([pre_key, key], axis=2)
-
-    value = value.reshape([batch, kv_head, 1, seq_len, head_dim])
-    value = paddle.tile(value, [1, 1, heads // kv_head, 1, 1])
-    value = value.reshape([batch, heads, seq_len, head_dim])
-
-    if pre_value is not None:
-        pre_value = pre_value.reshape([batch, kv_head, 1, -1, head_dim])
-        pre_value = paddle.tile(pre_value, [1, 1, heads // kv_head, 1, 1])
-        pre_value = pre_value.reshape([batch, heads, -1, head_dim])
-        value = paddle.concat([pre_value, value], axis=2)
-
-    qk_res = paddle.matmul(query, key, transpose_y=True)
-    attention = qk_res * scale
-    if mask is not None:
-        attention = attention + mask
-
-    if sinks is not None:
-        kv_len = attention.shape[-1]
-        sinks_tiled = sinks.unsqueeze([0, 2, 3]).expand([batch, heads, seq_len, 1])
-        attention = paddle.concat([attention, sinks_tiled], axis=-1)
-        softmax_result = paddle.nn.functional.softmax(attention, -1)[:, :, :, :kv_len]
-    else:
-        softmax_result = paddle.nn.functional.softmax(attention, -1)
-    result = paddle.matmul(paddle.cast(softmax_result, dtype=value.dtype), value)
-    return result
-
 
 def get_padding_offset(bsz, seq_lens_this_time):
     token_num = paddle.sum(seq_lens_this_time)
@@ -283,18 +72,6 @@ def get_padding_offset(bsz, seq_lens_this_time):
         cu_seqlens_q[i + 1] = index
         cu_seqlens_k[i + 1] = index
     return batch_id_per_token, cu_seqlens_q, cu_seqlens_k
-
-
-def remove_padding(seq_lens, cu_seq_lens, inputs, token_num):
-    bsz, num_head, seq_len, head_dim = inputs.shape
-    output = paddle.zeros(shape=[token_num, num_head * head_dim], dtype=inputs.dtype)
-    inputs = inputs.transpose([0, 2, 1, 3]).reshape([bsz, seq_len, -1])
-    for i in range(bsz):
-        seq_len_now = seq_lens[i]
-        start_idx = cu_seq_lens[i]
-        end_idx = cu_seq_lens[i + 1]
-        output[start_idx:end_idx, :] = inputs[i, :seq_len_now, :]
-    return output
 
 
 def get_qkv_and_qkv_concat_tensor(bs, q_num_head, kv_num_head, seq_len, head_dim, place, dtype):
@@ -344,10 +121,7 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
         self.cache_quant_type = "cache_fp8"
         self.use_qk_norm = False
         self.use_mask_offset = False
-        self.mask_matrix = False
-        self.use_sinks = False
         self.causal = True
-        self.use_dynamic_quant = False
         self.quant_min_bound = -448.0
         self.quant_max_bound = 448.0
         self.init_tensor()
@@ -422,7 +196,7 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             self.head_dim,
         )
 
-        if self.use_dynamic_quant:
+        if self.cache_quant_type == "block_wise_fp8":
             self.cache_scale_shape = (
                 self.max_block_num,
                 self.kv_num_head,
@@ -430,12 +204,10 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             )
             self.cache_k = paddle.zeros(shape=self.cache_shape, dtype="uint8")
             self.cache_v = paddle.zeros(shape=self.cache_shape, dtype="uint8")
-            self.cache_k_T = paddle.zeros(shape=self.cache_shape, dtype=self.dtype)
-            self.cache_v_T = paddle.zeros(shape=self.cache_shape, dtype=self.dtype)
             self.cache_k_scale = paddle.zeros(shape=self.cache_scale_shape, dtype=self.dtype)
             self.cache_v_scale = paddle.zeros(shape=self.cache_scale_shape, dtype=self.dtype)
             self.cache_k_out_scale = None
-            self.cache_k_out_scale = None
+            self.cache_v_out_scale = None
         else:
             self.cache_k_scale = (
                 self.quant_max_bound / self.k.transpose([1, 0, 2, 3]).reshape([self.kv_num_head, -1]).abs().max(axis=1)
@@ -460,20 +232,6 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             self.cu_seqlens_k,
         ) = get_padding_offset(self.batch_size, self.seq_lens_this_time)
 
-        # mask
-        if self.mask_matrix:
-            self.attn_mask = create_attn_mask(
-                self.dtype,
-                self.batch_size,
-                [
-                    self.max_tokens_per_batch,
-                ]
-                * self.batch_size,
-                sliding_window=self.sliding_window,
-            )
-        else:
-            self.attn_mask = None
-
         # mask offset
         self.mask_offset = None
         if self.use_mask_offset:
@@ -481,13 +239,6 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             for i in range(self.batch_size):
                 self.mask_offset[i * 2] = 0
                 self.mask_offset[i * 2 + 1] = self.seq_lens_dec[i] + 1
-
-        if self.use_sinks:
-            self.sinks = paddle.to_tensor(
-                np.random.random([self.q_num_head]), place=self.place, dtype=self.dtype, stop_gradient=False
-            )
-        else:
-            self.sinks = None
 
         # buffer
         self.buffer = {}
@@ -519,49 +270,6 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
         self.buffer["tmp_d"] = paddle.full(
             [self.batch_size * self.max_tokens_per_batch, max_num_chunk, self.q_num_head], 0, dtype="float32"
         )
-
-    def apply_qk_norm(self, head_dim, dtype, q, k):
-        bs, q_num_head, seq_len, head_dim = q.shape
-        _, kv_num_head, _, _ = k.shape
-
-        q = q.reshape([-1, head_dim])
-        k = k.reshape([-1, head_dim])
-        q = fused_rms_norm(q.astype("float32"), self.q_norm_weight, None, self.rms_norm_eps)[0].astype(dtype)
-        k = fused_rms_norm(k.astype("float32"), self.k_norm_weight, None, self.rms_norm_eps)[0].astype(dtype)
-        q = q.reshape([-1, q_num_head, seq_len, head_dim])
-        k = k.reshape([-1, kv_num_head, seq_len, head_dim])
-        return q, k
-
-    def naive_attention(self, pre_k, pre_v):
-        q, k = self.rope._apply_rope(self.rotary_embs, self.q, self.k, self.cache_len)
-        if self.use_qk_norm:
-            q, k = self.apply_qk_norm(self.head_dim, self.dtype, q, k)
-
-        # For cache_fp8, gqa_rope_write_cache returns empty K/V.
-        # Read K/V from the uint8 cache and dequantize instead.
-        if self.cache_quant_type == "cache_fp8" and pre_k.shape[2] == 0:
-            pre_k, pre_v = block_cache_to_naive_cache_c8(
-                self.cache_k,
-                self.cache_v,
-                self.batch_size,
-                self.block_tables,
-                self.cache_len,
-                self.cache_k_out_scale,
-                self.cache_v_out_scale,
-            )
-
-        out_ref = naive_attention_impl(
-            q,
-            k,
-            self.v,
-            pre_k,
-            pre_v,
-            self.attn_mask,
-            self.softmax_scale,
-            sinks=self.sinks,
-        )
-        out_ref = remove_padding(self.seq_lens_this_time, self.cu_seqlens_q, out_ref, self.token_num)
-        return q, k, self.v, out_ref
 
     def append_attention_with_args(
         self,
@@ -646,11 +354,11 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             None,  # cache_v_zp
             None,  # linear_shift
             None,  # linear_smooth
-            self.mask_offset,
+            None,  # mask_offset
             None,  # kv_signal_data
             self.q_norm_weight,
             self.k_norm_weight,
-            self.sinks,
+            None,  # sinks
             self.rms_norm_eps,
             "bf16",
             self.cache_quant_type,
@@ -684,7 +392,7 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             self.cu_seqlens_q,
         )
 
-    def decode_attention(self):
+    def decode_unified_attention(self):
         paddle.disable_static()
 
         config_for_attention(
@@ -757,8 +465,8 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             self.cache_v_out_scale,  # cache_v_dequant_scales
             None,  # cache_k_zp
             None,  # cache_v_zp
-            self.mask_offset,  # mask_offset
-            self.sinks,  # sinks
+            None,  # mask_offset
+            None,  # sinks  # sinks
             paddle.empty([self.qkv.shape[0], self.q_num_head * self.head_dim], dtype=self.qkv.dtype),  # fmha_out
             self.cache_quant_type,
             self.max_model_len,
@@ -874,7 +582,7 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
         return k, v
 
     def test_all(self):
-        """Compare append_attention vs decode_attention output for consistency."""
+        """Compare append_attention vs decode_unified_attention output for consistency."""
         # Step 1: Prefill - just write K/V to cache via gqa_rope_write_cache
         self.prefill()
 
@@ -896,8 +604,8 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             dec_cu_seqlens_q,
         )
 
-        # Step 3: Decode with decode_attention (uses self.cache_k/v directly)
-        _, out_decode = self.decode_attention()
+        # Step 3: Decode with decode_unified_attention (uses self.cache_k/v directly)
+        _, out_decode = self.decode_unified_attention()
 
         # Step 4: Compare
         out_append_f = out_append_dec.astype("float32").numpy()
@@ -908,17 +616,8 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             out_append_f,
             rtol=1e-02,
             atol=1e-02,
-            err_msg="decode_attention output doesn't match append_attention output",
+            err_msg="decode_unified_attention output doesn't match append_attention output",
         )
-
-    # profiler
-    def profile(self):
-        pre_k, pre_v = self.prefill()
-        paddle.device.synchronize()
-        self.append_attention()
-        paddle.device.synchronize()
-        qkv_out, out = self.decode_attention()
-        paddle.device.synchronize()
 
 
 class TestDecodeUnifiedAttentionMultiBatch(TestDecodeUnifiedAttention):
@@ -948,10 +647,7 @@ class TestDecodeUnifiedAttentionMultiBatch(TestDecodeUnifiedAttention):
         self.cache_quant_type = "cache_fp8"
         self.use_qk_norm = False
         self.use_mask_offset = False
-        self.mask_matrix = False
-        self.use_sinks = False
         self.causal = True
-        self.use_dynamic_quant = False
         self.quant_min_bound = -448.0
         self.quant_max_bound = 448.0
         self.init_tensor()
@@ -984,10 +680,7 @@ class TestDecodeUnifiedAttentionSpeculate(TestDecodeUnifiedAttention):
         self.cache_quant_type = "cache_fp8"
         self.use_qk_norm = False
         self.use_mask_offset = False
-        self.mask_matrix = False
-        self.use_sinks = False
         self.causal = True
-        self.use_dynamic_quant = False
         self.quant_min_bound = -448.0
         self.quant_max_bound = 448.0
         self.init_tensor()
@@ -1020,10 +713,7 @@ class TestDecodeUnifiedAttentionMultiHead(TestDecodeUnifiedAttention):
         self.cache_quant_type = "cache_fp8"
         self.use_qk_norm = False
         self.use_mask_offset = False
-        self.mask_matrix = False
-        self.use_sinks = False
         self.causal = True
-        self.use_dynamic_quant = False
         self.quant_min_bound = -448.0
         self.quant_max_bound = 448.0
         self.init_tensor()
@@ -1056,10 +746,7 @@ class TestDecodeUnifiedAttentionMultiSpeculate(TestDecodeUnifiedAttention):
         self.cache_quant_type = "cache_fp8"
         self.use_qk_norm = False
         self.use_mask_offset = False
-        self.mask_matrix = False
-        self.use_sinks = False
         self.causal = True
-        self.use_dynamic_quant = False
         self.quant_min_bound = -448.0
         self.quant_max_bound = 448.0
         self.init_tensor()
@@ -1092,10 +779,106 @@ class TestDecodeUnifiedAttentionSpeculateBs128Mtp4(TestDecodeUnifiedAttention):
         self.cache_quant_type = "cache_fp8"
         self.use_qk_norm = False
         self.use_mask_offset = False
-        self.mask_matrix = False
-        self.use_sinks = False
         self.causal = True
-        self.use_dynamic_quant = False
+        self.quant_min_bound = -448.0
+        self.quant_max_bound = 448.0
+        self.init_tensor()
+
+
+class TestDecodeUnifiedAttentionDynamicC8(TestDecodeUnifiedAttention):
+    def setUp(self):
+        paddle.disable_static()
+        self.name = "TestDecodeUnifiedAttention"
+        self.place = paddle.CUDAPlace(0)
+        self.q_num_head = 14
+        self.kv_num_head = 1
+        self.batch_size = 6
+        self.max_tokens_per_batch = 2
+        self.cache_len = 500
+        self.seq_len_dec = None
+        self.seq_lens_this_time = None
+        self.max_model_len = 131072
+        self.head_dim = 128
+        self.rms_norm_eps = 1e-6
+        self.rope_3d = False
+        self.q_hid_dim = self.q_num_head * self.head_dim
+        self.kv_hid_dim = self.kv_num_head * self.head_dim
+        self.block_size = 64
+        self.use_neox_rotary_style = False
+        self.softmax_scale = self.head_dim**-0.5
+        self.rope_theta = 10000
+        self.sliding_window = 0
+        self.dtype = "bfloat16"
+        self.cache_quant_type = "block_wise_fp8"
+        self.use_qk_norm = False
+        self.use_mask_offset = False
+        self.causal = True
+        self.quant_min_bound = -448.0
+        self.quant_max_bound = 448.0
+        self.init_tensor()
+
+
+class TestDecodeUnifiedAttentionDynamicC8MultiBatch(TestDecodeUnifiedAttention):
+    def setUp(self):
+        paddle.disable_static()
+        self.name = "TestDecodeUnifiedAttention"
+        self.place = paddle.CUDAPlace(0)
+        self.q_num_head = 14
+        self.kv_num_head = 1
+        self.batch_size = 60
+        self.max_tokens_per_batch = 2
+        self.cache_len = 500
+        self.seq_len_dec = None
+        self.seq_lens_this_time = None
+        self.max_model_len = 131072
+        self.head_dim = 128
+        self.rms_norm_eps = 1e-6
+        self.rope_3d = False
+        self.q_hid_dim = self.q_num_head * self.head_dim
+        self.kv_hid_dim = self.kv_num_head * self.head_dim
+        self.block_size = 64
+        self.use_neox_rotary_style = False
+        self.softmax_scale = self.head_dim**-0.5
+        self.rope_theta = 10000
+        self.sliding_window = 0
+        self.dtype = "bfloat16"
+        self.cache_quant_type = "block_wise_fp8"
+        self.use_qk_norm = False
+        self.use_mask_offset = False
+        self.causal = True
+        self.quant_min_bound = -448.0
+        self.quant_max_bound = 448.0
+        self.init_tensor()
+
+
+class TestDecodeUnifiedAttentionDynamicC8Speculate(TestDecodeUnifiedAttention):
+    def setUp(self):
+        paddle.disable_static()
+        self.name = "TestDecodeUnifiedAttention"
+        self.place = paddle.CUDAPlace(0)
+        self.q_num_head = 14
+        self.kv_num_head = 1
+        self.batch_size = 6
+        self.max_tokens_per_batch = 4
+        self.cache_len = 500
+        self.seq_len_dec = None
+        self.seq_lens_this_time = None
+        self.max_model_len = 131072
+        self.head_dim = 128
+        self.rms_norm_eps = 1e-6
+        self.rope_3d = False
+        self.q_hid_dim = self.q_num_head * self.head_dim
+        self.kv_hid_dim = self.kv_num_head * self.head_dim
+        self.block_size = 64
+        self.use_neox_rotary_style = False
+        self.softmax_scale = self.head_dim**-0.5
+        self.rope_theta = 10000
+        self.sliding_window = 0
+        self.dtype = "bfloat16"
+        self.cache_quant_type = "block_wise_fp8"
+        self.use_qk_norm = False
+        self.use_mask_offset = False
+        self.causal = True
         self.quant_min_bound = -448.0
         self.quant_max_bound = 448.0
         self.init_tensor()
@@ -1128,10 +911,7 @@ class TestDecodeUnifiedAttentionQKNorm(TestDecodeUnifiedAttention):
         self.cache_quant_type = "cache_fp8"
         self.use_qk_norm = True
         self.use_mask_offset = False
-        self.mask_matrix = False
-        self.use_sinks = False
         self.causal = True
-        self.use_dynamic_quant = False
         self.quant_min_bound = -448.0
         self.quant_max_bound = 448.0
         self.init_tensor()

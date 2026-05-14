@@ -176,7 +176,7 @@ class TestDecodeUnifiedAttentionC16(unittest.TestCase):
     """Base test class for decode append attention with cache_quant_type='none' (fp16/bf16 KV cache).
 
     Uses append_attention for prefill (verified correct by test_append_attention_c16.py)
-    and then tests decode_attention (new split ops) against the same naive reference.
+    and then tests decode_unified_attention (new split ops) against the same naive reference.
 
     Subclasses override setUp to vary batch_size, max_tokens_per_batch, dtype, etc.
     """
@@ -403,7 +403,7 @@ class TestDecodeUnifiedAttentionC16(unittest.TestCase):
         )
         return buffer
 
-    def _run_decode_attention(
+    def _run_decode_unified_attention(
         self,
         cache_k,
         cache_v,
@@ -595,7 +595,7 @@ class TestDecodeUnifiedAttentionC16(unittest.TestCase):
             err_msg="append_attention decode output doesn't match naive reference",
         )
 
-    def test_naive_vs_decode_attention(self):
+    def test_naive_vs_decode_unified_attention(self):
         """Test: prefill with append_attention, then decode with new split decode ops."""
         # Step 1: Prefill
         cache_k, cache_v = self.do_prefill_with_append_attention()
@@ -611,7 +611,7 @@ class TestDecodeUnifiedAttentionC16(unittest.TestCase):
 
         dec_batch_id_per_token, dec_cu_seqlens_q, _ = get_padding_offset(self.batch_size, dec_seq_lens_this_time)
 
-        out, _, _ = self._run_decode_attention(
+        out, _, _ = self._run_decode_unified_attention(
             cache_k,
             cache_v,
             dec_seq_lens_encoder,
@@ -636,7 +636,7 @@ class TestDecodeUnifiedAttentionC16(unittest.TestCase):
             err_msg="decode_unified_attention output doesn't match naive reference",
         )
 
-    def test_append_vs_decode_attention(self):
+    def test_append_vs_decode_unified_attention(self):
         """Test: append_attention decode vs new split decode ops should produce same result."""
         # Step 1: Prefill
         cache_k, cache_v = self.do_prefill_with_append_attention()
@@ -660,7 +660,7 @@ class TestDecodeUnifiedAttentionC16(unittest.TestCase):
         )
 
         # Step 3: Decode with new split ops
-        out_decode, _, _ = self._run_decode_attention(
+        out_decode, _, _ = self._run_decode_unified_attention(
             cache_k,
             cache_v,
             dec_seq_lens_encoder,
@@ -720,7 +720,7 @@ class TestDecodeUnifiedAttentionC16Speculate(TestDecodeUnifiedAttentionC16):
         """Skip: naive ref only computes 1 token, but ops compute max_tokens_per_batch tokens."""
         pass
 
-    def test_naive_vs_decode_attention(self):
+    def test_naive_vs_decode_unified_attention(self):
         """Skip: naive ref only computes 1 token, but ops compute max_tokens_per_batch tokens."""
         pass
 
@@ -859,7 +859,7 @@ class TestDecodeUnifiedAttentionC16MultiBatchSpeculate(TestDecodeUnifiedAttentio
         """Skip: naive ref only computes 1 token, but ops compute max_tokens_per_batch tokens."""
         pass
 
-    def test_naive_vs_decode_attention(self):
+    def test_naive_vs_decode_unified_attention(self):
         """Skip: naive ref only computes 1 token, but ops compute max_tokens_per_batch tokens."""
         pass
 
