@@ -198,3 +198,142 @@ def fused_moe_kernel_paddle(
     c_mask = token_mask[:, None] & (offs_cn[None, :] < N)
 
     tl.store(c_ptrs, accumulator, mask=c_mask)
+
+
+# ---------------------------------------------------------------------------
+# BF16-native MoE kernel, ported from vLLM fused_moe_kernel (BF16-only path).
+#
+# Key differences from fused_moe_kernel_paddle (the wint8/fp8 kernel above):
+#   1. compute_type is a tl.constexpr parameter (not hardcoded bfloat16).
+#   2. offs_token is cast to int64 to prevent stride-multiplication overflow.
+#   3. b matrix load always uses a K-boundary mask (no even_Ks special path).
+#   4. Router-weight multiplication is done in fp32 before the final cast.
+#   5. No quantization paths (use_fp8/int8 removed for clarity).
+# ---------------------------------------------------------------------------
+@enable_compat_on_triton_kernel
+@triton.jit
+def fused_moe_kernel_bf16(  # pragma: no cover  -- Triton JIT; body compiles to GPU code
+    # Pointers
+    a_ptr,
+    b_ptr,
+    c_ptr,
+    topk_weights_ptr,
+    sorted_token_ids_ptr,
+    expert_ids_ptr,
+    num_tokens_post_padded_ptr,
+    # Dimensions (runtime scalars)
+    N,
+    K,
+    EM,
+    num_valid_tokens,
+    # Strides
+    stride_am,
+    stride_ak,
+    stride_be,
+    stride_bk,
+    stride_bn,
+    stride_cm,
+    stride_cn,
+    # Meta-parameters (compile-time constants)
+    BLOCK_SIZE_M: tl.constexpr,
+    BLOCK_SIZE_N: tl.constexpr,
+    BLOCK_SIZE_K: tl.constexpr,
+    GROUP_SIZE_M: tl.constexpr,
+    MUL_ROUTED_WEIGHT: tl.constexpr,
+    top_k: tl.constexpr,
+    compute_type: tl.constexpr,
+    # naive_block_assignment: tl.constexpr = False,
+    even_Ks: tl.constexpr = False,
+):
+    """
+    BF16 Fused-MoE GEMM kernel, ported from vLLM.
+
+    A: [num_tokens, K]   – input activations (bf16)
+    B: [E, K, N]         – expert weights    (bf16)
+    C: [num_tokens * top_k, N]  – output     (bf16)
+
+    sorted_token_ids: [EM]  flat token-expert pair indices (int32)
+    expert_ids:       [EM // BLOCK_SIZE_M]  expert index per M-block (int32)
+
+    When naive_block_assignment=True, each M-block processes exactly one
+    token-expert pair (skipping the preprocess/sort step). In this mode:
+      - expert_ids[pid_m] holds the expert index for token-expert pair pid_m
+      - sorted_token_ids_ptr is unused
+      - offs_token is constructed as [pid_m, invalid, invalid, ...]
+    This avoids the preprocess kernel overhead for very small token counts.
+    """
+    pid = tl.program_id(axis=0)
+    num_pid_m = tl.cdiv(EM, BLOCK_SIZE_M)
+    num_pid_n = tl.cdiv(N, BLOCK_SIZE_N)
+    num_pid_in_group = GROUP_SIZE_M * num_pid_n
+    group_id = pid // num_pid_in_group
+    first_pid_m = group_id * GROUP_SIZE_M
+    group_size_m = min(num_pid_m - first_pid_m, GROUP_SIZE_M)
+    pid_m = first_pid_m + ((pid % num_pid_in_group) % group_size_m)
+    pid_n = (pid % num_pid_in_group) // group_size_m
+
+    num_tokens_post_padded = tl.load(num_tokens_post_padded_ptr)
+    if pid_m * BLOCK_SIZE_M >= num_tokens_post_padded:
+        return
+
+    offs = tl.arange(0, BLOCK_SIZE_M)
+
+    offs_token_id = pid_m * BLOCK_SIZE_M + offs
+    offs_token = tl.load(sorted_token_ids_ptr + offs_token_id)
+
+    # if not naive_block_assignment:
+    #     offs_token_id = pid_m * BLOCK_SIZE_M + offs
+    #     offs_token = tl.load(sorted_token_ids_ptr + offs_token_id)
+    # else:
+    #     # Each block handles exactly one token-expert pair:
+    #     # row 0 = pid_m (the token-expert pair index), remaining rows are
+    #     # set to num_valid_tokens which will fail the < mask check.
+    #     offs_token = tl.where(offs == 0, pid_m, num_valid_tokens)
+
+    # Cast to int64 to prevent overflow: stride_cm * offs_token can exceed int32
+    offs_token = offs_token.to(tl.int64)
+    token_mask = offs_token < num_valid_tokens
+
+    off_experts = tl.load(expert_ids_ptr + pid_m).to(tl.int64)
+
+    offs_bn = (pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N).to(tl.int64)) % N
+    offs_k = tl.arange(0, BLOCK_SIZE_K)
+
+    # A pointer: a_ptr[token_idx, :K]  where token_idx = offs_token // top_k
+    a_ptrs = a_ptr + (offs_token[:, None] // top_k * stride_am + offs_k[None, :] * stride_ak)
+
+    # B pointer: b_ptr[expert, :K, offs_bn]  — B layout is [E, K, N]
+    b_ptrs = b_ptr + off_experts * stride_be + (offs_k[:, None] * stride_bk + offs_bn[None, :] * stride_bn)
+
+    accumulator = tl.zeros((BLOCK_SIZE_M, BLOCK_SIZE_N), dtype=tl.float32)
+
+    for k in range(0, tl.cdiv(K, BLOCK_SIZE_K)):
+        if even_Ks:
+            a = tl.load(a_ptrs, mask=token_mask[:, None], other=0.0)
+            b = tl.load(b_ptrs)
+        else:
+            a = tl.load(
+                a_ptrs,
+                mask=token_mask[:, None] & (offs_k[None, :] < K - k * BLOCK_SIZE_K),
+                other=0.0,
+            )
+            b = tl.load(
+                b_ptrs,
+                mask=offs_k[:, None] < K - k * BLOCK_SIZE_K,
+                other=0.0,
+            )
+        accumulator += tl.dot(a, b)
+        a_ptrs += BLOCK_SIZE_K * stride_ak
+        b_ptrs += BLOCK_SIZE_K * stride_bk
+
+    # Router-weight multiplication in fp32 (before precision conversion)
+    if MUL_ROUTED_WEIGHT:
+        moe_weight = tl.load(topk_weights_ptr + offs_token, mask=token_mask, other=0)
+        accumulator = accumulator * moe_weight[:, None]
+
+    accumulator = accumulator.to(compute_type)
+
+    offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
+    c_ptrs = c_ptr + stride_cm * offs_token[:, None] + stride_cn * offs_cn[None, :]
+    c_mask = token_mask[:, None] & (offs_cn[None, :] < N)
+    tl.store(c_ptrs, accumulator, mask=c_mask)
