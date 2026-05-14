@@ -892,5 +892,115 @@ class TestInitializeKVCacheDtype(unittest.TestCase):
             self.assertEqual(str(tensor.dtype), "paddle.bfloat16")
 
 
+# ============================================================================
+# _format_cache_name Tests
+# ============================================================================
+
+
+class TestFormatCacheName(unittest.TestCase):
+    """Test _format_cache_name method."""
+
+    def test_unknown_role_raises_value_error(self):
+        controller = create_cache_controller(num_layers=4)
+        with self.assertRaises(ValueError):
+            controller._format_cache_name("bad_role", 0)
+
+
+# ============================================================================
+# initialize_host_cache Tests
+# ============================================================================
+
+
+def _make_concrete_backend(key_shape=(4, 16, 64), value_shape=(4, 16, 64)):
+    """Create a minimal concrete AttentionBackend with get_kv_cache_shape."""
+    from fastdeploy.model_executor.layers.attention.base_attention_backend import (
+        AttentionBackend,
+    )
+
+    class _TestBackend(AttentionBackend):
+        def init_attention_metadata(self, forward_meta):
+            pass
+
+        def get_kv_cache_shape(self, max_num_blocks, kv_cache_quant_type=None):
+            ks = [max_num_blocks] + list(key_shape)
+            vs = [max_num_blocks] + list(value_shape) if value_shape is not None else []
+            return ks, vs
+
+    return _TestBackend()
+
+
+class TestInitializeHostCache(unittest.TestCase):
+    """Test initialize_host_cache method."""
+
+    def _make_controller_with_spec(self, num_host_blocks=50, num_layers=2):
+        controller = create_cache_controller(num_host_blocks=num_host_blocks, num_layers=num_layers)
+        from fastdeploy.config import SpeculativeConfig
+
+        controller.config.speculative_config = SpeculativeConfig({})
+        return controller
+
+    def test_zero_blocks_skips(self):
+        controller = self._make_controller_with_spec(num_host_blocks=0)
+        result = controller.initialize_host_cache(MagicMock())
+        self.assertIsNone(result)
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+    @patch("fastdeploy.model_executor.layers.attention.base_attention_backend.cuda_host_alloc")
+    def test_success_populates_host_cache_kvs_map(self, mock_alloc):
+        mock_alloc.return_value = 1000000
+        controller = self._make_controller_with_spec(num_host_blocks=50, num_layers=2)
+        backend = _make_concrete_backend(key_shape=(4, 16, 64), value_shape=(4, 16, 64))
+
+        controller.initialize_host_cache(backend)
+
+        self.assertGreater(len(controller.host_cache_kvs_map), 0)
+        # 2 layers * (key + value) = 4 entries
+        self.assertEqual(len(controller.host_cache_kvs_map), 4)
+        for name, ptr in controller.host_cache_kvs_map.items():
+            self.assertEqual(ptr, 1000000)
+
+    def test_not_implemented_error_skips(self):
+        controller = self._make_controller_with_spec(num_host_blocks=50, num_layers=2)
+        backend = _make_concrete_backend()
+        backend.create_host_kv_cache = MagicMock(side_effect=NotImplementedError("test"))
+
+        result = controller.initialize_host_cache(backend)
+
+        self.assertIsNone(result)
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+
+class TestFreeHostCache(unittest.TestCase):
+    """Test _free_host_cache method."""
+
+    def test_when_backend_is_none_clears_map(self):
+        controller = create_cache_controller(num_layers=4)
+        controller.host_cache_kvs_map = {"key_0": 12345}
+        controller.attn_backend = None
+
+        controller._free_host_cache()
+
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+    def test_with_backend_delegates_to_free_host_kv_cache(self):
+        controller = create_cache_controller(num_layers=4)
+        controller.host_cache_kvs_map = {"key_0": 12345, "value_0": 67890}
+        mock_backend = MagicMock()
+        controller.attn_backend = mock_backend
+
+        controller._free_host_cache()
+
+        mock_backend.free_host_kv_cache.assert_called_once_with(controller.host_cache_kvs_map)
+
+    def test_empty_host_cache_map_noop(self):
+        controller = create_cache_controller(num_layers=4)
+        controller.host_cache_kvs_map = {}
+        controller.attn_backend = MagicMock()
+
+        controller._free_host_cache()
+
+        controller.attn_backend.free_host_kv_cache.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()
