@@ -437,13 +437,24 @@ class ResourceManagerV1(ResourceManager):
                         del self.req_dict[preempted_req.request_id]
                     if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
                         if self.config.cache_config.kvcache_storage_backend:
-                            self.cache_manager.write_cache_to_storage_decode(preempted_req)
+                            try:
+                                self.cache_manager.write_cache_to_storage_decode(preempted_req)
+                            except Exception as e:
+                                llm_logger.warning(
+                                    f"Failed to write cache to storage for preempted request {preempted_req.request_id}, error: {e}"
+                                )
+
                     self._free_blocks(preempted_req)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
                     if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
                         if self.config.cache_config.kvcache_storage_backend:
-                            self.cache_manager.write_cache_to_storage(preempted_req)
+                            try:
+                                self.cache_manager.write_cache_to_storage(preempted_req)
+                            except Exception as e:
+                                llm_logger.warning(
+                                    f"Failed to write cache to storage for preempted request {preempted_req.request_id}, error: {e}"
+                                )
                     self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
                     self.to_be_rescheduled_request_id_set.add(preempted_req.request_id)
