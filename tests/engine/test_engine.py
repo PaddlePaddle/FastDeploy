@@ -42,6 +42,7 @@ def _make_cfg(**ov):
     pc.enable_flashinfer_allreduce_fusion = False
     sc = ns(max_num_seqs=256, max_num_batched_tokens=4096, splitwise_role="mixed", name="local")
     sc.enable_overlap_schedule = False
+    sc.enable_moe_scores_elementwise_fuse = False
     cc = ns(num_gpu_blocks_override=None, gpu_memory_utilization=0.9, block_size=16, enc_dec_block_num=0)
     cc.enable_prefix_caching = cc.enable_chunked_prefill = False
     cc.kv_cache_ratio, cc.kvcache_storage_backend, cc.num_cpu_blocks, cc.max_encoder_cache = 1.0, None, 0, 0

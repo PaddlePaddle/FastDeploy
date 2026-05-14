@@ -41,7 +41,7 @@ def clear_logs():
 
 
 def print_logs():
-    log_dir = os.path.join(os.getcwd(), "log")
+    log_dir = os.path.join(os.getcwd(), "log", "paddle")
     log_file = os.path.join(log_dir, "workerlog.0")
 
     if not os.path.exists(log_file):

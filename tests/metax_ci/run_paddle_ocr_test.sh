@@ -86,14 +86,14 @@ while true; do
     POLL_COUNT=$((POLL_COUNT + 1))
     if [ $POLL_COUNT -ge $SERVER_TIMEOUT_SEC ]; then
         cat ${SERVER_LOG_FILE}
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         echo "[TIMEOUT] Server process is about to terminate and exit the script!"
         exit 1
     fi
 
     if ! kill -0 $SERVER_PID >/dev/null 2>&1; then
         cat ${SERVER_LOG_FILE}
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         echo "[ERROR] Server process(PID: $SERVER_PID) has exited abnormally and no keywords were detected!"
         exit 1
     fi

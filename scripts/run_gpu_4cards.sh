@@ -44,14 +44,20 @@ for test_file in "${test_files[@]}"; do
 
         if [ -d "${REPO_ROOT}/log" ]; then
             echo ">>> grep error in ${REPO_ROOT}/log/"
-            grep -Rni --color=auto "error" "${REPO_ROOT}/log/" || true
+            grep -Rni --color=auto "error" "${REPO_ROOT}/log/" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" || true
         else
             echo "${REPO_ROOT}/log directory not found"
         fi
 
-        if [ -f "${REPO_ROOT}/log/log_0/workerlog.0" ]; then
+        if [ -f "${REPO_ROOT}/log/paddle/workerlog.0" ]; then
             echo "---------------- workerlog.0 (last 100 lines) -------------"
-            tail -n 100 "${REPO_ROOT}/log/log_0/workerlog.0"
+            tail -n 100 "${REPO_ROOT}/log/paddle/workerlog.0"
+            echo "------------------------------------------------------------"
+        fi
+
+        if [ -f "${REPO_ROOT}/log/log_0/paddle/workerlog.0" ]; then
+            echo "---------------- workerlog.0 (last 100 lines) -------------"
+            tail -n 100 "${REPO_ROOT}/log/log_0/paddle/workerlog.0"
             echo "------------------------------------------------------------"
         fi
 

@@ -454,7 +454,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Create mock response data with prompt_logprobs
         mock_response_data = [
             {
-                "request_id": "test_request_0",
+                "request_id": "test_request::n::0",
                 "error_code": 200,
                 "prompt_logprobs": LogprobsTensors(
                     logprob_token_ids=paddle.to_tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=paddle.int64),
@@ -550,7 +550,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Create mock response data with logprobs
         mock_response_data = [
             {
-                "request_id": "test_request_0",
+                "request_id": "test_request::n::0",
                 "error_code": 200,
                 "metrics": {
                     "arrival_time": 1234567890,
@@ -645,7 +645,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Create mock response data with both prompt_logprobs and logprobs
         mock_response_data = [
             {
-                "request_id": "test_request_0",
+                "request_id": "test_request::n::0",
                 "error_code": 200,
                 "prompt_logprobs": LogprobsTensors(
                     logprob_token_ids=paddle.to_tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=paddle.int64),
@@ -750,7 +750,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Create mock response data without logprobs
         mock_response_data = [
             {
-                "request_id": "test_request_0",
+                "request_id": "test_request::n::0",
                 "error_code": 200,
                 "metrics": {
                     "arrival_time": 1234567890,
@@ -886,7 +886,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Create mock response data with prompt_logprobs
         mock_response_data = [
             {
-                "request_id": "test_request_0",
+                "request_id": "test_request::n::0",
                 "error_code": 200,
                 "prompt_logprobs": LogprobsTensors(
                     logprob_token_ids=paddle.to_tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=paddle.int64),
@@ -977,7 +977,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Create mock response data with logprobs
         mock_response_data = [
             {
-                "request_id": "test_request_0",
+                "request_id": "test_request::n::0",
                 "error_code": 200,
                 "metrics": {
                     "arrival_time": 1234567890,
@@ -1065,7 +1065,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Create mock response data with both prompt_logprobs and logprobs
         mock_response_data = [
             {
-                "request_id": "test_request_0",
+                "request_id": "test_request::n::0",
                 "error_code": 200,
                 "prompt_logprobs": LogprobsTensors(
                     logprob_token_ids=paddle.to_tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]], dtype=paddle.int64),
@@ -1163,7 +1163,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         # Create mock response data without logprobs
         mock_response_data = [
             {
-                "request_id": "test_request_0",
+                "request_id": "test_request::n::0",
                 "error_code": 200,
                 "metrics": {
                     "arrival_time": 1234567890,
@@ -1332,7 +1332,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             results.append(result)
 
         # Verify that abort was called
-        mock_engine_client.abort.assert_called_once_with("test_request_0", 1)
+        mock_engine_client.abort.assert_called_once_with("test_request::n::0", 1)
 
         # Verify that generator ends gracefully (should have [DONE] message)
         self.assertTrue(len(results) > 0)
