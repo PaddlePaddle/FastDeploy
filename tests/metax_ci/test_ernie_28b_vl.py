@@ -31,7 +31,7 @@ class TestErnie28BVL(unittest.TestCase):
 
         cls.llm = LLM(
             model=cls.model_path,
-            tensor_parallel_size=2,
+            tensor_parallel_size=1,
             engine_worker_queue_port=8899,
             max_model_len=32768,
             quantization="wint8",
