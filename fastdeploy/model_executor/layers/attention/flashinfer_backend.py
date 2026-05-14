@@ -111,12 +111,16 @@ class FlashInferAttentionBackend(AttentionBackend):
         # DCP world size (default to 1 if not available)
         self.dcp_world_size = getattr(fd_config.parallel_config, "data_parallel_size", 1)
 
+        # Dummy scale tensors for non-fp8 mode (C++ kernel requires non-None tensors)
+        self._dummy_scale = paddle.empty([1], dtype=paddle.float32)
+
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         # For full cudagraph capture, one `decode_wrapper` for each batch
         # size is needed for FlashInfer.
         self._decode_wrappers_cudagraph: dict[
             int, BatchDecodeWithPagedKVCacheWrapper
         ] = {}
+        self._decode_wrapper = None
         self._decode_cudagraph_max_bs =  min(
             (1 + self.num_spec_tokens) * self.max_num_seqs,
             512
@@ -125,6 +129,7 @@ class FlashInferAttentionBackend(AttentionBackend):
         num_seqs = forward_meta.input_batch.num_seqs
         num_decodes = forward_meta.input_batch.num_decodes
         num_prefills = forward_meta.input_batch.num_prefills
+        self.num_prefills = num_prefills
         self.num_decode_tokens = forward_meta.input_batch.num_decode_tokens # 投机解码下取上限
         self.num_prefill_tokens = forward_meta.input_batch.num_prefill_tokens
 
@@ -153,7 +158,7 @@ class FlashInferAttentionBackend(AttentionBackend):
             assert qo_indptr_prefill_cpu.shape[0] == num_prefills + 1
 
             self.prefill_wrapper = BatchPrefillWithPagedKVCacheWrapper(
-                self._workspace_buffer(), "NHD"
+                self._workspace_buffer, "NHD"
             )
 
             # Slicing CPU buffers that are only needed for FI native prefills
@@ -181,20 +186,19 @@ class FlashInferAttentionBackend(AttentionBackend):
                 logits_soft_cap=self.logits_soft_cap,
                 q_data_type=self.q_data_dtype,
                 kv_data_type=self.kv_cache_dtype,
-                o_data_type=self.o_data_dtype,
                 fixed_split_size=self.prefill_fixed_split_size,
                 disable_split_kv=self.disable_split_kv,
             )
 
         if num_decodes > 0:
-            assert seq_lens_cpu is not None
+            assert seq_lens_np is not None
             pure_decode = num_prefills == 0
             use_cudagraph = (
                 forward_meta.step_use_cudagraph
                 and pure_decode
-                and num_decode_tokens <= self._decode_cudagraph_max_bs
+                and self.num_decode_tokens <= self._decode_cudagraph_max_bs
             )
-            num_input_tokens = num_decode_tokens
+            num_input_tokens = self.num_decode_tokens
 
             self.decode_wrapper = self._get_decode_wrapper(
                 num_input_tokens, use_cudagraph
@@ -219,7 +223,6 @@ class FlashInferAttentionBackend(AttentionBackend):
                 logits_soft_cap=self.logits_soft_cap,
                 q_data_type=self.q_data_dtype,
                 kv_data_type=self.kv_cache_dtype,
-                o_data_type=self.o_data_dtype,
                 fixed_split_size=self.decode_fixed_split_size,
                 disable_split_kv=self.disable_split_kv,
             )
@@ -240,7 +243,7 @@ class FlashInferAttentionBackend(AttentionBackend):
                 paged_kv_indices = None
                 paged_kv_last_page_len = None
             decode_wrapper = BatchDecodeWithPagedKVCacheWrapper(
-                self._get_workspace_buffer(),
+                self._workspace_buffer,
                 "NHD",
                 use_cuda_graph=use_cudagraph,
                 paged_kv_indptr_buffer=paged_kv_indptr,
@@ -347,53 +350,91 @@ class FlashInferAttentionBackend(AttentionBackend):
         query,
         key,
         value,
+        qkv,
+        compressed_kv,
+        k_pe,
         layer: Attention,
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
-        cache_quant_type_str = getattr(layer, "cache_quant_type_str", "none")
-        if cache_quant_type_str == "block_wise_fp8":
+        # Split qkv if q/k/v not provided separately
+        if query is None and qkv is not None:
+            num_tokens = qkv.shape[0]
+            q_size = layer.num_heads * layer.head_dim
+            kv_size = layer.kv_num_heads * layer.head_dim
+            query = qkv[:, :q_size].reshape([num_tokens, layer.num_heads, layer.head_dim])
+            key = qkv[:, q_size:q_size + kv_size].reshape([num_tokens, layer.kv_num_heads, layer.head_dim])
+            value = qkv[:, q_size + kv_size:q_size + 2 * kv_size].reshape([num_tokens, layer.kv_num_heads, layer.head_dim])
+
+        # Determine cache layout: 4 entries per layer (fp8) vs 2 entries per layer
+        num_caches = len(forward_meta.caches)
+        is_block_wise_fp8 = (num_caches == 4 * self.num_layers)
+
+        if is_block_wise_fp8:
             cache_k = forward_meta.caches[4 * layer.layer_id]
             cache_v = forward_meta.caches[4 * layer.layer_id + 1]
             cache_k_scales = forward_meta.caches[4 * layer.layer_id + 2]
             cache_v_scales = forward_meta.caches[4 * layer.layer_id + 3]
+            kv_cache_dtype = "fp8_e4m3"
         else:
             cache_k = forward_meta.caches[2 * layer.layer_id]
             cache_v = forward_meta.caches[2 * layer.layer_id + 1]
-            cache_k_scales = getattr(layer, "cache_k_scale", None)
-            cache_v_scales = getattr(layer, "cache_v_scale", None)
+            if not hasattr(self, '_dummy_scale') or self._dummy_scale is None:
+                self._dummy_scale = paddle.empty([1], dtype=paddle.float32)
+            cache_k_scales = self._dummy_scale
+            cache_v_scales = self._dummy_scale
+            kv_cache_dtype = "auto"
         reshape_and_cache_flash(
             key,
             value,
             cache_k,
             cache_v,
-            forward_meta.slot_mapping,
-            self.kv_cache_dtype,
+            forward_meta.slot_mapping.cast(paddle.int64),
             cache_k_scales,
             cache_v_scales,
+            kv_cache_dtype,
         )
 
-        output = paddle.empty_like(query)
+        # For FlashInfer wrapper, pass None scales when not using fp8
+        fi_k_scale = cache_k_scales if is_block_wise_fp8 else None
+        fi_v_scale = cache_v_scales if is_block_wise_fp8 else None
 
-        if forward_meta.num_prefill_tokens > 0:
-            prefill_query = query[:self.num_prefills]
+        output = paddle.empty([query.shape[0], layer.num_heads, layer.head_dim], dtype=query.dtype)
+
+        if self.num_prefill_tokens > 0:
+            prefill_query = query[self.num_decode_tokens:]
             self.prefill_wrapper.run(
                 prefill_query,
                 (cache_k, cache_v),
-                k_scale=cache_k_scales,
-                v_scale=cache_v_scales,
+                k_scale=fi_k_scale,
+                v_scale=fi_v_scale,
                 out=output[self.num_decode_tokens:],
             )
-        
+
         if self.num_decode_tokens > 0:
-            decode_query = query[self.num_prefills:]
+            decode_query = query[:self.num_decode_tokens]
             self.decode_wrapper.run(
                 decode_query,
                 (cache_k, cache_v),
-                k_scale=cache_k_scales,
-                v_scale=cache_v_scales,
+                k_scale=fi_k_scale,
+                v_scale=fi_v_scale,
                 out=output[:self.num_decode_tokens],
             )
-        
+
+        return output.reshape([query.shape[0], -1])
+
+    def forward_decode(
+        self,
+        query,
+        key,
+        value,
+        qkv,
+        compressed_kv,
+        k_pe,
+        layer: Attention,
+        forward_meta: ForwardMeta,
+    ) -> paddle.Tensor:
+        return self.forward_mixed(query, key, value, qkv, compressed_kv, k_pe, layer, forward_meta)
+
 
 def fast_plan_decode(
     decode_wrapper,
@@ -409,7 +450,6 @@ def fast_plan_decode(
     logits_soft_cap: float | None = None,
     q_data_type: str | paddle.dtype | None = "float16",
     kv_data_type: str | paddle.dtype | None = None,
-    o_data_type: str | paddle.dtype | None = None,
     data_type: str | paddle.dtype | None = None,
     sm_scale: float | None = None,
     rope_scale: float | None = None,
@@ -448,7 +488,6 @@ def fast_plan_decode(
             logits_soft_cap=logits_soft_cap,
             q_data_type=q_data_type,
             kv_data_type=kv_data_type,
-            o_data_type=o_data_type,
             data_type=data_type,
             sm_scale=sm_scale,
             rope_scale=rope_scale,

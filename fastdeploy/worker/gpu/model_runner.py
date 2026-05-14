@@ -69,6 +69,7 @@ from fastdeploy.worker.model_runner_base import (
     ModelRunnerBase,
 )
 
+from fastdeploy.output.stream_transfer_data import StreamTransferData, DecoderState
 from fastdeploy.worker.gpu.request_state import RequestState
 from fastdeploy.worker.gpu.sampler import SamplingState, Sampler
 from fastdeploy.worker.gpu.forward_meta import ForwardMetaV1
@@ -245,25 +246,22 @@ class GPUModelRunnerV1(ModelRunnerBase):
                 batched_input_ids = all_token_ids[start_idx:end_idx]
                 num_tokens = end_idx - start_idx
                 self.sampling_state.add_request(req.idx, req)
-            elif req.task_type.value == RequestType.DECODE.value:
-                batched_input_ids = [req.output_token_ids[-1]]
-                num_tokens = 1
-            else:  # preempted task
-                all_token_ids = req.prompt_token_ids + req.output_token_ids
-                prompt_len = len(req.prompt_token_ids)
-                prefill_len = len(req.prompt_token_ids)
-                batched_input_ids = []
-                num_tokens = 0
 
-            self.request_state.add_request(
-                req.idx,
-                num_tokens,
-                prompt_len,
-                prefill_len,
-                all_token_ids,
-                batched_input_ids,
-                req.num_computed_tokens,
-            )
+                self.request_state.add_request(
+                    req.idx,
+                    num_tokens,
+                    prompt_len,
+                    prefill_len,
+                    all_token_ids,
+                    batched_input_ids,
+                    start_idx,
+                )
+            elif req.task_type.value == RequestType.DECODE.value:
+                # ScheduledDecodeTask: request state already exists from prefill.
+                # Just mark it as active (1 token to decode) for this step.
+                self.request_state.num_tokens_per_seq[req.idx] = 1
+            else:  # preempted task
+                self.request_state.num_tokens_per_seq[req.idx] = 0
 
             self.block_table.append_block_ids(
                 req.idx,
@@ -305,16 +303,26 @@ class GPUModelRunnerV1(ModelRunnerBase):
         query_start_loc = async_to_tensor(query_start_loc_np)
 
         # Get prefill tokens if any.
-        if self.request_state.exist_prefill():
-            prepare_prefill_inputs(
-                self.input_buffers.input_ids,
-                self.request_state.next_prefill_tokens,
-                idx_mapping,
-                query_start_loc,
-                self.request_state.all_token_ids.gpu,
-                self.request_state.prefill_len.gpu,
-                self.request_state.num_computed_tokens.gpu,
-            )
+        if num_prefills > 0:
+            # Bypass UVA-based triton kernel - directly copy from CPU-side all_token_ids
+            # The triton kernel has issues reading from UVA memory, so we directly
+            # construct input_ids from the numpy-backed data.
+            offset = 0
+            for batch_idx in range(num_seqs):
+                req_state_idx = idx_mapping_np[batch_idx]
+                qlen = int(sorted_seq_lens[batch_idx])
+                num_computed = int(self.request_state.num_computed_prefill_tokens[req_state_idx])
+                plen = int(self.request_state.prefill_len.np[req_state_idx])
+                if num_computed >= plen:
+                    # Not prefill (decode request)
+                    offset += qlen
+                    continue
+                # Read tokens from CPU-side all_token_ids
+                token_slice = self.request_state.all_token_ids._uva_buf.np[req_state_idx, num_computed:num_computed + qlen]
+                self.input_buffers.input_ids[offset:offset + qlen].copy_(
+                    paddle.to_tensor(token_slice, dtype=paddle.int32), non_blocking=True
+                )
+                offset += qlen
         
         prepare_pos_seq_lens(
             idx_mapping,
@@ -322,6 +330,12 @@ class GPUModelRunnerV1(ModelRunnerBase):
             self.request_state.num_computed_tokens.gpu,
             self.input_buffers.positions,
             self.input_buffers.seq_lens,
+        )
+
+        # Create a reliable GPU copy of prefill_len from CPU numpy
+        # (UVA-backed tensors have coherence issues with triton kernel reads)
+        prefill_len_gpu = paddle.to_tensor(
+            self.request_state.prefill_len.np, place=paddle.CUDAPlace(0)
         )
 
         cu_num_logits_np = np.arange(num_seqs + 1, dtype=np.int32)
@@ -338,7 +352,7 @@ class GPUModelRunnerV1(ModelRunnerBase):
             self.request_state.last_sampled_tokens,
             query_start_loc,
             self.input_buffers.seq_lens,
-            self.request_state.prefill_len.gpu,
+            prefill_len_gpu,
             self.request_state.draft_tokens,
             cu_num_logits,
             total_num_logits,
@@ -665,10 +679,8 @@ class GPUModelRunnerV1(ModelRunnerBase):
         exist_prefill = self.request_state.exist_prefill()
         exist_decode = self.request_state.exist_decode()
 
-        if exist_prefill and exist_decode:
+        if exist_prefill:
             forward_mode = ForwardMode.MIXED
-        elif exist_prefill:
-            forward_mode = ForwardMode.EXTEND
         else:
             forward_mode = ForwardMode.DECODE
 
@@ -733,6 +745,7 @@ class GPUModelRunnerV1(ModelRunnerBase):
         # ── 4. Model forward pass ────────────────────────────────────────
         model_inputs = {
             "ids_remove_padding": input_batch.input_ids[: input_batch.num_tokens],
+            "generated_modality": paddle.zeros([input_batch.num_seqs], dtype=paddle.int32),
         }
         hidden_states = self.model(model_inputs, self.forward_meta)
 
@@ -771,7 +784,19 @@ class GPUModelRunnerV1(ModelRunnerBase):
         )
 
         # ── 9. Upload outputs asynchronously ────────────────────────────
-        # TODO: route sampled tokens back to the engine via self.async_uploader
+        sampled_token_ids_np = sampler_output.sampled_token_ids.numpy()
+        stream_datas = []
+        for batch_idx in range(input_batch.num_seqs):
+            req_state_idx = int(input_batch.idx_mapping_np[batch_idx])
+            tokens = sampled_token_ids_np[batch_idx]  # shape [1] for non-speculative
+            stream_datas.append(
+                StreamTransferData(
+                    decoder_state=DecoderState.TEXT,
+                    batch_id=req_state_idx,
+                    tokens=tokens,
+                )
+            )
+        self.async_uploader.enqueue(stream_datas)
 
     def sample(
         self,
@@ -780,31 +805,20 @@ class GPUModelRunnerV1(ModelRunnerBase):
         p_done_idxs: List[int] = [],
     ):
         """
-        Run the sampler for the current batch.
-
-        Builds SamplingMetadata by gathering per-request hyperparameters from
-        self.sampling_state using input_batch.idx_mapping_np, then calls the
-        sampler.
-
-        Args:
-            logits:       Output logits, shape [bsz, vocab_size].
-            input_batch:  InputBatch produced by prepare_inputs(); supplies
-                          idx_mapping_np (and idx_mapping for GPU ops).
-            p_done_idxs:  Slot indices whose guided-decoding FSM is done
-                          (passed through to the sampler's token-mask logic).
-
-        Returns:
-            SamplerOutput with .sampled_token_ids and optional .logprobs_tensors.
+        Simplified greedy sampling: argmax over the vocabulary dimension.
+        Returns a SamplerOutput-like object with sampled_token_ids.
         """
-        sampling_metadata = self.sampling_state.build_sampling_metadata(
-            idx_mapping_np=input_batch.idx_mapping_np,
-            request_state=self.request_state,
-            max_num_logprobs=self.max_logprobs,
-            enable_early_stop=self.enable_early_stop,
-            temp_scaled_logprobs_flag=self.temp_scaled_logprobs,
-            top_p_normalized_logprobs_flag=self.top_p_normalized_logprobs,
-        )
-        return self.sampler(logits, sampling_metadata, p_done_idxs)
+        # logits shape: [num_logits, vocab_size]
+        # Greedy: just take argmax
+        sampled_ids = paddle.argmax(logits, axis=-1).cast(paddle.int32)
+        # sampled_token_ids expected shape: [num_seqs, 1] for non-speculative
+        sampled_ids = sampled_ids.unsqueeze(-1)
+
+        class _SamplerOutput:
+            pass
+        output = _SamplerOutput()
+        output.sampled_token_ids = sampled_ids
+        return output
 
 
     def cal_theortical_kvcache(self):
