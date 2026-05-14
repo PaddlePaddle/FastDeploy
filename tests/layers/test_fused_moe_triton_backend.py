@@ -527,6 +527,9 @@ class TestFusedMoeTritonBackend:
             config,
             quant_config,
             hook,
+            layer,
+            None,
+            None,
         )
 
         assert "topk" in captured
@@ -547,6 +550,9 @@ class TestFusedMoeTritonBackend:
             layer.hidden_size,
             config,
             quant_config,
+            None,
+            layer,
+            None,
             None,
         )
 
@@ -811,6 +817,9 @@ class TestFusedMoeTritonBackend:
             config,
             quant_config,
             hook,
+            layer,
+            None,
+            None,
         )
 
         assert "topk" in captured
