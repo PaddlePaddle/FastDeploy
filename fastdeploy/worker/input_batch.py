@@ -85,6 +85,14 @@ class InputBatch:
         else:
             raise KeyError(f"'{key}' is not a valid attribute of InputBatch")
 
+    def tensor_keys(self):
+        """返回所有 paddle.Tensor 类型的属性名"""
+        return [k for k, v in self.__dict__.items() if isinstance(v, paddle.Tensor)]
+
+    def tensor_len(self):
+        """统计 paddle.Tensor 类型的属性数量"""
+        return len(self.tensor_keys())
+
     def __init__(self, fd_config: FDConfig) -> None:
         """
         Initialize all share buffers for model inputs.

@@ -12,58 +12,55 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "macros.h"
 #include "paddle/extension.h"
 #include "pybind11/numpy.h"
 #include "pybind11/pybind11.h"
 namespace py = pybind11;
 
-// 自定义异常类，用于处理CUDA错误
-class CudaError : public std::exception {
- public:
-  explicit CudaError(cudaError_t error) : error_(error) {}
+// ===================python api===================
 
-  const char* what() const noexcept override {
-    return cudaGetErrorString(error_);
-  }
-
- private:
-  cudaError_t error_;
-};
-
-// 检查CUDA错误并抛出异常
-void check_cuda_error(cudaError_t error) {
-  if (error != cudaSuccess) {
-    throw CudaError(error);
-  }
-}
-
-// 封装cudaHostAlloc的Python函数
 uintptr_t cuda_host_alloc(size_t size,
                           unsigned int flags = cudaHostAllocDefault) {
   void* ptr = nullptr;
-  check_cuda_error(cudaHostAlloc(&ptr, size, flags));
+  FD_CUDA_CHECK(cudaHostAlloc(&ptr, size, flags));
   return reinterpret_cast<uintptr_t>(ptr);
 }
 
-// 封装cudaFreeHost的Python函数
 void cuda_host_free(uintptr_t ptr) {
-  check_cuda_error(cudaFreeHost(reinterpret_cast<void*>(ptr)));
+  FD_CUDA_CHECK(cudaFreeHost(reinterpret_cast<void*>(ptr)));
 }
 
-paddle::Tensor CustomNumpyToTensor(py::array numpy_array,
-                                   paddle::Tensor tensor) {
+paddle::Tensor copy_array_to_tensor(py::array numpy_array,
+                                    paddle::Tensor tensor) {
   py::buffer_info buf_info = numpy_array.request();
   void* numpy_data = buf_info.ptr;
   size_t data_size = buf_info.size * buf_info.itemsize;
   auto stream = tensor.stream();
-  cudaMemcpyAsync((void*)(tensor.data()),
-                  numpy_data,
-                  data_size,
-                  cudaMemcpyHostToDevice,
-                  stream);
+  FD_CUDA_CHECK(cudaMemcpyAsync((void*)(tensor.data()),
+                                numpy_data,
+                                data_size,
+                                cudaMemcpyHostToDevice,
+                                stream));
   return tensor;
 }
 
+paddle::Tensor get_cuda_view_from_cpu_tensor(paddle::Tensor& cpu_tensor) {
+  PD_CHECK(is_pinned_place(cpu_tensor.place()), "Input tensor must be pinned");
+
+  if (cpu_tensor.numel() == 0) {
+    return paddle::empty(
+        cpu_tensor.shape(), cpu_tensor.dtype(), paddle::CPUPlace());
+  }
+
+  void* host_ptr = const_cast<void*>(cpu_tensor.data());
+  void* device_ptr = nullptr;
+  FD_CUDA_CHECK(cudaHostGetDevicePointer(&device_ptr, host_ptr, 0));
+
+  return paddle::from_blob(device_ptr, cpu_tensor.shape(), cpu_tensor.dtype());
+}
+
+// ===================paddle custom ops===================
 void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::Tensor& k_input,
                         const paddle::Tensor& v_input,
@@ -1236,6 +1233,16 @@ std::vector<paddle::Tensor> DSMLAWriteCacheKernel(
     const paddle::optional<paddle::Tensor>& scale,
     const std::string& cache_quant_type_str);
 
+std::vector<paddle::Tensor> ReshapeAndCacheFlashKernel(
+    const paddle::Tensor& key,
+    const paddle::Tensor& value,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& slot_mapping,
+    const paddle::Tensor& k_scale,
+    const paddle::Tensor& v_scale,
+    const std::string& kv_cache_dtype);
+
 std::vector<paddle::Tensor> IndexerKQuantAndCacheKernel(
     const paddle::Tensor& k,
     const paddle::Tensor& kv_cache,
@@ -1326,7 +1333,6 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("flags") = cudaHostAllocDefault);
   m.def(
       "cuda_host_free", &cuda_host_free, "Free pinned memory", py::arg("ptr"));
-  py::register_exception<CudaError>(m, "CudaError");
 #ifdef ENABLE_SM80_EXT_OPS
   /**
    * append_attention.cu
@@ -1917,9 +1923,14 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
 
-  m.def("custom_numpy_to_tensor",
-        &CustomNumpyToTensor,
-        "custom_numpy_to_tensor function");
+  m.def("copy_array_to_tensor",
+        &copy_array_to_tensor,
+        "copy_array_to_tensor function");
+
+  m.def("get_cuda_view_from_cpu_tensor",
+        &get_cuda_view_from_cpu_tensor,
+        "get_cuda_view_from_cpu_tensor function");
+
   m.def("prefill_permute_to_masked_gemm",
         &PrefillPermuteToMaskedGemm,
         py::arg("x"),
@@ -1942,6 +1953,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "radix_topk_ragged_transform function");
 
   m.def("dsk_attn_write_cache", &DSMLAWriteCacheKernel, "dsk_attn_write_cache");
+
+  m.def("reshape_and_cache_flash", &ReshapeAndCacheFlashKernel, "reshape_and_cache_flash");
 
   m.def("indexer_k_quant_and_cache",
         &IndexerKQuantAndCacheKernel,

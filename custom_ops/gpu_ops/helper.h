@@ -50,6 +50,7 @@ namespace cub = hipcub;
 #include <iostream>
 
 #include "env.h"
+#include "macros.h"
 #include "paddle/extension.h"
 #include "paddle/phi/core/allocator.h"
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
@@ -72,18 +73,6 @@ namespace cub = hipcub;
 #ifndef PADDLE_WITH_COREX
 using json = nlohmann::json;
 #endif
-
-#define CUDA_CHECK(call)                           \
-  do {                                             \
-    const cudaError_t error_code = call;           \
-    if (error_code != cudaSuccess) {               \
-      std::printf("at %s:%d - %s.\n",              \
-                  __FILE__,                        \
-                  __LINE__,                        \
-                  cudaGetErrorString(error_code)); \
-      exit(1);                                     \
-    }                                              \
-  } while (0)
 
 #ifdef PADDLE_WITH_HIP
 template <size_t kBlockSize = 256, size_t kNumWaves = 16>

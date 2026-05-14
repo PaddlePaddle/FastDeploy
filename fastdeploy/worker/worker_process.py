@@ -22,6 +22,8 @@ import time
 import traceback
 from typing import Tuple
 
+import nvtx
+
 import numpy as np
 
 from fastdeploy.logger.logger import intercept_paddle_loggers
@@ -602,7 +604,8 @@ class PaddleDisWorkerProc:
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
 
-            self.worker.execute_model(req_dicts, max_occupied_batch_index)
+            with nvtx.annotate("execute_model", color="red"):
+                self.worker.execute_model(req_dicts, max_occupied_batch_index)
 
             # Only v0 use this signal
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
