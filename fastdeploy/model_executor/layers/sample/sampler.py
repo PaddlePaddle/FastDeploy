@@ -1181,19 +1181,12 @@ class SpeculativeSampler(nn.Layer):
         share_inputs: List[paddle.Tensor],
     ) -> SamplerOutput:
         """Normal sampling for NAIVE mode on XPU."""
-        top_p, top_k, topp_seed = padding_sampling_params(
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            sampling_metadata.seed,
-            paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]),
-            paddle.reshape(share_inputs["seq_lens_encoder"], shape=[-1]),
-        )
         _, next_tokens = top_k_top_p_sampling(
             probs,
-            top_p=top_p,
-            top_k=top_k,
+            top_p=sampling_metadata.top_p,
+            top_k=sampling_metadata.top_k,
             top_k_list=sampling_metadata.top_k_list,
-            topp_seed=topp_seed,
+            topp_seed=sampling_metadata.topp_seed,
         )
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
         running_mask = (paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]) > 0).cast("int32")
@@ -1213,11 +1206,13 @@ class SpeculativeSampler(nn.Layer):
         sampling_metadata: SamplingMetadata,
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
+        increment_value: int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
         """Verify draft tokens (MTP/Ngram mode) on XPU using verify_draft_tokens."""
         from fastdeploy.model_executor.ops.xpu import (
+            build_sampling_params,
             top_p_candidates,
             verify_draft_tokens,
         )
@@ -1226,12 +1221,14 @@ class SpeculativeSampler(nn.Layer):
         candidate_ids, candidate_scores, candidate_lens = None, None, None
 
         if self.verify_strategy == VerifyStrategy.TARGET_MATCH:
-            top_p, top_k, topp_seed = padding_sampling_params(
+            top_p, top_k, topp_seed = build_sampling_params(
                 sampling_metadata.top_p,
                 sampling_metadata.top_k,
                 sampling_metadata.seed,
-                paddle.reshape(share_inputs["seq_lens_this_time"], shape=[-1]),
-                paddle.reshape(share_inputs["seq_lens_encoder"], shape=[-1]),
+                share_inputs["seq_lens_this_time"],
+                share_inputs["seq_lens_encoder"],
+                token_num_output_cpu=int(share_inputs["cu_seqlens_q_output"][-1]),
+                increment_value=increment_value,
             )
             _, target_tokens = top_k_top_p_sampling(
                 probs,
@@ -1293,6 +1290,7 @@ class SpeculativeSampler(nn.Layer):
         sampling_metadata: SamplingMetadata,
         max_model_len: int,
         share_inputs: List[paddle.Tensor],
+        increment_value: int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
@@ -1346,6 +1344,7 @@ class SpeculativeSampler(nn.Layer):
                 sampling_metadata,
                 max_model_len,
                 share_inputs,
+                increment_value,
                 accept_all_drafts,
                 reject_all_drafts,
             )
