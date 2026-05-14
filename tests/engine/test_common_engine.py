@@ -1139,22 +1139,29 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng = self._make_mixed_engine()
         eng.is_paused = False
         eng._pause_cond = threading.Condition()
-        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False), put_tasks=Mock())
+        eng.engine_worker_queue = Mock(exist_tasks=Mock(return_value=False))
         eng.resource_manager = Mock(
-            preempted_all=Mock(return_value=[Request(request_id="r1", prompt_token_ids=[1], prompt_token_ids_len=1)]),
-            get_real_bsz=Mock(),
-            wait_worker_inflight_requests_finish=Mock(),
+            requests={"r1": Mock(output_token_ids=[1, 2, 3])},
+            waiting_abort_req_id_set=set(),
+            to_be_aborted_req_id_set=set(),
+            add_abort_req_ids=Mock(),
             log_status=Mock(),
             cache_manager=Mock(reset=Mock()),
-            real_bsz=1,
         )
         eng.token_processor = Mock(clear_data=Mock())
-        eng.scheduler = Mock(get_inflight_requests=Mock(return_value=[]), reset=Mock())
+        mock_scheduler = Mock(reset=Mock())
+        mock_scheduler.requests = {}
+        mock_scheduler.mutex = threading.Lock()
+        mock_scheduler.responses = {}
+        mock_scheduler.batch_responses_per_step = []
+        eng.scheduler = mock_scheduler
         eng._send_error_response = Mock()
+        eng._wait_inflight_drained = Mock()
 
         with patch("fastdeploy.engine.common_engine.envs.ENABLE_V1_KVCACHE_SCHEDULER", True):
             eng._control_pause(ControlRequest(request_id="ctrl1", method="pause"))
             self.assertTrue(eng.is_paused)
+            eng.resource_manager.add_abort_req_ids.assert_called_once()
 
             eng._control_resume(ControlRequest(request_id="ctrl2", method="resume"))
             self.assertFalse(eng.is_paused)
