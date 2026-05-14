@@ -339,7 +339,11 @@ class EngineArgs:
 
     enable_moe_scores_elementwise_fuse: bool = False
     """
+<<<<<<< HEAD
     Flag to enable fused elementwise cast in get_moe_scores. Default is False (disabled).
+=======
+    Flag to enable fused elementwise in get_moe_scores. Default is False (disabled).
+>>>>>>> cb2d7c0fd ([Op][Optimization]Kernel fusion: cast+sigmoid+bias+noauxtc (#7777))
     """
 
     cache_transfer_protocol: str = "ipc,rdma"
@@ -1399,7 +1403,7 @@ class EngineArgs:
             "--enable-moe-scores-elementwise-fuse",
             action="store_true",
             default=EngineArgs.enable_moe_scores_elementwise_fuse,
-            help="Enable fused elementwise cast in get_moe_scores for MoE routing.",
+            help="Enable fused elementwise in get_moe_scores for MoE routing.",
         )
         model_group.add_argument(
             "--deploy-modality",

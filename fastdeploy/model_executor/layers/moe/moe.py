@@ -36,15 +36,14 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 try:
-    from fastdeploy.model_executor.ops.gpu import noaux_tc, noaux_tc_redundant
+    from fastdeploy.model_executor.ops.gpu import (
+        grouped_topk,
+        noaux_tc,
+        noaux_tc_redundant,
+    )
 except:
     logger.warning("import noaux_tc Failed!")
 import numpy as np
-
-if current_platform.is_cuda():
-    from fastdeploy.model_executor.layers.moe.fused_cast_sigmoid_bias import (
-        fused_cast_sigmoid_bias,
-    )
 
 
 def get_moe_method(layer=None):
@@ -107,11 +106,6 @@ def get_moe_scores(
     compute moe scores using e_score_correction_bias.
     """
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
-    if use_fused_cast and current_platform.is_cuda():
-        scores, scores_with_bias = fused_cast_sigmoid_bias(gating_output, e_score_correction_bias, cast_type="float32")
-    else:
-        scores = paddle.nn.functional.sigmoid(gating_output)
-        scores_with_bias = scores + e_score_correction_bias
     if envs.FD_USE_PHI_MOE_TOPK:
         # calculate renormalize and routed_scaling_factor value outside the noaux_tc
         original_renormalize = renormalize
@@ -119,7 +113,9 @@ def get_moe_scores(
         renormalize = False
         routed_scaling_factor = 1.0
 
-    if expert_id_to_ep_rank_array is None:
+    if expert_id_to_ep_rank_array is None and not use_fused_cast:
+        scores = paddle.nn.functional.sigmoid(gating_output)
+        scores_with_bias = scores + e_score_correction_bias
         scores, topk_values, topk_idx = noaux_tc(
             scores,
             scores_with_bias,
@@ -129,9 +125,20 @@ def get_moe_scores(
             renormalize,
             routed_scaling_factor,
         )
+    elif expert_id_to_ep_rank_array is None and use_fused_cast:
+        # fused kernel: cast + sigmoid + add + noaux_tc
+        scores, topk_values, topk_idx = grouped_topk(
+            gating_output,
+            e_score_correction_bias,
+            n_group if n_group > 0 else 1,
+            topk_group if topk_group > 0 else 1,
+            top_k,
+            renormalize,
+            routed_scaling_factor,
+        )
     else:
-        # noaux_tc_redundant returns 4 values: scores, topk_values, topk_idx,
-        # and tokens_per_expert_stats_list_out (inplace updated)
+        scores = paddle.nn.functional.sigmoid(gating_output)
+        scores_with_bias = scores + e_score_correction_bias
         scores, topk_values, topk_idx, _ = noaux_tc_redundant(
             scores,
             scores_with_bias,

@@ -691,6 +691,15 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     bool renormalize,
                                     float routed_scaling_factor);
 
+std::vector<paddle::Tensor> grouped_topk(
+    paddle::Tensor& gating_output,
+    paddle::Tensor& e_score_correction_bias,
+    int n_group,
+    int topk_group,
+    int topk,
+    bool renormalize,
+    float routed_scaling_factor);
+
 std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
                                                  const paddle::Tensor& bias,
                                                  std::string cast_type);
@@ -1703,6 +1712,8 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 #endif
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
+
+  m.def("grouped_topk", &grouped_topk, "fused grouped topk for MoE routing");
 
   m.def("fused_cast_sigmoid_bias",
         &FusedCastSigmoidBias,
