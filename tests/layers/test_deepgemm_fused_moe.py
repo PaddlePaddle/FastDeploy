@@ -106,7 +106,10 @@ class DummyFDConfig:
             # ep_size * this = max tokens buffer for masked GEMM; must be ≥ aligned M
             num_max_dispatch_tokens_per_rank=128,
         )
-        self.scheduler_config = types.SimpleNamespace(max_num_batched_tokens=NUM_TOKENS)
+        self.scheduler_config = types.SimpleNamespace(
+            max_num_batched_tokens=NUM_TOKENS,
+            enable_moe_scores_elementwise_fuse=False,
+        )
         self.parallel_config = types.SimpleNamespace(tensor_parallel_size=1)
 
 
