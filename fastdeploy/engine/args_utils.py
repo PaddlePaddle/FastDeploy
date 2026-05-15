@@ -127,7 +127,7 @@ class EngineArgs:
     Server-level default response token length.
     Used when per-request response_max_tokens is not specified. None means no default limit.
     """
-    min_tokens: int = 1
+    min_completion_tokens: int = 1
     """
     Server-level default minimum generation length.
     Used when per-request min_tokens is not specified.
@@ -808,9 +808,9 @@ class EngineArgs:
             "Used when per-request value is not specified. Default: None (no limit).",
         )
         model_group.add_argument(
-            "--min-tokens",
+            "--min-completion-tokens",
             type=int,
-            default=EngineArgs.min_tokens,
+            default=EngineArgs.min_completion_tokens,
             help="Server-level default minimum generation length. "
             "Used when per-request value is not specified. Default: 1.",
         )
@@ -1585,8 +1585,8 @@ class EngineArgs:
             raise ValueError("--reasoning-max-tokens must be >= 1")
         if self.response_max_tokens is not None and self.response_max_tokens < 1:
             raise ValueError("--response-max-tokens must be >= 1")
-        if self.min_tokens < 1:
-            raise ValueError("--min-tokens must be >= 1")
+        if self.min_completion_tokens < 1:
+            raise ValueError("--min-completion-tokens must be >= 1")
         if self.input_max_tokens is not None and self.input_max_tokens < 1:
             raise ValueError("--input-max-tokens must be >= 1")
 

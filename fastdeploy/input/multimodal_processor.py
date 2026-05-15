@@ -443,7 +443,7 @@ class MultiModalProcessor(BaseTextProcessor):
         for key, server_val in [
             ("reasoning_max_tokens", self.reasoning_max_tokens),
             ("response_max_tokens", self.response_max_tokens),
-            ("min_tokens", self.min_tokens),
+            ("min_tokens", self.min_completion_tokens),
         ]:
             if server_val is not None or request.get(key) is not None:
                 request[key] = _min_non_none(max_tokens, server_val, request.get(key))
