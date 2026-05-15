@@ -1971,6 +1971,32 @@ class EngineService(EngineServicePrepareMixin):
                     self.token_processor.tokens_counter[request_id] = 1
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
                         self.scheduler.put_results([req_output])
+
+                    # Storage pool mode: D reads cache from storage before adding to running queue
+                    if envs.FD_PD_TRANSFER_VIA_STORAGE:
+                        request = self.resource_manager.requests[request_id]
+                        self.llm_logger.info(f"[PD Storage] D reading cache from storage, request_id: {request_id}")
+                        storage_block_ids = self.resource_manager.cache_manager.read_cache_from_storage_for_pd(request)
+                        if not storage_block_ids:
+                            self.llm_logger.error(
+                                f"[PD Storage] D failed to read cache from storage, " f"request_id: {request_id}"
+                            )
+                            self.resource_manager.pre_recycle_resource(request_id)
+                            if request_id in self.token_processor.tokens_counter:
+                                del self.token_processor.tokens_counter[request_id]
+                            req_output.error_code = 502
+                            req_output.error_msg = (
+                                f"PD Storage Error: D failed to read all blocks from storage, "
+                                f"request_id: {request_id}"
+                            )
+                            req_output.finished = True
+                            self.scheduler.put_results([req_output])
+                            continue
+                        self.llm_logger.info(
+                            f"[PD Storage] D successfully read cache from storage, "
+                            f"request_id: {request_id}, blocks: {len(storage_block_ids)}"
+                        )
+
                     self.resource_manager.add_prefilled_request(req_output)
                     self.llm_logger.info(f"D has successfully added prefilled request, {request_id}")
 

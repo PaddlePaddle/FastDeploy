@@ -657,6 +657,19 @@ class TokenProcessor:
                         f"wait for sending cache, request_id: {task_id}, cost seconds: {time.time()-start_time:.5f}"
                     )
                     trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_END, task_id, getattr(task, "user", ""))
+
+                    # Storage pool mode: write all cache to storage before sending first token to D
+                    if envs.FD_PD_TRANSFER_VIA_STORAGE and result.error_code == 200:
+                        llm_logger.info(
+                            f"[PD Storage] P writing cache to storage before send_first_token, "
+                            f"request_id: {task_id}"
+                        )
+                        self.resource_manager.cache_manager.write_all_cache_to_storage(task, include_output=False)
+                        llm_logger.info(
+                            f"[PD Storage] P finished writing cache to storage, "
+                            f"request_id: {task_id}, cost: {time.time()-start_time:.5f}s"
+                        )
+
                     result.metrics.send_request_output_to_decode_time = time.time()
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
