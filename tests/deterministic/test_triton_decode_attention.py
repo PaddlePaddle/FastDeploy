@@ -63,8 +63,7 @@ def cosine_similarity(a, b):
 # ---------------------------------------------------------------------------
 # Reference implementation: naive decode attention (no paging)
 # ---------------------------------------------------------------------------
-def naive_decode_attention_ref(q, k_pages, v_pages, kv_indptr, kv_indices,
-                               sm_scale, kv_block_size):
+def naive_decode_attention_ref(q, k_pages, v_pages, kv_indptr, kv_indices, sm_scale, kv_block_size):
     """
     Naive Python reference for decode attention with paged KV cache.
 
@@ -154,7 +153,6 @@ def build_decode_test_data(
     np.random.seed(seed)
     paddle.seed(seed)
 
-    total_kv_len = sum(seq_lens)
     num_blocks_needed = sum((s + block_size - 1) // block_size for s in seq_lens)
     num_blocks = max(num_blocks_needed + 4, 8)
 
@@ -194,7 +192,7 @@ def build_decode_test_data(
     attn_lse = paddle.empty([batch_size, num_heads, max_kv_splits], dtype="float32")
     o = paddle.empty([batch_size, num_heads, Lv], dtype=dtype)
 
-    sm_scale = head_dim_k ** -0.5
+    sm_scale = head_dim_k**-0.5
 
     return {
         "q": q,
@@ -290,8 +288,7 @@ _DECODE_CASES = [
     ids=[c[0] for c in _DECODE_CASES],
 )
 @pytest.mark.parametrize("dtype", ["float16", "bfloat16"])
-def test_decode_attention_correctness(name, batch, num_heads, kv_heads, Lk, Lv,
-                                      seq_lens, block_size, dtype):
+def test_decode_attention_correctness(name, batch, num_heads, kv_heads, Lk, Lv, seq_lens, block_size, dtype):
     """Triton decode attention output should match naive reference."""
     data = build_decode_test_data(
         batch_size=batch,
@@ -336,12 +333,10 @@ def test_decode_attention_correctness(name, batch, num_heads, kv_heads, Lk, Lv,
     cos_sim = cosine_similarity(triton_out, ref_out)
 
     atol = BF16_ATOL if dtype == "bfloat16" else FP16_ATOL
-    assert max_diff < atol, (
-        f"[{name}/{dtype}] max_diff={max_diff:.6f} exceeds atol={atol}"
-    )
-    assert cos_sim > COSINE_SIM_THRESHOLD, (
-        f"[{name}/{dtype}] cos_sim={cos_sim:.6f} below threshold={COSINE_SIM_THRESHOLD}"
-    )
+    assert max_diff < atol, f"[{name}/{dtype}] max_diff={max_diff:.6f} exceeds atol={atol}"
+    assert (
+        cos_sim > COSINE_SIM_THRESHOLD
+    ), f"[{name}/{dtype}] cos_sim={cos_sim:.6f} below threshold={COSINE_SIM_THRESHOLD}"
 
 
 # ===========================================================================
@@ -380,10 +375,7 @@ def test_decode_attention_determinism():
         results.append(o.astype("float32").numpy())
 
     for i in range(1, len(results)):
-        np.testing.assert_array_equal(
-            results[0], results[i],
-            err_msg=f"Run 0 vs run {i} differ — non-deterministic!"
-        )
+        np.testing.assert_array_equal(results[0], results[i], err_msg=f"Run 0 vs run {i} differ — non-deterministic!")
 
 
 # ===========================================================================

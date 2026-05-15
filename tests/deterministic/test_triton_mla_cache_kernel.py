@@ -411,10 +411,7 @@ def test_write_cache_determinism():
         results.append(cache.astype("float32").numpy())
 
     for i in range(1, len(results)):
-        np.testing.assert_array_equal(
-            results[0], results[i],
-            err_msg=f"Run 0 vs run {i} differ — non-deterministic!"
-        )
+        np.testing.assert_array_equal(results[0], results[i], err_msg=f"Run 0 vs run {i} differ — non-deterministic!")
 
 
 # ===========================================================================
@@ -429,17 +426,23 @@ def test_manual_baseline():
     latent_dim = kv_lora_rank + qk_rope_head_dim  # 6
 
     # 3 tokens, deterministic values
-    compressed_kv = paddle.to_tensor([
-        [1.0, 2.0, 3.0, 4.0],
-        [5.0, 6.0, 7.0, 8.0],
-        [9.0, 10.0, 11.0, 12.0],
-    ], dtype="float32")
+    compressed_kv = paddle.to_tensor(
+        [
+            [1.0, 2.0, 3.0, 4.0],
+            [5.0, 6.0, 7.0, 8.0],
+            [9.0, 10.0, 11.0, 12.0],
+        ],
+        dtype="float32",
+    )
 
-    k_pe = paddle.to_tensor([
-        [0.1, 0.2],
-        [0.3, 0.4],
-        [0.5, 0.6],
-    ], dtype="float32")
+    k_pe = paddle.to_tensor(
+        [
+            [0.1, 0.2],
+            [0.3, 0.4],
+            [0.5, 0.6],
+        ],
+        dtype="float32",
+    )
 
     latent_cache = paddle.zeros([num_blocks, 1, block_size, latent_dim], dtype="float32")
 
