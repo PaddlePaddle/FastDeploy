@@ -366,7 +366,21 @@ class DeepseekV3MLAAttention(nn.Layer):
             fused_read_cache_and_interleave,
         )
 
+<<<<<<< HEAD
         q_total_token_num = hidden_states.shape[0]
+=======
+        need_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
+        need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
+
+        # Idle pass (e.g. CUDAGraph padding): skip all attention computation
+        if not need_do_prefill and not need_do_decode:
+            return self.o_proj(
+                paddle.zeros(
+                    [hidden_states.shape[0], self.num_attention_heads_tp * self.v_head_dim],
+                    dtype=hidden_states.dtype,
+                )
+            )
+>>>>>>> 15a153a24 (update forward)
 
         attn_out = None
         if self.use_gated_attn:
@@ -536,7 +550,6 @@ class DeepseekV3MLAAttention(nn.Layer):
                 attn_out = attn_out * ((F.softsign(gate_out) + 1.0) / 2.0)
             else:
                 raise NotImplementedError(f"{gated_attn_act} not implemented")
-
         output = self.o_proj(attn_out)
         return output
 
