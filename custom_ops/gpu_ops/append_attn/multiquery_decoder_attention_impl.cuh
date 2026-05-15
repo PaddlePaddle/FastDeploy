@@ -16,19 +16,6 @@
 #include "decode_attention_func.cuh"
 #include "multiquery_decoder_attention_kernel.h"
 
-#define CHECK(call)                                                   \
-  do {                                                                \
-    const cudaError_t error_code = call;                              \
-    if (error_code != cudaSuccess) {                                  \
-      printf("CUDA Error:\n");                                        \
-      printf("     File:      %s\n", __FILE__);                       \
-      printf("     Line       %d:\n", __LINE__);                      \
-      printf("     Error code:%d\n", error_code);                     \
-      printf("     Error text:%s\n", cudaGetErrorString(error_code)); \
-      exit(1);                                                        \
-    }                                                                 \
-  } while (0)
-
 template <typename T,
           typename OutT,
           int vec_size,
@@ -481,8 +468,8 @@ void MultiQueryDecoderAttention(
         nullptr,
         reinterpret_cast<NV_TYPE *>(const_cast<T *>(out->data<T>())));
 
-    // CHECK(cudaGetLastError());
-    // CHECK(cudaDeviceSynchronize());
+    // FD_CUDA_CHECK(cudaGetLastError());
+    // FD_CUDA_CHECK(cudaDeviceSynchronize());
   } else {
     auto *allocator = paddle::GetAllocator(q.place());
     phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
@@ -516,8 +503,8 @@ void MultiQueryDecoderAttention(
         reinterpret_cast<NV_TYPE *>(tmp_m->ptr()),
         reinterpret_cast<NV_TYPE *>(tmp_d->ptr()),
         reinterpret_cast<NV_TYPE *>(const_cast<T *>(out->data<T>())));
-    // CHECK(cudaGetLastError());
-    // CHECK(cudaDeviceSynchronize());
+    // FD_CUDA_CHECK(cudaGetLastError());
+    // FD_CUDA_CHECK(cudaDeviceSynchronize());
 
     constexpr int mblockx = HEAD_DIM_V / vec_size;
     constexpr int bdy = 256 / mblockx;
@@ -545,6 +532,6 @@ void MultiQueryDecoderAttention(
             num_heads,
             HEAD_DIM_V);
   }
-  // CHECK(cudaGetLastError());
-  // CHECK(cudaDeviceSynchronize());
+  // FD_CUDA_CHECK(cudaGetLastError());
+  // FD_CUDA_CHECK(cudaDeviceSynchronize());
 }

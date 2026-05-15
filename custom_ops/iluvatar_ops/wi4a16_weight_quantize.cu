@@ -130,7 +130,7 @@ std::vector<paddle::Tensor> Wi4A16Quantize(const paddle::Tensor& w,
   auto scales = GetEmptyTensor({k / group_size, n}, w.dtype(), w.place());
   auto zeros = GetEmptyTensor({k / group_size, n}, w.dtype(), w.place());
 
-  CUDA_CHECK(cudaMemsetAsync(
+  FD_CUDA_CHECK(cudaMemsetAsync(
       zeros.data(),
       0,
       static_cast<size_t>(zeros.numel()) * phi::SizeOf(zeros.dtype()),

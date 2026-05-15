@@ -38,7 +38,10 @@ try:
     ModelRunner = load_model_runner_plugins()
 except Exception as e:
     logger.info(f"Plugin ModelRunner not available ({e}), using default GPUModelRunner")
-    from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
+    if envs.FD_ENABLE_GPU_MRV1:
+        from fastdeploy.worker.gpu.model_runner import GPUModelRunnerV1 as ModelRunner
+    else:
+        from fastdeploy.worker.gpu_model_runner import GPUModelRunner as ModelRunner
 
 
 class GpuWorker(WorkerBase):

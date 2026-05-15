@@ -54,6 +54,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_MAX_STOP_SEQS_NUM": lambda: int(os.getenv("FD_MAX_STOP_SEQS_NUM", "5")),
     # Maximum length of stop sequences.
     "FD_STOP_SEQS_MAX_LEN": lambda: int(os.getenv("FD_STOP_SEQS_MAX_LEN", "8")),
+    # Maximum number of bad words.
+    "FD_MAX_BDA_WORDS_NUM": lambda: int(os.getenv("FD_MAX_BDA_WORDS_NUM", "16")),
+    # Maximum length of bad words.
+    "FD_BDA_WORDS_MAX_LEN": lambda: int(os.getenv("FD_BDA_WORDS_MAX_LEN", "8")),
     # GPU devices that will be used. This is a string that
     # splited by comma, such as 0,1,2.
     "CUDA_VISIBLE_DEVICES": lambda: os.getenv("CUDA_VISIBLE_DEVICES", None),
@@ -279,6 +283,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
     # enable kv cache manager v1
     "ENABLE_V1_KVCACHE_MANAGER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_MANAGER", "0")),
+    # Whether to enable GPUModelRunnerV1(only support GPU)
+    "FD_ENABLE_GPU_MRV1": lambda: int(os.getenv("FD_ENABLE_GPU_MRV1", "0")),
 }
 
 

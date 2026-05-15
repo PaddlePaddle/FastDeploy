@@ -356,6 +356,9 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/ipc_sent_key_value_cache_by_remote_ptr.cu",
     ]
 
+    # cache_kv
+    sources += ["gpu_ops/cache_kv/reshape_and_cache_flash.cu"]
+
     dg_third_party_include_dirs = (
         "third_party/cutlass/include/cute",
         "third_party/cutlass/include/cutlass",

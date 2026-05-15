@@ -100,9 +100,9 @@ else:
         speculate_step_reschedule,
         limit_thinking_content_length,
         speculate_limit_thinking_content_length,
-        custom_numpy_to_tensor,
         mtp_save_first_token,
         mtp_save_first_token_with_topk,
+        copy_array_to_tensor,
     )
 
 from fastdeploy.model_executor.entropy_utils import (
@@ -130,9 +130,9 @@ def async_set_value(tgt, src):
         if current_platform.is_cuda():
             if str(src.dtype) != dtype_str:
                 srt_tensor = paddle.empty(tgt.shape, dtype=str(src.dtype))
-                src = custom_numpy_to_tensor(src, srt_tensor)
+                src = copy_array_to_tensor(src, srt_tensor)
             else:
-                return custom_numpy_to_tensor(src, tgt)
+                return copy_array_to_tensor(src, tgt)
         else:
             src = paddle.to_tensor(src, dtype=tgt.dtype)
     elif isinstance(src, paddle.Tensor):
