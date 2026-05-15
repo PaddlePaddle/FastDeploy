@@ -52,8 +52,12 @@ namespace cub = hipcub;
 #include "env.h"
 #include "paddle/extension.h"
 #include "paddle/phi/core/allocator.h"
+// TODO (yuzhe): remove ifndef PADDLE_WITH_COREX when
+// https://github.com/PaddlePaddle/Paddle/pull/78813 merged
+#ifndef PADDLE_WITH_COREX
 #include "paddle/phi/core/memory/allocation/allocator_facade.h"
 #include "paddle/phi/backends/gpu/cuda/cuda_graph.h"
+#endif
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
 #include "paddle/phi/backends/custom/custom_context.h"
 #else
@@ -374,7 +378,9 @@ inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
                                      const paddle::DataType &dtype,
                                      const paddle::Place &place) {
   phi::Allocator *allocator = nullptr;
-#if defined(PADDLE_WITH_CUDA)
+// TODO (yuzhe): remove !defined(PADDLE_WITH_COREX) when
+// https://github.com/PaddlePaddle/Paddle/pull/78813 merged
+#if defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_COREX)
   if (phi::backends::gpu::CUDAGraph::IsThisThreadCapturing()) {
     allocator = paddle::memory::allocation::AllocatorFacade::Instance()
                     .GetAllocator(place)
@@ -397,7 +403,9 @@ inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
                                      const paddle::DataType &dtype,
                                      const paddle::Place &place) {
   phi::Allocator *allocator = nullptr;
-#if defined(PADDLE_WITH_CUDA)
+// TODO (yuzhe): remove !defined(PADDLE_WITH_COREX) when
+// https://github.com/PaddlePaddle/Paddle/pull/78813 merged
+#if defined(PADDLE_WITH_CUDA) && !defined(PADDLE_WITH_COREX)
   if (phi::backends::gpu::CUDAGraph::IsThisThreadCapturing()) {
     allocator = paddle::memory::allocation::AllocatorFacade::Instance()
                     .GetAllocator(place)
