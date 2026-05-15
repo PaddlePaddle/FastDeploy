@@ -58,6 +58,7 @@ class DummyFDConfig:
     def __init__(self, load_choices="default_v1"):
         self.load_config = DummyLoadConfig(load_choices)
         self.model_config = types.SimpleNamespace(enable_cache=False)
+        self.scheduler_config = types.SimpleNamespace(enable_moe_scores_elementwise_fuse=False)
 
 
 class DummyGate(paddle.nn.Layer):

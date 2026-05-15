@@ -588,6 +588,7 @@ class TokenProcessor:
                             f"PD Error: prefill failed to send cache to decode, "
                             f"{task_id}, {self.prefill_result_status[task_id]}"
                         )
+                    self.prefill_result_status.pop(task_id)
                     log_request(
                         RequestLogLevel.STAGES,
                         message="wait for sending cache, request_id: {request_id}, cost seconds: {cost_seconds}",

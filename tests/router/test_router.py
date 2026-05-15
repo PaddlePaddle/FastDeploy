@@ -20,6 +20,7 @@ Why mock:
     We mock it at the network boundary to test Router's registration and selection logic.
 """
 
+import asyncio
 import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -192,7 +193,7 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
 
     @patch("fastdeploy.router.router.check_service_health_async", new_callable=AsyncMock, return_value=True)
     async def test_abort_broadcasts_to_all_but_returns_decode_only(self, mock_health):
-        """P and D both receive the request, but only D results are aggregated."""
+        """Router returns 200 immediately and forwards to all (P + D) servers in background."""
         from fastdeploy.router.router import abort_requests as abort_fn
         from fastdeploy.router.router import app
 
@@ -203,24 +204,8 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
 
         prefill_resp = AsyncMock()
         prefill_resp.status = 200
-        prefill_resp.json = AsyncMock(
-            return_value={
-                "request_id": "control-p",
-                "status": "success",
-                "error_message": None,
-                "result": {"aborted": [{"request_id": "req-1::n::0", "output_token_count": 0}], "not_found": []},
-            }
-        )
         decode_resp = AsyncMock()
         decode_resp.status = 200
-        decode_resp.json = AsyncMock(
-            return_value={
-                "request_id": "control-d",
-                "status": "success",
-                "error_message": None,
-                "result": {"aborted": [{"request_id": "req-1::n::0", "output_token_count": 15}], "not_found": []},
-            }
-        )
 
         mock_session = self._make_mock_session([prefill_resp, decode_resp])
         mock_request = AsyncMock()
@@ -228,18 +213,17 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
 
         with patch("fastdeploy.router.router.aiohttp.ClientSession", return_value=mock_session):
             resp = await abort_fn(mock_request)
+            # Give the background task a chance to run
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
 
-        import json
-
-        body = json.loads(resp.body)
-        self.assertEqual(len(body["result"]["aborted"]), 1)
-        self.assertEqual(body["result"]["aborted"][0]["output_token_count"], 15)
-        self.assertEqual(body["status"], "success")
+        self.assertEqual(resp.status_code, 200)
+        # Forwarded to both prefill + decode
         self.assertEqual(mock_session.post.call_count, 2)
 
     @patch("fastdeploy.router.router.check_service_health_async", new_callable=AsyncMock, return_value=True)
-    async def test_abort_decode_error_returns_error_status(self, mock_health):
-        """When D node returns a non-200 status, status should be 'error'."""
+    async def test_abort_returns_200_even_when_decode_errors(self, mock_health):
+        """Router fire-and-forgets: still returns 200 when D returns non-200."""
         from fastdeploy.router.router import abort_requests as abort_fn
         from fastdeploy.router.router import app
 
@@ -250,14 +234,6 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
 
         prefill_resp = AsyncMock()
         prefill_resp.status = 200
-        prefill_resp.json = AsyncMock(
-            return_value={
-                "request_id": "control-p",
-                "status": "success",
-                "error_message": None,
-                "result": {"aborted": [], "not_found": []},
-            }
-        )
         decode_resp = AsyncMock()
         decode_resp.status = 500
 
@@ -267,16 +243,14 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
 
         with patch("fastdeploy.router.router.aiohttp.ClientSession", return_value=mock_session):
             resp = await abort_fn(mock_request)
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
 
-        import json
-
-        body = json.loads(resp.body)
-        self.assertEqual(body["status"], "error")
-        self.assertIsNotNone(body["error_message"])
+        self.assertEqual(resp.status_code, 200)
 
     @patch("fastdeploy.router.router.check_service_health_async", new_callable=AsyncMock, return_value=True)
-    async def test_abort_decode_exception_returns_error(self, mock_health):
-        """When D node connection fails (exception), error should be captured."""
+    async def test_abort_returns_200_when_decode_raises(self, mock_health):
+        """Router fire-and-forgets: still returns 200 when a downstream raises."""
         from fastdeploy.router.router import abort_requests as abort_fn
         from fastdeploy.router.router import app
 
@@ -287,30 +261,20 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
 
         prefill_resp = AsyncMock()
         prefill_resp.status = 200
-        prefill_resp.json = AsyncMock(
-            return_value={
-                "request_id": "control-p",
-                "status": "success",
-                "error_message": None,
-                "result": {"aborted": [], "not_found": []},
-            }
-        )
 
-        # D node raises exception — but asyncio.gather(return_exceptions=True) captures it
-        # So we pass the exception as a response directly
         mock_session = self._make_mock_session([prefill_resp, prefill_resp])  # placeholder
         call_idx = [0]
 
         def post_with_exception(*args, **kwargs):
             call_idx[0] += 1
             if call_idx[0] == 1:
-                # prefill: normal
+
                 async def _coro():
                     return prefill_resp
 
                 return _coro()
             else:
-                # decode: raise (gather with return_exceptions=True will catch)
+
                 async def _coro_err():
                     raise ConnectionError("refused")
 
@@ -322,12 +286,10 @@ class TestRouterAbortRequests(unittest.IsolatedAsyncioTestCase):
 
         with patch("fastdeploy.router.router.aiohttp.ClientSession", return_value=mock_session):
             resp = await abort_fn(mock_request)
+            await asyncio.sleep(0)
+            await asyncio.sleep(0)
 
-        import json
-
-        body = json.loads(resp.body)
-        self.assertEqual(body["status"], "error")
-        self.assertIn("refused", body["error_message"])
+        self.assertEqual(resp.status_code, 200)
 
 
 if __name__ == "__main__":
