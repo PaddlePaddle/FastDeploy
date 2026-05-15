@@ -16,6 +16,7 @@
 
 import unittest
 
+import numpy as np
 import paddle
 
 paddle.enable_compat(scope={"deep_gemm"})
@@ -443,7 +444,11 @@ class TestDeepDenseGemm(unittest.TestCase):
         baseline_out = paddle.matmul(tmp0, tmp1, False, True)
 
         deepgemm_output = paddle.zeros_like(baseline_out)
-        for i in range(10):
+        test_loops = 5
+        start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_loops)]
+        end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_loops)]
+
+        for i in range(test_loops):
             # 这行代码放在这里是为了让event的计时更准确！
             # 太棒啦！
             for j in range(100):
@@ -453,9 +458,7 @@ class TestDeepDenseGemm(unittest.TestCase):
             a = raw_x_scale.transpose([1, 0]).contiguous().transpose([1, 0])
             b = raw_w_scale.transpose([1, 0]).contiguous().transpose([1, 0])
 
-            start_events = paddle.device.cuda.Event(enable_timing=True)
-            end_events = paddle.device.cuda.Event(enable_timing=True)
-            start_events.record()
+            start_events[i].record()
 
             deep_gemm.fp8_gemm_nt(
                 (raw_x, a),
@@ -463,35 +466,27 @@ class TestDeepDenseGemm(unittest.TestCase):
                 deepgemm_output,
             )
 
-            end_events.record()
+            end_events[i].record()
 
-            total_time = round(start_events.elapsed_time(end_events), 10)
-            flops = 2.0 * M * N * K / (1024**4) / (total_time / 1000.0)
-            print(total_time)
-            print(flops)
+        total_time = np.array([round(s.elapsed_time(e), 10) for s, e in zip(start_events, end_events)])[-1:]
+        flops = 2.0 * M * N * K / (1024**4) / (total_time / 1000.0)
+        print(total_time)
+        print(flops)
 
-        print(baseline_out - deepgemm_output)
+        # print(baseline_out - deepgemm_output)
         # assert (baseline_out - deepgemm_output).abs().max().item() < 0.1
 
     def test_main(self):
         prop = paddle.device.cuda.get_device_properties()
         if prop.major != 10:
             return
-        # import paddle.profiler as profiler
-
-        # p = profiler.Profiler(
-        #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
-        #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
-        # )
-        # p.start()
-        # p.step()
 
         self.one_invoke(4096, 4096, 4096)
+        self.one_invoke(4096, 2048, 7168)
+        self.one_invoke(4096, 65536, 1536)
         # self.one_invoke(128 * 20, 2048, 2048)
 
         self.two_invoke(128 * 20, 128 * 20, 64 * 4)
-
-        # p.stop()
 
 
 if __name__ == "__main__":
