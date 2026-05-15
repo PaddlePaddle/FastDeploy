@@ -107,7 +107,7 @@ class TritonMLAAttentionBackend(AttentionBackend):
         self.causal: bool = getattr(fd_config.model_config, "causal", True)
 
         self.num_heads: int = num_heads
-        self.head_dim: int = fd_config.model_config.head_dim
+        self.head_dim: int = head_dim
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         self.kv_lora_rank: int = fd_config.model_config.kv_lora_rank
@@ -124,7 +124,7 @@ class TritonMLAAttentionBackend(AttentionBackend):
         self.max_kv_splits: int = 32
 
         self.rank, self.device_id = init_rank_and_device_id(fd_config)
-        self.useless_tensor = paddle.randn([1]).cast("int32")
+        self.useless_tensor = paddle.zeros([1], dtype="int32")
 
         # Pre-allocate buffers for CUDAGraph compatibility (stable memory addresses)
         self.max_num_seqs = fd_config.scheduler_config.max_num_seqs
@@ -132,6 +132,12 @@ class TritonMLAAttentionBackend(AttentionBackend):
         self._kv_indptr_buf = paddle.zeros([self.max_num_seqs + 1], dtype="int32")
         self._kv_indices_buf = paddle.zeros([self.max_num_seqs * max_blocks_per_seq * self.block_size], dtype="int32")
         self._num_kv_splits_buf = paddle.ones([self.max_num_seqs], dtype="int32")
+
+        # Pre-allocate decode kernel intermediate buffers for CUDAGraph address stability
+        Lv = fd_config.model_config.kv_lora_rank
+        self._attn_logits_buf = paddle.empty([self.max_num_seqs, num_heads, self.max_kv_splits, Lv], dtype="float32")
+        self._attn_lse_buf = paddle.empty([self.max_num_seqs, num_heads, self.max_kv_splits], dtype="float32")
+        self._o_buf = paddle.empty([self.max_num_seqs, num_heads, Lv], dtype=paddle.get_default_dtype())
 
         if self.flash_attn_func is None:
             prop = paddle.device.cuda.get_device_properties()
@@ -191,7 +197,10 @@ class TritonMLAAttentionBackend(AttentionBackend):
             total_kv_len = int(paddle.sum(decode_seq_lens).item())
 
             build_kv_indices_from_block_tables(
-                decode_block_tables, decode_seq_lens, self.block_size, decode_bs,
+                decode_block_tables,
+                decode_seq_lens,
+                self.block_size,
+                decode_bs,
                 total_kv_len=total_kv_len,
                 kv_indptr_buf=self._kv_indptr_buf,
                 kv_indices_buf=self._kv_indices_buf,
@@ -200,11 +209,10 @@ class TritonMLAAttentionBackend(AttentionBackend):
             # kv_indptr[decode_bs] = total_kv_len; positions beyond must equal the same
             # so that (kv_indptr[i+1] - kv_indptr[i]) = 0 for padded batches.
             if decode_bs < self.max_num_seqs:
-                self._kv_indptr_buf[decode_bs + 1:] = total_kv_len
+                self._kv_indptr_buf[decode_bs + 1 :] = total_kv_len
 
             # Compute num_kv_splits into the pre-allocated buffer
-            compute_num_kv_splits(decode_seq_lens, decode_bs, self.max_kv_splits,
-                                  out_buf=self._num_kv_splits_buf)
+            compute_num_kv_splits(decode_seq_lens, decode_bs, self.max_kv_splits, out_buf=self._num_kv_splits_buf)
             # Padded entries must be >= 1 to avoid division by zero in kernel
             if decode_bs < self.max_num_seqs:
                 self._num_kv_splits_buf[decode_bs:] = 1
@@ -346,14 +354,15 @@ class TritonMLAAttentionBackend(AttentionBackend):
         latent_dim = self.kv_lora_rank + self.qk_rope_head_dim
         q_reshaped = q.reshape([bs, self.num_heads, latent_dim])
 
-        attn_logits = paddle.empty([bs, self.num_heads, self.max_kv_splits, Lv], dtype="float32")
-        attn_lse = paddle.empty([bs, self.num_heads, self.max_kv_splits], dtype="float32")
-        o = paddle.empty([bs, self.num_heads, Lv], dtype=q.dtype)
+        # Use pre-allocated buffers sliced to current batch size for CUDAGraph address stability
+        attn_logits = self._attn_logits_buf[:bs]
+        attn_lse = self._attn_lse_buf[:bs]
+        o = self._o_buf[:bs]
 
         decode_attention_fwd(
             q_reshaped,
             latent_cache,
-            latent_cache[:, :, :, :self.kv_lora_rank],
+            latent_cache[:, :, :, : self.kv_lora_rank],
             o,
             metadata.kv_indptr,
             metadata.kv_indices,

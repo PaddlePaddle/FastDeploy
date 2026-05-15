@@ -28,14 +28,7 @@ from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
     enable_compat_on_triton_kernel,
 )
 
-
 _MIN_BLOCK_KV = 32
-
-
-@enable_compat_on_triton_kernel
-@triton.jit
-def tanh(x):
-    return 2 * tl.sigmoid(2 * x) - 1
 
 
 @enable_compat_on_triton_kernel
@@ -104,13 +97,9 @@ def _fwd_grouped_kernel_stage1(
     if BLOCK_DPE > 0:
         offs_dpe = BLOCK_DMODEL + tl.arange(0, BLOCK_DPE)
         mask_dpe = offs_dpe < Lk
-        off_qpe = (
-            cur_batch * stride_qbs + cur_head[:, None] * stride_qh + offs_dpe[None, :]
-        )
+        off_qpe = cur_batch * stride_qbs + cur_head[:, None] * stride_qh + offs_dpe[None, :]
 
-    kv_len_per_split = (
-        tl.cdiv(tl.cdiv(cur_batch_seq_len, kv_splits), MIN_BLOCK_KV) * MIN_BLOCK_KV
-    )
+    kv_len_per_split = tl.cdiv(tl.cdiv(cur_batch_seq_len, kv_splits), MIN_BLOCK_KV) * MIN_BLOCK_KV
     split_kv_start = kv_len_per_split * split_kv_id
     split_kv_end = tl.minimum(split_kv_start + kv_len_per_split, cur_batch_seq_len)
 
@@ -121,9 +110,7 @@ def _fwd_grouped_kernel_stage1(
     if split_kv_end > split_kv_start:
         q = tl.load(Q + offs_q, mask=(mask_h[:, None]) & (mask_d[None, :]), other=0.0)
         if BLOCK_DPE > 0:
-            qpe = tl.load(
-                Q + off_qpe, mask=(mask_h[:, None]) & (mask_dpe[None, :]), other=0.0
-            )
+            qpe = tl.load(Q + off_qpe, mask=(mask_h[:, None]) & (mask_dpe[None, :]), other=0.0)
         for start_n in range(split_kv_start, split_kv_end, BLOCK_N):
             offs_n = start_n + tl.arange(0, BLOCK_N)
             kv_loc = tl.load(
@@ -163,9 +150,7 @@ def _fwd_grouped_kernel_stage1(
                 qk += tl.dot(qpe, kpe.to(qpe.dtype))
             qk *= sm_scale
 
-            qk = tl.where(
-                mask_h[:, None] & (offs_n[None, :] < split_kv_end), qk, float("-inf")
-            )
+            qk = tl.where(mask_h[:, None] & (offs_n[None, :] < split_kv_end), qk, float("-inf"))
 
             # Load V from paged cache
             offs_buf_v = (
@@ -202,11 +187,7 @@ def _fwd_grouped_kernel_stage1(
             mask=(mask_h[:, None]) & (mask_dv[None, :]),
         )
 
-        offs_mid_o_1 = (
-            cur_batch * stride_mid_ob
-            + cur_head * stride_mid_oh
-            + split_kv_id * stride_mid_os
-        ) // Lv
+        offs_mid_o_1 = (cur_batch * stride_mid_ob + cur_head * stride_mid_oh + split_kv_id * stride_mid_os) // Lv
 
         tl.store(
             Att_Lse + offs_mid_o_1,
@@ -239,9 +220,7 @@ def _fwd_kernel_stage2(
     cur_batch = tl.program_id(0)
     cur_head = tl.program_id(1)
 
-    cur_batch_seq_len = tl.load(kv_indptr + cur_batch + 1) - tl.load(
-        kv_indptr + cur_batch
-    )
+    cur_batch_seq_len = tl.load(kv_indptr + cur_batch + 1) - tl.load(kv_indptr + cur_batch)
     kv_splits = tl.load(num_kv_splits + cur_batch)
 
     offs_d = tl.arange(0, BLOCK_DV)
@@ -253,18 +232,14 @@ def _fwd_kernel_stage2(
 
     offs_v = cur_batch * stride_mid_ob + cur_head * stride_mid_oh + offs_d
     offs_logic = (cur_batch * stride_mid_ob + cur_head * stride_mid_oh) // Lv
-    kv_len_per_split = (
-        tl.cdiv(tl.cdiv(cur_batch_seq_len, kv_splits), MIN_BLOCK_KV) * MIN_BLOCK_KV
-    )
+    kv_len_per_split = tl.cdiv(tl.cdiv(cur_batch_seq_len, kv_splits), MIN_BLOCK_KV) * MIN_BLOCK_KV
 
     for split_kv_id in range(0, MAX_KV_SPLITS):
         split_kv_start = kv_len_per_split * split_kv_id
         split_kv_end = tl.minimum(split_kv_start + kv_len_per_split, cur_batch_seq_len)
 
         if split_kv_end > split_kv_start:
-            tv = tl.load(
-                Mid_O + offs_v + split_kv_id * stride_mid_os, mask=mask_d, other=0.0
-            )
+            tv = tl.load(Mid_O + offs_v + split_kv_id * stride_mid_os, mask=mask_d, other=0.0)
             tlogic = tl.load(Mid_O_1 + offs_logic + split_kv_id * stride_mid_os // Lv)
             n_e_max = tl.maximum(tlogic, e_max)
 
@@ -276,9 +251,11 @@ def _fwd_kernel_stage2(
             e_sum = e_sum * old_scale + exp_logic
             e_max = n_e_max
 
+    # Guard against e_sum==0 (empty sequences from CUDAGraph padding) to avoid NaN
+    safe_e_sum = tl.where(e_sum == 0.0, 1.0, e_sum)
     tl.store(
         O + cur_batch * stride_obs + cur_head * stride_oh + offs_d,
-        acc / e_sum,
+        tl.where(e_sum == 0.0, 0.0, acc / safe_e_sum),
         mask=mask_d,
     )
 
