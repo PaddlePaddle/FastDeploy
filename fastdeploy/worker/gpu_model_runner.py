@@ -1172,6 +1172,9 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
+        # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
+        if self.fd_config.parallel_config.enable_expert_parallel:
+            input_length = min(input_length, 32)
 
         block_num = (
             input_length + self.cache_config.block_size - 1
