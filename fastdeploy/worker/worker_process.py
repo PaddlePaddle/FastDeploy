@@ -864,6 +864,11 @@ def parse_args():
         default=256,
         help="chunk size of moe input",
     )
+    parser.add_argument(
+        "--enable_moe_scores_elementwise_fuse",
+        action="store_true",
+        help="enable fused elementwise in get_moe_scores",
+    )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_start_id", type=int, default=-1)
     parser.add_argument("--think_end_id", type=int, default=-1)

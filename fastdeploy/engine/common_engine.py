@@ -1493,17 +1493,30 @@ class EngineService:
     def _wait_inflight_drained(self):
         """
         Wait until resource_manager.requests is completely empty.
-        No timeout — abort pipeline will complete. Aligned with SGLang's poll-until-drained.
+        No timeout — abort pipeline will complete.
+        Logs a warning every 30 seconds while waiting to help diagnose potential hangs.
         """
-        start_time = time.time()
-        while (
-            self.resource_manager.requests
-            or self.scheduler.requests
-            or self.resource_manager.waiting_abort_req_id_set
-            or self.resource_manager.to_be_aborted_req_id_set
-        ):
+        start_time = time.monotonic()
+        next_warn_time = start_time + 30
+
+        while self.resource_manager.requests or self.scheduler.requests:
+            now = time.monotonic()
+
+            if now >= next_warn_time:
+                self.llm_logger.warning(
+                    "Still waiting for inflight requests to drain, "
+                    f"elapsed: {now - start_time:.3f} seconds, "
+                    f"resource_manager.requests: {len(self.resource_manager.requests)}, "
+                    f"scheduler.requests: {len(self.scheduler.requests)}",
+                )
+                next_warn_time = now + 30
+
             time.sleep(0.005)
-        self.llm_logger.info(f"All inflight requests drained, take time: {time.time() - start_time:.3f} seconds")
+
+        self.llm_logger.info(
+            "All inflight requests drained, take time: %.3f seconds",
+            time.monotonic() - start_time,
+        )
 
     def _control_resume(self, control_request: ControlRequest) -> Optional[dict]:
         """Control function for resuming request generation.

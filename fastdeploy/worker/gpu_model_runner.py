@@ -3038,6 +3038,13 @@ class GPUModelRunner(ModelRunnerBase):
         # Clear CUDAGraph
         if self.use_cudagraph:
             self.model.clear_graph_opt_backend()
+
+            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
+                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+                    clear_all_block_wise_graphs,
+                )
+
+                clear_all_block_wise_graphs()
             if (
                 self.speculative_decoding
                 and self.spec_method == SpecMethod.MTP
@@ -3499,11 +3506,11 @@ class GPUModelRunner(ModelRunnerBase):
         if not envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
             return
 
-        from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (  # Parse capture sizes from env var
-            dump_captured_graph_summary,
+        from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
             set_block_wise_capturing,
         )
 
+        # Parse capture sizes from env var
         sizes_str = envs.FD_BLOCK_WISE_CUDA_GRAPH_SIZES
         capture_sizes = sorted([int(s.strip()) for s in sizes_str.split(",") if s.strip()], reverse=True)
         if not capture_sizes:
@@ -3533,4 +3540,3 @@ class GPUModelRunner(ModelRunnerBase):
             f"Block-wise CUDA graph capturing took {time_after_capture - time_before_capture:.3f} seconds "
             f"for {len(capture_sizes)} sizes"
         )
-        dump_captured_graph_summary()

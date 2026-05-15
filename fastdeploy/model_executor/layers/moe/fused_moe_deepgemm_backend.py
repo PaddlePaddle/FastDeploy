@@ -774,7 +774,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x)
 
         if layer.topk_method == "noaux_tc":
-            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
             if not use_fused:
                 gate_out = gate_out.cast("float32")
             _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(

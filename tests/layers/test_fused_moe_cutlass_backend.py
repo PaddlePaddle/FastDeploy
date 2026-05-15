@@ -58,6 +58,7 @@ class DummyFDConfig:
     def __init__(self, load_choices="default_v1"):
         self.model_config = types.SimpleNamespace(model="dummy", prefix_layer_name="prefix")
         self.load_config = types.SimpleNamespace(load_choices=load_choices, dynamic_load_weight=False)
+        self.scheduler_config = types.SimpleNamespace(enable_moe_scores_elementwise_fuse=False)
 
 
 class DummyLayer(paddle.nn.Layer):

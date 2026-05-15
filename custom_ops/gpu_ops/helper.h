@@ -370,10 +370,17 @@ inline json readJsonFromFile(const std::string& filePath) {
 // paddle::GPUPlace()
 
 #ifdef PADDLE_DEV
+<<<<<<< HEAD
 inline paddle::Tensor GetEmptyTensor(const common::DDim& dims,
                                      const paddle::DataType& dtype,
                                      const paddle::Place& place) {
   phi::Allocator* allocator = nullptr;
+=======
+inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
+                                     const paddle::DataType &dtype,
+                                     const paddle::Place &place) {
+  phi::Allocator *allocator = nullptr;
+>>>>>>> 8790cec070ea2aa2ab19ea657f3707427cf46112
 #if defined(PADDLE_WITH_CUDA)
   if (phi::backends::gpu::CUDAGraph::IsThisThreadCapturing()) {
     allocator = paddle::memory::allocation::AllocatorFacade::Instance()
@@ -392,11 +399,11 @@ inline paddle::Tensor GetEmptyTensor(const common::DDim& dims,
   return paddle::Tensor(std::make_shared<phi::DenseTensor>(dense_tensor));
 }
 
-inline paddle::Tensor GetEmptyTensor(const common::DDim& dims,
-                                     const common::DDim& strides,
-                                     const paddle::DataType& dtype,
-                                     const paddle::Place& place) {
-  phi::Allocator* allocator = nullptr;
+inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
+                                     const common::DDim &strides,
+                                     const paddle::DataType &dtype,
+                                     const paddle::Place &place) {
+  phi::Allocator *allocator = nullptr;
 #if defined(PADDLE_WITH_CUDA)
   if (phi::backends::gpu::CUDAGraph::IsThisThreadCapturing()) {
     allocator = paddle::memory::allocation::AllocatorFacade::Instance()
