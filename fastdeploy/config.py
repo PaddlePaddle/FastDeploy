@@ -1896,6 +1896,59 @@ class RoutingReplayConfig:
         return self.to_json_string()
 
 
+class BenchmarkMetricsConfig:
+    """Configuration for in-process benchmark metrics logger.
+
+    Args (passed as JSON dict via --benchmark-metrics-config):
+        window_size: Number of recent requests to aggregate. 0 = all requests (cumulative).
+        percentiles: Comma-separated percentile values to compute, e.g. "50,90,95,99".
+        metrics: Comma-separated metric names to report, or "all".
+            Available metrics (aligned with benchmark_serving.py --percentile-metrics):
+                ttft          - Time to First Token (client arrival → first token)
+                s_ttft        - Server TTFT (inference start → first token)
+                tpot          - Time per Output Token (excluding first token)
+                itl           - Inter-token Latency
+                e2el          - End-to-end Latency (client arrival → last token)
+                s_e2el        - Server E2EL (inference start → last token)
+                s_decode      - Decode speed (tokens/s, excluding first token)
+                input_len     - Prefix cache hit token count ("Cached Tokens" in benchmark_serving)
+                s_input_len   - Infer input length (total prompt tokens on inference side)
+                output_len    - Output token length per request
+    """
+
+    _DEFAULTS = {
+        "window_size": 0,
+        "percentiles": "50,90,95,99",
+        "metrics": "all",
+    }
+
+    _ALL_METRICS = [
+        "ttft",  # Time to First Token
+        "s_ttft",  # Server TTFT
+        "tpot",  # Time per Output Token
+        "itl",  # Inter-token Latency
+        "e2el",  # End-to-end Latency
+        "s_e2el",  # Server E2EL
+        "s_decode",  # Decode speed (tok/s)
+        "input_len",  # Prefix cache hit tokens (= "Cached Tokens" in benchmark_serving)
+        "s_input_len",  # Infer input length (total prompt tokens)
+        "output_len",  # Output token length
+    ]
+
+    def __init__(self, args: Optional[dict] = None):
+        for key, value in self._DEFAULTS.items():
+            setattr(self, key, value)
+        if args:
+            for key, value in args.items():
+                if key in self._DEFAULTS:
+                    setattr(self, key, value)
+        self.percentile_values = [float(p.strip()) for p in self.percentiles.split(",") if p.strip()]
+        if self.metrics == "all":
+            self.selected_metrics = set(self._ALL_METRICS)
+        else:
+            self.selected_metrics = {m.strip() for m in self.metrics.split(",") if m.strip()}
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1930,6 +1983,7 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
+        benchmark_metrics_config=None,
         deploy_modality: DeployModality = DeployModality.MIXED,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
@@ -1947,6 +2001,7 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
+        self.benchmark_metrics_config = benchmark_metrics_config
         self.deploy_modality: DeployModality = deploy_modality
 
         # Initialize cuda graph capture list

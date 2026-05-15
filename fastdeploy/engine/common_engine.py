@@ -200,6 +200,18 @@ class EngineService(EngineServicePrepareMixin):
         self.resource_manager.scheduler_metrics_logger = self.scheduler_metrics_logger
         self.token_processor.set_scheduler_metrics_logger(self.scheduler_metrics_logger)
 
+        if self.cfg.benchmark_metrics_config is not None:
+            from fastdeploy.metrics.benchmark_metrics_logger import (
+                BenchmarkMetricsLogger,
+            )
+
+            self.benchmark_metrics_logger = BenchmarkMetricsLogger(
+                config=self.cfg.benchmark_metrics_config,
+                log_dir=envs.FD_LOG_DIR,
+                dp_rank=self.cfg.parallel_config.local_data_parallel_id,
+            )
+            self.token_processor.set_benchmark_logger(self.benchmark_metrics_logger)
+
         self.partial_chunked_tokens = [0] * (self.cfg.max_num_partial_prefills + 1)
         for idx in range(1, self.cfg.max_num_partial_prefills + 1):
             self.partial_chunked_tokens[idx] = (
