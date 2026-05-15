@@ -96,25 +96,25 @@ def scan_log_dir(log_dir):
 
     for root, dirs, files in os.walk(log_dir):
         for fname in files:
-            if not fname.endswith('.txt'):
+            if not fname.endswith(".txt"):
                 continue
             filepath = os.path.join(root, fname)
 
             # 尝试从文件名解析场景信息
             # 格式: *_bs<N>_[<quant>_]<fd|sg>.txt
-            m = re.search(r'_bs(\d+)_(?:(fp8|bf16|wint4|wint8)_)?(fd|sg)\.txt$', fname, re.IGNORECASE)
+            m = re.search(r"_bs(\d+)_(?:(fp8|bf16|wint4|wint8)_)?(fd|sg)\.txt$", fname, re.IGNORECASE)
             if not m:
                 # 也尝试无 quant 的模式 (默认 bf16)
-                m = re.search(r'_bs(\d+)_(fd|sg)\.txt$', fname, re.IGNORECASE)
+                m = re.search(r"_bs(\d+)_(fd|sg)\.txt$", fname, re.IGNORECASE)
                 if m:
                     bs = m.group(1)
-                    quant = 'bf16'
+                    quant = "bf16"
                     framework = m.group(2).lower()
                 else:
                     continue
             else:
                 bs = m.group(1)
-                quant = (m.group(2) or 'bf16').lower()
+                quant = (m.group(2) or "bf16").lower()
                 framework = m.group(3).lower()
 
             key = f"{quant}_bs{bs}"
@@ -133,49 +133,51 @@ def generate_html(benchmark_data, config):
     """生成完整的多模式 HTML 报告"""
 
     # 确定可用的量化方式和并发数
-    quants = sorted(set(k.split('_bs')[0] for k in benchmark_data.keys()))
-    bs_values = sorted(set(k.split('_bs')[1] for k in benchmark_data.keys()), key=int)
+    quants = sorted(set(k.split("_bs")[0] for k in benchmark_data.keys()))
+    bs_values = sorted(set(k.split("_bs")[1] for k in benchmark_data.keys()), key=int)
 
-    model_name = config.get('model_name', 'Unknown Model')
-    default_quant = config.get('default_quant', quants[0] if quants else 'bf16')
-    default_bs = config.get('default_bs', bs_values[-1] if bs_values else '32')
-    gpu_type = config.get('gpu_type', 'H800')
-    tp_size = config.get('tp_size', 1)
-    fd_attention = config.get('fd_attention', 'MLA_ATTN (FlashAttn v3)')
-    sg_attention = config.get('sg_attention', 'flashmla')
-    sg_version = config.get('sg_version', '0.5.10.post1')
-    fd_commit_date = config.get('fd_commit_date', '')
-    fd_commit_short = config.get('fd_commit_short', '')
-    fd_commit_full = config.get('fd_commit_full', '')
-    max_model_len = config.get('max_model_len', 65536)
-    dataset_url = config.get('dataset_url', '')
-    dataset_desc = config.get('dataset_desc', '')
-    test_date = config.get('test_date', '')
-    model_type = config.get('model_type', '')
-    model_size = config.get('model_size', '')
-    model_experts = config.get('model_experts', '')
-    model_layers_hidden = config.get('model_layers_hidden', '')
+    model_name = config.get("model_name", "Unknown Model")
+    default_quant = config.get("default_quant", quants[0] if quants else "bf16")
+    default_bs = config.get("default_bs", bs_values[-1] if bs_values else "32")
+    gpu_type = config.get("gpu_type", "H800")
+    tp_size = config.get("tp_size", 1)
+    dp_size = config.get("dp_size", 1)
+    ep_size = config.get("ep_size", 0)
+    fd_attention = config.get("fd_attention", "MLA_ATTN (FlashAttn v3)")
+    sg_attention = config.get("sg_attention", "flashmla")
+    sg_version = config.get("sg_version", "0.5.10.post1")
+    fd_commit_date = config.get("fd_commit_date", "")
+    fd_commit_short = config.get("fd_commit_short", "")
+    fd_commit_full = config.get("fd_commit_full", "")
+    max_model_len = config.get("max_model_len", 65536)
+    dataset_url = config.get("dataset_url", "")
+    dataset_desc = config.get("dataset_desc", "")
+    test_date = config.get("test_date", "")
+    model_type = config.get("model_type", "")
+    model_size = config.get("model_size", "")
+    model_experts = config.get("model_experts", "")
+    model_layers_hidden = config.get("model_layers_hidden", "")
 
     # 生成量化选择器按钮
     def quant_btn_label(q):
-        if q == 'fp8':
-            return 'FP8 (Block-Wise)'
+        if q == "fp8":
+            return "FP8 (Block-Wise)"
         return q.upper()
 
-    quant_buttons = '\n'.join(
+    quant_buttons = "\n".join(
         f'                <div class="seg-btn" data-val="{q}" onclick="setQuant(\'{q}\')" title="{"FD: block_wise_fp8 / SG: fp8" if q == "fp8" else ""}">{quant_btn_label(q)}</div>'
         for q in quants
     )
 
     # 生成并发选择器按钮
-    bs_buttons = '\n'.join(
+    bs_buttons = "\n".join(
         f'                <div class="seg-btn" data-val="{bs}" onclick="setBS(\'{bs}\')">{bs}</div>'
         for bs in bs_values
     )
 
     data_json = json.dumps(benchmark_data, ensure_ascii=False)
 
-    html = f'''<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html lang="zh-CN" data-theme="light">
 <head>
     <meta charset="UTF-8">
@@ -394,8 +396,8 @@ def generate_html(benchmark_data, config):
         <h1>FastDeploy vs SGLang</h1>
         <p class="subtitle">{model_name} 推理性能基准测试报告</p>
         <div class="badge-row">
-            <span class="badge">{gpu_type} x{tp_size}</span>
-            <span class="badge">TP={tp_size}</span>
+            <span class="badge">{gpu_type} x{tp_size * dp_size}</span>
+            <span class="badge">TP={tp_size}{f' DP={dp_size}' if dp_size > 1 else ''}{f' EP={ep_size}' if ep_size > 0 else ''}</span>
             <span class="badge" id="badge-quant">{default_quant.upper()}</span>
             <span class="badge" id="badge-bs">并发 {default_bs}</span>
             {f'<span class="badge">{test_date}</span>' if test_date else ''}
@@ -433,8 +435,8 @@ def generate_html(benchmark_data, config):
         <div class="config-card fd">
             <div class="card-tag">FastDeploy</div>
             <div class="config-grid-inner">
-                <div class="config-item"><div class="label">GPU</div><div class="value">{gpu_type} x{tp_size}</div></div>
-                <div class="config-item"><div class="label">TP</div><div class="value">{tp_size}</div></div>
+                <div class="config-item"><div class="label">GPU</div><div class="value">{gpu_type} x{tp_size * dp_size}</div></div>
+                <div class="config-item"><div class="label">部署方式</div><div class="value">TP={tp_size}{f' DP={dp_size}' if dp_size > 1 else ''}{' EP' if ep_size > 0 else ''}</div></div>
                 <div class="config-item"><div class="label">并发</div><div class="value" id="cfg-fd-bs">{default_bs}</div></div>
                 <div class="config-item"><div class="label">Max Len</div><div class="value">{max_model_len}</div></div>
                 <div class="config-item"><div class="label">Attention</div><div class="value">{fd_attention}</div></div>
@@ -446,8 +448,8 @@ def generate_html(benchmark_data, config):
         <div class="config-card sg">
             <div class="card-tag">SGLang</div>
             <div class="config-grid-inner">
-                <div class="config-item"><div class="label">GPU</div><div class="value">{gpu_type} x{tp_size}</div></div>
-                <div class="config-item"><div class="label">TP</div><div class="value">{tp_size}</div></div>
+                <div class="config-item"><div class="label">GPU</div><div class="value">{gpu_type} x{tp_size * dp_size}</div></div>
+                <div class="config-item"><div class="label">部署方式</div><div class="value">TP={tp_size}{f' DP={dp_size}' if dp_size > 1 else ''}{f' EP={ep_size}' if ep_size > 0 else ''}</div></div>
                 <div class="config-item"><div class="label">并发</div><div class="value" id="cfg-sg-bs">{default_bs}</div></div>
                 <div class="config-item"><div class="label">Context Len</div><div class="value">{max_model_len}</div></div>
                 <div class="config-item"><div class="label">Attention</div><div class="value">{sg_attention}</div></div>
@@ -775,7 +777,7 @@ function updateAll() {{
 updateAll();
 </script>
 </body>
-</html>'''
+</html>"""
 
     return html
 
@@ -798,7 +800,8 @@ def main():
     --default-quant bf16 --default-bs 512 \\
     --fd-attention "MLA_ATTN (FlashAttn v3)" --sg-attention flashmla \\
     --sg-version 0.5.10.post1
-        """)
+        """,
+    )
 
     # 数据来源（二选一）
     source = parser.add_mutually_exclusive_group(required=True)
@@ -818,6 +821,8 @@ def main():
     # 部署配置
     parser.add_argument("--gpu-type", default="H800", help="GPU 型号")
     parser.add_argument("--tp", type=int, default=1, help="TP 大小")
+    parser.add_argument("--dp", type=int, default=1, help="DP 大小")
+    parser.add_argument("--ep", type=int, default=0, help="EP 大小 (0=不启用)")
     parser.add_argument("--max-model-len", type=int, default=65536, help="最大模型长度")
     parser.add_argument("--fd-attention", default="MLA_ATTN (FlashAttn v3)", help="FD Attention Backend")
     parser.add_argument("--sg-attention", default="flashmla", help="SG Attention Backend")
@@ -851,7 +856,7 @@ def main():
     # 过滤掉不完整的场景（缺少 fd 或 sg）
     valid_data = {}
     for key, val in benchmark_data.items():
-        if 'fd' in val and 'sg' in val and val['fd'] and val['sg']:
+        if "fd" in val and "sg" in val and val["fd"] and val["sg"]:
             valid_data[key] = val
         else:
             print(f"[WARN] 场景 {key} 数据不完整，跳过", file=sys.stderr)
@@ -864,25 +869,27 @@ def main():
 
     # 构建配置
     config = {
-        'model_name': args.model_name,
-        'model_type': args.model_type,
-        'model_size': args.model_size,
-        'model_experts': args.model_experts,
-        'model_layers_hidden': args.model_layers_hidden,
-        'gpu_type': args.gpu_type,
-        'tp_size': args.tp,
-        'max_model_len': args.max_model_len,
-        'fd_attention': args.fd_attention,
-        'sg_attention': args.sg_attention,
-        'sg_version': args.sg_version,
-        'fd_commit_date': args.fd_commit_date,
-        'fd_commit_short': args.fd_commit_short,
-        'fd_commit_full': args.fd_commit_full,
-        'default_quant': args.default_quant,
-        'default_bs': args.default_bs,
-        'test_date': args.test_date,
-        'dataset_url': args.dataset_url,
-        'dataset_desc': args.dataset_desc,
+        "model_name": args.model_name,
+        "model_type": args.model_type,
+        "model_size": args.model_size,
+        "model_experts": args.model_experts,
+        "model_layers_hidden": args.model_layers_hidden,
+        "gpu_type": args.gpu_type,
+        "tp_size": args.tp,
+        "dp_size": args.dp,
+        "ep_size": args.ep,
+        "max_model_len": args.max_model_len,
+        "fd_attention": args.fd_attention,
+        "sg_attention": args.sg_attention,
+        "sg_version": args.sg_version,
+        "fd_commit_date": args.fd_commit_date,
+        "fd_commit_short": args.fd_commit_short,
+        "fd_commit_full": args.fd_commit_full,
+        "default_quant": args.default_quant,
+        "default_bs": args.default_bs,
+        "test_date": args.test_date,
+        "dataset_url": args.dataset_url,
+        "dataset_desc": args.dataset_desc,
     }
 
     # 生成 HTML

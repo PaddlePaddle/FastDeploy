@@ -1,10 +1,10 @@
 ---
 name: benchmark
 description: >
-  FastDeploy vs SGLang 推理框架性能对比测试工具。自动完成环境安装、服务启动、
-  性能测试、结果可视化全流程。支持单卡/多卡 TP/多机 PD 分离部署模式。
-  也支持仅从用户提供的日志/数据生成多模式可视化 HTML 报告（无需启动服务）。
-  触发方式：/benchmark 或 "帮我跑 benchmark"、"对比测试 FD 和 SG"、"性能对比"、"生成报告"
+FastDeploy vs SGLang 推理框架性能对比测试工具。自动完成环境安装、服务启动、
+性能测试、结果可视化全流程。支持单卡/多卡 TP/多机 PD 分离部署模式。
+也支持仅从用户提供的日志/数据生成多模式可视化 HTML 报告（无需启动服务）。
+触发方式：/benchmark 或 "帮我跑 benchmark"、"对比测试 FD 和 SG"、"性能对比"、"生成报告"
 user_invocable: true
 ---
 
@@ -334,8 +334,8 @@ python3 scripts/extract_metrics.py \
   --fd-result "$OUTPUT_DIR/$RESULT_FD" \
   --sg-result "$OUTPUT_DIR/$RESULT_SG" \
   --model-path "$MODEL_PATH" \
-  --fd-config '{"gpu":"H800","tp":'$TP_SIZE',"concurrency":'$CONCURRENCY',"quantization":"'$QUANTIZATION'"}' \
-  --sg-config '{"gpu":"H800","tp":'$TP_SIZE',"concurrency":'$CONCURRENCY',"quantization":"'$QUANTIZATION'"}' \
+  --fd-config '{"gpu":"H800","tp":'$TP_SIZE',"dp":'$DP_SIZE',"ep":'$EP_SIZE',"concurrency":'$CONCURRENCY',"quantization":"'$QUANTIZATION'"}' \
+  --sg-config '{"gpu":"H800","tp":'$TP_SIZE',"dp":'$DP_SIZE',"ep":'$EP_SIZE',"concurrency":'$CONCURRENCY',"quantization":"'$QUANTIZATION'"}' \
   --output "$OUTPUT_DIR/metrics.json"
 ```
 
@@ -352,6 +352,8 @@ python3 scripts/generate_report.py \
   --model-name "$MODEL_NAME" \
   --gpu-type "H800" \
   --tp $TP_SIZE \
+  --dp $DP_SIZE \
+  --ep $EP_SIZE \
   --default-quant "$QUANTIZATION" \
   --default-bs "$CONCURRENCY"
 ```
@@ -415,6 +417,9 @@ kill $(lsof -t -i :$SG_PORT) 2>/dev/null
 | 12 | PD 分离 | 仅 FD 支持，SG 作为标准模式基线 |
 | 13 | FP8 量化类型差异 | FD 使用 `block_wise_fp8`（分块量化，粒度更细），SG 使用 `fp8`（per-tensor）。报告中需明确标注为 "Block-Wise FP8"，避免用户误解为同一种 FP8 实现 |
 | 14 | FP8 并发限制 | FD 的 FP8 模式下 `--max-num-seqs` 建议设为 32（设 64 会导致 MoE 模型 worker crash）。benchmark 的 `--max-concurrency` 可以更高（请求在服务端排队） |
+| 15 | **CUDA Graph 必须开启** | **两个框架都必须开启 CUDA Graph**（各自默认行为），这是测试最优性能的前提。FD 默认开启（不要设 `FLAGS_use_cuda_graph=0`）；SG 默认开启（不要加 `--disable-cuda-graph`）。如果 OOM，应通过降低 `max-num-seqs` 或 `gpu-memory-utilization` 来解决，而不是禁用 CUDA Graph |
+| 16 | SGLang DP 端口冲突 | SGLang 在 DP>1 时，torch.distributed 初始化可能与系统服务（18xxx 端口范围）冲突。解决方案：启动前 `export MASTER_PORT=45000`（`launch_service.sh` 已自动处理）|
+| 17 | 报告展示部署方式 | HTML 报告中必须显示 TP/DP/EP 配置。使用 `generate_report.py --tp N --dp N --ep N` 参数传入 |
 
 ---
 
@@ -492,7 +497,7 @@ python3 scripts/generate_report.py \
   --model-size "~58.2 GB" \
   --model-experts "64R + 1S (Active: 4)" \
   --model-layers-hidden "47 / 2048" \
-  --gpu-type H800 --tp 1 \
+  --gpu-type H800 --tp 1 --dp 1 --ep 0 \
   --max-model-len 65536 \
   --fd-attention "MLA_ATTN (FlashAttn v3)" \
   --sg-attention "flashmla" \

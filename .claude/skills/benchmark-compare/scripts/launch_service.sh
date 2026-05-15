@@ -151,14 +151,20 @@ else:
     export FLAGS_flash_attn_version=3
     export FD_SAMPLING_CLASS=rejection
 
-    # 构建命令
-    local CMD="python -m fastdeploy.entrypoints.openai.api_server"
+    # 构建命令 (优先使用 fastdeploy CLI，如不可用则回退到 python -m)
+    local CMD
+    if command -v fastdeploy &>/dev/null; then
+        CMD="fastdeploy serve"
+    else
+        CMD="python -m fastdeploy.entrypoints.openai.api_server"
+    fi
     CMD+=" --model $MODEL"
     CMD+=" --port $PORT"
     CMD+=" --tensor-parallel-size $TP"
     CMD+=" --max-model-len $MAX_MODEL_LEN"
     CMD+=" --max-num-seqs $CONCURRENCY"
     CMD+=" --gpu-memory-utilization $GPU_MEM_UTIL"
+    CMD+=" --trust-remote-code"
 
     # DP (data parallelism)
     if [[ "$DP" -gt 1 ]]; then
@@ -207,6 +213,13 @@ launch_sglang() {
 
     export CUDA_VISIBLE_DEVICES="$GPUS"
 
+    # DP 模式下，设置 MASTER_PORT 避免 torch.distributed 端口冲突
+    # 默认使用 45000+ 范围，避免与系统服务（18xxx）冲突
+    if [[ "$DP" -gt 1 ]]; then
+        export MASTER_PORT=${MASTER_PORT:-45000}
+        echo "[INFO] DP=$DP, 设置 MASTER_PORT=$MASTER_PORT 避免端口冲突"
+    fi
+
     # 注意力后端
     if [[ -z "$ATTENTION_BACKEND" ]]; then
         ATTENTION_BACKEND="flashmla"
@@ -221,6 +234,7 @@ launch_sglang() {
     CMD+=" --context-length $MAX_MODEL_LEN"
     CMD+=" --max-running-requests $CONCURRENCY"
     CMD+=" --attention-backend $ATTENTION_BACKEND"
+    CMD+=" --trust-remote-code"
 
     # DP (data parallelism)
     if [[ "$DP" -gt 1 ]]; then
