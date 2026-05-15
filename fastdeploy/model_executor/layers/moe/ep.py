@@ -510,6 +510,8 @@ class EPRunner:
                     tokens_per_expert_stats_list=tokens_per_expert_stats_list,
                     redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
                     topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                    use_fused_cast=False,  # TODO(zhushengguang): Not support in EPLB scenarios,
+                    # (sigmoid + add + noaux_tc_redundant) fusion can be implemented in the future.
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
@@ -536,6 +538,7 @@ class EPRunner:
                     layer.gate_correction_bias,
                     getattr(layer, "renormalize", True),
                     topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                    use_fused_cast=True,  # NOTE(zhushengguang): Kernel Fusion can be used in non-EPLB scenarios.
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
