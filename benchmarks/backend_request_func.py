@@ -476,9 +476,11 @@ async def async_request_eb_openai_chat_completions(
                                     ttft = timestamp - st
                                     output.ttft = ttft
                                     # cached_tokens
-                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                                        output.prompt_len = (
-                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                    usage = data.get("usage") or {}
+
+                                    if usage.get("prompt_tokens_details"):
+                                        output.prompt_len = usage.get("prompt_tokens_details", {}).get(
+                                            "cached_tokens", 0
                                         )
                                     else:
                                         output.prompt_len = 0
@@ -504,11 +506,9 @@ async def async_request_eb_openai_chat_completions(
                             elif usage := data.get("usage", {}):
                                 output.output_tokens = usage.get("completion_tokens", 0)
                                 output.prompt_tokens = usage.get("prompt_tokens", 0)
+                                prompt_tokens_details = usage.get("prompt_tokens_details") or {}
                                 if output.prompt_len == 0:
-                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                                        output.prompt_len = (
-                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                                        )
+                                    output.prompt_len = prompt_tokens_details.get("cached_tokens", 0)
 
                             most_recent_timestamp = timestamp
                             token_timestamps.append(time.time())
@@ -517,12 +517,12 @@ async def async_request_eb_openai_chat_completions(
                     # 在流式结束时，记录最后一个 chunk 收到的时间戳
                     output.end_timestamp = most_recent_timestamp
                     # 截断case
-                    usage = data.get("usage", {})
+                    usage = data.get("usage") or {}
                     output.output_tokens = usage.get("completion_tokens", 0)
                     output.prompt_tokens = usage.get("prompt_tokens", 0)
+                    prompt_tokens_details = usage.get("prompt_tokens_details") or {}
                     if output.prompt_len == 0:
-                        if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                            output.prompt_len = data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                        output.prompt_len = prompt_tokens_details.get("cached_tokens", 0)
 
                     if tool_call_buffer:
                         for _, tc in tool_call_buffer.items():
