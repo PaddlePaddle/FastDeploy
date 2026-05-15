@@ -267,7 +267,6 @@ class TestComputeNumKvSplits:
 # ===========================================================================
 
 # MLA typical configs: Lk = kv_lora_rank + qk_rope_head_dim (e.g. 512+64=576)
-# For MLA, kv_heads=1, num_heads=num_attention_heads
 _DECODE_CASES = [
     # (name, batch, num_heads, kv_heads, Lk, Lv, seq_lens, block_size)
     ("mla_basic_bs1", 1, 16, 1, 576, 512, [64], 16),
