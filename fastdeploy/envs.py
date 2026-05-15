@@ -261,6 +261,16 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Whether to enable block-wise CUDA Graph capture/replay.
+    # When enabled, individual layer forward methods decorated with @block_wise_cuda_graph_wrap
+    # will be captured and replayed as CUDA Graphs for improved performance.
+    # Set to 1 to enable; defaults to 0 (disabled).
+    "FD_USE_BLOCK_WISE_CUDA_GRAPH": lambda: bool(int(os.getenv("FD_USE_BLOCK_WISE_CUDA_GRAPH", "0"))),
+    # Comma-separated list of token counts to pre-capture for block-wise CUDA Graphs.
+    # Used during the warmup phase to pre-capture graphs for these specific sizes.
+    # At runtime, token counts not in this list fall back to eager execution.
+    # Example: "1,2,4,8,16,32,64,128,256,512"
+    "FD_BLOCK_WISE_CUDA_GRAPH_SIZES": lambda: os.getenv("FD_BLOCK_WISE_CUDA_GRAPH_SIZES", "128,256,512,1024,2048"),
     # Suspend rollouting routing replay
     "FD_SUSPEND_ROUTING_REPLAY": lambda: bool(int(os.getenv("FD_SUSPEND_ROUTING_REPLAY", "0"))),
     # train-infer consistency, used in RL
@@ -281,6 +291,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
     # enable kv cache manager v1
     "ENABLE_V1_KVCACHE_MANAGER": lambda: int(os.getenv("ENABLE_V1_KVCACHE_MANAGER", "0")),
+    # When set to 1, print which op / shape enters the block-wise CUDA Graph
+    # during the capture phase. Defaults to 0 (silent).
+    "FD_BLOCK_WISE_DEBUG": lambda: bool(int(os.getenv("FD_BLOCK_WISE_DEBUG", "0"))),
 }
 
 

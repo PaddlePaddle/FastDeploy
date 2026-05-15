@@ -52,6 +52,8 @@ namespace cub = hipcub;
 #include "env.h"
 #include "paddle/extension.h"
 #include "paddle/phi/core/allocator.h"
+#include "paddle/phi/core/memory/allocation/allocator_facade.h"
+#include "paddle/phi/backends/gpu/cuda/cuda_graph.h"
 #ifdef PADDLE_WITH_CUSTOM_DEVICE
 #include "paddle/phi/backends/custom/custom_context.h"
 #else
@@ -371,7 +373,18 @@ inline json readJsonFromFile(const std::string &filePath) {
 inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
                                      const paddle::DataType &dtype,
                                      const paddle::Place &place) {
-  auto *allocator = paddle::GetAllocator(place);
+  phi::Allocator *allocator = nullptr;
+#if defined(PADDLE_WITH_CUDA)
+  if (phi::backends::gpu::CUDAGraph::IsThisThreadCapturing()) {
+    allocator = paddle::memory::allocation::AllocatorFacade::Instance()
+                    .GetAllocator(place)
+                    .get();
+  } else {
+    allocator = paddle::GetAllocator(place);
+  }
+#else
+  allocator = paddle::GetAllocator(place);
+#endif
   phi::DenseTensor dense_tensor;
   dense_tensor.Resize(dims);
   dense_tensor.AllocateFrom(
@@ -383,7 +396,18 @@ inline paddle::Tensor GetEmptyTensor(const common::DDim &dims,
                                      const common::DDim &strides,
                                      const paddle::DataType &dtype,
                                      const paddle::Place &place) {
-  auto *allocator = paddle::GetAllocator(place);
+  phi::Allocator *allocator = nullptr;
+#if defined(PADDLE_WITH_CUDA)
+  if (phi::backends::gpu::CUDAGraph::IsThisThreadCapturing()) {
+    allocator = paddle::memory::allocation::AllocatorFacade::Instance()
+                    .GetAllocator(place)
+                    .get();
+  } else {
+    allocator = paddle::GetAllocator(place);
+  }
+#else
+  allocator = paddle::GetAllocator(place);
+#endif
   phi::DenseTensor dense_tensor;
   dense_tensor.Resize(dims);
   dense_tensor.AllocateFrom(
