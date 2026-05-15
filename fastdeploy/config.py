@@ -208,6 +208,11 @@ class ModelConfig:
         self.is_quantized = False
         self.is_moe_quantized = False
         self.max_model_len = 0
+        self.max_completion_tokens = None
+        self.reasoning_max_tokens = None
+        self.response_max_tokens = None
+        self.min_tokens = 1
+        self.input_max_tokens = None
         self.dtype = "bfloat16"
         self.enable_logprob = False
         self.max_logprobs = 20

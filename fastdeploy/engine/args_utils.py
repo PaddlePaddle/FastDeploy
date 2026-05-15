@@ -111,6 +111,32 @@ class EngineArgs:
     """
     Maximum context length supported by the model.
     """
+    max_completion_tokens: Optional[int] = None
+    """
+    Server-level default maximum completion token length.
+    Used when per-request max_tokens/max_completion_tokens is not specified.
+    None means default to max_model_len - input_len.
+    """
+    reasoning_max_tokens: Optional[int] = None
+    """
+    Server-level default reasoning/thinking token length.
+    Used when per-request reasoning_max_tokens is not specified. None means no default limit.
+    """
+    response_max_tokens: Optional[int] = None
+    """
+    Server-level default response token length.
+    Used when per-request response_max_tokens is not specified. None means no default limit.
+    """
+    min_tokens: int = 1
+    """
+    Server-level default minimum generation length.
+    Used when per-request min_tokens is not specified.
+    """
+    input_max_tokens: Optional[int] = None
+    """
+    Server-level maximum input token length.
+    Requests with prompt longer than this will be rejected. None means no limit (bounded by max_model_len).
+    """
     tensor_parallel_size: int = 1
     """
     Degree of tensor parallelism.
@@ -758,6 +784,43 @@ class EngineArgs:
             type=int,
             default=EngineArgs.max_model_len,
             help="Maximum context length supported by the model.",
+        )
+        model_group.add_argument(
+            "--max-completion-tokens",
+            type=int,
+            default=EngineArgs.max_completion_tokens,
+            help="Server-level default maximum completion token length. "
+            "Used when per-request value is not specified. "
+            "Default: None (uses max_model_len - input_len).",
+        )
+        model_group.add_argument(
+            "--reasoning-max-tokens",
+            type=int,
+            default=EngineArgs.reasoning_max_tokens,
+            help="Server-level default reasoning/thinking token length. "
+            "Used when per-request value is not specified. Default: None (no limit).",
+        )
+        model_group.add_argument(
+            "--response-max-tokens",
+            type=int,
+            default=EngineArgs.response_max_tokens,
+            help="Server-level default response token length. "
+            "Used when per-request value is not specified. Default: None (no limit).",
+        )
+        model_group.add_argument(
+            "--min-tokens",
+            type=int,
+            default=EngineArgs.min_tokens,
+            help="Server-level default minimum generation length. "
+            "Used when per-request value is not specified. Default: 1.",
+        )
+        model_group.add_argument(
+            "--input-max-tokens",
+            type=int,
+            default=EngineArgs.input_max_tokens,
+            help="Server-level maximum input token length. "
+            "Requests with prompt longer than this will be rejected. "
+            "Default: None (no limit, bounded by max_model_len).",
         )
         model_group.add_argument(
             "--block-size",
@@ -1514,6 +1577,18 @@ class EngineArgs:
         """
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
+
+        # Validate server-level token length parameters
+        if self.max_completion_tokens is not None and self.max_completion_tokens < 1:
+            raise ValueError("--max-completion-tokens must be >= 1")
+        if self.reasoning_max_tokens is not None and self.reasoning_max_tokens < 1:
+            raise ValueError("--reasoning-max-tokens must be >= 1")
+        if self.response_max_tokens is not None and self.response_max_tokens < 1:
+            raise ValueError("--response-max-tokens must be >= 1")
+        if self.min_tokens < 1:
+            raise ValueError("--min-tokens must be >= 1")
+        if self.input_max_tokens is not None and self.input_max_tokens < 1:
+            raise ValueError("--input-max-tokens must be >= 1")
 
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size

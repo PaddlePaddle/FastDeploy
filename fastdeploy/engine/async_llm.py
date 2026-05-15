@@ -299,6 +299,7 @@ class AsyncLLM(EngineServiceClient):
         )
         # Create data processor
         self.data_processor = self.input_processor.create_processor()
+        self.data_processor.set_server_defaults(cfg.model_config)
 
         # Create high-performance async connection manager
         self.connection_manager = None

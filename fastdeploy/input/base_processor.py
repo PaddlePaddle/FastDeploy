@@ -110,6 +110,25 @@ class BaseTextProcessor(ABC):
         self.tokenizer.pad_token_id = self.pad_token_id
         self._init_parsers(reasoning_parser_obj, tool_parser_obj)
 
+        # Server-level defaults (set via set_server_defaults after construction)
+        self.max_completion_tokens = None
+        self.reasoning_max_tokens = None
+        self.response_max_tokens = None
+        self.min_tokens = 1
+        self.input_max_tokens = None
+
+    def set_server_defaults(self, model_config):
+        """Set server-level default values from model config.
+
+        These defaults are applied in process_request_dict when per-request
+        values are not specified.
+        """
+        self.max_completion_tokens = model_config.max_completion_tokens
+        self.reasoning_max_tokens = model_config.reasoning_max_tokens
+        self.response_max_tokens = model_config.response_max_tokens
+        self.min_tokens = model_config.min_tokens
+        self.input_max_tokens = model_config.input_max_tokens
+
     # ------------------------------------------------------------------
     # Abstract interface
     # ------------------------------------------------------------------
@@ -438,6 +457,12 @@ class BaseTextProcessor(ABC):
         if request.get("completion_token_ids"):
             request["prompt_token_ids"].extend(request["completion_token_ids"])
 
+        # Reject requests exceeding input_max_tokens (before truncation)
+        if self.input_max_tokens is not None and len(request["prompt_token_ids"]) > self.input_max_tokens:
+            raise ValueError(
+                f"Input token length {len(request['prompt_token_ids'])} exceeds --input-max-tokens {self.input_max_tokens}"
+            )
+
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
@@ -447,11 +472,24 @@ class BaseTextProcessor(ABC):
         )
         request["logits_processors_args"] = logits_processors_args
 
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
-        else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
+        # Compute effective length limits:
+        #   effective = min(upper_bound, server_default, user_value)  (skip Nones)
+        def _min_non_none(*values):
+            return min(v for v in values if v is not None)
+
+        context_remaining = max(1, max_model_len - len(request["prompt_token_ids"]))
+        request["max_tokens"] = max(
+            1, _min_non_none(context_remaining, self.max_completion_tokens, request.get("max_tokens"))
+        )
+
+        max_tokens = request["max_tokens"]
+        for key, server_val in [
+            ("reasoning_max_tokens", self.reasoning_max_tokens),
+            ("response_max_tokens", self.response_max_tokens),
+            ("min_tokens", self.min_tokens),
+        ]:
+            if server_val is not None or request.get(key) is not None:
+                request[key] = _min_non_none(max_tokens, server_val, request.get(key))
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature means greedy decoding: set top_k=1 to force argmax
             request["temperature"] = 1

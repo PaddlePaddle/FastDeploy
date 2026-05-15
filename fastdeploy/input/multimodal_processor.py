@@ -409,6 +409,12 @@ class MultiModalProcessor(BaseTextProcessor):
             request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["multimodal_inputs"] = outputs
 
+        # Reject requests exceeding input_max_tokens (before truncation)
+        if self.input_max_tokens is not None and len(request["prompt_token_ids"]) > self.input_max_tokens:
+            raise ValueError(
+                f"Input token length {len(request['prompt_token_ids'])} exceeds --input-max-tokens {self.input_max_tokens}"
+            )
+
         # Truncation
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
             request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
@@ -423,12 +429,24 @@ class MultiModalProcessor(BaseTextProcessor):
             )
             request["logits_processors_args"] = logits_processors_args
 
-        # max_tokens
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
-        if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
-        else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
+        # Compute effective length limits:
+        #   effective = min(upper_bound, server_default, user_value)  (skip Nones)
+        def _min_non_none(*values):
+            return min(v for v in values if v is not None)
+
+        context_remaining = max(1, max_model_len - len(request["prompt_token_ids"]))
+        request["max_tokens"] = max(
+            1, _min_non_none(context_remaining, self.max_completion_tokens, request.get("max_tokens"))
+        )
+
+        max_tokens = request["max_tokens"]
+        for key, server_val in [
+            ("reasoning_max_tokens", self.reasoning_max_tokens),
+            ("response_max_tokens", self.response_max_tokens),
+            ("min_tokens", self.min_tokens),
+        ]:
+            if server_val is not None or request.get(key) is not None:
+                request[key] = _min_non_none(max_tokens, server_val, request.get(key))
 
         # Ernie: default reasoning_max_tokens
         if cfg.set_default_reasoning_max_tokens and request.get("reasoning_max_tokens") is None:

@@ -147,6 +147,7 @@ class LLMEngine:
         self.engine.start()
         self.engine.create_data_processor()
         self.data_processor = self.engine.data_processor
+        self.data_processor.set_server_defaults(self.cfg.model_config)
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
@@ -746,7 +747,10 @@ class LLMEngine:
                     prompts["prompt"] = query_list
 
         if "max_tokens" not in prompts:
-            prompts["max_tokens"] = self.cfg.model_config.max_model_len
+            if self.cfg.model_config.max_completion_tokens is not None:
+                prompts["max_tokens"] = self.cfg.model_config.max_completion_tokens
+            else:
+                prompts["max_tokens"] = self.cfg.model_config.max_model_len
 
         self.add_requests(prompts)
         return prompts["request_id"]
