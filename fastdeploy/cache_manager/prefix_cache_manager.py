@@ -1448,6 +1448,7 @@ class PrefixCacheManager:
                 hash_value_gpu_block_ids_map = defaultdict(list)
                 hash_value_flush_info = {}  # {input_hash_value: (token_ids, min_depth)}
                 total_gpu_free_count = 0
+                skipped_nodes = []
 
                 while True:
                     if len(self.gpu_lru_leaf_heap) == 0:
@@ -1481,11 +1482,13 @@ class PrefixCacheManager:
                                     heapq.heappush(self.gpu_lru_leaf_heap, node)
                                     self.gpu_lru_leaf_set.add(node)
                         else:
+                            skipped_nodes.append(node)
                             continue
                     else:
                         if node.shared_count == 0 and node.is_gpu_leaf_node:
                             node.cache_status = CacheStatus.SWAP2CPU
                         else:
+                            skipped_nodes.append(node)
                             continue
                         self._handle_free_gpu_node_with_cpu(
                             node,
@@ -1508,6 +1511,12 @@ class PrefixCacheManager:
                         ):
                             heapq.heappush(self.gpu_lru_leaf_heap, node)
                             self.gpu_lru_leaf_set.add(node)
+                # Put back skipped nodes (shared_count > 0) to avoid permanent heap leakage
+                for skipped_node in skipped_nodes:
+                    if skipped_node not in self.gpu_lru_leaf_set:
+                        heapq.heappush(self.gpu_lru_leaf_heap, skipped_node)
+                        self.gpu_lru_leaf_set.add(skipped_node)
+
                 logger.info(
                     f"free_block_ids_async: need_block_num {need_block_num}, free_block_num {total_gpu_free_count}."
                 )
