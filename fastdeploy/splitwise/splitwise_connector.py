@@ -236,6 +236,27 @@ class SplitwiseConnector:
         )
         self._send_message(addr, "decode", tasks_list)
 
+    def send_drop_signal(self, request_id: str, disaggregate_info: dict):
+        """
+        Notify the decode side that this prefill request has been dropped
+        (e.g. paused gate rejected it on P). The decode side should recycle
+        its scheduler entry for this request_id, otherwise it would sit
+        there forever as a ghost and pause/abort drain would hang.
+        """
+        if not disaggregate_info:
+            return
+        decode_ip = disaggregate_info.get("decode_ip")
+        decode_port = disaggregate_info.get("decode_connector_port")
+        if not decode_ip or not decode_port:
+            self.logger.warning(
+                f"send_drop_signal: missing decode_ip/decode_connector_port in "
+                f"disaggregate_info for {request_id}; skip"
+            )
+            return
+        addr = f"{decode_ip}:{decode_port}"
+        self.logger.info(f"send_drop_signal: addr={addr}, request_id={request_id}")
+        self._send_message(addr, "drop", {"request_id": request_id})
+
     def check_decode_allocated(self, task):
         """Check whether the requests have been allocated resources in decode."""
         self.logger.debug(f"check_decode_allocated: {task.request_id}")
@@ -382,6 +403,8 @@ class SplitwiseConnector:
                 self._handle_prefill(payload)
             elif msg_type == "decode":
                 self._handle_decode(payload)
+            elif msg_type == "drop":
+                self._handle_drop(payload)
             elif msg_type == "cache_sync":
                 for task in payload:
                     self.logger.info(f"_process_message: cache_sync task: {task}")
@@ -412,3 +435,15 @@ class SplitwiseConnector:
         for task in payload:
             tasks.append(RequestOutput.from_dict(task))
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks))
+
+    def _handle_drop(self, payload):
+        """
+        Handle drop signal from prefill: forward to engine worker queue so the
+        decode engine main loop can recycle the corresponding scheduler entry.
+        """
+        request_id = payload.get("request_id") if isinstance(payload, dict) else None
+        if not request_id:
+            self.logger.warning(f"_handle_drop: invalid payload {payload}")
+            return
+        self.logger.info(f"_handle_drop: request_id={request_id}")
+        self.engine_worker_queue.put_disaggregated_tasks(("decode_drop", [request_id]))
