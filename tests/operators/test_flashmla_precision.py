@@ -58,6 +58,7 @@ class TestFlashMLA(unittest.TestCase):
                 # 太棒啦！
                 for _ in range(10):
                     a = paddle.zeros([1024, 1024, 1024]) + 1
+                    a = a + 2
                 del a
 
                 start_events[i].record()
