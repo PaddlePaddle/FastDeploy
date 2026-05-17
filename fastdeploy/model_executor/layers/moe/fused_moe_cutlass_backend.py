@@ -360,11 +360,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         gate_out = gate(x)
         if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
             if layer.topk_method == "noaux_tc":
-                use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda() and not fc1_latent_proj
+                use_fused = (
+                    layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+                )
                 if not use_fused:
                     gate_out = gate_out.cast("float32")
-                    if fc1_latent_proj is not None:
-                        x = fc1_latent_proj(x)
+
+                if fc1_latent_proj is not None:
+                    x = fc1_latent_proj(x)
                 gate_out, topk_weights, topk_idx = get_moe_scores(
                     gate_out,
                     layer.n_group,
@@ -436,11 +439,13 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             return fused_moe_out
 
         if layer.topk_method == "noaux_tc":
-            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda() and not fc1_latent_proj
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
             if not use_fused:
                 gate_out = gate_out.cast("float32")
-                if fc1_latent_proj is not None:
-                    x = fc1_latent_proj(x)
+            if fc1_latent_proj is not None:
+                x = fc1_latent_proj(x)
             gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
                 layer.n_group,

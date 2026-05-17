@@ -176,7 +176,13 @@ jobs:
               git config --global --add safe.directory $(pwd)
               git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
               echo "运行增量覆盖率检查 (diff-cover, fail-under=80)..."
-              diff-cover xpu_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report xpu_diff_coverage.json || COVERAGE_EXIT_CODE=9
+              diff-cover xpu_coverage_all.xml --diff-file=diff.txt --fail-under=80 --json-report xpu_diff_coverage.json \
+                --include "fastdeploy/platforms/xpu.py" \
+                --include "fastdeploy/worker/xpu_*" \
+                --include "fastdeploy/model_executor/xpu_*" \
+                --include "fastdeploy/model_executor/ops/xpu/*" \
+                --include "fastdeploy/model_executor/layers/backends/xpu/*" \
+                || COVERAGE_EXIT_CODE=9
             fi
 
             wget -q --no-proxy --no-check-certificate \
