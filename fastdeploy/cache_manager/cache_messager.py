@@ -716,11 +716,11 @@ class CacheMessagerV1:
                             logger.info(
                                 f"[PD Storage] Skip RDMA transfer, mark as finished, " f"req_id: {task['request_id']}"
                             )
-                            self.engine_worker_queue.finish_send_cache_barrier.wait()
                             self.engine_worker_queue.put_finished_req([[task["request_id"], task["status"]]])
                             self.engine_cache_tasks[task["current_id"]] = dict()
                             del self.cache_info[task["request_id"]]
                             del self.idx_cache_task_dict[task["current_id"]]
+                    self.engine_worker_queue.finish_send_cache_barrier.wait()
                     continue
 
                 block_start_end_list = []
