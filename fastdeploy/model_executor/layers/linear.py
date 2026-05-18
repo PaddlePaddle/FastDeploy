@@ -952,9 +952,6 @@ class RowParallelLinear(LinearBase):
             out.reshape_([x.shape[0] // self.tp_size, self.input_size])
         return out
 
-    # NOTE: do NOT wrap with @block_wise_cuda_graph_wrap here.
-    # This forward contains collective comms (alltoall / all_reduce) which
-    # cannot be captured into a CUDA Graph.
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         if self.split_token:
             x = self.all2all_transpose(x)
