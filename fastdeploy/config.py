@@ -213,6 +213,7 @@ class ModelConfig:
         self.response_max_tokens = None
         self.min_completion_tokens = None
         self.input_max_tokens = None
+        self.truncate_prompt_tokens = True
         self.dtype = "bfloat16"
         self.enable_logprob = False
         self.max_logprobs = 20

@@ -116,6 +116,7 @@ class BaseTextProcessor(ABC):
         self.response_max_tokens = None
         self.min_completion_tokens = None
         self.input_max_tokens = None
+        self.truncate_prompt_tokens = True
 
     def set_server_defaults(self, model_config):
         """Set server-level default values from model config.
@@ -128,6 +129,7 @@ class BaseTextProcessor(ABC):
         self.response_max_tokens = model_config.response_max_tokens
         self.min_completion_tokens = model_config.min_completion_tokens
         self.input_max_tokens = model_config.input_max_tokens
+        self.truncate_prompt_tokens = model_config.truncate_prompt_tokens
 
     # ------------------------------------------------------------------
     # Abstract interface
@@ -465,7 +467,13 @@ class BaseTextProcessor(ABC):
 
         # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+            if self.truncate_prompt_tokens:
+                request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+            else:
+                raise ValueError(
+                    f"Input token length {len(request['prompt_token_ids'])} exceeds "
+                    f"the configured max_model_len {max_model_len}"
+                )
 
         logits_processors_args = self._update_thinking_prompt_state(
             request["prompt_token_ids"], request.get("logits_processors_args") or {}

@@ -417,7 +417,13 @@ class MultiModalProcessor(BaseTextProcessor):
 
         # Truncation
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+            if self.truncate_prompt_tokens:
+                request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+            else:
+                raise ValueError(
+                    f"Input token length {len(request['prompt_token_ids'])} exceeds "
+                    f"the configured max_model_len {max_model_len}"
+                )
 
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
 

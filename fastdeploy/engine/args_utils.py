@@ -137,6 +137,11 @@ class EngineArgs:
     Server-level maximum input token length.
     Requests with prompt longer than this will be rejected. None means no limit (bounded by max_model_len).
     """
+    truncate_prompt_tokens: bool = True
+    """
+    Whether to truncate prompts that exceed max_model_len.
+    If True (default), prompts are silently truncated. If False, a ValueError is raised.
+    """
     tensor_parallel_size: int = 1
     """
     Degree of tensor parallelism.
@@ -821,6 +826,14 @@ class EngineArgs:
             help="Server-level maximum input token length. "
             "Requests with prompt longer than this will be rejected. "
             "Default: None (no limit, bounded by max_model_len).",
+        )
+        model_group.add_argument(
+            "--truncate-prompt-tokens",
+            type=lambda x: x.lower() in ("true", "1", "yes"),
+            default=EngineArgs.truncate_prompt_tokens,
+            help="Whether to truncate prompts that exceed max_model_len. "
+            "If True (default), prompts are silently truncated. "
+            "If False, a ValueError is raised.",
         )
         model_group.add_argument(
             "--block-size",

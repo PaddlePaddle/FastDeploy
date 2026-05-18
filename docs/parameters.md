@@ -20,6 +20,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```response_max_tokens``` | `int` | Server-level default response token length. Used when per-request value is not specified. Default: None (no limit) |
 | ```min_completion_tokens``` | `int` | Server-level default minimum generation length. Used when per-request min_tokens is not specified. Default: None (no limit) |
 | ```input_max_tokens``` | `int` | Server-level maximum input token length. Requests with prompt longer than this will be rejected. Default: None (no limit, bounded by max_model_len) |
+| ```truncate_prompt_tokens``` | `bool` | Whether to truncate prompts that exceed max_model_len. If True (default), prompts are silently truncated. If False, a ValueError is raised. Default: True |
 | ```tensor_parallel_size``` | `int` | Default tensor parallelism degree for model, default: 1 |
 | ```data_parallel_size``` | `int` | Default data parallelism degree for model, default: 1 |
 | ```block_size``` | `int` | KVCache management granularity (Token count), recommended default: 64 |
