@@ -25,9 +25,6 @@ class DummyEngine:
     """Dummy Engine class to simulate the actual Engine for testing."""
 
     class ResourceManager:
-        def __init__(self):
-            self.waiting = []
-
         def available_batch(self):
             return 4
 
