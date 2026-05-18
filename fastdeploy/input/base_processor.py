@@ -114,7 +114,7 @@ class BaseTextProcessor(ABC):
         self.max_completion_tokens = None
         self.reasoning_max_tokens = None
         self.response_max_tokens = None
-        self.min_completion_tokens = 1
+        self.min_completion_tokens = None
         self.input_max_tokens = None
 
     def set_server_defaults(self, model_config):
@@ -486,10 +486,16 @@ class BaseTextProcessor(ABC):
         for key, server_val in [
             ("reasoning_max_tokens", self.reasoning_max_tokens),
             ("response_max_tokens", self.response_max_tokens),
-            ("min_tokens", self.min_completion_tokens),
         ]:
             if server_val is not None or request.get(key) is not None:
                 request[key] = _min_non_none(max_tokens, server_val, request.get(key))
+
+        # min_tokens: fallback to server default, then clamp to max_tokens
+        if self.min_completion_tokens is not None or request.get("min_tokens") is not None:
+            effective_min = (
+                request.get("min_tokens") if request.get("min_tokens") is not None else self.min_completion_tokens
+            )
+            request["min_tokens"] = min(max_tokens, effective_min)
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature means greedy decoding: set top_k=1 to force argmax
             request["temperature"] = 1

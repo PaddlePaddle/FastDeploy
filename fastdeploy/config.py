@@ -211,7 +211,7 @@ class ModelConfig:
         self.max_completion_tokens = None
         self.reasoning_max_tokens = None
         self.response_max_tokens = None
-        self.min_completion_tokens = 1
+        self.min_completion_tokens = None
         self.input_max_tokens = None
         self.dtype = "bfloat16"
         self.enable_logprob = False

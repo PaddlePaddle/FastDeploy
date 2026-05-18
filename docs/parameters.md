@@ -18,7 +18,7 @@ When using FastDeploy to deploy models (including offline inference and service 
 | ```max_completion_tokens``` | `int` | Server-level default maximum completion token length. Used when per-request max_tokens/max_completion_tokens is not specified. Default: None (uses max_model_len - input_len) |
 | ```reasoning_max_tokens``` | `int` | Server-level default reasoning/thinking token length. Used when per-request value is not specified. Default: None (no limit) |
 | ```response_max_tokens``` | `int` | Server-level default response token length. Used when per-request value is not specified. Default: None (no limit) |
-| ```min_completion_tokens``` | `int` | Server-level default minimum generation length. Used when per-request min_tokens is not specified. Default: 1 |
+| ```min_completion_tokens``` | `int` | Server-level default minimum generation length. Used when per-request min_tokens is not specified. Default: None (no limit) |
 | ```input_max_tokens``` | `int` | Server-level maximum input token length. Requests with prompt longer than this will be rejected. Default: None (no limit, bounded by max_model_len) |
 | ```tensor_parallel_size``` | `int` | Default tensor parallelism degree for model, default: 1 |
 | ```data_parallel_size``` | `int` | Default data parallelism degree for model, default: 1 |

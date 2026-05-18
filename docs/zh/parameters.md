@@ -16,7 +16,7 @@
 | ```max_completion_tokens```        | `int`       | 服务级默认最大生成token数。请求未指定max_tokens/max_completion_tokens时使用此值。默认：None（使用max_model_len - input_len） |
 | ```reasoning_max_tokens```         | `int`       | 服务级默认推理/思考token数上限。请求未指定时使用此值。默认：None（不限制） |
 | ```response_max_tokens```          | `int`       | 服务级默认回复token数上限。请求未指定时使用此值。默认：None（不限制） |
-| ```min_completion_tokens```        | `int`       | 服务级默认最小生成长度。请求未指定min_tokens时使用此值。默认：1 |
+| ```min_completion_tokens```        | `int`       | 服务级默认最小生成长度。请求未指定min_tokens时使用此值。默认：None（不限制） |
 | ```input_max_tokens```             | `int`       | 服务级输入token数上限。超过此值的请求将被拒绝。默认：None（不限制，受max_model_len约束） |
 | ```tensor_parallel_size```         | `int`       | 模型默认张量并行数，默认1 |
 | ```data_parallel_size```           | `int`       | 模型默认数据并行数，默认1 |
