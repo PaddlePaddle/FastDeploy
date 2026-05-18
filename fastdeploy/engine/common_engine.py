@@ -196,6 +196,7 @@ class EngineService(EngineServicePrepareMixin):
         self.scheduler_metrics_logger = SchedulerMetricsLogger(
             enabled=True,
             dp_rank=self.cfg.parallel_config.local_data_parallel_id,
+            splitwise_role=self.cfg.scheduler_config.splitwise_role,
         )
         self.resource_manager.scheduler_metrics_logger = self.scheduler_metrics_logger
         self.token_processor.set_scheduler_metrics_logger(self.scheduler_metrics_logger)
