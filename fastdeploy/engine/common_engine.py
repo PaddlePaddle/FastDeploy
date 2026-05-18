@@ -200,7 +200,7 @@ class EngineService(EngineServicePrepareMixin):
         self.resource_manager.scheduler_metrics_logger = self.scheduler_metrics_logger
         self.token_processor.set_scheduler_metrics_logger(self.scheduler_metrics_logger)
 
-        if self.cfg.benchmark_metrics_config is not None:
+        if self.cfg.benchmark_metrics_config is not None and self.cfg.benchmark_metrics_config.enable:
             from fastdeploy.metrics.benchmark_metrics_logger import (
                 BenchmarkMetricsLogger,
             )

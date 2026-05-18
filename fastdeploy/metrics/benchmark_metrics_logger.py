@@ -52,10 +52,13 @@ class BenchmarkMetricsLogger:
 
     def __init__(self, config: BenchmarkMetricsConfig, log_dir: str, dp_rank: int = 0):
         self.config = config
-        self.enabled = True
+        self.enabled = config.enable
         self.dp_rank = dp_rank
 
-        self._window: deque = deque()
+        if config.window_mode == "sliding" and config.window_size > 0:
+            self._window: deque = deque(maxlen=config.window_size)
+        else:
+            self._window: deque = deque()
 
         self._pending: deque = deque()
         self._condition = threading.Condition()
@@ -96,7 +99,12 @@ class BenchmarkMetricsLogger:
             stats = self._compute_rolling_stats()
             line = json.dumps(stats, ensure_ascii=False)
             self._file.write(line + "\n")
-            if self.config.window_size > 0 and len(self._window) >= self.config.window_size:
+            # Tumbling window: clear after reaching window_size
+            if (
+                self.config.window_mode == "tumbling"
+                and self.config.window_size > 0
+                and len(self._window) >= self.config.window_size
+            ):
                 self._window.clear()
         self._file.flush()
 
@@ -155,6 +163,7 @@ class BenchmarkMetricsLogger:
         result: dict[str, Any] = {
             "timestamp": datetime.now().isoformat(),
             "window_size": self.config.window_size,
+            "window_mode": self.config.window_mode,
             "completed": n,
             "total_input_tokens": total_input,
             "total_output_tokens": total_output,

@@ -1900,7 +1900,11 @@ class BenchmarkMetricsConfig:
     """Configuration for in-process benchmark metrics logger.
 
     Args (passed as JSON dict via --benchmark-metrics-config):
+        enable: Whether to enable the benchmark metrics logger. Default: False.
         window_size: Number of recent requests to aggregate. 0 = all requests (cumulative).
+        window_mode: Window aggregation mode. Default: "sliding".
+            "sliding" = sliding window (keep last N records),
+            "tumbling" = tumbling window (clear and restart after every N records).
         percentiles: Comma-separated percentile values to compute, e.g. "50,90,95,99".
         metrics: Comma-separated metric names to report, or "all".
             Available metrics (aligned with benchmark_serving.py --percentile-metrics):
@@ -1917,7 +1921,9 @@ class BenchmarkMetricsConfig:
     """
 
     _DEFAULTS = {
+        "enable": False,
         "window_size": 0,
+        "window_mode": "sliding",
         "percentiles": "50,90,95,99",
         "metrics": "all",
     }
@@ -2448,6 +2454,33 @@ class FDConfig:
                 raise ImportError(
                     "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
                     "  CUDA 12.x → pip install cuda-python==12.*\n"
+                )
+
+        if self.benchmark_metrics_config is not None:
+            cfg = self.benchmark_metrics_config
+            assert isinstance(
+                cfg.enable, bool
+            ), f"BenchmarkMetricsConfig: 'enable' must be a bool, got {type(cfg.enable).__name__}"
+            assert (
+                isinstance(cfg.window_size, int) and cfg.window_size >= 0
+            ), f"BenchmarkMetricsConfig: 'window_size' must be a non-negative integer, got {cfg.window_size!r}"
+            assert cfg.window_mode in (
+                "sliding",
+                "tumbling",
+            ), f"BenchmarkMetricsConfig: 'window_mode' must be 'sliding' or 'tumbling', got {cfg.window_mode!r}"
+            assert (
+                isinstance(cfg.percentiles, str) and cfg.percentiles.strip()
+            ), f"BenchmarkMetricsConfig: 'percentiles' must be a non-empty string, got {cfg.percentiles!r}"
+            for p in cfg.percentile_values:
+                assert 0 <= p <= 100, f"BenchmarkMetricsConfig: percentile value {p} out of range [0, 100]"
+            assert (
+                isinstance(cfg.metrics, str) and cfg.metrics.strip()
+            ), f"BenchmarkMetricsConfig: 'metrics' must be a non-empty string, got {cfg.metrics!r}"
+            if cfg.metrics != "all":
+                invalid = cfg.selected_metrics - set(BenchmarkMetricsConfig._ALL_METRICS)
+                assert not invalid, (
+                    f"BenchmarkMetricsConfig: unknown metric(s): {invalid}. "
+                    f"Valid metrics: {BenchmarkMetricsConfig._ALL_METRICS}"
                 )
 
     def print(self):
