@@ -644,11 +644,18 @@ class TokenProcessor:
                 if result.error_code == 200:
                     write_cache_start_time = time.time()
                     llm_logger.info(f"[PD Storage] P writing cache to storage (direct), request_id: {task_id}")
-                    self.resource_manager.cache_manager.write_all_cache_to_storage(task, include_output=False)
-                    llm_logger.info(
-                        f"[PD Storage] P finished writing cache to storage (direct), "
-                        f"request_id: {task_id}, cost: {time.time()-write_cache_start_time:.5f}s"
+                    write_success = self.resource_manager.cache_manager.write_all_cache_to_storage(
+                        task, include_output=False
                     )
+                    if not write_success:
+                        result.error_code = 501
+                        result.error_msg = f"P instance failed to write cache to storage for request {task_id}"
+                        llm_logger.error(f"[PD Storage] {result.error_msg}")
+                    else:
+                        llm_logger.info(
+                            f"[PD Storage] P finished writing cache to storage (direct), "
+                            f"request_id: {task_id}, cost: {time.time()-write_cache_start_time:.5f}s"
+                        )
                 trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_END, task_id, getattr(task, "user", ""))
                 result.metrics.send_request_output_to_decode_time = time.time()
                 self.split_connector.send_first_token(task.disaggregate_info, [result])

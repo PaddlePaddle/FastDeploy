@@ -1485,6 +1485,7 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
             (CacheStatus.STORAGE2GPU, "pref", ["h1"], [1, 2]),
             (CacheStatus.STORAGE2GPU, "pref", ["h2"], [1]),
             (CacheStatus.GPU2STORAGE, "write", ["h3"], [9]),
+            (CacheStatus.GPU2STORAGE, "write", ["h3"], [9]),
         ]
         manager.cache_task_queue = _FakeTransferQueue(payloads)
         with self.assertRaises(SystemExit):

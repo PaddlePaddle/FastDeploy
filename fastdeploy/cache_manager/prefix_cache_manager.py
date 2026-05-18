@@ -97,6 +97,7 @@ class PrefixCacheManager:
         self.kvcache_storage_backend = self.cache_config.kvcache_storage_backend
         self.write_policy = self.cache_config.write_policy
         self.task_write_back_event = {}
+        self.storage_write_back_result = {}
         self.task_prefetch_event = {}
         self.storage_prefetch_block_ids = {}
 
@@ -1186,9 +1187,15 @@ class PrefixCacheManager:
         )
         logger.debug(f"issue write storage task: {write_storage_task}")
         tic = time.time()
-        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
+        success = self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
-        logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+        if not success:
+            logger.error(
+                f"write cache back to storage FAILED, req_id: {req_id}, "
+                f"block num: {len(keys)}, cost_time: {cost_time:.6f}s"
+            )
+        else:
+            logger.info(f"finish write cache back to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
         trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_END, request.request_id, getattr(request, "user", ""))
 
     def write_cache_to_storage_decode(self, request: Request):
@@ -1267,10 +1274,59 @@ class PrefixCacheManager:
         )
 
         tic = time.time()
-        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
+        success = self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
-        logger.info(f"[D instance] finish write cache to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+        if not success:
+            logger.error(
+                f"[D instance] write cache to storage FAILED, req_id: {req_id}, "
+                f"block num: {len(keys)}, cost_time: {cost_time:.6f}s"
+            )
+        else:
+            logger.info(f"[D instance] finish write cache to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
         trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_END, request.request_id, getattr(request, "user", ""))
+
+    def _compute_pd_storage_keys(self, request: Request, input_token_ids: list):
+        """
+        Compute cache keys (including :partial:N suffix for last incomplete block)
+        for PD storage-pool mode. Used by both write_all_cache_to_storage (P/D) and
+        read_cache_from_storage_for_pd (D) to ensure consistent key computation.
+
+        Args:
+            request: The request object (needed for get_block_hash_extra_keys).
+            input_token_ids: The token IDs to compute keys for.
+
+        Returns:
+            list: The computed hash keys for each block.
+        """
+        keys = []
+        prefix_block_key = []
+        block_size = self.config.cache_config.block_size
+        mm_idx = 0
+
+        for i in range(0, len(input_token_ids), block_size):
+            block_token_ids = input_token_ids[i : i + block_size]
+            actual_token_num = len(block_token_ids)
+
+            if actual_token_num < block_size:
+                # Last incomplete block: compute key with actual tokens + partial marker
+                key = get_hash_str(block_token_ids, prefix_block_key)
+                key = f"{key}:partial:{actual_token_num}"
+                keys.append(key)
+            else:
+                # Full block: compute key normally
+                mm_idx, extra_keys = self.get_block_hash_extra_keys(
+                    request=request,
+                    start_idx=i,
+                    end_idx=i + block_size,
+                    mm_idx=mm_idx,
+                )
+                prefix_block_key.extend(extra_keys)
+                key = get_hash_str(block_token_ids, prefix_block_key)
+                keys.append(key)
+
+            prefix_block_key = [key]
+
+        return keys
 
     def write_all_cache_to_storage(self, request: Request, include_output=True):
         """
@@ -1288,9 +1344,12 @@ class PrefixCacheManager:
             request: The request object.
             include_output: If True, include output_token_ids in the write (used by D).
                            If False, only write prompt_token_ids (used by P).
+
+        Returns:
+            bool: True if all blocks written successfully, False otherwise.
         """
         if self.kvcache_storage_backend is None:
-            return
+            return True
 
         # 1. Get complete token_ids
         token_ids = request.prompt_token_ids
@@ -1301,37 +1360,11 @@ class PrefixCacheManager:
 
         input_token_ids = token_ids + request.output_token_ids if include_output else token_ids
 
-        # 2. Calculate cache keys using chained hash, including last partial block
-        keys = []
-        prefix_block_key = []
-        block_size = self.config.cache_config.block_size
-        mm_idx = 0
-
-        for i in range(0, len(input_token_ids), block_size):
-            block_token_ids = input_token_ids[i : i + block_size]
-            actual_token_num = len(block_token_ids)
-
-            if actual_token_num < block_size:
-                # Last incomplete block: compute key with actual tokens + partial marker
-                key = get_hash_str(block_token_ids, prefix_block_key)
-                key = f"{key}:partial:{actual_token_num}"
-                keys.append(key)
-            else:
-                # Full block: compute key normally (same as write_cache_to_storage_decode)
-                mm_idx, extra_keys = self.get_block_hash_extra_keys(
-                    request=request,
-                    start_idx=i,
-                    end_idx=i + block_size,
-                    mm_idx=mm_idx,
-                )
-                prefix_block_key.extend(extra_keys)
-                key = get_hash_str(block_token_ids, prefix_block_key)
-                keys.append(key)
-
-            prefix_block_key = [key]
+        # 2. Calculate cache keys using shared helper
+        keys = self._compute_pd_storage_keys(request, input_token_ids)
 
         if not keys:
-            return
+            return True
 
         # 3. Get corresponding gpu_block_ids
         gpu_block_ids = request.block_tables[: len(keys)]
@@ -1352,10 +1385,19 @@ class PrefixCacheManager:
         )
 
         tic = time.time()
-        self.issue_write_back_storage_task(write_storage_task, is_sync=True)
+        success = self.issue_write_back_storage_task(write_storage_task, is_sync=True)
         cost_time = time.time() - tic
-        logger.info(f"[PD Storage] finish write all cache to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s")
+        if not success:
+            logger.error(
+                f"[PD Storage] write all cache to storage FAILED, req_id: {req_id}, "
+                f"block num: {len(keys)}, cost_time: {cost_time:.6f}s"
+            )
+        else:
+            logger.info(
+                f"[PD Storage] finish write all cache to storage, req_id: {req_id}, cost_time: {cost_time:.6f}s"
+            )
         trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_END, request.request_id, getattr(request, "user", ""))
+        return success
 
     def read_cache_from_storage_for_pd(self, request: Request):
         """
@@ -1379,35 +1421,10 @@ class PrefixCacheManager:
             token_ids = token_ids.tolist()
         else:
             token_ids = list(token_ids)
-
         input_token_ids = token_ids
 
-        # 2. Calculate cache keys using same algorithm as write_all_cache_to_storage
-        keys = []
-        prefix_block_key = []
-        block_size = self.config.cache_config.block_size
-        mm_idx = 0
-
-        for i in range(0, len(input_token_ids), block_size):
-            block_token_ids = input_token_ids[i : i + block_size]
-            actual_token_num = len(block_token_ids)
-
-            if actual_token_num < block_size:
-                key = get_hash_str(block_token_ids, prefix_block_key)
-                key = f"{key}:partial:{actual_token_num}"
-                keys.append(key)
-            else:
-                mm_idx, extra_keys = self.get_block_hash_extra_keys(
-                    request=request,
-                    start_idx=i,
-                    end_idx=i + block_size,
-                    mm_idx=mm_idx,
-                )
-                prefix_block_key.extend(extra_keys)
-                key = get_hash_str(block_token_ids, prefix_block_key)
-                keys.append(key)
-
-            prefix_block_key = [key]
+        # 2. Calculate cache keys using shared helper (same algorithm as write_all_cache_to_storage)
+        keys = self._compute_pd_storage_keys(request, token_ids)
 
         if not keys:
             return []
@@ -1448,8 +1465,12 @@ class PrefixCacheManager:
             return storage_block_ids
 
     def issue_write_back_storage_task(self, task: WriteStorageTask, is_sync=True):
+        """
+        Issue a write-back storage task.
+        Returns True if all blocks written successfully (sync mode), True always (async mode).
+        """
         if self.kvcache_storage_backend is None:
-            return
+            return True
 
         if not envs.FD_AS_ONLY_FLUSH and len(task.keys) != len(task.gpu_block_ids):
             err_msg = (
@@ -1462,15 +1483,37 @@ class PrefixCacheManager:
             self.task_write_back_event[task.task_id] = Event()
         self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
         if is_sync:
-            self.wait_write_storage_task(task.task_id)
+            return self.wait_write_storage_task(task.task_id, expected_block_num=len(task.gpu_block_ids))
+        return True
 
-    def wait_write_storage_task(self, req_id):
+    def wait_write_storage_task(self, req_id, expected_block_num=0, timeout=60.0):
         """
-        Sync write back task
+        Sync write back task.
+        Returns True if all expected blocks written successfully across all TP ranks.
+
+        Args:
+            req_id: request ID
+            expected_block_num: number of blocks expected to be written
+            timeout: max wait time in seconds
         """
         if req_id in self.task_write_back_event:
-            self.task_write_back_event[req_id].wait()
+            success = self.task_write_back_event[req_id].wait(timeout=timeout)
             del self.task_write_back_event[req_id]
+            if not success:
+                logger.error(f"[PD Storage] write storage task timeout after {timeout}s, req_id: {req_id}")
+                self.storage_write_back_result.pop(req_id, None)
+                return False
+            # Check actual written block count vs expected
+            written_block_ids = self.storage_write_back_result.pop(req_id, [])
+            actual_written = len(written_block_ids)
+            if expected_block_num > 0 and actual_written < expected_block_num:
+                logger.error(
+                    f"[PD Storage] write storage incomplete: {actual_written}/{expected_block_num} blocks, "
+                    f"req_id: {req_id}"
+                )
+                return False
+            return True
+        return True
 
     def issue_prefetch_storage_task(self, task: ReadStorageTask, is_sync=True):
         """
@@ -2403,8 +2446,16 @@ class PrefixCacheManager:
                 elif event_type.value == CacheStatus.GPU2STORAGE.value:
                     logger.debug(f"recv_data_transfer_result: {data}")
                     task_id, hash_keys, block_ids = data[1:]
-                    if task_id in self.task_write_back_event:
-                        self.task_write_back_event[task_id].set()
+                    # Collect results from all TP ranks (same pattern as STORAGE2GPU path)
+                    if task_id not in self.storage_write_back_result:
+                        self.storage_write_back_result[task_id] = []
+                    saved_results = self.storage_write_back_result[task_id]
+                    saved_results.append(block_ids)
+                    if len(saved_results) == self.tensor_parallel_size:
+                        # Take minimum across all ranks (conservative, same as read path)
+                        self.storage_write_back_result[task_id] = min(saved_results, key=len)
+                        if task_id in self.task_write_back_event:
+                            self.task_write_back_event[task_id].set()
                 else:
                     (
                         event_type,
