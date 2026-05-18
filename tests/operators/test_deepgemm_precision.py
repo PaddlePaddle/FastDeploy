@@ -43,7 +43,7 @@ class DenseGemmKernel:
         self.num_ab_stage = 4
         self.num_acc_stage = 1
         self.use_2cta_instrs = True
-        self.cluster_shape_mnk = (2, 1, 1) if self.use_2cta_instrs else (1, 1, 1)
+        self.cluster_shape_mnk = (2, 1, 1)
         self.cluster_shape_mn = self.cluster_shape_mnk[:2]
         self.cta_group = tcgen05.CtaGroup.TWO if self.use_2cta_instrs else tcgen05.CtaGroup.ONE
 
@@ -113,6 +113,10 @@ class DenseGemmKernel:
         b_copy_size = cute.size_in_bytes(self.b_dtype, b_smem_layout)
         self.num_tma_load_bytes = (a_copy_size + b_copy_size) * self.atom_thr_size
 
+        grid = [M // self.mma_tiler[0], N // self.mma_tiler[1], 1]
+        if self.use_2cta_instrs:
+            grid[0] = M // self.mma_tiler[0] * self.cluster_shape_mn[0]
+
         self.kernel(
             tiled_mma,
             a,
@@ -126,7 +130,7 @@ class DenseGemmKernel:
             tma_atom_b,
             self.cluster_layout_vmnk,
         ).launch(
-            grid=[M // self.mma_tiler[0] * self.cluster_shape_mn[0], N // self.mma_tiler[1], 1],
+            grid=grid,
             block=[128, 1, 1],
             cluster=self.cluster_shape_mnk,
         )
