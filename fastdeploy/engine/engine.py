@@ -147,7 +147,6 @@ class LLMEngine:
         self.engine.start()
         self.engine.create_data_processor()
         self.data_processor = self.engine.data_processor
-        self.data_processor.set_server_defaults(self.cfg.model_config)
 
         # If block numer is specified and model is deployed in mixed mode, start cache manager first
         if not self.do_profile and self.cfg.scheduler_config.splitwise_role != "mixed":
