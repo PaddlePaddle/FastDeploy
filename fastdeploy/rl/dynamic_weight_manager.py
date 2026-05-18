@@ -348,6 +348,13 @@ class DynamicWeightManager:
             if shutdown_process_group:
                 paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
         if shutdown_process_group:
+            # ProcessGroupGloo has no shutdown(); remove it from paddle's registry
+            # before the global sweep to avoid AttributeError.
+            from paddle.distributed.collective import _get_group_map_by_name
+
+            for name, pg in list(_get_group_map_by_name().items()):
+                if pg.process_group is not None and not hasattr(pg.process_group, "shutdown"):
+                    _get_group_map_by_name().pop(name, None)
             paddle.distributed.shutdown_process_group()
         self._update_shared_status(pid, ModelWeightsStatus.CLEARED)
 
