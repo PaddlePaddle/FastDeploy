@@ -174,6 +174,7 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule
         self.cached_control_reqs = []
+        self.gloo_group = dist.new_group(list(range(self.ranks)), backend="gloo")
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -501,8 +502,7 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
-                    group = dist.new_group(list(range(self.ranks)), backend="gloo")
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=group)
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=self.gloo_group)
 
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
@@ -566,9 +566,8 @@ class PaddleDisWorkerProc:
                             while self.model_weights_signal[0] != ModelWeightsStatus.UPDATING:
                                 self.model_weights_signal[0] = self.model_weights_status.value[0]
                                 if self.ranks > 1:
-                                    group = dist.new_group(list(range(self.ranks)), backend="gloo")
                                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                                        src=0, group=group
+                                        src=0, group=self.gloo_group
                                     )
                                 time.sleep(1)
                             self.model_weights_status.value[0] = (
