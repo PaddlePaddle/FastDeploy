@@ -829,11 +829,11 @@ class EngineArgs:
         )
         model_group.add_argument(
             "--truncate-prompt-tokens",
-            type=lambda x: x.lower() in ("true", "1", "yes"),
+            action=argparse.BooleanOptionalAction,
             default=EngineArgs.truncate_prompt_tokens,
             help="Whether to truncate prompts that exceed max_model_len. "
             "If True (default), prompts are silently truncated. "
-            "If False, a ValueError is raised.",
+            "If False, a ValueError is raised. Use --no-truncate-prompt-tokens to disable.",
         )
         model_group.add_argument(
             "--block-size",

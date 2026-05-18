@@ -493,23 +493,24 @@ class BaseTextProcessor(ABC):
             else:
                 request["max_tokens"] = context_remaining
         else:
-            # User specified: clamp to upper bound (context_remaining + max_completion_tokens)
+            # User specified: clamp to min(context_remaining, max_completion_tokens)
             request["max_tokens"] = _min_non_none(context_remaining, self.max_completion_tokens, request["max_tokens"])
 
         max_tokens = request["max_tokens"]
-        for key, server_val in [
-            ("reasoning_max_tokens", self.reasoning_max_tokens),
-            ("response_max_tokens", self.response_max_tokens),
-        ]:
-            if server_val is not None or request.get(key) is not None:
-                request[key] = _min_non_none(max_tokens, server_val, request.get(key))
-
-        # min_tokens: fallback to server default, then clamp to max_tokens
-        if self.min_completion_tokens is not None or request.get("min_tokens") is not None:
-            effective_min = (
-                request.get("min_tokens") if request.get("min_tokens") is not None else self.min_completion_tokens
+        if self.reasoning_max_tokens is not None or request.get("reasoning_max_tokens") is not None:
+            request["reasoning_max_tokens"] = _min_non_none(
+                max_tokens, self.reasoning_max_tokens, request.get("reasoning_max_tokens")
             )
-            request["min_tokens"] = min(max_tokens, effective_min)
+        if self.response_max_tokens is not None or request.get("response_max_tokens") is not None:
+            request["response_max_tokens"] = _min_non_none(
+                max_tokens, self.response_max_tokens, request.get("response_max_tokens")
+            )
+
+        # min_tokens: server-level takes priority, fallback to request value, then clamp to max_tokens
+        if self.min_completion_tokens is not None:
+            request["min_tokens"] = min(max_tokens, self.min_completion_tokens)
+        elif request.get("min_tokens") is not None:
+            request["min_tokens"] = min(max_tokens, request["min_tokens"])
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature means greedy decoding: set top_k=1 to force argmax
             request["temperature"] = 1
