@@ -178,7 +178,10 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule
         self.cached_control_reqs = []
-        self.gloo_group = dist.new_group(list(range(self.ranks)), backend="gloo")
+        if self.ranks > 1:
+            self.gloo_group = dist.new_group(list(range(self.ranks)), backend="gloo")
+        else:
+            self.gloo_group = None
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
