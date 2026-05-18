@@ -460,7 +460,7 @@ class BaseTextProcessor(ABC):
         # Reject requests exceeding input_max_tokens (before truncation)
         if self.input_max_tokens is not None and len(request["prompt_token_ids"]) > self.input_max_tokens:
             raise ValueError(
-                f"Input token length {len(request['prompt_token_ids'])} exceeds --input-max-tokens {self.input_max_tokens}"
+                f"Input token length {len(request['prompt_token_ids'])} exceeds the configured input_max_tokens limit {self.input_max_tokens}"
             )
 
         # truncate prompts that exceed the length limit
