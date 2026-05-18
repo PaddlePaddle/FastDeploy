@@ -1514,7 +1514,7 @@ class GPUModelRunner(ModelRunnerBase):
         # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
         if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
-            if self.speculative_decoding:
+            if self.speculative_decoding and self.proposer is not None:
                 self.proposer.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
         # Update Batch type for cuda graph for only_prefill_batch
@@ -1997,7 +1997,7 @@ class GPUModelRunner(ModelRunnerBase):
                     is_dummy_run=True,
                 )
             elif self.spec_method == SpecMethod.NAIVE:
-                self.proposer.run()
+                pass
             else:
                 self.proposer.prepare_dummy_speculative_drafts(share_inputs=self.share_inputs, batch_size=batch_size)
         return sampler_output
@@ -2790,13 +2790,13 @@ class GPUModelRunner(ModelRunnerBase):
             post_process_event.record()
 
             # 6. Speculative decode -- proposer run
-            # NAIVE: NaiveProposer.run() is a no-op; seq_lens_this_time was
+            # NAIVE: proposer is None, skip; seq_lens_this_time was
             # already set to 1 by naive_update_model_status kernel during
             # sampling. MTP/Ngram: the proposer populates draft_tokens and
             # updates seq_lens_this_time to (draft_count + 1) for the next
             # target-model forward pass.
 
-            if self.speculative_decoding and self.proposer is not None:
+            if self.speculative_decoding:
                 if self.spec_method == SpecMethod.MTP:
                     self.proposer.run(
                         full_hidden_states=model_output,
@@ -2804,7 +2804,7 @@ class GPUModelRunner(ModelRunnerBase):
                         real_bsz=real_bsz,
                     )
                 elif self.spec_method == SpecMethod.NAIVE:
-                    self.proposer.run()
+                    pass
                 else:
                     self.proposer.run(share_inputs=self.share_inputs)
 

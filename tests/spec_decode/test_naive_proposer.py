@@ -14,41 +14,26 @@
 # limitations under the License.
 """
 
-# NOTE: Coverage supplement test — uses mock to reach NaiveProposer
-# branches that require no GPU model loading.
-
 import unittest
 
 from utils import FakeModelConfig, get_default_test_fd_config
 
 from fastdeploy.config import SpeculativeConfig
-from fastdeploy.spec_decode.naive import NaiveProposer
 from fastdeploy.spec_decode.types import SpecMethod
 
 
-class TestNaiveProposer(unittest.TestCase):
+class TestNaiveCreateProposer(unittest.TestCase):
     def setUp(self):
         self.fd_config = get_default_test_fd_config()
         self.fd_config.model_config = FakeModelConfig()
         self.fd_config.speculative_config = SpeculativeConfig({"method": "naive", "num_speculative_tokens": 1})
 
-    def test_init_stores_config(self):
-        proposer = NaiveProposer(self.fd_config)
-        self.assertIsNotNone(proposer.fd_config)
-        self.assertEqual(proposer.fd_config.speculative_config.method, "naive")
-
-    def test_run_impl_is_noop(self):
-        proposer = NaiveProposer(self.fd_config)
-        result = proposer._run_impl()
-        self.assertIsNone(result)
-
-    def test_create_proposer_returns_naive_proposer(self):
+    def test_create_proposer_returns_none(self):
         proposer = SpecMethod.NAIVE.create_proposer(self.fd_config)
-        self.assertIsInstance(proposer, NaiveProposer)
+        self.assertIsNone(proposer)
 
-    def test_create_proposer_is_not_none(self):
-        proposer = SpecMethod.NAIVE.create_proposer(self.fd_config)
-        self.assertIsNotNone(proposer)
+    def test_needs_proposer_returns_false(self):
+        self.assertFalse(SpecMethod.NAIVE.needs_proposer)
 
 
 if __name__ == "__main__":

@@ -89,9 +89,7 @@ class SpecMethod(str, Enum):
             Proposer instance, or None for NAIVE.
         """
         if self == SpecMethod.NAIVE:
-            from fastdeploy.spec_decode.naive import NaiveProposer
-
-            return NaiveProposer(fd_config)
+            return None
         elif self == SpecMethod.MTP:
             from fastdeploy.spec_decode.mtp import create_mtp_proposer
 
