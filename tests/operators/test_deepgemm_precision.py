@@ -44,7 +44,7 @@ class DenseGemmKernel:
         self.num_acc_stage = 1
         self.use_2cta_instrs = True
         self.cluster_shape_mnk = (2, 1, 1) if self.use_2cta_instrs else (1, 1, 1)
-        self.cluster_shape_mn = (2, 1) if self.use_2cta_instrs else (1, 1)
+        self.cluster_shape_mn = self.cluster_shape_mnk[:2]
         self.cta_group = tcgen05.CtaGroup.TWO if self.use_2cta_instrs else tcgen05.CtaGroup.ONE
 
         self.mma_tiler = (128, 128, 64)
