@@ -33,6 +33,11 @@ class SamplingState:
 
         self.max_num_seqs = max_num_seqs
 
+        # EOS token IDs — model-level, same for all requests.
+        # Initialized with placeholder; updated on first request via init_eos().
+        self.eos_token_ids = paddle.zeros([eos_tokens_len], dtype=paddle.int64)
+        self.eos_inited = False
+
         self.temperature = StagedWriteTensor(max_num_seqs, dtype=paddle.float32)
         self.top_k = StagedWriteTensor(max_num_seqs, dtype=paddle.int32)
         self.top_p = StagedWriteTensor(max_num_seqs, dtype=paddle.float32)
@@ -60,6 +65,11 @@ class SamplingState:
         self.stop_token_offsets = StagedWriteTensor((max_num_seqs, max_stop_seqs_num + 1), dtype=paddle.int32)
 
         self.num_logprobs = np.empty(self.max_num_seqs, dtype=np.int32)
+
+    def init_eos(self, eos_token_ids: list[int]) -> None:
+        """Initialize model-level EOS token IDs (called once on first request)."""
+        self.eos_token_ids = paddle.to_tensor(eos_token_ids, dtype=paddle.int64)
+        self.eos_inited = True
 
     def add_request(self, req_idx: int, request) -> None:
         temperature = request.get("temperature", 1.0)

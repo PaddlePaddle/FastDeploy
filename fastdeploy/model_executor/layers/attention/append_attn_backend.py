@@ -313,6 +313,18 @@ class AppendAttentionBackend(AttentionBackend):
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
             )
+
+        # V0 Debug: dump qkv before append_attention for layer 0
+        if not getattr(self, "_v0_append_debug_done", False) and layer.layer_id == 0:
+            self._v0_append_debug_done = True
+            _q_size = layer.num_heads * layer.head_dim
+            _kv_size = layer.kv_num_heads * layer.head_dim
+            _q = qkv[0, :_q_size].reshape([layer.num_heads, layer.head_dim])
+            _k = qkv[0, _q_size : _q_size + _kv_size].reshape([layer.kv_num_heads, layer.head_dim])
+            with open("/tmp/v0_debug.txt", "a") as _f:
+                _f.write(f"qkv_before_rope q[0,:5]={_q[0,:5].cast('float32').tolist()}\n")
+                _f.write(f"qkv_before_rope k[0,:5]={_k[0,:5].cast('float32').tolist()}\n")
+
         cache_quant_type_str = getattr(layer, "cache_quant_type_str", "none")
         if cache_quant_type_str == "block_wise_fp8":
             cache_k = forward_meta.caches[4 * layer.layer_id]
@@ -497,4 +509,14 @@ class AppendAttentionBackend(AttentionBackend):
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
             )
+
+        # V0 Debug: dump attention output for layer 0
+        if not getattr(self, "_v0_attn_out_debug_done", False) and layer.layer_id == 0:
+            self._v0_attn_out_debug_done = True
+            _out_reshaped = res.reshape([res.shape[0], layer.num_heads, layer.head_dim])
+            with open("/tmp/v0_debug.txt", "a") as _f:
+                _f.write(f"attn_output[0,:5]={_out_reshaped[0,0,:5].cast('float32').tolist()}\n")
+                _f.write(f"attn_output[1,:5]={_out_reshaped[1,0,:5].cast('float32').tolist()}\n")
+                _f.write(f"attn_output[-1,:5]={_out_reshaped[-1,0,:5].cast('float32').tolist()}\n")
+
         return res

@@ -30,7 +30,7 @@ import paddle
 import triton
 import triton.language as tl
 
-NEG_INF = float("-inf")
+NEG_INF = tl.constexpr(float("-inf"))
 
 
 # ---------------------------------------------------------------------------
@@ -93,6 +93,19 @@ def _check_stop_kernel(
                 )
                 if tl.sum(((stop_vals == token) & mask).to(tl.int32)) > 0:
                     stop = True
+
+    # If the sequence is stopping but the *last* sampled token is not an
+    # EOS (e.g. stopped due to max_dec_len), overwrite it with eos[0] so
+    # downstream consumers see a proper end-of-stream marker.
+    if stop:
+        last_t = tok_end - 1
+        last_token = tl.load(sampled_tokens_ptr + last_t)
+        eos_offsets = tl.arange(0, num_eos)
+        eos_vals = tl.load(eos_token_ids_ptr + eos_offsets)
+        is_eos = tl.sum((eos_vals == last_token).to(tl.int32)) > 0
+        if not is_eos:
+            eos0 = tl.load(eos_token_ids_ptr)
+            tl.store(sampled_tokens_ptr + last_t, eos0.to(last_token.dtype))
 
     tl.store(stop_flags_ptr + bid, stop)
 

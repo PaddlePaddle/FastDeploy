@@ -68,13 +68,7 @@ class RequestState:
         self.total_len = StagedWriteTensor(self.max_num_seqs, dtype=paddle.int32)
 
         # Number of computed tokens.
-        self.num_computed_prefill_tokens = np.zeros(self.max_num_seqs, dtype=np.int32)
         self.num_computed_tokens = StagedWriteTensor(self.max_num_seqs, dtype=paddle.int32)
-        # CPU shadow of num_computed_tokens, kept in sync with the GPU buffer.
-        # Used by prepare_inputs to compute seq_lens_np (full KV-cache length per seq)
-        # without a D2H copy. Mirrors the kernel's
-        #     seq_len = num_computed_tokens + query_len
-        # see fastdeploy/worker/gpu/input_batch.py::_prepare_pos_seq_lens_kernel.
         self.num_computed_tokens_np = np.zeros(self.max_num_seqs, dtype=np.int32)
 
         # Number of computing tokens.
@@ -92,6 +86,9 @@ class RequestState:
         self.draft_tokens_len = paddle.full(self.max_num_seqs, 0, dtype=paddle.int32)
 
         self.next_prefill_tokens = paddle.full(self.max_num_seqs, 0, dtype=paddle.int32)
+
+        # Number of output tokens emitted so far (decode tokens, excluding prompt).
+        self.num_output_tokens = np.zeros(self.max_num_seqs, dtype=np.int32)
 
     @property
     def num_reqs(self) -> int:
@@ -112,9 +109,8 @@ class RequestState:
         self.prefill_len.np[req_idx] = prefill_len
         self.all_token_ids.stage_write(req_idx, 0, all_token_ids)
         self.batched_input_ids.stage_write(req_idx, 0, batched_input_ids)
-        self.num_computed_prefill_tokens[req_idx] = num_computed_tokens
-        self.num_computed_tokens.stage_write_elem(req_idx, num_computed_tokens)
         self.num_computed_tokens_np[req_idx] = num_computed_tokens
+        self.num_computed_tokens.stage_write_elem(req_idx, num_computed_tokens)
 
     def apply_staged_writes(self) -> None:
         self.prompt_len.copy_to_uva()
@@ -134,19 +130,19 @@ class RequestState:
     def exist_prefill(self) -> bool:
         running_idx = self.num_tokens_per_seq > 0
         return len(running_idx) > 0 and np.any(
-            self.num_computed_prefill_tokens[running_idx] < self.prefill_len.np[running_idx]
+            self.num_computed_tokens_np[running_idx] < self.prefill_len.np[running_idx]
         )
 
     def exist_decode(self) -> bool:
         running_idx = self.num_tokens_per_seq > 0
         return len(running_idx) > 0 and np.any(
-            self.num_computed_prefill_tokens[running_idx] >= self.prefill_len.np[running_idx]
+            self.num_computed_tokens_np[running_idx] >= self.prefill_len.np[running_idx]
         )
 
     def get_num_prefills(self) -> int:
         running_idx = self.num_tokens_per_seq > 0
-        return np.sum(self.num_computed_prefill_tokens[running_idx] < self.prefill_len[running_idx])
+        return np.sum(self.num_computed_tokens_np[running_idx] < self.prefill_len[running_idx])
 
     def get_num_num_decodes(self) -> int:
         running_idx = self.num_tokens_per_seq > 0
-        return np.sum(self.num_computed_prefill_tokens[running_idx] >= self.prefill_len[running_idx])
+        return np.sum(self.num_computed_tokens_np[running_idx] >= self.prefill_len[running_idx])

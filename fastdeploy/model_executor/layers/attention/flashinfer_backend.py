@@ -35,8 +35,33 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
-from fastdeploy.model_executor.ops.gpu import reshape_and_cache_flash
+from fastdeploy.model_executor.ops.gpu import (
+    fused_rotary_position_encoding,
+    reshape_and_cache_flash,
+)
 from fastdeploy.worker.gpu.buffer_utils import CpuGpuBuffer
+
+
+def _per_head_rms_norm(
+    x: paddle.Tensor,
+    weight: paddle.Tensor,
+    eps: float = 1e-6,
+) -> paddle.Tensor:
+    """Apply per-head RMSNorm.
+
+    Args:
+        x: [num_tokens, num_heads, head_dim]
+        weight: [head_dim] - learnable scale parameter
+        eps: epsilon for numerical stability
+
+    Returns:
+        Normalized tensor with same shape as x.
+    """
+    orig_dtype = x.dtype
+    x_fp32 = x.astype("float32")
+    variance = x_fp32.pow(2).mean(-1, keepdim=True)
+    x_normed = x_fp32 * paddle.rsqrt(variance + eps)
+    return (x_normed * weight.astype("float32")).astype(orig_dtype)
 
 
 class FlashInferAttentionBackend(AttentionBackend):
@@ -126,7 +151,7 @@ class FlashInferAttentionBackend(AttentionBackend):
             qo_indptr_prefill_cpu = qo_indptr_cpu[prefill_start:] - qo_indptr_cpu[prefill_start]
             assert qo_indptr_prefill_cpu.shape[0] == num_prefills + 1
 
-            self.prefill_wrapper = BatchPrefillWithPagedKVCacheWrapper(self._workspace_buffer, "NHD")
+            self.prefill_wrapper = BatchPrefillWithPagedKVCacheWrapper(self._workspace_buffer, "NHD", backend="fa2")
 
             # Slicing CPU buffers that are only needed for FI native prefills
             paged_kv_last_page_len_prefill_cpu = self.paged_kv_last_page_len.cpu[prefill_start:num_seqs]
@@ -316,6 +341,34 @@ class FlashInferAttentionBackend(AttentionBackend):
                 [num_tokens, layer.kv_num_heads, layer.head_dim]
             )
 
+        # Apply RoPE (rotary positional embedding) before writing KV cache.
+        # FlashInfer uses pos_encoding_mode="NONE", so RoPE must be applied externally.
+        if forward_meta.positions is not None and forward_meta.cos_sin_cache is not None:
+            num_tokens = query.shape[0]
+            # fused_rotary_position_encoding is in-place; ensure q/k are contiguous.
+            q_flat = query.reshape([num_tokens, -1]).contiguous()
+            k_flat = key.reshape([num_tokens, -1]).contiguous()
+            fused_rotary_position_encoding(
+                q_flat,
+                k_flat,
+                forward_meta.positions.cast(paddle.int32),
+                forward_meta.cos_sin_cache,
+                layer.head_dim,
+                layer.use_neox_rotary_style,
+            )
+            query = q_flat.reshape([num_tokens, layer.num_heads, layer.head_dim])
+            key = k_flat.reshape([num_tokens, layer.kv_num_heads, layer.head_dim])
+
+        # Apply QK Norm after RoPE (when qk_norm_before_rope=False and use_qk_norm=True).
+        # In V0, this is done inside the fused append_attention kernel.
+        if getattr(layer, "use_qk_norm", False) and not getattr(layer, "qk_norm_before_rope", False):
+            q_norm_weight = getattr(layer, "q_norm_weight", None)
+            k_norm_weight = getattr(layer, "k_norm_weight", None)
+            if q_norm_weight is not None:
+                eps = getattr(layer, "rms_norm_eps", 1e-6)
+                query = _per_head_rms_norm(query, q_norm_weight, eps)
+                key = _per_head_rms_norm(key, k_norm_weight, eps)
+
         # Determine cache layout: 4 entries per layer (fp8) vs 2 entries per layer
         num_caches = len(forward_meta.caches)
         is_block_wise_fp8 = num_caches == 4 * self.num_layers
@@ -334,6 +387,7 @@ class FlashInferAttentionBackend(AttentionBackend):
             cache_k_scales = self._dummy_scale
             cache_v_scales = self._dummy_scale
             kv_cache_dtype = "auto"
+
         reshape_and_cache_flash(
             key,
             value,
@@ -352,23 +406,23 @@ class FlashInferAttentionBackend(AttentionBackend):
         output = paddle.empty([query.shape[0], layer.num_heads, layer.head_dim], dtype=query.dtype)
 
         if self.num_prefill_tokens > 0:
-            prefill_query = query[self.num_decode_tokens :]
+            prefill_query = query[: self.num_prefill_tokens]
             self.prefill_wrapper.run(
                 prefill_query,
                 (cache_k, cache_v),
                 k_scale=fi_k_scale,
                 v_scale=fi_v_scale,
-                out=output[self.num_decode_tokens :],
+                out=output[: self.num_prefill_tokens],
             )
 
         if self.num_decode_tokens > 0:
-            decode_query = query[: self.num_decode_tokens]
+            decode_query = query[self.num_prefill_tokens :]
             self.decode_wrapper.run(
                 decode_query,
                 (cache_k, cache_v),
                 k_scale=fi_k_scale,
                 v_scale=fi_v_scale,
-                out=output[: self.num_decode_tokens],
+                out=output[self.num_prefill_tokens :],
             )
 
         return output.reshape([query.shape[0], -1])

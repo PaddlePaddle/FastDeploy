@@ -27,7 +27,7 @@ from fastdeploy.inter_communicator.zmq_client import ZmqIpcClient
 logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
-    from fastdeploy.worker.output import ModelRunnerOutput, SamplerOutput
+    pass
 
 
 class AsyncUploader:
@@ -60,28 +60,25 @@ class AsyncUploader:
 class AsyncOutput:
     def __init__(
         self,
-        model_runner_output: "ModelRunnerOutput",
-        sampler_output: "SamplerOutput",
-        num_sampled_tokens: paddle.Tensor,
-        main_stream: paddle.cuda.Stream,
+        sampled_token_ids: paddle.Tensor,
+        stop_flags: paddle.Tensor,
+        num_computed_tokens: paddle.Tensor,
     ):
-        self.model_runner_output = model_runner_output
-        self.sampler_output = sampler_output
-        self.num_sampled_tokens = num_sampled_tokens
         self.copy_event = paddle.cuda.Event()
-
         self.sampled_token_ids_cpu = paddle.full(
-            shape=sampler_output.sampled_token_ids.shape,
-            fill_value=-1,
-            dtype=sampler_output.sampled_token_ids.dtype,
-        )
-        self.sampled_token_ids_cpu.copy_(sampler_output.sampled_token_ids, blocking=False)
+            shape=sampled_token_ids.shape, fill_value=-1, dtype=sampled_token_ids.dtype, device="cpu"
+        ).pin_memory()
+        self.stop_flags_cpu = paddle.full(
+            shape=stop_flags.shape, fill_value=-1, dtype=stop_flags.dtype, device="cpu"
+        ).pin_memory()
+        self.num_computed_tokens_cpu = paddle.full(
+            shape=num_computed_tokens.shape, fill_value=-1, dtype=num_computed_tokens.dtype, device="cpu"
+        ).pin_memory()
+        self.sampled_token_ids_cpu.copy_(sampled_token_ids, non_blocking=True)
+        self.stop_flags_cpu.copy_(stop_flags, non_blocking=True)
+        self.num_computed_tokens_cpu.copy_(num_computed_tokens, non_blocking=True)
         self.copy_event.record()
 
     def get_output(self):
         self.copy_event.synchronize()
-        self.model_runner_output.sampled_token_ids = self.sampled_token_ids_cpu
-        if self.logprobs_tensors is not None:
-            self.model_runner_output.logprobs = self.logprobs_tensors.tolists()
-        self.model_runner_output.prompt_logprobs_dict = self.prompt_logprobs_dict
-        return self.model_runner_output
+        return self

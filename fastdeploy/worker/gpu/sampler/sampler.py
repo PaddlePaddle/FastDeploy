@@ -30,8 +30,8 @@ class SamplerInputs:
     # [num_seqs] int32 — batch_idx -> req_idx mapping.
     idx_mapping: paddle.Tensor
     # [max_num_seqs, vocab] int32 — per-request token frequency histogram,
-    # maintained by post_update after each step.
-    output_bin_counts: paddle.Tensor
+    # maintained by post_update after each step. None if not yet available.
+    output_bin_counts: Optional[paddle.Tensor]
     # [max_num_seqs] int32 — tokens emitted so far per request.
     step_idx: paddle.Tensor
     # [max_num_seqs] int32 — per-request min/max decode lengths.
@@ -67,12 +67,13 @@ class Sampler:
             num_bad_words=s.num_bad_words.gpu,
             idx_mapping=idx_map,
         )
-        post_process.apply_repetition_penalty(
-            logits,
-            output_bin_counts=inputs.output_bin_counts,
-            repetition_penalty=s.repetition_penalty.gpu,
-            idx_mapping=idx_map,
-        )
+        if inputs.output_bin_counts is not None:
+            post_process.apply_repetition_penalty(
+                logits,
+                output_bin_counts=inputs.output_bin_counts,
+                repetition_penalty=s.repetition_penalty.gpu,
+                idx_mapping=idx_map,
+            )
         post_process.apply_temperature(
             logits,
             temperature=s.temperature.gpu,
@@ -94,8 +95,8 @@ class Sampler:
         s = self.states
         if num_sampled_cu is None:
             # Build exclusive prefix-sum with a leading zero on GPU.
-            zero = paddle.zeros([1], dtype=num_sampled.dtype)
-            num_sampled_cu = paddle.concat([zero, paddle.cumsum(num_sampled)])
+            zero = paddle.zeros([1], dtype=paddle.int32)
+            num_sampled_cu = paddle.concat([zero, paddle.cumsum(num_sampled).cast(paddle.int32)])
 
         return post_process.check_stop(
             sampled_tokens=sampled_tokens,

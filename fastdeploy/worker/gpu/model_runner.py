@@ -20,6 +20,7 @@ from typing import List, Optional
 import numpy as np
 import paddle
 from paddle import nn
+from paddle.nn import functional as F
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
@@ -31,26 +32,30 @@ from fastdeploy.model_executor.graph_optimization.utils import sot_warmup_guard
 from fastdeploy.model_executor.layers.attention.flashinfer_backend import (
     FlashInferAttentionBackend,
 )
+from fastdeploy.model_executor.layers.sample.ops.top_k_top_p_sampling import (
+    top_k_top_p_sampling,
+)
 from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.pre_and_post_process import async_set_value
 from fastdeploy.output.stream_transfer_data import DecoderState, StreamTransferData
 from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.utils import print_gpu_memory_use
-from fastdeploy.worker.gpu.async_output import AsyncUploader
+from fastdeploy.worker.gpu.async_output import AsyncOutput, AsyncUploader
 from fastdeploy.worker.gpu.block_table import BlockTable
 from fastdeploy.worker.gpu.buffer_utils import async_to_tensor
 from fastdeploy.worker.gpu.forward_meta import ForwardMetaV1
 from fastdeploy.worker.gpu.input_batch import (
     InputBatch,
     InputBuffers,
-    post_update,
     prepare_input_ids,
     prepare_query_start_loc_and_seq_lens,
 )
+from fastdeploy.worker.gpu.post_update import post_update
 from fastdeploy.worker.gpu.request_state import RequestState
 from fastdeploy.worker.gpu.rotary_embedding.mrope import compute_cos_sin_cache
 from fastdeploy.worker.gpu.sampler import Sampler, SamplingState
+from fastdeploy.worker.gpu.sampler.sampler import SamplerInputs
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors
 
@@ -92,8 +97,7 @@ class GPUModelRunnerV1(ModelRunnerBase):
         self.spec_method = self.fd_config.speculative_config.method
         self.speculative_decoding = self.spec_method is not None
 
-        self.sampler = Sampler(fd_config)
-        self.num_spec_tokens = self.fd_config.speculative_config.num_model_steps
+        self.num_spec_tokens = self.fd_config.speculative_config.num_model_steps if self.speculative_decoding else 0
 
         # logprob
         self.enable_logprob = fd_config.model_config.enable_logprob
@@ -167,6 +171,8 @@ class GPUModelRunnerV1(ModelRunnerBase):
             bad_words_max_len=self.model_config.bad_words_max_len,
             max_bad_words_num=self.model_config.max_bad_words_num,
         )
+        self.sampler = Sampler(self.sampling_state)
+        self.async_output = None
 
         self.input_buffers = InputBuffers(
             max_num_seqs=self.scheduler_config.max_num_seqs,
@@ -217,17 +223,33 @@ class GPUModelRunnerV1(ModelRunnerBase):
                     batched_input_ids,
                     start_idx,
                 )
+                # Initialize total_len for this request (prompt + output so far)
+                total_len_init = len(all_token_ids)
+                self.request_state.total_len.stage_write_elem(req.idx, total_len_init)
+
+                # Initialize num_output_tokens (decode tokens emitted so far)
+                self.request_state.num_output_tokens[req.idx] = len(req.output_token_ids)
+
+                # Set EOS token IDs from the first request (model-level, same for all)
+                if not self.sampling_state.eos_inited and req.eos_token_ids is not None:
+                    self.sampling_state.init_eos(req.eos_token_ids)
+
             elif req.task_type.value == RequestType.DECODE.value:
                 # ScheduledDecodeTask: request state already exists from prefill.
                 # Just mark it as active (1 token to decode) for this step.
                 self.request_state.num_tokens_per_seq[req.idx] = 1
+            elif req.task_type.value == RequestType.ABORT.value:
+                # Abort task: mark request as inactive.
+                self.request_state.num_tokens_per_seq[req.idx] = 0
+                continue  # No block tables to append for abort tasks
             else:  # preempted task
                 self.request_state.num_tokens_per_seq[req.idx] = 0
 
-            self.block_table.append_block_ids(
-                req.idx,
-                req.block_tables,
-            )
+            if hasattr(req, "block_tables") and req.block_tables is not None:
+                self.block_table.append_block_ids(
+                    req.idx,
+                    req.block_tables,
+                )
 
         self.request_state.apply_staged_writes()
         self.sampling_state.apply_staged_writes()
@@ -658,6 +680,8 @@ class GPUModelRunnerV1(ModelRunnerBase):
             forward_mode=forward_mode,
             is_dummy_or_profile_run=is_dummy_or_profile_run,
             is_zero_size=(input_batch.num_tokens == 0),
+            positions=input_batch.positions,
+            cos_sin_cache=self.input_buffers.cos_sin_buffer,
         )
 
         # ── 4. Attention Backend Init ────────────────────────────────────────
@@ -672,10 +696,10 @@ class GPUModelRunnerV1(ModelRunnerBase):
         """
         One inference step: prepare inputs → build attn metadata → forward → sample → update state.
         """
-        # ── 1. Build input batch ─────────────────────────────────────────
         if np.sum(self.request_state.num_tokens_per_seq > 0) == 0:
             return
 
+        # ── 1. Build input batch ─────────────────────────────────────────
         input_batch = self.prepare_inputs()
 
         # ── 2. Prepare paged-KV attention tensors ────────────────────────
@@ -689,7 +713,7 @@ class GPUModelRunnerV1(ModelRunnerBase):
         # FlashInfer prefill/decode wrappers are planned.
         self.initialize_forward_meta(input_batch, input_block_tables, slot_mappings)
 
-        # ── 4. Model forward pass ────────────────────────────────────────
+        # ── 4. Model forward ─────────────────────────────────────────────
         model_inputs = {
             "ids_remove_padding": input_batch.input_ids[: input_batch.num_tokens],
             "generated_modality": paddle.zeros([input_batch.num_seqs], dtype=paddle.int32),
@@ -700,30 +724,40 @@ class GPUModelRunnerV1(ModelRunnerBase):
         if self.use_cudagraph and self.forward_meta.step_use_cudagraph:
             hidden_states = hidden_states[: input_batch.num_tokens]
 
-        # ── 5. Compute logits (lm_head projection) ───────────────────────
+        # ── 5. upload_last_batch ─────────────────────────────────────────
+        self.upload_last_batch(input_batch)
+
+        # ── 6. Compute logits (lm_head projection) ───────────────────────
         # Only the positions in logits_indices need a logit vector; these
         # correspond to the last token of each sequence (or draft tokens for
         # speculative decoding).
         hidden_states = hidden_states[input_batch.logits_indices]
         logits = self.model.compute_logits(hidden_states, self.forward_meta)
 
-        # ── 6. Sample next tokens ────────────────────────────────────────
-        sampler_output = self.sample(logits, input_batch)
+        # ── 7. Sample ────────────────────────────────────────────────────
+        sampled_token_ids, sampler_inputs = self.sample(logits, input_batch)
 
-        # ── 7. Post-update: advance position counters and store samples ───
-        # For standard (non-speculative) decoding every sequence contributes
-        # exactly 1 accepted token.
-        # TODO(spec decode): derive num_sampled / num_rejected from the
-        # speculative-acceptance outcome (see get_num_sampled_and_rejected).
+        # ── 8. Check stop conditions ─────────────────────────────────────
         num_sampled = paddle.ones([input_batch.num_seqs], dtype=paddle.int32)
         num_rejected = paddle.zeros([input_batch.num_seqs], dtype=paddle.int32)
 
+        # Reshape view (no copy) so the check_stop kernel can write the
+        # forced-EOS token back into sampled_token_ids in place.
+        sampled_flat = sampled_token_ids.reshape([-1])
+
+        stop_flags = self.sampler.check_stop(
+            sampled_tokens=sampled_flat,
+            num_sampled=num_sampled,
+            inputs=sampler_inputs,
+        )
+
+        # ── 9. Post-update: advance position counters and store samples ───
         post_update(
             idx_mapping=input_batch.idx_mapping,
             num_computed_tokens=self.request_state.num_computed_tokens.gpu,
             last_sampled_tokens=self.request_state.last_sampled_tokens,
             output_bin_counts=None,
-            sampled_tokens=sampler_output.sampled_token_ids,
+            sampled_tokens=sampled_token_ids,
             num_sampled=num_sampled,
             num_rejected=num_rejected,
             query_start_loc=input_batch.query_start_loc,
@@ -731,21 +765,83 @@ class GPUModelRunnerV1(ModelRunnerBase):
             total_len=self.request_state.total_len.gpu,
         )
 
-        # Mirror the GPU update on the CPU shadow so prepare_inputs in the next
-        # step has an accurate num_computed_tokens. Equivalent to the GPU kernel:
-        #     num_computed += query_len - num_rejected
-        # (see _post_update_kernel in input_batch.py). For the current non-spec
-        # path num_rejected is always 0, so query_len suffices.
-        # TODO(spec decode): subtract per-seq num_rejected once available on CPU.
-        query_len_np = np.diff(input_batch.query_start_loc_np).astype(np.int32)
-        self.request_state.num_computed_tokens_np[input_batch.idx_mapping_np] += query_len_np
+        # Advance CPU-side per-seq counters for the next step.
+        running = np.flatnonzero(self.request_state.num_tokens_per_seq)
+        computed = self.request_state.num_computed_tokens_np[running]
+        chunk = self.request_state.num_tokens_per_seq[running]
+        prefill_len = self.request_state.prefill_len.np[running]
+        last_prefill = running[computed + chunk == prefill_len]
+        in_decode = running[computed >= prefill_len]
+        # After the final prefill chunk, the seq switches to decode (1 token / step).
+        self.request_state.num_tokens_per_seq[last_prefill] = 1
+        self.request_state.num_computed_tokens_np[last_prefill] += 1
+        self.request_state.num_computed_tokens_np[in_decode] += 1 + self.num_spec_tokens
 
-        # ── 9. Upload outputs asynchronously ────────────────────────────
-        sampled_token_ids_np = sampler_output.sampled_token_ids.numpy()
+        self.async_output = AsyncOutput(
+            num_computed_tokens=self.request_state.num_computed_tokens.gpu,
+            sampled_token_ids=sampled_token_ids,
+            stop_flags=stop_flags,
+        )
+
+    def sample(
+        self,
+        logits: paddle.Tensor,
+        input_batch: InputBatch,
+        output_bin_counts: paddle.Tensor = None,
+    ):
+        """
+        Sample next tokens using top-k/top-p sampling.
+        """
+        num_output_tokens_gpu = self.request_state.total_len.gpu - self.request_state.prompt_len.gpu
+
+        sampler_inputs = SamplerInputs(
+            idx_mapping=input_batch.idx_mapping,
+            output_bin_counts=None,  # TODO: maintain token frequency histogram
+            step_idx=num_output_tokens_gpu,
+            min_dec_len=self.sampling_state.min_lens.gpu,
+            max_dec_len=self.sampling_state.max_lens.gpu,
+            eos_token_ids=self.sampling_state.eos_token_ids,
+        )
+
+        # Apply penalties and temperature
+        logits = self.sampler.preprocess_logits(logits, sampler_inputs)
+
+        # Gather per-request sampling params via idx_mapping
+        top_p = paddle.index_select(self.sampling_state.top_p.gpu, input_batch.idx_mapping)
+        top_k = paddle.index_select(self.sampling_state.top_k.gpu, input_batch.idx_mapping).cast(paddle.int64)
+        seeds = paddle.index_select(self.sampling_state.seeds.gpu, input_batch.idx_mapping)
+
+        # softmax to get probabilities
+        probs = F.softmax(logits.cast(paddle.float32))
+
+        # top-k / top-p sampling (reuses the old runner's proven implementation)
+        _, sampled_ids = top_k_top_p_sampling(
+            probs,
+            top_p=top_p,
+            top_k=top_k,
+            topp_seed=seeds,
+        )
+
+        # sampled_token_ids expected shape: [num_seqs, 1] for non-speculative
+        sampled_token_ids = sampled_ids.cast(paddle.int32)
+        return sampled_token_ids, sampler_inputs
+
+    def upload_last_batch(self, input_batch):
+        if self.async_output is None:
+            return
+        self.async_output.get_output()
+
         stream_datas = []
+        stop_flags_np = self.async_output.stop_flags_cpu.numpy()
+        sampled_token_ids_np = self.async_output.sampled_token_ids_cpu.numpy()
+
         for batch_idx in range(input_batch.num_seqs):
             req_state_idx = int(input_batch.idx_mapping_np[batch_idx])
             tokens = sampled_token_ids_np[batch_idx]  # shape [1] for non-speculative
+
+            if stop_flags_np[batch_idx]:
+                self.request_state.num_tokens_per_seq[req_state_idx] = 0
+
             stream_datas.append(
                 StreamTransferData(
                     decoder_state=DecoderState.TEXT,
@@ -754,28 +850,7 @@ class GPUModelRunnerV1(ModelRunnerBase):
                 )
             )
         self.async_uploader.enqueue(stream_datas)
-
-    def sample(
-        self,
-        logits: paddle.Tensor,
-        input_batch: InputBatch,
-    ):
-        """
-        Simplified greedy sampling: argmax over the vocabulary dimension.
-        Returns a SamplerOutput-like object with sampled_token_ids.
-        """
-        # logits shape: [num_logits, vocab_size]
-        # Greedy: just take argmax
-        sampled_ids = paddle.argmax(logits, axis=-1).cast(paddle.int32)
-        # sampled_token_ids expected shape: [num_seqs, 1] for non-speculative
-        sampled_ids = sampled_ids.unsqueeze(-1)
-
-        class _SamplerOutput:
-            pass
-
-        output = _SamplerOutput()
-        output.sampled_token_ids = sampled_ids
-        return output
+        self.async_output = None
 
     def cal_theortical_kvcache(self):
         """

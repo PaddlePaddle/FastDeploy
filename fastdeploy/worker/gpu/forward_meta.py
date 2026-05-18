@@ -51,6 +51,15 @@ class ForwardMetaV1:
     # key/value projection should be written.
     slot_mapping: paddle.Tensor
 
+    # Position IDs for each token, shape [num_tokens]. Used by attention
+    # backends that apply RoPE externally (e.g. FlashInfer).
+    positions: Optional[paddle.Tensor] = None
+
+    # Precomputed cos/sin cache for rotary position embedding.
+    # Shape [max_position_embeddings, rotary_dim]. First half along last dim
+    # is cos, second half is sin.
+    cos_sin_cache: Optional[paddle.Tensor] = None
+
     # ------------------------------------------------------------------ #
     # Optional / control fields                                            #
     # ------------------------------------------------------------------ #
