@@ -435,15 +435,21 @@ class MultiModalProcessor(BaseTextProcessor):
             )
             request["logits_processors_args"] = logits_processors_args
 
-        # Compute effective length limits:
-        #   effective = min(upper_bound, server_default, user_value)  (skip Nones)
+        # Compute effective length limits
         def _min_non_none(*values):
             return min(v for v in values if v is not None)
 
         context_remaining = max(1, max_model_len - len(request["prompt_token_ids"]))
-        request["max_tokens"] = max(
-            1, _min_non_none(context_remaining, self.max_completion_tokens, request.get("max_tokens"))
-        )
+
+        if request.get("max_tokens") is None:
+            # User didn't specify: default to min(context_remaining, server_default)
+            if self.max_completion_tokens is not None:
+                request["max_tokens"] = max(1, min(context_remaining, self.max_completion_tokens))
+            else:
+                request["max_tokens"] = context_remaining
+        else:
+            # User specified: clamp to upper bound (context_remaining + max_completion_tokens)
+            request["max_tokens"] = _min_non_none(context_remaining, self.max_completion_tokens, request["max_tokens"])
 
         max_tokens = request["max_tokens"]
         for key, server_val in [

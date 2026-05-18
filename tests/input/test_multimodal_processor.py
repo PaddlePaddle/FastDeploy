@@ -59,6 +59,12 @@ def _make_processor(model_type, **overrides):
     proc.model_status_dict = {}
     proc.decode_status = {}
     proc.tool_parser_dict = {}
+    proc.input_max_tokens = None
+    proc.max_completion_tokens = None
+    proc.truncate_prompt_tokens = True
+    proc.reasoning_max_tokens = None
+    proc.response_max_tokens = None
+    proc.min_completion_tokens = None
     proc.generation_config = MagicMock()
     proc.generation_config.top_p = 0.7
     proc.generation_config.temperature = 1.0
