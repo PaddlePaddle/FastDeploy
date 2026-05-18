@@ -1207,7 +1207,6 @@ class SpeculativeSampler(nn.Layer):
                 logits if logits_ori is None else logits_ori,
                 sampling_metadata,
                 share_inputs,
-                is_naive=is_naive,
                 logprobs_mode=self.logprobs_mode,
                 compute_logprobs_fn=self.compute_logprobs,
                 real_bsz=real_bsz,

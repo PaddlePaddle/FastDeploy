@@ -141,7 +141,6 @@ def build_output_logprobs(
     logits: paddle.Tensor,
     sampling_metadata,
     share_inputs: List[paddle.Tensor],
-    is_naive: bool = False,
     logprobs_mode: str = "default",
     compute_logprobs_fn: Optional[Callable] = None,
     real_bsz: int = 0,
@@ -155,7 +154,6 @@ def build_output_logprobs(
         logits: Model output logits.
         sampling_metadata: Sampling parameters and metadata.
         share_inputs: Shared input tensors.
-        is_naive: True for NAIVE mode (single token per request).
         logprobs_mode: One of "raw_logprobs", "raw_logits", or "default".
         compute_logprobs_fn: Callable for computing logprobs with temperature
             scaling and top_p normalization. Used when logprobs_mode == "raw_logprobs".
