@@ -74,7 +74,7 @@ Metrics are aligned with `benchmark_serving.py --percentile-metrics`:
 | `ttft` | Time to First Token (client arrival → first token) | ms |
 | `s_ttft` | Server TTFT (inference start → first token) | ms |
 | `tpot` | Time per Output Token (excluding first token) | ms |
-| `itl` | Inter-token Latency | ms |
+| `s_itl` | Infer Inter-token Latency | ms |
 | `e2el` | End-to-end Latency (client arrival → last token) | ms |
 | `s_e2el` | Server E2EL (inference start → last token) | ms |
 | `s_decode` | Decode speed (excluding first token) | tok/s |

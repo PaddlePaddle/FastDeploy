@@ -74,7 +74,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
 | `ttft` | 首 Token 时延（客户端到达 → 首 Token） | ms |
 | `s_ttft` | 服务端首 Token 时延（推理开始 → 首 Token） | ms |
 | `tpot` | 每 Token 输出时延（不含首 Token） | ms |
-| `itl` | Token 间时延 | ms |
+| `s_itl` | 推理 Token 间时延 | ms |
 | `e2el` | 端到端时延（客户端到达 → 最后一个 Token） | ms |
 | `s_e2el` | 服务端端到端时延（推理开始 → 最后一个 Token） | ms |
 | `s_decode` | 解码速度（不含首 Token） | tok/s |

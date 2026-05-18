@@ -1911,7 +1911,7 @@ class BenchmarkMetricsConfig:
                 ttft          - Time to First Token (client arrival → first token)
                 s_ttft        - Server TTFT (inference start → first token)
                 tpot          - Time per Output Token (excluding first token)
-                itl           - Inter-token Latency
+                s_itl         - Infer Inter-token Latency
                 e2el          - End-to-end Latency (client arrival → last token)
                 s_e2el        - Server E2EL (inference start → last token)
                 s_decode      - Decode speed (tokens/s, excluding first token)
@@ -1932,7 +1932,7 @@ class BenchmarkMetricsConfig:
         "ttft",  # Time to First Token
         "s_ttft",  # Server TTFT
         "tpot",  # Time per Output Token
-        "itl",  # Inter-token Latency
+        "s_itl",  # Infer Inter-token Latency
         "e2el",  # End-to-end Latency
         "s_e2el",  # Server E2EL
         "s_decode",  # Decode speed (tok/s)

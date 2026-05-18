@@ -180,8 +180,8 @@ class BenchmarkMetricsLogger:
             result["s_ttft_ms"] = self._stats(s_ttfts, percentile_values)
         if "tpot" in selected:
             result["tpot_ms"] = self._stats(tpots, percentile_values)
-        if "itl" in selected:
-            result["itl_ms"] = self._stats(all_itls, percentile_values)
+        if "s_itl" in selected:
+            result["s_itl_ms"] = self._stats(all_itls, percentile_values)
         if "e2el" in selected:
             result["e2el_ms"] = self._stats(e2els, percentile_values)
         if "s_e2el" in selected:
