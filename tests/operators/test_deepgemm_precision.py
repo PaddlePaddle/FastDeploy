@@ -470,8 +470,8 @@ class TestDeepDenseGemm(unittest.TestCase):
 
         total_time = np.array([round(s.elapsed_time(e), 10) for s, e in zip(start_events, end_events)])[-1:]
         flops = 2.0 * M * N * K / (1024**4) / (total_time / 1000.0)
-        print(total_time)
-        print(flops)
+        print(total_time[0], "ms")
+        print(flops[0], "TFLOPs")
 
         # print(baseline_out - deepgemm_output)
         # assert (baseline_out - deepgemm_output).abs().max().item() < 0.1
