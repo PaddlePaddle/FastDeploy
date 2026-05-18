@@ -1386,7 +1386,9 @@ class GPUModelRunner(ModelRunnerBase):
         Results are stored in self.forward_meta.
         """
         # NOTE(zhushengguang): Only support MLAAttentionBackend and DSAAttentionBackend currently.
-        if not isinstance(self.attn_backends[0], (MLAAttentionBackend, DSAAttentionBackend, TritonMLAAttentionBackend)):
+        if not isinstance(
+            self.attn_backends[0], (MLAAttentionBackend, DSAAttentionBackend, TritonMLAAttentionBackend)
+        ):
             return
         current_total_tokens = self.forward_meta.ids_remove_padding.shape[0]
         position_ids = self.share_inputs["position_ids_buffer"][:current_total_tokens]

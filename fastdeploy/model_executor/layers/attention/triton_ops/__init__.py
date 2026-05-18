@@ -18,9 +18,9 @@
 # Licensed under Apache License 2.0
 """
 
-from .decode_attention import compute_num_kv_splits, decode_attention_fwd
-from .mla_cache_kernel import mla_write_cache_triton
-from .unified_extend_attention import (
+from .decode_attention import compute_num_kv_splits, decode_attention_fwd  # noqa: F401
+from .mla_cache_kernel import mla_write_cache_triton  # noqa: F401
+from .unified_extend_attention import (  # noqa: F401
     build_kv_indices_from_block_tables,
     build_unified_kv_indices,
     extend_attention_fwd_unified,
