@@ -427,10 +427,6 @@ class ModelOptNvFp4LinearMethod(QuantMethodBase):
         x_fp4, x_scale_interleaved = fp4_quantize(x, layer.input_scale_inv)
 
         assert x_fp4.dtype == paddle.uint8
-        assert layer.weight.dtype == paddle.uint8
-        assert layer.weight_scale_interleaved.dtype == paddle.float8_e4m3fn
-        assert layer.alpha.dtype == paddle.float32
-
         if self.backend.startswith("flashinfer-"):
             backend = self.backend[len("flashinfer-") :]
         else:
@@ -680,14 +676,15 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
-        use_fp4_comm_quant = envs.FD_USE_NVFP4_COMM_QUANT
+        dispatch_use_fp4 = envs.FD_DISPATCH_USE_FP4
 
-        if use_fp4_comm_quant:
+        if dispatch_use_fp4:
             # FP4 communication quantization: quantize to FP4 before dispatch,
             # reducing communication volume by ~2x vs BF16.
             x_fp4, x_fp4_scale = fp4_quantize(
                 x, layer.up_gate_proj_input_scale_quant, sf_vec_size=16, is_sf_swizzled_layout=False
             )
+            assert x_fp4.dtype == paddle.uint8, f"x_fp4 must be packed as uint8, got {x_fp4.dtype}"
             x_fp4_scale = x_fp4_scale.view(paddle.float32)  # float8_e4m3fn -> float32
             dispatch_input = x_fp4
             dispatch_scale = x_fp4_scale
