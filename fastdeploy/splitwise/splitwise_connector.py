@@ -412,7 +412,7 @@ class SplitwiseConnector:
                     self.current_request_ids[task["request_id"]] = current_status
                     if self.enable_decode_cache_task:
                         del self.current_request_ids[task["request_id"]]
-                    if current_status == "finished":
+                    if current_status == "finished" and not envs.FD_PD_TRANSFER_VIA_STORAGE:
                         self.engine_worker_queue.put_cache_info(payload)
 
         except Exception as e:
