@@ -113,9 +113,7 @@ class DenseGemmKernel:
         b_copy_size = cute.size_in_bytes(self.b_dtype, b_smem_layout)
         self.num_tma_load_bytes = (a_copy_size + b_copy_size) * self.atom_thr_size
 
-        grid = [M // self.mma_tiler[0], N // self.mma_tiler[1], 1]
-        if self.use_2cta_instrs:
-            grid[0] = M // self.mma_tiler[0] * self.cluster_shape_mn[0]
+        grid = [M // self.mma_tiler[0] * self.atom_thr_size, N // self.mma_tiler[1], 1]
 
         self.kernel(
             tiled_mma,
