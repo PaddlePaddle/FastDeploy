@@ -1578,18 +1578,6 @@ class EngineArgs:
         all_dict = asdict(self)
         model_cfg = ModelConfig(all_dict)
 
-        # Validate server-level token length parameters
-        if self.max_completion_tokens is not None and self.max_completion_tokens < 1:
-            raise ValueError("--max-completion-tokens must be >= 1")
-        if self.reasoning_max_tokens is not None and self.reasoning_max_tokens < 1:
-            raise ValueError("--reasoning-max-tokens must be >= 1")
-        if self.response_max_tokens is not None and self.response_max_tokens < 1:
-            raise ValueError("--response-max-tokens must be >= 1")
-        if self.min_completion_tokens < 1:
-            raise ValueError("--min-completion-tokens must be >= 1")
-        if self.input_max_tokens is not None and self.input_max_tokens < 1:
-            raise ValueError("--input-max-tokens must be >= 1")
-
         if not model_cfg.is_unified_ckpt and hasattr(model_cfg, "tensor_parallel_size"):
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
 
