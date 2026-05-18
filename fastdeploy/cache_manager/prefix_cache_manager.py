@@ -2007,6 +2007,7 @@ class PrefixCacheManager:
         gpu_block_ids = request.block_tables[num_cached_tokens // block_size :].copy()
         prefix_block_key = [] if last_node.hash_value is None else [last_node.hash_value]
 
+        can_recycle_gpu_block_ids = []
         for i in range(num_cached_tokens, can_cache_computed_tokens, block_size):
             current_block = input_ids[i : i + block_size]
             current_block_size = len(current_block)  # 最后一个block可能没填满
@@ -2023,25 +2024,41 @@ class PrefixCacheManager:
                 hash_value = get_hash_str(current_block, prefix_block_key)
                 prefix_block_key = [hash_value]
                 allocated_block_id = gpu_block_ids.pop(0)
-                node_id = self.node_id_pool.pop()
-                unique_node_ids.append(node_id)
-                new_last_node = BlockNode(
-                    node_id,
-                    input_ids,
-                    input_hash_value,
-                    node.depth + 1,
-                    allocated_block_id,
-                    current_block_size,
-                    hash_value,
-                    current_time,
-                    parent=node,
-                    shared_count=1,
-                    reverved_dec_block_ids=[],
-                )
-                new_last_node.req_id_set.add(request.request_id)
-                self.node_map[node_id] = new_last_node
-                node.children[hash_value] = new_last_node
-                node = new_last_node
+                if hash_value in node.children:
+                    # Reuse existing child node instead of overwriting it
+                    child = node.children[hash_value]
+                    child.increment_shared_count()
+                    child.last_used_time = current_time
+                    child.req_id_set.add(request.request_id)
+                    if child in self.gpu_lru_leaf_set:
+                        self.gpu_lru_leaf_set.remove(child)
+                        self.gpu_lru_leaf_heap.remove(child)
+                        heapq.heapify(self.gpu_lru_leaf_heap)
+                    can_recycle_gpu_block_ids.append(allocated_block_id)
+                    new_last_node = child
+                    node = child
+                else:
+                    node_id = self.node_id_pool.pop()
+                    unique_node_ids.append(node_id)
+                    new_last_node = BlockNode(
+                        node_id,
+                        input_ids,
+                        input_hash_value,
+                        node.depth + 1,
+                        allocated_block_id,
+                        current_block_size,
+                        hash_value,
+                        current_time,
+                        parent=node,
+                        shared_count=1,
+                        reverved_dec_block_ids=[],
+                    )
+                    new_last_node.req_id_set.add(request.request_id)
+                    self.node_map[node_id] = new_last_node
+                    node.children[hash_value] = new_last_node
+                    node = new_last_node
+        if can_recycle_gpu_block_ids:
+            self.recycle_gpu_blocks(can_recycle_gpu_block_ids)
 
         reverved_dec_block_ids = []
         if has_unfilled_block is True:
@@ -2095,6 +2112,7 @@ class PrefixCacheManager:
         has_unfilled_block = False
         prefix_block_key = [] if last_node.hash_value is None else [last_node.hash_value]
 
+        can_recycle_gpu_block_ids = []
         for i in range(0, token_num, block_size):
             current_block = left_input_ids[i : i + block_size]
             current_block_size = len(current_block)  # 最后一个block可能没填满
@@ -2104,25 +2122,41 @@ class PrefixCacheManager:
                 hash_value = get_hash_str(current_block, prefix_block_key)
                 prefix_block_key = [hash_value]
                 allocated_block_id = gpu_block_ids.pop(0)
-                node_id = self.node_id_pool.pop()
-                unique_node_ids.append(node_id)
-                new_last_node = BlockNode(
-                    node_id,
-                    input_ids,
-                    input_hash_value,
-                    node.depth + 1,
-                    allocated_block_id,
-                    current_block_size,
-                    hash_value,
-                    current_time,
-                    parent=node,
-                    shared_count=1,
-                    reverved_dec_block_ids=[],
-                )
-                new_last_node.req_id_set.add(req_id)
-                self.node_map[node_id] = new_last_node
-                node.children[hash_value] = new_last_node
-                node = new_last_node
+                if hash_value in node.children:
+                    # Reuse existing child node instead of overwriting it
+                    child = node.children[hash_value]
+                    child.increment_shared_count()
+                    child.last_used_time = current_time
+                    child.req_id_set.add(req_id)
+                    if child in self.gpu_lru_leaf_set:
+                        self.gpu_lru_leaf_set.remove(child)
+                        self.gpu_lru_leaf_heap.remove(child)
+                        heapq.heapify(self.gpu_lru_leaf_heap)
+                    can_recycle_gpu_block_ids.append(allocated_block_id)
+                    new_last_node = child
+                    node = child
+                else:
+                    node_id = self.node_id_pool.pop()
+                    unique_node_ids.append(node_id)
+                    new_last_node = BlockNode(
+                        node_id,
+                        input_ids,
+                        input_hash_value,
+                        node.depth + 1,
+                        allocated_block_id,
+                        current_block_size,
+                        hash_value,
+                        current_time,
+                        parent=node,
+                        shared_count=1,
+                        reverved_dec_block_ids=[],
+                    )
+                    new_last_node.req_id_set.add(req_id)
+                    self.node_map[node_id] = new_last_node
+                    node.children[hash_value] = new_last_node
+                    node = new_last_node
+        if can_recycle_gpu_block_ids:
+            self.recycle_gpu_blocks(can_recycle_gpu_block_ids)
         if has_unfilled_block is True:
             reverved_dec_block_ids.append(gpu_block_ids.pop(0))
 
