@@ -13,6 +13,11 @@
 | ```engine_worker_queue_port```     | `list[int]` | FastDeploy内部引擎进程通信端口列表，会根据data_parallel_size自动分配 |
 | ```cache_queue_port```             | `list[int]` | FastDeploy内部KVCache进程通信端口列表，会根据data_parallel_size自动分配 |
 | ```max_model_len```                | `int`       | 推理默认最大支持上下文长度，默认2048 |
+| ```max_completion_tokens```        | `int`       | 服务级默认最大生成token数。请求未指定max_tokens/max_completion_tokens时使用此值。默认：None（使用max_model_len - input_len） |
+| ```reasoning_max_tokens```         | `int`       | 服务级默认推理/思考token数上限。请求未指定时使用此值。默认：None（不限制） |
+| ```response_max_tokens```          | `int`       | 服务级默认回复token数上限。请求未指定时使用此值。默认：None（不限制） |
+| ```min_completion_tokens```        | `int`       | 服务级默认最小生成长度。请求未指定min_tokens时使用此值。默认：1 |
+| ```input_max_tokens```             | `int`       | 服务级输入token数上限。超过此值的请求将被拒绝。默认：None（不限制，受max_model_len约束） |
 | ```tensor_parallel_size```         | `int`       | 模型默认张量并行数，默认1 |
 | ```data_parallel_size```           | `int`       | 模型默认数据并行数，默认1 |
 | ```block_size```                   | `int`       | KVCache管理粒度(Token数)，推荐默认值64 |
