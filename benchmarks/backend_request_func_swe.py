@@ -60,6 +60,7 @@ class RequestFuncInput:
     prompt_token_ids: Optional[list] = None
     tokenizer_model: str = None
     tokenizer_path: str = None
+    stream: bool = True
 
 
 @dataclass
@@ -226,6 +227,88 @@ def load_tokenizer(model, actor_tokenizer_path):
     return tokenizer
 
 
+async def handle_non_stream_response(
+    response,
+    output,
+    st,
+):
+    """
+    处理非流式返回
+    """
+    text = await response.text()
+
+    timestamp = time.perf_counter()
+    data = json.loads(text)
+    # print("data:", data)
+
+    request_id = data.get("id", "None")
+
+    usage = data.get("usage", {})
+
+    output.output_tokens = usage.get("completion_tokens", 0)
+    output.prompt_tokens = usage.get("prompt_tokens", 0)
+
+    if output.prompt_len == 0:
+        if usage.get("prompt_tokens_details", {}):
+            output.prompt_len = usage.get("prompt_tokens_details", {}).get("cached_tokens", 0)
+
+    choices = data.get("choices", [])
+
+    if choices:
+        message = choices[0].get("message", {})
+
+        output.generated_text = message.get("content", "") or ""
+        output.reasoning_content = message.get("reasoning_content", "") or ""
+
+        completion_token_ids = message.get("completion_token_ids", [])
+        if completion_token_ids:
+            output.output_ids.extend(completion_token_ids)
+
+        # tool calls
+        tool_calls = message.get("tool_calls") or []
+
+        for tc in tool_calls:
+            func = tc.get("function", {})
+
+            try:
+                args = json.loads(func.get("arguments", "{}"))
+            except Exception:
+                args = {}
+
+            output.tool_calls.append(
+                {
+                    "id": tc.get("id"),
+                    "name": func.get("name"),
+                    "arguments": args,
+                }
+            )
+
+    latency = timestamp - st
+
+    # 非流式没有ttft
+    output.ttft = latency
+    output.res_ttft = latency
+
+    output.end_timestamp = timestamp
+    output.latency = latency
+    # 非流式没有stream chunk
+    # 非流式兼容stream benchmark逻辑
+    # arrival_time:
+    output.arrival_time = []
+
+    has_text = output.generated_text.strip() or output.reasoning_content.strip()
+
+    has_tool = bool(output.tool_calls)
+
+    if not has_text and not has_tool:
+        output.success = False
+        output.error = "No generated text found!"
+    else:
+        output.success = True
+
+    return data, request_id
+
+
 async def async_request_eb_openai_chat_completions(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
@@ -250,14 +333,17 @@ async def async_request_eb_openai_chat_completions(
     payload = {
         "model": request_func_input.model,
         "messages": request_func_input.history_QA,
-        "stream": True,
-        "stream_options": {
-            "include_usage": True,
-            "continuous_usage_stats": True,
-        },
+        "stream": request_func_input.stream,
         "max_tokens": request_func_input.output_len,
         "collect_metrics": request_func_input.pd_metrics,
     }
+
+    # 流式模式返回usage
+    if request_func_input.stream:
+        payload["stream_options"] = {
+            "include_usage": True,
+            "continuous_usage_stats": True,
+        }
     if request_func_input.json_data:
         json_data = request_func_input.json_data
 
@@ -341,126 +427,133 @@ async def async_request_eb_openai_chat_completions(
         async with session.post(url=api_url, json=payload, headers=headers, read_bufsize=10 * 1024 * 1024) as response:
             data = {}
             if response.status == 200:
-                async for chunk_bytes in response.content:
-                    chunk_bytes = chunk_bytes.strip()
-                    if not chunk_bytes:
-                        continue
+                # 默认流式模式
+                if request_func_input.stream:
+                    async for chunk_bytes in response.content:
+                        chunk_bytes = chunk_bytes.strip()
+                        if not chunk_bytes:
+                            continue
 
-                    chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
-                    if chunk != "[DONE]":
-                        # print("####chunk:", chunk, type(chunk))
-                        timestamp = time.perf_counter()
-                        data = json.loads(chunk)
-                        # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
+                        chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
+                        if chunk != "[DONE]":
+                            # print("####chunk:", chunk, type(chunk))
+                            timestamp = time.perf_counter()
+                            data = json.loads(chunk)
+                            # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
 
-                        if "metrics" in data:
-                            metrics_list.append(data["metrics"])
+                            if "metrics" in data:
+                                metrics_list.append(data["metrics"])
 
-                        if request_id == "None" and "id" in data:
-                            request_id = data["id"]
+                            if request_id == "None" and "id" in data:
+                                request_id = data["id"]
 
-                        if choices := data.get("choices"):
-                            content = choices[0]["delta"].get("content")
-                            reason_content = choices[0]["delta"].get("reasoning_content")
-                            tool_calls = choices[0]["delta"].get("tool_calls")
-                            completion_token_ids = choices[0]["delta"].get("completion_token_ids", [])
-                            if tool_calls:
-                                for tc in tool_calls:
-                                    idx = tc.get("index", 0)
+                            if choices := data.get("choices"):
+                                content = choices[0]["delta"].get("content")
+                                reason_content = choices[0]["delta"].get("reasoning_content")
+                                tool_calls = choices[0]["delta"].get("tool_calls")
+                                completion_token_ids = choices[0]["delta"].get("completion_token_ids", [])
+                                if tool_calls:
+                                    for tc in tool_calls:
+                                        idx = tc.get("index", 0)
 
-                                    if idx not in tool_call_buffer:
-                                        tool_call_buffer[idx] = {
-                                            "id": tc.get("id"),
-                                            "name": "",
-                                            "arguments": "",
-                                        }
+                                        if idx not in tool_call_buffer:
+                                            tool_call_buffer[idx] = {
+                                                "id": tc.get("id"),
+                                                "name": "",
+                                                "arguments": "",
+                                            }
 
-                                    func = tc.get("function", {})
+                                        func = tc.get("function", {})
 
-                                    if "name" in func:
-                                        tool_call_buffer[idx]["name"] = func["name"]
+                                        if "name" in func:
+                                            tool_call_buffer[idx]["name"] = func["name"]
 
-                                    if "arguments" in func:
-                                        tool_call_buffer[idx]["arguments"] += func["arguments"]
+                                        if "arguments" in func:
+                                            tool_call_buffer[idx]["arguments"] += func["arguments"]
 
-                            # First token
-                            if ttft == 0.0:
-                                ttft = timestamp - st
-                                output.ttft = ttft
-                                # cached_tokens
-                                if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                                    output.prompt_len = (
-                                        data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                                    )
+                                # First token
+                                if ttft == 0.0:
+                                    ttft = timestamp - st
+                                    output.ttft = ttft
+                                    # cached_tokens
+                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
+                                        output.prompt_len = (
+                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                        )
+                                    else:
+                                        output.prompt_len = 0
+
+                                # Decoding phase
                                 else:
-                                    output.prompt_len = 0
+                                    output.itl.append(timestamp - most_recent_timestamp)
 
-                            # Decoding phase
-                            else:
-                                output.itl.append(timestamp - most_recent_timestamp)
+                                # response首token
+                                if res_ttft == 0.0:
+                                    if content:
+                                        res_ttft = choices[0].get("arrival_time", timestamp)
+                                        output.res_ttft = res_ttft
+                                        usage = data.get("usage") or {}
+                                        output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
 
-                            # response首token
-                            if res_ttft == 0.0:
-                                if content:
-                                    res_ttft = choices[0].get("arrival_time", timestamp)
-                                    output.res_ttft = res_ttft
-                                    usage = data.get("usage") or {}
-                                    output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
+                                output.generated_text += content or ""
+                                output.reasoning_content += reason_content or ""
+                                if completion_token_ids:
+                                    output.output_ids.extend(completion_token_ids)
+                                # print(f"####content:{data}")
+                                output.arrival_time.append(choices[0].get("arrival_time", timestamp))
+                            elif usage := data.get("usage", {}):
+                                output.output_tokens = usage.get("completion_tokens", 0)
+                                output.prompt_tokens = usage.get("prompt_tokens", 0)
+                                if output.prompt_len == 0:
+                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
+                                        output.prompt_len = (
+                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                        )
 
-                            output.generated_text += content or ""
-                            output.reasoning_content += reason_content or ""
-                            if completion_token_ids:
-                                output.output_ids.extend(completion_token_ids)
-                            # print(f"####content:{data}")
-                            output.arrival_time.append(choices[0].get("arrival_time", timestamp))
-                        elif usage := data.get("usage", {}):
-                            output.output_tokens = usage.get("completion_tokens", 0)
-                            output.prompt_tokens = usage.get("prompt_tokens", 0)
-                            if output.prompt_len == 0:
-                                if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                                    output.prompt_len = (
-                                        data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                                    )
+                            most_recent_timestamp = timestamp
+                            token_timestamps.append(time.time())
 
-                        most_recent_timestamp = timestamp
-                        token_timestamps.append(time.time())
-
-                # output.generated_text = generated_text
-                # 在流式结束时，记录最后一个 chunk 收到的时间戳
-                output.end_timestamp = most_recent_timestamp
-                # 截断case也记录usage
-                usage = data.get("usage", {})
-                if usage:
+                    # output.generated_text = generated_text
+                    # 在流式结束时，记录最后一个 chunk 收到的时间戳
+                    output.end_timestamp = most_recent_timestamp
+                    # 截断case
+                    usage = data.get("usage", {})
                     output.output_tokens = usage.get("completion_tokens", 0)
                     output.prompt_tokens = usage.get("prompt_tokens", 0)
                     if output.prompt_len == 0:
-                        prompt_details = usage.get("prompt_tokens_details", {})
-                        if prompt_details:
-                            output.prompt_len = prompt_details.get("cached_tokens", 0)
+                        if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
+                            output.prompt_len = data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
 
-                if tool_call_buffer:
-                    for _, tc in tool_call_buffer.items():
-                        try:
-                            args = json.loads(tc["arguments"]) if tc["arguments"] else {}
-                        except:
-                            args = {}
+                    if tool_call_buffer:
+                        for _, tc in tool_call_buffer.items():
+                            try:
+                                args = json.loads(tc["arguments"]) if tc["arguments"] else {}
+                            except:
+                                args = {}
 
-                        output.tool_calls.append({"id": tc["id"], "name": tc["name"], "arguments": args})
+                            output.tool_calls.append({"id": tc["id"], "name": tc["name"], "arguments": args})
 
-                # 新增metrics统计，计算首token过滤空包
-                output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
+                    # 新增metrics统计，计算首token过滤空包
+                    output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
 
-                has_text = output.generated_text.strip() or output.reasoning_content.strip()
-                has_tool = getattr(output, "tool_calls", None)
+                    has_text = output.generated_text.strip() or output.reasoning_content.strip()
+                    has_tool = getattr(output, "tool_calls", None)
 
-                # 兼容思考内容超长截断的情况，此时回复内容为空
-                if not has_text and not has_tool:
-                    output.success = False
-                    output.reasoning_tokens = output.output_tokens
-                    output.error = "No generated text found!"
+                    # 兼容思考内容超长截断的情况，此时回复内容为空
+                    if not has_text and not has_tool:
+                        output.success = False
+                        output.reasoning_tokens = output.output_tokens
+                        output.error = "No generated text found!"
+                    else:
+                        output.success = True
+                    output.latency = most_recent_timestamp - st
                 else:
-                    output.success = True
-                output.latency = most_recent_timestamp - st
+                    # 非流式模式
+                    data, request_id = await handle_non_stream_response(
+                        response=response,
+                        output=output,
+                        st=st,
+                    )
             else:
                 error_text = await response.text()
                 print(
