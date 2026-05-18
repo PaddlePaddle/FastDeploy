@@ -26,6 +26,7 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.config import MoEPhase
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import singleton
 
 
@@ -529,6 +530,9 @@ class EPRunner:
             if layer.topk_method == "noaux_tc":
                 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 
+                use_fused = (
+                    layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+                )
                 score, topk_weights, topk_idx = get_moe_scores(
                     gate_out,
                     layer.n_group,
@@ -538,7 +542,7 @@ class EPRunner:
                     layer.gate_correction_bias,
                     getattr(layer, "renormalize", True),
                     topk_reduce_func=getattr(layer, "topk_reduce_func", None),
-                    use_fused_cast=True,  # NOTE(zhushengguang): Kernel Fusion can be used in non-EPLB scenarios.
+                    use_fused_cast=use_fused,  # NOTE(zhushengguang): Kernel Fusion can be used in non-EPLB scenarios.
                 )
             else:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
