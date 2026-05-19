@@ -199,7 +199,8 @@ __global__ void prefill_absorb_cache_kernel(
        linear_index += step) {
     const uint32_t token_idx = linear_index / hidden_size;
     const uint32_t bias = linear_index % hidden_size;
-    const uint32_t ori_bi = batch_id_per_token[token_idx];
+    const int32_t ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens[ori_bi] == 0) continue;
     const uint32_t ori_seq_id =
         (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
