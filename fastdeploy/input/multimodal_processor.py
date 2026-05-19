@@ -461,11 +461,14 @@ class MultiModalProcessor(BaseTextProcessor):
                 max_tokens, self.response_max_tokens, request.get("response_max_tokens")
             )
 
-        # min_tokens: server-level takes priority, fallback to request value, then clamp to max_tokens
-        if self.min_completion_tokens is not None:
-            request["min_tokens"] = min(max_tokens, self.min_completion_tokens)
-        elif request.get("min_tokens") is not None:
-            request["min_tokens"] = min(max_tokens, request["min_tokens"])
+        # min_tokens: take the larger of server-level and user value, reject if > max_tokens
+        server_min = self.min_completion_tokens
+        user_min = request.get("min_tokens")
+        if server_min is not None or user_min is not None:
+            effective_min = max(v for v in (server_min, user_min) if v is not None)
+            if effective_min > max_tokens:
+                raise ValueError(f"min_tokens ({effective_min}) must not exceed max_tokens ({max_tokens})")
+            request["min_tokens"] = effective_min
 
         # Ernie: default reasoning_max_tokens
         if cfg.set_default_reasoning_max_tokens and request.get("reasoning_max_tokens") is None:

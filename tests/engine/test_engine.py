@@ -33,7 +33,12 @@ def _make_cfg(**ov):
     mc.runner, mc.convert, mc.override_pooler_config, mc.logprobs_mode = "default", None, None, "none"
     mc.max_logprobs, mc.enable_logprob, mc.lm_head_fp32, mc.moe_gate_fp32 = 0, False, False, False
     mc.enable_entropy, mc.model_impl = False, "default"
-    mc.max_completion_tokens, mc.reasoning_max_tokens, mc.response_max_tokens, mc.min_tokens = None, None, None, 1
+    mc.max_completion_tokens, mc.reasoning_max_tokens, mc.response_max_tokens, mc.min_completion_tokens = (
+        None,
+        None,
+        None,
+        None,
+    )
     pc = ns(tensor_parallel_size=1, tensor_parallel_rank=0, device_ids="0", data_parallel_size=1)
     pc.expert_parallel_size, pc.chunked_moe_size, pc.engine_worker_queue_port = 1, 0, [6778]
     pc.enable_expert_parallel = pc.enable_chunked_moe = pc.disable_custom_all_reduce = False

@@ -796,6 +796,277 @@ class TestProcessRequestDict(unittest.TestCase):
         remaining = 100 - len(result["prompt_token_ids"])
         self.assertEqual(result["max_tokens"], remaining)
 
+    # ------------------------------------------------------------------
+    # Server-level length control: max_completion_tokens
+    # ------------------------------------------------------------------
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_max_completion_tokens_server_default(self, mock_stop):
+        """Server max_completion_tokens used when request omits max_tokens."""
+        proc = _make_processor(QWEN_VL, max_completion_tokens=50)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "mct1", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=100)
+        # context_remaining=95, server=50 → min(95,50)=50
+        self.assertEqual(result["max_tokens"], 50)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_max_completion_tokens_clamped_by_context(self, mock_stop):
+        """Server max_completion_tokens larger than context_remaining gets clamped."""
+        proc = _make_processor(QWEN_VL, max_completion_tokens=5000)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "mct2", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=100)
+        # context_remaining=95, server=5000 → min(95,5000)=95
+        remaining = 100 - len(result["prompt_token_ids"])
+        self.assertEqual(result["max_tokens"], remaining)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_max_completion_tokens_request_smaller(self, mock_stop):
+        """Request max_tokens < server → request wins."""
+        proc = _make_processor(QWEN_VL, max_completion_tokens=50)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "mct3", "prompt": "hello", "max_tokens": 30}
+        result = proc.process_request_dict(request, max_model_len=100)
+        # min(95, 50, 30) = 30
+        self.assertEqual(result["max_tokens"], 30)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_max_completion_tokens_server_smaller_than_request(self, mock_stop):
+        """Request max_tokens > server → server clamps."""
+        proc = _make_processor(QWEN_VL, max_completion_tokens=50)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "mct4", "prompt": "hello", "max_tokens": 200}
+        result = proc.process_request_dict(request, max_model_len=100)
+        # min(95, 50, 200) = 50
+        self.assertEqual(result["max_tokens"], 50)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_max_completion_tokens_none_no_effect(self, mock_stop):
+        """Server max_completion_tokens=None has no effect (existing behavior)."""
+        proc = _make_processor(QWEN_VL, max_completion_tokens=None)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "mct5", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=100)
+        remaining = 100 - len(result["prompt_token_ids"])
+        self.assertEqual(result["max_tokens"], remaining)
+
+    # ------------------------------------------------------------------
+    # Server-level length control: reasoning_max_tokens
+    # ------------------------------------------------------------------
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_reasoning_max_tokens_server_only(self, mock_stop):
+        """Only server reasoning_max_tokens set."""
+        proc = _make_processor(QWEN_VL, reasoning_max_tokens=100)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rmt1", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=300)
+        # max_tokens=295(context_remaining), reasoning clamp: min(295,100)=100
+        self.assertEqual(result["reasoning_max_tokens"], 100)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_reasoning_max_tokens_request_only(self, mock_stop):
+        """Only request reasoning_max_tokens set."""
+        proc = _make_processor(QWEN_VL, reasoning_max_tokens=None)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rmt2", "prompt": "hello", "reasoning_max_tokens": 150}
+        result = proc.process_request_dict(request, max_model_len=300)
+        # min(295, 150) = 150
+        self.assertEqual(result["reasoning_max_tokens"], 150)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_reasoning_max_tokens_both_server_smaller(self, mock_stop):
+        """Both set, server < request → server wins."""
+        proc = _make_processor(QWEN_VL, reasoning_max_tokens=100)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rmt3", "prompt": "hello", "reasoning_max_tokens": 150}
+        result = proc.process_request_dict(request, max_model_len=300)
+        # min(295, 100, 150) = 100
+        self.assertEqual(result["reasoning_max_tokens"], 100)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_reasoning_max_tokens_both_request_smaller(self, mock_stop):
+        """Both set, request < server → request wins."""
+        proc = _make_processor(QWEN_VL, reasoning_max_tokens=200)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rmt4", "prompt": "hello", "reasoning_max_tokens": 80}
+        result = proc.process_request_dict(request, max_model_len=300)
+        # min(295, 200, 80) = 80
+        self.assertEqual(result["reasoning_max_tokens"], 80)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_reasoning_max_tokens_clamped_by_max_tokens(self, mock_stop):
+        """reasoning_max_tokens clamped by max_tokens."""
+        proc = _make_processor(QWEN_VL, reasoning_max_tokens=100, max_completion_tokens=50)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rmt5", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=300)
+        # max_tokens = min(295,50) = 50; reasoning = min(50,100) = 50
+        self.assertEqual(result["max_tokens"], 50)
+        self.assertEqual(result["reasoning_max_tokens"], 50)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_reasoning_max_tokens_both_none_not_set(self, mock_stop):
+        """Both None → reasoning_max_tokens key not set."""
+        proc = _make_processor(QWEN_VL, reasoning_max_tokens=None)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rmt6", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertNotIn("reasoning_max_tokens", result)
+
+    # ------------------------------------------------------------------
+    # Server-level length control: response_max_tokens
+    # ------------------------------------------------------------------
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_response_max_tokens_server_only(self, mock_stop):
+        """Only server response_max_tokens set."""
+        proc = _make_processor(QWEN_VL, response_max_tokens=100)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rpmt1", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertEqual(result["response_max_tokens"], 100)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_response_max_tokens_request_only(self, mock_stop):
+        """Only request response_max_tokens set."""
+        proc = _make_processor(QWEN_VL, response_max_tokens=None)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rpmt2", "prompt": "hello", "response_max_tokens": 150}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertEqual(result["response_max_tokens"], 150)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_response_max_tokens_both_server_smaller(self, mock_stop):
+        """Both set, server < request → server wins."""
+        proc = _make_processor(QWEN_VL, response_max_tokens=100)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rpmt3", "prompt": "hello", "response_max_tokens": 150}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertEqual(result["response_max_tokens"], 100)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_response_max_tokens_both_request_smaller(self, mock_stop):
+        """Both set, request < server → request wins."""
+        proc = _make_processor(QWEN_VL, response_max_tokens=200)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rpmt4", "prompt": "hello", "response_max_tokens": 80}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertEqual(result["response_max_tokens"], 80)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_response_max_tokens_clamped_by_max_tokens(self, mock_stop):
+        """response_max_tokens clamped by max_tokens."""
+        proc = _make_processor(QWEN_VL, response_max_tokens=100, max_completion_tokens=50)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rpmt5", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertEqual(result["max_tokens"], 50)
+        self.assertEqual(result["response_max_tokens"], 50)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_response_max_tokens_both_none_not_set(self, mock_stop):
+        """Both None → response_max_tokens key not set."""
+        proc = _make_processor(QWEN_VL, response_max_tokens=None)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "rpmt6", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertNotIn("response_max_tokens", result)
+
+    # ------------------------------------------------------------------
+    # Server-level length control: min_completion_tokens
+    # ------------------------------------------------------------------
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_min_completion_tokens_server_only(self, mock_stop):
+        """Only server min_completion_tokens set."""
+        proc = _make_processor(QWEN_VL, min_completion_tokens=20)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "minct1", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertEqual(result["min_tokens"], 20)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_min_completion_tokens_server_exceeds_max_tokens_raises(self, mock_stop):
+        """Server min_completion_tokens > max_tokens raises ValueError."""
+        proc = _make_processor(QWEN_VL, min_completion_tokens=300, max_completion_tokens=50)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "minct2", "prompt": "hello"}
+        with self.assertRaises(ValueError):
+            proc.process_request_dict(request, max_model_len=300)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_min_completion_tokens_request_only(self, mock_stop):
+        """Only request min_tokens set (server=None)."""
+        proc = _make_processor(QWEN_VL, min_completion_tokens=None)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "minct3", "prompt": "hello", "min_tokens": 30}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertEqual(result["min_tokens"], 30)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_min_completion_tokens_request_exceeds_max_tokens_raises(self, mock_stop):
+        """Request min_tokens > max_tokens raises ValueError."""
+        proc = _make_processor(QWEN_VL, min_completion_tokens=None, max_completion_tokens=50)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "minct4", "prompt": "hello", "min_tokens": 500}
+        with self.assertRaises(ValueError):
+            proc.process_request_dict(request, max_model_len=300)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_min_completion_tokens_take_max_of_server_and_request(self, mock_stop):
+        """min_tokens = max(server, user), user is larger."""
+        proc = _make_processor(QWEN_VL, min_completion_tokens=20)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "minct5", "prompt": "hello", "min_tokens": 50}
+        result = proc.process_request_dict(request, max_model_len=300)
+        # max(server=20, user=50) = 50
+        self.assertEqual(result["min_tokens"], 50)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_min_completion_tokens_server_larger_than_request(self, mock_stop):
+        """min_tokens = max(server, user), server is larger."""
+        proc = _make_processor(QWEN_VL, min_completion_tokens=80)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "minct5b", "prompt": "hello", "min_tokens": 30}
+        result = proc.process_request_dict(request, max_model_len=300)
+        # max(server=80, user=30) = 80
+        self.assertEqual(result["min_tokens"], 80)
+
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_min_completion_tokens_both_none_not_set(self, mock_stop):
+        """Both None → min_tokens key not set."""
+        proc = _make_processor(QWEN_VL, min_completion_tokens=None)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "minct6", "prompt": "hello"}
+        result = proc.process_request_dict(request, max_model_len=300)
+        self.assertNotIn("min_tokens", result)
+
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_paddleocr_skips_bad_words(self, mock_stop):
         """PaddleOCR skips bad_words processing (cfg.has_bad_words=False)."""
