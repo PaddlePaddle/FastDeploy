@@ -211,6 +211,21 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
         }
       }
     }
+    case paddle::DataType::UINT8: {
+      switch (scale.dtype()) {
+        case paddle::DataType::FLOAT32: {
+          switch (topk) {
+            DISPATCH_TOPK(paddle::DataType::UINT8, paddle::DataType::FLOAT32, 4)
+            DISPATCH_TOPK(paddle::DataType::UINT8, paddle::DataType::FLOAT32, 6)
+            DISPATCH_TOPK(paddle::DataType::UINT8, paddle::DataType::FLOAT32, 8)
+            default:
+              PD_THROW("Unsupported topk value, must be 4 or 6 or 8");
+          }
+        }
+        default:
+          PD_THROW("Unsupported scale dtype for UINT8 x, must be float32");
+      }
+    }
     case paddle::DataType::BFLOAT16: {
       switch (scale.dtype()) {
         case paddle::DataType::FLOAT32: {
@@ -235,10 +250,20 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
               PD_THROW("Unsupported topk value, must be 4 or 8");
           }
         }
+        case paddle::DataType::UINT8: {
+          switch (topk) {
+            DISPATCH_TOPK(
+                paddle::DataType::BFLOAT16, paddle::DataType::UINT8, 4)
+            DISPATCH_TOPK(
+                paddle::DataType::BFLOAT16, paddle::DataType::UINT8, 8)
+            default:
+              PD_THROW("Unsupported topk value, must be 4 or 8");
+          }
+        }
       }
     }
     default:
-      PD_THROW("Unsupported dtype, must be float8_e4m3fn or bfloat16");
+      PD_THROW("Unsupported dtype, must be uint8, float8_e4m3fn or bfloat16");
   }
 
 #undef DISPATCH_TOPK
