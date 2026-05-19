@@ -664,7 +664,6 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.block_tables,
             metadata.kv_signal_data_list[layer.layer_id],
             "none",
-            getattr(forward_meta, "max_input_length", -1),
         )
 
         fmha_out = self.flash_attn_func(
@@ -810,6 +809,7 @@ class MLAAttentionBackend(AttentionBackend):
                 forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
                 metadata.block_tables,
+                forward_meta.slot_mapping,
                 metadata.kv_signal_data_list[layer.layer_id],
                 "none",
             )

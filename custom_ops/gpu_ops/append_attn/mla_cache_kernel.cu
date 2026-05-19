@@ -27,6 +27,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
+    const paddle::Tensor& slot_mapping,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     cudaStream_t& stream,
     paddle::Tensor* kv_cache) {
@@ -49,7 +50,9 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
 
-  prefill_absorb_cache_kernel<DataType_, PackSize>
+  using CT = DataType_;
+
+  prefill_absorb_cache_kernel<DataType_, PackSize, CT>
       <<<grid_size, blocksize, 0, stream>>>(
           reinterpret_cast<DataType_*>(
               const_cast<data_t*>(kv_nope.data<data_t>())),
@@ -57,6 +60,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
               const_cast<data_t*>(kv_pe.data<data_t>())),
           reinterpret_cast<DataType_*>(kv_cache->data<data_t>()),
           block_tables.data<int>(),
+          slot_mapping.data<int64_t>(),
           batch_id_per_token.data<int>(),
           cu_seqlens_q.data<int>(),
           seq_lens.data<int>(),
@@ -106,6 +110,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
+    const paddle::Tensor& slot_mapping,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const std::string& cache_quant_type_str) {
   cudaStream_t stream = kv_pe.stream();
@@ -134,6 +139,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
           batch_id_per_token,
           cu_seqlens_q,
           block_tables,
+          slot_mapping,
           kv_signal_data,
           stream,
           const_cast<paddle::Tensor*>(&kv_cache));
@@ -148,6 +154,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
           batch_id_per_token,
           cu_seqlens_q,
           block_tables,
+          slot_mapping,
           kv_signal_data,
           stream,
           const_cast<paddle::Tensor*>(&kv_cache));
@@ -300,6 +307,7 @@ PD_BUILD_STATIC_OP(prefill_mla_write_cache)
              "batch_id_per_token",
              "cu_seqlens_q",
              "block_tables",
+             "slot_mapping",
              paddle::Optional("kv_signal_data")})
     .Outputs({"kv_cache_out"})
     .SetInplaceMap({{"kv_cache", "kv_cache_out"}})

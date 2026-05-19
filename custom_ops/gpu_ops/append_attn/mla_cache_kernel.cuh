@@ -166,13 +166,14 @@ __global__ void speculate_decode_absorb_cache_kernel(
   }
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, typename CT = T>
 __global__ void prefill_absorb_cache_kernel(
     const T* __restrict__ kv_nope,  // [bsz, kv_num_heads, pe_size] 512
     const T* __restrict__ kv_pe,    // [bsz, kv_num_heads, nope_size] 64
-    T* __restrict__ kv_cache,       // [num_blocks, kv_num_heads, block_size,
+    CT* __restrict__ kv_cache,      // [num_blocks, kv_num_heads, block_size,
                                     // nope_size]
     const int* __restrict__ block_tables,  // [bsz, max_blocks_per_seq]
+    const int64_t* __restrict__ slot_mapping,
     const int* __restrict__ batch_id_per_token,
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
@@ -207,6 +208,14 @@ __global__ void prefill_absorb_cache_kernel(
     block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const uint32_t block_idx = block_table_now[ori_seq_id / block_size];
     const uint32_t block_offset = ori_seq_id % block_size;
+
+    const int32_t block_idx1 = slot_mapping[token_idx] / block_size;
+    if (block_idx1 != block_idx) {
+      printf("block_idx1 %d != block_idx %d\n", block_idx1, block_idx);
+      printf("token_idx %d\n", token_idx);
+      printf("slot_mapping %d\n", slot_mapping[token_idx]);
+      asm volatile("trap;");
+    }
 
     if (bias < nope_hidden_size) {  // pe
       const uint32_t inner_bias = bias;
