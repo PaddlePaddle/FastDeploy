@@ -85,7 +85,18 @@ def init_flash_attn_version():
         if sm_version >= 100:
             try:
                 paddle.enable_compat(scope={"cutlass"})
-                from flash_mask.cute.interface import flashmask_attention as fa4
+                try:
+                    from paddlefleet.ops import is_flash_mask_available
+
+                    if is_flash_mask_available():
+                        from paddlefleet.ops.flash_mask.cute.interface import (
+                            flashmask_attention as fa4,
+                        )
+                    else:
+                        raise ModuleNotFoundError("flash_mask not available.")
+
+                except (ImportError, ModuleNotFoundError):
+                    logger.info(f"The current platform[sm{get_sm_version()}] can't import Flash Attention V4.")
 
                 global flashmask_attention_v4
                 flashmask_attention_v4 = fa4
