@@ -276,7 +276,7 @@ class LLM:
                 raise RuntimeError(f"Failed to validate 'tools' parameter in chat method: {e}") from e
 
         req_ids = self._add_request(
-            prompts=messages,
+            prompts=[{"messages": msg} for msg in messages],
             sampling_params=sampling_params,
             chat_template_kwargs=chat_template_kwargs,
             chat_template=chat_template,
@@ -326,19 +326,9 @@ class LLM:
                     "prompt": prompts[i],
                     "request_id": request_id,
                 }
-            elif isinstance(prompts[i], list) and len(prompts[i]) == 0:
-                raise ValueError(
-                    f"prompts[{i}] is an empty list. Expected a non-empty list of int (prompt_token_ids) "
-                    "or a non-empty list of dict (messages)."
-                )
             elif isinstance(prompts[i], list) and isinstance(prompts[i][0], int):
                 tasks = {
                     "prompt_token_ids": prompts[i],
-                    "request_id": request_id,
-                }
-            elif isinstance(prompts[i], list) and isinstance(prompts[i][0], dict):
-                tasks = {
-                    "messages": prompts[i],
                     "request_id": request_id,
                 }
             elif isinstance(prompts[i], dict):
