@@ -556,7 +556,6 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const std::string& cache_quant_type_str,
-    const int max_seq_len,
     const bool speculate_decoder);
 
 std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
@@ -569,8 +568,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
-    const std::string& cache_quant_type_str,
-    const int max_seq_len);
+    const std::string& cache_quant_type_str);
 
 void FusedRotaryPositionEncoding(
     paddle::Tensor& query,  // [num_tokens, num_heads, head_size] or

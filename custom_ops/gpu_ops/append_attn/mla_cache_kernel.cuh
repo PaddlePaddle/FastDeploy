@@ -27,7 +27,6 @@ __global__ void decode_absorb_cache_kernel(
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
-    const int max_seq_len,
     const int max_blocks_per_seq,
     const int kv_num_heads,
     const int nope_size,
@@ -98,7 +97,6 @@ __global__ void speculate_decode_absorb_cache_kernel(
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
-    const int max_seq_len,
     const int max_blocks_per_seq,
     const int kv_num_heads,
     const int nope_size,
@@ -179,7 +177,6 @@ __global__ void prefill_absorb_cache_kernel(
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_decoder,  // [bsz]
-    const int max_seq_len,
     const int max_blocks_per_seq,
     const int kv_num_heads,
     const int nope_size,
