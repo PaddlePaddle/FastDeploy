@@ -54,7 +54,7 @@ for test_file in "${test_files[@]}"; do
                 fi
 
                 echo ">>> grep error in ${log_dir}"
-                grep -Rni --color=auto "error" "${log_dir}" || true
+                grep -Rni --color=auto "error" "${log_dir}" --exclude="pytest_*_error.log" || true
             fi
         done
 
