@@ -124,6 +124,8 @@ class BaseTextProcessor(ABC):
         These defaults are applied in process_request_dict when per-request
         values are not specified.
         """
+        if serving_limits_config is None:
+            return
         self.max_completion_tokens = serving_limits_config.max_completion_tokens
         self.reasoning_max_tokens = serving_limits_config.reasoning_max_tokens
         self.response_max_tokens = serving_limits_config.response_max_tokens

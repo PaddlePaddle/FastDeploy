@@ -1628,6 +1628,7 @@ class EngineArgs:
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
         serving_limits_cfg = ServingLimitsConfig(all_dict)
+        serving_limits_cfg.validate(model_cfg.max_model_len)
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()

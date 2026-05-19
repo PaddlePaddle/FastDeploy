@@ -1901,6 +1901,32 @@ class ServingLimitsConfig:
             if hasattr(self, key) and value != "None":
                 setattr(self, key, value)
 
+    def validate(self, max_model_len):
+        """Validate serving limits against max_model_len at startup."""
+        if self.min_completion_tokens is not None:
+            if self.min_completion_tokens > max_model_len:
+                raise ValueError(
+                    f"--min-completion-tokens ({self.min_completion_tokens}) must not exceed "
+                    f"--max-model-len ({max_model_len}). All requests would be rejected."
+                )
+            if self.max_completion_tokens is not None and self.min_completion_tokens > self.max_completion_tokens:
+                raise ValueError(
+                    f"--min-completion-tokens ({self.min_completion_tokens}) must not exceed "
+                    f"--max-completion-tokens ({self.max_completion_tokens})."
+                )
+
+        if self.max_completion_tokens is not None and self.max_completion_tokens > max_model_len:
+            logger.warning(
+                f"--max-completion-tokens ({self.max_completion_tokens}) > "
+                f"--max-model-len ({max_model_len}), it will have no effect."
+            )
+
+        if self.input_max_tokens is not None and self.input_max_tokens > max_model_len:
+            logger.warning(
+                f"--input-max-tokens ({self.input_max_tokens}) > "
+                f"--max-model-len ({max_model_len}), it will have no effect."
+            )
+
 
 class FDConfig:
     """
@@ -1937,7 +1963,7 @@ class FDConfig:
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
         deploy_modality: DeployModality = DeployModality.MIXED,
-        serving_limits_config: ServingLimitsConfig = None,
+        serving_limits_config: ServingLimitsConfig = None,  # resolved below
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1955,7 +1981,7 @@ class FDConfig:
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
         self.deploy_modality: DeployModality = deploy_modality
-        self.serving_limits_config: ServingLimitsConfig = serving_limits_config
+        self.serving_limits_config: ServingLimitsConfig = serving_limits_config or ServingLimitsConfig({})
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
         if self.graph_opt_config.cudagraph_only_prefill:
