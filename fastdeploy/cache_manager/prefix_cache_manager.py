@@ -132,6 +132,7 @@ class PrefixCacheManager:
         main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.free_cpu_block_num.set(self.num_cpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
     def _get_kv_cache_shape(self, max_block_num):
@@ -461,6 +462,7 @@ class PrefixCacheManager:
         main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
         main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
         main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
+        main_process_metrics.free_cpu_block_num.set(self.num_cpu_blocks)
         main_process_metrics.available_gpu_resource.set(1.0)
 
     def can_allocate_gpu_blocks(self, num_blocks: int):
@@ -520,6 +522,7 @@ class PrefixCacheManager:
         logger.info(
             f"allocate_cpu_blocks: {allocated_block_ids}, len(self.cpu_free_block_list) {len(self.cpu_free_block_list)}"
         )
+        main_process_metrics.free_cpu_block_num.set(len(self.cpu_free_block_list))
         return allocated_block_ids
 
     def recycle_cpu_blocks(self, cpu_block_ids):
@@ -534,6 +537,7 @@ class PrefixCacheManager:
                 heapq.heappush(self.cpu_free_block_list, cpu_block_id)
         else:
             heapq.heappush(self.cpu_free_block_list, cpu_block_ids)
+        main_process_metrics.free_cpu_block_num.set(len(self.cpu_free_block_list))
 
     def issue_swap_task(
         self,
@@ -1439,6 +1443,7 @@ class PrefixCacheManager:
         logger.info(
             "free_cpu_block_ids: after free, " + f"len(self.cpu_free_block_list) {len(self.cpu_free_block_list)}"
         )
+        main_process_metrics.free_cpu_block_num.set(len(self.cpu_free_block_list))
         return total_cpu_free_count
 
     def get_block_hash_extra_keys(self, request, start_idx, end_idx, mm_idx):
@@ -2127,6 +2132,7 @@ class PrefixCacheManager:
         # reset metrics
         self.metrics.reset_metrics()
         main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
+        main_process_metrics.free_cpu_block_num.set(len(self.cpu_free_block_list))
         main_process_metrics.available_gpu_block_num.set(len(self.gpu_free_block_list))
         main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
 
