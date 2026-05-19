@@ -22,7 +22,7 @@ template <typename T,
           typename ScaleT,
           int VecSize,
           int TOP_K,
-          bool SWIZZLE_SCALE>
+          bool MAKE_SCALE_INTERLEAVED>
 __global__ void PrefillPermuteToMaskedGemmKernel(
     T* __restrict__ permute_x,
     ScaleT* __restrict__ permute_scale,
@@ -40,8 +40,8 @@ __global__ void PrefillPermuteToMaskedGemmKernel(
 
   const int tidx = threadIdx.x;
   const int x_num_vecs = hidden / VecSize;
-  // Pre-compute swizzle constants outside the slot loop (compile-time dead if
-  // !SWIZZLE_SCALE)
+  // Pre-compute interleaved scale constants outside the slot loop (compile-time
+  // dead if !MAKE_SCALE_INTERLEAVED)
   const int scale_bytes_per_token =
       hidden_scale * static_cast<int>(sizeof(ScaleT));
   const int m_tiles = max_tokens_per_expert / 128;
@@ -84,10 +84,10 @@ __global__ void PrefillPermuteToMaskedGemmKernel(
         const ScaleT* src_scale =
             scale + static_cast<int64_t>(token_idx) * hidden_scale;
 
-        if constexpr (SWIZZLE_SCALE) {
-          // Directly write packed FP8 scale bytes into the swizzled layout used
-          // by flashinfer cutedsl: [E, M/128, K/4, 32, 4, 4]. The tensor is
-          // exposed to Paddle as packed float32 [E, M, K/4].
+        if constexpr (MAKE_SCALE_INTERLEAVED) {
+          // Directly write packed FP8 scale bytes into the interleaved layout
+          // used by flashinfer cutedsl: [E, M/128, K/4, 32, 4, 4]. The tensor
+          // is exposed to Paddle as packed float32 [E, M, K/4].
           const uint8_t* src_scale_bytes =
               reinterpret_cast<const uint8_t*>(src_scale);
           uint8_t* dst_scale_bytes = reinterpret_cast<uint8_t*>(permute_scale);
@@ -209,12 +209,12 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
   cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev);
   int num_blocks = sm_count * 2;
 
-#define LAUNCH_PREFILL_PERMUTE(SWIZZLE)                           \
+#define LAUNCH_PREFILL_PERMUTE(INTERLEAVED)                       \
   PrefillPermuteToMaskedGemmKernel<DataType_,                     \
                                    ScaleDataType_,                \
                                    VecSize,                       \
                                    TOP_K,                         \
-                                   SWIZZLE>                       \
+                                   INTERLEAVED>                   \
       <<<num_blocks, BLOCK_THREADS, 0, stream>>>(                 \
           reinterpret_cast<DataType_*>(permute_x.data<data_t>()), \
           reinterpret_cast<ScaleDataType_*>(                      \
