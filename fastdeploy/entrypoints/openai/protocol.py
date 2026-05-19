@@ -525,6 +525,7 @@ class CompletionRequest(BaseModel):
     user: Optional[str] = None
     request_id: Optional[str] = None
     disaggregate_info: Optional[dict] = None
+    disable_prefix_caching: Optional[bool] = False
 
     # doc: begin-completion-sampling-params
     top_k: Optional[int] = None
@@ -707,6 +708,7 @@ class ChatCompletionRequest(BaseModel):
     response_format: Optional[AnyResponseFormat] = None
     request_id: Optional[str] = None
     disaggregate_info: Optional[dict] = None
+    disable_prefix_caching: Optional[bool] = False
 
     # doc: begin-chat-completion-sampling-params
     top_k: Optional[int] = None
