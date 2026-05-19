@@ -846,10 +846,22 @@ class TokenProcessor:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
         elif self.use_logprobs:
-            batch = self.output_tokens[1, 0]
-            tokens = tokens[2 : batch * (K + 1) + 2].reshape([batch, K + 1])[:, : (K + 1)]
-            scores = self.output_scores[: batch * (K + 1)].numpy().reshape([batch, K + 1])[:, : (K + 1)]
+            # mtext[1] packs bsz (low 16 bits) and actual_topk (high 16 bits).
+            # actual_topk = max_num_logprobs written by save_output_topk, which
+            # equals the actual number of logprob columns in this step's message
+            # (top_logprobs+1 across the batch). Using actual_topk as stride
+            # avoids processing the K+1=21 fixed-size slots when fewer are needed.
+            packed = int(self.output_tokens[1, 0])
+            batch = packed & 0xFFFF
+            actual_topk = (packed >> 16) & 0xFFFF
+            tokens = tokens[2 : batch * actual_topk + 2].reshape([batch, actual_topk])
+            scores = self.output_scores[: batch * actual_topk].numpy().reshape([batch, actual_topk])
             ranks = self.output_ranks[:batch].numpy()
+            # Pre-convert the full [batch, actual_topk] arrays to Python lists once,
+            # avoiding per-row .tolist() calls inside the loop below.
+            tokens_lists = tokens.tolist()
+            scores_lists = scores.tolist()
+            ranks_list = ranks.tolist()
         else:
             batch = self.output_tokens[1, 0]
             tokens = tokens[2 : batch + 2]
@@ -1022,10 +1034,11 @@ class TokenProcessor:
                             topk_logprobs = scores[i, batch_token_index, :].tolist()
                             sampled_rank = ranks[i, batch_token_index].item()
                         else:
-                            result.outputs.logprob = float(scores[i, 0])
-                            topk_token_ids = tokens[i, :].tolist()
-                            topk_logprobs = scores[i, :].tolist()
-                            sampled_rank = ranks[i].item()
+                            # Use pre-converted lists (batch .tolist() done before the loop).
+                            result.outputs.logprob = scores_lists[i][0]
+                            topk_token_ids = tokens_lists[i]
+                            topk_logprobs = scores_lists[i]
+                            sampled_rank = ranks_list[i]
 
                         if result.outputs.top_logprobs is None:
                             result.outputs.top_logprobs = LogprobsLists(
