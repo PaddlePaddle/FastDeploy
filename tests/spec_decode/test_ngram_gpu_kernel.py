@@ -126,8 +126,8 @@ def _cpu_ngram_match(
 
 
 def _cpu_hybrid_mtp_ngram(
-    input_ids,
-    input_ids_len,
+    token_ids_all,
+    prompt_lens,
     pre_ids,
     step_idx,
     draft_token_num,
@@ -145,7 +145,7 @@ def _cpu_hybrid_mtp_ngram(
     max_dec_len = max_dec_len.ravel()
     step_idx = step_idx.ravel()
     draft_token_num = draft_token_num.ravel()
-    input_ids_len = input_ids_len.ravel()
+    prompt_lens = prompt_lens.ravel()
     max_batch_size = seq_lens_this_time.shape[0]
 
     unprocessed = sum(1 for b in range(max_batch_size) if seq_lens_decoder[b] > 0)
@@ -158,11 +158,11 @@ def _cpu_hybrid_mtp_ngram(
         if ori_slt == 0 or max_q <= 0:
             continue
 
-        cur_input_ids = input_ids[batch_idx]
+        cur_input_ids = token_ids_all[batch_idx]
         cur_draft = draft_tokens[batch_idx]
         cur_pre = pre_ids[batch_idx]
         cur_step = int(step_idx[batch_idx])
-        cur_ids_len = int(input_ids_len[batch_idx])
+        cur_ids_len = int(prompt_lens[batch_idx])
         unprocessed -= 1
 
         sum_tok = sum(int(seq_lens_this_time[i]) for i in range(batch_idx + 1))
@@ -263,9 +263,14 @@ def _make_mixed_test_data(batch_size=4, input_len=64, pre_ids_len=256, max_draft
     """Create realistic test tensors for hybrid_mtp_ngram op."""
     rng = np.random.RandomState(seed)
     vocab_size = 1000
+    # token_ids_all must be at least as large as the per-request budget;
+    # use pre_ids_len as a stand-in for max_model_len in tests.
+    max_model_len = max(pre_ids_len, input_len + 64)
 
-    input_ids = rng.randint(0, vocab_size, (batch_size, input_len)).astype(np.int64)
-    input_ids_len = np.full((batch_size, 1), input_len, dtype=np.int64)
+    prompt_tokens = rng.randint(0, vocab_size, (batch_size, input_len)).astype(np.int64)
+    token_ids_all = np.full((batch_size, max_model_len), -1, dtype=np.int64)
+    token_ids_all[:, :input_len] = prompt_tokens
+    prompt_lens = np.full((batch_size, 1), input_len, dtype=np.int64)
 
     pre_ids = np.zeros((batch_size, pre_ids_len), dtype=np.int64)
     step_idx = np.zeros((batch_size, 1), dtype=np.int64)
@@ -280,13 +285,13 @@ def _make_mixed_test_data(batch_size=4, input_len=64, pre_ids_len=256, max_draft
         # Copy contiguous blocks from prompt to guarantee ngram matches
         gen_len = 20
         src = rng.randint(0, max(1, input_len - gen_len))
-        pre_ids[b, :gen_len] = input_ids[b, src : src + gen_len]
-        # step_idx = last valid position (0-based index), matches hybrid kernel semantics
+        pre_ids[b, :gen_len] = prompt_tokens[b, src : src + gen_len]
+        # step_idx = last valid position (0-based index)
         step_idx[b] = gen_len - 1
 
     return {
-        "input_ids": input_ids,
-        "input_ids_len": input_ids_len,
+        "token_ids_all": token_ids_all,
+        "prompt_lens": prompt_lens,
         "pre_ids": pre_ids,
         "step_idx": step_idx,
         "draft_token_num": draft_token_num,
@@ -813,8 +818,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         cpu_draft = data["draft_tokens"].copy()
         cpu_slt = data["seq_lens_this_time"].copy()
         _cpu_hybrid_mtp_ngram(
-            data["input_ids"],
-            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
             data["pre_ids"],
             data["step_idx"],
             data["draft_token_num"],
@@ -829,8 +834,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
 
         gpu_data = _to_gpu(data)
         self.hybrid_mtp_ngram(
-            gpu_data["input_ids"],
-            gpu_data["input_ids_len"],
+            gpu_data["token_ids_all"],
+            gpu_data["prompt_lens"],
             gpu_data["pre_ids"],
             gpu_data["step_idx"],
             gpu_data["draft_token_num"],
@@ -857,8 +862,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 cpu_draft = data["draft_tokens"].copy()
                 cpu_slt = data["seq_lens_this_time"].copy()
                 _cpu_hybrid_mtp_ngram(
-                    data["input_ids"],
-                    data["input_ids_len"],
+                    data["token_ids_all"],
+                    data["prompt_lens"],
                     data["pre_ids"],
                     data["step_idx"],
                     data["draft_token_num"],
@@ -872,8 +877,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 )
                 gpu_data = _to_gpu(data)
                 self.hybrid_mtp_ngram(
-                    gpu_data["input_ids"],
-                    gpu_data["input_ids_len"],
+                    gpu_data["token_ids_all"],
+                    gpu_data["prompt_lens"],
                     gpu_data["pre_ids"],
                     gpu_data["step_idx"],
                     gpu_data["draft_token_num"],
@@ -900,8 +905,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         cpu_draft = data["draft_tokens"].copy()
         cpu_slt = data["seq_lens_this_time"].copy()
         _cpu_hybrid_mtp_ngram(
-            data["input_ids"],
-            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
             data["pre_ids"],
             data["step_idx"],
             data["draft_token_num"],
@@ -919,8 +924,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         os.environ["SPEC_TOKENUM_THRESHOLD"] = str(high_threshold)
         try:
             self.hybrid_mtp_ngram(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
+                gpu_data["token_ids_all"],
+                gpu_data["prompt_lens"],
                 gpu_data["pre_ids"],
                 gpu_data["step_idx"],
                 gpu_data["draft_token_num"],
@@ -947,8 +952,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         cpu_draft = data["draft_tokens"].copy()
         cpu_slt = data["seq_lens_this_time"].copy()
         _cpu_hybrid_mtp_ngram(
-            data["input_ids"],
-            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
             data["pre_ids"],
             data["step_idx"],
             data["draft_token_num"],
@@ -962,8 +967,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         )
         gpu_data = _to_gpu(data)
         self.hybrid_mtp_ngram(
-            gpu_data["input_ids"],
-            gpu_data["input_ids_len"],
+            gpu_data["token_ids_all"],
+            gpu_data["prompt_lens"],
             gpu_data["pre_ids"],
             gpu_data["step_idx"],
             gpu_data["draft_token_num"],
@@ -986,8 +991,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         cpu_draft = data["draft_tokens"].copy()
         cpu_slt = data["seq_lens_this_time"].copy()
         _cpu_hybrid_mtp_ngram(
-            data["input_ids"],
-            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
             data["pre_ids"],
             data["step_idx"],
             data["draft_token_num"],
@@ -1005,8 +1010,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         os.environ["SPEC_TOKENUM_THRESHOLD"] = str(high_threshold)
         try:
             self.hybrid_mtp_ngram(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
+                gpu_data["token_ids_all"],
+                gpu_data["prompt_lens"],
                 gpu_data["pre_ids"],
                 gpu_data["step_idx"],
                 gpu_data["draft_token_num"],
