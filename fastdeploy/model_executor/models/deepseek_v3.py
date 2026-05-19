@@ -1105,7 +1105,8 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         residual: paddle.Tensor,
     ):
         """ """
-        if hidden_states.shape[0] > 0:
+        need_do_attention = forward_meta.max_len_tensor_cpu[1] > 0 or forward_meta.max_len_tensor_cpu[2] > 0
+        if hidden_states.shape[0] > 0 and need_do_attention:
             hidden_states, residual = self.input_layernorm(
                 hidden_states, residual_input=residual, forward_meta=forward_meta
             )

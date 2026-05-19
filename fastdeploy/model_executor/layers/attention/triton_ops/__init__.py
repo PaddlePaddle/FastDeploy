@@ -17,3 +17,12 @@
 # https://github.com/sgl-project/sglang/blob/main/python/sglang/srt/layers/attention/triton_ops/extend_attention.py
 # Licensed under Apache License 2.0
 """
+
+from .decode_attention import compute_num_kv_splits, decode_attention_fwd  # noqa: F401
+from .mla_cache_kernel import mla_write_cache_triton  # noqa: F401
+from .unified_extend_attention import (  # noqa: F401
+    build_kv_indices_from_block_tables,
+    build_unified_kv_indices,
+    extend_attention_fwd_unified,
+    triton_cumsum_with_zero_prefix,
+)
