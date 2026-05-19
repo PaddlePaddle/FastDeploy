@@ -112,7 +112,7 @@ class ZmqServerBase(ABC):
             # receive from socket
             msg = self.socket.recv(flags=flags)
             try:
-                data_dict = jsonapi.loads(msg)
+                data_dict = self.socket._deserialize(msg, lambda buf: jsonapi.loads(buf))
             except (UnicodeDecodeError, ValueError) as e:
                 llm_logger.warning(f"recv_json decode failed, msg={msg}, err={e}")
                 raise
