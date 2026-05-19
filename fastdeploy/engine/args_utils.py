@@ -38,6 +38,7 @@ from fastdeploy.config import (
     RouterConfig,
     RoutingReplayConfig,
     RunnerOption,
+    ServingLimitsConfig,
     SpeculativeConfig,
     StructuredOutputsConfig,
     TaskOption,
@@ -1626,6 +1627,7 @@ class EngineArgs:
         cache_cfg = CacheConfig(all_dict)
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
+        serving_limits_cfg = ServingLimitsConfig(all_dict)
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
@@ -1661,4 +1663,5 @@ class EngineArgs:
             early_stop_config=early_stop_cfg,
             routing_replay_config=routing_replay_config,
             deploy_modality=DeployModality.from_str(self.deploy_modality),
+            serving_limits_config=serving_limits_cfg,
         )

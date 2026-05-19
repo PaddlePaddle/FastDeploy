@@ -118,18 +118,18 @@ class BaseTextProcessor(ABC):
         self.input_max_tokens = None
         self.truncate_prompt_tokens = True
 
-    def set_server_defaults(self, model_config):
-        """Set server-level default values from model config.
+    def set_server_defaults(self, serving_limits_config):
+        """Set server-level default values from serving limits config.
 
         These defaults are applied in process_request_dict when per-request
         values are not specified.
         """
-        self.max_completion_tokens = model_config.max_completion_tokens
-        self.reasoning_max_tokens = model_config.reasoning_max_tokens
-        self.response_max_tokens = model_config.response_max_tokens
-        self.min_completion_tokens = model_config.min_completion_tokens
-        self.input_max_tokens = model_config.input_max_tokens
-        self.truncate_prompt_tokens = model_config.truncate_prompt_tokens
+        self.max_completion_tokens = serving_limits_config.max_completion_tokens
+        self.reasoning_max_tokens = serving_limits_config.reasoning_max_tokens
+        self.response_max_tokens = serving_limits_config.response_max_tokens
+        self.min_completion_tokens = serving_limits_config.min_completion_tokens
+        self.input_max_tokens = serving_limits_config.input_max_tokens
+        self.truncate_prompt_tokens = serving_limits_config.truncate_prompt_tokens
 
     # ------------------------------------------------------------------
     # Abstract interface

@@ -208,12 +208,6 @@ class ModelConfig:
         self.is_quantized = False
         self.is_moe_quantized = False
         self.max_model_len = 0
-        self.max_completion_tokens = None
-        self.reasoning_max_tokens = None
-        self.response_max_tokens = None
-        self.min_completion_tokens = None
-        self.input_max_tokens = None
-        self.truncate_prompt_tokens = True
         self.dtype = "bfloat16"
         self.enable_logprob = False
         self.max_logprobs = 20
@@ -1892,6 +1886,22 @@ class RoutingReplayConfig:
         return self.to_json_string()
 
 
+class ServingLimitsConfig:
+    """Server-level request length limits and policies."""
+
+    def __init__(self, args):
+        self.max_completion_tokens = None
+        self.reasoning_max_tokens = None
+        self.response_max_tokens = None
+        self.min_completion_tokens = None
+        self.input_max_tokens = None
+        self.truncate_prompt_tokens = True
+
+        for key, value in args.items():
+            if hasattr(self, key) and value != "None":
+                setattr(self, key, value)
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1927,6 +1937,7 @@ class FDConfig:
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
         deploy_modality: DeployModality = DeployModality.MIXED,
+        serving_limits_config: ServingLimitsConfig = None,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1944,6 +1955,7 @@ class FDConfig:
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
         self.deploy_modality: DeployModality = deploy_modality
+        self.serving_limits_config: ServingLimitsConfig = serving_limits_config
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
         if self.graph_opt_config.cudagraph_only_prefill:
