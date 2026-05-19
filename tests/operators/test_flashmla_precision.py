@@ -31,14 +31,17 @@ class TestFlashMLA(unittest.TestCase):
         pass
 
     def test_flashmla(self):
+        dtype = paddle.float8_e4m3fn
+        dtype = paddle.bfloat16
 
         bsz = 128
         kv_len = 1024 * 8
         page_size = 64
-        decoder_q = paddle.randn([bsz, 1, 128, 576], dtype="bfloat16")
+        decoder_q = paddle.randn([bsz, 1, 128, 576], dtype="bfloat16").cast(dtype)
+
         cache_seqlens = paddle.zeros([bsz], dtype="int32") + kv_len
         block_tables = paddle.arange((kv_len // page_size + 1) * bsz, dtype="int32").reshape([bsz, -1])
-        latent_cache = paddle.randn([bsz * block_tables.shape[1], 1, page_size, 576], dtype="bfloat16")
+        latent_cache = paddle.randn([bsz * block_tables.shape[1], 1, page_size, 576], dtype="bfloat16").cast(dtype)
         # copy from dsv3
         attn_softmax_scale = 0.1352337788608801
 
