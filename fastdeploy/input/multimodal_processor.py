@@ -185,7 +185,7 @@ class MultiModalProcessor(BaseTextProcessor):
             if not isinstance(content, list):
                 content = [content]
             for item in content:
-                if item.get("type") in ["image", "video"]:
+                if isinstance(item, dict) and item.get("type") in ["image", "video"]:
                     mm_items.append(item)
 
         missing_hashes, missing_idx = [], []
