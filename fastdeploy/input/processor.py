@@ -55,6 +55,12 @@ class Processor:
         self.mm_processor = mm_processor
         self.force_disable_thinking = force_disable_thinking
         self.set_default_reasoning_max_tokens = set_default_reasoning_max_tokens
+        self.max_completion_tokens = None
+        self.reasoning_max_tokens = None
+        self.response_max_tokens = None
+        self.min_completion_tokens = None
+        self.input_max_tokens = None
+        self.truncate_prompt_tokens = True
 
         # Response-handling state.
         self.decode_status: Dict[str, list] = {}
@@ -95,6 +101,15 @@ class Processor:
         self.pad_token_id = self.get_pad_id()
         self.tokenizer.pad_token_id = self.pad_token_id
         self._init_parsers(reasoning_parser_obj, tool_parser_obj)
+
+    def set_server_defaults(self, model_config):
+        """Set server-level default values from model config."""
+        self.max_completion_tokens = model_config.max_completion_tokens
+        self.reasoning_max_tokens = model_config.reasoning_max_tokens
+        self.response_max_tokens = model_config.response_max_tokens
+        self.min_completion_tokens = model_config.min_completion_tokens
+        self.input_max_tokens = model_config.input_max_tokens
+        self.truncate_prompt_tokens = model_config.truncate_prompt_tokens
 
     # ------------------------------------------------------------------
     # Tokenizer loading
@@ -413,9 +428,21 @@ class Processor:
         if self.force_disable_thinking:
             request["enable_thinking"] = False
 
+        # Reject requests exceeding input_max_tokens
+        if self.input_max_tokens is not None and len(request["prompt_token_ids"]) > self.input_max_tokens:
+            raise ValueError(
+                f"Input token length {len(request['prompt_token_ids'])} exceeds the configured input_max_tokens limit {self.input_max_tokens}"
+            )
+
         # Truncation
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+            if self.truncate_prompt_tokens:
+                request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+            else:
+                raise ValueError(
+                    f"Input token length {len(request['prompt_token_ids'])} exceeds "
+                    f"the configured max_model_len {max_model_len}"
+                )
 
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
 
@@ -425,12 +452,40 @@ class Processor:
         )
         request["logits_processors_args"] = logits_processors_args
 
-        # max_tokens
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
+        # Compute effective length limits
+        def _min_non_none(*values):
+            return min(v for v in values if v is not None)
+
+        context_remaining = max(1, max_model_len - len(request["prompt_token_ids"]))
+
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
+            # User didn't specify: default to min(context_remaining, server_default)
+            if self.max_completion_tokens is not None:
+                request["max_tokens"] = max(1, min(context_remaining, self.max_completion_tokens))
+            else:
+                request["max_tokens"] = context_remaining
         else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
+            # User specified: clamp to min(context_remaining, max_completion_tokens)
+            request["max_tokens"] = _min_non_none(context_remaining, self.max_completion_tokens, request["max_tokens"])
+
+        max_tokens = request["max_tokens"]
+        if self.reasoning_max_tokens is not None or request.get("reasoning_max_tokens") is not None:
+            request["reasoning_max_tokens"] = _min_non_none(
+                max_tokens, self.reasoning_max_tokens, request.get("reasoning_max_tokens")
+            )
+        if self.response_max_tokens is not None or request.get("response_max_tokens") is not None:
+            request["response_max_tokens"] = _min_non_none(
+                max_tokens, self.response_max_tokens, request.get("response_max_tokens")
+            )
+
+        # min_tokens: take the larger of server-level and user value, reject if > max_tokens
+        server_min = self.min_completion_tokens
+        user_min = request.get("min_tokens")
+        if server_min is not None or user_min is not None:
+            effective_min = max(v for v in (server_min, user_min) if v is not None)
+            if effective_min > max_tokens:
+                raise ValueError(f"min_tokens ({effective_min}) must not exceed max_tokens ({max_tokens})")
+            request["min_tokens"] = effective_min
 
         # Default reasoning_max_tokens (only for models that need it, e.g. Ernie)
         if self.set_default_reasoning_max_tokens and request.get("reasoning_max_tokens") is None:
