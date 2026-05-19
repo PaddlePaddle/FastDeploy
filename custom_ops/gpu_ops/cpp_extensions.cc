@@ -1043,8 +1043,8 @@ void NgramMatch(const paddle::Tensor& token_ids_all,
                 const int max_ngram_size,
                 const int max_draft_tokens);
 
-void HybridMtpNgram(const paddle::Tensor& input_ids,
-                    const paddle::Tensor& input_ids_len,
+void HybridMtpNgram(const paddle::Tensor& token_ids_all,
+                    const paddle::Tensor& prompt_lens,
                     const paddle::Tensor& pre_ids,
                     const paddle::Tensor& step_idx,
                     const paddle::Tensor& draft_token_num,
