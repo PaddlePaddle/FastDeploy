@@ -81,7 +81,7 @@ def call_prefill_permute_to_masked_gemm(
     topk_ids: paddle.Tensor,
     num_local_experts: int,
     max_token_num: int,
-    swizzle_scale: bool = False,
+    make_scale_interleaved: bool = False,
 ):
     """
     Permute input tokens and scales from token-major to expert-major layout
@@ -93,7 +93,7 @@ def call_prefill_permute_to_masked_gemm(
         topk_ids: Expert routing indices [num_tokens, topk] (int64 or int32).
         num_local_experts: Number of local experts on this device.
         max_token_num: Maximum tokens per expert buffer.
-        swizzle_scale: Whether to directly write scale in flashinfer swizzled layout.
+        make_scale_interleaved: Whether to directly write scale in flashinfer swizzled layout.
 
     Returns:
         tuple: (permute_x, permute_scale, permuted_indice_map, token_nums_per_expert)
@@ -106,7 +106,9 @@ def call_prefill_permute_to_masked_gemm(
     if scale is None:
         scale = paddle.empty([0], dtype=paddle.float32)
 
-    results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num, swizzle_scale)
+    results = prefill_permute_to_masked_gemm(
+        x, scale, topk_ids, num_local_experts, max_token_num, make_scale_interleaved
+    )
 
     return results[0], results[1], results[2], results[3]
 
@@ -767,7 +769,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
                     topk_ids=recv_topk_idx,
                     num_local_experts=layer.num_local_experts,
                     max_token_num=layer.ep_size * max_tokens_per_rank,
-                    swizzle_scale=recv_x_scale is not None,
+                    make_scale_interleaved=recv_x_scale is not None,
                 )
             )
 

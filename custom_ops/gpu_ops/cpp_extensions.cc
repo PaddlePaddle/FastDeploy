@@ -1217,7 +1217,7 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
     const paddle::Tensor& topk_ids,
     const int num_local_experts,
     const int max_token_num,
-    const bool swizzle_scale);
+    const bool make_scale_interleaved);
 
 std::vector<paddle::Tensor> DepermutePrefillCombine(
     const paddle::Tensor& x,
@@ -1939,7 +1939,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("topk_ids"),
         py::arg("num_local_experts"),
         py::arg("max_token_num"),
-        py::arg("swizzle_scale") = false,
+        py::arg("make_scale_interleaved") = false,
         "Prefill permute to masked GEMM for MoE");
 
   m.def("depermute_prefill_combine",
