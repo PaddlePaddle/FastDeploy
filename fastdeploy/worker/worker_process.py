@@ -178,6 +178,10 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule
         self.cached_control_reqs = []
+        if self.ranks > 1:
+            self.gloo_group = dist.new_group(list(range(self.ranks)), backend="gloo")
+        else:
+            self.gloo_group = None
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -312,9 +316,12 @@ class PaddleDisWorkerProc:
         self.experts_manager.tensor_infos = None
 
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
-        signal_list = [self.model_weights_signal[0]]
-        paddle.distributed.broadcast_object_list(signal_list, src=src, group=group)
-        return int(signal_list[0])
+        model_weights_signal_tensor = paddle.full(
+            shape=[1], fill_value=self.model_weights_signal[0], dtype="int32", device="cpu"
+        )
+        paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
+        value = model_weights_signal_tensor.numpy()[0]
+        return int(value)
 
     def _get_exist_task_flag(self) -> bool:
         if self.nnode > 1:
@@ -465,7 +472,7 @@ class PaddleDisWorkerProc:
             if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=self.gloo_group)
 
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
@@ -530,7 +537,7 @@ class PaddleDisWorkerProc:
                                 self.model_weights_signal[0] = self.model_weights_status.value[0]
                                 if self.ranks > 1:
                                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                                        src=0, group=None
+                                        src=0, group=self.gloo_group
                                     )
                                 time.sleep(1)
                             self.model_weights_status.value[0] = (
