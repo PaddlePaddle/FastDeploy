@@ -242,6 +242,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ENABLE_BATCH_SCHEDULER": lambda: int(os.getenv("FD_ENABLE_BATCH_SCHEDULER", "0")),
     # Timeout for batching reqs, 500ms in default
     "FD_RECV_BATCH_TIMEOUT": lambda: int(os.getenv("FD_RECV_BATCH_TIMEOUT", "500")),
+    # Advance time (in seconds) to report infer monitor before forward finishes, 0 means report after forward
+    "FD_REPORT_IM_ADVANCE_TIME": lambda: int(os.getenv("FD_REPORT_IM_ADVANCE_TIME", "0")),
     # Port for IM reporting
     "FD_REPORT_IM_PORT": lambda: int(os.getenv("FD_REPORT_IM_PORT", "9009")),
 }

@@ -388,7 +388,7 @@ class EngineService:
             suffix=current_suffix,
             create=True,
         )
-        
+
         # gpu_cache_lock: file-based lock for mutual exclusion between worker
         # and CPU transfer when accessing GPU KV cache.
         self.gpu_cache_lock = IPCLock(
@@ -396,7 +396,7 @@ class EngineService:
             suffix=current_suffix,
             create=True,
         )
-        
+
         infer_finished_signal_data = np.zeros([1], dtype=np.int32)
         self.infer_finished_signal = IPCSignal(
             name="infer_finished_signal",
@@ -408,7 +408,7 @@ class EngineService:
 
     def init_parallel_env(self, start_port=6370):
         llm_logger.info("Start init CPU parallel envs")
-          
+
         local_data_parallel_size = len(self.cfg.parallel_config.engine_worker_queue_port)
         global_data_parallel_id = (
             self.cfg.node_rank * local_data_parallel_size + self.cfg.parallel_config.local_data_parallel_id
@@ -865,6 +865,7 @@ class EngineService:
         buffered_req_info = {}
         req_info_lock = threading.Lock()
         last_sched_batch_id, last_sched_batch_cnt, last_received_request_ids = -1, [], []
+        avg_execute_time, alpha = -1, 0.2
 
         def _fetch_request():
             try:
@@ -1101,6 +1102,26 @@ class EngineService:
         if not envs.FD_ENABLE_BATCH_SCHEDULER:
             self.infer_finished_signal.value[0] = 1
 
+        pending_forward_done = threading.Event()
+        pending_forward_done.set()  # Initially no pending forward
+        forward_wait_pool = ThreadPoolExecutor(max_workers=1)
+
+        def _wait_forward_and_update_ema(start_execute_time):
+            # Wait for worker forward to finish, compute execute_time, update avg_execute_time EMA
+            nonlocal avg_execute_time
+            while self.infer_finished_signal.value[0] == 0:
+                time.sleep(0.005)
+            execute_time = int((time.time() - start_execute_time) * 1000)
+            if avg_execute_time == -1:
+                avg_execute_time = execute_time
+            else:
+                avg_execute_time = int((1 - alpha) * avg_execute_time + alpha * execute_time)
+            self.infer_finished_signal.value[0] = 0
+            self.llm_logger.info(
+                f"set forward finished signal to 0 (execute_time={execute_time}ms, avg={avg_execute_time}ms)"
+            )
+            pending_forward_done.set()
+
         start_time = time.time()
         while self.running:
             with self._pause_cond:
@@ -1138,6 +1159,10 @@ class EngineService:
 
                 # 3. Send to engine
                 if tasks:
+                    if envs.FD_ENABLE_BATCH_SCHEDULER:
+                        # Wait for any previous forward to complete before starting new forward
+                        pending_forward_done.wait()
+
                     if self.cfg.scheduler_config.splitwise_role == "decode":
                         for task in tasks:
                             if task.task_type == RequestType.PREEMPTED:
@@ -1208,20 +1233,53 @@ class EngineService:
 
                 if envs.FD_ENABLE_BATCH_SCHEDULER:
                     start_execute_time = time.time()
-                    while self.infer_finished_signal.value[0] == 0:
-                        # Wait for current forward to finish
-                        time.sleep(0.01)
-                    execute_time = int((time.time() - start_execute_time) * 1000)
 
-                    # Report to IM
                     if last_sched_batch_id != -1:
-                        self.report_infer_monitor(
-                            last_sched_batch_id,
-                            last_received_request_ids,
-                            execute_time,
-                            self.resource_manager.get_remain_token_num(),
-                        )
-                    self.infer_finished_signal.value[0] = 0
+                        report_advance_time = envs.FD_REPORT_IM_ADVANCE_TIME
+                        reported_early = False
+
+                        pending_forward_done.clear()
+                        forward_wait_pool.submit(_wait_forward_and_update_ema, start_execute_time)
+
+                        if report_advance_time > 0 and avg_execute_time != -1:
+                            # Estimate when to report: avg_execute_time - X seconds
+                            report_deadline = max(0, avg_execute_time - report_advance_time)
+                            while self.infer_finished_signal.value[0] == 0:
+                                elapsed = (time.time() - start_execute_time) * 1000
+                                if elapsed >= report_deadline:
+                                    # Report IM early (X seconds before estimated forward completion)
+                                    self.report_infer_monitor(
+                                        last_sched_batch_id,
+                                        last_received_request_ids,
+                                        avg_execute_time,
+                                        self.resource_manager.get_remain_token_num(),
+                                    )
+                                    reported_early = True
+
+                                    self.llm_logger.info(
+                                        f"report infer monitor early at {elapsed:.3f}ms "
+                                        f"(advance={report_advance_time}ms, avg forward={avg_execute_time:.3f}ms)"
+                                    )
+
+                                    break
+                                time.sleep(0.01)
+
+                        if not reported_early:
+                            # No early report, must wait synchronously
+                            pending_forward_done.wait()
+                            execute_time = int((time.time() - start_execute_time) * 1000)
+
+                            self.report_infer_monitor(
+                                last_sched_batch_id,
+                                last_received_request_ids,
+                                execute_time,
+                                self.resource_manager.get_remain_token_num(),
+                            )
+                    else:
+                        while self.infer_finished_signal.value[0] == 0:
+                            time.sleep(0.005)
+                        self.infer_finished_signal.value[0] = 0
+                        self.llm_logger.info("set forward finished signal to 0")
                 else:
                     if not tasks and not error_tasks:
                         time.sleep(0.005)
@@ -1916,6 +1974,7 @@ class EngineService:
         Report info of latest batch to infer monitor
         """
         report_info_list = []
+        llm_logger.info(f"batch duration: {last_run_batch_duration} remain_num: {remain_token_num}")
         dist.communication.stream.gather(
             paddle.to_tensor([last_run_batch_duration, remain_token_num]),
             report_info_list,

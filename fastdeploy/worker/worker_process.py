@@ -597,13 +597,14 @@ class PaddleDisWorkerProc:
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
                 self.infer_finished_signal.value[0] = 1
+
+                logger.info("idle loop, set forward finished signal to 1")
                 time.sleep(0.001)
                 continue
 
             # Execute model to generate token. The generated token will be written to the buffer.
             # These generated tokens can be obtained through get_output op.
             start_execute_time = time.time()
-
             self._acquire_kvcache_lock(tp_rank)
             self.worker.execute_model(req_dicts, self.max_occupied_batch_index)
             self._release_kvcache_lock(tp_rank)
@@ -614,7 +615,10 @@ class PaddleDisWorkerProc:
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
 
             self._tp_barrier_wait() if tp_size > 1 else None
-            self.infer_finished_signal.value[0] = 1
+            if tp_rank == 0:
+                self.infer_finished_signal.value[0] = 1
+                logger.info("set forward finished signal to 1")
+
             if (
                 not self.parallel_config.use_ep
                 and hasattr(self.worker.model_runner, "current_launch_token_num")
