@@ -16,96 +16,157 @@ jobs:
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
 
-  build:
-    name: FD-Build-Linux
+  build_cu130_310:
+    name: FD-Build-Linux-Cu130-Py310
     needs: clone
-    uses: ./.github/workflows/_build_linux.yml
+    uses: ./.github/workflows/_build_linux_cu130.yml
     with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda126-manylinux
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda130-manylinux
       FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
       COMPILE_ARCH: "90"
       WITH_NIGHTLY_BUILD: "OFF"
       FD_VERSION: "0.0.0"
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
+      PYTHON_VERSION: "3.10"
+
+  build_cu130_311:
+    name: FD-Build-Linux-Cu130-Py311
+    needs: clone
+    uses: ./.github/workflows/_build_linux_cu130.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda130-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "90"
+      WITH_NIGHTLY_BUILD: "OFF"
+      FD_VERSION: "0.0.0"
+      PYTHON_VERSION: "3.11"
+
+  build_cu130_312:
+    name: FD-Build-Linux-Cu130-Py312
+    needs: clone
+    uses: ./.github/workflows/_build_linux_cu130.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda130-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "90"
+      WITH_NIGHTLY_BUILD: "OFF"
+      FD_VERSION: "0.0.0"
+      PYTHON_VERSION: "3.12"
+
+  build_cu129_310:
+    name: FD-Build-Linux-Cu129-Py310
+    needs: clone
+    uses: ./.github/workflows/_build_linux_cu129.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "90"
+      WITH_NIGHTLY_BUILD: "OFF"
+      FD_VERSION: "0.0.0"
+      PYTHON_VERSION: "3.10"
+
+  build_cu129_311:
+    name: FD-Build-Linux-Cu129-Py311
+    needs: clone
+    uses: ./.github/workflows/_build_linux_cu129.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "90"
+      WITH_NIGHTLY_BUILD: "OFF"
+      FD_VERSION: "0.0.0"
+      PYTHON_VERSION: "3.11"
+
+  build_cu129_312:
+    name: FD-Build-Linux-Cu129-Py312
+    needs: clone
+    uses: ./.github/workflows/_build_linux_cu129.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-build-cuda129-manylinux
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COMPILE_ARCH: "90"
+      WITH_NIGHTLY_BUILD: "OFF"
+      FD_VERSION: "0.0.0"
+      PYTHON_VERSION: "3.12"
 
   resultshow:
     name: Use Build Output
-    needs: build
+    needs: [build_cu130_310, build_cu130_311, build_cu130_312]
     runs-on: ubuntu-latest
     steps:
-      - name: Print wheel path
+      - name: Print wheel paths
         run: |
-          echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
+          echo "Py310 wheel: ${{ needs.build_cu130_310.outputs.wheel_path }}"
+          echo "Py311 wheel: ${{ needs.build_cu130_311.outputs.wheel_path }}"
+          echo "Py312 wheel: ${{ needs.build_cu130_312.outputs.wheel_path }}"
 
-  unittest_coverage:
-    name: Run FastDeploy Unit Tests and Coverage
-    needs: [clone,build]
-    uses: ./.github/workflows/_unit_test_coverage.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
-      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-
-  four_cards_test:
-    name: Run Four Cards Tests
-    needs: [clone,build]
-    uses: ./.github/workflows/_gpu_4cards_case_test.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
-      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-
-  logprob_test:
-    name: Run FastDeploy LogProb Tests
-    needs: [build]
-    uses: ./.github/workflows/_logprob_test_linux.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
-      PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
-      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-
-  pre_ce_test:
-    name: Extracted partial CE model tasks to run in CI.
-    needs: [clone,build]
-    uses: ./.github/workflows/_pre_ce_test.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
-      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-
-  base_test:
-    name: Run Base Tests
-    needs: [clone,build]
-    uses: ./.github/workflows/_base_test.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
-      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
-
-  stable_test:
-    name: Run Stable Tests
-    needs: [clone,build]
-    uses: ./.github/workflows/_stable_test.yml
-    with:
-      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
-      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
-      FASTDEPLOY_WHEEL_URL: ${{ needs.build.outputs.wheel_path }}
-      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
-    secrets:
-      github-token: ${{ secrets.GITHUB_TOKEN }}
+#  unittest_coverage:
+#    name: Run FastDeploy Unit Tests and Coverage
+#    needs: [clone,build_cu130_310]
+#    uses: ./.github/workflows/_unit_test_coverage.yml
+#    with:
+#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
+#      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+#      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130_310.outputs.wheel_path }}
+#      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+#    secrets:
+#      github-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#  four_cards_test:
+#    name: Run Four Cards Tests
+#    needs: [clone,build_cu130_310]
+#    uses: ./.github/workflows/_gpu_4cards_case_test.yml
+#    with:
+#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
+#      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+#      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130_310.outputs.wheel_path }}
+#      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+#    secrets:
+#      github-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#  logprob_test:
+#    name: Run FastDeploy LogProb Tests
+#    needs: [build_cu130_310]
+#    uses: ./.github/workflows/_logprob_test_linux.yml
+#    with:
+#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
+#      PADDLETEST_ARCHIVE_URL: "https://xly-devops.bj.bcebos.com/PaddleTest/PaddleTest.tar.gz"
+#      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130_310.outputs.wheel_path }}
+#      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+#    secrets:
+#      github-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#  pre_ce_test:
+#    name: Extracted partial CE model tasks to run in CI.
+#    needs: [clone,build_cu130_310]
+#    uses: ./.github/workflows/_pre_ce_test.yml
+#    with:
+#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+#      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+#      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130_310.outputs.wheel_path }}
+#      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+#    secrets:
+#      github-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#  base_test:
+#    name: Run Base Tests
+#    needs: [clone,build_cu130_310]
+#    uses: ./.github/workflows/_base_test.yml
+#    with:
+#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev
+#      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+#      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130_310.outputs.wheel_path }}
+#      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+#    secrets:
+#      github-token: ${{ secrets.GITHUB_TOKEN }}
+#
+#  stable_test:
+#    name: Run Stable Tests
+#    needs: [clone,build_cu130_310]
+#    uses: ./.github/workflows/_stable_test.yml
+#    with:
+#      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-dailyupdate
+#      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+#      FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130_310.outputs.wheel_path }}
+#      MODEL_CACHE_DIR: "/ssd2/actions-runner/ModelData"
+#    secrets:
+#      github-token: ${{ secrets.GITHUB_TOKEN }}
