@@ -113,24 +113,25 @@ class EngineArgs:
     """
     max_completion_tokens: Optional[int] = None
     """
-    Server-level default maximum completion token length.
-    Used when per-request max_tokens/max_completion_tokens is not specified.
-    None means default to max_model_len - input_len.
+    Server-level maximum allowed completion token length (hard cap).
+    Per-request max_tokens will be clamped to this value. None means no server-level cap
+    (bounded by max_model_len - input_len).
     """
     reasoning_max_tokens: Optional[int] = None
     """
-    Server-level default reasoning/thinking token length.
-    Used when per-request reasoning_max_tokens is not specified. None means no default limit.
+    Server-level maximum allowed reasoning/thinking token length (hard cap).
+    Per-request reasoning_max_tokens will be clamped to this value. None means no server-level cap.
     """
     response_max_tokens: Optional[int] = None
     """
-    Server-level default response token length.
-    Used when per-request response_max_tokens is not specified. None means no default limit.
+    Server-level maximum allowed response token length (hard cap).
+    Per-request response_max_tokens will be clamped to this value. None means no server-level cap.
     """
     min_completion_tokens: Optional[int] = None
     """
-    Server-level default minimum generation length.
-    Used when per-request min_tokens is not specified. None means no default limit.
+    Server-level minimum generation length floor.
+    Effective min_tokens = max(server_value, per-request value). Requests cannot set min_tokens
+    below this floor. None means no server-level floor.
     """
     input_max_tokens: Optional[int] = None
     """
@@ -794,30 +795,30 @@ class EngineArgs:
             "--max-completion-tokens",
             type=int,
             default=EngineArgs.max_completion_tokens,
-            help="Server-level default maximum completion token length. "
-            "Used when per-request value is not specified. "
-            "Default: None (uses max_model_len - input_len).",
+            help="Server-level maximum allowed completion token length (hard cap). "
+            "Per-request max_tokens will be clamped to this value. "
+            "Default: None (bounded by max_model_len - input_len).",
         )
         model_group.add_argument(
             "--reasoning-max-tokens",
             type=int,
             default=EngineArgs.reasoning_max_tokens,
-            help="Server-level default reasoning/thinking token length. "
-            "Used when per-request value is not specified. Default: None (no limit).",
+            help="Server-level maximum allowed reasoning/thinking token length (hard cap). "
+            "Per-request reasoning_max_tokens will be clamped to this value. Default: None (no cap).",
         )
         model_group.add_argument(
             "--response-max-tokens",
             type=int,
             default=EngineArgs.response_max_tokens,
-            help="Server-level default response token length. "
-            "Used when per-request value is not specified. Default: None (no limit).",
+            help="Server-level maximum allowed response token length (hard cap). "
+            "Per-request response_max_tokens will be clamped to this value. Default: None (no cap).",
         )
         model_group.add_argument(
             "--min-completion-tokens",
             type=int,
             default=EngineArgs.min_completion_tokens,
-            help="Server-level default minimum generation length. "
-            "Used when per-request value is not specified. Default: None (no limit).",
+            help="Server-level minimum generation length floor. "
+            "Effective min_tokens = max(server_value, per-request value). Default: None (no floor).",
         )
         model_group.add_argument(
             "--input-max-tokens",
