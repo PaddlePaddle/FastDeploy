@@ -33,6 +33,7 @@ from utils.serving_utils import (
     send_request,
 )
 
+
 def _build_speculate_metrics_baseline(
     accepted_tokens,
     rejected_tokens,
