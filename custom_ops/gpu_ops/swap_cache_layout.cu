@@ -155,26 +155,51 @@ void SwapCacheImpLayout(const std::vector<paddle::Tensor>& cache_gpu_tensors,
 
   bool use_optimized = is_cpu_block_ids_sequential(cpu_block_ids);
 
+  // float4 vectorized kernels require block_bytes to be 16-byte aligned
+  // and cache_cpu_base to be 16-byte aligned for correct float4 access.
+  if (use_optimized && (block_bytes % sizeof(float4) != 0)) {
+    use_optimized = false;
+  }
+  if (use_optimized) {
+    int64_t cpu_start_block = cpu_block_ids[0];
+    uintptr_t cpu_base_addr =
+        static_cast<uintptr_t>(cache_cpu_pointer) +
+        cpu_start_block * layer_number * cache_block_stride * sizeof(DataType_);
+    if (cpu_base_addr % sizeof(float4) != 0) {
+      use_optimized = false;
+    }
+  }
+
   if (use_optimized) {
     ensure_device_block_ids(n_blocks * sizeof(int64_t));
     ensure_device_layer_ptrs(layer_number * sizeof(DataType_*));
 
-    cudaMemcpyAsync(g_device_block_ids,
-                    gpu_block_ids.data(),
-                    n_blocks * sizeof(int64_t),
-                    cudaMemcpyHostToDevice,
-                    stream);
+    cudaError_t status = cudaMemcpyAsync(g_device_block_ids,
+                                         gpu_block_ids.data(),
+                                         n_blocks * sizeof(int64_t),
+                                         cudaMemcpyHostToDevice,
+                                         stream);
+    PADDLE_ENFORCE_EQ(
+        status,
+        cudaSuccess,
+        phi::errors::External("cudaMemcpyAsync block_ids H2D failed: %s",
+                              cudaGetErrorString(status)));
 
     std::vector<DataType_*> h_layer_ptrs(layer_number);
     for (int64_t i = 0; i < layer_number; i++) {
       h_layer_ptrs[i] = reinterpret_cast<DataType_*>(
           const_cast<data_t*>(cache_gpu_tensors[i].data<data_t>()));
     }
-    cudaMemcpyAsync(g_device_layer_ptrs,
-                    h_layer_ptrs.data(),
-                    layer_number * sizeof(DataType_*),
-                    cudaMemcpyHostToDevice,
-                    stream);
+    status = cudaMemcpyAsync(g_device_layer_ptrs,
+                             h_layer_ptrs.data(),
+                             layer_number * sizeof(DataType_*),
+                             cudaMemcpyHostToDevice,
+                             stream);
+    PADDLE_ENFORCE_EQ(
+        status,
+        cudaSuccess,
+        phi::errors::External("cudaMemcpyAsync layer_ptrs H2D failed: %s",
+                              cudaGetErrorString(status)));
 
     int64_t cpu_start_block = cpu_block_ids[0];
     auto* cache_cpu_base = reinterpret_cast<DataType_*>(cache_cpu_pointer) +
@@ -196,11 +221,11 @@ void SwapCacheImpLayout(const std::vector<paddle::Tensor>& cache_gpu_tensors,
       // CPU→GPU: DMA memcpy to staging then scatter kernel
       ensure_staging_buffer(total_bytes);
 
-      cudaError_t status = cudaMemcpyAsync(g_staging_buffer,
-                                           cache_cpu_base,
-                                           total_bytes,
-                                           cudaMemcpyHostToDevice,
-                                           stream);
+      status = cudaMemcpyAsync(g_staging_buffer,
+                               cache_cpu_base,
+                               total_bytes,
+                               cudaMemcpyHostToDevice,
+                               stream);
       PADDLE_ENFORCE_EQ(status,
                         cudaSuccess,
                         phi::errors::External("cudaMemcpyAsync H2D failed: %s",
