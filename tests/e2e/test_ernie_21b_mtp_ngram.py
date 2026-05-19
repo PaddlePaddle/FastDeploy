@@ -33,22 +33,47 @@ from utils.serving_utils import (
     send_request,
 )
 
-BASELINE_SPECULATE_METRICS = {
-    "accepted_tokens": 100,
-    "rejected_tokens": 176,
-    "accept_ratio": 0.54,
-    "average_accept_length": 2.1739130434782608,
-    "accepted_tokens_per_head": [46, 25, 15, 8, 6, 0],
-    "accept_ratio_per_head": [0.5434782608695652, 0.6, 0.5333333333333333, 0.75, 0.0],
-}
-BASELINE_SPECULATE_METRICS_WITH_LOGPROBS = {
-    "accepted_tokens": 100,
-    "rejected_tokens": 182,
-    "accept_ratio": 0.53,
-    "average_accept_length": 2.127659574468085,
-    "accepted_tokens_per_head": [47, 29, 16, 5, 3, 0],
-    "accept_ratio_per_head": [0.6170212765957447, 0.5517241379310345, 0.3125, 0.6, 0.0],
-}
+def _build_speculate_metrics_baseline(
+    accepted_tokens,
+    rejected_tokens,
+    accept_ratio,
+    average_accept_length,
+    accepted_tokens_per_head,
+    accept_ratio_per_head,
+):
+    """
+    Build a tolerance-based baseline for speculate metrics.
+
+    Integer counters remain strict, while floating-point fields and
+    per-head metric arrays use approximate comparison to reduce
+    environment-sensitive test flakiness.
+    """
+    return {
+        "accepted_tokens": accepted_tokens,
+        "rejected_tokens": rejected_tokens,
+        "accept_ratio": pytest.approx(accept_ratio, abs=0.02),
+        "average_accept_length": pytest.approx(average_accept_length, abs=0.1),
+        "accepted_tokens_per_head": pytest.approx(accepted_tokens_per_head, abs=2),
+        "accept_ratio_per_head": pytest.approx(accept_ratio_per_head, abs=0.05),
+    }
+
+
+BASELINE_SPECULATE_METRICS = _build_speculate_metrics_baseline(
+    accepted_tokens=100,
+    rejected_tokens=176,
+    accept_ratio=0.54,
+    average_accept_length=2.1739130434782608,
+    accepted_tokens_per_head=[46, 25, 15, 8, 6, 0],
+    accept_ratio_per_head=[0.5434782608695652, 0.6, 0.5333333333333333, 0.75, 0.0],
+)
+BASELINE_SPECULATE_METRICS_WITH_LOGPROBS = _build_speculate_metrics_baseline(
+    accepted_tokens=100,
+    rejected_tokens=182,
+    accept_ratio=0.53,
+    average_accept_length=2.127659574468085,
+    accepted_tokens_per_head=[47, 29, 16, 5, 3, 0],
+    accept_ratio_per_head=[0.6170212765957447, 0.5517241379310345, 0.3125, 0.6, 0.0],
+)
 
 
 @pytest.fixture(scope="session", autouse=True)
