@@ -54,7 +54,7 @@ class TestInputPreprocessorBranching(unittest.TestCase):
         self.assertEqual(pp.limit_mm_per_prompt, {"image": 2})
 
     def test_create_processor_text_normal_path(self):
-        """Normal path: non-Ernie, non-MM arch creates a TextProcessor."""
+        """Normal path: non-Ernie, non-MM arch creates a Processor."""
         from fastdeploy.input.preprocess import InputPreprocessor
 
         config = _make_model_config("LlamaForCausalLM", enable_mm=False)
@@ -63,7 +63,7 @@ class TestInputPreprocessorBranching(unittest.TestCase):
         mock_dp = MagicMock()
         with (
             patch.dict("sys.modules", {"fastdeploy.plugins": None, "fastdeploy.plugins.input_processor": None}),
-            patch("fastdeploy.input.text_processor.TextProcessor", return_value=mock_dp),
+            patch("fastdeploy.input.processor.Processor", return_value=mock_dp),
         ):
             pp.create_processor()
 
