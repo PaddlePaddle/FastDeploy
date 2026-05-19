@@ -1,4 +1,4 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,23 +12,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import glob
+import os
+import re
+import time
+from typing import Any, Union
+
 import pytest
+from e2e.utils.serving_utils import (  # noqa: E402
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    clean_ports,
+)
 
 
 def pytest_configure(config):
+    """
+    Configure pytest:
+    - Register custom markers
+    - Ensure log directory exists
+    """
     config.addinivalue_line("markers", "gpu: mark test as requiring GPU platform")
+
+    log_dir = os.environ.get("FD_LOG_DIR", "log")
+    os.makedirs(log_dir, exist_ok=True)
 
 
 def pytest_collection_modifyitems(config, items):
-    """Skip GPU-marked tests when not on a GPU platform.
-
-    IMPORTANT: Do NOT import paddle or fastdeploy here. This function runs
-    during pytest collection (before fork). Importing paddle initializes the
-    CUDA runtime, which makes forked child processes unable to re-initialize
-    CUDA (OSError: CUDA error(3), initialization error).
     """
-    import glob
+    Skip tests marked with 'gpu' if no GPU device is detected.
 
+    IMPORTANT:
+    Do NOT import paddle or fastdeploy here.
+    This hook runs during test collection (before process fork).
+    Importing CUDA-related libraries will initialize CUDA runtime,
+    causing forked subprocesses to fail with:
+    OSError: CUDA error(3), initialization error.
+    """
     has_gpu = len(glob.glob("/dev/nvidia[0-9]*")) > 0
 
     if has_gpu:
@@ -40,18 +61,11 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip_marker)
 
 
-import time
-from typing import Any, Union
-
-from e2e.utils.serving_utils import (  # noqa: E402
-    FD_API_PORT,
-    FD_CACHE_QUEUE_PORT,
-    FD_ENGINE_QUEUE_PORT,
-    clean_ports,
-)
-
-
 class FDRunner:
+    """
+    Wrapper for FastDeploy LLM serving process.
+    """
+
     def __init__(
         self,
         model_name_or_path: str,
@@ -88,7 +102,9 @@ class FDRunner:
         sampling_params,
         **kwargs: Any,
     ) -> list[tuple[list[list[int]], list[str]]]:
-
+        """
+        Run generation and return token IDs and generated texts.
+        """
         req_outputs = self.llm.generate(prompts, sampling_params=sampling_params, **kwargs)
         outputs: list[tuple[list[list[int]], list[str]]] = []
         for output in req_outputs:
@@ -101,6 +117,9 @@ class FDRunner:
         max_tokens: int,
         **kwargs: Any,
     ) -> list[tuple[list[int], str]]:
+        """
+        Generate outputs with deterministic sampling (top_p=0, temperature=0).
+        """
         from fastdeploy.engine.sampling_params import SamplingParams
 
         topp_params = SamplingParams(temperature=0.0, top_p=0, max_tokens=max_tokens)
@@ -116,4 +135,33 @@ class FDRunner:
 
 @pytest.fixture(scope="session")
 def fd_runner():
+    """Provide FDRunner as a pytest fixture."""
     return FDRunner
+
+
+@pytest.hookimpl(tryfirst=True, hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    """
+    Capture failed test cases and save error logs to FD_LOG_DIR.
+
+    Only logs failures during the test execution phase.
+    """
+    outcome = yield
+    report = outcome.get_result()
+
+    if report.when == "call" and report.failed:
+        log_dir = os.environ.get("FD_LOG_DIR", "log")
+        os.makedirs(log_dir, exist_ok=True)
+
+        case_name = re.sub(r"_+", "_", re.sub(r"[^\w\-.]", "_", item.nodeid.split("::", 1)[-1])).strip("_")[:200]
+
+        error_log_file = os.path.join(log_dir, f"pytest_{case_name}_error.log")
+
+        with open(error_log_file, "w", encoding="utf-8") as f:
+            f.write(f"Case name: {item.nodeid}\n")
+            f.write(f"Outcome: {report.outcome}\n")
+            f.write(f"Duration: {report.duration:.4f}s\n")
+            f.write("-" * 80 + "\n")
+
+            if report.longrepr:
+                f.write(str(report.longrepr))

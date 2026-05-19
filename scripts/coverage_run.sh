@@ -42,30 +42,18 @@ classify_tests() {
         fi
     fi
 
-    # Rule 5: high-risk OOM tests (treat as multi_gpu for sequential execution)
-    if [[ "$test_file" == "tests/entrypoints/cli/test_main.py" ||
-          "$test_file" == "tests/entrypoints/cli/test_serve.py" ||
-          "$test_file" == "tests/operators/test_group_swiglu_with_masked.py" ||
-          "$test_file" == "tests/operators/test_hybrid_mtp_ngram.py" ||
-          "$test_file" == "tests/operators/test_moe_top_k_select.py" ||
-          "$test_file" == "tests/operators/test_noaux_tc.py" ||
-          "$test_file" == "tests/output/test_get_save_output_v1.py" ||
-          "$test_file" == "tests/output/test_process_batch_draft_tokens.py" ||
-          "$test_file" == "tests/output/test_process_batch_output.py" ]]; then
-        echo "multi_gpu"
-        return
-    fi
-
     # ========== Single-GPU tests (no port required, can run in parallel) ==========
     echo "single_gpu"
 }
 
 # ============================================================
-# Run Test With Logging
+# Run Test With Logging (with retry for OOM/Kill)
 # ============================================================
 run_test_with_logging() {
     local test_file=$1
     local log_prefix=$2
+    local max_retries=3  # Max retries for OOM/Kill issues
+    local retry_count=0
     local status
 
     echo "Running pytest file: $test_file"
@@ -81,14 +69,37 @@ run_test_with_logging() {
     # Set FD_LOG_DIR to isolate logs for each test
     export FD_LOG_DIR="$isolated_log_dir"
 
-    # Run test
-    timeout 600 python -m coverage run -m pytest -c ${PYTEST_INI} "$test_file" -vv -s
-    status=$?
+    # Retry loop for OOM/Kill issues (only handle "Killed" / SIGKILL)
+    while [ $retry_count -le $max_retries ]; do
+        if [ $retry_count -gt 0 ]; then
+            echo ""
+            echo "==================== Retrying (${retry_count}/${max_retries}) ===================="
+            echo "Previous attempt was Killed, retrying..."
+            # Clean up before retry
+            sleep 5  # Wait a bit to let resources be released
+        fi
+
+        # Run test
+        timeout 600 python -m coverage run -m pytest -c ${PYTEST_INI} "$test_file" -vv -s
+        status=$?
+
+        # Exit code 137 = SIGKILL (Killed / OOM)
+        if [ "$status" -eq 137 ] && [ $retry_count -lt $max_retries ]; then
+            retry_count=$((retry_count + 1))
+            continue
+        fi
+
+        # Break loop on success or non-Kill error or max retries reached
+        break
+    done
 
     if [ "$status" -ne 0 ]; then
         echo "$test_file" >> "$log_prefix"
         echo ""
         echo "==================== Test Failed: $test_file ===================="
+        if [ $retry_count -gt 0 ]; then
+            echo "Total attempts: $((retry_count + 1))"
+        fi
 
         # Use isolated log directory for this test
         if [ -d "$isolated_log_dir" ]; then
@@ -108,7 +119,7 @@ run_test_with_logging() {
             fi
 
             echo ">>> grep error in ${isolated_log_dir}"
-            grep -Rni --color=auto "error" "${isolated_log_dir}" || true
+            grep -Rni --color=auto "error" "${isolated_log_dir}" --exclude="pytest_*_error.log" || true
         fi
 
         # print all server logs
