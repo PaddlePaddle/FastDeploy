@@ -110,8 +110,7 @@ class ZmqServerBase(ABC):
         _zmq_metrics_stats = ZMQMetricsStats()
         try:
             # receive from socket
-            frame = self.socket.recv(copy=False, flags=flags)
-            msg = frame.bytes
+            msg = self.socket.recv(flags=flags)
             try:
                 data_dict = jsonapi.loads(msg)
             except (UnicodeDecodeError, ValueError) as e:
@@ -157,8 +156,7 @@ class ZmqServerBase(ABC):
         """
         _zmq_metrics_stats = ZMQMetricsStats()
         self._ensure_socket()
-        frame = self.socket.recv(copy=False, flags=flags)
-        data_bytes = frame.bytes
+        data_bytes = self.socket.recv(flags=flags)
         try:
             envelope = ForkingPickler.loads(data_bytes)
         except (UnicodeDecodeError, ValueError, pickle.UnpicklingError) as e:
@@ -505,8 +503,6 @@ class ZmqIpcServer(ZmqServerBase):
                 self.worker_push_addresses.clear()
 
             if self.socket is not None and not self.socket.closed:
-                if self.address:
-                    self.socket.unbind(self.address)
                 self.socket.close()
             if not self.context.closed:
                 self.context.term()
