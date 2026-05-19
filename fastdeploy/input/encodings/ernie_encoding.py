@@ -176,9 +176,12 @@ class ErnieEncoding(BaseEncoding):
 
     def load_video(self, url, item):
         from fastdeploy.input.utils.render_timestamp import render_frame_timestamp
-        from fastdeploy.input.utils.video import read_frames_decord, read_video_decord
+        from fastdeploy.input.utils.video import (
+            read_frames_paddlecodec,
+            read_video_paddlecodec,
+        )
 
-        reader, meta, path = read_video_decord(url, save_to_disk=False)
+        reader, meta, path = read_video_paddlecodec(url, save_to_disk=False)
 
         video_frame_args = {
             "fps": item.get("fps", self.fps),
@@ -189,7 +192,7 @@ class ErnieEncoding(BaseEncoding):
         }
         video_frame_args = self.set_video_frame_args(video_frame_args, meta)
 
-        frames_data, _, timestamps = read_frames_decord(
+        frames_data, _, timestamps = read_frames_paddlecodec(
             path,
             reader,
             meta,
