@@ -20,7 +20,7 @@ import numpy as np
 
 from fastdeploy.input.utils.video import (
     _is_gif,
-    read_video_decord,
+    read_video_paddlecodec,
     sample_frames,
     sample_frames_paddleocr,
     sample_frames_qwen,
@@ -36,14 +36,20 @@ NOT_GIF = b"NOTGIF" + b"\x00" * 10
 
 
 def _make_mock_reader(num_frames=100, fps=25.0):
-    """Return a mock that mimics decord.VideoReader."""
+    """Return a mock that mimics paddlecodec VideoDecoder."""
+    metadata = MagicMock()
+    metadata.num_frames = num_frames
+    metadata.average_fps = fps
+
+    frame_data = MagicMock()
+    frame_data.numpy.return_value = np.zeros((480, 640, 3), dtype=np.uint8)
+
+    frames_result = MagicMock()
+    frames_result.data = [frame_data]
+
     reader = MagicMock()
-    reader.__len__ = MagicMock(return_value=num_frames)
-    reader.get_avg_fps = MagicMock(return_value=fps)
-    reader.seek = MagicMock(return_value=None)
-    frame = MagicMock()
-    frame.asnumpy = MagicMock(return_value=np.zeros((480, 640, 3), dtype=np.uint8))
-    reader.__getitem__ = MagicMock(return_value=frame)
+    reader.metadata = metadata
+    reader.get_frames_at = MagicMock(return_value=frames_result)
     return reader
 
 
@@ -67,48 +73,101 @@ class TestIsGif(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
-# VideoReaderWrapper (mock decord + moviepy)
+# VideoReaderWrapper (mock paddlecodec + moviepy)
 # ---------------------------------------------------------------------------
 
 
 class TestVideoReaderWrapper(unittest.TestCase):
-    def _make_wrapper(self, video_path, mock_reader=None):
-        """Construct a VideoReaderWrapper with decord mocked out."""
+    @staticmethod
+    def _sys_modules_patch(mock_decoder):
+        mock_VideoDecoder = MagicMock(return_value=mock_decoder)
+        mock_torchcodec_decoders = MagicMock()
+        mock_torchcodec_decoders.VideoDecoder = mock_VideoDecoder
+        mock_torchcodec = MagicMock()
+        return patch.dict(
+            "sys.modules",
+            {
+                "torchcodec": mock_torchcodec,
+                "torchcodec.decoders": mock_torchcodec_decoders,
+                "moviepy": MagicMock(),
+                "moviepy.editor": MagicMock(),
+            },
+        )
+
+    @staticmethod
+    def _paddle_patch():
+        """Patch `paddle` inside video module so use_compat_guard becomes a no-op."""
+        from contextlib import contextmanager
+
+        from fastdeploy.input.utils import video
+
+        @contextmanager
+        def _noop_guard(*args, **kwargs):
+            yield
+
+        fake_paddle = MagicMock()
+        fake_paddle.use_compat_guard = _noop_guard
+        return patch.object(video, "paddle", fake_paddle)
+
+    def _make_wrapper(self, video_path, mock_decoder=None):
+        """Construct a VideoReaderWrapper with paddlecodec mocked out."""
         from fastdeploy.input.utils.video import VideoReaderWrapper
 
-        if mock_reader is None:
-            mock_reader = _make_mock_reader()
+        if mock_decoder is None:
+            mock_decoder = _make_mock_reader()
 
-        mock_decord = MagicMock()
-        mock_decord.VideoReader.return_value = mock_reader
-
-        with patch.dict("sys.modules", {"decord": mock_decord, "moviepy": MagicMock(), "moviepy.editor": MagicMock()}):
+        with self._paddle_patch(), self._sys_modules_patch(mock_decoder):
             wrapper = VideoReaderWrapper(video_path)
 
-        wrapper._reader = mock_reader
+        wrapper._decoder = mock_decoder
         return wrapper
 
     def test_len(self):
-        reader = _make_mock_reader(num_frames=42)
-        wrapper = self._make_wrapper("/fake/video.mp4", reader)
+        decoder = _make_mock_reader(num_frames=42)
+        wrapper = self._make_wrapper("/fake/video.mp4", decoder)
         self.assertEqual(len(wrapper), 42)
 
-    def test_getitem_resets_seek(self):
-        reader = _make_mock_reader()
-        wrapper = self._make_wrapper("/fake/video.mp4", reader)
-        _ = wrapper[0]
-        reader.seek.assert_called_with(0)
+    def test_getitem_returns_numpyframe(self):
+        decoder = _make_mock_reader()
+        wrapper = self._make_wrapper("/fake/video.mp4", decoder)
+        frame = wrapper[0]
+        self.assertTrue(hasattr(frame, "asnumpy"))
+        arr = frame.asnumpy()
+        self.assertEqual(arr.shape, (480, 640, 3))
+
+    def test_getitem_slice_returns_numpyframe(self):
+        decoder = _make_mock_reader()
+        frame_data = MagicMock()
+        frame_data.numpy.return_value = np.zeros((2, 480, 640, 3), dtype=np.uint8)
+        frames_result = MagicMock()
+        frames_result.data = frame_data
+        decoder.get_frames_at.return_value = frames_result
+        wrapper = self._make_wrapper("/fake/video.mp4", decoder)
+
+        frames = wrapper[1:3]
+
+        self.assertTrue(hasattr(frames, "asnumpy"))
+        self.assertEqual(frames.asnumpy().shape, (2, 480, 640, 3))
+        decoder.get_frames_at.assert_called_with(indices=[1, 2])
+
+    def test_init_reraises_torchcodec_import_error(self):
+        from fastdeploy.input.utils.video import VideoReaderWrapper
+
+        original_import = __import__
+
+        def mock_import(name, *args, **kwargs):
+            if name == "torchcodec.decoders":
+                raise RuntimeError("backend missing")
+            return original_import(name, *args, **kwargs)
+
+        with self._paddle_patch(), patch("builtins.__import__", side_effect=mock_import):
+            with self.assertRaisesRegex(RuntimeError, "backend missing"):
+                VideoReaderWrapper("/fake/video.mp4")
 
     def test_get_avg_fps(self):
-        reader = _make_mock_reader(fps=30.0)
-        wrapper = self._make_wrapper("/fake/video.mp4", reader)
+        decoder = _make_mock_reader(fps=30.0)
+        wrapper = self._make_wrapper("/fake/video.mp4", decoder)
         self.assertEqual(wrapper.get_avg_fps(), 30.0)
-
-    def test_seek(self):
-        reader = _make_mock_reader()
-        wrapper = self._make_wrapper("/fake/video.mp4", reader)
-        wrapper.seek(5)
-        reader.seek.assert_called_with(5)
 
     def test_del_no_original_file(self):
         """__del__ should be a no-op when original_file is None."""
@@ -116,7 +175,7 @@ class TestVideoReaderWrapper(unittest.TestCase):
 
         wrapper = object.__new__(VideoReaderWrapper)
         wrapper.original_file = None
-        wrapper._reader = _make_mock_reader()
+        wrapper._decoder = _make_mock_reader()
         # Should not raise
         wrapper.__del__()
 
@@ -132,7 +191,7 @@ class TestVideoReaderWrapper(unittest.TestCase):
 
         wrapper = object.__new__(VideoReaderWrapper)
         wrapper.original_file = tmp_path
-        wrapper._reader = _make_mock_reader()
+        wrapper._decoder = _make_mock_reader()
         wrapper.__del__()
         self.assertFalse(os.path.exists(tmp_path))
 
@@ -140,11 +199,8 @@ class TestVideoReaderWrapper(unittest.TestCase):
         """Passing a non-GIF string path must NOT set original_file (bug fix)."""
         from fastdeploy.input.utils.video import VideoReaderWrapper
 
-        mock_reader = _make_mock_reader()
-        mock_decord = MagicMock()
-        mock_decord.VideoReader.return_value = mock_reader
-
-        with patch.dict("sys.modules", {"decord": mock_decord, "moviepy": MagicMock(), "moviepy.editor": MagicMock()}):
+        mock_decoder = _make_mock_reader()
+        with self._paddle_patch(), self._sys_modules_patch(mock_decoder):
             wrapper = VideoReaderWrapper("/fake/video.mp4")
 
         self.assertIsNone(wrapper.original_file)
@@ -153,23 +209,20 @@ class TestVideoReaderWrapper(unittest.TestCase):
         """Passing a BytesIO that is NOT a GIF must not set original_file."""
         from fastdeploy.input.utils.video import VideoReaderWrapper
 
-        mock_reader = _make_mock_reader()
-        mock_decord = MagicMock()
-        mock_decord.VideoReader.return_value = mock_reader
-
+        mock_decoder = _make_mock_reader()
         bio = io.BytesIO(NOT_GIF)
-        with patch.dict("sys.modules", {"decord": mock_decord, "moviepy": MagicMock(), "moviepy.editor": MagicMock()}):
+        with self._paddle_patch(), self._sys_modules_patch(mock_decoder):
             wrapper = VideoReaderWrapper(bio)
 
         self.assertIsNone(wrapper.original_file)
 
 
 # ---------------------------------------------------------------------------
-# read_video_decord
+# read_video_paddlecodec
 # ---------------------------------------------------------------------------
 
 
-class TestReadVideoDecord(unittest.TestCase):
+class TestReadVideoPaddlecodec(unittest.TestCase):
     def _patch_wrapper(self, num_frames=100, fps=25.0):
         """Return a context manager that replaces VideoReaderWrapper with a mock."""
         from fastdeploy.input.utils import video
@@ -187,7 +240,7 @@ class TestReadVideoDecord(unittest.TestCase):
         mock_wrapper.__len__ = MagicMock(return_value=50)
         mock_wrapper.get_avg_fps = MagicMock(return_value=10.0)
 
-        reader, meta, path = read_video_decord(mock_wrapper)
+        reader, meta, path = read_video_paddlecodec(mock_wrapper)
 
         self.assertIs(reader, mock_wrapper)
         self.assertEqual(meta["num_of_frame"], 50)
@@ -211,7 +264,7 @@ class TestReadVideoDecord(unittest.TestCase):
                 return 10.0
 
         with patch.object(video, "VideoReaderWrapper", FakeWrapper):
-            reader, meta, path = read_video_decord(b"fake_video_bytes")
+            reader, meta, path = read_video_paddlecodec(b"fake_video_bytes")
 
         self.assertIsInstance(captured[0], io.BytesIO)
 
@@ -230,7 +283,7 @@ class TestReadVideoDecord(unittest.TestCase):
                 return 30.0
 
         with patch.object(video, "VideoReaderWrapper", FakeWrapper):
-            reader, meta, path = read_video_decord("/fake/path.mp4")
+            reader, meta, path = read_video_paddlecodec("/fake/path.mp4")
 
         self.assertEqual(meta["num_of_frame"], 60)
         self.assertAlmostEqual(meta["duration"], 2.0)

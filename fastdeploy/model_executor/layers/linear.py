@@ -25,6 +25,9 @@ from fastdeploy.distributed.communication import (
     decode_alltoall_transpose,
     tensor_model_parallel_all_reduce,
 )
+from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+    block_wise_cuda_graph_wrap,
+)
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
@@ -253,6 +256,7 @@ class LinearBase(nn.Layer):
             bias_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.bias_key)))
             self.bias.set_value(bias_tensor)
 
+    @block_wise_cuda_graph_wrap(inputs=["x"], self_attrs=["weight", "weight_scale_inv", "bias"])
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         """
         Forward function for Linear.

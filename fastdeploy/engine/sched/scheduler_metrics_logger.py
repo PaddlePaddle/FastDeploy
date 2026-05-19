@@ -29,9 +29,10 @@ class SchedulerMetricsLogger:
 
     DEFAULT_DECODE_LOG_INTERVAL = 5
 
-    def __init__(self, enabled: bool = True, dp_rank: int = 0) -> None:
+    def __init__(self, enabled: bool = True, dp_rank: int = 0, splitwise_role: str = "mixed") -> None:
         self.enabled = enabled
         self.dp_rank = dp_rank
+        self.splitwise_role = splitwise_role
         decode_log_interval = envs.FD_CONSOLE_DECODE_LOG_INTERVAL
         if decode_log_interval <= 0:
             decode_log_interval = self.DEFAULT_DECODE_LOG_INTERVAL
@@ -65,8 +66,9 @@ class SchedulerMetricsLogger:
         with self._lock:
             self._decode_tokens_since_last += num_tokens
 
-    def log_prefill_batch(
+    def _log_prefill_like_batch(
         self,
+        batch_name: str,
         prefill_reqs: Iterable,
         running_cnt: int,
         queue_cnt: int,
@@ -91,8 +93,9 @@ class SchedulerMetricsLogger:
             cached_tokens += getattr(req, "num_cached_tokens", 0) or 0
 
         msg = (
-            "Prefill batch, "
+            f"{batch_name}, "
             f"dp_rank: {self.dp_rank}, "
+            f"splitwise_role: {self.splitwise_role}, "
             f"#new-seq: {len(prefill_reqs)}, "
             f"#new-token: {new_tokens}, "
             f"#cached-token: {cached_tokens}, "
@@ -103,6 +106,48 @@ class SchedulerMetricsLogger:
             f"#queue-req: {queue_cnt}, "
         )
         self._logger.info(msg)
+
+    def log_prefill_batch(
+        self,
+        prefill_reqs: Iterable,
+        running_cnt: int,
+        queue_cnt: int,
+        tokens_used: int,
+        token_usage: float,
+        free_blocks: int = 0,
+        evictable_blocks: int = 0,
+    ) -> None:
+        self._log_prefill_like_batch(
+            batch_name="Prefill batch",
+            prefill_reqs=prefill_reqs,
+            running_cnt=running_cnt,
+            queue_cnt=queue_cnt,
+            tokens_used=tokens_used,
+            token_usage=token_usage,
+            free_blocks=free_blocks,
+            evictable_blocks=evictable_blocks,
+        )
+
+    def log_decode_bootstrap_batch(
+        self,
+        prefill_reqs: Iterable,
+        running_cnt: int,
+        queue_cnt: int,
+        tokens_used: int,
+        token_usage: float,
+        free_blocks: int = 0,
+        evictable_blocks: int = 0,
+    ) -> None:
+        self._log_prefill_like_batch(
+            batch_name="Decode bootstrap batch from prefill",
+            prefill_reqs=prefill_reqs,
+            running_cnt=running_cnt,
+            queue_cnt=queue_cnt,
+            tokens_used=tokens_used,
+            token_usage=token_usage,
+            free_blocks=free_blocks,
+            evictable_blocks=evictable_blocks,
+        )
 
     def log_decode_batch(
         self,
@@ -132,6 +177,7 @@ class SchedulerMetricsLogger:
         msg = (
             "Decode batch, "
             f"dp_rank: {self.dp_rank}, "
+            f"splitwise_role: {self.splitwise_role}, "
             f"#running-req: {running_cnt}, "
             f"#token: {tokens_used}, "
             f"token usage: {token_usage:.2f}, "
