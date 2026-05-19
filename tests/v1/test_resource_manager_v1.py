@@ -550,6 +550,23 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         self.assertEqual(request.metrics.gpu_cache_token_num, 4)
         self.assertEqual(request.metrics.cpu_cache_token_num, 0)
 
+    def test_get_prefix_cached_blocks_disable_prefix_caching(self):
+        manager = _build_manager(enable_prefix_caching=True)
+        _register_manager_cleanup(self, manager)
+        request = _make_request(request_id="req-no-cache", prompt_token_ids=list(range(8)))
+        request.disable_prefix_caching = True
+        manager.cache_manager = MagicMock()
+        manager.cache_manager.get_required_block_num.return_value = 2
+
+        success = manager.get_prefix_cached_blocks(request)
+
+        self.assertTrue(success)
+        manager.cache_manager.request_match_blocks.assert_not_called()
+        self.assertEqual(request.cache_info, [0, 2])
+        self.assertEqual(request.block_tables, [])
+        self.assertEqual(request.num_cached_tokens, 0)
+        self.assertEqual(request.num_computed_tokens, 0)
+
     def test_preallocate_resource_in_p_and_d(self):
         manager_p = _build_manager(splitwise_role="prefill", enable_prefix_caching=False)
         _register_manager_cleanup(self, manager_p)
@@ -560,6 +577,18 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         self.assertTrue(manager_p.preallocate_resource_in_p(request_p))
         self.assertEqual(request_p.idx, 0)
         self.assertFalse(manager_p.stop_flags[0])
+
+        manager_p_with_disabled_cache = _build_manager(splitwise_role="prefill", enable_prefix_caching=True)
+        _register_manager_cleanup(self, manager_p_with_disabled_cache)
+        manager_p_with_disabled_cache.cache_manager = MagicMock()
+        manager_p_with_disabled_cache.cache_manager.can_allocate_gpu_blocks.return_value = True
+        manager_p_with_disabled_cache.cache_manager.allocate_gpu_blocks.return_value = [1, 2]
+        request_p_disabled = _make_request(prompt_token_ids=[1, 2, 3])
+        request_p_disabled.disable_prefix_caching = True
+        self.assertTrue(manager_p_with_disabled_cache.preallocate_resource_in_p(request_p_disabled))
+        manager_p_with_disabled_cache.cache_manager.request_match_blocks.assert_not_called()
+        manager_p_with_disabled_cache.cache_manager.update_cache_blocks.assert_not_called()
+        self.assertEqual(request_p_disabled.num_computed_tokens, 0)
 
         manager_d = _build_manager(splitwise_role="decode", enable_prefix_caching=False)
         _register_manager_cleanup(self, manager_d)
@@ -638,6 +667,21 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         self.assertEqual(request.block_tables, [])
         self.assertEqual(request.extend_block_tables, [])
 
+    def test_free_blocks_disable_prefix_caching(self):
+        manager = _build_manager(enable_prefix_caching=True)
+        _register_manager_cleanup(self, manager)
+        manager.cache_manager = MagicMock()
+        request = _make_request(request_id="req-disabled-free")
+        request.disable_prefix_caching = True
+        request.block_tables = [1, 2, 3]
+        request.num_cached_blocks = 1
+
+        manager._free_blocks(request)
+
+        manager.cache_manager.release_block_ids.assert_not_called()
+        manager.cache_manager.recycle_gpu_blocks.assert_called_once_with([1, 2, 3], request.request_id)
+        self.assertEqual(request.block_tables, [])
+
     def test_finish_requests_updates_state(self):
         manager = _build_manager()
         _register_manager_cleanup(self, manager)
@@ -645,6 +689,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         manager.cache_manager.num_gpu_blocks = 8
         manager.cache_manager.gpu_free_block_list = list(range(8))
         manager.cache_manager.write_cache_to_storage = MagicMock()
+        manager.config.cache_config.kvcache_storage_backend = "mock_backend"
         request = _make_request(request_id="req-finish")
         request.idx = 0
         manager.tasks_list[0] = request
@@ -659,6 +704,27 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         self.assertTrue(manager.stop_flags[0])
         self.assertNotIn(request.request_id, manager.requests)
         manager.cache_manager.write_cache_to_storage.assert_called_once_with(request)
+        manager._free_blocks.assert_called_once_with(request)
+
+    def test_finish_requests_disable_prefix_caching_skips_storage_write(self):
+        manager = _build_manager()
+        _register_manager_cleanup(self, manager)
+        manager.cache_manager = MagicMock()
+        manager.cache_manager.num_gpu_blocks = 8
+        manager.cache_manager.gpu_free_block_list = list(range(8))
+        request = _make_request(request_id="req-finish-disabled")
+        request.disable_prefix_caching = True
+        request.idx = 0
+        manager.tasks_list[0] = request
+        manager.stop_flags[0] = False
+        manager.requests[request.request_id] = request
+        manager.running.append(request)
+        manager._free_blocks = MagicMock()
+
+        manager.finish_requests([request.request_id])
+
+        manager.cache_manager.write_cache_to_storage.assert_not_called()
+        manager.cache_manager.write_cache_to_storage_decode.assert_not_called()
         manager._free_blocks.assert_called_once_with(request)
 
     def test_schedule_decode_and_waiting_prefill(self):

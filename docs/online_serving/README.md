@@ -213,6 +213,9 @@ prompt_token_ids: Optional[List[int]] = None
 disable_chat_template: Optional[bool] = False
 # Whether to disable chat template rendering, using raw input directly (default False means template is enabled).
 
+disable_prefix_caching: Optional[bool] = False
+# Whether to disable prefix caching for the current request, including skipping prefix cache matching, writing, and release paths for cache reuse (default False means following the global prefix caching configuration).
+
 temp_scaled_logprobs: Optional[bool] = False
 # Whether to divide the logits by the temperature coefficient when calculating logprobs (default is False, meaning the logits are not divided by the temperature coefficient).
 

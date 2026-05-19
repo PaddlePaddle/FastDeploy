@@ -255,6 +255,9 @@ class ResourceManagerV1(ResourceManager):
     def allocated_slots(self, request: Request):
         return len(request.block_tables) * self.config.cache_config.block_size
 
+    def _enable_prefix_cache_for_request(self, request: Request):
+        return self.config.cache_config.enable_prefix_caching and not getattr(request, "disable_prefix_caching", False)
+
     def get_new_block_nums(self, request: Request, num_new_tokens: int):
         block_num = (
             request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1
@@ -436,13 +439,17 @@ class ResourceManagerV1(ResourceManager):
                     if preempted_req.request_id in self.req_dict:
                         del self.req_dict[preempted_req.request_id]
                     if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
-                        if self.config.cache_config.kvcache_storage_backend:
+                        if self.config.cache_config.kvcache_storage_backend and self._enable_prefix_cache_for_request(
+                            preempted_req
+                        ):
                             self.cache_manager.write_cache_to_storage_decode(preempted_req)
                     self._free_blocks(preempted_req)
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
                 else:
                     if envs.FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST:
-                        if self.config.cache_config.kvcache_storage_backend:
+                        if self.config.cache_config.kvcache_storage_backend and self._enable_prefix_cache_for_request(
+                            preempted_req
+                        ):
                             self.cache_manager.write_cache_to_storage(preempted_req)
                     self._free_blocks(preempted_req)
                     preempted_req.num_cached_blocks = 0
@@ -855,7 +862,7 @@ class ResourceManagerV1(ResourceManager):
 
     def cache_output_tokens(self, request):
         if (
-            self.config.cache_config.enable_prefix_caching
+            self._enable_prefix_cache_for_request(request)
             and self.config.cache_config.enable_output_caching
             and self.config.scheduler_config.splitwise_role != "decode"
         ):
@@ -1022,7 +1029,7 @@ class ResourceManagerV1(ResourceManager):
                     token_budget -= num_new_tokens
                     request.num_computed_tokens += num_new_tokens
                     if (
-                        self.config.cache_config.enable_prefix_caching
+                        self._enable_prefix_cache_for_request(request)
                         and self.config.scheduler_config.splitwise_role != "decode"
                         and self.config.scheduler_config.splitwise_role != "prefill"
                         and not self.enable_cache_manager_v1
@@ -1064,7 +1071,7 @@ class ResourceManagerV1(ResourceManager):
 
                         self._update_mm_hashes(request)
                         # Enable prefix caching
-                        if self.config.cache_config.enable_prefix_caching:
+                        if self._enable_prefix_cache_for_request(request):
                             if not self.enable_cache_manager_v1:
                                 if (
                                     self.cache_manager.num_cpu_blocks > 0
@@ -1094,7 +1101,7 @@ class ResourceManagerV1(ResourceManager):
                                 break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         if num_new_tokens == 0:
-                            if self.config.cache_config.enable_prefix_caching:
+                            if self._enable_prefix_cache_for_request(request):
                                 self._free_blocks(request)
                             skip_requests.append(request)
                             self.waiting.popleft()
@@ -1118,7 +1125,7 @@ class ResourceManagerV1(ResourceManager):
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if (
-                                self.config.cache_config.enable_prefix_caching
+                                self._enable_prefix_cache_for_request(request)
                                 and self.config.scheduler_config.splitwise_role != "decode"
                                 and not self.enable_cache_manager_v1
                             ):
@@ -1134,7 +1141,7 @@ class ResourceManagerV1(ResourceManager):
                                 self.req_dict[request.request_id] = allocated_position
                                 llm_logger.debug(f"req_id:{request.request_id} allocate pos end")
                         else:
-                            if self.config.cache_config.enable_prefix_caching:
+                            if self._enable_prefix_cache_for_request(request):
                                 self._free_blocks(request)
                             break
                     elif request.status == RequestStatus.PREEMPTED:
@@ -1142,7 +1149,7 @@ class ResourceManagerV1(ResourceManager):
                             request.num_total_tokens
                         )  # Before preempted task rescheduled, preempted task has been sent to engine, no more tokens are output, here num_total_tokens should be static and correct
                         if (
-                            self.config.cache_config.enable_prefix_caching
+                            self._enable_prefix_cache_for_request(request)
                             and self.config.scheduler_config.splitwise_role != "decode"
                         ):
                             if not self.enable_cache_manager_v1:
@@ -1167,7 +1174,7 @@ class ResourceManagerV1(ResourceManager):
                                 break
                         num_new_tokens = self._get_num_new_tokens(request, token_budget)
                         if num_new_tokens == 0:
-                            if self.config.cache_config.enable_prefix_caching:
+                            if self._enable_prefix_cache_for_request(request):
                                 self._free_blocks(request)
                             skip_requests.append(request)
                             self.waiting.popleft()
@@ -1187,7 +1194,7 @@ class ResourceManagerV1(ResourceManager):
                             token_budget -= num_new_tokens
                             request.num_computed_tokens += num_new_tokens
                             if (
-                                self.config.cache_config.enable_prefix_caching
+                                self._enable_prefix_cache_for_request(request)
                                 and self.config.scheduler_config.splitwise_role != "decode"
                                 and not self.enable_cache_manager_v1
                             ):
@@ -1196,7 +1203,7 @@ class ResourceManagerV1(ResourceManager):
                                 )
                             request.status = RequestStatus.RUNNING_PREFILL
                         else:
-                            if self.config.cache_config.enable_prefix_caching:
+                            if self._enable_prefix_cache_for_request(request):
                                 self._free_blocks(request)
                             break
                     else:
@@ -1421,6 +1428,14 @@ class ResourceManagerV1(ResourceManager):
         """
         Match and fetch cache for a task.
         """
+        if not self._enable_prefix_cache_for_request(request):
+            block_size = self.config.cache_config.block_size
+            request.cache_info = [0, (request.need_prefill_tokens + block_size - 1) // block_size]
+            request.block_tables = []
+            request.num_cached_tokens = 0
+            request.num_computed_tokens = 0
+            return True
+
         try:
             trace_print(LoggingEventName.PREPARE_PREFIX_CACHE_START, request.request_id, getattr(request, "user", ""))
 
@@ -1519,7 +1534,7 @@ class ResourceManagerV1(ResourceManager):
             need_prealloc_prefill_blocks = (
                 request.need_prefill_tokens + self.config.cache_config.block_size - 1
             ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num  # consider for mtp, plus enc_dec_block_num
-            if self.config.cache_config.enable_prefix_caching:
+            if self._enable_prefix_cache_for_request(request):
                 # Enable prefix caching
                 if self.cache_manager.num_cpu_blocks > 0 or self.config.cache_config.kvcache_storage_backend:
                     if not self.cache_manager.can_allocate_gpu_blocks(
@@ -1644,7 +1659,7 @@ class ResourceManagerV1(ResourceManager):
         if self.enable_cache_manager_v1:
             self.cache_manager.request_finish(request)
         elif (
-            self.config.cache_config.enable_prefix_caching and self.config.scheduler_config.splitwise_role != "decode"
+            self._enable_prefix_cache_for_request(request) and self.config.scheduler_config.splitwise_role != "decode"
         ):
             self.cache_manager.release_block_ids(request)
             self.cache_manager.recycle_gpu_blocks(
@@ -1708,13 +1723,16 @@ class ResourceManagerV1(ResourceManager):
 
             # Do not block the main thread here
             # Write cache to storage if kvcache_storage_backend is enabled
-            for req in need_postprocess_reqs:
-                if self.config.scheduler_config.splitwise_role == "decode":
-                    # D instance uses simplified write method (does not rely on Radix Tree)
-                    self.cache_manager.write_cache_to_storage_decode(req)
-                else:
-                    # P instance / Mixed instance uses standard write method (relies on Radix Tree)
-                    self.cache_manager.write_cache_to_storage(req)
+            if self.config.cache_config.kvcache_storage_backend:
+                for req in need_postprocess_reqs:
+                    if not self._enable_prefix_cache_for_request(req):
+                        continue
+                    if self.config.scheduler_config.splitwise_role == "decode":
+                        # D instance uses simplified write method (does not rely on Radix Tree)
+                        self.cache_manager.write_cache_to_storage_decode(req)
+                    else:
+                        # P instance / Mixed instance uses standard write method (relies on Radix Tree)
+                        self.cache_manager.write_cache_to_storage(req)
 
             with self.lock:
                 for req in need_postprocess_reqs:

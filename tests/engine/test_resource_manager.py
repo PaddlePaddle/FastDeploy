@@ -13,7 +13,7 @@
 # limitations under the License.
 
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -57,13 +57,14 @@ class _StubCacheManager:
 class _Task:
     """Real task object with all fields ResourceManager touches."""
 
-    def __init__(self, request_id="req-1", prompt_len=128, disaggregate_info=None):
+    def __init__(self, request_id="req-1", prompt_len=128, disaggregate_info=None, disable_prefix_caching=False):
         self.request_id = request_id
         self.prompt_token_ids = list(range(prompt_len))
         self.prompt_token_ids_len = prompt_len
         self.block_tables = []
         self.need_block_tables = []
         self.disaggregate_info = disaggregate_info
+        self.disable_prefix_caching = disable_prefix_caching
         self.seq_lens_decoder = 0
         self.inference_time_cost = -1.0
         self.tokens_all_num = 0
@@ -190,6 +191,21 @@ def test_allocate_with_prefix(rm_factory):
     assert t.cache_info is not None
 
 
+def test_allocate_with_prefix_disabled_cache(rm_factory):
+    """Request-level cache bypass uses ordinary allocation when global prefix cache is on."""
+    rm = rm_factory(max_seqs=4, enable_prefix=True, dec_token=0, block_size=64, num_free=100)
+    rm.cache_manager.request_block_ids = MagicMock(wraps=rm.cache_manager.request_block_ids)
+    t = _Task(prompt_len=256, disable_prefix_caching=True)
+    result = rm.allocate_resources_for_new_tasks([t])
+    assert len(result) == 1
+    rm.cache_manager.request_block_ids.assert_not_called()
+    assert len(t.block_tables) == 4
+    assert t.need_block_tables == t.block_tables
+    assert t.num_cached_tokens == 0
+    assert t.cache_info is None
+    assert t.prompt_token_ids_len == 256
+
+
 def test_allocate_disaggregate(rm_factory):
     """Disaggregate prefill/decode paths (prefix + no-prefix)."""
     rm = rm_factory(max_seqs=4, enable_prefix=True, dec_token=0, block_size=64, num_free=100)
@@ -217,6 +233,11 @@ def test_recycle_free_and_check(rm_factory):
     t2.block_tables = [0, 1]
     rm2._recycle_block_tables(t2)
     assert t2 in rm2.cache_manager._released
+    t3 = _Task(disable_prefix_caching=True)
+    t3.block_tables = [2, 3]
+    rm2._recycle_block_tables(t3)
+    assert t3 not in rm2.cache_manager._released
+    assert 2 in rm2.cache_manager._recycled
     # free + check paths
     assert rm.free_block_tables(10) == 10
     rm.check_and_free_block_tables()
