@@ -43,7 +43,7 @@ def load_deep_ep() -> ModuleType:
             # Enable paddle.enable_compat before importing deep_ep (required by PFCC/PaddleFleet variants)
             paddle.enable_compat(scope={"deep_ep"})
             try:
-                import paddlefleet.ops.deep_ep as deep_ep  # type: ignore
+                import paddlefleet_ops.deep_ep as deep_ep  # type: ignore
 
                 logger.info("FD use PaddleFleet/DeepEP now.")
                 return deep_ep
