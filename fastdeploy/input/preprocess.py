@@ -73,8 +73,8 @@ class InputPreprocessor:
         try:
             from fastdeploy.plugins.input_processor import load_input_processor_plugins
 
-            Processor = load_input_processor_plugins()
-            self.processor = Processor(
+            PluginProcessor = load_input_processor_plugins()
+            self.processor = PluginProcessor(
                 model_name_or_path=self.model_name_or_path,
                 reasoning_parser_obj=reasoning_parser_obj,
                 tool_parser_obj=tool_parser_obj,
@@ -83,45 +83,65 @@ class InputPreprocessor:
             )
         except Exception as e:
             logger.info(f"Plugin input processor not available ({e}), using built-in processor")
-            if not self.enable_mm_runtime:
-                from fastdeploy.input.text_processor import TextProcessor
+            from fastdeploy.input.processor import Processor
 
+            if not self.enable_mm_runtime:
                 tokenizer_type = "ernie4_5" if ErnieArchitectures.contains_ernie_arch(architecture) else "auto"
-                self.processor = TextProcessor(
+                self.processor = Processor(
                     model_name_or_path=self.model_name_or_path,
                     tokenizer_type=tokenizer_type,
                     reasoning_parser_obj=reasoning_parser_obj,
                     tool_parser_obj=tool_parser_obj,
                 )
             else:
-                from fastdeploy.input.mm_model_config import (
-                    ERNIE4_5_VL,
-                    PADDLEOCR_VL,
-                    QWEN3_VL,
-                    QWEN_VL,
+                from fastdeploy.input.multimodal import (
+                    Ernie4_5VLProcessor,
+                    PaddleOCRVLProcessor,
+                    Qwen3VLProcessor,
+                    QwenVLProcessor,
                 )
-                from fastdeploy.input.multimodal_processor import MultiModalProcessor
 
+                # Determine mm_processor class and Processor-level flags
                 if ErnieArchitectures.contains_ernie_arch(architecture):
-                    model_type = ERNIE4_5_VL
+                    mm_proc_cls = Ernie4_5VLProcessor
+                    force_disable_thinking = False
+                    set_default_reasoning_max_tokens = True
                 elif "PaddleOCRVL" in architecture:
-                    model_type = PADDLEOCR_VL
+                    mm_proc_cls = PaddleOCRVLProcessor
+                    force_disable_thinking = False
+                    set_default_reasoning_max_tokens = False
                 elif "Qwen2_5_VL" in architecture:
-                    model_type = QWEN_VL
+                    mm_proc_cls = QwenVLProcessor
+                    force_disable_thinking = True
+                    set_default_reasoning_max_tokens = False
                 elif "Qwen3VL" in architecture:
-                    model_type = QWEN3_VL
+                    mm_proc_cls = Qwen3VLProcessor
+                    force_disable_thinking = True
+                    set_default_reasoning_max_tokens = False
                 else:
                     raise ValueError(f"Unsupported model processor architecture: {architecture}. ")
 
-                self.processor = MultiModalProcessor(
+                tokenizer_type = mm_proc_cls.tokenizer_type
+
+                # Create the unified Processor first (loads tokenizer)
+                self.processor = Processor(
                     model_name_or_path=self.model_name_or_path,
-                    model_type=model_type,
-                    config=self.model_config,
-                    limit_mm_per_prompt=self.limit_mm_per_prompt,
-                    mm_processor_kwargs=self.mm_processor_kwargs,
+                    tokenizer_type=tokenizer_type,
                     reasoning_parser_obj=reasoning_parser_obj,
                     tool_parser_obj=tool_parser_obj,
+                    force_disable_thinking=force_disable_thinking,
+                    set_default_reasoning_max_tokens=set_default_reasoning_max_tokens,
+                )
+
+                # Create and attach the multimodal processor
+                mm_processor = mm_proc_cls(
+                    tokenizer=self.processor.tokenizer,
+                    model_name_or_path=self.model_name_or_path,
+                    config=self.model_config,
+                    processor_kwargs=self.mm_processor_kwargs,
+                    limit_mm_per_prompt=self.limit_mm_per_prompt,
                     enable_processor_cache=self.enable_processor_cache,
                 )
+                self.processor.mm_processor = mm_processor
 
         return self.processor
