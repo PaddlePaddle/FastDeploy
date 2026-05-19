@@ -75,7 +75,7 @@ class CUDAPlatform(Platform):
             return "fastdeploy.model_executor.layers.attention.FlashMaskAttentionBackend"
         elif selected_backend == _Backend.DECODE_UNIFIED_ATTN:
             logger.info("Using DECODE UNIFIED ATTN backend.")
-            return "fastdeploy.model_executor.layers.attention.DecodeAttentionBackend"
+            return "fastdeploy.model_executor.layers.attention.DecodeUnifiedAttentionBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"

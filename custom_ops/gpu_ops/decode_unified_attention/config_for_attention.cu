@@ -83,11 +83,14 @@ __global__ void GetMaxLenKernel(const int* seq_lens_decoder,
   }
 }
 
-template <int min_chunk_size, uint32_t block_size>
+template <int min_chunk_size,
+          int chunk_step,
+          uint32_t block_size,
+          int max_chunk_size>
 __global__ void config_decode_attn(const int* __restrict__ seq_lens_this_time,
                                    const int* __restrict__ seq_lens_encoder,
                                    const int* __restrict__ seq_lens_decoder,
-                                   int* __restrict__ block_indices,
+                                   int4* __restrict__ block_indices,
                                    int* __restrict__ num_blocks,
                                    int* __restrict__ chunk_size,
                                    const int bsz,
@@ -96,166 +99,168 @@ __global__ void config_decode_attn(const int* __restrict__ seq_lens_this_time,
                                    const int q_tile_size,
                                    const int max_tokens_per_batch,
                                    const int config_gridx) {
-  // one block one warp
   const int tid = threadIdx.x, wid = threadIdx.y;
   const uint32_t warp_size = blockDim.x;
   __shared__ int num_block_all_shared[block_size];
   __shared__ int chunk_size_res[1];
-  __shared__ int use_scheme_e_res[1];
 
   const int lane_id = tid + wid * warp_size;
 
-  // Step 1: compute num_block_all WITHOUT chunk splitting (Scheme E)
+  // Merged Step 1+2: single bsz loop computing both Scheme E metrics and
+  // split-KV block counts per lane. Avoids redundant seq_lens reads and
+  // shared intermediate values (token_num, kv_len, q_tile_num).
+  const int target_blocks = config_gridx / 3;  // sm_count * 3
+  // Search chunk_size from 512 with step 128: {512, 640, 768, ...}
+
+  const int cur_chunk_size =
+      min(min_chunk_size + lane_id * chunk_step, max_chunk_size);
   int num_block_no_chunk = 0;
+  int max_kv_len_no_chunk = 0;
+  int num_block_all = 0;
   for (int bid = 0; bid < bsz; bid++) {
     if (seq_lens_this_time[bid] <= 0 || seq_lens_encoder[bid] > 0) {
       continue;
     }
-    int token_num_cur_batch = seq_lens_this_time[bid];
-    int q_tile_num = div_up(token_num_cur_batch * group_size, q_tile_size);
+    const int token_num_cur_batch = seq_lens_this_time[bid];
+    const int kv_len_cur_batch = seq_lens_decoder[bid] + token_num_cur_batch;
+    const int q_tile_num =
+        div_up(token_num_cur_batch * group_size, q_tile_size);
     num_block_no_chunk += q_tile_num * kv_num_heads;
+    max_kv_len_no_chunk = max(max_kv_len_no_chunk, kv_len_cur_batch);
+    const int kv_chunk_num = div_up(kv_len_cur_batch, cur_chunk_size);
+    num_block_all += q_tile_num * kv_chunk_num * kv_num_heads;
   }
+  num_block_all_shared[lane_id] = num_block_all;
+  __syncthreads();
 
-  // Step 2: decide mode — Scheme E if enough blocks, else split-kv
-  // Adaptive strategy: prefer Scheme E (zero merge overhead) when blocks
-  // already fill all SMs. When splitting is needed, use the LARGEST
-  // chunk_size that still creates enough blocks to fill SMs, minimizing
-  // merge count while ensuring SM utilization.
-  // Target: at least sm_count*3 blocks to ensure 3+ waves for GPU utilization.
-  // Too few waves (e.g. 1 waves with target=sm_count*3) leaves SMs idle between
-  // waves; 3 waves is a balanced tradeoff between utilization and merge
-  // overhead.
-  const int target_blocks = config_gridx / 2;  // sm_count * 3
-  const bool use_scheme_e = (num_block_no_chunk >= target_blocks);
-
-  if (use_scheme_e) {
-    // Scheme E: no chunk splitting, chunk_size = INT_MAX
-    if (tid == 0 && wid == 0) {
-      num_blocks[0] = num_block_no_chunk;
-      chunk_size[0] = INT_MAX;
-      chunk_size_res[0] = INT_MAX;
-      use_scheme_e_res[0] = 1;
-    }
-  } else {
-    // Split-kv: find the LARGEST chunk_size whose total blocks >= target_blocks
-    // This minimizes merge count while ensuring SM utilization.
-    int cur_chunk_size = min_chunk_size * (lane_id + 1);
-    int num_block_all = 0;
-    for (int bid = 0; bid < bsz; bid++) {
-      if (seq_lens_this_time[bid] <= 0 || seq_lens_encoder[bid] > 0) {
-        continue;
+  // Step 3: find best chunk_size, then decide Scheme E vs split-KV
+  if (tid == 0 && wid == 0) {
+    // Strategy:
+    //   1. Must fill target_blocks (2*sm_count) to maintain SM concurrency
+    //   2. Among valid choices, prefer minimum per-SM max KV traffic
+    //      (= waves * chunk_size, since kernel time = slowest SM)
+    //   3. Within 5% of minimum KV traffic, prefer larger chunk_size
+    int chunk_size_best = min_chunk_size;
+    int num_block_all_best = num_block_all_shared[0];
+    // Step 1: find minimum kv_traffic among chunk_sizes that fill SMs
+    int64_t kv_traffic_min = INT64_MAX;
+    for (int i = 0; i < static_cast<int>(block_size); i++) {
+      const int nb = num_block_all_shared[i];
+      if (nb < target_blocks) continue;
+      const int cs = min(min_chunk_size + i * chunk_step, max_chunk_size);
+      const int w = div_up(nb, target_blocks);
+      const int64_t kv_traffic = static_cast<int64_t>(w) * cs;
+      if (kv_traffic < kv_traffic_min) {
+        kv_traffic_min = kv_traffic;
       }
-      int token_num_cur_batch = seq_lens_this_time[bid];
-      int kv_len_cur_batch = seq_lens_decoder[bid] + token_num_cur_batch;
-      int q_tile_num = div_up(token_num_cur_batch * group_size, q_tile_size);
-      int kv_chunk_num = div_up(kv_len_cur_batch, cur_chunk_size);
-      num_block_all += q_tile_num * kv_chunk_num * kv_num_heads;
     }
-    num_block_all_shared[lane_id] = num_block_all;
-    __syncthreads();
-
-    int chunk_size_best;
-    int num_block_all_best;
-    if (tid == 0 && wid == 0) {
-      // Search from largest chunk_size to smallest:
-      // pick the first (largest) chunk_size with enough blocks
-      chunk_size_best = min_chunk_size;  // fallback: smallest chunk
+    // Step 2: if no chunk_size fills SMs, fall back to smallest
+    if (kv_traffic_min == INT64_MAX) {
+      chunk_size_best = min_chunk_size;
       num_block_all_best = num_block_all_shared[0];
+    } else {
+      // Step 3: scan from largest chunk_size downward; accept the first
+      // one that fills SMs AND has kv_traffic within 20% of minimum
       for (int i = block_size - 1; i >= 0; i--) {
-        if (num_block_all_shared[i] >= target_blocks) {
-          chunk_size_best = min_chunk_size * (i + 1);
-          num_block_all_best = num_block_all_shared[i];
+        const int nb = num_block_all_shared[i];
+        if (nb < target_blocks) continue;
+        const int cs = min(min_chunk_size + i * chunk_step, max_chunk_size);
+        const int w = div_up(nb, target_blocks);
+        const int64_t kv_traffic = static_cast<int64_t>(w) * cs;
+        if (kv_traffic <= kv_traffic_min + kv_traffic_min / 4) {
+          chunk_size_best = cs;
+          num_block_all_best = nb;
           break;
         }
       }
-      // If even the smallest chunk doesn't reach target_blocks,
-      // use the smallest chunk to maximize parallelism
-      if (num_block_all_best < target_blocks) {
-        chunk_size_best = min_chunk_size;
-        num_block_all_best = num_block_all_shared[0];
+    }
+
+    // Decide Scheme E: prefer when blocks fill SMs AND estimated latency
+    // is no worse than split-KV.
+    //   Scheme E: waves_E * max_kv_len (few heavy blocks)
+    //   Split-KV: waves_split * chunk_size_best (many light blocks)
+    // When no splitting is needed (num_block_all_best == num_block_no_chunk),
+    // Scheme E is strictly better (saves merge overhead).
+    bool use_scheme_e = false;
+    if (num_block_no_chunk >= target_blocks) {
+      if (num_block_all_best == num_block_no_chunk) {
+        use_scheme_e = true;
+      } else {
+        // target_blocks = sm_count * 3 ≈ CTAs per wave (sm_count × occupancy).
+        // Using target_blocks as denominator correctly accounts for occupancy
+        // in wave count estimation.
+        const int waves_e = div_up(num_block_no_chunk, target_blocks);
+        const int waves_split = div_up(num_block_all_best, target_blocks);
+        use_scheme_e = (static_cast<int64_t>(waves_e) * max_kv_len_no_chunk <=
+                        static_cast<int64_t>(waves_split) * chunk_size_best);
       }
+    }
+
+    if (use_scheme_e) {
+      num_blocks[0] = num_block_no_chunk;
+      chunk_size[0] = INT_MAX;
+      chunk_size_res[0] = INT_MAX;
+    } else {
       num_blocks[0] = num_block_all_best;
       chunk_size[0] = chunk_size_best;
       chunk_size_res[0] = chunk_size_best;
-      use_scheme_e_res[0] = 0;
     }
   }
 
   __syncthreads();
   if (wid == 0) {
-    const bool use_scheme_e_local = use_scheme_e_res[0];
-    const int chunk_size_best = chunk_size_res[0];
+    const int chunk_size_final = chunk_size_res[0];
 
-    // one block one warp
     int prev_offset = 0;
-    // loop on warp tile：[base, base+32)
     for (int base = 0; base < bsz; base += warp_size) {
       const int bid = base + tid;
+      int num_block_cur = 0;
       int q_tile_num = 0;
       int kv_chunk_num = 0;
 
-      // calculate loop_times for bid
-      int num_block_all = 0;
       if (bid < bsz) {
         int token_num_cur_batch = seq_lens_this_time[bid];
         if (seq_lens_encoder && seq_lens_encoder[bid] > 0) {
           token_num_cur_batch = 0;
         }
         q_tile_num = div_up(token_num_cur_batch * group_size, q_tile_size);
-        if (use_scheme_e_local) {
-          num_block_all += q_tile_num * kv_num_heads;
-        } else {
-          int kv_len_cur_batch = seq_lens_decoder[bid] + token_num_cur_batch;
-          kv_chunk_num = div_up(kv_len_cur_batch, chunk_size_best);
-          num_block_all += q_tile_num * kv_chunk_num * kv_num_heads;
-        }
+        const int kv_len_cur_batch =
+            seq_lens_decoder[bid] + token_num_cur_batch;
+        kv_chunk_num = div_up(kv_len_cur_batch, chunk_size_final);
+        num_block_cur = q_tile_num * kv_chunk_num * kv_num_heads;
       }
 
-      // prefix sum for each lane, get the start offset in this tile
-      // inclusive scan
-      int x = num_block_all;
+      // inclusive prefix sum
+      int x = num_block_cur;
       for (int offset = 1; offset < warp_size; offset <<= 1) {
         int y = __shfl_up_sync(0xffffffff, x, offset);
         if (tid >= offset) x += y;
       }
-      // exclusive prefix sum
-      int bid_offset = x - num_block_all;
+      int bid_offset = x - num_block_cur;
       int tile_sum = __shfl_sync(0xffffffff, x, warp_size - 1);
 
-      // write batch_ids and tile_ids_per_batch
-      if (bid < bsz && num_block_all > 0) {
-        int write_base = prev_offset + bid_offset;
-        if (use_scheme_e_local) {
-          for (int kv_head_id = 0; kv_head_id < kv_num_heads; kv_head_id++) {
+      // Write block_indices using int4 vectorized stores.
+      // Each entry is exactly 4 ints (bid, kv_head_id, kv_chunk_id, q_tile_id),
+      // matching int4 layout. This reduces 4 scalar stores to 1 vector store.
+      if (bid < bsz && num_block_cur > 0) {
+        int4* write_ptr = block_indices + prev_offset + bid_offset;
+        int flat_idx = 0;
+        const int kv_chunk_num_x_q_tile_num = kv_chunk_num * q_tile_num;
+#pragma unroll 2
+        for (int kv_head_id = 0; kv_head_id < kv_num_heads; kv_head_id++) {
+          const int head_base = kv_head_id * kv_chunk_num_x_q_tile_num;
+#pragma unroll 2
+          for (int kv_chunk_id = 0; kv_chunk_id < kv_chunk_num; kv_chunk_id++) {
+            const int chunk_base = head_base + kv_chunk_id * q_tile_num;
+#pragma unroll
             for (int q_tile_id = 0; q_tile_id < q_tile_num; q_tile_id++) {
-              int idx =
-                  write_base * 4 + (kv_head_id * q_tile_num + q_tile_id) * 4;
-              block_indices[idx] = bid;
-              block_indices[idx + 1] = kv_head_id;
-              block_indices[idx + 2] = 0;
-              block_indices[idx + 3] = q_tile_id;
-            }
-          }
-        } else {
-          for (int kv_head_id = 0; kv_head_id < kv_num_heads; kv_head_id++) {
-            for (int kv_chunk_id = 0; kv_chunk_id < kv_chunk_num;
-                 kv_chunk_id++) {
-              for (int q_tile_id = 0; q_tile_id < q_tile_num; q_tile_id++) {
-                int idx =
-                    write_base * 4 +
-                    ((kv_head_id * kv_chunk_num + kv_chunk_id) * q_tile_num +
-                     q_tile_id) *
-                        4;
-                block_indices[idx] = bid;
-                block_indices[idx + 1] = kv_head_id;
-                block_indices[idx + 2] = kv_chunk_id;
-                block_indices[idx + 3] = q_tile_id;
-              }
+              write_ptr[flat_idx] =
+                  make_int4(bid, kv_head_id, kv_chunk_id, q_tile_id);
+              flat_idx++;
             }
           }
         }
       }
-      // for next warp tile
       prev_offset += tile_sum;
     }
   }
@@ -318,12 +323,16 @@ void ConfigForAttention(
 
     const int q_tile_size = 16;
     dim3 blocks(32, 4);
+    // Cast block_indices to int4* for vectorized stores.
+    // Each block_indices entry is 4 ints = 16 bytes = sizeof(int4),
+    // and block_num * 4 ints = block_num int4s, so the reinterpret is valid.
+    int4* block_indices_i4 = reinterpret_cast<int4*>(block_indices.data<int>());
     if (cache_quant_type == "cache_int4_zp") {
-      config_decode_attn<256, 128>
+      config_decode_attn<512, 256, 128, 32768>
           <<<1, blocks, 0, stream>>>(seq_lens_this_time.data<int>(),
                                      seq_lens_encoder.data<int>(),
                                      seq_lens_decoder.data<int>(),
-                                     block_indices.data<int>(),
+                                     block_indices_i4,
                                      num_blocks.data<int>(),
                                      chunk_size.data<int>(),
                                      bsz,
@@ -333,11 +342,11 @@ void ConfigForAttention(
                                      max_tokens_per_batch,
                                      config_gridx);
     } else {
-      config_decode_attn<128, 128>
+      config_decode_attn<512, 128, 128, 16384>
           <<<1, blocks, 0, stream>>>(seq_lens_this_time.data<int>(),
                                      seq_lens_encoder.data<int>(),
                                      seq_lens_decoder.data<int>(),
-                                     block_indices.data<int>(),
+                                     block_indices_i4,
                                      num_blocks.data<int>(),
                                      chunk_size.data<int>(),
                                      bsz,

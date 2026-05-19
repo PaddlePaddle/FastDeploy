@@ -242,7 +242,7 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
 
         # buffer
         self.buffer = {}
-        min_chunk_size = 128
+        min_chunk_size = 512
         max_num_chunk = (self.max_model_len + min_chunk_size - 1) // min_chunk_size
         self.group_size = self.q_num_head // self.kv_num_head
         q_tile_size = 16

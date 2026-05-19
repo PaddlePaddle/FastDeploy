@@ -80,7 +80,7 @@ def allocate_decode_unified_related_buffer(
 
     # Decode unified attention split ops buffers
     res["max_len_tensor_cpu"] = paddle.full([9], 0, dtype="int32").cpu()
-    min_chunk_size = 128
+    min_chunk_size = 512
     max_num_chunk = (max_model_len + min_chunk_size - 1) // min_chunk_size
     q_tile_size = 16
     q_tile_num = (decoder_step_token_num * group_size + q_tile_size - 1) // q_tile_size
@@ -154,23 +154,16 @@ class DecodeUnifiedAttentionBackend(AttentionBackend):
         # Note(ZKK): here must be consistent with append_attn_backend.py
         self.max_tokens_per_batch: int = self.speculate_max_draft_token_num + 1
 
-    def get_kv_cache_shape(
-        self,
-        max_num_blocks: int,
-        kv_cache_quant_type: str = None,
-    ):
-        """
-        Calculate kv cache shape
-        """
-        key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
-        if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            key_cache_shape[-1] = self.head_dim // 2
-        value_cache_shape = key_cache_shape
-        return key_cache_shape, value_cache_shape
-
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
         metadata = DecodeUnifiedAttentionMetadata()
+        metadata._dtype = paddle.get_default_dtype()
+        if metadata._dtype == "bfloat16":
+            metadata._fuse_kernel_compute_dtype = "bf16"
+        elif metadata._dtype == "float16":
+            metadata._fuse_kernel_compute_dtype = "fp16"
+        elif metadata._dtype == "float32":
+            metadata._fuse_kernel_compute_dtype = "fp32"
 
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
@@ -188,18 +181,50 @@ class DecodeUnifiedAttentionBackend(AttentionBackend):
                 self.rank, int(self.device_id), self.keep_pd_step_flag
             )
 
-        if metadata._dtype == "bfloat16":
-            metadata._fuse_kernel_compute_dtype = "bf16"
-        elif metadata._dtype == "float16":
-            metadata._fuse_kernel_compute_dtype = "fp16"
-        elif metadata._dtype == "float32":
-            metadata._fuse_kernel_compute_dtype = "fp32"
-
         self.attention_metadata = metadata
 
-    def get_attntion_meta(self) -> AttentionMetadata:
-        """get_attntion_meta"""
+    def get_attention_meta(self) -> AttentionMetadata:
+        """get_attention_meta"""
         return self.attention_metadata
+
+    def _get_identity_rotary_embs(self, original_rotary_embs: paddle.Tensor) -> paddle.Tensor:
+        """
+        Create identity rotary embeddings (cos=1, sin=0) that make RoPE a no-op.
+
+        This is used when RoPE has already been applied externally (e.g., by PaddleFormers).
+        The identity transformation ensures: x * cos(0) + y * sin(0) = x, preserving the input.
+
+        NOTE: Shape can change between prefill/decode, so we check if cached shape matches.
+        """
+        # Check if we need to recreate (shape mismatch or not cached)
+        need_recreate = (
+            not hasattr(self, "_identity_rotary_embs")
+            or self._identity_rotary_embs is None
+            or self._identity_rotary_embs.shape != original_rotary_embs.shape
+        )
+
+        if need_recreate:
+            # Create identity RoPE: cos=1, sin=0
+            identity = paddle.zeros_like(original_rotary_embs)
+            identity[0] = 1.0  # cos = 1
+            identity[1] = 0.0  # sin = 0
+            self._identity_rotary_embs = identity
+
+        return self._identity_rotary_embs
+
+    def get_kv_cache_shape(
+        self,
+        max_num_blocks: int,
+        kv_cache_quant_type: str = None,
+    ):
+        """
+        Calculate kv cache shape
+        """
+        key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
+        if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
+            key_cache_shape[-1] = self.head_dim // 2
+        value_cache_shape = key_cache_shape
+        return key_cache_shape, value_cache_shape
 
     def forward_mixed(
         self,
@@ -212,17 +237,35 @@ class DecodeUnifiedAttentionBackend(AttentionBackend):
         layer: Attention,
         forward_meta: ForwardMeta,
     ) -> paddle.Tensor:
+        """
+        forward_mixed
+        """
         metadata = self.attention_metadata
+
+        rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
+        if rope_already_applied and forward_meta.rotary_embs is not None:
+            forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
+
+        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
+        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
+        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
+
+        if self.rope_3d:
+            assert len(forward_meta.rotary_embs.shape) == 6
+        else:
+            assert len(forward_meta.rotary_embs.shape) == 5
+            if layer.use_neox_rotary_style:
+                assert forward_meta.rotary_embs.shape[0:4] == [2, 1, self.max_seq_len, 1]
+                # 128 is qwen3
+                # 32 is glm
+                # 64 is gpt-oss
+                assert forward_meta.rotary_embs.shape[4] in [128, 32, 64]
 
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,
             )
-        norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
-        q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
-        k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
-
         cache_quant_type_str = getattr(layer, "cache_quant_type_str", "none")
         if cache_quant_type_str == "block_wise_fp8":
             cache_k = forward_meta.caches[4 * layer.layer_id]

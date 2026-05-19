@@ -112,7 +112,7 @@ def allocate_launch_related_buffer(
 
     # Decode unified attention split ops buffers
     if envs.USE_DECODE_UNIFIED_ATTENTION:
-        min_chunk_size = 128
+        min_chunk_size = 512
         max_num_chunk = (max_model_len + min_chunk_size - 1) // min_chunk_size
         q_tile_size = 16
         q_tile_num = (decoder_step_token_num * group_size + q_tile_size - 1) // q_tile_size

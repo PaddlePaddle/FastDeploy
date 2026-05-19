@@ -610,7 +610,7 @@ void DecodeUnifiedC8Attention(const AppendAttnMetaData& meta_data,
   int sm_count;
   cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev_id);
 
-  const int max_num_chunks = div_up(max_seq_len, 128);
+  const int max_num_chunks = div_up(max_seq_len, 512);
   uint32_t attn_mask_len;
   if (attn_mask) {
     attn_mask_len = attn_mask.get().shape()[1];

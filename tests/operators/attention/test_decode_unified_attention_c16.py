@@ -380,7 +380,7 @@ class TestDecodeUnifiedAttentionC16(unittest.TestCase):
     def _build_decode_buffer(self):
         """Build buffer for new split decode ops."""
         buffer = {}
-        min_chunk_size = 128
+        min_chunk_size = 512
         max_num_chunk = (self.max_model_len + min_chunk_size - 1) // min_chunk_size
         q_tile_size = 16
         q_tile_num = (self.max_tokens_per_batch * self.group_size + q_tile_size - 1) // q_tile_size
