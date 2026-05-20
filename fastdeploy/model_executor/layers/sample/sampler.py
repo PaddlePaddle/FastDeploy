@@ -67,6 +67,7 @@ else:
         verify_draft_tokens,
     )
 
+
 def _apply_triton_top_k_top_p(
     logits: paddle.Tensor,
     top_p: paddle.Tensor,
@@ -1216,7 +1217,6 @@ class SpeculativeSampler(nn.Layer):
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
         """Verify draft tokens (MTP/Ngram mode) on XPU using verify_draft_tokens."""
-
 
         target_tokens = None
         candidate_ids, candidate_scores, candidate_lens = None, None, None

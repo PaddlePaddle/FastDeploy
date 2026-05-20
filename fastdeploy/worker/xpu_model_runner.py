@@ -852,7 +852,9 @@ class XPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             # Update Batch type for cuda graph for only_decode_batch
             if_only_decode = self.only_decode()
-            self.forward_meta.step_use_cudagraph = self.use_cudagraph and if_only_decode and self.forward_meta.ids_remove_padding.shape[0] > 0
+            self.forward_meta.step_use_cudagraph = (
+                self.use_cudagraph and if_only_decode and self.forward_meta.ids_remove_padding.shape[0] > 0
+            )
 
         # Update bad tokens len
         max_bad_tokens_len = paddle.max(self.share_inputs["bad_tokens_len"])
@@ -863,9 +865,7 @@ class XPUModelRunner(ModelRunnerBase):
         if self.pd_disaggregation_mode == "per_chunk" or self.pd_disaggregation_mode == "per_query":
             self.forward_meta.kv_signal_sender = self.share_inputs["kv_signal_sender"]
 
-        if (
-            self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed"
-        ): 
+        if self.fd_config.parallel_config.use_ep and self.fd_config.scheduler_config.splitwise_role == "mixed":
             if_only_decode = self.only_decode()
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
@@ -1223,7 +1223,9 @@ class XPUModelRunner(ModelRunnerBase):
                         expected_decode_len=expected_decode_len,
                         in_capturing=True,
                     )
-                    logger.info(f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}")
+                    logger.info(
+                        f"Warm up the model with the batch size:{batch_size}, num tokens:{expected_decode_len}"
+                    )
         except RuntimeError as e:
             if "out of memory" in str(e):
                 raise RuntimeError(
@@ -1302,7 +1304,10 @@ class XPUModelRunner(ModelRunnerBase):
             if is_dummy_run:
                 self.forward_meta.step_use_cudagraph = in_capturing and self.forward_meta.step_use_cudagraph
             else:
-                self.forward_meta.step_use_cudagraph = self.forward_meta.step_use_cudagraph and self.real_token_num <= self.fd_config.graph_opt_config.max_capture_size
+                self.forward_meta.step_use_cudagraph = (
+                    self.forward_meta.step_use_cudagraph
+                    and self.real_token_num <= self.fd_config.graph_opt_config.max_capture_size
+                )
 
             num_tokens = self.share_inputs["ids_remove_padding"].shape[0]
             if not self.parallel_config.enable_expert_parallel and num_tokens <= 0:
@@ -1319,7 +1324,7 @@ class XPUModelRunner(ModelRunnerBase):
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
             if self.enable_mm:
                 model_inputs["image_features"] = self.share_inputs["image_features"]
-            # 3. Execute 
+            # 3. Execute
             model_output = self.model(
                 model_inputs,
                 forward_meta=self.forward_meta,
@@ -1351,7 +1356,7 @@ class XPUModelRunner(ModelRunnerBase):
                     self.model_config.max_model_len,
                     self.share_inputs,
                     self.increment_value,
-                    accept_all_drafts = accept_all_drafts,
+                    accept_all_drafts=accept_all_drafts,
                 )
                 if self.parallel_config.tensor_parallel_size > 1:
                     paddle.distributed.broadcast(

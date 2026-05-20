@@ -114,7 +114,7 @@ class MTPProposerXPU(MTPProposer):
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
-        
+
         # 1. CUDA Graph capture sizes must be recorded in descending order (large → small).
         # 2. In multi-step execution, only the first step should be captured.
         # self.forward_meta.step_use_cudagraph = (
