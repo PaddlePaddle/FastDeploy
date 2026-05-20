@@ -61,19 +61,31 @@ def _build_speculate_metrics_baseline(
 
 BASELINE_SPECULATE_METRICS = _build_speculate_metrics_baseline(
     accepted_tokens=100,
-    rejected_tokens=176,
-    accept_ratio=0.54,
-    average_accept_length=2.1739130434782608,
-    accepted_tokens_per_head=[46, 25, 15, 8, 6, 0],
-    accept_ratio_per_head=[0.5434782608695652, 0.6, 0.5333333333333333, 0.75, 0.0],
+    rejected_tokens=206,
+    accept_ratio=0.49,
+    average_accept_length=1.9607843137254902,
+    accepted_tokens_per_head=[51, 33, 13, 2, 1, 0],
+    accept_ratio_per_head=[
+        0.6470588235294118,
+        0.3939393939393939,
+        0.15384615384615385,
+        0.5,
+        0.0,
+    ],
 )
 BASELINE_SPECULATE_METRICS_WITH_LOGPROBS = _build_speculate_metrics_baseline(
     accepted_tokens=100,
-    rejected_tokens=182,
-    accept_ratio=0.53,
-    average_accept_length=2.127659574468085,
-    accepted_tokens_per_head=[47, 29, 16, 5, 3, 0],
-    accept_ratio_per_head=[0.6170212765957447, 0.5517241379310345, 0.3125, 0.6, 0.0],
+    rejected_tokens=206,
+    accept_ratio=0.49,
+    average_accept_length=1.9607843137254902,
+    accepted_tokens_per_head=[51, 33, 13, 2, 1, 0],
+    accept_ratio_per_head=[
+        0.6470588235294118,
+        0.3939393939393939,
+        0.15384615384615385,
+        0.5,
+        0.0,
+    ],
 )
 
 
