@@ -17,6 +17,8 @@
 """
 metrics
 """
+import copy
+import json
 import os
 from typing import Set
 
@@ -32,6 +34,7 @@ from prometheus_client.registry import Collector
 
 from fastdeploy import envs
 from fastdeploy.metrics import build_1_2_5_buckets
+from fastdeploy.metrics.interface import MetricsManagerInterface
 from fastdeploy.metrics.prometheus_multiprocess_setup import (
     setup_multiprocess_prometheus,
 )
@@ -127,7 +130,7 @@ REQUEST_LATENCY_BUCKETS = [
 ]
 
 
-class MetricsManager:
+class MetricsManager(MetricsManagerInterface):
     """Prometheus Metrics Manager handles all metric updates"""
 
     _instance = None
@@ -653,21 +656,55 @@ class MetricsManager:
         },
     }
 
+    def _patch_labelnames(self, metrics_dict: dict) -> dict:
+        """When _enable_labels is True, add keys from _default_labelvalues to
+        labelnames for all metrics. Does not modify the original dict.
+
+        Returns a deep-copied dict with patched kwargs.
+        """
+        if not self._enable_labels:
+            return metrics_dict
+        patched = {}
+        for name, config in metrics_dict.items():
+            new_config = copy.deepcopy(config)
+            kwargs = new_config["kwargs"]
+            if "labelnames" in kwargs:
+                for label in self._default_labelvalues:
+                    if label not in kwargs["labelnames"]:
+                        kwargs["labelnames"].append(label)
+            else:
+                kwargs["labelnames"] = list(self._default_labelvalues.keys())
+            patched[name] = new_config
+        return patched
+
     def __init__(self):
         """Initializes the Prometheus metrics and starts the HTTP server if not already initialized."""
+
+        # 解析 FD_DEFAULT_METRIC_LABEL_VALUES
+        # 当值为合法 JSON dict 且非空时启用 metric labels
+        try:
+            self._default_labelvalues = json.loads(envs.FD_DEFAULT_METRIC_LABEL_VALUES)
+        except (json.JSONDecodeError, TypeError):
+            self._default_labelvalues = {}
+        self._enable_labels = isinstance(self._default_labelvalues, dict) and len(self._default_labelvalues) > 0
 
         # 在模块加载，指标注册先设置Prometheus环境变量
         setup_multiprocess_prometheus()
 
+        # 用 _patch_labelnames 处理后的副本创建指标，不修改类级别原始 dict
+        patched_metrics = self._patch_labelnames(self.METRICS)
+        patched_gauge_metrics = self._patch_labelnames(self.GAUGE_METRICS)
+        patched_server_metrics = self._patch_labelnames(self.SERVER_METRICS)
+
         # 动态创建所有非 gauge 型指标
-        for metric_name, config in self.METRICS.items():
+        for metric_name, config in patched_metrics.items():
             setattr(
                 self,
                 metric_name,
                 config["type"](config["name"], config["description"], **config["kwargs"]),
             )
         # 动态创建所有 gauge 型指标，统一配置 multiprocess_mode 为 livesum
-        for metric_name, config in self.GAUGE_METRICS.items():
+        for metric_name, config in patched_gauge_metrics.items():
             kwargs = config["kwargs"].copy()
             if "multiprocess_mode" not in kwargs:
                 kwargs["multiprocess_mode"] = "livesum"
@@ -677,12 +714,59 @@ class MetricsManager:
                 config["type"](config["name"], config["description"], **kwargs),
             )
         # 动态创建server metrics
-        for metric_name, config in self.SERVER_METRICS.items():
+        for metric_name, config in patched_server_metrics.items():
             setattr(
                 self,
                 metric_name,
                 config["type"](config["name"], config["description"], **config["kwargs"]),
             )
+
+    def _get_metric_and_labels(self, name: str, labelvalues: dict = None):
+        """Get the metric object and merged labelvalues.
+
+        When _enable_labels is True, returns (metric, merged_labels) where
+        merged_labels is the union of _default_labelvalues and caller-provided
+        labelvalues. When False, returns (metric, None).
+        """
+        metric = getattr(self, name)
+        if not self._enable_labels:
+            return metric, None
+        merged = dict(self._default_labelvalues)
+        if labelvalues:
+            merged.update(labelvalues)
+        return metric, merged
+
+    def set_value(self, name: str, value, labelvalues: dict = None):
+        """Set a Gauge metric to the given value."""
+        metric, merged = self._get_metric_and_labels(name, labelvalues)
+        if merged is not None:
+            metric.labels(**merged).set(value)
+        else:
+            metric.set(value)
+
+    def inc_value(self, name: str, value=1, labelvalues: dict = None):
+        """Increment a Counter or Gauge metric by the given value."""
+        metric, merged = self._get_metric_and_labels(name, labelvalues)
+        if merged is not None:
+            metric.labels(**merged).inc(value)
+        else:
+            metric.inc(value)
+
+    def dec_value(self, name: str, value=1, labelvalues: dict = None):
+        """Decrement a Gauge metric by the given value."""
+        metric, merged = self._get_metric_and_labels(name, labelvalues)
+        if merged is not None:
+            metric.labels(**merged).dec(value)
+        else:
+            metric.dec(value)
+
+    def obs_value(self, name: str, value, labelvalues: dict = None):
+        """Observe a value on a Histogram metric."""
+        metric, merged = self._get_metric_and_labels(name, labelvalues)
+        if merged is not None:
+            metric.labels(**merged).observe(value)
+        else:
+            metric.observe(value)
 
     def _init_speculative_metrics(self, speculative_method, num_speculative_tokens):
         self.SPECULATIVE_METRICS = {
@@ -724,8 +808,12 @@ class MetricsManager:
                 "description": "Single head acceptance rate of speculative decoding",
                 "kwargs": {},
             }
-        for metric_name, config in self.SPECULATIVE_METRICS.items():
+
+        patched_spec_metrics = self._patch_labelnames(self.SPECULATIVE_METRICS)
+
+        for metric_name, config in patched_spec_metrics.items():
             if metric_name == "spec_decode_draft_single_head_acceptance_rate":
+                # list[Gauge] — keep original behavior, no label migration
                 gauges = []
                 for i in range(num_speculative_tokens):
                     gauges.append(
@@ -752,8 +840,9 @@ class MetricsManager:
                 )
 
     def init_zmq_metrics(self):
-        # 动态创建所有指标
-        for metric_name, config in self.ZMQ_METRICS.items():
+        # 用 _patch_labelnames 处理 ZMQ_METRICS dict 后再创建指标
+        patched_zmq_metrics = self._patch_labelnames(self.ZMQ_METRICS)
+        for metric_name, config in patched_zmq_metrics.items():
             setattr(
                 self,
                 metric_name,
@@ -769,35 +858,54 @@ class MetricsManager:
         if not self._collect_zmq_metrics:
             return
 
+        # 构建 zmq labelvalues: address + _default_labelvalues
+        zmq_labels = {"address": address}
+        if self._enable_labels:
+            zmq_labels.update(self._default_labelvalues)
+
         # 记录zmq统计信息
-        self.msg_send_total.labels(address=address).inc(zmq_metrics_stats.msg_send_total)
-        self.msg_send_failed_total.labels(address=address).inc(zmq_metrics_stats.msg_send_failed_total)
-        self.msg_bytes_send_total.labels(address=address).inc(zmq_metrics_stats.msg_bytes_send_total)
-        self.msg_recv_total.labels(address=address).inc(zmq_metrics_stats.msg_recv_total)
-        self.msg_bytes_recv_total.labels(address=address).inc(zmq_metrics_stats.msg_bytes_recv_total)
+        self.msg_send_total.labels(**zmq_labels).inc(zmq_metrics_stats.msg_send_total)
+        self.msg_send_failed_total.labels(**zmq_labels).inc(zmq_metrics_stats.msg_send_failed_total)
+        self.msg_bytes_send_total.labels(**zmq_labels).inc(zmq_metrics_stats.msg_bytes_send_total)
+        self.msg_recv_total.labels(**zmq_labels).inc(zmq_metrics_stats.msg_recv_total)
+        self.msg_bytes_recv_total.labels(**zmq_labels).inc(zmq_metrics_stats.msg_bytes_recv_total)
         if zmq_metrics_stats.zmq_latency > 0.0:
             # trans to millisecond
-            self.zmq_latency.labels(address=address).observe(zmq_metrics_stats.zmq_latency * 1000)
+            self.zmq_latency.labels(**zmq_labels).observe(zmq_metrics_stats.zmq_latency * 1000)
 
     def set_cache_config_info(self, obj) -> None:
+        metrics_info = obj.metrics_info()
+
         if hasattr(self, "cache_config_info") and isinstance(self.cache_config_info, Gauge):
-            metrics_info = obj.metrics_info()
             if metrics_info:
-                self.cache_config_info.labels(**metrics_info).set(1)
+                # 合并 default labelvalues
+                merged = dict(metrics_info)
+                if self._enable_labels:
+                    merged.update(self._default_labelvalues)
+                self.cache_config_info.labels(**merged).set(1)
             return
 
-        metrics_info = obj.metrics_info()
         if not metrics_info:
             return
+
+        # 动态创建 cache_config_info gauge，追加 default labelvalues 的 labelnames
+        labelnames = list(metrics_info.keys())
+        if self._enable_labels:
+            for label in self._default_labelvalues:
+                if label not in labelnames:
+                    labelnames.append(label)
 
         self.cache_config_info = Gauge(
             name="fastdeploy:cache_config_info",
             documentation="Information of the engine's CacheConfig",
-            labelnames=list(metrics_info.keys()),
+            labelnames=labelnames,
             multiprocess_mode="mostrecent",
         )
 
-        self.cache_config_info.labels(**metrics_info).set(1)
+        merged = dict(metrics_info)
+        if self._enable_labels:
+            merged.update(self._default_labelvalues)
+        self.cache_config_info.labels(**merged).set(1)
 
     def register_speculative_metrics(self, registry: CollectorRegistry):
         """Register all speculative metrics to the specified registry"""

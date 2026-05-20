@@ -296,6 +296,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # When set to 1, print which op / shape enters the block-wise CUDA Graph
     # during the capture phase. Defaults to 0 (silent).
     "FD_BLOCK_WISE_DEBUG": lambda: bool(int(os.getenv("FD_BLOCK_WISE_DEBUG", "0"))),
+    # Default label values for Prometheus metrics, specified as a JSON dict string.
+    # When set to a valid JSON dict, metric labels are automatically enabled.
+    # Example: '{"model_id":"my_model"}' adds model_id label to all metrics.
+    "FD_DEFAULT_METRIC_LABEL_VALUES": lambda: os.getenv("FD_DEFAULT_METRIC_LABEL_VALUES", "{}"),
 }
 
 

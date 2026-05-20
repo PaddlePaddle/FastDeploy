@@ -131,11 +131,11 @@ class PrefixCacheManager:
             f"{self.cache_config.bytes_per_token_per_layer / self.config.parallel_config.tensor_parallel_size}"
         )
 
-        main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
-        main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.available_gpu_resource.set(1.0)
+        main_process_metrics.set_value("max_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("max_cpu_block_num", self.num_cpu_blocks)
+        main_process_metrics.set_value("available_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("free_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("available_gpu_resource", 1.0)
 
     def _get_kv_cache_shape(self, max_block_num):
         from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -462,11 +462,11 @@ class PrefixCacheManager:
         heapq.heapify(self.gpu_free_block_list)
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
 
-        main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
-        main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.available_gpu_resource.set(1.0)
+        main_process_metrics.set_value("max_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("max_cpu_block_num", self.num_cpu_blocks)
+        main_process_metrics.set_value("available_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("free_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("available_gpu_resource", 1.0)
 
     def can_allocate_gpu_blocks(self, num_blocks: int, try_free_gpu_blocks: bool = True):
         """
@@ -494,8 +494,8 @@ class PrefixCacheManager:
         logger.info(
             f"req_id:{req_id} allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
         return allocated_block_ids
 
     def recycle_gpu_blocks(self, gpu_block_ids, req_id=None):
@@ -529,8 +529,8 @@ class PrefixCacheManager:
         else:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
         logger.debug(f"req_id:{req_id} recycle blocks end")
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
 
     def allocate_cpu_blocks(self, num_blocks):
         """
@@ -2296,9 +2296,9 @@ class PrefixCacheManager:
 
         # reset metrics
         self.metrics.reset_metrics()
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
 
     def clear_prefix_cache(self):
         """
