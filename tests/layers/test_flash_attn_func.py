@@ -240,21 +240,21 @@ class TestInitFlashAttnVersion(unittest.TestCase):
         """Inject fake paddlefleet modules so the inner imports succeed."""
         pkg = types.ModuleType("paddlefleet")
         pkg.__path__ = []
-        ops = types.ModuleType("paddlefleet.ops")
+        ops = types.ModuleType("paddlefleet_ops")
         ops.__path__ = []
         ops.is_flash_mask_available = lambda: is_available
-        flash_mask = types.ModuleType("paddlefleet.ops.flash_mask")
+        flash_mask = types.ModuleType("paddlefleet_ops.flash_mask")
         flash_mask.__path__ = []
-        cute = types.ModuleType("paddlefleet.ops.flash_mask.cute")
+        cute = types.ModuleType("paddlefleet_ops.flash_mask.cute")
         cute.__path__ = []
-        interface = types.ModuleType("paddlefleet.ops.flash_mask.cute.interface")
+        interface = types.ModuleType("paddlefleet_ops.flash_mask.cute.interface")
         interface.flashmask_attention = mock.MagicMock(name="fa4")
 
         sys.modules["paddlefleet"] = pkg
-        sys.modules["paddlefleet.ops"] = ops
-        sys.modules["paddlefleet.ops.flash_mask"] = flash_mask
-        sys.modules["paddlefleet.ops.flash_mask.cute"] = cute
-        sys.modules["paddlefleet.ops.flash_mask.cute.interface"] = interface
+        sys.modules["paddlefleet_ops"] = ops
+        sys.modules["paddlefleet_ops.flash_mask"] = flash_mask
+        sys.modules["paddlefleet_ops.flash_mask.cute"] = cute
+        sys.modules["paddlefleet_ops.flash_mask.cute.interface"] = interface
         return interface.flashmask_attention
 
     def test_fa4_import_success(self):
@@ -300,10 +300,10 @@ class TestInitFlashAttnVersion(unittest.TestCase):
         # Ensure paddlefleet import fails.
         for name in (
             "paddlefleet",
-            "paddlefleet.ops",
-            "paddlefleet.ops.flash_mask",
-            "paddlefleet.ops.flash_mask.cute",
-            "paddlefleet.ops.flash_mask.cute.interface",
+            "paddlefleet_ops",
+            "paddlefleet_ops.flash_mask",
+            "paddlefleet_ops.flash_mask.cute",
+            "paddlefleet_ops.flash_mask.cute.interface",
         ):
             sys.modules.pop(name, None)
         flash_attn_backend.FLASH_ATTN_VERSION = None
