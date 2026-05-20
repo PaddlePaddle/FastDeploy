@@ -368,43 +368,69 @@ class MTPProposer(Proposer):
         # Initialize AttentionBackend buffers
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
-
-        self.model_inputs["decoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["decoder_batch_ids"])
-        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_tile_ids_per_batch"]
-        )
-        if current_platform.is_xpu() or current_platform.is_maca():
-            self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
-                self.target_model_inputs["decoder_num_blocks_cpu"]
-            ).cpu()
-        else:
-            self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
-                self.target_model_inputs["decoder_num_blocks_cpu"]
-            ).pin_memory()
-        self.model_inputs["decoder_num_blocks_device"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_num_blocks_device"]
-        )
-        self.model_inputs["decoder_chunk_size_device"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_chunk_size_device"]
-        )
         self.model_inputs["max_len_tensor_cpu"] = paddle.zeros_like(
             self.target_model_inputs["max_len_tensor_cpu"]
         ).cpu()
+        if envs.FD_ATTENTION_BACKEND == "DECODE_UNIFIED_ATTN":
+            self.model_inputs["decoder_batch_ids"] = None
+            self.model_inputs["decoder_tile_ids_per_batch"] = None
+            self.model_inputs["decoder_num_blocks_cpu"] = None
+            self.model_inputs["decoder_num_blocks_device"] = None
+            self.model_inputs["decoder_chunk_size_device"] = None
+            self.model_inputs["encoder_batch_ids"] = None
+            self.model_inputs["encoder_tile_ids_per_batch"] = None
+            self.model_inputs["encoder_num_blocks_x_cpu"] = None
+            self.model_inputs["kv_batch_ids"] = None
+            self.model_inputs["kv_tile_ids_per_batch"] = None
+            self.model_inputs["kv_num_blocks_x_cpu"] = None
+        else:
+            self.model_inputs["decoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["decoder_batch_ids"])
+            self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_tile_ids_per_batch"]
+            )
+            if current_platform.is_xpu() or current_platform.is_maca():
+                self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
+                    self.target_model_inputs["decoder_num_blocks_cpu"]
+                ).cpu()
+            else:
+                self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
+                    self.target_model_inputs["decoder_num_blocks_cpu"]
+                ).pin_memory()
+            self.model_inputs["decoder_num_blocks_device"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_num_blocks_device"]
+            )
+            self.model_inputs["decoder_chunk_size_device"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_chunk_size_device"]
+            )
 
-        self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["encoder_batch_ids"])
-        self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["encoder_tile_ids_per_batch"]
-        )
-        self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
-            self.target_model_inputs["encoder_num_blocks_x_cpu"]
-        ).cpu()
-        self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.target_model_inputs["kv_batch_ids"])
-        self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["kv_tile_ids_per_batch"]
-        )
-        self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
-            self.target_model_inputs["kv_num_blocks_x_cpu"]
-        ).cpu()
+            self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["encoder_batch_ids"])
+            self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["encoder_tile_ids_per_batch"]
+            )
+            self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
+                self.target_model_inputs["encoder_num_blocks_x_cpu"]
+            ).cpu()
+            self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.target_model_inputs["kv_batch_ids"])
+            self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["kv_tile_ids_per_batch"]
+            )
+            self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
+                self.target_model_inputs["kv_num_blocks_x_cpu"]
+            ).cpu()
+
+        # Decode attention split ops buffers
+        if (
+            "decode_block_indices" in self.target_model_inputs
+            and self.target_model_inputs["decode_block_indices"] is not None
+        ):
+            self.model_inputs["decode_block_indices"] = paddle.zeros_like(
+                self.target_model_inputs["decode_block_indices"]
+            )
+            self.model_inputs["decode_num_blocks"] = paddle.zeros_like(self.target_model_inputs["decode_num_blocks"])
+            self.model_inputs["decode_chunk_size"] = paddle.zeros_like(self.target_model_inputs["decode_chunk_size"])
+            self.model_inputs["decode_tmp_workspace"] = self.target_model_inputs["decode_tmp_workspace"]
+            self.model_inputs["decode_tmp_m"] = self.target_model_inputs["decode_tmp_m"]
+            self.model_inputs["decode_tmp_d"] = self.target_model_inputs["decode_tmp_d"]
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -677,6 +703,13 @@ class MTPProposer(Proposer):
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
         )
+        if "decode_block_indices" in self.model_inputs:
+            self.forward_meta.decode_block_indices = self.model_inputs["decode_block_indices"]
+            self.forward_meta.decode_num_blocks = self.model_inputs["decode_num_blocks"]
+            self.forward_meta.decode_chunk_size = self.model_inputs["decode_chunk_size"]
+            self.forward_meta.decode_tmp_workspace = self.model_inputs["decode_tmp_workspace"]
+            self.forward_meta.decode_tmp_m = self.model_inputs["decode_tmp_m"]
+            self.forward_meta.decode_tmp_d = self.model_inputs["decode_tmp_d"]
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:
