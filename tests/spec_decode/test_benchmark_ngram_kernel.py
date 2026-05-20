@@ -48,64 +48,71 @@ def _build_data(batch_size, seq_len, hit_type="low_input", seed=42):
     """
     Build test tensors with controlled ngram hit placement.
 
+    token_ids_all layout: [:seq_len] = prompt (haystack), [seq_len:] = generated tokens.
+    prompt_lens = seq_len so the kernel splits correctly.
+    step_idx = count of generated tokens (positions 0..step_idx-1 are valid in pre_ids).
+
     hit_type controls where the ngram match is found:
-      - high_input: match near start of input_ids (fast find)
-      - high_pre:   match near start of token_ids_all gen tokens
-      - low_input:  match near end of input_ids (worst-case scan)
-      - low_pre:    match near end of token_ids_all gen tokens
+      - high_input: match near start of prompt (fast input scan)
+      - high_pre:   match near start of pre_ids (fast pre scan)
+      - low_input:  match near end of prompt (worst-case input scan)
+      - low_pre:    match near end of pre_ids (worst-case pre scan)
       - none:       no planted match (full scan, no hit)
     """
     rng = np.random.RandomState(seed)
     step_idx_val = max(MAX_NGRAM_SIZE + 2, 20)
-    pre_len = step_idx_val + 1
-    max_model_len = max(seq_len + 64, pre_len + 64)
+    pre_len = step_idx_val + 1  # space for step_idx_val generated tokens
 
+    # Prompt tokens (haystack) and generated tokens (pre_ids) are separate arrays
+    # then merged into a single token_ids_all buffer.
     input_ids = rng.randint(10, 500, (batch_size, seq_len)).astype(np.int64)
-    token_ids_all = rng.randint(10, 500, (batch_size, max_model_len)).astype(np.int64)
+    pre_ids_area = rng.randint(10, 500, (batch_size, pre_len)).astype(np.int64)
+    token_ids_all = np.concatenate([input_ids, pre_ids_area], axis=1)
+
+    # Pattern = what the fixed kernel reads: pre_ids[step_idx - ngram_size : step_idx]
+    #         = token_ids_all[:, seq_len + step_idx_val - MAX_NGRAM_SIZE : seq_len + step_idx_val]
     pattern = np.arange(1001, 1001 + MAX_NGRAM_SIZE, dtype=np.int64)
+    ng_start_in_pre = step_idx_val - MAX_NGRAM_SIZE  # relative to pre_ids start
 
     for b in range(batch_size):
-        # Plant pattern in token_ids_all at step_idx alignment (the ngram to search for)
-        ng_start = step_idx_val + 1 - MAX_NGRAM_SIZE
-        token_ids_all[b, ng_start : step_idx_val + 1] = pattern
+        # Plant pattern at the pre_ids position the kernel reads (after the fix)
+        token_ids_all[b, seq_len + ng_start_in_pre : seq_len + step_idx_val] = pattern
 
         if hit_type == "high_input":
             pos = 5
             if pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS <= seq_len:
-                input_ids[b, pos : pos + MAX_NGRAM_SIZE] = pattern
-                input_ids[b, pos + MAX_NGRAM_SIZE : pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS] = np.arange(
+                token_ids_all[b, pos : pos + MAX_NGRAM_SIZE] = pattern
+                token_ids_all[b, pos + MAX_NGRAM_SIZE : pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS] = np.arange(
                     2001, 2001 + MAX_DRAFT_TOKENS, dtype=np.int64
                 )
 
         elif hit_type == "high_pre":
             pos = 5
-            if pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS < ng_start:
-                token_ids_all[b, pos : pos + MAX_NGRAM_SIZE] = pattern
-                token_ids_all[b, pos + MAX_NGRAM_SIZE : pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS] = np.arange(
-                    2001, 2001 + MAX_DRAFT_TOKENS, dtype=np.int64
-                )
+            if pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS < ng_start_in_pre:
+                token_ids_all[b, seq_len + pos : seq_len + pos + MAX_NGRAM_SIZE] = pattern
+                token_ids_all[
+                    b, seq_len + pos + MAX_NGRAM_SIZE : seq_len + pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS
+                ] = np.arange(2001, 2001 + MAX_DRAFT_TOKENS, dtype=np.int64)
 
         elif hit_type == "low_input":
             pos = seq_len - MAX_NGRAM_SIZE - MAX_DRAFT_TOKENS - 5
             if pos > 0:
-                input_ids[b, pos : pos + MAX_NGRAM_SIZE] = pattern
-                input_ids[b, pos + MAX_NGRAM_SIZE : pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS] = np.arange(
+                token_ids_all[b, pos : pos + MAX_NGRAM_SIZE] = pattern
+                token_ids_all[b, pos + MAX_NGRAM_SIZE : pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS] = np.arange(
                     2001, 2001 + MAX_DRAFT_TOKENS, dtype=np.int64
                 )
 
         elif hit_type == "low_pre":
             pos = step_idx_val - MAX_NGRAM_SIZE - MAX_DRAFT_TOKENS - 5
-            if pos > 0 and pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS < ng_start:
-                token_ids_all[b, pos : pos + MAX_NGRAM_SIZE] = pattern
-                token_ids_all[b, pos + MAX_NGRAM_SIZE : pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS] = np.arange(
-                    2001, 2001 + MAX_DRAFT_TOKENS, dtype=np.int64
-                )
+            if pos > 0 and pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS < ng_start_in_pre:
+                token_ids_all[b, seq_len + pos : seq_len + pos + MAX_NGRAM_SIZE] = pattern
+                token_ids_all[
+                    b, seq_len + pos + MAX_NGRAM_SIZE : seq_len + pos + MAX_NGRAM_SIZE + MAX_DRAFT_TOKENS
+                ] = np.arange(2001, 2001 + MAX_DRAFT_TOKENS, dtype=np.int64)
 
-        elif hit_type == "none":
-            pass  # No match planted — random data only
+        # hit_type == "none": no match planted — random data only
 
-    input_ids_len = np.full((batch_size, 1), seq_len, dtype=np.int64)
-    prompt_lens = np.zeros((batch_size, 1), dtype=np.int64)
+    prompt_lens = np.full((batch_size, 1), seq_len, dtype=np.int64)
     step_idx = np.full((batch_size, 1), step_idx_val, dtype=np.int64)
     draft_token_num = np.full((batch_size, 1), MAX_DRAFT_TOKENS, dtype=np.int32)
     draft_tokens = np.zeros((batch_size, MAX_DRAFT_TOKENS + 1), dtype=np.int64)
@@ -115,8 +122,6 @@ def _build_data(batch_size, seq_len, hit_type="low_input", seed=42):
     max_dec_len = np.full((batch_size, 1), 1048576, dtype=np.int64)
 
     return {
-        "input_ids": input_ids,
-        "input_ids_len": input_ids_len,
         "token_ids_all": token_ids_all,
         "prompt_lens": prompt_lens,
         "step_idx": step_idx,
@@ -139,8 +144,6 @@ def _to_gpu(np_dict):
 def _run_gpu(ngram_match_fn, gpu_data):
     """Run GPU kernel (tensors already on GPU)."""
     ngram_match_fn(
-        gpu_data["input_ids"],
-        gpu_data["input_ids_len"],
         gpu_data["token_ids_all"],
         gpu_data["prompt_lens"],
         gpu_data["step_idx"],

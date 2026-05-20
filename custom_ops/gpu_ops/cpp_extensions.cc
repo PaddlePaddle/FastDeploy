@@ -951,9 +951,7 @@ void SpeculateScheduleCache(const paddle::Tensor& draft_tokens,
                             const int block_size,
                             const int max_draft_tokens);
 
-void NgramMatch(const paddle::Tensor& input_ids,
-                const paddle::Tensor& input_ids_len,
-                const paddle::Tensor& token_ids_all,
+void NgramMatch(const paddle::Tensor& token_ids_all,
                 const paddle::Tensor& prompt_lens,
                 const paddle::Tensor& step_idx,
                 const paddle::Tensor& draft_token_num,
