@@ -77,6 +77,24 @@ BASELINE_SPECULATE_METRICS_WITH_LOGPROBS = _build_speculate_metrics_baseline(
 )
 
 
+def _assert_speculate_metrics_match(actual, baseline, label):
+    """Per-field comparison against a tolerance-based baseline.
+
+    Avoids whole-dict ``==`` so that an AssertionError isn't masked by a
+    TypeError when json.dumps tries to serialize pytest.approx wrappers in
+    the failure message.
+    """
+    missing = set(baseline) - set(actual)
+    extra = set(actual) - set(baseline)
+    assert not missing and not extra, (
+        f"[{label}] speculate_metrics keys mismatch: missing={missing}, extra={extra}, "
+        f"got_keys={sorted(actual.keys())}"
+    )
+    for key, expected in baseline.items():
+        got = actual[key]
+        assert got == expected, f"[{label}] field '{key}' mismatch:\n" f"  got:      {got}\n" f"  expected: {expected}"
+
+
 @pytest.fixture(scope="session", autouse=True)
 def setup_and_run_server():
     """
@@ -276,12 +294,10 @@ def test_mtp_ngram_speculate_metrics(api_url):
         f"sum(accepted_tokens_per_head) ({sum(accepted_per_head)})"
     )
 
-    # Baseline comparison — exact match against the values captured in the reference environment.
+    # Baseline comparison (tolerance-based) against values captured in the reference environment.
     if BASELINE_SPECULATE_METRICS is not None:
-        assert speculate_metrics == BASELINE_SPECULATE_METRICS, (
-            f"speculate_metrics mismatch\n"
-            f"got:      {json.dumps(speculate_metrics, indent=2)}\n"
-            f"baseline: {json.dumps(BASELINE_SPECULATE_METRICS, indent=2)}"
+        _assert_speculate_metrics_match(
+            speculate_metrics, BASELINE_SPECULATE_METRICS, label="test_mtp_ngram_speculate_metrics"
         )
 
 
@@ -336,10 +352,10 @@ def test_mtp_ngram_speculate_metrics_with_logprobs(api_url):
     assert len(accepted_per_head) == 6
     assert speculate_metrics["accepted_tokens"] == sum(accepted_per_head)
 
-    # Baseline comparison — exact match against the values captured in the reference environment.
+    # Baseline comparison (tolerance-based) against values captured in the reference environment.
     if BASELINE_SPECULATE_METRICS_WITH_LOGPROBS is not None:
-        assert speculate_metrics == BASELINE_SPECULATE_METRICS_WITH_LOGPROBS, (
-            f"speculate_metrics mismatch\n"
-            f"got:      {json.dumps(speculate_metrics, indent=2)}\n"
-            f"baseline: {json.dumps(BASELINE_SPECULATE_METRICS_WITH_LOGPROBS, indent=2)}"
+        _assert_speculate_metrics_match(
+            speculate_metrics,
+            BASELINE_SPECULATE_METRICS_WITH_LOGPROBS,
+            label="test_mtp_ngram_speculate_metrics_with_logprobs",
         )
