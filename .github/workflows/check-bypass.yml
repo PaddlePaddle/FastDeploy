@@ -75,7 +75,7 @@ jobs:
             if [[ "$f" =~ ^\.claude/ || "$f" =~ ^benchmarks/ || "$f" =~ ^docs/ || "$f" =~ ^dockerfiles/ || "$f" =~ ^examples/ || "$f" =~ ^tools/ ]]; then
               continue
             fi
-            if [[ ! "$f" =~ \.(md|yaml|go)$ ]]; then
+            if [[ ! "$f" =~ \.(md|yaml|go|yml)$ ]]; then
               can_skip_docs=false
               break
             fi
