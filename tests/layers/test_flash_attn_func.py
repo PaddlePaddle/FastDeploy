@@ -220,10 +220,10 @@ class TestInitFlashAttnVersion(unittest.TestCase):
             name: sys.modules.get(name)
             for name in (
                 "paddlefleet",
-                "paddlefleet.ops",
-                "paddlefleet.ops.flash_mask",
-                "paddlefleet.ops.flash_mask.cute",
-                "paddlefleet.ops.flash_mask.cute.interface",
+                "paddlefleet_ops",
+                "paddlefleet_ops.flash_mask",
+                "paddlefleet_ops.flash_mask.cute",
+                "paddlefleet_ops.flash_mask.cute.interface",
             )
         }
 

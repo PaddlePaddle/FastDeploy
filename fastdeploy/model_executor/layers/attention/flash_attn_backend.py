@@ -86,10 +86,10 @@ def init_flash_attn_version():
             try:
                 paddle.enable_compat(scope={"cutlass"})
                 try:
-                    from paddlefleet.ops import is_flash_mask_available
+                    from paddlefleet_ops import is_flash_mask_available
 
                     if is_flash_mask_available():
-                        from paddlefleet.ops.flash_mask.cute.interface import (
+                        from paddlefleet_ops.flash_mask.cute.interface import (
                             flashmask_attention as fa4,
                         )
                     else:
