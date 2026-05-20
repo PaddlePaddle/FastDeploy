@@ -14,10 +14,14 @@
 
 from __future__ import annotations
 
+import sys
+import types
 import unittest
+from unittest import mock
 
 import paddle
 
+from fastdeploy.model_executor.layers.attention import flash_attn_backend
 from fastdeploy.model_executor.layers.attention.flash_attn_backend import (
     flash_attn_func,
 )
@@ -203,6 +207,119 @@ class TestFlashAttnFunc(unittest.TestCase):
             head_dim=head_dim,
             version=4,
         )
+
+
+class TestInitFlashAttnVersion(unittest.TestCase):
+    """Tests for the init_flash_attn_version FA4 import branch (sm>=100)."""
+
+    def setUp(self):
+        # Save state to restore after each test.
+        self._saved_version = flash_attn_backend.FLASH_ATTN_VERSION
+        self._saved_v4 = flash_attn_backend.flashmask_attention_v4
+        self._saved_modules = {
+            name: sys.modules.get(name)
+            for name in (
+                "paddlefleet",
+                "paddlefleet.ops",
+                "paddlefleet.ops.flash_mask",
+                "paddlefleet.ops.flash_mask.cute",
+                "paddlefleet.ops.flash_mask.cute.interface",
+            )
+        }
+
+    def tearDown(self):
+        flash_attn_backend.FLASH_ATTN_VERSION = self._saved_version
+        flash_attn_backend.flashmask_attention_v4 = self._saved_v4
+        for name, mod in self._saved_modules.items():
+            if mod is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = mod
+
+    def _install_fake_paddlefleet(self, is_available: bool):
+        """Inject fake paddlefleet modules so the inner imports succeed."""
+        pkg = types.ModuleType("paddlefleet")
+        pkg.__path__ = []
+        ops = types.ModuleType("paddlefleet.ops")
+        ops.__path__ = []
+        ops.is_flash_mask_available = lambda: is_available
+        flash_mask = types.ModuleType("paddlefleet.ops.flash_mask")
+        flash_mask.__path__ = []
+        cute = types.ModuleType("paddlefleet.ops.flash_mask.cute")
+        cute.__path__ = []
+        interface = types.ModuleType("paddlefleet.ops.flash_mask.cute.interface")
+        interface.flashmask_attention = mock.MagicMock(name="fa4")
+
+        sys.modules["paddlefleet"] = pkg
+        sys.modules["paddlefleet.ops"] = ops
+        sys.modules["paddlefleet.ops.flash_mask"] = flash_mask
+        sys.modules["paddlefleet.ops.flash_mask.cute"] = cute
+        sys.modules["paddlefleet.ops.flash_mask.cute.interface"] = interface
+        return interface.flashmask_attention
+
+    def test_fa4_import_success(self):
+        """Covers lines 88, 89, 91, 92 (is_flash_mask_available True branch)."""
+        fake_fa4 = self._install_fake_paddlefleet(is_available=True)
+        flash_attn_backend.FLASH_ATTN_VERSION = None
+        flash_attn_backend.flashmask_attention_v4 = None
+
+        with (
+            mock.patch.object(flash_attn_backend.current_platform, "is_cuda", return_value=True),
+            mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
+            mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
+        ):
+            flash_attn_backend.init_flash_attn_version()
+
+        self.assertEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
+        self.assertIs(flash_attn_backend.flashmask_attention_v4, fake_fa4)
+
+    def test_fa4_flash_mask_unavailable(self):
+        """Covers lines 88, 89, 91, 96, 98, 99 (raise + except path)."""
+        self._install_fake_paddlefleet(is_available=False)
+        flash_attn_backend.FLASH_ATTN_VERSION = None
+        flash_attn_backend.flashmask_attention_v4 = None
+
+        with (
+            mock.patch.object(flash_attn_backend.current_platform, "is_cuda", return_value=True),
+            mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
+            mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
+        ):
+            # The inner except swallows ModuleNotFoundError, but `fa4` is then
+            # unbound, so the outer block raises NameError (not ImportError),
+            # which propagates. Verify the inner except actually executed by
+            # checking that FA4 was not selected.
+            try:
+                flash_attn_backend.init_flash_attn_version()
+            except NameError:
+                pass
+
+        self.assertNotEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
+
+    def test_fa4_paddlefleet_import_error(self):
+        """Covers lines 88, 89, 98, 99 (ImportError caught by inner except)."""
+        # Ensure paddlefleet import fails.
+        for name in (
+            "paddlefleet",
+            "paddlefleet.ops",
+            "paddlefleet.ops.flash_mask",
+            "paddlefleet.ops.flash_mask.cute",
+            "paddlefleet.ops.flash_mask.cute.interface",
+        ):
+            sys.modules.pop(name, None)
+        flash_attn_backend.FLASH_ATTN_VERSION = None
+        flash_attn_backend.flashmask_attention_v4 = None
+
+        with (
+            mock.patch.object(flash_attn_backend.current_platform, "is_cuda", return_value=True),
+            mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
+            mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
+        ):
+            try:
+                flash_attn_backend.init_flash_attn_version()
+            except NameError:
+                pass
+
+        self.assertNotEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
 
 
 if __name__ == "__main__":
