@@ -212,20 +212,36 @@ class TestFlashAttnFunc(unittest.TestCase):
 class TestInitFlashAttnVersion(unittest.TestCase):
     """Tests for the init_flash_attn_version FA4 import branch (sm>=100)."""
 
+    _MODULE_NAMES = (
+        "paddlefleet",
+        "paddlefleet.ops",
+        "paddlefleet.ops.flash_mask",
+        "paddlefleet.ops.flash_mask.cute",
+        "paddlefleet.ops.flash_mask.cute.interface",
+        "paddlefleet_ops",
+        "paddlefleet_ops.flash_mask",
+        "paddlefleet_ops.flash_mask.cute",
+        "paddlefleet_ops.flash_mask.cute.interface",
+    )
+
     def setUp(self):
         # Save state to restore after each test.
         self._saved_version = flash_attn_backend.FLASH_ATTN_VERSION
         self._saved_v4 = flash_attn_backend.flashmask_attention_v4
-        self._saved_modules = {
-            name: sys.modules.get(name)
-            for name in (
-                "paddlefleet",
-                "paddlefleet_ops",
-                "paddlefleet_ops.flash_mask",
-                "paddlefleet_ops.flash_mask.cute",
-                "paddlefleet_ops.flash_mask.cute.interface",
-            )
-        }
+        self._saved_modules = {name: sys.modules.get(name) for name in self._MODULE_NAMES}
+        # Make sure each test starts with a clean module state.
+        for name in self._MODULE_NAMES:
+            sys.modules.pop(name, None)
+
+    def _block_old_api(self):
+        """Force `paddlefleet.ops` import to fail regardless of what is installed."""
+        # Setting sys.modules[name] = None makes importlib.import_module raise ImportError.
+        sys.modules["paddlefleet"] = None
+        sys.modules["paddlefleet.ops"] = None
+
+    def _block_new_api(self):
+        """Force `paddlefleet_ops` import to fail regardless of what is installed."""
+        sys.modules["paddlefleet_ops"] = None
 
     def tearDown(self):
         flash_attn_backend.FLASH_ATTN_VERSION = self._saved_version
@@ -236,10 +252,30 @@ class TestInitFlashAttnVersion(unittest.TestCase):
             else:
                 sys.modules[name] = mod
 
-    def _install_fake_paddlefleet(self, is_available: bool):
-        """Inject fake paddlefleet modules so the inner imports succeed."""
+    def _install_fake_paddlefleet_old_api(self, is_available: bool):
+        """Inject fake `paddlefleet.ops` (old API) modules."""
         pkg = types.ModuleType("paddlefleet")
         pkg.__path__ = []
+        ops = types.ModuleType("paddlefleet.ops")
+        ops.__path__ = []
+        ops.is_flash_mask_available = lambda: is_available
+        pkg.ops = ops
+        flash_mask = types.ModuleType("paddlefleet.ops.flash_mask")
+        flash_mask.__path__ = []
+        cute = types.ModuleType("paddlefleet.ops.flash_mask.cute")
+        cute.__path__ = []
+        interface = types.ModuleType("paddlefleet.ops.flash_mask.cute.interface")
+        interface.flashmask_attention = mock.MagicMock(name="fa4_old")
+
+        sys.modules["paddlefleet"] = pkg
+        sys.modules["paddlefleet.ops"] = ops
+        sys.modules["paddlefleet.ops.flash_mask"] = flash_mask
+        sys.modules["paddlefleet.ops.flash_mask.cute"] = cute
+        sys.modules["paddlefleet.ops.flash_mask.cute.interface"] = interface
+        return interface.flashmask_attention
+
+    def _install_fake_paddlefleet_new_api(self, is_available: bool):
+        """Inject fake `paddlefleet_ops` (new API) modules."""
         ops = types.ModuleType("paddlefleet_ops")
         ops.__path__ = []
         ops.is_flash_mask_available = lambda: is_available
@@ -248,18 +284,56 @@ class TestInitFlashAttnVersion(unittest.TestCase):
         cute = types.ModuleType("paddlefleet_ops.flash_mask.cute")
         cute.__path__ = []
         interface = types.ModuleType("paddlefleet_ops.flash_mask.cute.interface")
-        interface.flashmask_attention = mock.MagicMock(name="fa4")
+        interface.flashmask_attention = mock.MagicMock(name="fa4_new")
 
-        sys.modules["paddlefleet"] = pkg
         sys.modules["paddlefleet_ops"] = ops
         sys.modules["paddlefleet_ops.flash_mask"] = flash_mask
         sys.modules["paddlefleet_ops.flash_mask.cute"] = cute
         sys.modules["paddlefleet_ops.flash_mask.cute.interface"] = interface
         return interface.flashmask_attention
 
-    def test_fa4_import_success(self):
-        """Covers lines 88, 89, 91, 92 (is_flash_mask_available True branch)."""
-        fake_fa4 = self._install_fake_paddlefleet(is_available=True)
+    def test_fa4_old_api_import_success(self):
+        """Old API (`paddlefleet.ops`) is preferred when available."""
+        fake_fa4 = self._install_fake_paddlefleet_old_api(is_available=True)
+        # Also install new API to verify the old API takes precedence.
+        new_fa4 = self._install_fake_paddlefleet_new_api(is_available=True)
+        flash_attn_backend.FLASH_ATTN_VERSION = None
+        flash_attn_backend.flashmask_attention_v4 = None
+
+        with (
+            mock.patch.object(flash_attn_backend.current_platform, "is_cuda", return_value=True),
+            mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
+            mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
+        ):
+            flash_attn_backend.init_flash_attn_version()
+
+        self.assertEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
+        self.assertIs(flash_attn_backend.flashmask_attention_v4, fake_fa4)
+        self.assertIsNot(flash_attn_backend.flashmask_attention_v4, new_fa4)
+
+    def test_fa4_old_api_flash_mask_unavailable(self):
+        """Old API present but `is_flash_mask_available` is False."""
+        self._install_fake_paddlefleet_old_api(is_available=False)
+        self._block_new_api()
+        flash_attn_backend.FLASH_ATTN_VERSION = None
+        flash_attn_backend.flashmask_attention_v4 = None
+
+        with (
+            mock.patch.object(flash_attn_backend.current_platform, "is_cuda", return_value=True),
+            mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
+            mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
+        ):
+            try:
+                flash_attn_backend.init_flash_attn_version()
+            except NameError:
+                pass
+
+        self.assertNotEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
+
+    def test_fa4_new_api_import_success(self):
+        """Falls back to new API (`paddlefleet_ops`) when old API is missing."""
+        fake_fa4 = self._install_fake_paddlefleet_new_api(is_available=True)
+        self._block_old_api()
         flash_attn_backend.FLASH_ATTN_VERSION = None
         flash_attn_backend.flashmask_attention_v4 = None
 
@@ -273,9 +347,10 @@ class TestInitFlashAttnVersion(unittest.TestCase):
         self.assertEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
         self.assertIs(flash_attn_backend.flashmask_attention_v4, fake_fa4)
 
-    def test_fa4_flash_mask_unavailable(self):
-        """Covers lines 88, 89, 91, 96, 98, 99 (raise + except path)."""
-        self._install_fake_paddlefleet(is_available=False)
+    def test_fa4_new_api_flash_mask_unavailable(self):
+        """New API present but `is_flash_mask_available` is False."""
+        self._install_fake_paddlefleet_new_api(is_available=False)
+        self._block_old_api()
         flash_attn_backend.FLASH_ATTN_VERSION = None
         flash_attn_backend.flashmask_attention_v4 = None
 
@@ -284,10 +359,6 @@ class TestInitFlashAttnVersion(unittest.TestCase):
             mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
             mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
         ):
-            # The inner except swallows ModuleNotFoundError, but `fa4` is then
-            # unbound, so the outer block raises NameError (not ImportError),
-            # which propagates. Verify the inner except actually executed by
-            # checking that FA4 was not selected.
             try:
                 flash_attn_backend.init_flash_attn_version()
             except NameError:
@@ -296,16 +367,9 @@ class TestInitFlashAttnVersion(unittest.TestCase):
         self.assertNotEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
 
     def test_fa4_paddlefleet_import_error(self):
-        """Covers lines 88, 89, 98, 99 (ImportError caught by inner except)."""
-        # Ensure paddlefleet import fails.
-        for name in (
-            "paddlefleet",
-            "paddlefleet_ops",
-            "paddlefleet_ops.flash_mask",
-            "paddlefleet_ops.flash_mask.cute",
-            "paddlefleet_ops.flash_mask.cute.interface",
-        ):
-            sys.modules.pop(name, None)
+        """Neither old nor new API is importable."""
+        self._block_old_api()
+        self._block_new_api()
         flash_attn_backend.FLASH_ATTN_VERSION = None
         flash_attn_backend.flashmask_attention_v4 = None
 

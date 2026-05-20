@@ -74,6 +74,8 @@ from fastdeploy.spec_decode import SpecMethod
 
 FLASH_ATTN_VERSION = None
 
+from fastdeploy.model_executor.utils import try_import
+
 
 def init_flash_attn_version():
     """
@@ -86,14 +88,25 @@ def init_flash_attn_version():
             try:
                 paddle.enable_compat(scope={"cutlass"})
                 try:
-                    from paddlefleet_ops import is_flash_mask_available
+                    old_api = try_import(["paddlefleet.ops"])
+                    if old_api is not None:
+                        from paddlefleet.ops import is_flash_mask_available
 
-                    if is_flash_mask_available():
-                        from paddlefleet_ops.flash_mask.cute.interface import (
-                            flashmask_attention as fa4,
-                        )
+                        if is_flash_mask_available():
+                            from paddlefleet.ops.flash_mask.cute.interface import (
+                                flashmask_attention as fa4,
+                            )
+                        else:
+                            raise ModuleNotFoundError("flash_mask not available.")
                     else:
-                        raise ModuleNotFoundError("flash_mask not available.")
+                        from paddlefleet_ops import is_flash_mask_available
+
+                        if is_flash_mask_available():
+                            from paddlefleet_ops.flash_mask.cute.interface import (
+                                flashmask_attention as fa4,
+                            )
+                        else:
+                            raise ModuleNotFoundError("flash_mask not available.")
 
                 except (ImportError, ModuleNotFoundError):
                     logger.info(f"The current platform[sm{get_sm_version()}] can't import Flash Attention V4.")
