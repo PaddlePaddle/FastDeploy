@@ -274,6 +274,11 @@ class FusedMoE(nn.Layer):
         assert self.quant_method is not None, "self.quant_method should not be None"
         self.redundant_table_manger = redundant_table_manger
         self.is_rearrange = False
+        if envs.FD_USE_BLACKWELL_GEMM:
+            self.quant_group_size = 32
+        else:
+            self.quant_group_size = 128
+
         if self.ep_size > 1:
             self.quant_method.init_ep(self)
         self.enable_routing_replay = fd_config.routing_replay_config.enable_routing_replay

@@ -27,8 +27,6 @@ from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     deep_gemm,
     paddlefleet_ops,
-    quant_weight_ue8m0,
-    transform_scale_ue8m0,
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import (
@@ -95,7 +93,6 @@ def call_prefill_permute_to_masked_gemm(
     if topk_ids.dtype != paddle.int64:
         topk_ids = topk_ids.cast(paddle.int64)
 
-    # results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
     results = blackwell_ops.prefill_permute_to_blackwell_masked_gemm(
         x, scale, topk_ids, num_local_experts, max_token_num
     )
@@ -288,7 +285,7 @@ def moe_topk_select(
 
 class BlackwellGemmFusedMoeMethod(MoEMethodBase):
     """
-    DeepGemmFusedMoeMethod is a class that implements the MoEMethodBase interface for DeepGemm backend.
+    BlackwellGemmFusedMoeMethod is a class that implements the MoEMethodBase interface for BlackwellGemm backend.
     """
 
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
@@ -454,18 +451,14 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
             scale_list = []
 
             for expert_id in range(layer.num_local_experts):
-                w_q, s_fp32 = quant_weight_ue8m0(
-                    weight_dequant=getattr(layer, unquantized_weight_name)[expert_id].transpose([1, 0]).contiguous(),
-                    weight_block_size=self.quant_config.weight_block_size,
-                )
-                s_ue8m0 = transform_scale_ue8m0(
-                    s_fp32, mn=w_q.shape[-2], weight_block_size=self.quant_config.weight_block_size
+                w_q, s_q = blackwell_ops.group_wise_quant(
+                    getattr(layer, unquantized_weight_name)[expert_id].transpose([1, 0]).contiguous(),
+                    False,
+                    True,  # use_swzzle
                 )
                 weight[expert_id].copy_(w_q, False)
-                scale_list.append(s_ue8m0)
-            scale = paddle.to_tensor(scale_list).transpose([0, 2, 1]).contiguous().transpose([0, 2, 1])
-
-            scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
+                scale_list.append(s_q)
+            scale = paddle.to_tensor(scale_list).contiguous()
 
             free_tensor(getattr(layer, unquantized_weight_name))
             free_tensor(getattr(layer, weight_name))
@@ -482,15 +475,15 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
                 layer,
                 scale_name,
                 layer.create_parameter(
-                    shape=scale_bw.shape,
-                    dtype=scale_bw.dtype,
+                    shape=scale.shape,
+                    dtype=scale.dtype,
                     default_initializer=paddle.nn.initializer.Constant(0),
                 ),
             )
 
             getattr(layer, weight_name).copy_(weight, False)
             scale_param = getattr(layer, scale_name)
-            scale_param.data = scale_bw
+            scale_param.data = scale
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize
@@ -509,7 +502,7 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
-        deepgemm create weight process.
+        blackwell gemm create weight process.
         """
         up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
 
@@ -580,26 +573,14 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
                 )
             )
 
-        if not self.quant_config.deepgemm_scale_ue8m0:
-            up_gate_proj_weight = (
-                paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-            )
-            down_proj_weight = (
-                paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-            )
-            up_gate_proj_weight_scale = (
-                paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
-            )
-            down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1]).contiguous()
-        else:
-            up_gate_proj_weight = (
-                paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-            )
-            down_proj_weight = (
-                paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
-            )
-            up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1])
-            down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1])
+        up_gate_proj_weight = (
+            paddle.stack(up_gate_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+        )
+        down_proj_weight = (
+            paddle.stack(down_proj_weights, axis=0).transpose([0, 2, 1]).contiguous().view("float8_e4m3fn")
+        )
+        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1])
+        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1])
 
         name_tensor_map = {
             "up_gate_proj_weight": up_gate_proj_weight,
@@ -647,29 +628,28 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
-        # 2. Dynamic compute blockwise quantization scales
-        if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
-            x_fp8, x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                x, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
-            )
-        else:
-            x_fp8, x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-                x,
-                using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
-                output_scale_transpose=self.quant_config.deepgemm_scale_ue8m0,
-                using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
-            )
-            x_scale_tensor = (
-                x_scale_tensor[: x.shape[0]]
-                if not self.quant_config.deepgemm_scale_ue8m0
-                else x_scale_tensor.T[: x.shape[0]]
-            )
+        # 2. Dynamic compute blockwise quantization scales x_scale_tensor doesn‘t need to be swizzle
+        x_fp8, x_scale_tensor = blackwell_ops.group_wise_quant(x, False, False)
 
         event = deep_ep.Buffer.capture()
 
         if self.ep_prefill_runner.num_worst_tokens <= 0:
             let_another_thread_run()
+
+        max_tokens_per_rank = 0
+        if self.ep_prefill_runner.num_worst_tokens > 0:
+            token_split_factor = 2 if int(os.getenv("USE_TBO", "0")) == 1 else 1
+            max_tokens_per_rank = (
+                layer.fd_config.scheduler_config.max_num_batched_tokens
+                // layer.fd_config.parallel_config.tensor_parallel_size
+                // token_split_factor
+            )
         # 3. EP Dispatch
+        # fuse permute and swizzle in dispatch if use_mask_prmt is True
+        # TODO(lizhenyun01):
+        #    1. profiler use_mask_prmt
+        #    2. support contiguous prmt
+        use_mask_prmt = True
         (
             recv_x,
             recv_topk_idx,
@@ -677,8 +657,18 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
             recv_num_tokens_per_expert_list,
             handle,
             event,
+            permuted_indice_map,
+            token_nums_per_expert,
         ) = self.ep_prefill_runner.dispatch(
-            x_fp8, topk_idx, topk_weights, x_scale_tensor=x_scale_tensor, expert_alignment=128, previous_event=event
+            x_fp8,
+            topk_idx,
+            topk_weights,
+            x_scale_tensor=x_scale_tensor,
+            expert_alignment=128,
+            previous_event=event,
+            quant_group_size=layer.quant_group_size,
+            use_mask_prmt=use_mask_prmt,
+            max_tokens_per_expert=layer.ep_size * max_tokens_per_rank,
         )
 
         if self.ep_prefill_runner.num_worst_tokens > 0:
@@ -695,7 +685,6 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
             global_values[thread_name] = {}
 
         (recv_x_value, recv_x_scale) = recv_x
-        (recv_x_value, recv_x_scale) = recv_x
 
         global_values[thread_name]["x"] = x
         global_values[thread_name]["topk_idx"] = topk_idx
@@ -711,32 +700,23 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
 
         token_all_num = sum(recv_num_tokens_per_expert_list)
 
-        # Note(ZKK):
-        # below code have many del, so ugly!
-        # but considering MoE Prefill will reach peak GPU memory,
-        # so here we manually del a var as soon as it's not used.
-
         # 4. Compute ffn
         if self.ep_prefill_runner.num_worst_tokens > 0:
-            token_split_factor = 2 if int(os.getenv("USE_TBO", "0")) == 1 else 1
-            max_tokens_per_rank = (
-                layer.fd_config.scheduler_config.max_num_batched_tokens
-                // layer.fd_config.parallel_config.tensor_parallel_size
-                // token_split_factor
-            )
-
             logger.debug(f"max_tokens_per_rank {max_tokens_per_rank}")
 
-            permute_input, permute_scale, permuted_indice_map, token_nums_per_expert = (
-                call_prefill_permute_to_masked_gemm(
-                    x=recv_x_value,
-                    scale=recv_x_scale,
-                    topk_ids=recv_topk_idx,
-                    num_local_experts=layer.num_local_experts,
-                    max_token_num=layer.ep_size * max_tokens_per_rank,
+            if use_mask_prmt:  # fuse permute and padding in dispatch
+                permute_input = recv_x_value.reshape([-1, recv_x_value.shape[-1]])
+                permute_scale = recv_x_scale
+            else:  # need permute and swizzle
+                permute_input, permute_scale, permuted_indice_map, token_nums_per_expert = (
+                    call_prefill_permute_to_masked_gemm(
+                        x=recv_x_value,
+                        scale=recv_x_scale,
+                        topk_ids=recv_topk_idx,
+                        num_local_experts=layer.num_local_experts,
+                        max_token_num=layer.ep_size * max_tokens_per_rank,
+                    )
                 )
-            )
-
             up_gate_proj_out = paddle.empty(
                 [
                     layer.num_local_experts * layer.ep_size * max_tokens_per_rank,
@@ -800,130 +780,11 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
                 x=ffn_out,
                 indice_map=permuted_indice_map,
                 topk_weights=recv_topk_weights,
-                num_worst_tokens=recv_x_value.shape[0],
+                num_worst_tokens=permuted_indice_map.shape[0],
             )
 
         elif token_all_num > 0:
-            logger.debug(f"token_all_num {token_all_num}")
-
-            if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE:
-                recv_topk_idx = recv_topk_idx.astype(paddle.int32)
-                (
-                    permute_input,
-                    permute_indices_per_token,  # == zipped_expertwise_rowmap
-                    dst_weights,
-                    permute_scale,
-                    m_indices,
-                ) = paddle.nn.functional.moe_permute(
-                    hidden_states=recv_x_value,
-                    scale=recv_x_scale,
-                    expert_routemap_topk=recv_topk_idx,
-                    expert_prob_topk=recv_topk_weights,
-                    num_experts=layer.num_local_experts,
-                    tokens_per_expert=[],
-                    padding_alignment=128,
-                    return_expert_indices=True,
-                    override_buffer_size=token_all_num,
-                    using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
-                )
-            else:
-                token_nums_this_rank = count_tokens_per_expert_func(recv_topk_idx, layer.num_local_experts)
-                (
-                    permute_input,
-                    permute_scale,
-                    permute_indices_per_token,
-                    recv_num_tokens_per_expert_list_cumsum,
-                    recv_num_tokens_per_expert_list_padded_cumsum,
-                    dst_weights,
-                    dst_indices,
-                    cumsum_idx_gpu,
-                    m_indices,
-                ) = fastdeploy.model_executor.ops.gpu.ep_moe_expert_dispatch_fp8(
-                    recv_x_value,
-                    recv_x_scale,
-                    recv_topk_idx,
-                    recv_topk_weights,
-                    token_nums_this_rank[0],
-                    token_nums_this_rank[1],
-                    True,  # use_in_ep
-                    token_all_num,
-                )
-
-            assert permute_input.shape[0] == token_all_num
-
-            if permute_scale.strides[0] != 1:
-                permute_scale = permute_scale.transpose([1, 0]).contiguous().transpose([1, 0])
-
-            # up_gate_proj
-            ffn_out = paddle.empty(
-                (token_all_num, getattr(layer, self.added_weight_attrs[0]).shape[1]),
-                dtype=paddle.bfloat16,
-            )
-            m_grouped_fp8_gemm_nt_contiguous(
-                (permute_input, permute_scale),
-                (getattr(layer, self.added_weight_attrs[0]), getattr(layer, self.added_scale_attrs[0])),
-                ffn_out,
-                m_indices,
-            )
-
-            if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE:
-                ffn_in_x, ffn_in_x_scale_tensor = paddlefleet_ops.fuse_weighted_swiglu_fp8_quant(
-                    ffn_out, dst_weights, using_pow2_scaling=True, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
-                )
-
-                ffn_in_x_scale_tensor = paddle.transpose(
-                    paddle.transpose(ffn_in_x_scale_tensor, [1, 0]).contiguous(), [1, 0]
-                )
-            else:
-                # swiglu
-                ffn_out = paddle.incubate.nn.functional.swiglu(ffn_out, None)
-
-                # down_proj
-                if not fastdeploy.envs.FD_USE_PHI_FP8_QUANT:
-                    ffn_in_x, ffn_in_x_scale_tensor = fastdeploy.model_executor.ops.gpu.per_token_quant(
-                        ffn_out, self.quant_config.weight_block_size[0], self.quant_config.deepgemm_scale_ue8m0
-                    )
-                    ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.transpose([1, 0]).contiguous().transpose([1, 0])
-                else:
-                    ffn_in_x, ffn_in_x_scale_tensor = paddle.incubate.nn.functional.fp8_quant_blockwise(
-                        ffn_out,
-                        using_pow2_scale=self.quant_config.deepgemm_scale_ue8m0,
-                        using_ue8m0_scale=self.quant_config.deepgemm_scale_ue8m0,
-                    )
-                    ffn_in_x_scale_tensor = ffn_in_x_scale_tensor.T[: ffn_in_x.shape[0]]
-
-            ffn_out = paddle.empty(
-                (token_all_num, getattr(layer, self.added_weight_attrs[1]).shape[1]),
-                dtype=paddle.bfloat16,
-            )
-            m_grouped_fp8_gemm_nt_contiguous(
-                (ffn_in_x, ffn_in_x_scale_tensor),
-                (getattr(layer, self.added_weight_attrs[1]), getattr(layer, self.added_scale_attrs[1])),
-                ffn_out,
-                m_indices,
-            )
-            if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE:
-                tmp_ffn_out, out_probs = paddle.nn.functional.moe_unpermute(
-                    hidden_states_unzipped=ffn_out,
-                    zipped_expertwise_rowmap=permute_indices_per_token,
-                    expert_routemap_topk=recv_topk_idx,
-                    token_prob_unzipped=dst_weights,
-                    total_zipped_tokens=recv_x_value.shape[0],
-                    num_experts=layer.num_local_experts,
-                    using_weighted_combine=not fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE,
-                )
-
-            else:
-                # prmt back per rank
-                tmp_ffn_out = fastdeploy.model_executor.ops.gpu.ep_moe_expert_combine(
-                    ffn_out,
-                    dst_weights,
-                    permute_indices_per_token,
-                    dst_indices,
-                    None,  # down_proj_bias
-                    False,  # norm_topk_prob
-                    1.0,
-                )
+            raise RuntimeError("contigious gemm is not support yet, please use deepgemm")
         else:
             tmp_ffn_out = paddle.empty([0, hidden_size], paddle.bfloat16)
 
@@ -971,7 +832,7 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
 
         # 2. EP Dispatch
         permute_input, token_nums_per_expert, handle = self.ep_decoder_runner.dispatch(
-            x, topk_idx, topk_weights, use_fp8=True, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
+            x, topk_idx, topk_weights, use_fp8=True, use_ue8m0=True, quant_group_size=layer.quant_group_size
         )
         # 3. Compute ffn
         assert isinstance(permute_input, tuple)
@@ -993,13 +854,10 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
             ],
             dtype=paddle.bfloat16,
         )
-        input_x = permute_input[0].reshape([-1, permute_input[0].shape[-1]])
-
-        permute_scale_new = blackwell_ops.unpack_and_convert_scale(permute_input[1], token_nums_per_expert)
         group_gemm_masked(
-            input_x,
+            permute_input[0].reshape([-1, permute_input[0].shape[-1]]),
             getattr(layer, self.added_weight_attrs[0]),
-            permute_scale_new,
+            permute_input[1],
             getattr(layer, self.added_scale_attrs[0]),  # weight_scale_new
             token_nums_per_expert,
             up_gate_proj_out,
@@ -1045,7 +903,7 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
         topk_ids_hookfunc: Callable = None,
     ) -> paddle.Tensor:
         """
-        Paddle Use DeepGemm compute Fused MoE.
+        Paddle Use BlackWellGemm compute Fused MoE.
         below is TP compute method.
         """
         gate_out = gate(x)

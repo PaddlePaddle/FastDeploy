@@ -42,16 +42,22 @@ def load_deep_ep() -> ModuleType:
         if envs.FD_USE_PFCC_DEEP_EP:
             # Enable paddle.enable_compat before importing deep_ep (required by PFCC/PaddleFleet variants)
             paddle.enable_compat(scope={"deep_ep"})
-            try:
-                import paddlefleet.ops.deep_ep as deep_ep  # type: ignore
-
-                logger.info("FD use PaddleFleet/DeepEP now.")
-                return deep_ep
-            except ModuleNotFoundError:
-                import deep_ep  # type: ignore
+            if envs.FD_USE_BLACKWELL_GEMM:
+                import deep_ep
 
                 logger.info("FD use PFCCLab/DeepEP now.")
                 return deep_ep
+            else:
+                try:
+                    import paddlefleet.ops.deep_ep as deep_ep  # type: ignore
+
+                    logger.info("FD use PaddleFleet/DeepEP now.")
+                    return deep_ep
+                except ModuleNotFoundError:
+                    import deep_ep  # type: ignore
+
+                    logger.info("FD use PFCCLab/DeepEP now.")
+                    return deep_ep
         else:
             from paddle.distributed.communication import deep_ep  # type: ignore
 
@@ -102,6 +108,7 @@ class DeepEPBuffer:
         moe_phase: MoEPhase,
         use_internode_ll_two_stage: bool = False,
         top_k: int = 8,
+        quant_group_size: int = 128,
     ):
         self.group = group
         self.hidden_size = hidden_size
@@ -112,6 +119,7 @@ class DeepEPBuffer:
         self.moe_phase = moe_phase
         self.use_internode_ll_two_stage = use_internode_ll_two_stage
         self.top_k = top_k
+        self.quant_group_size = quant_group_size
 
         self.deepep_buffer = None
         self.num_nvl_bytes = 0
@@ -141,6 +149,7 @@ class DeepEPBuffer:
                     self.hidden_size,
                     self.ep_size,
                     self.num_experts,
+                    quant_group_size=self.quant_group_size,
                 )
             else:
                 num_rdma_bytes = deep_ep.Buffer.get_low_latency_rdma_size_hint_two_stage(
@@ -263,6 +272,7 @@ class DeepEPEngine:
         group=None,
         use_internode_ll_two_stage: bool = False,
         top_k: int = 8,
+        quant_group_size: int = 128,
     ):
         if group is None:
             group = paddle.distributed.new_group(range(ep_size))
@@ -273,6 +283,7 @@ class DeepEPEngine:
         self.num_experts = num_experts
         self.num_local_experts = num_experts // ep_size
         self.top_k = top_k
+        self.quant_group_size = quant_group_size
         self.async_finish = async_finish
 
         self.ep_config = None
@@ -292,6 +303,7 @@ class DeepEPEngine:
             moe_phase=moe_phase,
             use_internode_ll_two_stage=use_internode_ll_two_stage,
             top_k=self.top_k,
+            quant_group_size=self.quant_group_size,
         )
         self.buffer.create_buffer()
 
@@ -338,6 +350,7 @@ class DeepEPEngine:
                 return_recv_hook=True,
                 round_scale=use_ue8m0,
                 use_ue8m0=use_ue8m0,
+                quant_group_size=quant_group_size,
             )
         else:
             (
@@ -468,6 +481,7 @@ class EPRunner:
         redundant_experts_num: int = 0,
         ep_group=None,
         use_internode_ll_two_stage: bool = False,
+        quant_group_size: int = 128,
     ):
         self.top_k = top_k
         self.num_experts = num_experts
@@ -484,6 +498,7 @@ class EPRunner:
             group=ep_group,
             use_internode_ll_two_stage=self.use_internode_ll_two_stage,
             top_k=self.top_k,
+            quant_group_size=quant_group_size,
         )
 
     def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
@@ -588,6 +603,7 @@ class EPPrefillRunner(EPRunner):
         ep_group=None,
         use_internode_ll_two_stage: bool = False,
         prefill_num_worst_tokens: int = 0,
+        quant_group_size: int = 128,
     ):
         super().__init__(
             top_k,
@@ -601,6 +617,7 @@ class EPPrefillRunner(EPRunner):
             redundant_experts_num=redundant_experts_num,
             ep_group=ep_group,
             use_internode_ll_two_stage=use_internode_ll_two_stage,
+            quant_group_size=quant_group_size,
         )
         self.num_worst_tokens = prefill_num_worst_tokens
         self._dispatch_parameters: Optional[set] = None
@@ -643,6 +660,9 @@ class EPPrefillRunner(EPRunner):
         )
 
         x_scale_tensor = kwargs.get("x_scale_tensor", None)
+        quant_group_size = kwargs.get("quant_group_size", 128)
+        use_mask_prmt = kwargs.get("use_mask_prmt", False)
+        max_tokens_per_expert = kwargs.get("max_tokens_per_expert", 0)
         dispatch_args = {
             "x": (x, x_scale_tensor) if x_scale_tensor is not None else x,
             "num_tokens_per_rank": num_tokens_per_rank,
@@ -656,6 +676,9 @@ class EPPrefillRunner(EPRunner):
             "expert_alignment": expert_alignment,
             "allocate_on_comm_stream": EPPrefillRunner.allocate_on_comm_stream,
             "previous_event": event,
+            "quant_group_size": quant_group_size,
+            "use_mask_prmt": use_mask_prmt,
+            "max_tokens_per_expert": max_tokens_per_expert,
         }
 
         if envs.FD_USE_PFCC_DEEP_EP:
@@ -717,6 +740,7 @@ class EPDecoderRunner(EPRunner):
         ep_group=None,
         moe_phase: MoEPhase = MoEPhase("decode"),
         use_internode_ll_two_stage: bool = False,
+        quant_group_size: int = 128,
     ):
         super().__init__(
             top_k,
@@ -730,6 +754,7 @@ class EPDecoderRunner(EPRunner):
             redundant_experts_num=redundant_experts_num,
             ep_group=ep_group,
             use_internode_ll_two_stage=use_internode_ll_two_stage,
+            quant_group_size=quant_group_size,
         )
 
     def dispatch(

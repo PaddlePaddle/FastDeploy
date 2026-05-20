@@ -87,6 +87,7 @@ class MoEMethodBase(QuantMethodBase):
             "ep_rank": layer.ep_rank,
             "redundant_experts_num": layer.fd_config.eplb_config.redundant_experts_num,
             "ep_group": layer.fd_config.parallel_config.ep_group,
+            "quant_group_size": layer.quant_group_size,
         }
 
         config = layer.fd_config
