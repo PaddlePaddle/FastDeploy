@@ -7,7 +7,7 @@ on:
       - synchronize
     branches:
       - develop
-      - release/**
+      - release/*
 
 permissions:
   contents: read
