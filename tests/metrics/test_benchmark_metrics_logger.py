@@ -366,3 +366,134 @@ def test_invalid_metrics_unknown(mock_envs):
     fd_cfg = _make_fd_config_with_benchmark(benchmark_cfg)
     with pytest.raises(AssertionError, match="unknown metric"):
         fd_cfg.check()
+
+
+# ============================================================
+# Direct method tests (bypass daemon thread for coverage)
+# ============================================================
+
+
+def test_process_pending_direct(tmp_path):
+    """Directly call _process_pending to cover lines 98-109."""
+    config = BenchmarkMetricsConfig({"enable": True, "window_size": 0, "metrics": "all", "percentiles": "50,99"})
+    logger = BenchmarkMetricsLogger(config=config, log_dir=str(tmp_path), dp_rank=0)
+
+    now = time.time()
+    # Add records directly to _pending without relying on background thread
+    for i in range(3):
+        logger._pending.append(_make_record(f"req-{i}", now, i * 0.5))
+
+    # Call _process_pending directly from main thread (coverage-tracked)
+    logger._process_pending()
+
+    assert len(logger._window) == 3
+    logger.shutdown()
+
+    jsonl_path = os.path.join(str(tmp_path), "benchmark_metrics.jsonl")
+    with open(jsonl_path) as f:
+        lines = f.readlines()
+    assert len(lines) == 3
+    rec = json.loads(lines[-1])
+    assert rec["completed"] == 3
+    assert "ttft_ms" in rec
+    assert "tpot_ms" in rec
+    assert "e2el_ms" in rec
+    assert "s_ttft_ms" in rec
+    assert "s_e2el_ms" in rec
+    assert "s_decode" in rec
+    assert "input_len" in rec
+    assert "s_input_len" in rec
+    assert "output_len" in rec
+    assert "request_throughput" in rec
+    assert "output_throughput" in rec
+    assert "total_throughput" in rec
+
+
+def test_process_pending_tumbling_clear(tmp_path):
+    """Tumbling window clears after reaching window_size via direct call."""
+    config = BenchmarkMetricsConfig(
+        {"enable": True, "window_size": 2, "window_mode": "tumbling", "metrics": "ttft", "percentiles": "50"}
+    )
+    logger = BenchmarkMetricsLogger(config=config, log_dir=str(tmp_path), dp_rank=0)
+
+    now = time.time()
+    for i in range(3):
+        logger._pending.append(_make_record(f"req-{i}", now, i * 0.5))
+
+    logger._process_pending()
+
+    # After 3 records with window_size=2: first 2 fill window then clear, 3rd starts fresh
+    assert len(logger._window) == 1
+    logger.shutdown()
+
+
+def test_compute_rolling_stats_empty_window(tmp_path):
+    """_compute_rolling_stats with empty window returns minimal result."""
+    config = BenchmarkMetricsConfig({"enable": True, "window_size": 0, "metrics": "all", "percentiles": "50"})
+    logger = BenchmarkMetricsLogger(config=config, log_dir=str(tmp_path), dp_rank=0)
+
+    result = logger._compute_rolling_stats()
+    assert result["completed"] == 0
+    logger.shutdown()
+
+
+def test_compute_rolling_stats_single_record(tmp_path):
+    """Single record: no throughput, no tpot (needs output_len > 1 check)."""
+    config = BenchmarkMetricsConfig({"enable": True, "window_size": 0, "metrics": "all", "percentiles": "50,99"})
+    logger = BenchmarkMetricsLogger(config=config, log_dir=str(tmp_path), dp_rank=0)
+
+    now = time.time()
+    # output_len=1 means tpot and decode_speed won't be computed
+    logger._window.append(
+        CompletedRequestRecord(
+            request_id="r1",
+            completion_time=now,
+            arrival_time=now - 0.05,
+            inference_start_time=now - 0.04,
+            first_token_time=now - 0.02,
+            last_token_time=now,
+            input_len=100,
+            output_len=1,
+            itl_samples=[],
+        )
+    )
+
+    result = logger._compute_rolling_stats()
+    assert result["completed"] == 1
+    assert "request_throughput" not in result  # duration=0 for single record
+    assert result["ttft_ms"]["mean"] > 0
+    assert result["tpot_ms"] == {}  # no tpot with output_len=1
+    assert result["s_itl_ms"] == {}  # no itl samples
+    logger.shutdown()
+
+
+def test_compute_rolling_stats_multiple_records(tmp_path):
+    """Multiple records: throughput and all metrics computed."""
+    config = BenchmarkMetricsConfig({"enable": True, "window_size": 0, "metrics": "all", "percentiles": "50,95"})
+    logger = BenchmarkMetricsLogger(config=config, log_dir=str(tmp_path), dp_rank=0)
+
+    now = time.time()
+    for i in range(3):
+        logger._window.append(_make_record(f"req-{i}", now, i * 0.5))
+
+    result = logger._compute_rolling_stats()
+    assert result["completed"] == 3
+    assert result["request_throughput"] > 0
+    assert result["output_throughput"] > 0
+    assert result["total_throughput"] > 0
+    assert result["ttft_ms"]["mean"] > 0
+    assert result["s_ttft_ms"]["mean"] > 0
+    assert result["tpot_ms"]["mean"] > 0
+    assert result["s_itl_ms"]["mean"] > 0
+    assert result["e2el_ms"]["mean"] > 0
+    assert result["s_e2el_ms"]["mean"] > 0
+    assert result["s_decode"]["mean"] > 0
+    assert "p50" in result["ttft_ms"]
+    assert "p95" in result["ttft_ms"]
+    logger.shutdown()
+
+
+def test_stats_with_float_percentile():
+    """Percentile key uses float format when not integer."""
+    stats = BenchmarkMetricsLogger._stats([1.0, 2.0, 3.0], [99.9])
+    assert "p99.9" in stats
