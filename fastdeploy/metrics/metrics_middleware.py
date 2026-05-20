@@ -52,7 +52,11 @@ class PrometheusMiddleware(BaseHTTPMiddleware):
             process_time = end_time - start_time
 
             # record http metrics
-            main_process_metrics.http_requests_total.labels(method=method, path=path, status_code=status_code).inc()
-            main_process_metrics.http_request_duration_seconds.labels(method=method, path=path).observe(process_time)
+            main_process_metrics.inc_value(
+                "http_requests_total", labelvalues={"method": method, "path": path, "status_code": status_code}
+            )
+            main_process_metrics.obs_value(
+                "http_request_duration_seconds", process_time, labelvalues={"method": method, "path": path}
+            )
 
         return response

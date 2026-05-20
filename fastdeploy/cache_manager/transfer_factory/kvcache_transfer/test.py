@@ -12,8 +12,9 @@ import random
 import time
 
 import paddle
-import rdma_comm
 import zmq
+
+import rdma_comm
 
 if paddle.is_compiled_with_xpu():
     from custom_setup_ops import get_peer_mem_addr
