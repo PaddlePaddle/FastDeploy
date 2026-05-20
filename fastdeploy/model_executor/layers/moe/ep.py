@@ -27,7 +27,10 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.config import MoEPhase
+from fastdeploy.model_executor.utils import try_import
 from fastdeploy.utils import singleton
+
+paddlefleet_ops = try_import(["paddlefleet.ops"])
 
 
 def load_deep_ep() -> ModuleType:
