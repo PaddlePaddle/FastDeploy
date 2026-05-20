@@ -3056,13 +3056,6 @@ class GPUModelRunner(ModelRunnerBase):
             ):
                 self.proposer.model.clear_graph_opt_backend()
 
-        # Clear block-wise CUDA graphs
-        if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
-            from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
-                clear_all_block_wise_graphs,
-            )
-
-            clear_all_block_wise_graphs()
         # Clear parameters and Send single
         self.dynamic_weight_manager.clear_parameters(
             pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
