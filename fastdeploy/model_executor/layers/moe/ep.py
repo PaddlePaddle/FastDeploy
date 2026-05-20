@@ -27,7 +27,10 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.config import MoEPhase
+from fastdeploy.model_executor.utils import try_import
 from fastdeploy.utils import singleton
+
+paddlefleet_ops = try_import(["paddlefleet.ops"])
 
 
 def load_deep_ep() -> ModuleType:
@@ -43,7 +46,7 @@ def load_deep_ep() -> ModuleType:
             # Enable paddle.enable_compat before importing deep_ep (required by PFCC/PaddleFleet variants)
             paddle.enable_compat(scope={"deep_ep"})
             try:
-                import paddlefleet.ops.deep_ep as deep_ep  # type: ignore
+                import paddlefleet_ops.deep_ep as deep_ep  # type: ignore
 
                 logger.info("FD use PaddleFleet/DeepEP now.")
                 return deep_ep

@@ -325,7 +325,7 @@ class ResourceManagerV1(ResourceManager):
                 del self.req_dict[request_id]
                 self.to_be_aborted_req_id_set.discard(request_id)
                 self.waiting_abort_req_id_set.discard(request_id)
-                llm_logger.debug(f"request_id:{request_id} recycle end")
+                llm_logger.debug(f"request_id:{request_id} recycle abort task end")
         self.update_metrics()
 
     def _trigger_abort(self, request_id, batch_request):
@@ -338,6 +338,7 @@ class ResourceManagerV1(ResourceManager):
             batch_request.add_request(self._prepare_abort_task(abort_request))
             self.to_be_aborted_req_id_set.add(request_id)
             self.waiting_abort_req_id_set.discard(request_id)
+            llm_logger.debug(f"request_id:{request_id} trigger abort")
 
     def _info_each_block(self):
         """
@@ -1794,15 +1795,26 @@ class ResourceManagerV1(ResourceManager):
         prefill_reqs = [r for r in batch_request if isinstance(r, Request) and r.task_type == RequestType.PREFILL]
         has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in batch_request)
 
-        self.scheduler_metrics_logger.log_prefill_batch(
-            prefill_reqs=prefill_reqs,
-            running_cnt=running_cnt,
-            queue_cnt=queue_cnt,
-            tokens_used=tokens_used,
-            token_usage=token_usage,
-            free_blocks=free_blocks,
-            evictable_blocks=evictable_blocks,
-        )
+        if self.config.scheduler_config.splitwise_role == "decode":
+            self.scheduler_metrics_logger.log_decode_bootstrap_batch(
+                prefill_reqs=prefill_reqs,
+                running_cnt=running_cnt,
+                queue_cnt=queue_cnt,
+                tokens_used=tokens_used,
+                token_usage=token_usage,
+                free_blocks=free_blocks,
+                evictable_blocks=evictable_blocks,
+            )
+        else:
+            self.scheduler_metrics_logger.log_prefill_batch(
+                prefill_reqs=prefill_reqs,
+                running_cnt=running_cnt,
+                queue_cnt=queue_cnt,
+                tokens_used=tokens_used,
+                token_usage=token_usage,
+                free_blocks=free_blocks,
+                evictable_blocks=evictable_blocks,
+            )
         if has_decode:
             has_prefill = len(prefill_reqs) > 0
             graph_opt_cfg = self.config.graph_opt_config

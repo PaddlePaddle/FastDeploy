@@ -1964,6 +1964,7 @@ class FDConfig:
                     in [
                         SpecMethod.MTP,
                         SpecMethod.SUFFIX,
+                        SpecMethod.NGRAM,
                     ]
                 )
                 else 0

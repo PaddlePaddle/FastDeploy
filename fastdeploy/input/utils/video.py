@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Shared video utilities: VideoReaderWrapper, read_video_decord, sample_frames, read_frames_decord."""
+"""Shared video utilities: VideoReaderWrapper, read_video_paddlecodec, sample_frames, read_frames_paddlecodec."""
 
 import datetime
 import hashlib
@@ -26,19 +26,22 @@ from tempfile import NamedTemporaryFile as ntf
 from typing import Optional, Union
 
 import numpy as np
+import paddle
 from PIL import Image
 
 from fastdeploy.input.image_processors.common import ceil_by_factor, floor_by_factor
-from fastdeploy.utils import data_processor_logger
+from fastdeploy.utils import data_processor_logger, get_logger
+
+logger = get_logger("video_utils")
 
 __all__ = [
     "VideoReaderWrapper",
-    "read_video_decord",
+    "read_video_paddlecodec",
     "sample_frames",
     "sample_frames_qwen",
     "sample_frames_paddleocr",
     "get_frame_indices",
-    "read_frames_decord",
+    "read_frames_paddlecodec",
     "EXTRACTED_FRAME_DIR",
     "get_filename",
 ]
@@ -54,15 +57,20 @@ def _is_gif(data: bytes) -> bool:
     return data[:6] in (b"GIF87a", b"GIF89a")
 
 
-class VideoReaderWrapper:
-    """decord.VideoReader wrapper that fixes a memory leak and adds GIF support.
+class _NumpyFrame:
+    """Wrapper so that frame[idx].asnumpy() keeps working with paddlecodec."""
 
-    Reference: https://github.com/dmlc/decord/issues/208
-    """
+    def __init__(self, array):
+        self._array = array
+
+    def asnumpy(self):
+        return self._array
+
+
+class VideoReaderWrapper:
+    """paddlecodec VideoDecoder wrapper with GIF support."""
 
     def __init__(self, video_path, *args, **kwargs):
-        import decord
-
         try:
             # moviepy 1.0
             import moviepy.editor as mp
@@ -101,22 +109,53 @@ class VideoReaderWrapper:
                 video_path = mp4_path
                 self.original_file = video_path  # temp mp4, cleaned up in __del__
 
-            self._reader = decord.VideoReader(video_path, *args, **kwargs)
-            self._reader.seek(0)
+            with paddle.use_compat_guard(enable=True, scope={"torchcodec"}):
+                try:
+                    import sys
+
+                    from torchcodec.decoders import VideoDecoder
+
+                    sys.modules["torchcodec"] = None
+                except (ImportError, RuntimeError) as e:
+                    logger.error(
+                        f"Failed to load 'torchcodec' backend via Paddle proxy.\n"
+                        f"  - Common Causes:\n"
+                        f"    1. Conflict with official 'torch' or 'torchcodec' packages.\n"
+                        f"    2. Missing FFmpeg libraries or System library mismatch (CXXABI).\n"
+                        f"  - Recommended Fix Steps:\n"
+                        f"    1. Install dependencies: `conda install ffmpeg -c conda-forge` or `apt-get update && apt-get install ffmpeg` \n"
+                        f"    2. Uninstall conflicts: `pip uninstall torchcodec paddlecodec -y`\n"
+                        f"    3. Reinstall packages: `pip install paddlecodec --force-reinstall`\n"
+                        f"  - If you encounter 'CXXABI' or 'libstdc++' errors, your system libraries might be outdated.\n"
+                        f"    Try prioritizing Conda libraries by running: `LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH python your_script.py`\n"
+                        f"  - Original Error: {e}"
+                    )
+                    raise
+                PADDLECODEC_NUM_THREADS = int(os.environ.get("PADDLECODEC_NUM_THREADS", 0))
+                self._decoder = VideoDecoder(
+                    video_path,
+                    seek_mode="exact",
+                    num_ffmpeg_threads=PADDLECODEC_NUM_THREADS,
+                    device=kwargs.get("device", "cpu"),
+                    dimension_order="NHWC",
+                )
 
     def __len__(self):
-        return len(self._reader)
+        return self._decoder.metadata.num_frames
 
     def __getitem__(self, key):
-        frames = self._reader[key]
-        self._reader.seek(0)
-        return frames
+        if isinstance(key, (int, np.integer)):
+            frame = self._decoder.get_frames_at(indices=[int(key)]).data[0]
+            return _NumpyFrame(frame.numpy())
+        if isinstance(key, slice):
+            indices = list(range(*key.indices(len(self))))
+        else:
+            indices = list(key) if not isinstance(key, list) else key
+        frames = self._decoder.get_frames_at(indices=indices).data
+        return _NumpyFrame(frames.numpy())
 
     def get_avg_fps(self):
-        return self._reader.get_avg_fps()
-
-    def seek(self, pos):
-        return self._reader.seek(pos)
+        return self._decoder.metadata.average_fps
 
     def __del__(self):
         original_file = getattr(self, "original_file", None)
@@ -128,11 +167,11 @@ class VideoReaderWrapper:
 
 
 # ---------------------------------------------------------------------------
-# read_video_decord
+# read_video_paddlecodec
 # ---------------------------------------------------------------------------
 
 
-def read_video_decord(video_path, save_to_disk: bool = False):
+def read_video_paddlecodec(video_path, save_to_disk: bool = False):
     """Load a video file and return (video_reader, video_meta, video_path).
 
     video_meta contains keys: "fps", "duration", "num_of_frame".
@@ -306,7 +345,7 @@ def get_filename(url=None):
 
 
 # ---------------------------------------------------------------------------
-# get_frame_indices / read_frames_decord
+# get_frame_indices / read_frames_paddlecodec
 # (migrated from ernie4_5_vl_processor/process_video.py)
 # ---------------------------------------------------------------------------
 
@@ -376,7 +415,7 @@ def get_frame_indices(
     return frame_indices
 
 
-def read_frames_decord(
+def read_frames_paddlecodec(
     video_path,
     video_reader,
     video_meta,
@@ -389,7 +428,7 @@ def read_frames_decord(
     frame_indices=None,
     tol=10,
 ):
-    """Read frames from a video using decord, with retry logic for corrupt frames."""
+    """Read frames from a video using paddlecodec, with retry logic for corrupt frames."""
     if cache_dir is None:
         cache_dir = EXTRACTED_FRAME_DIR
 

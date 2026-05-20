@@ -1304,6 +1304,10 @@ class XPUModelRunner(ModelRunnerBase):
             else:
                 self.forward_meta.step_use_cudagraph = self.forward_meta.step_use_cudagraph and self.real_token_num <= self.fd_config.graph_opt_config.max_capture_size
 
+            num_tokens = self.share_inputs["ids_remove_padding"].shape[0]
+            if not self.parallel_config.enable_expert_parallel and num_tokens <= 0:
+                return None
+
             # NOTE(wufeisheng): If `not_need_stop`` is False, it means the current worker is in an idle state.
             # This logic is not used in TP (Tensor Parallelism) mode. However, in EP (Expert Parallelism) mode,
             # when there is data on other runner, the current runner is required to execute part of the model.

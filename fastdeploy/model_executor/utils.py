@@ -555,6 +555,30 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
     return fn
 
 
+def try_import(modules, name=None, fail_msg=None):
+    """
+    try_import
+    """
+    if not isinstance(modules, (list, tuple)):
+        modules = [modules]
+
+    for m in modules:
+        assert isinstance(m, str), m
+        try:
+            m = importlib.import_module(m)
+        except ImportError:
+            m = None
+
+        if m is not None:
+            if name is None:
+                return m
+            elif hasattr(m, name):
+                return getattr(m, name)
+
+    if fail_msg is not None:
+        logger.warning(fail_msg)
+
+
 def has_flashinfer():
     return importlib.util.find_spec("flashinfer") is not None
 
