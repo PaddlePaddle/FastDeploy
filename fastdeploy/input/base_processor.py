@@ -57,6 +57,21 @@ from fastdeploy.utils import data_processor_logger, make_choice_id, parse_choice
 _SAMPLING_EPS = 1e-5
 
 
+def _is_forced_tool_choice(tool_choice) -> bool:
+    """Return True iff ``tool_choice`` requires the chat template to inject
+    a tool-call prefix into the prompt — i.e. ``"required"`` or a named-tool
+    choice (``{"type": "function", "function": {...}}``).
+
+    By the time this runs, the request has already been dumped to dict form,
+    so ``tool_choice`` is either a string or a dict.
+    """
+    if isinstance(tool_choice, str):
+        return tool_choice == "required"
+    if isinstance(tool_choice, dict):
+        return tool_choice.get("type") == "function"
+    return False
+
+
 class BaseTextProcessor(ABC):
     """Abstract base class shared by all text / VL processors.
 
@@ -266,6 +281,32 @@ class BaseTextProcessor(ABC):
         else:
             return self.process_response_dict_normal(response_dict, **kwargs)
 
+    def _prepare_tool_prefix(self, tool_parser, request):
+        """Compute and cache on ``tool_parser`` the tool-call prefix that the
+        chat template may have injected at the tail of the rendered prompt
+        (e.g. for ``tool_choice=required``).
+
+        The detection is delegated to the parser itself
+        (:meth:`ToolParser.detect_tool_prefix`) so each parser controls
+        which sentinel tokens it recognizes. We compute once per parser
+        instance — for non-streaming a fresh instance is created per request,
+        for streaming the instance is cached per ``request_id``.
+        """
+        if tool_parser._tool_prefix_computed:
+            return
+        tool_parser._tool_prefix_computed = True
+        tool_parser._tool_prefix = ""
+        if not request:
+            return
+        prompt_str = request.get("prompt_tokens")
+        if not prompt_str or not isinstance(prompt_str, str):
+            return
+        try:
+            tool_parser._tool_prefix = tool_parser.detect_tool_prefix(prompt_str) or ""
+        except Exception:
+            data_processor_logger.exception("detect_tool_prefix failed; falling back to empty prefix")
+            tool_parser._tool_prefix = ""
+
     def process_response_dict_normal(self, response_dict, **kwargs):
         """Accumulate tokens and build the full completion text (non-streaming)."""
         token_ids = response_dict["outputs"]["token_ids"]
@@ -300,7 +341,12 @@ class BaseTextProcessor(ABC):
 
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, request)
+                parser_input = full_text
+                if _is_forced_tool_choice(request.get("tool_choice")):
+                    self._prepare_tool_prefix(tool_parser, request)
+                    if tool_parser._tool_prefix:
+                        parser_input = tool_parser._tool_prefix + full_text
+                tool_call_info = tool_parser.extract_tool_calls(parser_input, request)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
 
@@ -354,10 +400,28 @@ class BaseTextProcessor(ABC):
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parser_dict[req_id]
+            stream_previous = previous_texts
+            stream_current = previous_texts + delta_text
+            stream_delta = delta_text
+            if _is_forced_tool_choice(request.get("tool_choice")):
+                self._prepare_tool_prefix(tool_parser, request)
+                prefix = tool_parser._tool_prefix
+                # When the chat template injected a forced tool-call prefix into
+                # the prompt, the model output starts mid-tool-call. We splice
+                # the prefix back into the streaming arguments so the parser
+                # sees a complete sequence and its existing state machine works
+                # unchanged. ``delta_text`` only needs the splice on the first
+                # call so the parser's start-token detection fires once.
+                if prefix:
+                    stream_previous = prefix + stream_previous
+                    stream_current = prefix + stream_current
+                    if not tool_parser._tool_prefix_injected_to_delta:
+                        stream_delta = prefix + stream_delta
+                        tool_parser._tool_prefix_injected_to_delta = True
             tool_call_delta_message = tool_parser.extract_tool_calls_streaming(
-                previous_texts,
-                previous_texts + delta_text,
-                delta_text,
+                stream_previous,
+                stream_current,
+                stream_delta,
                 previous_token_ids,
                 previous_token_ids + token_ids,
                 token_ids,

@@ -34,6 +34,14 @@ class ToolParser:
     derived classes.
     """
 
+    # Subclasses should override these with the literal tool-call sentinel
+    # tokens they recognize (e.g. ``"<tool_call>"`` / ``"</tool_call>"``).
+    # Used by :meth:`detect_tool_prefix` to support ``tool_choice=required``
+    # style prompt-prefix injection. Empty defaults make the detection a no-op
+    # for parsers that have not opted in.
+    tool_call_start_token: str = ""
+    tool_call_end_token: str = ""
+
     def __init__(self, tokenizer):
         self.prev_tool_call_arr: list[dict] = []
         # the index of the tool call that is currently being parsed
@@ -42,6 +50,21 @@ class ToolParser:
         self.streamed_args_for_tool: list[str] = []
 
         self.model_tokenizer = tokenizer
+
+        # Per-request tool-prefix state, populated by the serving layer when
+        # ``tool_choice=required`` (or similar) causes a tool-call prefix to be
+        # appended to the rendered prompt by the chat template. The parser
+        # itself does not compute these — the serving layer calls
+        # :meth:`detect_tool_prefix` and stashes the result here.
+        self._tool_prefix: str = ""
+        # Idempotency flag: the serving layer may invoke its preparation hook
+        # once per streaming chunk, but the prefix only needs to be computed
+        # once per request. Set to ``True`` after the first computation.
+        self._tool_prefix_computed: bool = False
+        # Whether the prefix has already been spliced into ``delta_text`` for
+        # the streaming path. Only the first streaming call needs the splice;
+        # subsequent calls keep ``delta_text`` untouched.
+        self._tool_prefix_injected_to_delta: bool = False
 
     @cached_property
     def vocab(self) -> dict[str, int]:
@@ -54,6 +77,45 @@ class ToolParser:
         Static method that used to adjust the request parameters.
         """
         return request
+
+    def detect_tool_prefix(self, prompt: str) -> str:
+        """Detect a tool-call prefix that the chat template injected at the tail
+        of the rendered prompt to force tool output (``tool_choice=required``).
+
+        The check is generic: find the **last** occurrence of
+        :attr:`tool_call_start_token` in ``prompt`` and, if it is **not** closed
+        by a subsequent :attr:`tool_call_end_token`, treat the substring from
+        that position to the end of the prompt as the injected prefix. The
+        injected prefix must reach the very end of the prompt (modulo trailing
+        whitespace) — anything else is treated as historical / unrelated and
+        we conservatively return an empty string.
+
+        Returns ``""`` for parsers that have not declared their sentinel tokens
+        or for prompts where no such prefix is detected.
+
+        Subclasses with non-paired tag formats (e.g. a single sentinel without
+        a closing counterpart) may override this method.
+        """
+        start = self.tool_call_start_token
+        if not start or not prompt:
+            return ""
+
+        last_start = prompt.rfind(start)
+        if last_start == -1:
+            return ""
+
+        end = self.tool_call_end_token
+        if end and prompt.find(end, last_start + len(start)) != -1:
+            # The last start token is closed — this is a historical, completed
+            # tool-call (e.g. from a previous assistant turn), not an injected
+            # forced prefix.
+            return ""
+
+        # By construction, ``prompt[last_start:]`` reaches the end of the
+        # prompt. We treat the whole tail as the injected prefix. Subclasses
+        # whose chat templates place additional content after the prefix can
+        # override this method to apply stricter validation.
+        return prompt[last_start:]
 
     def extract_tool_calls(self, model_output: str, request: ChatCompletionRequest) -> ExtractedToolCallInformation:
         """

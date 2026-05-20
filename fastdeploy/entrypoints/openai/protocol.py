@@ -242,6 +242,22 @@ class ChatCompletionToolsParam(BaseModel):
     function: FunctionDefinition
 
 
+class ChatCompletionNamedFunction(BaseModel):
+    """Named function for ``tool_choice`` when forcing a specific tool."""
+
+    name: str
+
+
+class ChatCompletionNamedToolChoiceParam(BaseModel):
+    """OpenAI-compatible named tool choice — forces the model to call a
+    specific tool by name. Used as one of the values of
+    :attr:`ChatCompletionRequest.tool_choice`.
+    """
+
+    function: ChatCompletionNamedFunction
+    type: Literal["function"] = "function"
+
+
 class ChatMessage(BaseModel):
     """
     Chat message.
@@ -668,6 +684,12 @@ class ChatCompletionRequest(BaseModel):
     # https://platform.openai.com/docs/api-reference/chat/create
     messages: Union[List[Any], List[int]]
     tools: Optional[List[ChatCompletionToolsParam]] = None
+    tool_choice: Optional[
+        Union[
+            Literal["none", "auto", "required"],
+            ChatCompletionNamedToolChoiceParam,
+        ]
+    ] = "none"
     model: Optional[str] = "default"
     frequency_penalty: Optional[float] = Field(None, le=2, ge=-2)
     logprobs: Optional[bool] = False
