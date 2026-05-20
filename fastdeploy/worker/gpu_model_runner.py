@@ -3112,8 +3112,68 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager.finalize_update(pid)
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
-    def update_weights(self, version: str = None, verify_checksum: bool = False):
-        return self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum)
+    def update_weights(self, version: str = None, verify_checksum: bool = False, transfer_mode: str = None):
+        is_gdr_update = self.dynamic_weight_manager._resolve_transfer_mode(transfer_mode) == "gdr"
+        gdr_release_cache = bool(
+            (self.fd_config.load_config.rsync_config or {}).get("gdr_release_cache", False)
+        )
+        cache_clear_cost = 0.0
+        cache_rebuild_cost = 0.0
+        if is_gdr_update and gdr_release_cache:
+            clear_start = time.perf_counter()
+            self._clear_cache_for_gdr_weight_update()
+            cache_clear_cost = time.perf_counter() - clear_start
+
+        result = self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum, transfer_mode)
+
+        if is_gdr_update and gdr_release_cache:
+            rebuild_start = time.perf_counter()
+            self._rebuild_cache_after_gdr_weight_update()
+            cache_rebuild_cost = time.perf_counter() - rebuild_start
+        if is_gdr_update:
+            result["gdr_release_cache"] = gdr_release_cache
+            result["cache_clear_cost"] = cache_clear_cost
+            result["cache_rebuild_cost"] = cache_rebuild_cost
+
+        self.dynamic_weight_manager.finalize_update()
+        return result
+
+    def _clear_cache_for_gdr_weight_update(self):
+        if self.use_cudagraph:
+            self.model.clear_graph_opt_backend()
+            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
+                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+                    clear_all_block_wise_graphs,
+                )
+
+                clear_all_block_wise_graphs()
+            if (
+                self.speculative_decoding
+                and self.spec_method == SpecMethod.MTP
+                and self.graph_opt_config.draft_model_use_cudagraph
+            ):
+                self.proposer.model.clear_graph_opt_backend()
+        if self.speculative_decoding and self.spec_method == SpecMethod.MTP:
+            self.proposer.clear_mtp_cache()
+        self.clear_cache()
+        paddle.device.cuda.empty_cache()
+        self._cached_model_output_data = None
+        self._cached_sampler_output = None
+        self._cached_post_process_event = None
+        self._cached_launch_token_num = -1
+        self._cached_real_bsz = -1
+
+    def _rebuild_cache_after_gdr_weight_update(self):
+        self.share_inputs.reset_share_inputs()
+        if self.spec_method == SpecMethod.MTP:
+            self.proposer.model_inputs.reset_model_inputs()
+            if not self.enable_cache_manager_v1:
+                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+        self.initialize_kv_cache()
+        if self.use_cudagraph:
+            self.capture_model()
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.update_suspend_routing_replay()
 
     def sleep(self, tags):
 

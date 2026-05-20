@@ -1153,6 +1153,65 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         self.assertEqual(eng.cfg.model_config.version, "new-version")
         self._detach_finalizer(eng)
 
+    def test_control_update_weights_gdr_requires_matching_worker_versions(self):
+        eng = self._make_mixed_engine()
+        eng.is_paused = True
+        eng._pause_cond = threading.Condition()
+        eng.cfg.model_config.version = "old-version"
+        eng._call_worker = Mock(return_value=[{"version": "new-version"}, {"version": "new-version"}])
+
+        result = eng._control_update_weights(
+            ControlRequest(request_id="ctrl", method="update_weights", args={"transfer_mode": "gdr"})
+        )
+
+        self.assertEqual(result, [{"version": "new-version"}, {"version": "new-version"}])
+        self.assertEqual(eng.cfg.model_config.version, "new-version")
+        self._detach_finalizer(eng)
+
+    def test_control_update_weights_gdr_mode_can_come_from_rsync_config(self):
+        eng = self._make_mixed_engine()
+        eng.is_paused = True
+        eng._pause_cond = threading.Condition()
+        eng.cfg.model_config.version = "old-version"
+        eng.cfg.load_config.rsync_config = {"transfer_mode": "gdr"}
+        eng._call_worker = Mock(return_value=[{"version": "v1"}, {"version": "v2"}])
+
+        with self.assertRaisesRegex(RuntimeError, "version mismatch"):
+            eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
+
+        self.assertEqual(eng.cfg.model_config.version, "old-version")
+        self._detach_finalizer(eng)
+
+    def test_control_update_weights_gdr_rejects_version_mismatch(self):
+        eng = self._make_mixed_engine()
+        eng.is_paused = True
+        eng._pause_cond = threading.Condition()
+        eng.cfg.model_config.version = "old-version"
+        eng._call_worker = Mock(return_value=[{"version": "v1"}, {"version": "v2"}])
+
+        with self.assertRaisesRegex(RuntimeError, "version mismatch"):
+            eng._control_update_weights(
+                ControlRequest(request_id="ctrl", method="update_weights", args={"transfer_mode": "gdr"})
+            )
+
+        self.assertEqual(eng.cfg.model_config.version, "old-version")
+        self._detach_finalizer(eng)
+
+    def test_control_update_weights_gdr_rejects_missing_worker_version(self):
+        eng = self._make_mixed_engine()
+        eng.is_paused = True
+        eng._pause_cond = threading.Condition()
+        eng.cfg.model_config.version = "old-version"
+        eng._call_worker = Mock(return_value=[{"version": "v1"}, {"ok": True}])
+
+        with self.assertRaisesRegex(RuntimeError, "every worker response"):
+            eng._control_update_weights(
+                ControlRequest(request_id="ctrl", method="update_weights", args={"transfer_mode": "gdr"})
+            )
+
+        self.assertEqual(eng.cfg.model_config.version, "old-version")
+        self._detach_finalizer(eng)
+
     def test_control_update_weights_updates_cache_transfer_metadata(self):
         eng = self._make_mixed_engine()
         eng.is_paused = True
