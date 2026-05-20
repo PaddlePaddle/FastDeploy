@@ -556,7 +556,6 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const std::string& cache_quant_type_str,
-    const int max_seq_len,
     const bool speculate_decoder);
 
 std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
@@ -568,9 +567,9 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
+    const paddle::Tensor& slot_mapping,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
-    const std::string& cache_quant_type_str,
-    const int max_seq_len);
+    const std::string& cache_quant_type_str);
 
 void FusedRotaryPositionEncoding(
     paddle::Tensor& query,  // [num_tokens, num_heads, head_size] or
@@ -951,9 +950,7 @@ void SpeculateScheduleCache(const paddle::Tensor& draft_tokens,
                             const int block_size,
                             const int max_draft_tokens);
 
-void NgramMatch(const paddle::Tensor& input_ids,
-                const paddle::Tensor& input_ids_len,
-                const paddle::Tensor& token_ids_all,
+void NgramMatch(const paddle::Tensor& token_ids_all,
                 const paddle::Tensor& prompt_lens,
                 const paddle::Tensor& step_idx,
                 const paddle::Tensor& draft_token_num,

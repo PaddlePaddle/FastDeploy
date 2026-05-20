@@ -664,7 +664,6 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.block_tables,
             metadata.kv_signal_data_list[layer.layer_id],
             "none",
-            getattr(forward_meta, "max_input_length", -1),
         )
 
         fmha_out = self.flash_attn_func(
@@ -720,7 +719,6 @@ class MLAAttentionBackend(AttentionBackend):
             forward_meta.cu_seqlens_q,
             metadata.block_tables,
             "none",
-            self.max_seq_len,
             speculate_decoder,
         )
 
@@ -799,21 +797,23 @@ class MLAAttentionBackend(AttentionBackend):
 
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
 
+        assert k_pe.shape[0] == compressed_kv.shape[0]
+        prefill_mla_write_cache(
+            compressed_kv,
+            k_pe,
+            latent_cache,
+            forward_meta.seq_lens_this_time,
+            forward_meta.seq_lens_decoder,
+            forward_meta.batch_id_per_token,
+            forward_meta.cu_seqlens_q,
+            metadata.block_tables,
+            forward_meta.slot_mapping,
+            metadata.kv_signal_data_list[layer.layer_id],
+            "none",
+        )
+
         # Prefill branch: k is not None
         if k is not None:
-            prefill_mla_write_cache(
-                compressed_kv,
-                k_pe,
-                latent_cache,
-                forward_meta.seq_lens_encoder,
-                forward_meta.seq_lens_decoder,
-                forward_meta.batch_id_per_token,
-                forward_meta.cu_seqlens_q,
-                metadata.block_tables,
-                metadata.kv_signal_data_list[layer.layer_id],
-                "none",
-                self.max_seq_len,
-            )
 
             if self.prop.major == 10:
                 # TODO support FA4
@@ -845,20 +845,6 @@ class MLAAttentionBackend(AttentionBackend):
 
         # Decode branch: k is None
         if k is None:
-            decode_mla_write_cache(
-                compressed_kv,
-                k_pe,
-                latent_cache,
-                forward_meta.seq_lens_decoder,
-                forward_meta.seq_lens_encoder,
-                forward_meta.batch_id_per_token,
-                forward_meta.cu_seqlens_q,
-                metadata.block_tables,
-                "none",
-                self.max_seq_len,
-                speculate_decoder,
-            )
-
             if int(os.getenv("USE_FLASH_MLA", "0")) == 0 and self.prop.major == 9:
                 assert self.num_heads <= 64, "paddle mla attention support failed"
                 if self.heads_need_padding:
@@ -961,6 +947,12 @@ class MLAAttentionBackend(AttentionBackend):
     @staticmethod
     def mla_blackwell(decoder_q, latent_cache, block_table, cache_seqlens, attn_softmax_scale):
 
+        # decoder_q = decoder_q.cast(paddle.float8_e4m3fn)
+        # latent_cache = latent_cache.cast(paddle.float8_e4m3fn)
+
+        assert decoder_q.dtype == latent_cache.dtype
+        q_dtype = decoder_q.dtype
+
         page_size = latent_cache.shape[2]
         q_num_heads = decoder_q.shape[2]
         assert decoder_q.shape[1:] == [1, q_num_heads, 576]
@@ -1007,6 +999,8 @@ class MLAAttentionBackend(AttentionBackend):
         output_scale = 1.0
 
         from mla_decode_fp16 import BlackwellMultiHeadLatentAttentionForwardFP16
+
+        # from mla_decode_fp8 import BlackwellMultiHeadLatentAttentionForwardFP8
 
         mla = BlackwellMultiHeadLatentAttentionForwardFP16(
             cutlass.Float32,
@@ -1063,10 +1057,18 @@ class MLAAttentionBackend(AttentionBackend):
             stream,
         )
 
+        if q_dtype == paddle.float8_e4m3fn:
+            paddle_output = paddle_output.cast("bfloat16")
         return paddle_output
 
     @staticmethod
     def flashmla_baseline(decoder_q, latent_cache, block_table, cache_seqlens, attn_softmax_scale):
+
+        assert decoder_q.dtype == latent_cache.dtype
+
+        decoder_q = decoder_q.cast("bfloat16")
+        latent_cache = latent_cache.cast("bfloat16")
+
         page_size = latent_cache.shape[2]
         q_num_heads = decoder_q.shape[2]
         assert decoder_q.shape[1:] == [1, q_num_heads, 576]

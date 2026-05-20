@@ -2094,7 +2094,11 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding and self.spec_method in [SpecMethod.MTP, SpecMethod.SUFFIX]:
+            elif self.speculative_decoding and self.spec_method in [
+                SpecMethod.MTP,
+                SpecMethod.SUFFIX,
+                SpecMethod.NGRAM,
+            ]:
                 for capture_size in sorted(capture_sizes, reverse=True):
                     expected_decode_len = (self.speculative_config.num_speculative_tokens + 1) * 2
                     self._dummy_run(

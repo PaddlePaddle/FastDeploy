@@ -14,44 +14,17 @@
 # limitations under the License.
 """
 
-import importlib
-
 import paddle
 import triton
 from paddleformers.utils.log import logger
 
+from fastdeploy.model_executor.layers.utils import get_sm_version
 from fastdeploy.model_executor.ops.triton_ops import _per_token_group_quant_fp8
+from fastdeploy.model_executor.utils import try_import
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import per_token_group_fp8_quant
-
-
-from ..utils import get_sm_version
-
-
-def try_import(modules, name=None, fail_msg=None):
-    """
-    try_import
-    """
-    if not isinstance(modules, (list, tuple)):
-        modules = [modules]
-
-    for m in modules:
-        assert isinstance(m, str), m
-        try:
-            m = importlib.import_module(m)
-        except ImportError:
-            m = None
-
-        if m is not None:
-            if name is None:
-                return m
-            elif hasattr(m, name):
-                return getattr(m, name)
-
-    if fail_msg is not None:
-        logger.warning(fail_msg)
 
 
 paddlefleet_ops = try_import(["paddlefleet.ops"])
@@ -72,7 +45,7 @@ def load_deep_gemm():
             try:
                 import logging
 
-                import paddlefleet.ops.deep_gemm as deep_gemm
+                import paddlefleet_ops.deep_gemm as deep_gemm
 
                 logging.getLogger().handlers.clear()
                 logger.info("Detected sm100, use PaddleFleet DeepGEMM")
