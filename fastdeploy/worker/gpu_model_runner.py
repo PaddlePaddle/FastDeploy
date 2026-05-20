@@ -2908,7 +2908,6 @@ class GPUModelRunner(ModelRunnerBase):
         logger.info(
             f"Dummy run with {num_tokens} tokens, mm_max_tokens_per_item: {self.model_config.mm_max_tokens_per_item}"
         )
-
         self._dummy_run(
             num_tokens=num_tokens,
             batch_size=self.scheduler_config.max_num_seqs,
