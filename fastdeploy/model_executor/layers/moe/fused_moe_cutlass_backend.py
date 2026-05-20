@@ -175,7 +175,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 if fastdeploy.envs.FD_MOE_PROB_IN_ADVANCE:
                     out = paddlefleet_ops.fused_swiglu_scale(out, dst_weights)
                 else:
-                    out = paddle.incubate.nn.functional.swiglu(out)
+                    out = paddle.nn.functional.swiglu(out)
                 ffn_out = paddle.incubate.nn.functional.batched_gemm(
                     out,
                     getattr(layer, self.added_weight_attrs[1]),
@@ -335,7 +335,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     layer.routed_scaling_factor,
                     layer.gate_correction_bias,
                     getattr(layer, "renormalize", True),
-                    use_fused_cast=use_fused,
                 )
             else:
                 gate_out = gate_out.cast("float32")
@@ -406,7 +405,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
                 topk_reduce_func=getattr(layer, "topk_reduce_func", None),
-                use_fused_cast=use_fused,
             )
 
             (

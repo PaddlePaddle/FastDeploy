@@ -12,9 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Tests for process_stop_token_ids in fastdeploy.input.utils.common."""
+"""Tests for process_stop_token_ids in fastdeploy.input.utils."""
 
-from fastdeploy.input.utils.common import process_stop_token_ids
+from fastdeploy.input.utils import process_stop_token_ids
 
 
 def _mock_update_stop_seq_fn(stop_sequences):

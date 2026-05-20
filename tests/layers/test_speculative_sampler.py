@@ -78,7 +78,7 @@ def _create_default_sampling_metadata(
     fake_sampling_metadata = SamplingMetadata(
         temperature=paddle.full(shape=[batch_size, 1], fill_value=0.9, dtype="float32"),
         top_p=paddle.full(shape=[batch_size, 1], fill_value=0.7, dtype="float32"),
-        top_k=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int32"),
+        top_k=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         prompt_lens=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         step_idx=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         token_ids_all=_create_tokens_tensor(batch_size, max_seq_len),
