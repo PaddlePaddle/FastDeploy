@@ -60,7 +60,12 @@ if current_platform.is_cuda():
         build_sampling_params_logprob,
         naive_update_model_status,
     )
-
+else:
+    from fastdeploy.model_executor.ops.xpu import (
+        build_sampling_params,
+        top_p_candidates,
+        verify_draft_tokens,
+    )
 
 def _apply_triton_top_k_top_p(
     logits: paddle.Tensor,
@@ -1211,11 +1216,7 @@ class SpeculativeSampler(nn.Layer):
         reject_all_drafts: bool = False,
     ) -> SamplerOutput:
         """Verify draft tokens (MTP/Ngram mode) on XPU using verify_draft_tokens."""
-        from fastdeploy.model_executor.ops.xpu import (
-            build_sampling_params,
-            top_p_candidates,
-            verify_draft_tokens,
-        )
+
 
         target_tokens = None
         candidate_ids, candidate_scores, candidate_lens = None, None, None
