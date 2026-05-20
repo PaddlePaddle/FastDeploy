@@ -14,13 +14,17 @@
 # limitations under the License.
 """
 
+import asyncio
 import gc
 import glob
+import hashlib
 import os
+import queue
 import re
+import threading
 import time
 from multiprocessing.shared_memory import SharedMemory
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import paddle
@@ -29,6 +33,31 @@ from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
+
+DEFAULT_GDR_DEBUG_TENSOR_NAMES = (
+    "qwen2.layers.0.self_attn.qkv_proj.weight",
+    "qwen2.layers.0.mlp.up_gate_proj.weight",
+    "qwen2.layers.0.mlp.down_proj.weight",
+    "qwen2.norm.weight",
+)
+
+
+def _tensor_to_numpy_for_digest(tensor):
+    tensor_for_copy = tensor.detach() if hasattr(tensor, "detach") else tensor
+    try:
+        return np.ascontiguousarray(tensor_for_copy.cpu().numpy())
+    except TypeError as exc:
+        if "cannot pickle" not in str(exc):
+            raise
+        attrs = getattr(tensor, "__dict__", None)
+        if attrs is None:
+            raise
+        saved_attrs = dict(attrs)
+        attrs.clear()
+        try:
+            return np.ascontiguousarray(tensor.cpu().numpy())
+        finally:
+            attrs.update(saved_attrs)
 
 
 class DynamicWeightManager:
@@ -64,14 +93,24 @@ class DynamicWeightManager:
         )
 
     @paddle.no_grad()
-    def _capture_model_state(self):
+    def _capture_model_state(self, log_params: bool = True):
         """Capture and store initial model parameters state."""
+        self.state_dict = {}
         for model in self.model_list:
             for name, param in model.state_dict().items():
-                logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}, place={param.place}")
+                if log_params:
+                    logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}, place={param.place}")
                 self.state_dict[name] = param
 
-    def update_weights_by_rdma(self, version: str = None, verify_checksum: bool = False):
+    def update_weights_by_rdma(
+        self,
+        version: str = None,
+        verify_checksum: bool = False,
+        transfer_mode: Optional[str] = None,
+    ):
+        if self._resolve_transfer_mode(transfer_mode) == "gdr":
+            return self.update_weights_by_gdr(version=version, verify_checksum=verify_checksum)
+
         def valid_parameters(old_state_dict, new_state_dict):
             is_valid = True
             for key in new_state_dict:
@@ -92,14 +131,7 @@ class DynamicWeightManager:
                     )
             return is_valid
 
-        bootstrap_load = version is None or version == ""
-        if bootstrap_load:
-            version = self.read_model_version_from_file()
-        if version is None or version == "":
-            raise Exception(
-                "rsync model version not set, please set it in 1) {model_version}/version.yaml "
-                "or 2) interface arguments 'version'"
-            )
+        version, bootstrap_load = self._resolve_weight_update_version(version)
 
         logger.info(
             f"START rank:{self.local_rank}/{self.nranks} update_weights_by_rdma, "
@@ -150,6 +182,339 @@ class DynamicWeightManager:
             "version": version,
             "rank": self.local_rank,
         }
+
+    def update_weights_by_gdr(self, version: str = None, verify_checksum: bool = False):
+        """Update weights from CheckpointTransfer GPU Direct tensor stream."""
+        version, bootstrap_load = self._resolve_weight_update_version(version)
+        config = dict(self.fd_config.load_config.rsync_config or {})
+        output_framework = str(config.get("output_framework", "paddle")).lower()
+        if output_framework != "paddle":
+            raise ValueError("GDR weight update requires output_framework='paddle'")
+
+        if verify_checksum:
+            logger.warning(
+                "verify_checksum is ignored for GDR weight update because "
+                "CT receive_weights has no checksum argument."
+            )
+
+        logger.info(
+            f"START rank:{self.local_rank}/{self.nranks} update_weights_by_gdr, "
+            f"version:{version}, output_framework:{output_framework}, "
+            f"bootstrap_load:{bootstrap_load}"
+        )
+
+        from checkpoint_transfer.config import Phase1Backend, Role, TransferConfig
+        from checkpoint_transfer.transfer import CheckpointTransfer
+
+        transfer_config = dict(config)
+        node_index = int(transfer_config.pop("index", 0))
+        for key in (
+            "backend",
+            "transfer_mode",
+            "gpu_direct",
+            "output_framework",
+            "global_rank",
+            "gdr_mtp_chunk_size",
+            "gdr_prefetch_queue_size",
+            "gdr_release_cache",
+            "gdr_debug_tensor_digest",
+            "gdr_debug_tensor_names",
+            "gdr_debug_compare_direct",
+        ):
+            transfer_config.pop(key, None)
+        if "device_name" in transfer_config and "device" not in transfer_config:
+            transfer_config["device"] = transfer_config.pop("device_name")
+        else:
+            transfer_config.pop("device_name", None)
+        transfer_config["role"] = Role.INFERENCE
+        transfer_config["global_rank"] = node_index * self.nranks + self.local_rank
+        transfer_config["group_size"] = int(transfer_config.get("group_size", self.nranks))
+        transfer_config["phase1_backend"] = Phase1Backend.GPU_DIRECT
+
+        logger.info(f"CheckpointTransfer gdr TransferConfig:{transfer_config}")
+        gdr_handle = CheckpointTransfer(TransferConfig(**transfer_config))
+
+        total_start = time.perf_counter()
+        gdr_prefetch_queue_size = max(1, int(config.get("gdr_prefetch_queue_size", 2)))
+        weights_iterator = self._receive_gdr_weights_as_sync_iterator(
+            gdr_handle, version, gdr_prefetch_queue_size
+        )
+        debug_tensor_names = self._get_gdr_debug_tensor_names(config)
+        if debug_tensor_names:
+            direct_digests = (
+                self._load_direct_debug_digests(debug_tensor_names)
+                if self._is_true(config.get("gdr_debug_compare_direct", False))
+                else {}
+            )
+            weights_iterator = self._wrap_gdr_debug_weights(weights_iterator, debug_tensor_names, direct_digests)
+        update_count, mtp_cache_count = self._load_models_from_weight_iterator(weights_iterator)
+        self._capture_model_state(log_params=False)
+        if debug_tensor_names:
+            self._log_gdr_debug_param_digests(debug_tensor_names)
+        total_cost = time.perf_counter() - total_start
+        mtp_chunk_size = max(1, int(config.get("gdr_mtp_chunk_size", 16)))
+        logger.info(
+            f"END update_weights_by_gdr, cost {total_cost:.2f} seconds, "
+            f"weights:{update_count}, mtp_cached_weights:{mtp_cache_count}, "
+            f"mtp_chunk_size:{mtp_chunk_size}, "
+            f"prefetch_queue_size:{gdr_prefetch_queue_size}, "
+            f"version:{version}, local_rank:{self.local_rank}"
+        )
+        return {
+            "update_cost": total_cost,
+            "total_cost": total_cost,
+            "version": version,
+            "rank": self.local_rank,
+            "transfer_mode": "gdr",
+            "update_count": update_count,
+            "mtp_cache_count": mtp_cache_count,
+            "gdr_mtp_chunk_size": mtp_chunk_size,
+            "gdr_prefetch_queue_size": gdr_prefetch_queue_size,
+        }
+
+    def _is_true(self, value: Any) -> bool:
+        if isinstance(value, str):
+            return value.lower() in ("1", "true", "yes", "on")
+        return bool(value)
+
+    def _get_gdr_debug_tensor_names(self, config: Dict[str, Any]) -> Tuple[str, ...]:
+        if not self._is_true(config.get("gdr_debug_tensor_digest", False)):
+            return ()
+        names = config.get("gdr_debug_tensor_names", DEFAULT_GDR_DEBUG_TENSOR_NAMES)
+        if isinstance(names, str):
+            names = [name.strip() for name in names.split(",") if name.strip()]
+        return tuple(dict.fromkeys(names))
+
+    def _tensor_debug_digest(self, tensor: Any) -> Dict[str, Any]:
+        if isinstance(tensor, paddle.Tensor):
+            shape = list(tensor.shape)
+            dtype = str(tensor.dtype)
+            cpu_array = _tensor_to_numpy_for_digest(tensor)
+        else:
+            cpu_array = np.asarray(tensor)
+            shape = list(cpu_array.shape)
+            dtype = str(cpu_array.dtype)
+        cpu_array = np.ascontiguousarray(cpu_array)
+        digest = {
+            "shape": shape,
+            "dtype": dtype,
+            "nbytes": int(cpu_array.nbytes),
+            "md5": hashlib.md5(memoryview(cpu_array).cast("B")).hexdigest(),
+            "sum": None,
+        }
+        try:
+            digest["sum"] = float(cpu_array.astype("float32").sum())
+        except Exception:
+            pass
+        return digest
+
+    def _format_debug_digest(self, digest: Dict[str, Any]) -> str:
+        return (
+            f"shape={digest['shape']}, dtype={digest['dtype']}, "
+            f"nbytes={digest['nbytes']}, md5={digest['md5']}, sum={digest['sum']}"
+        )
+
+    def _load_direct_debug_digests(self, debug_tensor_names: Tuple[str, ...]) -> Dict[str, Dict[str, Any]]:
+        try:
+            from fastdeploy.model_executor.load_weight_utils import get_weight_iterator
+
+            model_path = self.fd_config.model_config.model
+            remaining = set(debug_tensor_names)
+            digests = {}
+            for name, tensor in get_weight_iterator(model_path, self.fd_config):
+                if name not in remaining:
+                    continue
+                digest = self._tensor_debug_digest(tensor)
+                digests[name] = digest
+                logger.info(
+                    f"GDR_DIRECT_DIGEST rank={self.local_rank} name={name}, "
+                    f"{self._format_debug_digest(digest)}"
+                )
+                remaining.remove(name)
+                if not remaining:
+                    break
+            for name in sorted(remaining):
+                logger.warning(f"GDR_DIRECT_DIGEST rank={self.local_rank} name={name} not found in model path")
+            return digests
+        except Exception as exc:
+            logger.warning(f"GDR_DIRECT_DIGEST rank={self.local_rank} failed: {type(exc).__name__}: {exc}")
+            return {}
+
+    def _wrap_gdr_debug_weights(
+        self,
+        weights_iterator: Iterable[Tuple[str, Any]],
+        debug_tensor_names: Tuple[str, ...],
+        direct_digests: Dict[str, Dict[str, Any]],
+    ):
+        debug_name_set = set(debug_tensor_names)
+        for name, tensor in weights_iterator:
+            if name in debug_name_set:
+                digest = self._tensor_debug_digest(tensor)
+                direct_digest = direct_digests.get(name)
+                match = None if direct_digest is None else digest["md5"] == direct_digest["md5"]
+                logger.info(
+                    f"GDR_RECV_DIGEST rank={self.local_rank} name={name}, "
+                    f"{self._format_debug_digest(digest)}, direct_md5_match={match}"
+                )
+            yield name, tensor
+
+    def _log_gdr_debug_param_digests(self, debug_tensor_names: Tuple[str, ...]) -> None:
+        for name in debug_tensor_names:
+            param = self.state_dict.get(name)
+            if param is None:
+                logger.warning(f"GDR_PARAM_DIGEST rank={self.local_rank} name={name} not found in model params")
+                continue
+            digest = self._tensor_debug_digest(param)
+            logger.info(
+                f"GDR_PARAM_DIGEST rank={self.local_rank} name={name}, "
+                f"{self._format_debug_digest(digest)}"
+            )
+
+    def _resolve_weight_update_version(self, version: Optional[str]) -> Tuple[str, bool]:
+        bootstrap_load = version is None or version == ""
+        if bootstrap_load:
+            version = self.read_model_version_from_file()
+        if version is None or version == "":
+            raise Exception(
+                "rsync model version not set, please set it in 1) {model_version}/version.yaml "
+                "or 2) interface arguments 'version'"
+            )
+        return version, bootstrap_load
+
+    def _resolve_transfer_mode(self, transfer_mode: Optional[str] = None) -> str:
+        config = self.fd_config.load_config.rsync_config or {}
+        mode = transfer_mode or config.get("transfer_mode") or ("gdr" if config.get("gpu_direct") else "rdma")
+        mode = str(mode).lower()
+        if mode not in ("rdma", "gdr"):
+            raise ValueError(f"Unsupported weight transfer_mode: {mode}")
+        return mode
+
+    def _receive_gdr_weights_as_sync_iterator(
+        self,
+        gdr_handle: Any,
+        version: str,
+        prefetch_queue_size: int,
+    ):
+        item_queue = queue.Queue(maxsize=prefetch_queue_size)
+        stop_event = threading.Event()
+        done_marker = object()
+
+        def put_item(item: Any) -> bool:
+            while not stop_event.is_set():
+                try:
+                    item_queue.put(item, timeout=0.1)
+                    return True
+                except queue.Full:
+                    continue
+            return False
+
+        async def receive_loop():
+            try:
+                await gdr_handle.initialize()
+                async for item in gdr_handle.receive_weights(step_id=version):
+                    if not put_item(item):
+                        break
+            except Exception as exc:
+                logger.error(f"GDR receive_weights failed: {type(exc).__name__}: {exc}")
+                put_item(exc)
+            finally:
+                try:
+                    await gdr_handle.cleanup()
+                except Exception as exc:
+                    logger.warning(f"GDR CheckpointTransfer cleanup failed: {type(exc).__name__}: {exc}")
+                put_item(done_marker)
+
+        def run_receive_loop():
+            loop = asyncio.new_event_loop()
+            try:
+                asyncio.set_event_loop(loop)
+                loop.run_until_complete(receive_loop())
+            finally:
+                asyncio.set_event_loop(None)
+                loop.close()
+
+        receive_thread = threading.Thread(
+            target=run_receive_loop,
+            name=f"gdr-receive-{self.local_rank}",
+            daemon=True,
+        )
+        receive_thread.start()
+        try:
+            while True:
+                item = item_queue.get()
+                if item is done_marker:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            stop_event.set()
+            if receive_thread.is_alive():
+                receive_thread.join(timeout=5.0)
+            if receive_thread.is_alive():
+                logger.warning("GDR receive thread is still alive after stop request.")
+
+    def _load_models_from_weight_iterator(
+        self,
+        weights_iterator: Iterable[Tuple[str, Any]],
+    ) -> Tuple[int, int]:
+        update_count = 0
+
+        if len(self.model_list) == 1:
+
+            def count_weights():
+                nonlocal update_count
+                for item in weights_iterator:
+                    update_count += 1
+                    yield item
+
+            self.model_list[0].load_weights(count_weights())
+            return update_count, 0
+
+        mtp_models = self.model_list[1:]
+        config = self.fd_config.load_config.rsync_config or {}
+        mtp_chunk_size = max(1, int(config.get("gdr_mtp_chunk_size", 16)))
+        mtp_chunk: List[Tuple[str, Any]] = []
+        mtp_cache_count = 0
+        mtp_weight_tokens = ["mtp_", "mtp_block"]
+        for model in mtp_models:
+            model_config = getattr(getattr(model, "fd_config", None), "model_config", None)
+            start_layer = getattr(model, "mtp_start_layer_idx", None)
+            num_layers = getattr(model, "num_mtp_layers", None)
+            start_layer = start_layer if start_layer is not None else getattr(model_config, "start_layer_index", None)
+            num_layers = num_layers if num_layers is not None else getattr(model_config, "num_nextn_predict_layers", None)
+            if start_layer is None or num_layers is None:
+                continue
+            for layer_id in range(int(start_layer), int(start_layer) + int(num_layers)):
+                mtp_weight_tokens.append(f"layers.{layer_id}.")
+                mtp_weight_tokens.append(f".layers.{layer_id}.")
+
+        def flush_mtp_chunk():
+            nonlocal mtp_chunk
+            if not mtp_chunk:
+                return
+            for model in mtp_models:
+                model.load_weights(iter(mtp_chunk))
+            mtp_chunk = []
+
+        def cache_mtp_weights():
+            nonlocal update_count, mtp_cache_count
+            for item in weights_iterator:
+                name, _ = item
+                update_count += 1
+                if any(token in name for token in mtp_weight_tokens):
+                    mtp_chunk.append(item)
+                    mtp_cache_count += 1
+                yield item
+                if len(mtp_chunk) >= mtp_chunk_size:
+                    flush_mtp_chunk()
+
+        self.model_list[0].load_weights(cache_mtp_weights())
+        flush_mtp_chunk()
+        if mtp_cache_count == 0:
+            raise ValueError("No MTP weights were cached from the GDR stream for auxiliary model loading.")
+
+        return update_count, mtp_cache_count
 
     def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
         """Core method to update model parameters based on strategy."""
@@ -414,7 +779,7 @@ class DynamicWeightManager:
         if src.shape != dst.shape:
             raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
-    def finalize_update(self, pid: int = 0):
+    def finalize_update(self, pid: Optional[int] = None):
         """Finalize update process with verification."""
         self._verify_parameters("update")
 
@@ -479,8 +844,10 @@ class DynamicWeightManager:
             f"current_reserved: {curr_reserved:.2f}GB"
         )
 
-    def _update_shared_status(self, pid: int, status: int) -> None:
+    def _update_shared_status(self, pid: Optional[int], status: int) -> None:
         """Update shared memory status flag for inter-process communication."""
+        if pid is None:
+            pid = self.parallel_config.local_engine_worker_queue_port
         array = np.zeros([1], dtype=np.int32)
         shm = SharedMemory(create=False, size=array.nbytes, name=f"model_weights_status.{pid}")
         value = np.ndarray(array.shape, dtype=array.dtype, buffer=shm.buf)
