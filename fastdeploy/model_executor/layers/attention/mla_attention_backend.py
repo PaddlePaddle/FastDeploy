@@ -809,7 +809,7 @@ class MLAAttentionBackend(AttentionBackend):
             metadata.block_tables,
             forward_meta.slot_mapping,
             metadata.kv_signal_data_list[layer.layer_id],
-            "none",
+            getattr(layer, "cache_quant_type_str", "none"),
         )
 
         # Prefill branch: k is not None
@@ -947,11 +947,13 @@ class MLAAttentionBackend(AttentionBackend):
     @staticmethod
     def mla_blackwell(decoder_q, latent_cache, block_table, cache_seqlens, attn_softmax_scale):
 
-        # decoder_q = decoder_q.cast(paddle.float8_e4m3fn)
-        # latent_cache = latent_cache.cast(paddle.float8_e4m3fn)
+        assert latent_cache.dtype in [paddle.bfloat16, paddle.uint8], latent_cache.dtype
+        use_fp8_cache_kv = latent_cache.dtype == paddle.uint8
+        if use_fp8_cache_kv:
+            decoder_q = decoder_q.cast(paddle.float8_e4m3fn)
+            latent_cache = latent_cache.view(paddle.float8_e4m3fn)
 
         assert decoder_q.dtype == latent_cache.dtype
-        q_dtype = decoder_q.dtype
 
         page_size = latent_cache.shape[2]
         q_num_heads = decoder_q.shape[2]
@@ -998,11 +1000,16 @@ class MLAAttentionBackend(AttentionBackend):
         softmax_scale = attn_softmax_scale
         output_scale = 1.0
 
-        from mla_decode_fp16 import BlackwellMultiHeadLatentAttentionForwardFP16
+        if use_fp8_cache_kv:
+            from mla_decode_fp8 import (
+                BlackwellMultiHeadLatentAttentionForwardFP8 as kernel,
+            )
+        else:
+            from mla_decode_fp16 import (
+                BlackwellMultiHeadLatentAttentionForwardFP16 as kernel,
+            )
 
-        # from mla_decode_fp8 import BlackwellMultiHeadLatentAttentionForwardFP8
-
-        mla = BlackwellMultiHeadLatentAttentionForwardFP16(
+        mla = kernel(
             cutlass.Float32,
             cutlass.Float32,
             mma_qk_tiler_mn=(128, 128),
@@ -1057,7 +1064,7 @@ class MLAAttentionBackend(AttentionBackend):
             stream,
         )
 
-        if q_dtype == paddle.float8_e4m3fn:
+        if use_fp8_cache_kv:
             paddle_output = paddle_output.cast("bfloat16")
         return paddle_output
 
