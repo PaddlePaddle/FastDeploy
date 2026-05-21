@@ -927,7 +927,12 @@ class SpeculativeSampler(nn.Layer):
                     increment_value,
                 )
                 _, target_tokens = top_k_top_p_sampling(
-                    probs, top_p=top_p, top_k=top_k, top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed
+                    probs,
+                    top_p=top_p,
+                    top_k=top_k,
+                    top_k_list=sampling_metadata.top_k_list,
+                    threshold=sampling_metadata.sampling_threshold,
+                    topp_seed=topp_seed,
                 )
         elif self.verify_strategy == VerifyStrategy.GREEDY:
             # GREEDY: deterministic argmax in target_tokens, no candidates needed
@@ -1022,6 +1027,7 @@ class SpeculativeSampler(nn.Layer):
                 sampling_metadata.top_p,
                 sampling_metadata.top_k,
                 sampling_metadata.top_k_list,
+                threshold=sampling_metadata.sampling_threshold,
                 topp_seed=sampling_metadata.seed,
             )
 
