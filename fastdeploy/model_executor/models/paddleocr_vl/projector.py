@@ -75,9 +75,7 @@ class Projector(nn.Layer):
         for image_grid in image_grid_thw:
             t, h, w = map(int, image_grid)
             if h % m1 != 0 or w % m2 != 0:
-                raise ValueError(
-                    f"grid {image_grid} is not divisible by merge_kernel_size {self.merge_kernel_size}"
-                )
+                raise ValueError(f"grid {image_grid} is not divisible by merge_kernel_size {self.merge_kernel_size}")
             local = np.arange(t * h * w, dtype=np.int64).reshape((t, h // m1, m1, w // m2, m2))
             local = local.transpose((0, 1, 3, 2, 4)).reshape(-1)
             merge_indices.append(local + start)
