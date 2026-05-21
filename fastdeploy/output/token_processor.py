@@ -668,7 +668,7 @@ class TokenProcessor:
                     # TODO: Refine checking sending cache and do not keep waiting
                     if time.time() - start_time > 30:
                         llm_logger.warning(f"wait for sending cache, {task_id}")
-                    time.sleep(0.002)
+                    time.sleep(0.005)
         else:
             if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.resource_manager.finish_requests_async(task_id)

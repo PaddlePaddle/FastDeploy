@@ -248,10 +248,10 @@ class EngineServicePrepareMixin:
                 with self._pause_cond:
                     self._pause_cond.wait_for(lambda: not self.is_paused)
                 fetch_fn()
-                time.sleep(0.002)
+                time.sleep(0.02)
             except Exception as e:
                 self.llm_logger.error(f"fetching request error in worker-{thread_idx}: {e} {traceback.format_exc()}")
-                time.sleep(0.002)
+                time.sleep(0.02)
 
     def _prepare_request_v1(self):
         """Prepare request and send to the queue for scheduling"""

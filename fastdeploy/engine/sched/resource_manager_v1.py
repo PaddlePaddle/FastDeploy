@@ -245,7 +245,7 @@ class ResourceManagerV1(ResourceManager):
         block_num = (
             request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1
         ) // self.config.cache_config.block_size - len(request.block_tables)
-
+        block_num = max(block_num, 0)
         if self.config.speculative_config.method is not None:
             block_num = min(block_num + 1, self.config.cache_config.max_block_num_per_seq)
         else:
@@ -1001,7 +1001,13 @@ class ResourceManagerV1(ResourceManager):
                         req_index += 1
                         continue
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(num_new_block)
+                    if self.config.scheduler_config.splitwise_role == "prefill":
+                        # for prefill instance, do not set threshold for running requests
+                        can_schedule_block_num_threshold = 0
+                    else:
+                        can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
+                            num_new_block
+                        )
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                         request.block_tables.extend(
