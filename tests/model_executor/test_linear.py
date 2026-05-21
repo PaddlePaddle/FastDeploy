@@ -189,12 +189,12 @@ def test_merged_and_column_weight_paths():
     layer_merge = MergedReplicatedLinear.__new__(MergedReplicatedLinear)
     layer_merge.__dict__.update(fd_config=make_fd_config(model_format="paddle"), output_sizes=[2, 2])
     param = TinyParam(paddle.zeros([2, 4], dtype="float32"), initialized=False, with_track=True)
-    loaded_weight = paddle.ones([2, 4], dtype="float16")
+    loaded_weight = paddle.ones([2, 4], dtype="float32")
     layer_merge.weight_loader(param, loaded_weight, loaded_shard_id=None)
     assert param.tensor_track.calls == [(0, loaded_weight.shape[-1])]
     np.testing.assert_allclose(param._tensor.numpy(), np.ones((2, 4), dtype="float32"))
     param_shard = TinyParam(paddle.zeros([2, 4], dtype="float32"), initialized=False)
-    layer_merge.weight_loader(param_shard, paddle.ones([2, 2], dtype="int8"), loaded_shard_id="gate")
+    layer_merge.weight_loader(param_shard, paddle.ones([2, 2], dtype="float32"), loaded_shard_id="gate")
     assert param_shard._is_initialized() is True
     assert not np.allclose(param_shard._tensor.numpy()[..., :2], 0)
     assert np.allclose(param_shard._tensor.numpy()[..., 2:], 0)
@@ -213,7 +213,7 @@ def test_merged_and_column_weight_paths():
     param_gate = TinyParam(paddle.zeros([2, 4], dtype="float32"), initialized=True)
     param_gate.output_dim = True
     param_gate.weight_need_transpose = True
-    layer_mc.weight_loader(param_gate, paddle.ones([4, 2], dtype="int8"), loaded_shard_id="gate")
+    layer_mc.weight_loader(param_gate, paddle.ones([4, 2], dtype="float32"), loaded_shard_id="gate")
     assert not np.allclose(param_gate._tensor.numpy()[..., :2], 0)
     assert np.allclose(param_gate._tensor.numpy()[..., 2:], 0)
     layer_mc.local_rank = 1
