@@ -130,6 +130,8 @@ def _create_dummy_modules():
         info=lambda *args, **kwargs: None,
         warning=lambda *args, **kwargs: None,
         debug=lambda *args, **kwargs: None,
+        exception=lambda *args, **kwargs: None,
+        error=lambda *args, **kwargs: None,
     )
 
     CHOICE_SEPARATOR = "::n::"
@@ -570,7 +572,9 @@ class TextProcessorTestCase(unittest.TestCase):
             "outputs": {"token_ids": [1, processor.tokenizer.eos_token_id]},
         }
 
-        processed = processor.process_response_dict(response, stream=False)
+        processed = processor.process_response_dict(
+            response, stream=False, request=SimpleNamespace(tool_choice="none")
+        )
         self.assertEqual(processed["outputs"]["reasoning_content"], "think")
         self.assertEqual(processed["outputs"]["tool_calls"], ["tool"])
 
@@ -597,7 +601,9 @@ class TextProcessorTestCase(unittest.TestCase):
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
 
-        result = processor.process_response_dict_streaming(response, enable_thinking=True)
+        result = processor.process_response_dict_streaming(
+            response, enable_thinking=True, request=SimpleNamespace(tool_choice="none")
+        )
         self.assertEqual(result["outputs"]["completion_tokens"], "7")
         self.assertEqual(result["outputs"]["text"], "tool-text")
         self.assertEqual(result["outputs"]["reasoning_content"], "because")
@@ -615,7 +621,9 @@ class TextProcessorTestCase(unittest.TestCase):
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
 
-        result = processor.process_response_dict_normal(response, enable_thinking=True)
+        result = processor.process_response_dict_normal(
+            response, enable_thinking=True, request=SimpleNamespace(tool_choice="none")
+        )
         self.assertEqual(result["outputs"]["completion_tokens"], "7")
         self.assertEqual(result["outputs"]["reasoning_content"], "because")
         self.assertEqual(result["outputs"]["reasoning_token_num"], 1)
@@ -754,32 +762,68 @@ class TextProcessorTestCase(unittest.TestCase):
 
 
 class IsForcedToolChoiceTest(unittest.TestCase):
-    """Tests for the module-level ``_is_forced_tool_choice`` helper."""
+    """Tests for the module-level ``_is_forced_tool_choice`` helper.
+
+    The helper takes a request-like object (something with ``tool_choice``
+    and ``chat_template_kwargs`` attributes) and returns whether the chat
+    template will inject a tool-call prefix.
+    """
 
     def setUp(self):
         from fastdeploy.input import base_processor
 
         self._is_forced = base_processor._is_forced_tool_choice
 
+    def _req(self, *, tool_choice=None, chat_template_kwargs=None):
+        return SimpleNamespace(
+            tool_choice=tool_choice,
+            chat_template_kwargs=chat_template_kwargs,
+        )
+
     def test_required_string(self):
-        self.assertTrue(self._is_forced("required"))
+        self.assertTrue(self._is_forced(self._req(tool_choice="required")))
 
     def test_other_strings(self):
-        self.assertFalse(self._is_forced("auto"))
-        self.assertFalse(self._is_forced("none"))
-        self.assertFalse(self._is_forced(""))
+        self.assertFalse(self._is_forced(self._req(tool_choice="auto")))
+        self.assertFalse(self._is_forced(self._req(tool_choice="none")))
+        self.assertFalse(self._is_forced(self._req(tool_choice="")))
 
     def test_pydantic_named_tool_choice(self):
         named = SimpleNamespace(type="function", function=SimpleNamespace(name="f"))
-        self.assertTrue(self._is_forced(named))
+        self.assertTrue(self._is_forced(self._req(tool_choice=named)))
 
     def test_pydantic_other_type(self):
-        self.assertFalse(self._is_forced(SimpleNamespace(type="other")))
-        self.assertFalse(self._is_forced(SimpleNamespace()))
+        self.assertFalse(self._is_forced(self._req(tool_choice=SimpleNamespace(type="other"))))
+        self.assertFalse(self._is_forced(self._req(tool_choice=SimpleNamespace())))
 
-    def test_none_and_other_types(self):
-        self.assertFalse(self._is_forced(None))
-        self.assertFalse(self._is_forced(123))
+    def test_no_tool_choice_no_options(self):
+        self.assertFalse(self._is_forced(self._req()))
+
+    def test_chat_template_options_force_mode(self):
+        kwargs = {
+            "options": {
+                "tool_choice": {"mode": "force", "name": "get_current_weather"},
+            }
+        }
+        self.assertTrue(self._is_forced(self._req(chat_template_kwargs=kwargs)))
+
+    def test_chat_template_options_non_force_mode(self):
+        kwargs = {"options": {"tool_choice": {"mode": "auto"}}}
+        self.assertFalse(self._is_forced(self._req(chat_template_kwargs=kwargs)))
+
+    def test_chat_template_options_missing_tool_choice(self):
+        self.assertFalse(self._is_forced(self._req(chat_template_kwargs={"options": {}})))
+        self.assertFalse(self._is_forced(self._req(chat_template_kwargs={})))
+
+    def test_chat_template_options_malformed(self):
+        # Non-dict options/inner must be tolerated (no crash, returns False).
+        self.assertFalse(self._is_forced(self._req(chat_template_kwargs={"options": "x"})))
+        self.assertFalse(self._is_forced(self._req(chat_template_kwargs={"options": {"tool_choice": "x"}})))
+
+    def test_tool_choice_takes_priority_over_options(self):
+        kwargs = {"options": {"tool_choice": {"mode": "auto"}}}
+        # Even with non-force mode in options, an explicit "required" wins.
+        self.assertTrue(self._is_forced(self._req(tool_choice="required", chat_template_kwargs=kwargs)))
 
 
 class _RecordingToolParser:
@@ -935,6 +979,31 @@ class ToolPrefixCompensationTest(unittest.TestCase):
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
         request = SimpleNamespace(tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")))
+
+        processor.process_response_dict_normal(
+            response,
+            request=request,
+            prompt_tokens="user msg\n<tool_call>",
+        )
+        self.assertTrue(parser.extract_calls[0].startswith("<tool_call>"))
+
+    def test_normal_path_chat_template_force_mode(self):
+        """Forcing through ``chat_template_kwargs.options.tool_choice.mode``
+        must also trigger prefix splicing even when ``tool_choice`` is unset
+        (the default ``"none"``)."""
+        processor = self.processor
+        parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
+        processor.tool_parser_obj = self._make_parser_factory(parser)
+
+        response = {
+            "request_id": "req-cti",
+            "finished": True,
+            "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
+        }
+        request = SimpleNamespace(
+            tool_choice="none",
+            chat_template_kwargs={"options": {"tool_choice": {"mode": "force", "name": "get_current_weather"}}},
+        )
 
         processor.process_response_dict_normal(
             response,

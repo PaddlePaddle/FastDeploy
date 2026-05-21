@@ -57,16 +57,33 @@ from fastdeploy.utils import data_processor_logger, make_choice_id, parse_choice
 _SAMPLING_EPS = 1e-5
 
 
-def _is_forced_tool_choice(tool_choice) -> bool:
-    """Return True iff ``tool_choice`` requires the chat template to inject
-    a tool-call prefix into the prompt — i.e. ``"required"`` or a named-tool
-    choice (a ``ChatCompletionNamedToolChoiceParam`` pydantic model).
+def _is_forced_tool_choice(request) -> bool:
+    """Return True iff the request asks the chat template to inject a
+    tool-call prefix into the prompt. Two ways are recognized:
+
+    1. ``request.tool_choice == "required"`` or a named-tool choice (a
+       ``ChatCompletionNamedToolChoiceParam`` pydantic model with
+       ``type == "function"``).
+    2. ``request.chat_template_kwargs.options.tool_choice.mode == "force"``
+       — used by chat templates that drive forced tool calls through their
+       own ``options`` dict instead of the OpenAI-style ``tool_choice``
+       field.
     """
+    tool_choice = getattr(request, "tool_choice", None)
     if isinstance(tool_choice, str):
-        return tool_choice == "required"
+        if tool_choice == "required":
+            return True
     # Duck-type the pydantic ``ChatCompletionNamedToolChoiceParam`` via its
     # ``type`` attribute to avoid importing the protocol module here.
-    return getattr(tool_choice, "type", None) == "function"
+    elif getattr(tool_choice, "type", None) == "function":
+        return True
+
+    chat_template_kwargs = getattr(request, "chat_template_kwargs", None) or {}
+    options = chat_template_kwargs.get("options") if isinstance(chat_template_kwargs, dict) else None
+    inner = options.get("tool_choice") if isinstance(options, dict) else None
+    if isinstance(inner, dict) and inner.get("mode") == "force":
+        return True
+    return False
 
 
 class BaseTextProcessor(ABC):
@@ -338,7 +355,7 @@ class BaseTextProcessor(ABC):
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 parser_input = full_text
-                if _is_forced_tool_choice(request.tool_choice):
+                if _is_forced_tool_choice(request):
                     self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
                     if tool_parser._tool_prefix:
                         parser_input = tool_parser._tool_prefix + full_text
@@ -399,7 +416,7 @@ class BaseTextProcessor(ABC):
             stream_previous = previous_texts
             stream_current = previous_texts + delta_text
             stream_delta = delta_text
-            if _is_forced_tool_choice(request.tool_choice):
+            if _is_forced_tool_choice(request):
                 self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
                 prefix = tool_parser._tool_prefix
                 # When the chat template injected a forced tool-call prefix into
