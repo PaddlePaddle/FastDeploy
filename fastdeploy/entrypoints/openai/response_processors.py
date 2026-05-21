@@ -72,7 +72,7 @@ class ChatResponseProcessor:
             else:
                 self._multipart_buffer.append({"decode_type": decode_type, "request_output": request_output})
 
-    async def process_response_chat(self, request_outputs, stream, include_stop_str_in_output, request):
+    async def process_response_chat(self, request_outputs, stream, include_stop_str_in_output, request, prompt_tokens):
         """
         Process a list of responses into a generator that yields each processed response as it's generated.
         Args:
@@ -101,6 +101,7 @@ class ChatResponseProcessor:
                                 audio_tokens=all_audio_tokens,
                                 tts=tts,
                                 request=request,
+                                prompt_tokens=prompt_tokens,
                             )
                         else:
                             response = self.data_processor.process_response_dict(

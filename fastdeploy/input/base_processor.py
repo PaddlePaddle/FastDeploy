@@ -60,16 +60,13 @@ _SAMPLING_EPS = 1e-5
 def _is_forced_tool_choice(tool_choice) -> bool:
     """Return True iff ``tool_choice`` requires the chat template to inject
     a tool-call prefix into the prompt — i.e. ``"required"`` or a named-tool
-    choice (``{"type": "function", "function": {...}}``).
-
-    By the time this runs, the request has already been dumped to dict form,
-    so ``tool_choice`` is either a string or a dict.
+    choice (a ``ChatCompletionNamedToolChoiceParam`` pydantic model).
     """
     if isinstance(tool_choice, str):
         return tool_choice == "required"
-    if isinstance(tool_choice, dict):
-        return tool_choice.get("type") == "function"
-    return False
+    # Duck-type the pydantic ``ChatCompletionNamedToolChoiceParam`` via its
+    # ``type`` attribute to avoid importing the protocol module here.
+    return getattr(tool_choice, "type", None) == "function"
 
 
 class BaseTextProcessor(ABC):
@@ -281,12 +278,14 @@ class BaseTextProcessor(ABC):
         else:
             return self.process_response_dict_normal(response_dict, **kwargs)
 
-    def _prepare_tool_prefix(self, tool_parser, request):
+    def _prepare_tool_prefix(self, tool_parser, prompt_tokens):
         """Compute and cache on ``tool_parser`` the tool-call prefix that the
         chat template may have injected at the tail of the rendered prompt
         (e.g. for ``tool_choice=required``).
 
-        The detection is delegated to the parser itself
+        ``prompt_tokens`` is the rendered-prompt string passed in by the
+        serving layer (see ``response_processors.process_response_chat``).
+        The detection itself is delegated to the parser
         (:meth:`ToolParser.detect_tool_prefix`) so each parser controls
         which sentinel tokens it recognizes. We compute once per parser
         instance — for non-streaming a fresh instance is created per request,
@@ -296,13 +295,10 @@ class BaseTextProcessor(ABC):
             return
         tool_parser._tool_prefix_computed = True
         tool_parser._tool_prefix = ""
-        if not request:
-            return
-        prompt_str = request.get("prompt_tokens")
-        if not prompt_str or not isinstance(prompt_str, str):
+        if not prompt_tokens or not isinstance(prompt_tokens, str):
             return
         try:
-            tool_parser._tool_prefix = tool_parser.detect_tool_prefix(prompt_str) or ""
+            tool_parser._tool_prefix = tool_parser.detect_tool_prefix(prompt_tokens) or ""
         except Exception:
             data_processor_logger.exception("detect_tool_prefix failed; falling back to empty prefix")
             tool_parser._tool_prefix = ""
@@ -342,8 +338,8 @@ class BaseTextProcessor(ABC):
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 parser_input = full_text
-                if _is_forced_tool_choice(request.get("tool_choice")):
-                    self._prepare_tool_prefix(tool_parser, request)
+                if _is_forced_tool_choice(request.tool_choice):
+                    self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
                     if tool_parser._tool_prefix:
                         parser_input = tool_parser._tool_prefix + full_text
                 tool_call_info = tool_parser.extract_tool_calls(parser_input, request)
@@ -403,8 +399,8 @@ class BaseTextProcessor(ABC):
             stream_previous = previous_texts
             stream_current = previous_texts + delta_text
             stream_delta = delta_text
-            if _is_forced_tool_choice(request.get("tool_choice")):
-                self._prepare_tool_prefix(tool_parser, request)
+            if _is_forced_tool_choice(request.tool_choice):
+                self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
                 prefix = tool_parser._tool_prefix
                 # When the chat template injected a forced tool-call prefix into
                 # the prompt, the model output starts mid-tool-call. We splice

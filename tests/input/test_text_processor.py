@@ -769,17 +769,17 @@ class IsForcedToolChoiceTest(unittest.TestCase):
         self.assertFalse(self._is_forced("none"))
         self.assertFalse(self._is_forced(""))
 
-    def test_named_function_dict(self):
-        self.assertTrue(self._is_forced({"type": "function", "function": {"name": "f"}}))
+    def test_pydantic_named_tool_choice(self):
+        named = SimpleNamespace(type="function", function=SimpleNamespace(name="f"))
+        self.assertTrue(self._is_forced(named))
 
-    def test_dict_without_function_type(self):
-        self.assertFalse(self._is_forced({"type": "other"}))
-        self.assertFalse(self._is_forced({}))
+    def test_pydantic_other_type(self):
+        self.assertFalse(self._is_forced(SimpleNamespace(type="other")))
+        self.assertFalse(self._is_forced(SimpleNamespace()))
 
     def test_none_and_other_types(self):
         self.assertFalse(self._is_forced(None))
         self.assertFalse(self._is_forced(123))
-        self.assertFalse(self._is_forced(["required"]))
 
 
 class _RecordingToolParser:
@@ -850,28 +850,32 @@ class ToolPrefixCompensationTest(unittest.TestCase):
 
     def test_prepare_tool_prefix_idempotent(self):
         parser = _RecordingToolParser(self.processor.tokenizer)
-        request = {"prompt_tokens": "history\n<tool_call>"}
+        prompt = "history\n<tool_call>"
 
-        self.processor._prepare_tool_prefix(parser, request)
+        self.processor._prepare_tool_prefix(parser, prompt)
         self.assertTrue(parser._tool_prefix_computed)
         self.assertEqual(parser._tool_prefix, "<tool_call>")
         self.assertEqual(len(parser.detect_calls), 1)
 
         # Second call must not invoke detect again.
-        self.processor._prepare_tool_prefix(parser, request)
+        self.processor._prepare_tool_prefix(parser, prompt)
         self.assertEqual(len(parser.detect_calls), 1)
 
     def test_prepare_tool_prefix_no_prompt(self):
         parser = _RecordingToolParser(self.processor.tokenizer)
-        self.processor._prepare_tool_prefix(parser, {})
+        self.processor._prepare_tool_prefix(parser, None)
         self.assertTrue(parser._tool_prefix_computed)
         self.assertEqual(parser._tool_prefix, "")
         self.assertEqual(parser.detect_calls, [])
 
+        parser2 = _RecordingToolParser(self.processor.tokenizer)
+        self.processor._prepare_tool_prefix(parser2, "")
+        self.assertEqual(parser2._tool_prefix, "")
+        self.assertEqual(parser2.detect_calls, [])
+
     def test_prepare_tool_prefix_handles_exception(self):
         parser = _RecordingToolParser(self.processor.tokenizer, detect_raises=True)
-        request = {"prompt_tokens": "history\n<tool_call>"}
-        self.processor._prepare_tool_prefix(parser, request)
+        self.processor._prepare_tool_prefix(parser, "history\n<tool_call>")
         self.assertTrue(parser._tool_prefix_computed)
         self.assertEqual(parser._tool_prefix, "")
 
@@ -885,12 +889,13 @@ class ToolPrefixCompensationTest(unittest.TestCase):
             "finished": True,
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
-        request = {
-            "tool_choice": "required",
-            "prompt_tokens": "user msg\n<tool_call>",
-        }
+        request = SimpleNamespace(tool_choice="required")
 
-        processor.process_response_dict_normal(response, request=request)
+        processor.process_response_dict_normal(
+            response,
+            request=request,
+            prompt_tokens="user msg\n<tool_call>",
+        )
         self.assertEqual(len(parser.extract_calls), 1)
         # Model output is "7" after decoding token 7; prefix must be prepended.
         self.assertTrue(parser.extract_calls[0].startswith("<tool_call>"))
@@ -906,21 +911,44 @@ class ToolPrefixCompensationTest(unittest.TestCase):
             "finished": True,
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
-        request = {"tool_choice": "auto", "prompt_tokens": "user msg\n<tool_call>"}
+        request = SimpleNamespace(tool_choice="auto")
 
-        processor.process_response_dict_normal(response, request=request)
+        processor.process_response_dict_normal(
+            response,
+            request=request,
+            prompt_tokens="user msg\n<tool_call>",
+        )
         # detect_tool_prefix must NOT be called for non-forced choices.
         self.assertEqual(parser.detect_calls, [])
         self.assertFalse(parser.extract_calls[0].startswith("<tool_call>"))
+
+    def test_normal_path_named_tool_choice_pydantic(self):
+        """A pydantic ``ChatCompletionNamedToolChoiceParam`` (duck-typed via
+        ``type='function'``) must also trigger prefix splicing."""
+        processor = self.processor
+        parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
+        processor.tool_parser_obj = self._make_parser_factory(parser)
+
+        response = {
+            "request_id": "req-named",
+            "finished": True,
+            "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
+        }
+        request = SimpleNamespace(tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")))
+
+        processor.process_response_dict_normal(
+            response,
+            request=request,
+            prompt_tokens="user msg\n<tool_call>",
+        )
+        self.assertTrue(parser.extract_calls[0].startswith("<tool_call>"))
 
     def test_streaming_path_splices_prefix_only_on_first_delta(self):
         processor = self.processor
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
         processor.tool_parser_obj = self._make_parser_factory(parser)
-        request = {
-            "tool_choice": "required",
-            "prompt_tokens": "user msg\n<tool_call>",
-        }
+        request = SimpleNamespace(tool_choice="required")
+        prompt_tokens = "user msg\n<tool_call>"
 
         # First chunk
         first = {
@@ -928,7 +956,7 @@ class ToolPrefixCompensationTest(unittest.TestCase):
             "request_id": "stream-req",
             "outputs": {"token_ids": [7]},
         }
-        processor.process_response_dict_streaming(first, request=request)
+        processor.process_response_dict_streaming(first, request=request, prompt_tokens=prompt_tokens)
         first_call = parser.streaming_calls[0]
         # delta_text decodes to "7"; previous="" current="7"
         self.assertEqual(first_call["previous_text"], "<tool_call>")
@@ -942,7 +970,7 @@ class ToolPrefixCompensationTest(unittest.TestCase):
             "request_id": "stream-req",
             "outputs": {"token_ids": [8, processor.tokenizer.eos_token_id]},
         }
-        processor.process_response_dict_streaming(second, request=request)
+        processor.process_response_dict_streaming(second, request=request, prompt_tokens=prompt_tokens)
         second_call = parser.streaming_calls[1]
         self.assertEqual(second_call["previous_text"], "<tool_call>7")
         self.assertEqual(second_call["current_text"], "<tool_call>78")
@@ -955,14 +983,14 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         # Empty configured prefix => detect returns "" even with required.
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="")
         processor.tool_parser_obj = self._make_parser_factory(parser)
-        request = {"tool_choice": "required", "prompt_tokens": "no sentinel"}
+        request = SimpleNamespace(tool_choice="required")
 
         first = {
             "finished": False,
             "request_id": "stream-noprefix",
             "outputs": {"token_ids": [7]},
         }
-        processor.process_response_dict_streaming(first, request=request)
+        processor.process_response_dict_streaming(first, request=request, prompt_tokens="no sentinel")
         self.assertEqual(parser.streaming_calls[0]["delta_text"], "7")
         self.assertFalse(parser._tool_prefix_injected_to_delta)
 
