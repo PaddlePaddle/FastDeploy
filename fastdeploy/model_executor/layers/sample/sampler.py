@@ -1200,6 +1200,7 @@ class SpeculativeSampler(nn.Layer):
             top_p=top_p,
             top_k=top_k,
             top_k_list=sampling_metadata.top_k_list,
+            threshold=sampling_metadata.sampling_threshold,
             topp_seed=topp_seed,
         )
         real_bsz = share_inputs["seq_lens_this_time"].shape[0]
@@ -1245,6 +1246,7 @@ class SpeculativeSampler(nn.Layer):
                 top_p=top_p,
                 top_k=top_k,
                 top_k_list=sampling_metadata.top_k_list,
+                threshold=sampling_metadata.sampling_threshold,
                 topp_seed=topp_seed,
             )
         elif self.verify_strategy == VerifyStrategy.GREEDY:

@@ -1349,11 +1349,12 @@ class GPUModelRunner(ModelRunnerBase):
         self.initialize_forward_meta(is_dummy_or_profile_run=is_dummy_or_profile_run)
         self.forward_meta.real_bsz = real_bsz
 
-        # Get sampling metadata
         sampling_threshold_list = self.share_inputs["sampling_threshold_list"]
         sampling_threshold_tensor = (
             self.share_inputs["sampling_threshold"] if any(v > 0.0 for v in sampling_threshold_list) else None
         )
+
+        # Get sampling metadata
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],

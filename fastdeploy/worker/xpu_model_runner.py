@@ -758,6 +758,8 @@ class XPUModelRunner(ModelRunnerBase):
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             self.share_inputs["min_p"][idx : idx + 1] = request.get("min_p", 0.0)
             self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
+            self.share_inputs["sampling_threshold_list"][idx] = request.get("sampling_threshold", 0.0)
+            self.share_inputs["sampling_threshold"][idx : idx + 1], request.get("sampling_threshold", 0.0)
             self.share_inputs["temperature"][idx : idx + 1] = request.get("temperature", 0.95)
             self.share_inputs["penalty_score"][idx : idx + 1] = request.get("repetition_penalty", 1.0)
             self.share_inputs["frequency_score"][idx : idx + 1] = request.get("frequency_penalty", 0.0)
@@ -882,6 +884,11 @@ class XPUModelRunner(ModelRunnerBase):
             if_only_decode = self.only_decode()
             self.fd_config.model_config.moe_phase.phase = "decode" if if_only_decode else "prefill"
 
+        sampling_threshold_list = self.share_inputs["sampling_threshold_list"]
+        sampling_threshold_tensor = (
+            self.share_inputs["sampling_threshold"] if any(v > 0.0 for v in sampling_threshold_list) else None
+        )
+
         # Get sampling metadata
         # TODU(lilujia): sync with GPU
         self.sampling_metadata = SamplingMetadata(
@@ -891,6 +898,7 @@ class XPUModelRunner(ModelRunnerBase):
             top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
             min_p_list=self.share_inputs["min_p_list"],
+            sampling_threshold=sampling_threshold_tensor,
             seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             token_ids_all=self.share_inputs["token_ids_all"],
