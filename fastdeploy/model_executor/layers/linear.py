@@ -41,15 +41,19 @@ from fastdeploy.platforms import current_platform
 from .utils import _set_var_distributed, divide, get_tensor, modules_to_convert
 
 
-def may_be_do_cast(loaded_weight, param_dtype):
+def may_be_do_cast(loaded_weight, param):
+
+    assert param.shape == loaded_weight.shape, (
+        f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+    )
     # Ensure loaded weight dtype matches model param dtype
-    if loaded_weight.dtype != param_dtype:
-        if loaded_weight.dtype == paddle.int8 and param_dtype == paddle.float8_e4m3fn:
-            loaded_weight = loaded_weight.view(param_dtype)
+    if loaded_weight.dtype != param.dtype:
+        if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+            loaded_weight = loaded_weight.view(param.dtype)
         else:
             assert (
-                loaded_weight.dtype == param_dtype
-            ), f"loaded_weight.dtype: {loaded_weight.dtype}, param_dtype: {param_dtype}"
+                loaded_weight.dtype == param.dtype
+            ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
     return loaded_weight
 
 
@@ -419,10 +423,7 @@ class MergedReplicatedLinear(ReplicatedLinear):
                 start=param_shard_offset,
                 end=param_shard_offset + param_shard_size,
             )
-        assert param.shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
+        loaded_weight = may_be_do_cast(loaded_weight, param)
         # (bukejiyu) After this fix, the early H2D copy for non-GPU devices is no longer needed and can be safely removed.
         h2d_copy(param, loaded_weight)
 
@@ -599,10 +600,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def load_state_dict(self, state_dict: dict):
@@ -754,10 +752,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
@@ -1275,10 +1270,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def gate_weight_loader(self, param, loaded_weight):
@@ -1310,10 +1302,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
         param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-        assert param.shape == loaded_weight.shape, (
-            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
+        loaded_weight = may_be_do_cast(loaded_weight, param)
         h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
