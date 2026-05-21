@@ -136,6 +136,7 @@ def _create_metadata(batch_size=1, min_seq_len=1, max_seq_len=3, max_num_logprob
         bad_words_token_len=paddle.full(shape=[batch_size, 1], fill_value=0, dtype="int64"),
         eos_token_ids=paddle.full(shape=[batch_size], fill_value=-2, dtype="int64"),
         min_p=paddle.zeros([batch_size], dtype="float32"),
+        sampling_threshold=paddle.zeros([batch_size], dtype="float32"),
         seed=paddle.full([batch_size, 1], 7, dtype="int64"),
         logits_processors=None,
     )
@@ -261,7 +262,7 @@ def test_sampler_forward_cuda_variants(mock_ops, monkeypatch, mode, next_token, 
 
     monkeypatch.setattr(
         "fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling",
-        lambda probs, top_p, top_k, top_k_list, topp_seed=None: (
+        lambda probs, top_p, top_k, top_k_list, threshold=None, topp_seed=None: (
             None,
             paddle.to_tensor([[next_token]], dtype="int64"),
         ),
@@ -403,7 +404,7 @@ def test_sampler_deterministic_log_mode_calls_diagnostic(mock_ops, monkeypatch):
 
     monkeypatch.setattr(
         "fastdeploy.model_executor.layers.sample.sampler.top_k_top_p_sampling",
-        lambda probs, top_p, top_k, top_k_list, topp_seed=None: (
+        lambda probs, top_p, top_k, top_k_list, threshold=None, topp_seed=None: (
             None,
             paddle.to_tensor([[1]], dtype="int64"),
         ),
