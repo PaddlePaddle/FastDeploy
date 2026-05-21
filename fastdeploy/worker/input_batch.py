@@ -396,7 +396,7 @@ class InputBatch:
         swap_data(self.token_ids_all, i1, i2)
         swap_data(self.input_ids, i1, i2)
         swap_data(self.top_p, i1, i2)
-        # swap_data(self.sampling_threshold, i1, i2)
+        swap_data(self.sampling_threshold, i1, i2)
         swap_data(self.top_k, i1, i2)
         swap_data(self.min_p, i1, i2)
         swap_data(self.temperature, i1, i2)
@@ -422,10 +422,10 @@ class InputBatch:
         # # Swap list-based arrays (lists don't need clone)
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
         self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
-        # self.sampling_threshold_list[i1], self.sampling_threshold_list[i2] = (
-        #     self.sampling_threshold_list[i2],
-        #     self.sampling_threshold_list[i1],
-        # )
+        self.sampling_threshold_list[i1], self.sampling_threshold_list[i2] = (
+            self.sampling_threshold_list[i2],
+            self.sampling_threshold_list[i1],
+        )
 
         # Swap 1D arrays
         swap_data(self.bad_tokens, i1, i2)
