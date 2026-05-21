@@ -54,7 +54,7 @@ for test_file in "${test_files[@]}"; do
                 fi
 
                 echo ">>> grep error in ${log_dir}"
-                grep -Rni --color=auto "error" "${log_dir}" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" --exclude="cache_messager*" --exclude="*.log.[0-9]*" | awk -F: '{key=$1; for(i=3;i<=NF;i++) key=key":"$i; gsub(/[0-9]+-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+,[0-9]+ [0-9]+/, "", key); if (!seen[key]++) print}' || true
+                grep -Rni --color=auto "error" "${log_dir}" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" || true
             fi
         done
 
