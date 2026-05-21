@@ -17,6 +17,11 @@
    * Min-p 采样首先计算 pivot=max_prob * min_p，然后只保留概率大于pivot的token(其余设置为0)进行后续的采样。
    * 用于过滤掉相对概率过低的token，只从高概率token中采样，提高生成质量。
 
+4. 采样阈值
+
+   * 只对大于或等于`sampling_threshold`的token(其余设置为0)进行采样。
+   * 用于过滤掉绝对概率过低的token，只从高概率token中采样，提高生成质量。
+
 ## 使用说明
 
 在部署时，可以通过设置环境变量 `FD_SAMPLING_CLASS` 来选择采样算法。可选择的值有 `base`, `base_non_truncated`, `air`或 `rejection`。
@@ -214,6 +219,50 @@ for chunk in response:
 print('\n')
 ```
 
+### 设置采样阈值
+
+如果你希望在min_p之后， top_p 或 top_k_top_p之前设置采样阈值，在发送请求时指定以下参数：
+
+* 使用 curl 命令发送用户请求示例如下：
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "min_p": 0.1,
+  "sampling_threshold": 0.00002,
+  "top_p": 0.8,
+  "top_k": 20
+}'
+```
+
+* 使用 python 脚本发送用户请求示例如下：
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+        {"role": "user", "content": "把李白的静夜思改写为现代诗"},
+    ],
+    stream=True,
+    top_p=0.8,
+    extra_body={"top_k": 20, "min_p": 0.1, "sampling_threshold": 0.00002}
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
+
 通过上述配置，你可以根据具体的生成任务需求，灵活选择和使用合适的采样策略。
 
 ## 参数说明
@@ -221,6 +270,7 @@ print('\n')
 * `top_p`: 概率累积分布截断阈值，仅考虑累计概率达到此阈值的最可能token集合。float类型，取值范围为[0.0,1.0]。当top_p=1.0时，考虑所有token；当top_p=0.0时，退化为greedy search。
 * `top_k`: 采样概率最高的token数量，考虑概率最高的k个token进行采样范围限制。int类型，取值范围为[0,vocab_size]
 * `min_p`：低概率过滤阈值，仅考虑概率大于等于(max_prob*min_p)的token集合。float类型，取值范围为[0.0,1.0]
+* `sampling_threshold`：低概率过滤阈值，仅考虑概率大于等于sampling_threshold的token集合。float类型，取值范围为[0.0,1.0)
 
 # Bad Words
 

@@ -19,6 +19,10 @@ Sampling strategies are used to determine how to select the next token from the 
    * Min-p sampling calculates `pivot=max_prob * min_p`, then retains only tokens with probabilities greater than the `pivot` (setting others to zero) for subsequent sampling.
    * It filters out tokens with relatively low probabilities, sampling only from high-probability tokens to improve generation quality.
 
+4. Sampling Threshold
+
+   * Only tokens with probability greater than or equal to `sampling_threshold` are retained (others are set to zero) for subsequent sampling.
+   * Filters out tokens whose absolute probability falls below the threshold, sampling only from sufficiently high-probability tokens to improve generation quality.
 ## Usage Instructions
 
 During deployment, you can choose the sampling algorithm by setting the environment variable `FD_SAMPLING_CLASS`. Available values are `base`, `base_non_truncated`, `air`, or `rejection`.
@@ -211,6 +215,49 @@ for chunk in response:
 print('\n')
 ```
 
+### Setting Sampling Threshold
+
+If you want to apply a sampling threshold after min-p filtering but before top-p or top-k_top-p sampling, specify the following parameters when sending a request:
+
+* Example request with curl:
+
+```bash
+curl -X POST "http://0.0.0.0:9222/v1/chat/completions" \
+-H "Content-Type: application/json" \
+-d '{
+  "messages": [
+    {"role": "user", "content": "How old are you"}
+  ],
+  "min_p": 0.1,
+  "sampling_threshold": 0.00002,
+  "top_p": 0.8,
+  "top_k": 20
+}'
+```
+
+* Example request with Python:
+
+```python
+import openai
+host = "0.0.0.0"
+port = "8170"
+client = openai.Client(base_url=f"http://{host}:{port}/v1", api_key="null")
+
+response = client.chat.completions.create(
+    model="null",
+    messages=[
+        {"role": "system", "content": "I'm a helpful AI assistant."},
+    ],
+    stream=True,
+    top_p=0.8,
+    extra_body={"top_k": 20, "min_p": 0.1, "sampling_threshold": 0.00002}
+)
+for chunk in response:
+    if chunk.choices[0].delta:
+        print(chunk.choices[0].delta.content, end='')
+print('\n')
+```
+
 With the above configurations, you can flexibly choose and use the appropriate sampling strategy according to the needs of specific generation tasks.
 
 ## Parameter Description
@@ -220,6 +267,8 @@ With the above configurations, you can flexibly choose and use the appropriate s
 `top_k`: The number of tokens with the highest sampling probability, limiting the sampling range to the top k tokens. It is an int type, with a range of [0, vocab_size].
 
 `min_p`: Low probability filtering threshold, considering only the token set with probability greater than or equal to (`max_prob*min_p`). It is a float type, with a range of [0.0, 1.0].
+
+`sampling_threshold`: Absolute probability filtering threshold, only retaining tokens with probability greater than or equal to `sampling_threshold`. It is a float type, with a range of [0.0, 1.0).
 
 # Bad Words
 

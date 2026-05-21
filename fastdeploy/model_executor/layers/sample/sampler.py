@@ -646,6 +646,7 @@ class Sampler(nn.Layer):
                 sampling_metadata.top_p,
                 sampling_metadata.top_k,
                 sampling_metadata.top_k_list,
+                threshold=sampling_metadata.sampling_threshold,
                 topp_seed=sampling_metadata.seed,
             )
 

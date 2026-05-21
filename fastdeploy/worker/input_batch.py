@@ -127,6 +127,8 @@ class InputBatch:
         self.top_k_list = [0] * max_num_seqs
         self.min_p = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
         self.min_p_list = [0.0] * max_num_seqs
+        self.sampling_threshold = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
+        self.sampling_threshold_list = [0.0] * max_num_seqs
         self.temperature = paddle.full([max_num_seqs, 1], self.model_config.temperature, dtype="float32")
         self.penalty_score = paddle.full([max_num_seqs, 1], self.model_config.penalty_score, dtype="float32")
         self.frequency_score = paddle.full(
@@ -394,6 +396,7 @@ class InputBatch:
         swap_data(self.token_ids_all, i1, i2)
         swap_data(self.input_ids, i1, i2)
         swap_data(self.top_p, i1, i2)
+        # swap_data(self.sampling_threshold, i1, i2)
         swap_data(self.top_k, i1, i2)
         swap_data(self.min_p, i1, i2)
         swap_data(self.temperature, i1, i2)
@@ -419,6 +422,10 @@ class InputBatch:
         # # Swap list-based arrays (lists don't need clone)
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
         self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
+        # self.sampling_threshold_list[i1], self.sampling_threshold_list[i2] = (
+        #     self.sampling_threshold_list[i2],
+        #     self.sampling_threshold_list[i1],
+        # )
 
         # Swap 1D arrays
         swap_data(self.bad_tokens, i1, i2)
@@ -563,6 +570,7 @@ class InputBatch:
             fill_paddle_tensor(self, "top_p", self.model_config.top_p)
             fill_paddle_tensor(self, "top_k", 0)
             fill_paddle_tensor(self, "min_p", 0.0)
+            fill_paddle_tensor(self, "sampling_threshold", 0.0)
             fill_paddle_tensor(self, "temperature", self.model_config.temperature)
             fill_paddle_tensor(self, "penalty_score", self.model_config.penalty_score)
             fill_paddle_tensor(self, "frequency_score", self.model_config.frequency_score)
@@ -573,6 +581,7 @@ class InputBatch:
             # Reset list variables (not paddle tensors)
             self.top_k_list = [0] * max_num_seqs
             self.min_p_list = [0.0] * max_num_seqs
+            self.sampling_threshold_list = [0.0] * max_num_seqs
 
             fill_paddle_tensor(self, "min_dec_len", self.model_config.min_length)
             fill_paddle_tensor(self, "max_dec_len", self.model_config.max_model_len)

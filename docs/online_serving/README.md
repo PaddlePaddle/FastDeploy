@@ -157,6 +157,9 @@ top_k: Optional[int] = None
 min_p: Optional[float] = None
 # Nucleus sampling threshold, only retaining tokens whose cumulative probability exceeds min_p (default None means disabled).
 
+sampling_threshold: Optional[float] = None
+# Absolute probability filtering threshold, only retaining tokens with probability greater than or equal to sampling_threshold (default None means disabled). Range [0.0, 1.0).
+
 min_tokens: Optional[int] = None
 # Forces a minimum number of tokens to be generated, avoiding premature truncation (default None means no limit).
 
@@ -433,6 +436,9 @@ top_k: Optional[int] = None
 
 min_p: Optional[float] = None
 # Nucleus sampling threshold, only retaining tokens whose cumulative probability exceeds min_p (default None means disabled).
+
+sampling_threshold: Optional[float] = None
+# Absolute probability filtering threshold, only retaining tokens with probability greater than or equal to sampling_threshold (default None means disabled). Range [0.0, 1.0).
 
 min_tokens: Optional[int] = None
 # Forces a minimum number of tokens to be generated, avoiding premature truncation (default None means no limit).

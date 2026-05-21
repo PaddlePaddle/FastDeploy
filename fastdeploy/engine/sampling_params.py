@@ -94,6 +94,7 @@ class SamplingParams:
     top_p: float = None
     top_k: int = 0
     min_p: float = 0.0
+    sampling_threshold: float = 0.0
     seed: Optional[int] = None
     stop: Optional[Union[str, List[str]]] = None
     stop_token_ids: Optional[List[int]] = None
@@ -160,6 +161,11 @@ class SamplingParams:
             top_p=getattr(req, "top_p", None) if getattr(req, "top_p", None) is not None else cls.top_p,
             top_k=getattr(req, "top_k", None) if getattr(req, "top_k", None) is not None else cls.top_k,
             min_p=getattr(req, "min_p", None) if getattr(req, "min_p", None) is not None else cls.min_p,
+            sampling_threshold=(
+                getattr(req, "sampling_threshold", None)
+                if getattr(req, "sampling_threshold", None) is not None
+                else cls.sampling_threshold
+            ),
             seed=getattr(req, "seed", None) if getattr(req, "seed", None) is not None else cls.seed,
             stop=getattr(req, "stop", None) if getattr(req, "stop", None) is not None else cls.stop,
             stop_token_ids=(
@@ -234,6 +240,7 @@ class SamplingParams:
         top_p,
         top_k,
         min_p,
+        sampling_threshold=0.0,
         seed=None,
         stop=None,
         stop_token_ids=None,
@@ -259,6 +266,7 @@ class SamplingParams:
             top_p=top_p,
             top_k=top_k if top_k is not None else 0,
             min_p=min_p if min_p is not None else 0.0,
+            sampling_threshold=sampling_threshold,
             seed=seed,
             stop=stop,
             stop_token_ids=stop_token_ids,
@@ -305,6 +313,10 @@ class SamplingParams:
             raise TypeError(f"top_k must be an integer, got {type(self.top_k).__name__}")
         if not 0.0 <= self.min_p <= 1.0:
             raise ValueError("min_p must be in [0,1],got f{self.min_p}")
+        if not isinstance(self.sampling_threshold, float):
+            raise TypeError(f"sampling_threshold must be a float, got {type(self.sampling_threshold).__name__}")
+        if not 0.0 <= self.sampling_threshold < 1.0:
+            raise ValueError(f"sampling_threshold must be in [0.0, 1.0), got {self.sampling_threshold}.")
 
         if self.max_tokens is not None and self.max_tokens < 1:
             raise ValueError(f"max_tokens must be at least 1, got {self.max_tokens}.")

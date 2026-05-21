@@ -185,6 +185,7 @@ For ``LLM`` configuration, refer to [Parameter Documentation](parameters.md).
 * top_p(float): Probability threshold for token selection
 * top_k(int): Number of tokens considered for sampling
 * min_p(float): Minimum probability relative to the maximum probability for a token to be considered (>0 filters low-probability tokens to improve quality)
+* sampling_threshold(float): Minimum absolute probability threshold for a token to be considered (>0 filters low-probability tokens by absolute value to improve generation quality). Range [0.0, 1.0).
 * max_tokens(int): Maximum generated tokens (input + output)
 * min_tokens(int): Minimum forced generation length
 * bad_words(list[str]): Prohibited words

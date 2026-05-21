@@ -524,6 +524,7 @@ class CompletionRequest(BaseModel):
     # doc: begin-completion-sampling-params
     top_k: Optional[int] = None
     min_p: Optional[float] = None
+    sampling_threshold: Optional[float] = Field(default=None, ge=0.0, lt=1.0)
     repetition_penalty: Optional[float] = None
     stop_token_ids: Optional[List[int]] = Field(default_factory=list)
     min_tokens: Optional[int] = None
@@ -703,6 +704,7 @@ class ChatCompletionRequest(BaseModel):
     # doc: begin-chat-completion-sampling-params
     top_k: Optional[int] = None
     min_p: Optional[float] = None
+    sampling_threshold: Optional[float] = Field(default=None, ge=0.0, lt=1.0)
     min_tokens: Optional[int] = None
     include_stop_str_in_output: Optional[bool] = False
     bad_words: Optional[List[str]] = None

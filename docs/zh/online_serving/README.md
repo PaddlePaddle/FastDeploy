@@ -155,6 +155,9 @@ top_k: Optional[int] = None
 min_p: Optional[float] = None
 # 核采样（nucleus sampling）阈值，只保留概率累计超过 min_p 的 token（默认 None 表示禁用）。
 
+sampling_threshold: Optional[float] = None
+# 采样阈值，只保留概率值大于或等于 sampling_threshold 的 token（默认 None 表示禁用）。取值范围[0.0, 1.0)。
+
 min_tokens: Optional[int] = None
 # 强制生成的最小 token 数，避免过早截断（默认 None 表示不限制）。
 
@@ -424,6 +427,9 @@ top_k: Optional[int] = None
 
 min_p: Optional[float] = None
 # 核采样（nucleus sampling）阈值，只保留概率累计超过 min_p 的 token（默认 None 表示禁用）。
+
+sampling_threshold: Optional[float] = None
+# 采样阈值，只保留概率值大于或等于 sampling_threshold 的 token（默认 None 表示禁用）。取值范围[0.0, 1.0)。
 
 min_tokens: Optional[int] = None
 # 强制生成的最小 token 数，避免过早截断（默认 None 表示不限制）。

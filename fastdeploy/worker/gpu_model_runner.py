@@ -1045,10 +1045,14 @@ class GPUModelRunner(ModelRunnerBase):
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
             self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
+            self.share_inputs["sampling_threshold_list"][idx] = request.get("sampling_threshold", 0.0)
             async_set_value(self.share_inputs["eos_token_id"][:], request.eos_token_ids)
             async_set_value(self.share_inputs["top_p"][idx : idx + 1], request.get("top_p", 0.7))
             async_set_value(self.share_inputs["top_k"][idx : idx + 1], request.get("top_k", 0))
             async_set_value(self.share_inputs["min_p"][idx : idx + 1], request.get("min_p", 0.0))
+            async_set_value(
+                self.share_inputs["sampling_threshold"][idx : idx + 1], request.get("sampling_threshold", 0.0)
+            )
             async_set_value(self.share_inputs["temperature"][idx : idx + 1], request.get("temperature", 0.95))
             async_set_value(self.share_inputs["penalty_score"][idx : idx + 1], request.get("repetition_penalty", 1.0))
             async_set_value(self.share_inputs["frequency_score"][idx : idx + 1], request.get("frequency_penalty", 0.0))
@@ -1346,6 +1350,10 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta.real_bsz = real_bsz
 
         # Get sampling metadata
+        sampling_threshold_list = self.share_inputs["sampling_threshold_list"]
+        sampling_threshold_tensor = (
+            self.share_inputs["sampling_threshold"] if any(v > 0.0 for v in sampling_threshold_list) else None
+        )
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
@@ -1353,6 +1361,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
             min_p_list=self.share_inputs["min_p_list"],
+            sampling_threshold=sampling_threshold_tensor,
             seed=self.share_inputs["infer_seed"],
             step_idx=self.share_inputs["step_idx"],
             token_ids_all=self.share_inputs["token_ids_all"],
