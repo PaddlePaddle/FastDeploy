@@ -20,6 +20,7 @@ Consolidates the four separate VL processor wrappers into a single class
 with pluggable Encoding strategies.
 """
 
+import logging
 import pickle
 from collections.abc import Mapping
 from typing import Any, Dict, Optional
@@ -524,7 +525,8 @@ class MultiModalProcessor(BaseTextProcessor):
             if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
                 request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 
-        data_processor_logger.info("Processed request summary: %s", self._processed_request_summary(request))
+        if data_processor_logger.isEnabledFor(logging.DEBUG):
+            data_processor_logger.debug("Processed request summary: %s", self._processed_request_summary(request))
         return request
 
     def _tokenize_request(self, request):

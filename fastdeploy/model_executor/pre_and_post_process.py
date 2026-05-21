@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import inspect
 import queue
 from typing import Dict, List, Optional, Union
 
@@ -120,6 +121,16 @@ from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, SamplerOu
 DISABLE_RECOVER = envs.FD_DISABLED_RECOVER == "1"
 
 
+def _get_padding_offset_accepts_seq_lens_decoder() -> bool:
+    op = globals().get("get_padding_offset")
+    if op is None:
+        return False
+    return len(inspect.signature(op).parameters) >= 6
+
+
+_GET_PADDING_OFFSET_ACCEPTS_SEQ_LENS_DECODER = _get_padding_offset_accepts_seq_lens_decoder()
+
+
 def async_set_value(tgt, src):
     if isinstance(src, (int, float, bool)):
         src = paddle.full(tgt.shape, fill_value=src, dtype=tgt.dtype)
@@ -175,9 +186,14 @@ def pre_process(
     specific_platform = current_platform.is_cuda() or current_platform.is_maca() or current_platform.is_iluvatar()
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
-        ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, None, token_num_cpu
-        )
+        if _GET_PADDING_OFFSET_ACCEPTS_SEQ_LENS_DECODER:
+            ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
+                input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, None, token_num_cpu
+            )
+        else:
+            ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
+                input_ids, seq_lens_this_time, None, seq_lens_encoder, token_num_cpu
+            )
         return (
             ids_remove_padding,
             batch_id_per_token,
