@@ -51,7 +51,7 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import llm_logger, spec_logger
+from fastdeploy.utils import get_base_request_id, llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
 RECOVERY_STOP_SIGNAL = -3
@@ -588,6 +588,7 @@ class TokenProcessor:
                             f"PD Error: prefill failed to send cache to decode, "
                             f"{task_id}, {self.prefill_result_status[task_id]}"
                         )
+                    self.prefill_result_status.pop(task_id)
                     log_request(
                         RequestLogLevel.STAGES,
                         message="wait for sending cache, request_id: {request_id}, cost seconds: {cost_seconds}",
@@ -808,7 +809,7 @@ class TokenProcessor:
             is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
             is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
 
-            rid = task_id.split("_")[0]
+            rid = get_base_request_id(task_id)
             trace_carrier = task.trace_carrier
             metrics = task.metrics
             t = metrics.inference_start_time

@@ -44,11 +44,9 @@ from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.register_manager import RegisterManager
 from fastdeploy.engine.request import (
-    CompletionOutput,
     ControlRequest,
     ControlResponse,
     Request,
-    RequestMetrics,
     RequestOutput,
     RequestStatus,
     RequestType,
@@ -74,7 +72,15 @@ from fastdeploy.splitwise.internal_adapter_utils import InternalAdapter
 from fastdeploy.splitwise.splitwise_connector import SplitwiseConnector
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import EngineError, console_logger, envs, get_logger, llm_logger
+from fastdeploy.utils import (
+    EngineError,
+    console_logger,
+    envs,
+    get_base_request_id,
+    get_logger,
+    llm_logger,
+    make_choice_id,
+)
 
 try:
     TokenProcessor = load_token_processor_plugins()
@@ -142,6 +148,7 @@ class EngineService:
 
         self.is_paused = False  # pause request generation
         self._pause_cond = threading.Condition()
+        self._rejecting_new_requests = False  # blocks new requests during abort drain
 
         self._ctrl_output_queues = {}
         self._ctrl_response_mailboxes = collections.defaultdict(collections.OrderedDict)
@@ -384,15 +391,6 @@ class EngineService:
             create=True,
         )
 
-        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
-        self.engine_forward_signal = IPCSignal(
-            name="engine_forward_signal",
-            array=engine_forward_signal_data,
-            dtype=np.int32,
-            suffix=current_suffix,
-            create=True,
-        )
-
         # worker_live_signal 用于engine感知各worker进程是否存活，记录每个step 时间
         worker_healthy_live_recorded_time_array = np.zeros(
             shape=[min(self.cfg.worker_num_per_node, self.cfg.parallel_config.tensor_parallel_size)], dtype=np.int32
@@ -530,7 +528,7 @@ class EngineService:
 
         need_delete_tasks = []
         for task in tasks:
-            rid = task.request_id.split("_")[0]
+            rid = get_base_request_id(task.request_id)
             trace_carrier = task.trace_carrier
             if trace_carrier:
                 tracing.trace_set_proc_propagate_context(rid, trace_carrier)
@@ -599,7 +597,7 @@ class EngineService:
                     task.metrics.inference_start_time = time.time()
                     tracing.trace_report_span(
                         tracing.TraceSpanName.SCHEDULE,
-                        task.request_id.split("_")[0],
+                        get_base_request_id(task.request_id),
                         int(task.metrics.scheduler_recv_req_time * 1e9),
                         int(task.metrics.inference_start_time * 1e9),
                         thread_finish_flag=True,
@@ -1083,29 +1081,26 @@ class EngineService:
             with self._pause_cond:
                 self._pause_cond.wait_for(lambda: not self.is_paused)
             try:
-                if not is_fetching:
-                    # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
-                    try:
+                if self.engine_worker_queue.exist_tasks():
+                    time.sleep(0.001)
+                    continue
+                if self.cfg.scheduler_config.splitwise_role != "mixed":
+                    if not is_fetching:
                         is_fetching = True
                         get_request_pool.submit(_fetch_request)
-                    except RuntimeError as e:
-                        if "shutdown" in str(e):
-                            self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
-                            break
-                        else:
-                            raise
-                if self.cfg.scheduler_config.splitwise_role != "mixed":
-                    # Continue preprocessing incoming requests and accumulating them in the queue when forward pass not finished.
-                    # Once the forward pass finishes, these accumulated requests can be scheduled in larger,
-                    # more efficient batches.
-                    if self.engine_worker_queue.exist_tasks() or self.engine_forward_signal.value[0] != 0:
-                        time.sleep(0.001)
-                        continue
+
                 else:
-                    # In mixed, todo: optimze cache swap, to decouple swap from scheduler
-                    if self.engine_worker_queue.exist_tasks():
-                        time.sleep(0.001)
-                        continue
+                    if len(self.resource_manager.waiting) == 0 and (not is_fetching):
+                        # Check if the thread pool is still available to avoid submitting tasks to a shutdown thread pool.
+                        try:
+                            is_fetching = True
+                            get_request_pool.submit(_fetch_request)
+                        except RuntimeError as e:
+                            if "shutdown" in str(e):
+                                self.llm_logger.info("Thread pool shutdown detected, exiting scheduler loop")
+                                break
+                            else:
+                                raise
 
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
@@ -1136,7 +1131,7 @@ class EngineService:
                     self.resource_manager.get_real_bsz()
                     for task in batch_request:
                         if task.task_type == RequestType.PREFILL:
-                            rid = task.request_id.split("_")[0]
+                            rid = get_base_request_id(task.request_id)
                             if isinstance(task, Request) and task.has_been_preempted_before:
                                 trace_print(
                                     LoggingEventName.RESCHEDULED_INFERENCE_START,
@@ -1170,13 +1165,6 @@ class EngineService:
                             elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
                     self.engine_worker_queue.put_tasks((batch_request, self.resource_manager.real_bsz))
-                else:
-                    # When there are no actual tasks to schedule, send an empty task batch to EP workers.
-                    # This helps EP workers barrier for syncing tasks not hang.
-                    if self.cfg.parallel_config.enable_expert_parallel:
-                        self.engine_worker_queue.put_tasks(
-                            (batch_request, self.resource_manager.real_bsz)
-                        )  # Empty (as idle tasks for ep)
 
                 # 4. Response error tasks
                 if error_tasks:
@@ -1194,6 +1182,10 @@ class EngineService:
             except Exception as e:
                 err_msg = "Error happened while insert task to engine: {}, {}.".format(e, str(traceback.format_exc()))
                 self.llm_logger.error(err_msg)
+                # Failed to connect to engine worker queue, retry after 5 seconds
+                if self.engine_worker_queue.is_broken():
+                    self.llm_logger.error("Failed to connect to engine worker queue, retry after 5 seconds")
+                    time.sleep(5)
 
     def _get_scheduler_unhandled_request_num(self) -> int:
         """
@@ -1305,10 +1297,27 @@ class EngineService:
                             self.request_worker_map[req_id_for_map] = worker_pid
                     status_value = data.get("status", None)
                     if status_value is not None and status_value == RequestStatus.ABORT.value:
-                        req_id = data["request_id"]
-                        self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
-                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                            self.resource_manager.add_abort_req_ids(req_id)
+                        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                            self.llm_logger.info("abort requests only supported in ENABLE_V1_KVCACHE_SCHEDULER")
+                        else:
+                            abort_all = data.get("abort_all", False)
+                            req_ids = data.get("req_ids", [])
+                            if abort_all or req_ids:
+                                target_req_ids = self._resolve_abort_targets(abort_all, req_ids)
+                                self.llm_logger.info(
+                                    f"Receive abort_reqs, abort_all={abort_all}, "
+                                    f"input={len(req_ids)}, resolved={len(target_req_ids)}"
+                                )
+                                self.resource_manager.add_abort_req_ids(target_req_ids)
+                            else:
+                                req_id = data.get("request_id", None)
+                                if not req_id:
+                                    self.llm_logger.warning(
+                                        "Receive abort request without request_id, skip invalid abort message"
+                                    )
+                                    continue
+                                self.llm_logger.info(f"Receive abort request, req_id: {req_id}")
+                                self.resource_manager.add_abort_req_ids(req_id)
                         continue
                     err_msg = None
                     try:
@@ -1318,14 +1327,14 @@ class EngineService:
                         main_process_metrics.requests_number.inc()
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
-                            request_id = data["request_id"].split("_")[0]
+                            request_id = get_base_request_id(data["request_id"])
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
                         trace_print(LoggingEventName.PREPROCESSING_END, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_SCHEDULE_START, data["request_id"], data.get("user", ""))
                         trace_print(LoggingEventName.REQUEST_QUEUE_START, data["request_id"], data.get("user", ""))
                         self.llm_logger.debug(f"Receive request from api server: {request}")
 
-                        if self.is_paused:
+                        if self.is_paused or self._rejecting_new_requests:
                             self.llm_logger.warning(f"Engine is paused, drop request: {request}")
                             self._send_error_response(
                                 request.request_id,
@@ -1445,38 +1454,19 @@ class EngineService:
             if self.is_paused:
                 self.llm_logger.info("Engine is already paused, no need to pause again.")
                 return
+            self._rejecting_new_requests = True
+        self.resource_manager.log_status()
+
+        # Scheduling loop picks them up via _trigger_abort when they enter resource_manager
+        all_req_ids = list(set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys()))
+        self.llm_logger.info(f"Pause: aborting {len(all_req_ids)} total requests.")
+        if all_req_ids:
+            self.resource_manager.add_abort_req_ids(all_req_ids)
+        self._wait_inflight_drained()
+
+        with self._pause_cond:
             self.is_paused = True
-
-        self.llm_logger.info("Abort running requests.")
-
         self.resource_manager.log_status()
-        # preempted all running reqs. preempted reqs will be append to ResourceManager.waiting queue
-        timeout, count = 60, 0
-        while self.engine_worker_queue.exist_tasks():
-            time.sleep(0.001)
-            count += 1
-            if count >= timeout * 1000:
-                break
-        if count >= timeout * 1000:
-            error_msg = f"Emptying engine worker queue timed out after {timeout} seconds, worker may hanged!"
-            self.llm_logger.error(error_msg)
-            raise Exception(error_msg)
-        running_reqs = self.resource_manager.preempted_all()
-        if len(running_reqs) > 0:
-            self.llm_logger.info(f"Total {len(running_reqs)} requests need to be aborted.")
-            self.resource_manager.get_real_bsz()
-            self.engine_worker_queue.put_tasks((running_reqs, self.resource_manager.real_bsz))
-            self.resource_manager.wait_worker_inflight_requests_finish(timeout=60)
-        # self.engine_worker_queue.clear_data()
-        self.token_processor.clear_data()
-        self.resource_manager.log_status()
-
-        # abort inflight requests to user
-        inflight_requests = self.scheduler.get_inflight_requests()
-        self.llm_logger.info(f"Abort inflight requests (total {len(inflight_requests)}).")
-        for req in inflight_requests:
-            self._send_error_response(req.request_id, "Request is aborted since engine is paused.")
-        self.scheduler.reset()
 
         if envs.ENABLE_V1_KVCACHE_MANAGER:
             self.resource_manager.cache_manager.reset_cache()
@@ -1500,6 +1490,21 @@ class EngineService:
         self.llm_logger.info("Successfully paused request generation.")
         return None
 
+    def _wait_inflight_drained(self):
+        """
+        Wait until resource_manager.requests is completely empty.
+        No timeout — abort pipeline will complete. Aligned with SGLang's poll-until-drained.
+        """
+        start_time = time.time()
+        while (
+            self.resource_manager.requests
+            or self.scheduler.requests
+            or self.resource_manager.waiting_abort_req_id_set
+            or self.resource_manager.to_be_aborted_req_id_set
+        ):
+            time.sleep(0.005)
+        self.llm_logger.info(f"All inflight requests drained, take time: {time.time() - start_time:.3f} seconds")
+
     def _control_resume(self, control_request: ControlRequest) -> Optional[dict]:
         """Control function for resuming request generation.
 
@@ -1515,6 +1520,7 @@ class EngineService:
                 self.llm_logger.info("Engine is not paused, no need to resume.")
                 return None
             self.is_paused = False
+            self._rejecting_new_requests = False
             self._pause_cond.notify_all()
 
         # resume cache transfer
@@ -1596,150 +1602,6 @@ class EngineService:
             self.llm_logger.info("Successfully updated cache-transfer metadata after weight update.")
 
         return responses
-
-    def _control_abort_requests(self, control_req: ControlRequest):
-        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            raise Exception("abort_requests only supported in ENABLE_V1_KVCACHE_SCHEDULER")
-        args = control_req.get_args()
-        abort_all = args.get("abort_all", False)
-        req_ids = args.get("req_ids", [])
-        matched_input_ids = set()
-        now_reqs = list(set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys()))
-
-        # Step 1: Determine target request list
-        if abort_all:
-            # all requests in running + waiting
-            target_req_ids = now_reqs
-        else:
-            # filter out requests that actually exist
-            target_req_ids = []
-            for rid in req_ids:
-                if rid in now_reqs:
-                    target_req_ids.append(rid)
-                    matched_input_ids.add(rid)
-                elif f"{rid}_0" in now_reqs:
-                    target_req_ids.append(f"{rid}_0")
-                    matched_input_ids.add(rid)
-
-        if not target_req_ids:
-            return {"aborted": [], "not_found": req_ids if not abort_all else []}
-
-        # Step 2: Collect partial results
-        aborted_info = []
-        results = []
-        for req_id in target_req_ids:
-            request = self.resource_manager.requests.get(req_id)
-            if request is None:
-                scheduled_req = self.scheduler.requests.get(req_id)
-                if scheduled_req is None:
-                    continue
-                request = scheduled_req.raw
-
-            partial_token_ids = list(request.output_token_ids)
-
-            # Construct finished response with partial results
-            now = time.time()
-            abort_metrics = RequestMetrics(
-                arrival_time=request.metrics.arrival_time if request.metrics else now,
-                inference_start_time=request.metrics.inference_start_time if request.metrics else now,
-                engine_recv_latest_token_time=now,
-                engine_recv_first_token_time=request.metrics.engine_recv_first_token_time if request.metrics else now,
-                request_start_time=request.metrics.arrival_time if request.metrics else now,
-            )
-            eos_token_ids = getattr(request, "eos_token_ids", [0])
-            result = RequestOutput(
-                request_id=req_id,
-                finished=True,
-                outputs=CompletionOutput(
-                    index=0,
-                    send_idx=len(partial_token_ids),
-                    token_ids=[eos_token_ids[0]],
-                ),
-                metrics=abort_metrics,
-                error_code=200,
-                error_msg="Aborted",
-            )
-            results.append(result)
-            aborted_info.append(
-                {
-                    "request_id": req_id,
-                    "output_token_count": len(partial_token_ids),
-                }
-            )
-
-        # Step 3: Execute abort — add all requests to waiting_abort_req_id_set
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            for req_id in target_req_ids:
-                self.resource_manager.add_abort_req_ids(req_id)
-                time.sleep(0.0001)
-            if self.cfg.scheduler_config.splitwise_role != "prefill":
-                self._wait_abort_complete(target_req_ids)
-
-        # Add results to scheduler, engine will have a thread calling get_results,
-        # then cleanup and call send_response to send to client.
-        # When client disconnects, send_response will automatically ignore
-        if self.cfg.scheduler_config.splitwise_role != "prefill":
-            try:
-                # self.send_response_server.send_response(req_id, [result])
-                self.scheduler.put_results(results)
-            except Exception:
-                pass  # client may have disconnected
-
-        not_found = [rid for rid in req_ids if rid not in matched_input_ids] if not abort_all else []
-
-        return {"aborted": aborted_info, "not_found": not_found}
-
-    def _wait_abort_complete(self, target_req_ids, stall_timeout=1):
-        """
-        Wait for all abort requests to complete.
-        - Keep monitoring as long as remaining is not empty, which means cleanup is not done yet
-        - If no progress within stall_timeout seconds, force cleanup requests stuck in to_be_aborted_req_id_set,
-          reset progress state if any, then continue monitoring
-        """
-        target_set = set(target_req_ids)
-        target_set = target_set & (set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys()))
-        prev_remaining_count = len(target_set)
-        last_progress_time = time.time()
-        remaining = target_set & self.resource_manager.get_reqs_in_aborting()
-        while remaining:
-            alive_reqs = set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys())
-            finished_reqs = target_set - alive_reqs
-            if finished_reqs:
-                self.llm_logger.info(f"abort targets already finished, skip: {finished_reqs}")
-                for req_id in finished_reqs:
-                    self.resource_manager.waiting_abort_req_id_set.discard(req_id)
-                    self.resource_manager.to_be_aborted_req_id_set.discard(req_id)
-                target_set -= finished_reqs
-            remaining = target_set & self.resource_manager.get_reqs_in_aborting()
-            if not remaining:
-                self.llm_logger.info(f"all {len(target_set)} abort reqs cleaned")
-                return
-            self.llm_logger.debug(f"remaining:{remaining}")
-
-            current_count = len(remaining)
-            if current_count < prev_remaining_count:
-                # progress made: recycle_abort_task was called
-                self.llm_logger.info(f"abort progress: {prev_remaining_count} -> {current_count}")
-                last_progress_time = time.time()
-                prev_remaining_count = current_count
-
-            if time.time() - last_progress_time > stall_timeout:
-                # no progress timeout: only cleanup requests stuck in to_be_aborted (worker hasn't returned -9)
-                stuck = remaining & self.resource_manager.to_be_aborted_req_id_set
-                if stuck:
-                    self.llm_logger.warning(
-                        f"no abort progress for {stall_timeout}s, "
-                        f"force cleanup {len(stuck)} stuck requests (in to_be_aborted)"
-                    )
-                    for req_id in list(stuck):
-                        self.llm_logger.warning(f"force cleanup stuck req_id:{req_id}")
-                        self.resource_manager.recycle_abort_task(req_id)
-                    # reset progress state
-                    last_progress_time = time.time()
-                    prev_remaining_count = current_count - len(stuck)
-                # else: remaining are all in waiting_abort_req_id_set, waiting for natural flow
-
-            time.sleep(0.005)
 
     def _parse_tags(self, control_request: ControlRequest):
         """
@@ -2231,6 +2093,8 @@ class EngineService:
         threading.Thread(target=decode_loop, daemon=True).start()
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
+        if envs.ENABLE_V1_KVCACHE_MANAGER:
+            return []
         console_logger.debug("Start cache manager...")
         return self.resource_manager.cache_manager.launch_cache_manager(
             cache_config=self.cfg.cache_config,
@@ -2766,3 +2630,23 @@ class EngineService:
         except Exception:
             pass
         return True
+
+    def _resolve_abort_targets(self, abort_all, req_ids):
+        """
+        Resolve abort target request IDs.
+        """
+        now_reqs = set(self.resource_manager.requests.keys()) | set(self.scheduler.requests.keys())
+        self.llm_logger.debug(f"now_reqs: {now_reqs}")
+
+        if abort_all:
+            return list(now_reqs)
+
+        target_req_ids = []
+        for rid in req_ids:
+            if rid in now_reqs:
+                target_req_ids.append(rid)
+            else:
+                choice_id = make_choice_id(rid, 0)
+                if choice_id in now_reqs:
+                    target_req_ids.append(choice_id)
+        return target_req_ids

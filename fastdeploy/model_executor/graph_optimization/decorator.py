@@ -60,12 +60,12 @@ def support_graph_optimization(cls: Optional[_T] = None) -> _T:
             # Not use graph optimization
             return
 
-    def __call__(self, **kwargs):
+    def __call__(self, *args, **kwargs):
         """Decorator model.__call__() func"""
         if not self.use_graph_opt:
-            return self.forward(**kwargs)
+            return self.forward(*args, **kwargs)
 
-        return self.graph_opt_backend(**kwargs)
+        return self.graph_opt_backend(*args, **kwargs)
 
     cls.__init__ = __init__
     cls.__call__ = __call__

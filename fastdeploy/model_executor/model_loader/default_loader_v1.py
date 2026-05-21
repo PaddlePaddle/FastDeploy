@@ -93,7 +93,7 @@ class DefaultModelLoaderV1(BaseModelLoader):
                     model_cls = as_embedding_model(model_cls)
                 else:
                     assert_never(convert_type)
-
+                print("model_class = ", model_cls)
                 model = model_cls(fd_config)
                 if fd_config.load_config.dynamic_load_weight or fd_config.model_config.enable_cache:
                     process_final_after_loading(model, fd_config)

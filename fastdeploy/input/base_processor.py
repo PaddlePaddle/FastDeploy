@@ -52,7 +52,7 @@ from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 from fastdeploy import envs
 from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.logger.request_logger import RequestLogLevel, log_request
-from fastdeploy.utils import data_processor_logger
+from fastdeploy.utils import data_processor_logger, make_choice_id, parse_choice_id
 
 _SAMPLING_EPS = 1e-5
 
@@ -472,13 +472,11 @@ class BaseTextProcessor(ABC):
     def _apply_reasoning_parser(self, request):
         """Apply reasoning parser to determine model thinking status."""
         model_status = self.reasoning_parser.get_model_status(request["prompt_token_ids"])
-        parts = request["request_id"].split("_")
-        if len(parts) > 1:
-            real_req_id = parts[0]
-            index = int(parts[1])
+        real_req_id, index = parse_choice_id(request["request_id"])
+        if index is not None:
             n = request.get("n", 1)
             for idx in range(index * n, (index + 1) * n):
-                self.model_status_dict[f"{real_req_id}_{idx}"] = model_status
+                self.model_status_dict[make_choice_id(real_req_id, idx)] = model_status
         else:
             self.model_status_dict[request["request_id"]] = model_status
         request["enable_thinking"] = model_status == "think_start"

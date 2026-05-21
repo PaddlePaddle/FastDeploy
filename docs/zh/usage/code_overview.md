@@ -330,7 +330,7 @@ tests/
 ├── quantization/      # 量化测试
 ├── multimodal/        # 多模态测试
 ├── xpu_ci/            # XPU CI 测试
-├── ce/                # CE 环境测试
+├── ci_validation/     # CI 验证测试
 ├── ci_use/            # CI 工具测试
 └── conftest.py        # pytest 配置
 ```

@@ -30,7 +30,9 @@ compile_file = triton.__path__[0] + "/tools/compile.py"
 link_file = triton.__path__[0] + "/tools/link.py"
 python_path = sys.executable
 
-if _is_package_installed("torch"):
+paddle_driver = None
+
+if _is_package_installed("torch") and paddle.is_compiled_with_cuda():
     with paddle.use_compat_guard(enable=True, silent=True):
         from triton.runtime.driver import _create_driver
 
@@ -54,7 +56,7 @@ def swap_driver_guard(fn):
 def enable_compat_on_triton_kernel(triton_kernel):
     # When torch is not installed, this decorator does not do anything, just return the original triton kernel.
     # Because the `paddle.enable_compat(scope={"triton"})` already enabled in `__init__.py`, it will take zero runtime overhead.
-    if not _is_package_installed("torch"):
+    if not _is_package_installed("torch") or paddle_driver is None:
         return triton_kernel
 
     class WrappedTritonKernel:

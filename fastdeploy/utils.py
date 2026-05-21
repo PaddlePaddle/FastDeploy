@@ -71,6 +71,40 @@ FASTDEPLOY_SUBCMD_PARSER_EPILOG = (
 )
 
 
+CHOICE_SEPARATOR = "::n::"
+
+
+def make_choice_id(request_id: str, index: int) -> str:
+    """Construct an internal request ID that encodes the choice index."""
+    return f"{request_id}{CHOICE_SEPARATOR}{index}"
+
+
+def parse_choice_id(compound_id: str) -> tuple:
+    """Parse an internal request ID back into (base_request_id, choice_index).
+    Returns (compound_id, None) if no choice index is encoded.
+    """
+    if CHOICE_SEPARATOR in compound_id:
+        base, idx = compound_id.rsplit(CHOICE_SEPARATOR, 1)
+        return base, int(idx)
+    return compound_id, None
+
+
+def get_base_request_id(compound_id: str) -> str:
+    """Extract the base request ID, stripping any choice index suffix."""
+    if CHOICE_SEPARATOR in compound_id:
+        return compound_id.rsplit(CHOICE_SEPARATOR, 1)[0]
+    return compound_id
+
+
+def get_choice_index(compound_id: str) -> int:
+    """Extract the choice index from a compound request ID.
+    Returns the index, or raises ValueError if not present.
+    """
+    if CHOICE_SEPARATOR in compound_id:
+        return int(compound_id.rsplit(CHOICE_SEPARATOR, 1)[1])
+    raise ValueError(f"No choice index in request_id: {compound_id}")
+
+
 def show_filtered_argument_or_group_from_help(parser: argparse.ArgumentParser, subcommand_name: list[str]):
 
     # Only handle --help=<keyword> for the current subcommand.
@@ -519,6 +553,12 @@ def is_port_available(host, port):
     import errno
     import socket
 
+    # If FD_ENGINE_TASK_QUEUE_WITH_SHM is enabled, then check the file socket is available
+    if envs.FD_ENGINE_TASK_QUEUE_WITH_SHM:
+        socket_path = f"/dev/shm/fd_task_queue_{port}.sock"
+        if not is_file_socket_available(socket_path):
+            return False
+
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         try:
             s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -528,6 +568,35 @@ def is_port_available(host, port):
             if e.errno == errno.EADDRINUSE:
                 return False
             return True
+
+
+def is_file_socket_available(socket_path):
+    """
+    Check the Unix domain socket (file socket) is available.
+
+    Args:
+        socket_path: Path to the socket file, e.g. /dev/shm/fd_task_queue_8000.sock
+
+    Returns:
+        True if the socket is available (not in use), False otherwise.
+    """
+    import errno
+    import os
+    import socket
+
+    if not os.path.exists(socket_path):
+        return True
+
+    # File exists, try to connect to see if someone is listening
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+        try:
+            s.connect(socket_path)
+            return False
+        except OSError as e:
+            if e.errno in (errno.ECONNREFUSED, errno.ENOENT):
+                # Stale socket file: exists but nobody is listening
+                return True
+            return False
 
 
 def find_free_ports(

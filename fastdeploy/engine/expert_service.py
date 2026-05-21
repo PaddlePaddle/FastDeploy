@@ -173,7 +173,9 @@ class ExpertService:
                     time.sleep(1)
             self.reset_kvcache_blocks()
 
-        if self.cfg.scheduler_config.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching:
+        if not envs.ENABLE_V1_KVCACHE_MANAGER and (
+            self.cfg.scheduler_config.splitwise_role != "mixed" or self.cfg.cache_config.enable_prefix_caching
+        ):
             self.cache_manager_processes = self.engine.start_cache_service(
                 self.cfg.local_device_ids,
                 self.cfg.parallel_config.local_engine_worker_queue_port,
