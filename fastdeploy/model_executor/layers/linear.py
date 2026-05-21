@@ -415,7 +415,9 @@ class MergedReplicatedLinear(ReplicatedLinear):
             if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+                assert (
+                    loaded_weight.dtype == param.dtype
+                ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
         # (bukejiyu) After this fix, the early H2D copy for non-GPU devices is no longer needed and can be safely removed.
         h2d_copy(param, loaded_weight)
 
