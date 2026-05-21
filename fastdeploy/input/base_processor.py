@@ -311,13 +311,26 @@ class BaseTextProcessor(ABC):
             return
         tool_parser._tool_prefix_computed = True
         tool_parser._tool_prefix = ""
+        tool_parser._tool_prefix_token_ids = []
         if not prompt_tokens or not isinstance(prompt_tokens, str):
             return
         try:
-            tool_parser._tool_prefix = tool_parser.detect_tool_prefix(prompt_tokens) or ""
+            prefix = tool_parser.detect_tool_prefix(prompt_tokens) or ""
         except Exception:
             data_processor_logger.exception("detect_tool_prefix failed; falling back to empty prefix")
-            tool_parser._tool_prefix = ""
+            return
+        tool_parser._tool_prefix = prefix
+        if not prefix:
+            return
+        # Encode the prefix into token ids so the streaming path can also
+        # splice ``previous/current/delta_token_ids`` — some parsers gate on
+        # ``tool_call_start_token_id in current_token_ids`` rather than on
+        # text (e.g. ``Ernie45VLThinkingToolParser``).
+        try:
+            tool_parser._tool_prefix_token_ids = list(self.tokenizer.encode(prefix, add_special_tokens=False))
+        except Exception:
+            data_processor_logger.exception("encode tool prefix to token ids failed; token-id splice disabled")
+            tool_parser._tool_prefix_token_ids = []
 
     def process_response_dict_normal(self, response_dict, **kwargs):
         """Accumulate tokens and build the full completion text (non-streaming)."""
@@ -415,28 +428,40 @@ class BaseTextProcessor(ABC):
             stream_previous = previous_texts
             stream_current = previous_texts + delta_text
             stream_delta = delta_text
+            stream_previous_token_ids = previous_token_ids
+            stream_current_token_ids = previous_token_ids + token_ids
+            stream_delta_token_ids = token_ids
             if _is_forced_tool_choice(request):
                 self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
                 prefix = tool_parser._tool_prefix
+                prefix_ids = tool_parser._tool_prefix_token_ids
                 # When the chat template injected a forced tool-call prefix into
                 # the prompt, the model output starts mid-tool-call. We splice
-                # the prefix back into the streaming arguments so the parser
-                # sees a complete sequence and its existing state machine works
-                # unchanged. ``delta_text`` only needs the splice on the first
-                # call so the parser's start-token detection fires once.
+                # the prefix back into both the text and token-id streaming
+                # arguments so parsers that gate on either form (e.g.
+                # ``Ernie45VLThinkingToolParser`` checks
+                # ``tool_call_start_token_id in current_token_ids``) see a
+                # complete sequence and their existing state machines work
+                # unchanged. The ``delta_*`` forms only need the splice on the
+                # first call so the parser's start detection fires once.
                 if prefix:
                     stream_previous = prefix + stream_previous
                     stream_current = prefix + stream_current
+                    if prefix_ids:
+                        stream_previous_token_ids = list(prefix_ids) + list(stream_previous_token_ids)
+                        stream_current_token_ids = list(prefix_ids) + list(stream_current_token_ids)
                     if not tool_parser._tool_prefix_injected_to_delta:
                         stream_delta = prefix + stream_delta
+                        if prefix_ids:
+                            stream_delta_token_ids = list(prefix_ids) + list(stream_delta_token_ids)
                         tool_parser._tool_prefix_injected_to_delta = True
             tool_call_delta_message = tool_parser.extract_tool_calls_streaming(
                 stream_previous,
                 stream_current,
                 stream_delta,
-                previous_token_ids,
-                previous_token_ids + token_ids,
-                token_ids,
+                stream_previous_token_ids,
+                stream_current_token_ids,
+                stream_delta_token_ids,
                 request,
             )
             if tool_call_delta_message:

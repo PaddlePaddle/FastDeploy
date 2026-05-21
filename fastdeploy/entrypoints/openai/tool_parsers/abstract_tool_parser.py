@@ -51,19 +51,14 @@ class ToolParser:
 
         self.model_tokenizer = tokenizer
 
-        # Per-request tool-prefix state, populated by the serving layer when
-        # ``tool_choice=required`` (or similar) causes a tool-call prefix to be
-        # appended to the rendered prompt by the chat template. The parser
-        # itself does not compute these — the serving layer calls
-        # :meth:`detect_tool_prefix` and stashes the result here.
+        # Per-request tool-prefix state populated by the serving layer when
+        # the chat template injects a forced tool-call prefix into the prompt.
         self._tool_prefix: str = ""
-        # Idempotency flag: the serving layer may invoke its preparation hook
-        # once per streaming chunk, but the prefix only needs to be computed
-        # once per request. Set to ``True`` after the first computation.
+        self._tool_prefix_token_ids: list[int] = []
+        # Set after the prefix is computed once for this request.
         self._tool_prefix_computed: bool = False
-        # Whether the prefix has already been spliced into ``delta_text`` for
-        # the streaming path. Only the first streaming call needs the splice;
-        # subsequent calls keep ``delta_text`` untouched.
+        # Set after the prefix has been spliced into the streaming delta
+        # (only the first chunk needs it).
         self._tool_prefix_injected_to_delta: bool = False
 
     @cached_property

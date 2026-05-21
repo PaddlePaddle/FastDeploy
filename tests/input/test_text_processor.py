@@ -867,6 +867,9 @@ class _RecordingToolParser:
                 "previous_text": previous_text,
                 "current_text": current_text,
                 "delta_text": delta_text,
+                "previous_token_ids": list(previous_token_ids),
+                "current_token_ids": list(current_token_ids),
+                "delta_token_ids": list(delta_token_ids),
             }
         )
         tool_calls = [
@@ -1037,7 +1040,13 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         self.assertEqual(first_call["previous_text"], "<tool_call>")
         self.assertEqual(first_call["current_text"], "<tool_call>7")
         self.assertEqual(first_call["delta_text"], "<tool_call>7")
+        # token_ids must be spliced too — DummyTokenizer.encode("<tool_call>") -> [11].
+        prefix_ids = [11]
+        self.assertEqual(first_call["previous_token_ids"], prefix_ids)
+        self.assertEqual(first_call["current_token_ids"], prefix_ids + [7])
+        self.assertEqual(first_call["delta_token_ids"], prefix_ids + [7])
         self.assertTrue(parser._tool_prefix_injected_to_delta)
+        self.assertEqual(parser._tool_prefix_token_ids, prefix_ids)
 
         # Second chunk: delta must NOT be re-spliced, but previous/current are.
         second = {
@@ -1050,6 +1059,12 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         self.assertEqual(second_call["previous_text"], "<tool_call>7")
         self.assertEqual(second_call["current_text"], "<tool_call>78")
         self.assertEqual(second_call["delta_text"], "8")  # no extra prefix splice
+        self.assertEqual(second_call["previous_token_ids"], prefix_ids + [7])
+        self.assertEqual(
+            second_call["current_token_ids"],
+            prefix_ids + [7, 8, processor.tokenizer.eos_token_id],
+        )
+        self.assertEqual(second_call["delta_token_ids"], [8, processor.tokenizer.eos_token_id])
         # detect should only run once across the whole stream.
         self.assertEqual(len(parser.detect_calls), 1)
 
