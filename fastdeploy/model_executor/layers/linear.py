@@ -41,6 +41,18 @@ from fastdeploy.platforms import current_platform
 from .utils import _set_var_distributed, divide, get_tensor, modules_to_convert
 
 
+def may_be_do_cast(loaded_weight, param_dtype):
+    # Ensure loaded weight dtype matches model param dtype
+    if loaded_weight.dtype != param_dtype:
+        if loaded_weight.dtype == paddle.int8 and param_dtype == paddle.float8_e4m3fn:
+            loaded_weight = loaded_weight.view(param_dtype)
+        else:
+            assert (
+                loaded_weight.dtype == param_dtype
+            ), f"loaded_weight.dtype: {loaded_weight.dtype}, param_dtype: {param_dtype}"
+    return loaded_weight
+
+
 class UnquantizedLinearMethod(QuantMethodBase):
     """Linear method without quantization."""
 
@@ -410,14 +422,7 @@ class MergedReplicatedLinear(ReplicatedLinear):
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
-        # Ensure loaded weight dtype matches model param dtype
-        if loaded_weight.dtype != param.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.view(param.dtype)
-            else:
-                assert (
-                    loaded_weight.dtype == param.dtype
-                ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
+        loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
         # (bukejiyu) After this fix, the early H2D copy for non-GPU devices is no longer needed and can be safely removed.
         h2d_copy(param, loaded_weight)
 
@@ -597,15 +602,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             assert param.shape == loaded_weight.shape, (
                 f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
             )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    assert (
-                        loaded_weight.dtype == param.dtype
-                    ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
-
+            loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
             h2d_copy(param, loaded_weight)
 
     def load_state_dict(self, state_dict: dict):
@@ -760,14 +757,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             assert param.shape == loaded_weight.shape, (
                 f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
             )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    assert (
-                        loaded_weight.dtype == param.dtype
-                    ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
+            loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
             h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
@@ -1288,14 +1278,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             assert param.shape == loaded_weight.shape, (
                 f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
             )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    assert (
-                        loaded_weight.dtype == param.dtype
-                    ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
+            loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
             h2d_copy(param, loaded_weight)
 
     def gate_weight_loader(self, param, loaded_weight):
@@ -1330,14 +1313,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         assert param.shape == loaded_weight.shape, (
             f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
-        # Ensure loaded weight dtype matches model param dtype
-        if loaded_weight.dtype != param.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.view(param.dtype)
-            else:
-                assert (
-                    loaded_weight.dtype == param.dtype
-                ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
+        loaded_weight = may_be_do_cast(loaded_weight, param.dtype)
         h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
