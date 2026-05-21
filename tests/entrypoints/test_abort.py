@@ -70,7 +70,7 @@ class TestEngineClientAbort(unittest.TestCase):
 
         # Verify _send_task was called with correct data
         expected_data = {
-            "request_id": "test_request_0",
+            "request_id": "test_request::n::0",
             "status": RequestStatus.ABORT.value,
         }
         mock_send_task.assert_called_once_with(expected_data)
@@ -90,9 +90,9 @@ class TestEngineClientAbort(unittest.TestCase):
 
         # Verify each call had correct request_id
         expected_calls = [
-            ({"request_id": "test_request_0", "status": RequestStatus.ABORT.value},),
-            ({"request_id": "test_request_1", "status": RequestStatus.ABORT.value},),
-            ({"request_id": "test_request_2", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request::n::0", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request::n::1", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request::n::2", "status": RequestStatus.ABORT.value},),
         ]
 
         actual_calls = [call.args for call in mock_send_task.call_args_list]
@@ -101,8 +101,8 @@ class TestEngineClientAbort(unittest.TestCase):
     @patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True)
     @patch.object(EngineClient, "_send_task")
     def test_abort_with_existing_suffix(self, mock_send_task):
-        """Test aborting request that already has _number suffix"""
-        request_id = "test_request_123_2"
+        """Test aborting request that already has choice index suffix"""
+        request_id = "test_request_123::n::2"
         n = 2
 
         # Run the abort method
@@ -113,8 +113,8 @@ class TestEngineClientAbort(unittest.TestCase):
 
         # Verify each call had correct request_id (should use prefix before existing suffix)
         expected_calls = [
-            ({"request_id": "test_request_123_0", "status": RequestStatus.ABORT.value},),
-            ({"request_id": "test_request_123_1", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request_123::n::0", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request_123::n::1", "status": RequestStatus.ABORT.value},),
         ]
 
         actual_calls = [call.args for call in mock_send_task.call_args_list]
@@ -135,8 +135,8 @@ class TestEngineClientAbort(unittest.TestCase):
 
         # Verify each call had correct request_id (should use full request_id as prefix)
         expected_calls = [
-            ({"request_id": "test_request_without_suffix_0", "status": RequestStatus.ABORT.value},),
-            ({"request_id": "test_request_without_suffix_1", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request_without_suffix::n::0", "status": RequestStatus.ABORT.value},),
+            ({"request_id": "test_request_without_suffix::n::1", "status": RequestStatus.ABORT.value},),
         ]
 
         actual_calls = [call.args for call in mock_send_task.call_args_list]
@@ -180,15 +180,18 @@ class TestEngineClientAbort(unittest.TestCase):
 
     @patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True)
     @patch.object(EngineClient, "_send_task")
-    def test_abort_request_id_regex_parsing(self, mock_send_task):
-        """Test that request_id regex parsing works correctly for various formats"""
+    def test_abort_request_id_choice_separator_parsing(self, mock_send_task):
+        """Test that request_id parsing works correctly with ::n:: choice separator"""
         test_cases = [
+            # (input_request_id, expected_base_id) — get_base_request_id strips ::n:: suffix
             ("simple_request", "simple_request"),
             ("request_with_underscores", "request_with_underscores"),
-            ("request_123", "request"),
-            ("request_123_456", "request_123"),
-            ("request_0", "request"),
-            ("complex_name_123_456_789", "complex_name_123_456"),
+            ("request_123", "request_123"),
+            ("request_123_456", "request_123_456"),
+            ("request_0", "request_0"),
+            ("complex_name_123_456_789", "complex_name_123_456_789"),
+            ("rid::n::5", "rid"),
+            ("my_req_id::n::0", "my_req_id"),
         ]
 
         for input_request_id, expected_prefix in test_cases:
@@ -200,7 +203,7 @@ class TestEngineClientAbort(unittest.TestCase):
 
                 # Verify _send_task was called with correct prefix
                 expected_data = {
-                    "request_id": f"{expected_prefix}_0",
+                    "request_id": f"{expected_prefix}::n::0",
                     "status": RequestStatus.ABORT.value,
                 }
                 mock_send_task.assert_called_once_with(expected_data)
@@ -230,25 +233,21 @@ class TestEngineClientAbort(unittest.TestCase):
     @patch("fastdeploy.entrypoints.engine_client.envs.FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", True)
     @patch("fastdeploy.entrypoints.engine_client.api_server_logger")
     @patch.object(EngineClient, "_send_task")
-    def test_abort_warning_logging_for_invalid_format(self, mock_send_task, mock_logger):
-        """Test that abort method logs warning for invalid request_id format"""
-        request_id = "invalid_format_no_suffix"  # This should actually not trigger warning
-        n = 1
+    def test_abort_preserves_underscores_in_request_id(self, mock_send_task, mock_logger):
+        """Test that abort correctly preserves underscores in request_id (no longer uses regex)"""
+        # With the new ::n:: separator, underscores in request_id are preserved
+        request_id = "just_a_string"
+        self.loop.run_until_complete(self.engine_client.abort(request_id, n=1))
 
-        # Run the abort method
-        self.loop.run_until_complete(self.engine_client.abort(request_id, n=n))
+        # Should generate "just_a_string::n::0" (underscores preserved)
+        expected_data = {
+            "request_id": "just_a_string::n::0",
+            "status": RequestStatus.ABORT.value,
+        }
+        mock_send_task.assert_called_once_with(expected_data)
 
-        # Verify warning log was called (this case might not actually trigger warning)
-        # The warning is only triggered when regex doesn't match, but our test case has valid format
-        # Let's test with a case that should trigger warning
-        mock_logger.reset_mock()
-
-        # This should trigger warning because it doesn't end with _number
-        request_id_no_suffix = "just_a_string"
-        self.loop.run_until_complete(self.engine_client.abort(request_id_no_suffix, n=1))
-
-        # Should have logged warning about format error
-        mock_logger.warning.assert_called()
+        # No warning should be logged (the new logic handles all formats)
+        mock_logger.warning.assert_not_called()
 
 
 if __name__ == "__main__":

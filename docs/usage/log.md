@@ -11,9 +11,9 @@ FastDeploy separates logs into three channels:
 
 | Channel | Logger Name | Output Files | Description |
 |---------|-------------|--------------|-------------|
-| main | `fastdeploy.main.*` | `fastdeploy.log`, `console.log` | Main logs for system configuration, startup info, etc. |
+| main | `fastdeploy.main.*` | `fastdeploy.log` | Main logs for system configuration, startup info, etc. |
 | request | `fastdeploy.request.*` | `request.log` | Request logs for request lifecycle and processing details |
-| console | `fastdeploy.console.*` | `console.log` | Console logs, output to terminal and console.log |
+| console | `fastdeploy.console.*` | `fastdeploy.log` + terminal | Console logs for startup info, etc. Written to fastdeploy.log and also printed to terminal |
 
 ## Request Log Levels
 
@@ -36,17 +36,16 @@ Default level is 2 (CONTENT), which logs request parameters, scheduling info, an
 | `FD_LOG_LEVEL` | `INFO` | Log level, supports `INFO` or `DEBUG` |
 | `FD_LOG_REQUESTS` | `1` | Enable request logging, `0` to disable, `1` to enable |
 | `FD_LOG_REQUESTS_LEVEL` | `2` | Request log level, range 0-3 |
-| `FD_LOG_MAX_LEN` | `2048` | Maximum length for L2 level log content (excess is truncated) |
 | `FD_LOG_BACKUP_COUNT` | `7` | Number of log files to retain |
 | `FD_DEBUG` | `0` | Debug mode, `1` enables DEBUG log level |
+| `FD_TRACE` | `off` | Trace mode: `off` disabled, `local` writes trace.log only, `otel` reports to OpenTelemetry only, `all` enables both |
 
 ## Inference Service Logs
 
-* `fastdeploy.log` : Main log file, records system configuration, startup information, runtime status, etc.
+* `fastdeploy.log` : Main log file, records system configuration, startup information, runtime status, and console output (console_logger)
 * `request.log` : Request log file, records user request lifecycle and processing details
-* `console.log` : Console log, records model startup time and other information. This log is also printed to the console.
+* `trace.log` : Trace log file, records events and timestamps for each stage of request processing, used for performance analysis (requires `FD_TRACE=local` or `all`)
 * `error.log` : Error log file, records all ERROR and above level logs
-* `workerlog.*` : Symlinks to paddle workerlog files in `paddle/` subdirectory. Tracks model loading progress and inference operator errors. Each GPU card has a corresponding file.
 * `worker_process.log` : Consolidated worker logs including engine inference data, model runner info, GPU worker profiling, and CudaGraph status.
 * `cache_manager.log` : Consolidated cache logs including KV Cache allocation, cache hit status, and cache transfer manager info.
 
@@ -61,5 +60,5 @@ Default level is 2 (CONTENT), which logs request parameters, scheduling info, an
 * `splitwise_connector.log` : Records data received from P/D instances and connection establishment details.
 
 ## Paddle Logs
-* `paddle/workerlog.*` : Paddle distributed launch logs, one file per GPU card. Symlinks are created in the main log directory for convenience.
+* `paddle/workerlog.*` : Paddle distributed launch logs, one file per GPU card.
 * `paddle/backup_env.*.json` : Records environment variables set during instance startup. The number of files matches the number of GPU cards.

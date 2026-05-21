@@ -55,7 +55,7 @@ The script will save the model execution times and batch tokens as a CSV file an
 Accuracy testing uses GSM8K. Use the following conversion to generate the test file.
 ```python
 >>> import pandas as pd
->>> df = pd.read_parquet('tests/ce/accuracy_cases/gsm8k.parquet', engine='pyarrow')
+>>> df = pd.read_parquet('tests/ci_validation/accuracy_cases/gsm8k.parquet', engine='pyarrow')
 >>> df.to_json('test.jsonl', orient='records', lines=True)
 ```
 Run the following command to perform the accuracy test.

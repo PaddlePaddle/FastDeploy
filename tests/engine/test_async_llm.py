@@ -668,7 +668,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
             # Build a minimal RequestOutput dict that generate() can consume
             metrics = RequestMetrics(arrival_time=0.0)
             completion = CompletionOutput(index=0, send_idx=0, token_ids=[], text="")
-            ro = RequestOutput(request_id="cmpl-test_0", outputs=completion, finished=True, metrics=metrics)
+            ro = RequestOutput(request_id="cmpl-test::n::0", outputs=completion, finished=True, metrics=metrics)
             ro_dict = ro.to_dict()
 
             engine = self.engine

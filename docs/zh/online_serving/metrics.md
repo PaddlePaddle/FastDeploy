@@ -46,3 +46,81 @@
 
 - 访问地址：`http://localhost:8000/metrics`
 - 指标类型：Prometheus 格式
+
+## Trace 事件
+
+FastDeploy 在请求处理的关键阶段输出结构化 trace 事件到 `trace.log`，用于定位请求级别的延迟瓶颈。每条 trace 日志包含 `timestamp`（毫秒）、`request_id`、`event`、`stage` 等字段。
+
+### 通用事件（Mixed / 所有实例）
+
+| 阶段 | 事件 | 说明 |
+| :---: | --- | --- |
+| PREPROCESSING | `PREPROCESSING_START` | API Server 开始预处理请求 |
+| PREPROCESSING | `PREPROCESSING_END` | Engine 收到请求，预处理完成 |
+| SCHEDULE | `REQUEST_SCHEDULE_START` | 请求进入调度流程 |
+| SCHEDULE | `REQUEST_QUEUE_START` | 请求进入调度队列等待 |
+| SCHEDULE | `REQUEST_QUEUE_END` | 请求从调度队列取出 |
+| SCHEDULE | `RESOURCE_ALLOCATE_START` | 开始为请求分配资源 |
+| SCHEDULE | `PREPARE_PREFIX_CACHE_START` | 开始匹配前缀缓存块 |
+| SCHEDULE | `PREPARE_PREFIX_CACHE_END` | 前缀缓存块匹配完成 |
+| SCHEDULE | `RESOURCE_ALLOCATE_END` | 资源分配完成 |
+| SCHEDULE | `REQUEST_SCHEDULE_END` | 调度流程结束 |
+| PREFILL | `INFERENCE_START` | 请求送入 GPU 执行推理 |
+| PREFILL | `FIRST_TOKEN_GENERATED` | 首 token 生成 |
+| DECODE | `DECODE_START` | 进入 Decode 阶段 |
+| DECODE | `INFERENCE_END` | 推理完成（所有 token 生成完毕） |
+| DECODE | `PREEMPTED` | 请求被抢占 |
+| DECODE | `RESCHEDULED_INFERENCE_START` | 被抢占的请求重新调度执行 |
+| POSTPROCESSING | `WRITE_CACHE_TO_STORAGE_START` | 开始将 KV Cache 写入外部存储 |
+| POSTPROCESSING | `WRITE_CACHE_TO_STORAGE_END` | KV Cache 写入外部存储完成 |
+| POSTPROCESSING | `POSTPROCESSING_START` | 开始后处理 |
+| POSTPROCESSING | `POSTPROCESSING_END` | 后处理完成，响应发送完毕 |
+
+### PD 分离 — Prefill (P) 实例专属事件
+
+| 阶段 | 事件 | 说明 |
+| :---: | --- | --- |
+| SCHEDULE | `ASK_DECODE_RESOURCE_START` | P 开始向 D 申请资源（发送 ZMQ 请求） |
+| SCHEDULE | `ASK_DECODE_RESOURCE_END` | P 收到 D 的资源分配确认（含 dest_block_ids） |
+| PREFILL | `PREFILL_INFERENCE_END` | P 实例 Prefill 推理完成 |
+| POSTPROCESSING | `CHECK_CACHE_TRANSFER_START` | P 开始等待 KV Cache 传输完成 |
+| POSTPROCESSING | `CHECK_CACHE_TRANSFER_END` | KV Cache 传输完成确认，准备发送 first token 到 D |
+
+### PD 分离 — Decode (D) 实例专属事件
+
+| 阶段 | 事件 | 说明 |
+| :---: | --- | --- |
+| DECODE | `DECODE_PROCESS_PREALLOCATE_REQUEST_START` | D 开始处理 P 发来的资源分配请求 |
+| DECODE | `DECODE_PROCESS_PREALLOCATE_REQUEST_END` | D 完成资源分配并返回 dest_block_ids 给 P |
+| DECODE | `DECODE_PROCESS_PREFILLED_REQUEST_START` | D 收到 P 的 first token，开始处理 Prefilled 请求 |
+| DECODE | `DECODE_PROCESS_PREFILLED_REQUEST_END` | D 将 Prefilled 请求加入 running queue |
+| DECODE | `DECODE_INFERENCE_END` | D 实例 Decode 推理完成 |
+
+### 请求生命周期时序图
+
+**Mixed 模式**（单实例完整推理）：
+```
+PREPROCESSING_START → PREPROCESSING_END → REQUEST_QUEUE_START → REQUEST_QUEUE_END
+→ RESOURCE_ALLOCATE_START → RESOURCE_ALLOCATE_END → INFERENCE_START
+→ FIRST_TOKEN_GENERATED → DECODE_START → INFERENCE_END
+→ POSTPROCESSING_START → POSTPROCESSING_END
+```
+
+**PD 分离 — Prefill (P) 实例**：
+```
+PREPROCESSING_START → PREPROCESSING_END → REQUEST_QUEUE_START → REQUEST_QUEUE_END
+→ ASK_DECODE_RESOURCE_START → ASK_DECODE_RESOURCE_END
+→ RESOURCE_ALLOCATE_START → RESOURCE_ALLOCATE_END
+→ INFERENCE_START → PREFILL_INFERENCE_END
+→ CHECK_CACHE_TRANSFER_START → CHECK_CACHE_TRANSFER_END → [发送 first token 到 D]
+```
+
+**PD 分离 — Decode (D) 实例**：
+```
+PREPROCESSING_START → PREPROCESSING_END → REQUEST_QUEUE_START → REQUEST_QUEUE_END
+→ DECODE_PROCESS_PREALLOCATE_REQUEST_START → DECODE_PROCESS_PREALLOCATE_REQUEST_END
+→ [等待 P 完成 prefill 并传输 KV Cache]
+→ DECODE_PROCESS_PREFILLED_REQUEST_START → DECODE_PROCESS_PREFILLED_REQUEST_END
+→ INFERENCE_START → DECODE_INFERENCE_END
+→ POSTPROCESSING_START → POSTPROCESSING_END
+```

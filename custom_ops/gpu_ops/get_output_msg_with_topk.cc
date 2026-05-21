@@ -88,13 +88,17 @@ void GetOutputTopK(const paddle::Tensor& x,
     return;
   }
 
-  int bsz = msg_rcv.mtext[1];
+  // Unpack bsz (low 16 bits) and actual_topk (high 16 bits) from mtext[1].
+  // This matches the packing in save_output_msg_with_topk.cc:
+  //   mtext[1] = bsz | (max_num_logprobs << 16)
+  int bsz = msg_rcv.mtext[1] & 0xFFFF;
+  int actual_topk = (msg_rcv.mtext[1] >> 16) & 0xFFFF;
   out_data[0] = (int64_t)msg_rcv.mtext[0];
-  out_data[1] = (int64_t)msg_rcv.mtext[1];
+  out_data[1] = (int64_t)msg_rcv.mtext[1];  // keep packed value; Python unpacks
 
   for (int i = 0; i < bsz; i++) {
-    for (int j = 0; j < k + 1; j++) {
-      const int64_t offset = i * (K + 1) + j;
+    for (int j = 0; j < actual_topk; j++) {
+      const int64_t offset = i * actual_topk + j;
       out_data[offset + 2] = (int64_t)msg_rcv.mtext[offset + 2];
       scores_data[offset] = msg_rcv.mtext_f[offset];
     }

@@ -77,17 +77,17 @@ function print_error_message() {
         echo "------------------- log/launch_worker.log -----------------"
         cat log/launch_worker.log
     fi
-    if [ -f "log/workerlog.0" ]; then
-        echo "------------------- log/workerlog.0 -----------------"
-        cat log/workerlog.0
+    if [ -f "log/paddle/workerlog.0" ]; then
+        echo "------------------- log/paddle/workerlog.0 -----------------"
+        cat log/paddle/workerlog.0
     fi
-    if [ -f "log/workerlog.1" ]; then
-        echo "------------------- log/workerlog.1 -----------------"
-        cat log/workerlog.1
+    if [ -f "log/paddle/workerlog.1" ]; then
+        echo "------------------- log/paddle/workerlog.1 -----------------"
+        cat log/paddle/workerlog.1
     fi
-    if [ -f "log/fastdeploy_error.log" ]; then
-        echo "------------------- log/fastdeploy_error.log -----------------"
-        cat log/fastdeploy_error.log
+    if [ -f "log/error.log" ]; then
+        echo "------------------- log/error.log -----------------"
+        cat log/error.log
     fi
 }
 
@@ -128,8 +128,12 @@ function clear_message() {
 }
 
 function stop_processes() {
-    ps -efww | grep -E 'api_server' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    # kill server
     ps -efww | grep -E '8180' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    # kill client
+    ps -efww | grep -E 'block_size 16' | grep -v grep | awk '{print $2}' | xargs kill -9 || true
+    # check
+    ps -efww | grep -E "fastdeploy" || true
 }
 
 function check_server_status() {
@@ -140,7 +144,7 @@ function check_server_status() {
         echo "Failed to launch worker processes..."
         stop_processes
         cat server.log
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         exit 1
     fi
 
@@ -148,7 +152,7 @@ function check_server_status() {
         echo "Some errors occurred..."
         stop_processes
         cat server.log
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         exit 1
     fi
 
@@ -168,7 +172,7 @@ function check_server_status() {
             echo -e "\nServer start timeout: After $((TIMEOUT/60)) minutes, the service still doesn't start!"
             stop_processes
             cat server.log
-            cat log/workerlog.0
+            cat log/paddle/workerlog.0
             exit 1
         fi
 
@@ -187,148 +191,122 @@ function check_server_status() {
     echo -e "\n"
 }
 
-echo "============ Online: start to test ERNIE-4.5-21B-A3B-Paddle (wint8, tp=1, enable_cudagraph) ==========="
-clear_message
-echo "Start server..."
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ${MODEL_DIR}/ERNIE-4.5-21B-A3B-Paddle \
-       --port 8180 \
-       --tensor-parallel-size 1 \
-       --quantization wint8 \
-       --max-model-len 32768 \
-       --max-num-seqs 8 \
-       --block-size 16 \
-       --graph-optimization-config '{"use_cudagraph": true}' > server.log 2>&1 &
+tensor_parallel_sizes=(1 2)
+quantizations=(wint8 wint4)
+use_cudagraphs=(false true)
+for tensor_parallel_size in "${tensor_parallel_sizes[@]}"; do
+    for quantization in "${quantizations[@]}"; do
+        for use_cudagraph in "${use_cudagraphs[@]}"; do
+            echo "============ Online: start to test ERNIE-4.5-21B-A3B-Paddle (${quantization}, tp=${tensor_parallel_size}, use_cudagraph=${use_cudagraph}) ==========="
+            clear_message
+            echo "Start server..."
+            python -m fastdeploy.entrypoints.openai.api_server \
+                   --model ${MODEL_DIR}/ERNIE-4.5-21B-A3B-Paddle \
+                   --port 8180 \
+                   --tensor-parallel-size ${tensor_parallel_size} \
+                   --quantization ${quantization} \
+                   --max-model-len 32768 \
+                   --max-num-seqs 8 \
+                   --block-size 16 \
+                   --graph-optimization-config "{\"use_cudagraph\": ${use_cudagraph}}" > server.log 2>&1 &
 
-check_server_status
+            check_server_status
 
-echo "Start inference..."
-cp ${CI_PATH}/test.jsonl ./
-python3 -u ${CI_PATH}/bench_gsm8k.py --port 8180 --num-questions 10 --num-shots 5 --parallel 8
+            echo "Start inference..."
+            cp ${CI_PATH}/test.jsonl ./
+            python3 -u ${CI_PATH}/bench_gsm8k.py --port 8180 --num-questions 10 --num-shots 5 --parallel 8
 
-exit_code=$?
-echo -e "\nexit_code is ${exit_code}"
+            exit_code=$?
+            echo -e "\nexit_code is ${exit_code}"
 
-echo -e "\nStop server..."
-stop_processes
-echo -e "\nStop server done."
+            echo -e "\nStop server..."
+            stop_processes
+            echo -e "\nStop server done."
 
-if [ ${exit_code} -ne 0 ]; then
-    print_error_message
-    exit 1
-fi
+            if [ ${exit_code} -ne 0 ]; then
+                print_error_message
+                exit 1
+            fi
 
-acc=`python3 -c "import json; [print(json.loads(line)['latency']) for line in open('result.jsonl')]"`
-latency=`python3 -c "import json; [print(json.loads(line)['latency']) for line in open('result.jsonl')]"`
-expected_lowerest_acc=0.8
-expected_largest_latency=60
-if awk -v a="$acc" -v b="$expected_lowerest_acc" 'BEGIN {exit !(a < b)}'; then
-    echo -e "\nExit with Accucary error, current accuracy $acc less than $expected_lowerest_acc "
-    exit 1
-fi
+            acc=`python3 -c "import json; [print(json.loads(line)['latency']) for line in open('result.jsonl')]"`
+            latency=`python3 -c "import json; [print(json.loads(line)['latency']) for line in open('result.jsonl')]"`
+            expected_lowerest_acc=0.8
+            expected_largest_latency=60
+            if awk -v a="$acc" -v b="$expected_lowerest_acc" 'BEGIN {exit !(a < b)}'; then
+                echo -e "\nExit with Accucary error, current accuracy $acc less than $expected_lowerest_acc "
+                exit 1
+            fi
 
-# if awk -v a="$latency" -v b="$expected_largest_latency" 'BEGIN {exit !(a > b)}'; then
-#     echo -e "\nExit with Latency Error, current latency $latency greater than $expected_largest_latency "
-#     exit 1
-# fi
-echo -e "\nPASSED"
+            # if awk -v a="$latency" -v b="$expected_largest_latency" 'BEGIN {exit !(a > b)}'; then
+            #     echo -e "\nExit with Latency Error, current latency $latency greater than $expected_largest_latency "
+            #     exit 1
+            # fi
+            echo -e "\nPASSED"
+        done
+    done
+done
 
-echo "============ Online: start to test ERNIE-4.5-21B-A3B-Paddle (wint8, tp=2, enable_cudagraph) ==========="
-clear_message
-echo "Start server..."
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ${MODEL_DIR}/ERNIE-4.5-21B-A3B-Paddle \
-       --port 8180 \
-       --tensor-parallel-size 2 \
-       --quantization wint8 \
-       --max-model-len 32768 \
-       --max-num-seqs 8 \
-       --block-size 16 \
-       --graph-optimization-config '{"use_cudagraph": true}' > server.log 2>&1 &
+for tensor_parallel_size in "${tensor_parallel_sizes[@]}"; do
+    for quantization in "${quantizations[@]}"; do
+        if [ "${quantization}" = "wint8" ] && [ "${tensor_parallel_size}" -eq 1 ]; then
+            echo -e "\n============ Online: skip ERNIE-4.5-VL-28B-A3B-Paddle (${quantization}, tp=${tensor_parallel_size}) because it may OOM ==========="
+            continue
+        fi
 
-check_server_status
+        for use_cudagraph in "${use_cudagraphs[@]}"; do
+            echo -e "\n============ Online: start to test ERNIE-4.5-VL-28B-A3B-Paddle (${quantization}, tp=${tensor_parallel_size}, use_cudagraph=${use_cudagraph}) ==========="
+            clear_message
+            echo "Start server..."
+            python -m fastdeploy.entrypoints.openai.api_server \
+                   --model ${MODEL_DIR}/ERNIE-4.5-VL-28B-A3B-Paddle \
+                   --port 8180 \
+                   --tensor-parallel-size ${tensor_parallel_size} \
+                   --quantization ${quantization} \
+                   --limit-mm-per-prompt '{"image": 100, "video": 100}' \
+                   --reasoning-parser ernie-45-vl \
+                   --max-model-len 32768 \
+                   --max-num-seqs 8 \
+                   --block-size 16 \
+                   --graph-optimization-config "{\"use_cudagraph\": ${use_cudagraph}}" > server.log 2>&1 &
 
-echo "Start inference..."
-cp ${CI_PATH}/test.jsonl ./
-python3 -u ${CI_PATH}/bench_gsm8k.py --port 8180 --num-questions 10 --num-shots 5 --parallel 8
+            check_server_status
 
-exit_code=$?
-echo -e "\nexit_code is ${exit_code}"
+            echo "Start inference..."
+            result_file="full_response.log"
 
-echo -e "\nStop server..."
-stop_processes
-echo -e "\nStop server done."
+            curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
+            -H "Content-Type: application/json" \
+            -d '{
+              "messages": [
+                {"role": "user", "content": [
+                  {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
+                  {"type": "text", "text": "From which era does the artifact in the image originate?"}
+                ]}
+              ],
+              "chat_template_kwargs":{"enable_thinking": false}
+            }' >& $result_file
 
-if [ ${exit_code} -ne 0 ]; then
-    print_error_message
-    exit 1
-fi
+            exit_code=$?
+            echo -e "\n\nexit_code is ${exit_code}"
 
-acc=`python3 -c "import json; [print(json.loads(line)['latency']) for line in open('result.jsonl')]"`
-latency=`python3 -c "import json; [print(json.loads(line)['latency']) for line in open('result.jsonl')]"`
-expected_lowerest_acc=0.8
-expected_largest_latency=60
-if awk -v a="$acc" -v b="$expected_lowerest_acc" 'BEGIN {exit !(a < b)}'; then
-    echo -e "\nExit with Accucary error, current accuracy $acc less than $expected_lowerest_acc "
-    exit 1
-fi
+            echo -e "\nfull response:"
+            cat $result_file
 
-# if awk -v a="$latency" -v b="$expected_largest_latency" 'BEGIN {exit !(a > b)}'; then
-#     echo -e "\nExit with Latency Error, current latency $latency greater than $expected_largest_latency "
-#     exit 1
-# fi
-echo -e "\nPASSED"
+            echo -e "\nStop server..."
+            stop_processes
+            echo -e "\nStop server done."
 
-echo -e "\n============ Online: start to test ERNIE-4.5-VL-28B-A3B-Paddle ==========="
-clear_message
-echo "Start server..."
-python -m fastdeploy.entrypoints.openai.api_server \
-       --model ${MODEL_DIR}/ERNIE-4.5-VL-28B-A3B-Paddle \
-       --port 8180 \
-       --tensor-parallel-size 2 \
-       --quantization wint8 \
-       --limit-mm-per-prompt '{"image": 100, "video": 100}' \
-       --reasoning-parser ernie-45-vl \
-       --max-model-len 32768 \
-       --max-num-seqs 8 \
-       --block-size 16 \
-       --graph-optimization-config '{"use_cudagraph": false}' > server.log 2>&1 &
-
-check_server_status
-
-echo "Start inference..."
-result_file="full_response.log"
-
-curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
--H "Content-Type: application/json" \
--d '{
-  "messages": [
-    {"role": "user", "content": [
-      {"type": "image_url", "image_url": {"url": "https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg"}},
-      {"type": "text", "text": "From which era does the artifact in the image originate?"}
-    ]}
-  ],
-  "chat_template_kwargs":{"enable_thinking": false}
-}' >& $result_file
-
-exit_code=$?
-echo -e "\n\nexit_code is ${exit_code}"
-
-echo -e "\nfull response:"
-cat $result_file
-
-echo -e "\nStop server..."
-stop_processes
-echo -e "\nStop server done."
-
-expected_strings="Buddhist"
-if grep -q "$expected_strings" "$result_file"; then
-    echo -e "\nPASSED"
-else
-    echo -e "\nExit with Accucary error: '$expected_strings' is not existed in generate response."
-    print_error_message
-    exit 1
-fi
+            expected_strings="Buddhist"
+            if grep -q "$expected_strings" "$result_file"; then
+                echo -e "\nPASSED"
+            else
+                echo -e "\nExit with Accucary error: '$expected_strings' is not existed in generate response."
+                print_error_message
+                exit 1
+            fi
+        done
+    done
+done
 
 echo -e "\n============ Online: start to test PaddleOCR-VL ==========="
 clear_message
@@ -352,7 +330,7 @@ echo "Start inference..."
 result_file="full_response.log"
 
 paddleocr doc_parser -i https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/paddleocr_vl_demo.png \
-       --vl_rec_backend fastdeploy-server --vl_rec_server_url http://127.0.0.1:8180/v1 --device iluvatar_gpu >& $result_file
+       --vl_rec_backend fastdeploy-server --vl_rec_server_url http://127.0.0.1:8180/v1 >& $result_file
 
 exit_code=$?
 echo -e "\n\nexit_code is ${exit_code}"

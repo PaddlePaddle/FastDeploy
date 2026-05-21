@@ -412,6 +412,7 @@ class TestRequestInstanceMethods(unittest.TestCase):
         request.prompt_token_ids_len = 3
         request.sampling_params = SamplingParams()
         request.metrics = RequestMetrics()
+        request.metrics.prompt_token_ids_len = 3
 
         data = request.to_dict()
 

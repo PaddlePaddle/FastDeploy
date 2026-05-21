@@ -38,14 +38,14 @@ for subdir in "$run_path"*/; do
                 if [ $exit_code -ne 0 ]; then
                     if [ -d "${subdir%/}/log" ]; then
                         echo ">>> grep error in ${subdir%/}/log/"
-                        grep -Rni --color=auto "error" "${subdir%/}/log/" || true
+                        grep -Rni --color=auto "error" "${subdir%/}/log/" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" --exclude="cache_messager*" --exclude="*.log.[0-9]*" | awk -F: '{key=$1; for(i=3;i<=NF;i++) key=key":"$i; gsub(/[0-9]+-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+,[0-9]+ [0-9]+/, "", key); if (!seen[key]++) print}' || true
                     else
                         echo "${subdir%/}/log directory not found"
                     fi
 
-                    if [ -f "${subdir%/}/log/workerlog.0" ]; then
-                        echo "---------------- log/workerlog.0 -------------------"
-                        cat "${subdir%/}/log/workerlog.0"
+                    if [ -f "${subdir%/}/log/paddle/workerlog.0" ]; then
+                        echo "---------------- log/paddle/workerlog.0 -------------------"
+                        cat "${subdir%/}/log/paddle/workerlog.0"
                         echo "----------------------------------------------------"
                     fi
 

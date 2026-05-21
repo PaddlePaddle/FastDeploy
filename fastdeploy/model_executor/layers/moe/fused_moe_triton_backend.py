@@ -17,10 +17,10 @@
 from typing import Callable
 
 import paddle
+import paddle.nn.functional as F
 from paddle import nn
 
 import fastdeploy
-from fastdeploy import envs
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
@@ -29,6 +29,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     weight_fully_copied,
 )
+from fastdeploy.platforms import current_platform
 from fastdeploy.utils import ceil_div, register_custom_python_op
 
 from ..quantization.quant_base import QuantMethodBase
@@ -302,7 +303,6 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
@@ -310,6 +310,11 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
 
         if layer.topk_method == "noaux_tc":
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             gate_out, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -318,8 +323,10 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,
@@ -693,7 +700,6 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
@@ -701,6 +707,11 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         E, N1, _ = getattr(layer, self.added_weight_attrs[0]).shape
 
         if layer.topk_method == "noaux_tc":
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             gate_out, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -709,8 +720,10 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,
@@ -1248,6 +1261,11 @@ def python_op_fused_moe_kernel_paddle(
             False,
         )
 
+    if layer.routed_scaling_factor_learnable:
+        safe_topk_indices = paddle.clip(topk_ids, min=0)
+        gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+        topk_weights = topk_weights * gathered_scales
+
     if topk_ids_hookfunc is not None:
         topk_ids_hookfunc(topk_ids=topk_ids)
 
@@ -1735,22 +1753,6 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
                 scale_param.data = scale
-            if bool(envs.FD_USE_BLACKWELL_GEMM):
-                import blackwell_ops
-
-                scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
-                scale_bw_name = scale_name + "_bw"
-                setattr(
-                    layer,
-                    scale_bw_name,
-                    scale_bw,
-                )
-                if layer.fd_config.scheduler_config.splitwise_role != "mixed":
-                    setattr(
-                        layer,
-                        scale_name,
-                        None,
-                    )
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize

@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import traceback
 from dataclasses import field
 from enum import Enum
 from typing import Any, Dict, Literal, Optional, Union
@@ -1963,6 +1964,7 @@ class FDConfig:
                     in [
                         SpecMethod.MTP,
                         SpecMethod.SUFFIX,
+                        SpecMethod.NGRAM,
                     ]
                 )
                 else 0
@@ -2127,8 +2129,8 @@ class FDConfig:
             self.structured_outputs_config is not None
             and self.structured_outputs_config.guided_decoding_backend != "off"
         ):
-            if current_platform.is_xpu() or self.speculative_config.method is not None:
-                logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
+            if self.speculative_config.method is not None:
+                logger.warning("Speculative Decoding currently does not support Guided decoding, set off.")
                 self.structured_outputs_config.guided_decoding_backend = "off"
             elif self.structured_outputs_config.guided_decoding_backend in ["auto", "xgrammar"]:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
@@ -2209,6 +2211,24 @@ class FDConfig:
         if self.speculative_config is not None and self.speculative_config.method is not None:
             num_spec_tokens = self.speculative_config.num_speculative_tokens
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
+
+            # For speculative, enlarge the threshold to trigger block preallocation earlier,
+            # since each step consumes num_spec_tokens + 1 slots at once
+            old_prealloc_threshold = self.cache_config.prealloc_dec_block_slot_num_threshold
+            prealloc_dec_block_slot = self.cache_config.prealloc_dec_block_slot_num_threshold * (num_spec_tokens + 1)
+            max_prealloc_dec_block_slot = max(
+                0, self.cache_config.block_size * self.cache_config.enc_dec_block_num - 1
+            )
+            self.cache_config.prealloc_dec_block_slot_num_threshold = min(
+                prealloc_dec_block_slot, max_prealloc_dec_block_slot
+            )
+            logger.info(
+                f"prealloc_dec_block_slot_num_threshold updated: {old_prealloc_threshold} -> "
+                f"{self.cache_config.prealloc_dec_block_slot_num_threshold} "
+                f"(num_spec_tokens={num_spec_tokens}, block_size={self.cache_config.block_size}, "
+                f"enc_dec_block_num={self.cache_config.enc_dec_block_num})"
+            )
+
         else:
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs
         if (
@@ -2281,7 +2301,9 @@ class FDConfig:
                 else None
             )
         except Exception as e:
-            logger.error(f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}")
+            logger.error(
+                f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}, {traceback.format_exc()}"
+            )
 
     def check(self):
         """
@@ -2300,7 +2322,7 @@ class FDConfig:
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
         tokens_per_seq = (
             (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
-            if self.speculative_config is not None
+            if self.speculative_config is not None and self.speculative_config.method is not None
             else 1
         )
         assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs * tokens_per_seq, (
@@ -2366,9 +2388,6 @@ class FDConfig:
                 assert (
                     self.speculative_config.method is None
                 ), "speculative decoding currently do not support guided_decoding"
-
-                # TODO: xpu support guided_decoding
-                assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
 
                 try:
                     import xgrammar  # noqa
@@ -2491,7 +2510,13 @@ class FDConfig:
             if paddle.is_compiled_with_xpu():
                 num_tokens = self.scheduler_config.max_num_batched_tokens
             else:
-                num_tokens = self.scheduler_config.max_num_seqs
+                # In MTP scenario, each sequence generates (num_speculative_tokens + 1) tokens per step
+                mtp_steps = (
+                    (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
+                    if self.speculative_config is not None and self.speculative_config.method is not None
+                    else 1
+                )
+                num_tokens = self.scheduler_config.max_num_seqs * mtp_steps
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
             if self.enable_mm_runtime and mm_max_tokens_per_item is not None:

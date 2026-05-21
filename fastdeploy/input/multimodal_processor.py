@@ -16,8 +16,8 @@
 
 """Unified multimodal processor for all VL model types.
 
-Consolidates the four separate VL processor wrappers and four separate
-DataProcessor classes into a single class with pluggable Encoding strategies.
+Consolidates the four separate VL processor wrappers into a single class
+with pluggable Encoding strategies.
 """
 
 import pickle

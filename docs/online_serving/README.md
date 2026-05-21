@@ -577,4 +577,4 @@ DeltaFunctionCall:
 - `/v1/pause` - Pause generation (causes denial of service). Inflight requests are aborted and cache is reset.
 - `/v1/resume` - Resume generation.
 - `/v1/is_paused` - Check if generation is paused.
-- `/v1/abort_requests` - Abort inference requests to release GPU memory (KV Cache blocks) and compute resources. Accepts `req_ids` (list of request IDs) or `abort_all=true` (abort all requests). Returns the list of aborted requests with their generated token counts.
+- `/v1/abort_requests` - Abort inference requests to release GPU memory (KV Cache blocks) and compute resources. Accepts `req_ids` (list of request IDs) or `abort_all=true` (abort all requests).

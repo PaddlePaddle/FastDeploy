@@ -16,6 +16,7 @@
 
 import json
 import re
+import traceback
 import uuid
 from collections.abc import Sequence
 from typing import Union
@@ -230,9 +231,10 @@ class Ernie45VLThinkingToolParser(ToolParser):
 
         except Exception as e:
             log_request_error(
-                message="request[{request_id}] Error in extracting tool call from response: {error}",
+                message="request[{request_id}] Error in extracting tool call from response: {error}, {traceback}",
                 request_id=request.request_id,
                 error=str(e),
+                traceback=traceback.format_exc(),
             )
             return ExtractedToolCallInformation(tools_called=False, tool_calls=None, content=model_output)
 
@@ -351,9 +353,10 @@ class Ernie45VLThinkingToolParser(ToolParser):
                             return delta
                     except Exception as e:
                         log_request_error(
-                            message="request[{request_id}] Error in streaming tool call extraction: {error}",
+                            message="request[{request_id}] Error in streaming tool call extraction: {error}, {traceback}",
                             request_id=request.get("request_id"),
                             error=str(e),
+                            traceback=traceback.format_exc(),
                         )
                         return None
             if "</tool_call>" in self.buffer:
@@ -366,8 +369,9 @@ class Ernie45VLThinkingToolParser(ToolParser):
 
         except Exception as e:
             log_request_error(
-                message="request[{request_id}] Error in streaming tool call extraction: {error}",
+                message="request[{request_id}] Error in streaming tool call extraction: {error}, {traceback}",
                 request_id=request.get("request_id"),
                 error=str(e),
+                traceback=traceback.format_exc(),
             )
             return None

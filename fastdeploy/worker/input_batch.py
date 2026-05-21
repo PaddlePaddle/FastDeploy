@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import traceback
+
 import paddle
 from paddleformers.utils.log import logger
 
@@ -189,9 +191,8 @@ class InputBatch:
         self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
 
         # Initialize addressing buffers
-        _max_batched_tokens = self.scheduler_config.max_num_batched_tokens
-        self.position_ids_buffer = paddle.zeros([_max_batched_tokens], dtype=paddle.int32)
-        self.slot_mapping_buffer = paddle.zeros([_max_batched_tokens], dtype=paddle.int64)
+        self.position_ids_buffer = paddle.zeros([self.max_chunk_tokens], dtype=paddle.int32)
+        self.slot_mapping_buffer = paddle.zeros([self.max_chunk_tokens], dtype=paddle.int64)
 
         # Declare AttentionBackend buffers
         self.decoder_batch_ids = None
@@ -586,7 +587,6 @@ class InputBatch:
             fill_paddle_tensor(self, "step_idx", 0)
             # fill_paddle_tensor(self, "not_need_stop", False)
             fill_paddle_tensor(self, "not_need_stop_device", False)
-            fill_paddle_tensor(self, "sampled_token_ids", -1)
             fill_paddle_tensor(self, "stop_flags", True)
 
             fill_paddle_tensor(self, "bad_tokens", -1)
@@ -724,10 +724,18 @@ class InputBatch:
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
             fill_paddle_tensor(self, "preempted_idx", 0)
+            fill_paddle_tensor(self, "last_preempted_idx", 0)
+
+            # Reset tensors for overlap
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
 
             logger.info("share_inputs reset completed")
         except Exception as e:
-            logger.error(f"Resetting share inputs failed, skipping reset, error message is {e}")
+            logger.error(
+                f"Resetting share inputs failed, skipping reset, error message is {e}, {traceback.format_exc()}"
+            )
 
 
 class ProposerInputBatch(InputBatch):
@@ -763,7 +771,7 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_xpu():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             if "token_ids_all" in self.target_model_input_batch:
@@ -787,6 +795,7 @@ class ProposerInputBatch(InputBatch):
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -1078,7 +1087,9 @@ class ProposerInputBatch(InputBatch):
 
             logger.info("model_inputs reset completed")
         except Exception as e:
-            logger.error(f"Resetting model inputs failed, skipping reset, error message is {e}")
+            logger.error(
+                f"Resetting model inputs failed, skipping reset, error message is {e}, {traceback.format_exc()}"
+            )
 
 
 def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch, target_model_input_batch: dict):
@@ -1242,3 +1253,13 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id, en
         logits = sampler_output.logits
         real_logits = _recover_tensor(logits, src_order)
         sampler_output.logits = real_logits
+
+    if sampler_output.sampling_mask is not None:
+        sampling_mask = sampler_output.sampling_mask
+        sort_len = len(src_order)
+        real_sampling_mask = [None] * len(sampling_mask)
+        for i in range(sort_len):
+            real_sampling_mask[i] = sampling_mask[src_order[i]]
+        for i in range(sort_len, len(sampling_mask)):
+            real_sampling_mask[i] = sampling_mask[i]
+        sampler_output.sampling_mask = real_sampling_mask
