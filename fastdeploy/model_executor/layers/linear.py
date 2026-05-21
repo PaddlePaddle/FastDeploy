@@ -602,7 +602,9 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
                 if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
                     loaded_weight = loaded_weight.view(param.dtype)
                 else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
+                    assert (
+                        loaded_weight.dtype == param.dtype
+                    ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
 
             h2d_copy(param, loaded_weight)
 
@@ -763,7 +765,9 @@ class QKVParallelLinear(ColumnParallelLinear):
                 if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
                     loaded_weight = loaded_weight.view(param.dtype)
                 else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
+                    assert (
+                        loaded_weight.dtype == param.dtype
+                    ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
             h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
@@ -1289,7 +1293,9 @@ class QKVGateParallelLinear(ColumnParallelLinear):
                 if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
                     loaded_weight = loaded_weight.view(param.dtype)
                 else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
+                    assert (
+                        loaded_weight.dtype == param.dtype
+                    ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
             h2d_copy(param, loaded_weight)
 
     def gate_weight_loader(self, param, loaded_weight):
@@ -1329,7 +1335,9 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
                 loaded_weight = loaded_weight.view(param.dtype)
             else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+                assert (
+                    loaded_weight.dtype == param.dtype
+                ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
         h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
