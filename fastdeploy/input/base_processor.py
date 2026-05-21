@@ -70,7 +70,10 @@ def _is_forced_tool_choice(request) -> bool:
        own ``options`` dict instead of the OpenAI-style ``tool_choice``
        field.
     """
-    tool_choice = request.tool_choice
+    if request is None:
+        return False
+
+    tool_choice = getattr(request, "tool_choice", None)
     # Named-tool choices are pydantic ``ChatCompletionNamedToolChoiceParam``
     # objects (``type == "function"``); plain string values such as
     # ``"required"`` / ``"auto"`` / ``"none"`` are skipped here.
