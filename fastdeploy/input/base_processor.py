@@ -61,21 +61,20 @@ def _is_forced_tool_choice(request) -> bool:
     """Return True iff the request asks the chat template to inject a
     tool-call prefix into the prompt. Two ways are recognized:
 
-    1. ``request.tool_choice == "required"`` or a named-tool choice (a
+    1. ``request.tool_choice`` is a named-tool choice (a
        ``ChatCompletionNamedToolChoiceParam`` pydantic model with
-       ``type == "function"``).
+       ``type == "function"``). The plain ``"required"`` string does NOT
+       trigger prefix injection in the chat template.
     2. ``request.chat_template_kwargs.options.tool_choice.mode == "force"``
        — used by chat templates that drive forced tool calls through their
        own ``options`` dict instead of the OpenAI-style ``tool_choice``
        field.
     """
-    tool_choice = getattr(request, "tool_choice", None)
-    if isinstance(tool_choice, str):
-        if tool_choice == "required":
-            return True
-    # Duck-type the pydantic ``ChatCompletionNamedToolChoiceParam`` via its
-    # ``type`` attribute to avoid importing the protocol module here.
-    elif getattr(tool_choice, "type", None) == "function":
+    tool_choice = request.tool_choice
+    # Named-tool choices are pydantic ``ChatCompletionNamedToolChoiceParam``
+    # objects (``type == "function"``); plain string values such as
+    # ``"required"`` / ``"auto"`` / ``"none"`` are skipped here.
+    if not isinstance(tool_choice, str) and getattr(tool_choice, "type", None) == "function":
         return True
 
     chat_template_kwargs = getattr(request, "chat_template_kwargs", None) or {}

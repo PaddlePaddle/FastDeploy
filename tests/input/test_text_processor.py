@@ -780,10 +780,10 @@ class IsForcedToolChoiceTest(unittest.TestCase):
             chat_template_kwargs=chat_template_kwargs,
         )
 
-    def test_required_string(self):
-        self.assertTrue(self._is_forced(self._req(tool_choice="required")))
-
-    def test_other_strings(self):
+    def test_string_tool_choice_never_forces(self):
+        # Plain string tool_choice values do NOT cause the chat template to
+        # inject a tool-call prefix, even when the value is ``"required"``.
+        self.assertFalse(self._is_forced(self._req(tool_choice="required")))
         self.assertFalse(self._is_forced(self._req(tool_choice="auto")))
         self.assertFalse(self._is_forced(self._req(tool_choice="none")))
         self.assertFalse(self._is_forced(self._req(tool_choice="")))
@@ -821,9 +821,10 @@ class IsForcedToolChoiceTest(unittest.TestCase):
         self.assertFalse(self._is_forced(self._req(chat_template_kwargs={"options": {"tool_choice": "x"}})))
 
     def test_tool_choice_takes_priority_over_options(self):
-        kwargs = {"options": {"tool_choice": {"mode": "auto"}}}
-        # Even with non-force mode in options, an explicit "required" wins.
-        self.assertTrue(self._is_forced(self._req(tool_choice="required", chat_template_kwargs=kwargs)))
+        kwargs = {"options": {"tool_choice": {"mode": "force"}}}
+        # Named-tool pydantic choice combined with options.force still forces.
+        named = SimpleNamespace(type="function", function=SimpleNamespace(name="f"))
+        self.assertTrue(self._is_forced(self._req(tool_choice=named, chat_template_kwargs=kwargs)))
 
 
 class _RecordingToolParser:
@@ -933,7 +934,10 @@ class ToolPrefixCompensationTest(unittest.TestCase):
             "finished": True,
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
-        request = SimpleNamespace(tool_choice="required")
+        # Named-tool pydantic choice triggers prefix injection.
+        request = SimpleNamespace(
+            tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")),
+        )
 
         processor.process_response_dict_normal(
             response,
@@ -1016,7 +1020,9 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         processor = self.processor
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
         processor.tool_parser_obj = self._make_parser_factory(parser)
-        request = SimpleNamespace(tool_choice="required")
+        request = SimpleNamespace(
+            tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")),
+        )
         prompt_tokens = "user msg\n<tool_call>"
 
         # First chunk
@@ -1049,10 +1055,12 @@ class ToolPrefixCompensationTest(unittest.TestCase):
 
     def test_streaming_path_no_splice_when_no_prefix_detected(self):
         processor = self.processor
-        # Empty configured prefix => detect returns "" even with required.
+        # Empty configured prefix => detect returns "" even when forced.
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="")
         processor.tool_parser_obj = self._make_parser_factory(parser)
-        request = SimpleNamespace(tool_choice="required")
+        request = SimpleNamespace(
+            tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")),
+        )
 
         first = {
             "finished": False,
