@@ -1226,15 +1226,11 @@ class GPUModelRunner(ModelRunnerBase):
             req.sampling_params.top_p_normalized_logprobs and req.sampling_params.top_p != 1.0 for req in logprobs_reqs
         )
         if logprobs_reqs:
-            self.max_logprobs = (
-                max(
-                    [
-                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
-                        for req in logprobs_reqs
-                    ]
-                )
-                if not self.speculative_decoding
-                else 20
+            self.max_logprobs = max(
+                [
+                    self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                    for req in logprobs_reqs
+                ]
             )
         elif self.enable_logprob:
             self.max_logprobs = None if not self.speculative_decoding else 0
