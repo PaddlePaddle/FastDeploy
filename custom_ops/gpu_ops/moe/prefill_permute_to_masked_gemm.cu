@@ -22,7 +22,7 @@ template <typename T,
           typename ScaleT,
           int VecSize,
           int TOP_K,
-          bool SWIZZLE_SCALE>
+          bool MAKE_SCALE_INTERLEAVED>
 __global__ void PrefillPermuteToMaskedGemmKernel(
     T* __restrict__ permute_x,
     ScaleT* __restrict__ permute_scale,
@@ -40,8 +40,8 @@ __global__ void PrefillPermuteToMaskedGemmKernel(
 
   const int tidx = threadIdx.x;
   const int x_num_vecs = hidden / VecSize;
-  // Pre-compute swizzle constants outside the slot loop (compile-time dead if
-  // !SWIZZLE_SCALE)
+  // Pre-compute interleaved scale constants outside the slot loop (compile-time
+  // dead if !MAKE_SCALE_INTERLEAVED)
   const int scale_bytes_per_token =
       hidden_scale * static_cast<int>(sizeof(ScaleT));
   const int m_tiles = max_tokens_per_expert / 128;
@@ -84,10 +84,10 @@ __global__ void PrefillPermuteToMaskedGemmKernel(
         const ScaleT* src_scale =
             scale + static_cast<int64_t>(token_idx) * hidden_scale;
 
-        if constexpr (SWIZZLE_SCALE) {
-          // Directly write packed FP8 scale bytes into the swizzled layout used
-          // by flashinfer cutedsl: [E, M/128, K/4, 32, 4, 4]. The tensor is
-          // exposed to Paddle as packed float32 [E, M, K/4].
+        if constexpr (MAKE_SCALE_INTERLEAVED) {
+          // Directly write packed FP8 scale bytes into the interleaved layout
+          // used by flashinfer cutedsl: [E, M/128, K/4, 32, 4, 4]. The tensor
+          // is exposed to Paddle as packed float32 [E, M, K/4].
           const uint8_t* src_scale_bytes =
               reinterpret_cast<const uint8_t*>(src_scale);
           uint8_t* dst_scale_bytes = reinterpret_cast<uint8_t*>(permute_scale);
@@ -142,7 +142,7 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
     const paddle::Tensor& topk_ids,
     const int num_local_experts,
     const int max_token_num,
-    const bool swizzle_scale) {
+    const bool make_scale_interleaved) {
   typedef PDTraits<D> traits_;
   typedef PDTraits<ScaleD> scale_traits_;
   typedef typename traits_::DataType DataType_;
@@ -162,13 +162,15 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
       {num_local_experts, max_token_num, hidden}, x.dtype(), place);
 
   paddle::Tensor permute_scale;
-  if (swizzle_scale) {
+  if (make_scale_interleaved) {
     const int scale_bytes_per_token =
         hidden_scale * static_cast<int>(sizeof(ScaleDataType_));
-    PD_CHECK(max_token_num % 128 == 0,
-             "swizzle_scale requires max_token_num to be divisible by 128");
+    PD_CHECK(
+        max_token_num % 128 == 0,
+        "make_scale_interleaved requires max_token_num to be divisible by 128");
     PD_CHECK(scale_bytes_per_token % 4 == 0,
-             "swizzle_scale requires the unpacked FP8 scale dimension to be "
+             "make_scale_interleaved requires the unpacked FP8 scale dimension "
+             "to be "
              "divisible by 4");
     permute_scale = GetEmptyTensor(
         {num_local_experts, max_token_num, hidden_scale}, ScaleD, place);
@@ -207,12 +209,12 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
   cudaDeviceGetAttribute(&sm_count, cudaDevAttrMultiProcessorCount, dev);
   int num_blocks = sm_count * 2;
 
-#define LAUNCH_PREFILL_PERMUTE(SWIZZLE)                           \
+#define LAUNCH_PREFILL_PERMUTE(INTERLEAVED)                       \
   PrefillPermuteToMaskedGemmKernel<DataType_,                     \
                                    ScaleDataType_,                \
                                    VecSize,                       \
                                    TOP_K,                         \
-                                   SWIZZLE>                       \
+                                   INTERLEAVED>                   \
       <<<num_blocks, BLOCK_THREADS, 0, stream>>>(                 \
           reinterpret_cast<DataType_*>(permute_x.data<data_t>()), \
           reinterpret_cast<ScaleDataType_*>(                      \
@@ -228,7 +230,7 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemmDispatch(
           hidden_scale,                                           \
           max_token_num)
 
-  if (swizzle_scale) {
+  if (make_scale_interleaved) {
     LAUNCH_PREFILL_PERMUTE(true);
   } else {
     LAUNCH_PREFILL_PERMUTE(false);
@@ -245,19 +247,25 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
     const paddle::Tensor& topk_ids,
     const int num_local_experts,
     const int max_token_num,
-    const bool swizzle_scale) {
-  if (swizzle_scale) {
-    PD_CHECK(x.dtype() == paddle::DataType::UINT8 &&
-                 scale.dtype() == paddle::DataType::FLOAT32,
-             "swizzle_scale=true is only valid for UINT8 x + FLOAT32 scale "
-             "(FP4 comm quant path)");
+    const bool make_scale_interleaved) {
+  if (make_scale_interleaved) {
+    PD_CHECK(
+        x.dtype() == paddle::DataType::UINT8 &&
+            scale.dtype() == paddle::DataType::FLOAT32,
+        "make_scale_interleaved=true is only valid for UINT8 x + FLOAT32 scale "
+        "(FP4 comm quant path)");
   }
   const int topk = topk_ids.shape()[1];
 
 #define DISPATCH_TOPK(DTYPE, SCALE_DTYPE, TOPK_VAL)                          \
   case TOPK_VAL:                                                             \
     return PrefillPermuteToMaskedGemmDispatch<DTYPE, SCALE_DTYPE, TOPK_VAL>( \
-        x, scale, topk_ids, num_local_experts, max_token_num, swizzle_scale);
+        x,                                                                   \
+        scale,                                                               \
+        topk_ids,                                                            \
+        num_local_experts,                                                   \
+        max_token_num,                                                       \
+        make_scale_interleaved);
 
   switch (x.dtype()) {
     case paddle::DataType::FLOAT8_E4M3FN: {
@@ -348,7 +356,7 @@ std::vector<std::vector<int64_t>> PrefillPermuteToMaskedGemmInferShape(
     const std::vector<int64_t>& topk_ids_shape,
     const int num_local_experts,
     const int max_token_num,
-    const bool swizzle_scale) {
+    const bool make_scale_interleaved) {
   int64_t num_tokens = x_shape[0];
   int64_t hidden = x_shape[1];
   int64_t hidden_scale = scale_shape[1];
@@ -368,7 +376,7 @@ std::vector<paddle::DataType> PrefillPermuteToMaskedGemmInferDtype(
     const paddle::DataType& topk_ids_dtype,
     const int num_local_experts,
     const int max_token_num,
-    const bool swizzle_scale) {
+    const bool make_scale_interleaved) {
   return {
       x_dtype, scale_dtype, paddle::DataType::INT32, paddle::DataType::INT32};
 }
@@ -381,7 +389,7 @@ PD_BUILD_STATIC_OP(prefill_permute_to_masked_gemm)
               "token_nums_per_expert"})
     .Attrs({"num_local_experts: int",
             "max_token_num: int",
-            "swizzle_scale: bool"})
+            "make_scale_interleaved: bool"})
     .SetKernelFn(PD_KERNEL(PrefillPermuteToMaskedGemm))
     .SetInferShapeFn(PD_INFER_SHAPE(PrefillPermuteToMaskedGemmInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(PrefillPermuteToMaskedGemmInferDtype));

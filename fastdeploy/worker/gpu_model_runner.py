@@ -1395,7 +1395,9 @@ class GPUModelRunner(ModelRunnerBase):
         )
         block_size = self.cache_config.block_size
         block_idx = position_ids // block_size  # [num_tokens]
-        assert self.forward_meta.batch_id_per_token.shape == block_idx.shape
+        assert (
+            self.forward_meta.batch_id_per_token.shape == block_idx.shape
+        ), f"batch_id_per_token.shape:{self.forward_meta.batch_id_per_token.shape} != block_idx.shape:{block_idx.shape}"
         block_ids = self.forward_meta.block_tables[self.forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
         block_offset = position_ids % block_size  # [num_tokens]
         slot_mapping = self.share_inputs["slot_mapping_buffer"][:current_total_tokens]
@@ -2094,7 +2096,11 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding and self.spec_method in [SpecMethod.MTP, SpecMethod.SUFFIX]:
+            elif self.speculative_decoding and self.spec_method in [
+                SpecMethod.MTP,
+                SpecMethod.SUFFIX,
+                SpecMethod.NGRAM,
+            ]:
                 for capture_size in sorted(capture_sizes, reverse=True):
                     expected_decode_len = (self.speculative_config.num_speculative_tokens + 1) * 2
                     self._dummy_run(

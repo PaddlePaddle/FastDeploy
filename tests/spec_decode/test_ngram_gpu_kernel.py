@@ -90,7 +90,7 @@ def _cpu_ngram_match(
         for ngram_size in range(max_ngram_size, 0, -1):
             if cur_step < ngram_size:
                 continue
-            ngram = cur_pre_ids[cur_step + 1 - ngram_size : cur_step + 1]
+            ngram = cur_pre_ids[cur_step - ngram_size : cur_step]
 
             # Search in input_ids
             match_input = False
@@ -241,8 +241,8 @@ def _make_ngram_test_data(batch_size=4, input_len=64, max_model_len=256, max_dra
         gen_len = 20
         src = rng.randint(0, max(1, input_len - gen_len))
         token_ids_all[b, input_len : input_len + gen_len] = input_ids[b, src : src + gen_len]
-        # step_idx = last valid position (0-based index)
-        step_idx[b] = gen_len - 1
+        # step_idx = count of generated tokens (positions 0..step_idx-1 are valid)
+        step_idx[b] = gen_len
 
     return {
         "input_ids": input_ids,
@@ -281,7 +281,7 @@ def _make_mixed_test_data(batch_size=4, input_len=64, pre_ids_len=256, max_draft
         gen_len = 20
         src = rng.randint(0, max(1, input_len - gen_len))
         pre_ids[b, :gen_len] = input_ids[b, src : src + gen_len]
-        # step_idx = last valid position (0-based index)
+        # step_idx = last valid position (0-based index), matches hybrid kernel semantics
         step_idx[b] = gen_len - 1
 
     return {
@@ -349,8 +349,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         # GPU kernel
         gpu_data = _to_gpu(data)
         self.ngram_match(
-            gpu_data["input_ids"],
-            gpu_data["input_ids_len"],
             gpu_data["token_ids_all"],
             gpu_data["prompt_lens"],
             gpu_data["step_idx"],
@@ -395,8 +393,6 @@ class TestNgramMatchKernel(unittest.TestCase):
                 )
                 gpu_data = _to_gpu(data)
                 self.ngram_match(
-                    gpu_data["input_ids"],
-                    gpu_data["input_ids_len"],
                     gpu_data["token_ids_all"],
                     gpu_data["prompt_lens"],
                     gpu_data["step_idx"],
@@ -444,8 +440,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = str(high_threshold)
         try:
             self.ngram_match(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
                 gpu_data["token_ids_all"],
                 gpu_data["prompt_lens"],
                 gpu_data["step_idx"],
@@ -489,8 +483,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         )
         gpu_data = _to_gpu(data)
         self.ngram_match(
-            gpu_data["input_ids"],
-            gpu_data["input_ids_len"],
             gpu_data["token_ids_all"],
             gpu_data["prompt_lens"],
             gpu_data["step_idx"],
@@ -534,8 +526,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = str(high_threshold)
         try:
             self.ngram_match(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
                 gpu_data["token_ids_all"],
                 gpu_data["prompt_lens"],
                 gpu_data["step_idx"],
@@ -563,8 +553,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         for _ in range(1):
             d = _to_gpu(_make_ngram_test_data(batch_size=32, input_len=512, seed=42))
             self.ngram_match(
-                d["input_ids"],
-                d["input_ids_len"],
                 d["token_ids_all"],
                 d["prompt_lens"],
                 d["step_idx"],
@@ -587,8 +575,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         t0 = time.perf_counter()
         for _ in range(n_runs):
             self.ngram_match(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
                 gpu_data["token_ids_all"],
                 gpu_data["prompt_lens"],
                 gpu_data["step_idx"],
@@ -639,8 +625,6 @@ class TestNgramMatchKernel(unittest.TestCase):
             # Warmup
             for _ in range(1):
                 self.ngram_match(
-                    gpu_data["input_ids"],
-                    gpu_data["input_ids_len"],
                     gpu_data["token_ids_all"],
                     gpu_data["prompt_lens"],
                     gpu_data["step_idx"],
@@ -660,8 +644,6 @@ class TestNgramMatchKernel(unittest.TestCase):
             t0 = time.perf_counter()
             for _ in range(n_runs):
                 self.ngram_match(
-                    gpu_data["input_ids"],
-                    gpu_data["input_ids_len"],
                     gpu_data["token_ids_all"],
                     gpu_data["prompt_lens"],
                     gpu_data["step_idx"],
@@ -744,8 +726,6 @@ class TestNgramMatchKernel(unittest.TestCase):
                 # Warmup
                 for _ in range(1):
                     self.ngram_match(
-                        gpu_data["input_ids"],
-                        gpu_data["input_ids_len"],
                         gpu_data["token_ids_all"],
                         gpu_data["prompt_lens"],
                         gpu_data["step_idx"],
@@ -765,8 +745,6 @@ class TestNgramMatchKernel(unittest.TestCase):
                 t0 = time.perf_counter()
                 for _ in range(n_runs):
                     self.ngram_match(
-                        gpu_data["input_ids"],
-                        gpu_data["input_ids_len"],
                         gpu_data["token_ids_all"],
                         gpu_data["prompt_lens"],
                         gpu_data["step_idx"],
