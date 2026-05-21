@@ -2061,6 +2061,11 @@ class FDConfig:
             getattr(self.model_config, "rope_3d", False) or getattr(self.model_config, "use_3d_rope", False)
         )
 
+    def _enable_default_encoder_cache(self) -> bool:
+        architectures = getattr(self.model_config, "architectures", None) or []
+        architecture = architectures[0] if isinstance(architectures, (list, tuple)) and architectures else ""
+        return current_platform.is_maca() and "PaddleOCR" in architecture
+
     def _disable_sequence_parallel_moe_if_needed(self, mode_name):
         if self.parallel_config.use_sequence_parallel_moe and self.graph_opt_config.use_cudagraph:
             self.parallel_config.use_sequence_parallel_moe = False
@@ -2144,7 +2149,10 @@ class FDConfig:
 
         if self.enable_mm_runtime:
             if self.cache_config.max_encoder_cache is None or self.cache_config.max_encoder_cache < 0:
-                self.cache_config.max_encoder_cache = 0
+                if self._enable_default_encoder_cache():
+                    self.cache_config.max_encoder_cache = self.scheduler_config.max_num_batched_tokens
+                else:
+                    self.cache_config.max_encoder_cache = 0
             elif self.cache_config.max_encoder_cache != 0:
                 if self.cache_config.max_encoder_cache < self.scheduler_config.max_num_batched_tokens:
                     logger.warning(
