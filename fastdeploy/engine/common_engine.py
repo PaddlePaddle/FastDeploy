@@ -1909,7 +1909,11 @@ class EngineService:
     def _decode_token(self, token_ids, req_id, is_end):
         delta_text = ""
         if envs.FD_ENABLE_RETURN_TEXT:
-            delta_text, cum_tokens, _ = self.data_processor.ids2tokens(token_ids, req_id)
+            delta_text, previous_token_ids, _ = self.data_processor.ids2tokens(token_ids, req_id)
+            # Reconstruct the post-extend cumulative list from the pre-delta
+            # snapshot + this call's input — ``ids2tokens`` only returns the
+            # snapshot to keep its return values aliasing-free.
+            cum_tokens = previous_token_ids + list(token_ids)
             if delta_text != "":
                 prefix_offset = self.data_processor.decode_status[req_id][0]
                 read_offset = self.data_processor.decode_status[req_id][1]

@@ -214,9 +214,16 @@ class BaseTextProcessor(ABC):
         Returns:
             (delta_text, previous_token_ids, previous_texts)
 
-        Both the HF and the PaddleFormers/ERNIE tokeniser paths return the
-        same tuple shape.  The HF path sets ``previous_token_ids`` to ``[]``
-        since it does not expose per-token ids during batch-decode.
+        ``previous_token_ids`` and ``previous_texts`` are **snapshots of the
+        accumulated state BEFORE this call's tokens were appended** —
+        symmetric pre-delta views of what the caller had decoded so far.
+        Both are owned by the caller (no aliasing of internal state).
+
+        Callers that need the post-extend cumulative list should reconstruct
+        it locally via ``previous_token_ids + token_id``.
+
+        The HF path returns ``[]`` for ``previous_token_ids`` since it does
+        not expose per-token ids during batch-decode.
         """
         if envs.FD_USE_HF_TOKENIZER:
             if task_id not in self.decode_status:
@@ -235,7 +242,9 @@ class BaseTextProcessor(ABC):
                 status[2] = decode_str[0]
             else:
                 new_str = ""
-            # Return consistent three-tuple; previous_token_ids not available.
+            # NOTE: HF path historically returns the post-delta full string
+            # here, inconsistent with the non-HF branch (which returns the
+            # pre-delta snapshot). Preserved as-is to avoid behavior change.
             return new_str, [], status[2]
         else:
             if task_id not in self.decode_status:
@@ -243,6 +252,8 @@ class BaseTextProcessor(ABC):
                 self.decode_status[task_id] = [0, 0, [], ""]
             status = self.decode_status[task_id]
             previous_texts = status[3]
+            # Snapshot BEFORE extend so the returned list is owned by the
+            # caller and symmetric with ``previous_texts``.
             previous_token_ids = list(status[2])
             status[2].extend(token_id)
             decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(status[2], status[0], status[1])
