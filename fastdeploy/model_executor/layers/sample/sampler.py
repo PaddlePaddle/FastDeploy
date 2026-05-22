@@ -577,6 +577,34 @@ class Sampler(nn.Layer):
             token_ranks_cpu = token_ranks.cpu()
         return LogprobsTensors(indices_cpu, top_logprobs_cpu, token_ranks_cpu)
 
+    def _sample_from_probs(self, probs, sampling_metadata):
+        token_num = probs.shape[0]
+        top_k_list = sampling_metadata.top_k_list
+        top_p_list = sampling_metadata.top_p_list
+        need_top_k_sampling = False
+        need_top_p_sampling = False
+        if top_k_list is not None:
+            top_k_list = top_k_list[:token_num]
+            need_top_k_sampling = any(k > 0 for k in top_k_list)
+        if top_p_list is not None:
+            top_p_list = top_p_list[:token_num]
+            need_top_p_sampling = any(p != 1.0 for p in top_p_list)
+        if not need_top_p_sampling:
+            if need_top_k_sampling:
+                from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
+
+                probs = top_k_renorm_probs(probs, sampling_metadata.top_k)
+            next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
+        else:
+            _, next_tokens = top_k_top_p_sampling(
+                probs,
+                sampling_metadata.top_p,
+                sampling_metadata.top_k,
+                top_k_list,
+                topp_seed=sampling_metadata.seed,
+            )
+        return next_tokens
+
     def forward_cuda(
         self,
         logits: paddle.Tensor,
@@ -641,13 +669,7 @@ class Sampler(nn.Layer):
         if FD_SAMPLING_CLASS.lower() == "triton":
             next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
         else:
-            _, next_tokens = top_k_top_p_sampling(
-                probs,
-                sampling_metadata.top_p,
-                sampling_metadata.top_k,
-                sampling_metadata.top_k_list,
-                topp_seed=sampling_metadata.seed,
-            )
+            next_tokens = self._sample_from_probs(probs, sampling_metadata)
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
