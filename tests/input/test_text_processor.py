@@ -332,6 +332,13 @@ class TextProcessorTestCase(unittest.TestCase):
         class DummyToolParser:
             def __init__(self, tokenizer):
                 self.tokenizer = tokenizer
+                self._tool_prefix = ""
+                self._tool_prefix_token_ids = []
+                self._tool_prefix_computed = False
+                self._tool_prefix_injected_to_delta = False
+
+            def detect_tool_prefix(self, prompt):
+                return ""
 
             def extract_tool_calls(self, full_text, response_dict):
                 # 模拟工具调用解析，返回固定的工具调用数据用于测试
