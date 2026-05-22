@@ -210,7 +210,7 @@ def _sample_from_probs(probs, sampling_metadata, top_p=None, top_k=None, topp_se
     top_k_list = sampling_metadata.top_k_list
     top_p_list = sampling_metadata.top_p_list
     need_top_k_sampling = False
-    need_top_p_sampling = False
+    need_top_p_sampling = True
     if top_k_list is not None:
         top_k_list = top_k_list[:token_num]
         need_top_k_sampling = any(k > 0 for k in top_k_list)
