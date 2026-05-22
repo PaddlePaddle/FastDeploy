@@ -242,12 +242,6 @@ class GpuWorker(WorkerBase):
         ):
             self.model_runner.capture_model_prefill_and_mixed()
 
-        # Capture CUDAGraph for decode phase (all modes)
-        self.model_runner.capture_model()
-
-        # Block-wise CUDA graph capture (independent loop)
-        self.model_runner.capture_block_wise_graphs()
-
         # Deterministic mode: reset RNG and share_inputs after warmup.
         # Warmup _dummy_run() calls consume CUDA RNG state and leave stale
         # data (infer_seed, stop_flags, seq_lens, etc.) in share_inputs.
@@ -256,6 +250,12 @@ class GpuWorker(WorkerBase):
         if envs.FD_DETERMINISTIC_MODE:
             set_random_seed(self.fd_config.model_config.seed)
             self.model_runner.share_inputs.reset_share_inputs()
+
+        # Capture CUDAGraph for decode phase (all modes)
+        self.model_runner.capture_model()
+
+        # Block-wise CUDA graph capture (independent loop)
+        self.model_runner.capture_block_wise_graphs()
 
     def check_health(self) -> bool:
         """ """
