@@ -75,23 +75,13 @@ class ToolParser:
         return request
 
     def detect_tool_prefix(self, prompt: str) -> str:
-        """Detect a tool-call prefix that the chat template injected at the tail
-        of the rendered prompt to force tool output (named-tool ``tool_choice``
-        or ``chat_template_kwargs.options.tool_choice.mode == "force"``).
+        """Detect the tool-call prefix injected at the tail of the rendered
+        prompt by a forced ``tool_choice``.
 
-        The check is generic: find the **last** occurrence of
-        :attr:`tool_call_start_token` in ``prompt`` and, if it is **not** closed
-        by a subsequent :attr:`tool_call_end_token`, treat the substring from
-        that position to the end of the prompt as the injected prefix. The
-        injected prefix must reach the very end of the prompt (modulo trailing
-        whitespace) — anything else is treated as historical / unrelated and
-        we conservatively return an empty string.
-
-        Returns ``""`` for parsers that have not declared their sentinel tokens
-        or for prompts where no such prefix is detected.
-
-        Subclasses with non-paired tag formats (e.g. a single sentinel without
-        a closing counterpart) may override this method.
+        Finds the **last** :attr:`tool_call_start_token` in ``prompt`` that is
+        not closed by a later :attr:`tool_call_end_token` and reaches the
+        prompt end (modulo trailing whitespace). Returns ``""`` otherwise.
+        Subclasses with non-paired tag formats may override.
         """
         start = self.tool_call_start_token
         if not start or not prompt:

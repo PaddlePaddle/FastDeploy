@@ -57,32 +57,6 @@ from fastdeploy.utils import data_processor_logger, make_choice_id, parse_choice
 _SAMPLING_EPS = 1e-5
 
 
-def _is_forced_tool_choice(request) -> bool:
-    """Return True iff the chat template should inject a forced tool-call
-    prefix into the prompt. Two recognized triggers:
-
-    1. ``request.tool_choice`` is a named-tool choice (pydantic model with
-       ``type == "function"``). Plain ``"required"`` does NOT trigger.
-    2. ``request.chat_template_kwargs.options.tool_choice.mode == "force"``.
-    """
-    if request is None:
-        return False
-
-    tool_choice = getattr(request, "tool_choice", None)
-    # Named-tool choices are pydantic ``ChatCompletionNamedToolChoiceParam``
-    # objects (``type == "function"``); plain string values such as
-    # ``"required"`` / ``"auto"`` / ``"none"`` are skipped here.
-    if not isinstance(tool_choice, str) and getattr(tool_choice, "type", None) == "function":
-        return True
-
-    chat_template_kwargs = getattr(request, "chat_template_kwargs", None) or {}
-    options = chat_template_kwargs.get("options") if isinstance(chat_template_kwargs, dict) else None
-    inner = options.get("tool_choice") if isinstance(options, dict) else None
-    if isinstance(inner, dict) and inner.get("mode") == "force":
-        return True
-    return False
-
-
 class BaseTextProcessor(ABC):
     """Abstract base class shared by all text / VL processors.
 
@@ -369,10 +343,9 @@ class BaseTextProcessor(ABC):
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 parser_input = full_text
-                if _is_forced_tool_choice(request):
-                    self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
-                    if tool_parser._tool_prefix:
-                        parser_input = tool_parser._tool_prefix + full_text
+                self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
+                if tool_parser._tool_prefix:
+                    parser_input = tool_parser._tool_prefix + full_text
                 tool_call_info = tool_parser.extract_tool_calls(parser_input, request)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
@@ -433,26 +406,25 @@ class BaseTextProcessor(ABC):
             stream_previous_token_ids = previous_token_ids
             stream_current_token_ids = previous_token_ids + token_ids
             stream_delta_token_ids = token_ids
-            if _is_forced_tool_choice(request):
-                self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
-                prefix = tool_parser._tool_prefix
-                prefix_ids = tool_parser._tool_prefix_token_ids
-                # Splice the injected prefix back into both text and token-id
-                # streaming args so parsers that gate on either form (e.g.
-                # ``Ernie45VLThinkingToolParser`` checks
-                # ``tool_call_start_token_id in current_token_ids``) work
-                # unchanged. ``delta_*`` only spliced on the first call.
-                if prefix:
-                    stream_previous = prefix + stream_previous
-                    stream_current = prefix + stream_current
+            self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
+            prefix = tool_parser._tool_prefix
+            prefix_ids = tool_parser._tool_prefix_token_ids
+            # Splice the injected prefix back into both text and token-id
+            # streaming args so parsers that gate on either form (e.g.
+            # ``Ernie45VLThinkingToolParser`` checks
+            # ``tool_call_start_token_id in current_token_ids``) work
+            # unchanged. ``delta_*`` only spliced on the first call.
+            if prefix:
+                stream_previous = prefix + stream_previous
+                stream_current = prefix + stream_current
+                if prefix_ids:
+                    stream_previous_token_ids = list(prefix_ids) + list(stream_previous_token_ids)
+                    stream_current_token_ids = list(prefix_ids) + list(stream_current_token_ids)
+                if not tool_parser._tool_prefix_injected_to_delta:
+                    stream_delta = prefix + stream_delta
                     if prefix_ids:
-                        stream_previous_token_ids = list(prefix_ids) + list(stream_previous_token_ids)
-                        stream_current_token_ids = list(prefix_ids) + list(stream_current_token_ids)
-                    if not tool_parser._tool_prefix_injected_to_delta:
-                        stream_delta = prefix + stream_delta
-                        if prefix_ids:
-                            stream_delta_token_ids = list(prefix_ids) + list(stream_delta_token_ids)
-                        tool_parser._tool_prefix_injected_to_delta = True
+                        stream_delta_token_ids = list(prefix_ids) + list(stream_delta_token_ids)
+                    tool_parser._tool_prefix_injected_to_delta = True
             tool_call_delta_message = tool_parser.extract_tool_calls_streaming(
                 stream_previous,
                 stream_current,

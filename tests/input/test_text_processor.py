@@ -573,7 +573,7 @@ class TextProcessorTestCase(unittest.TestCase):
         }
 
         processed = processor.process_response_dict(
-            response, stream=False, request=SimpleNamespace(tool_choice="none")
+            response, stream=False, request=SimpleNamespace(chat_template_kwargs=None)
         )
         self.assertEqual(processed["outputs"]["reasoning_content"], "think")
         self.assertEqual(processed["outputs"]["tool_calls"], ["tool"])
@@ -602,7 +602,7 @@ class TextProcessorTestCase(unittest.TestCase):
         }
 
         result = processor.process_response_dict_streaming(
-            response, enable_thinking=True, request=SimpleNamespace(tool_choice="none")
+            response, enable_thinking=True, request=SimpleNamespace(chat_template_kwargs=None)
         )
         self.assertEqual(result["outputs"]["completion_tokens"], "7")
         self.assertEqual(result["outputs"]["text"], "tool-text")
@@ -622,7 +622,7 @@ class TextProcessorTestCase(unittest.TestCase):
         }
 
         result = processor.process_response_dict_normal(
-            response, enable_thinking=True, request=SimpleNamespace(tool_choice="none")
+            response, enable_thinking=True, request=SimpleNamespace(chat_template_kwargs=None)
         )
         self.assertEqual(result["outputs"]["completion_tokens"], "7")
         self.assertEqual(result["outputs"]["reasoning_content"], "because")
@@ -761,72 +761,6 @@ class TextProcessorTestCase(unittest.TestCase):
         self.assertEqual(processor.update_bad_words(["combo", "oversize"], []), [])
 
 
-class IsForcedToolChoiceTest(unittest.TestCase):
-    """Tests for the module-level ``_is_forced_tool_choice`` helper.
-
-    The helper takes a request-like object (something with ``tool_choice``
-    and ``chat_template_kwargs`` attributes) and returns whether the chat
-    template will inject a tool-call prefix.
-    """
-
-    def setUp(self):
-        from fastdeploy.input import base_processor
-
-        self._is_forced = base_processor._is_forced_tool_choice
-
-    def _req(self, *, tool_choice=None, chat_template_kwargs=None):
-        return SimpleNamespace(
-            tool_choice=tool_choice,
-            chat_template_kwargs=chat_template_kwargs,
-        )
-
-    def test_string_tool_choice_never_forces(self):
-        # Plain string tool_choice values do NOT cause the chat template to
-        # inject a tool-call prefix, even when the value is ``"required"``.
-        self.assertFalse(self._is_forced(self._req(tool_choice="required")))
-        self.assertFalse(self._is_forced(self._req(tool_choice="auto")))
-        self.assertFalse(self._is_forced(self._req(tool_choice="none")))
-        self.assertFalse(self._is_forced(self._req(tool_choice="")))
-
-    def test_pydantic_named_tool_choice(self):
-        named = SimpleNamespace(type="function", function=SimpleNamespace(name="f"))
-        self.assertTrue(self._is_forced(self._req(tool_choice=named)))
-
-    def test_pydantic_other_type(self):
-        self.assertFalse(self._is_forced(self._req(tool_choice=SimpleNamespace(type="other"))))
-        self.assertFalse(self._is_forced(self._req(tool_choice=SimpleNamespace())))
-
-    def test_no_tool_choice_no_options(self):
-        self.assertFalse(self._is_forced(self._req()))
-
-    def test_chat_template_options_force_mode(self):
-        kwargs = {
-            "options": {
-                "tool_choice": {"mode": "force", "name": "get_current_weather"},
-            }
-        }
-        self.assertTrue(self._is_forced(self._req(chat_template_kwargs=kwargs)))
-
-    def test_chat_template_options_non_force_mode(self):
-        kwargs = {"options": {"tool_choice": {"mode": "auto"}}}
-        self.assertFalse(self._is_forced(self._req(chat_template_kwargs=kwargs)))
-
-    def test_chat_template_options_missing_tool_choice(self):
-        self.assertFalse(self._is_forced(self._req(chat_template_kwargs={"options": {}})))
-        self.assertFalse(self._is_forced(self._req(chat_template_kwargs={})))
-
-    def test_chat_template_options_malformed(self):
-        # Non-dict options/inner must be tolerated (no crash, returns False).
-        self.assertFalse(self._is_forced(self._req(chat_template_kwargs={"options": "x"})))
-        self.assertFalse(self._is_forced(self._req(chat_template_kwargs={"options": {"tool_choice": "x"}})))
-
-    def test_tool_choice_takes_priority_over_options(self):
-        kwargs = {"options": {"tool_choice": {"mode": "force"}}}
-        # Named-tool pydantic choice combined with options.force still forces.
-        named = SimpleNamespace(type="function", function=SimpleNamespace(name="f"))
-        self.assertTrue(self._is_forced(self._req(tool_choice=named, chat_template_kwargs=kwargs)))
-
-
 class _RecordingToolParser:
     """Minimal tool parser that records inputs and exposes the prefix-state
     fields the serving layer reads/writes."""
@@ -885,8 +819,9 @@ class _RecordingToolParser:
 
 class ToolPrefixCompensationTest(unittest.TestCase):
     """Tests for the forced-tool-call prefix compensation logic in
-    ``BaseTextProcessor`` (named-tool ``tool_choice`` and
-    ``chat_template_kwargs.options.tool_choice.mode == "force"``)."""
+    ``BaseTextProcessor``. Splicing is driven entirely by whether the
+    rendered prompt ends with an unclosed tool-call start token, not by
+    request parameter introspection."""
 
     def setUp(self):
         module, cleanup = _import_text_processor()
@@ -928,7 +863,9 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         self.assertTrue(parser._tool_prefix_computed)
         self.assertEqual(parser._tool_prefix, "")
 
-    def test_normal_path_splices_prefix_when_required(self):
+    def test_normal_path_splices_prefix_when_prompt_has_prefix(self):
+        """Prompt ending with an unclosed tool-call start triggers splicing,
+        regardless of how the user requested it."""
         processor = self.processor
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
         processor.tool_parser_obj = self._make_parser_factory(parser)
@@ -938,14 +875,9 @@ class ToolPrefixCompensationTest(unittest.TestCase):
             "finished": True,
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
-        # Named-tool pydantic choice triggers prefix injection.
-        request = SimpleNamespace(
-            tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")),
-        )
-
         processor.process_response_dict_normal(
             response,
-            request=request,
+            request=SimpleNamespace(chat_template_kwargs=None),
             prompt_tokens="user msg\n<tool_call>",
         )
         self.assertEqual(len(parser.extract_calls), 1)
@@ -953,7 +885,8 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         self.assertTrue(parser.extract_calls[0].startswith("<tool_call>"))
         self.assertEqual(response["outputs"]["tool_calls"], ["tc"])
 
-    def test_normal_path_no_splice_when_not_required(self):
+    def test_normal_path_no_splice_when_prompt_lacks_prefix(self):
+        """No prefix in prompt tail => detect returns "" => no splice."""
         processor = self.processor
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
         processor.tool_parser_obj = self._make_parser_factory(parser)
@@ -963,70 +896,20 @@ class ToolPrefixCompensationTest(unittest.TestCase):
             "finished": True,
             "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
         }
-        request = SimpleNamespace(tool_choice="auto")
-
         processor.process_response_dict_normal(
             response,
-            request=request,
-            prompt_tokens="user msg\n<tool_call>",
+            request=SimpleNamespace(chat_template_kwargs=None),
+            prompt_tokens="user msg without sentinel",
         )
-        # detect_tool_prefix must NOT be called for non-forced choices.
-        self.assertEqual(parser.detect_calls, [])
+        # detect_tool_prefix is called, but returns "" => no prefix prepended.
+        self.assertEqual(len(parser.detect_calls), 1)
         self.assertFalse(parser.extract_calls[0].startswith("<tool_call>"))
-
-    def test_normal_path_named_tool_choice_pydantic(self):
-        """A pydantic ``ChatCompletionNamedToolChoiceParam`` (duck-typed via
-        ``type='function'``) must also trigger prefix splicing."""
-        processor = self.processor
-        parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
-        processor.tool_parser_obj = self._make_parser_factory(parser)
-
-        response = {
-            "request_id": "req-named",
-            "finished": True,
-            "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
-        }
-        request = SimpleNamespace(tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")))
-
-        processor.process_response_dict_normal(
-            response,
-            request=request,
-            prompt_tokens="user msg\n<tool_call>",
-        )
-        self.assertTrue(parser.extract_calls[0].startswith("<tool_call>"))
-
-    def test_normal_path_chat_template_force_mode(self):
-        """Forcing through ``chat_template_kwargs.options.tool_choice.mode``
-        must also trigger prefix splicing even when ``tool_choice`` is unset
-        (the default ``"none"``)."""
-        processor = self.processor
-        parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
-        processor.tool_parser_obj = self._make_parser_factory(parser)
-
-        response = {
-            "request_id": "req-cti",
-            "finished": True,
-            "outputs": {"token_ids": [7, processor.tokenizer.eos_token_id]},
-        }
-        request = SimpleNamespace(
-            tool_choice="none",
-            chat_template_kwargs={"options": {"tool_choice": {"mode": "force", "name": "get_current_weather"}}},
-        )
-
-        processor.process_response_dict_normal(
-            response,
-            request=request,
-            prompt_tokens="user msg\n<tool_call>",
-        )
-        self.assertTrue(parser.extract_calls[0].startswith("<tool_call>"))
 
     def test_streaming_path_splices_prefix_only_on_first_delta(self):
         processor = self.processor
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
         processor.tool_parser_obj = self._make_parser_factory(parser)
-        request = SimpleNamespace(
-            tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")),
-        )
+        request = SimpleNamespace(chat_template_kwargs=None)
         prompt_tokens = "user msg\n<tool_call>"
 
         # First chunk
@@ -1070,12 +953,11 @@ class ToolPrefixCompensationTest(unittest.TestCase):
 
     def test_streaming_path_no_splice_when_no_prefix_detected(self):
         processor = self.processor
-        # Empty configured prefix => detect returns "" even when forced.
+        # Empty configured prefix => detect returns "" even when prompt looks
+        # like a forced rendering.
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="")
         processor.tool_parser_obj = self._make_parser_factory(parser)
-        request = SimpleNamespace(
-            tool_choice=SimpleNamespace(type="function", function=SimpleNamespace(name="f")),
-        )
+        request = SimpleNamespace(chat_template_kwargs=None)
 
         first = {
             "finished": False,
