@@ -583,8 +583,7 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         request.task_type = RequestType.PREFILL
         request.prefill_start_index = 4
         request.prefill_end_index = 5
-        batch_request = BatchRequest()
-        batch_request.add_request(request)
+        batch_request = [request]
 
         with patch.object(envs, "FD_CONSOLE_SCHEDULER_METRICS", True):
             manager._log_console_scheduler_metrics(batch_request)
