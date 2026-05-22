@@ -34,6 +34,20 @@ def _reset_cuda_generator_for_determinism():
     paddle.framework.core.default_cuda_generator(0).manual_seed(_DETERMINISTIC_RNG_SEED)
 
 
+def dispatch_top_k_renorm_probs(probs, top_k):
+    try:
+        if current_platform.is_iluvatar():
+            from fastdeploy.model_executor.ops.iluvatar import top_k_renorm_probs
+        else:
+            from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
+        probs = top_k_renorm_probs(probs, top_k)
+
+    except ImportError:
+        logger.warning("top_k sampling is not supported on current platform, skipping top_k filtering.")
+
+    return probs
+
+
 def top_k_top_p_sampling(
     x: paddle.Tensor,
     top_p: paddle.Tensor,
@@ -85,16 +99,7 @@ def top_k_top_p_sampling(
         _ = None
     else:
         if top_k_list and any(x > 0 for x in top_k_list):
-            try:
-                if current_platform.is_iluvatar():
-                    from fastdeploy.model_executor.ops.iluvatar import (
-                        top_k_renorm_probs,
-                    )
-                else:
-                    from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
-                x = top_k_renorm_probs(x, top_k)
-            except ImportError:
-                logger.warning("top_k sampling is not supported on current platform, skipping top_k filtering.")
+            x = dispatch_top_k_renorm_probs(x, top_k)
 
         if top_p_class == "air":
             _, ids = air_top_p_sampling(x, top_p, threshold, topp_seed, seed=seed, k=k, mode=mode)

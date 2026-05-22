@@ -40,6 +40,7 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
+    dispatch_top_k_renorm_probs,
     min_p_sampling,
     reasoning_phase_token_constraint,
     speculate_insert_first_token,
@@ -591,9 +592,7 @@ class Sampler(nn.Layer):
             need_top_p_sampling = any(p != 1.0 for p in top_p_list)
         if not need_top_p_sampling:
             if need_top_k_sampling:
-                from fastdeploy.model_executor.ops.gpu import top_k_renorm_probs
-
-                probs = top_k_renorm_probs(probs, sampling_metadata.top_k)
+                probs = dispatch_top_k_renorm_probs(probs, sampling_metadata.top_k)
             next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
         else:
             _, next_tokens = top_k_top_p_sampling(
