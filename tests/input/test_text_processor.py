@@ -884,8 +884,9 @@ class _RecordingToolParser:
 
 
 class ToolPrefixCompensationTest(unittest.TestCase):
-    """Tests for the ``tool_choice=required`` prefix compensation logic in
-    ``BaseTextProcessor``."""
+    """Tests for the forced-tool-call prefix compensation logic in
+    ``BaseTextProcessor`` (named-tool ``tool_choice`` and
+    ``chat_template_kwargs.options.tool_choice.mode == "force"``)."""
 
     def setUp(self):
         module, cleanup = _import_text_processor()
@@ -1059,12 +1060,11 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         self.assertEqual(second_call["previous_text"], "<tool_call>7")
         self.assertEqual(second_call["current_text"], "<tool_call>78")
         self.assertEqual(second_call["delta_text"], "8")  # no extra prefix splice
+        # ``is_end=True`` causes the eos token to be stripped before ids2tokens,
+        # so token_ids fed to the parser is just [8].
         self.assertEqual(second_call["previous_token_ids"], prefix_ids + [7])
-        self.assertEqual(
-            second_call["current_token_ids"],
-            prefix_ids + [7, 8, processor.tokenizer.eos_token_id],
-        )
-        self.assertEqual(second_call["delta_token_ids"], [8, processor.tokenizer.eos_token_id])
+        self.assertEqual(second_call["current_token_ids"], prefix_ids + [7, 8])
+        self.assertEqual(second_call["delta_token_ids"], [8])
         # detect should only run once across the whole stream.
         self.assertEqual(len(parser.detect_calls), 1)
 

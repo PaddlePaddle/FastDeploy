@@ -58,17 +58,12 @@ _SAMPLING_EPS = 1e-5
 
 
 def _is_forced_tool_choice(request) -> bool:
-    """Return True iff the request asks the chat template to inject a
-    tool-call prefix into the prompt. Two ways are recognized:
+    """Return True iff the chat template should inject a forced tool-call
+    prefix into the prompt. Two recognized triggers:
 
-    1. ``request.tool_choice`` is a named-tool choice (a
-       ``ChatCompletionNamedToolChoiceParam`` pydantic model with
-       ``type == "function"``). The plain ``"required"`` string does NOT
-       trigger prefix injection in the chat template.
-    2. ``request.chat_template_kwargs.options.tool_choice.mode == "force"``
-       — used by chat templates that drive forced tool calls through their
-       own ``options`` dict instead of the OpenAI-style ``tool_choice``
-       field.
+    1. ``request.tool_choice`` is a named-tool choice (pydantic model with
+       ``type == "function"``). Plain ``"required"`` does NOT trigger.
+    2. ``request.chat_template_kwargs.options.tool_choice.mode == "force"``.
     """
     if request is None:
         return False
@@ -169,6 +164,28 @@ class BaseTextProcessor(ABC):
             )
         return tokens["input_ids"][0]
 
+    def _text_to_token_ids(self, text: str) -> list:
+        """Encode ``text`` to a ``list[int]``, shared by :meth:`messages2ids`
+        and :meth:`_prepare_tool_prefix`.
+
+        ``ernie4_5`` tokenizer hangs on long inputs via ``.encode()``, so it
+        goes through ``tokenize`` + ``convert_tokens_to_ids``. Other tokenizers
+        use ``.encode()`` and the result is normalized to a plain list.
+        """
+        if self.tokenizer_type == "ernie4_5":
+            # NOTE: ernie4_5 tokenizer will hang when meet long input when use .encode()
+            return self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(text))
+        token_ids = self.tokenizer.encode(text, add_special_tokens=False)
+        if hasattr(token_ids, "input_ids") or (isinstance(token_ids, dict) and "input_ids" in token_ids):
+            token_ids = token_ids["input_ids"]
+            if hasattr(token_ids, "ndim") and token_ids.ndim > 1:
+                token_ids = token_ids[0]
+        if hasattr(token_ids, "tolist"):
+            token_ids = token_ids.tolist()
+        if not isinstance(token_ids, list):
+            token_ids = list(token_ids)
+        return token_ids
+
     def messages2ids(self, request, **kwargs):
         """Convert a chat-template request into a token-ID list.
 
@@ -190,19 +207,7 @@ class BaseTextProcessor(ABC):
         )
         request["prompt_tokens"] = spliced_message
         req_id = request.get("request_id", None) if isinstance(request, dict) else None
-        if self.tokenizer_type == "ernie4_5":
-            # NOTE: ernie4_5 tokenizer will hang when meet long input when use .encode()
-            token_ids = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(spliced_message))
-        else:
-            token_ids = self.tokenizer.encode(spliced_message, add_special_tokens=False)
-            if hasattr(token_ids, "input_ids") or (isinstance(token_ids, dict) and "input_ids" in token_ids):
-                token_ids = token_ids["input_ids"]
-                if hasattr(token_ids, "ndim") and token_ids.ndim > 1:
-                    token_ids = token_ids[0]
-            if hasattr(token_ids, "tolist"):
-                token_ids = token_ids.tolist()
-            if not isinstance(token_ids, list):
-                token_ids = list(token_ids)
+        token_ids = self._text_to_token_ids(spliced_message)
         log_request(
             level=1,
             message="req_id:{req_id}, token_ids: {token_ids}",
@@ -264,12 +269,13 @@ class BaseTextProcessor(ABC):
                 self.decode_status[task_id] = [0, 0, [], ""]
             status = self.decode_status[task_id]
             previous_texts = status[3]
+            previous_token_ids = list(status[2])
             status[2].extend(token_id)
             decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(status[2], status[0], status[1])
             status[0] = prefix_offset
             status[1] = read_offset
             status[3] += decode_str
-            return decode_str, status[2], previous_texts
+            return decode_str, previous_token_ids, previous_texts
 
     # ------------------------------------------------------------------
     # Response processing
@@ -298,17 +304,10 @@ class BaseTextProcessor(ABC):
             return self.process_response_dict_normal(response_dict, **kwargs)
 
     def _prepare_tool_prefix(self, tool_parser, prompt_tokens):
-        """Compute and cache on ``tool_parser`` the tool-call prefix that the
-        chat template may have injected at the tail of the rendered prompt
-        (e.g. for ``tool_choice=required``).
-
-        ``prompt_tokens`` is the rendered-prompt string passed in by the
-        serving layer (see ``response_processors.process_response_chat``).
-        The detection itself is delegated to the parser
-        (:meth:`ToolParser.detect_tool_prefix`) so each parser controls
-        which sentinel tokens it recognizes. We compute once per parser
-        instance — for non-streaming a fresh instance is created per request,
-        for streaming the instance is cached per ``request_id``.
+        """Detect and cache on ``tool_parser`` the tool-call prefix that the
+        chat template injected at the tail of ``prompt_tokens`` (the rendered
+        prompt string from the serving layer). Computed once per parser
+        instance via the parser's :meth:`ToolParser.detect_tool_prefix`.
         """
         if tool_parser._tool_prefix_computed:
             return
@@ -330,7 +329,7 @@ class BaseTextProcessor(ABC):
         # ``tool_call_start_token_id in current_token_ids`` rather than on
         # text (e.g. ``Ernie45VLThinkingToolParser``).
         try:
-            tool_parser._tool_prefix_token_ids = list(self.tokenizer.encode(prefix, add_special_tokens=False))
+            tool_parser._tool_prefix_token_ids = self._text_to_token_ids(prefix)
         except Exception:
             data_processor_logger.exception("encode tool prefix to token ids failed; token-id splice disabled")
             tool_parser._tool_prefix_token_ids = []
@@ -438,15 +437,11 @@ class BaseTextProcessor(ABC):
                 self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
                 prefix = tool_parser._tool_prefix
                 prefix_ids = tool_parser._tool_prefix_token_ids
-                # When the chat template injected a forced tool-call prefix into
-                # the prompt, the model output starts mid-tool-call. We splice
-                # the prefix back into both the text and token-id streaming
-                # arguments so parsers that gate on either form (e.g.
+                # Splice the injected prefix back into both text and token-id
+                # streaming args so parsers that gate on either form (e.g.
                 # ``Ernie45VLThinkingToolParser`` checks
-                # ``tool_call_start_token_id in current_token_ids``) see a
-                # complete sequence and their existing state machines work
-                # unchanged. The ``delta_*`` forms only need the splice on the
-                # first call so the parser's start detection fires once.
+                # ``tool_call_start_token_id in current_token_ids``) work
+                # unchanged. ``delta_*`` only spliced on the first call.
                 if prefix:
                     stream_previous = prefix + stream_previous
                     stream_current = prefix + stream_current

@@ -36,9 +36,10 @@ class ToolParser:
 
     # Subclasses should override these with the literal tool-call sentinel
     # tokens they recognize (e.g. ``"<tool_call>"`` / ``"</tool_call>"``).
-    # Used by :meth:`detect_tool_prefix` to support ``tool_choice=required``
-    # style prompt-prefix injection. Empty defaults make the detection a no-op
-    # for parsers that have not opted in.
+    # Used by :meth:`detect_tool_prefix` to support forced tool-call prompt
+    # prefix injection (named-tool ``tool_choice`` or
+    # ``chat_template_kwargs.options.tool_choice.mode == "force"``). Empty
+    # defaults make the detection a no-op for parsers that have not opted in.
     tool_call_start_token: str = ""
     tool_call_end_token: str = ""
 
@@ -75,7 +76,8 @@ class ToolParser:
 
     def detect_tool_prefix(self, prompt: str) -> str:
         """Detect a tool-call prefix that the chat template injected at the tail
-        of the rendered prompt to force tool output (``tool_choice=required``).
+        of the rendered prompt to force tool output (named-tool ``tool_choice``
+        or ``chat_template_kwargs.options.tool_choice.mode == "force"``).
 
         The check is generic: find the **last** occurrence of
         :attr:`tool_call_start_token` in ``prompt`` and, if it is **not** closed
