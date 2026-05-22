@@ -1350,11 +1350,12 @@ class PrefixCacheManager:
         blocks_to_recycle = list(node.reverved_dec_block_ids) + [node.block_id]
         if not defer_recycle:
             self.recycle_gpu_blocks(blocks_to_recycle)
-            logger.info(f"_handle_free_gpu_node_without_cpu: recycle blocks for node {node.node_id}, {blocks_to_recycle}")
+            logger.info(
+                f"_handle_free_gpu_node_without_cpu: recycle blocks for node {node.node_id}, {blocks_to_recycle}"
+            )
             return []
         else:
             return blocks_to_recycle
-
 
     def _handle_free_gpu_node_with_cpu(
         self,
@@ -1467,17 +1468,21 @@ class PrefixCacheManager:
                                 key = node.input_hash_value
                                 if key not in hash_value_flush_info or node.depth < hash_value_flush_info[key][1]:
                                     hash_value_flush_info[key] = (node.input_ids, node.depth)
-                            blocks_deferred_to_recycle.extend(self._handle_free_gpu_node_without_cpu(node, defer_recycle=True))
+                            blocks_deferred_to_recycle.extend(
+                                self._handle_free_gpu_node_without_cpu(node, defer_recycle=True)
+                            )
                             total_gpu_free_count += 1
 
                             # Disconnect node from its parent node
                             parent = node.parent
                             if node.hash_value in parent.children:
                                 del parent.children[node.hash_value]
-                            
+
                             if not parent.children:
                                 if parent in self.gpu_lru_leaf_set:
-                                    logger.warning(f"Node {parent.node_id} is already in gpu lru leaf heap, duplicated node free may occured!")
+                                    logger.warning(
+                                        f"Node {parent.node_id} is already in gpu lru leaf heap, duplicated node free may occured!"
+                                    )
                                     continue
                                 if (
                                     parent != self.radix_tree_root
@@ -1488,7 +1493,9 @@ class PrefixCacheManager:
                                     heapq.heappush(self.gpu_lru_leaf_heap, parent)
                                     self.gpu_lru_leaf_set.add(parent)
                         else:
-                            logger.warning(f"Node {node.node_id} popped out of gpu lru leaf heap, but its shared count is not zero.")
+                            logger.warning(
+                                f"Node {node.node_id} popped out of gpu lru leaf heap, but its shared count is not zero."
+                            )
                             continue
                     else:
                         if node.shared_count == 0 and node.is_gpu_leaf_node:
@@ -1522,7 +1529,9 @@ class PrefixCacheManager:
 
                 if blocks_deferred_to_recycle:
                     self.recycle_gpu_blocks(blocks_deferred_to_recycle)
-                    logger.info(f"free_block_ids_async: deferred recycling {len(blocks_deferred_to_recycle)} blocks, {blocks_deferred_to_recycle}")
+                    logger.info(
+                        f"free_block_ids_async: deferred recycling {len(blocks_deferred_to_recycle)} blocks, {blocks_deferred_to_recycle}"
+                    )
 
                 if (
                     envs.FD_AS_ONLY_FLUSH
