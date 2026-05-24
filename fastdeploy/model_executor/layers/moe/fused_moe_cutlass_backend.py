@@ -446,7 +446,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 gate_out = gate_out.cast("float32")
             if fc1_latent_proj is not None:
                 x = fc1_latent_proj(x)
-            gate_out, _, __ = get_moe_scores(
+            gate_out, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
