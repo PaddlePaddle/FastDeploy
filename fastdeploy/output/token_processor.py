@@ -774,10 +774,10 @@ class TokenProcessor:
         mtype = 3
         if self.cfg.speculative_config.method:
             if self.use_logprobs:
-                # meta[1] packs message_flag (low 8 bits) and actual_topk (high 16 bits).
+                # meta[1] packs message_flag (low 8 bits) and actual_topk (high 24 bits).
                 packed_meta1 = int(self.output_tokens[1, 0].item())
                 mtype = packed_meta1 & 0xFF
-                actual_topk = (packed_meta1 >> 8) & 0xFFFF
+                actual_topk = packed_meta1 >> 8
                 batch = self.output_tokens[2, 0]
                 accept_num = [int(num[0]) for num in self.output_tokens[3 : batch + 3]]
                 tokens = tokens[3 + MAX_BSZ : 3 + MAX_BSZ + batch * MAX_DRAFT_TOKENS * (K + 1)].reshape(

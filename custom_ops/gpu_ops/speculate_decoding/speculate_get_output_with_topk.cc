@@ -75,11 +75,11 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
 
   int bsz = msg_rcv.meta[2];
   output_tokens_data[0] = (int64_t)msg_rcv.meta[0];
-  // Unpack message_flag (low 8 bits) and actual_topk (high 16 bits) from
+  // Unpack message_flag (low 8 bits) and actual_topk (high 24 bits) from
   // meta[1]. Keep packed value; Python unpacks message_flag and actual_topk.
   output_tokens_data[1] = (int64_t)msg_rcv.meta[1];
   output_tokens_data[2] = (int64_t)msg_rcv.meta[2];
-  int actual_topk = (msg_rcv.meta[1] >> 8) & 0xFFFF;
+  int actual_topk = msg_rcv.meta[1] >> 8;
 
   int output_tokens_offset = 3 + SPEC_LOGPROB_MAX_BSZ;
   for (int i = 0; i < bsz; i++) {
