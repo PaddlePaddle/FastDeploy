@@ -386,6 +386,14 @@ DLL_EXPORT int limit_thinking_content_length_kernel_v2(
     const int64_t line_break_id,
     const int bs);
 
+template <typename T>
+DLL_EXPORT int top_k_renorm_probs(api::Context* ctx,
+                                  const T* probs,
+                                  T* renorm_probs,
+                                  const int64_t* top_k,
+                                  int batch_size,
+                                  int vocab_size);
+
 /*--------------------------------------- MTP being
  * --------------------------------------------*/
 
