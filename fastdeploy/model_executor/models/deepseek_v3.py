@@ -1105,6 +1105,12 @@ class DeepSeekV3DecoderLayer(nn.Layer):
         residual: paddle.Tensor,
     ):
         """ """
+        need_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
+        need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
+
+        if not need_do_prefill and not need_do_decode:
+            return hidden_states, residual
+
         if hidden_states.shape[0] > 0:
             hidden_states, residual = self.input_layernorm(
                 hidden_states, residual_input=residual, forward_meta=forward_meta
