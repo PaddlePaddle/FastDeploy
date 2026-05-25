@@ -101,6 +101,7 @@ class Request:
         multimodal_data: Optional[dict] = None,
         disable_chat_template: bool = False,
         disaggregate_info: Optional[dict] = None,
+        disable_prefix_caching: bool = False,
         draft_token_ids: Optional[list[int]] = None,
         guided_json: Optional[Any] = None,
         guided_regex: Optional[Any] = None,
@@ -156,6 +157,7 @@ class Request:
         self.eos_token_ids = eos_token_ids
         self.disable_chat_template = disable_chat_template
         self.disaggregate_info = disaggregate_info
+        self.disable_prefix_caching = disable_prefix_caching
 
         # prefix caching related
         self.num_cached_tokens = 0
@@ -318,6 +320,7 @@ class Request:
             metrics=metrics,
             guided_json_object=guided_json_object,
             disaggregate_info=getattr(req, "disaggregate_info", None),
+            disable_prefix_caching=getattr(req, "disable_prefix_caching", False),
             guided_json=getattr(req, "guided_json", None),
             guided_regex=getattr(req, "guided_regex", None),
             guided_choice=getattr(req, "guided_choice", None),
@@ -423,6 +426,7 @@ class Request:
             multimodal_data=d.get("multimodal_data"),
             disable_chat_template=d.get("disable_chat_template"),
             disaggregate_info=d.get("disaggregate_info"),
+            disable_prefix_caching=d.get("disable_prefix_caching", False),
             draft_token_ids=d.get("draft_token_ids"),
             guided_json=d.get("guided_json", None),
             guided_regex=d.get("guided_regex", None),
@@ -508,6 +512,7 @@ class Request:
             "multimodal_data": self.multimodal_data,
             "disable_chat_template": self.disable_chat_template,
             "disaggregate_info": self.disaggregate_info,
+            "disable_prefix_caching": self.disable_prefix_caching,
             "draft_token_ids": self.draft_token_ids,
             "enable_thinking": self.enable_thinking,
             "reasoning_max_tokens": self.reasoning_max_tokens,

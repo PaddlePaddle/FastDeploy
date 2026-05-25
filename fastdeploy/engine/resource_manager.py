@@ -161,6 +161,9 @@ class ResourceManager:
             if self.available_block_num() < self.cfg.max_block_num_per_seq:
                 self.free_block_tables(self.cfg.max_block_num_per_seq)
 
+    def _enable_prefix_cache_for_request(self, task):
+        return self.enable_prefix_cache and not getattr(task, "disable_prefix_caching", False)
+
     def _recycle_block_tables(self, task):
         """
         Recycling memory resource blocks
@@ -169,7 +172,7 @@ class ResourceManager:
             block_tables (list): block list
         """
 
-        if self.enable_prefix_cache:
+        if self._enable_prefix_cache_for_request(task):
             self.cache_manager.release_block_ids_async(task)
         else:
             req_id = task.request_id
@@ -255,7 +258,7 @@ class ResourceManager:
                     task.set("seed", random.randint(0, 9223372036854775807))
                 task.idx = allocated_position
 
-                if self.enable_prefix_cache:  # if prefix caching is enabled
+                if self._enable_prefix_cache_for_request(task):  # if prefix caching is enabled
                     # 1. request for enough blocks for current task
                     cache_prepare_time = time.time()
                     common_block_ids, unique_block_ids, hit_info = self.cache_manager.request_block_ids(
