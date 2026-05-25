@@ -105,7 +105,8 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
 #ifdef SPECULATE_GET_WITH_OUTPUT_DEBUG
   std::cout << "msg data: " << std::endl;
   std::cout << "stop_flag: " << output_tokens_data[0]
-            << ", message_flag: " << output_tokens_data[1]
+            << ", message_flag: " << (output_tokens_data[1] & 0xFF)
+            << ", max_num_logprobs: " << (output_tokens_data[1] >> 8)
             << ", bsz: " << output_tokens_data[2] << std::endl;
   for (int i = 0; i < output_tokens_data[2]; i++) {
     int cur_token_num = output_tokens_data[3 + i];

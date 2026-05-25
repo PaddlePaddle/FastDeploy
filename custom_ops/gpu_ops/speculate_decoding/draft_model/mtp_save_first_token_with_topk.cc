@@ -171,7 +171,8 @@ void MTPSaveFirstTokenWithTopK(const paddle::Tensor& sampled_token_ids,
 #ifdef SPECULATE_SAVE_WITH_OUTPUT_DEBUG
   std::cout << "msg data: " << std::endl;
   std::cout << "stop_flag: " << msg_sed.meta[0]
-            << ", message_flag: " << msg_sed.meta[1]
+            << ", message_flag: " << (msg_sed.meta[1] & 0xFF)
+            << ", max_num_logprobs: " << (msg_sed.meta[1] >> 8)
             << ", bsz: " << msg_sed.meta[2] << std::endl;
   for (int i = 0; i < bsz; i++) {
     int cur_token_num = msg_sed.meta[3 + i];
