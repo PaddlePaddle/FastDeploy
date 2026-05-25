@@ -42,6 +42,7 @@ class SamplingMetadata:
     step_idx: paddle.Tensor
 
     top_p: paddle.Tensor
+    top_p_list: Optional[list] = None
     # only GPU used
     bad_words_token_len: Optional[paddle.Tensor] = None
     top_k: Optional[paddle.Tensor] = None

@@ -121,6 +121,7 @@ class InputBatch:
         )
         self.eos_token_id = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.top_p = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        self.top_p_list = [self.model_config.top_p] * max_num_seqs
         self.top_k = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.top_k_list = [0] * max_num_seqs
         self.min_p = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
@@ -396,6 +397,7 @@ class InputBatch:
         # swap_data(self.recompute_token_num, i1, i2)
 
         # # Swap list-based arrays (lists don't need clone)
+        self.top_p_list[i1], self.top_p_list[i2] = self.top_p_list[i2], self.top_p_list[i1]
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
         self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
 
@@ -547,6 +549,7 @@ class InputBatch:
             fill_paddle_tensor(self, "top_p_normalized_logprobs", False)
 
             # Reset list variables (not paddle tensors)
+            self.top_p_list = [self.model_config.top_p] * max_num_seqs
             self.top_k_list = [0] * max_num_seqs
             self.min_p_list = [0.0] * max_num_seqs
 

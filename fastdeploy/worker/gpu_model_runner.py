@@ -992,6 +992,7 @@ class GPUModelRunner(ModelRunnerBase):
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
+            self.share_inputs["top_p_list"][idx] = request.get("top_p", 0.7)
             self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             async_set_value(self.share_inputs["eos_token_id"][:], request.eos_token_ids)
@@ -1287,6 +1288,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
+            top_p_list=self.share_inputs["top_p_list"],
             top_k=self.share_inputs["top_k"],
             top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
