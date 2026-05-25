@@ -1296,7 +1296,6 @@ class GPUModelRunner(ModelRunnerBase):
         token_num, real_bsz = self._resolve_current_launch_token_num(
             cached_token_num, cached_real_bsz, token_num_event, is_dummy_or_profile_run
         )
-        print("self.share_inputs[input_ids] ", self.share_inputs["input_ids"])
         (
             ids_remove_padding,
             batch_id_per_token,
@@ -1314,7 +1313,6 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["seq_lens_encoder"],
             self.share_inputs["seq_lens_decoder"],
         )
-        print("ids_remove_padding", ids_remove_padding)
         self.share_inputs["ids_remove_padding"].copy_(ids_remove_padding, False)
         # NOTE: (changwenbin) Initialized to max_num_seq '-1' before copying, marking illegal positions
         self.share_inputs["batch_id_per_token"][:] = -1
@@ -2502,7 +2500,6 @@ class GPUModelRunner(ModelRunnerBase):
     def _execute(self, model_inputs: Dict[str, paddle.Tensor]) -> None:
         model_output = None
         if model_inputs is not None and len(model_inputs) > 0:
-            print("model_inputs", model_inputs)
             model_output = self.model(
                 model_inputs,
                 self.forward_meta,

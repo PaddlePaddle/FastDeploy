@@ -157,7 +157,6 @@ class FastDeployAttention(FleetLayer):
             v = squeeze_to_3d(value, "value")
 
             if is_mla:
-                # 同时兼容 CUDA Graph 和非 CUDA Graph 模式
                 need_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
                 need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
 
@@ -294,6 +293,9 @@ class PaddleFleetModelBase(nn.Layer):
         self.paddleformers_config.tensor_model_parallel_size = parallel_config.tensor_parallel_size
         self.paddleformers_config.sequence_parallel = parallel_config.sequence_parallel
         self.paddleformers_config.expert_model_parallel_size = parallel_config.expert_parallel_size
+        # if parallel_config.expert_parallel_size > 1 and parallel_config.sequence_parallel == False:
+        #     self.paddleformers_config.tensor_model_parallel_size = 1
+        #     logger.warning("When using expert parallelism and tensor parallelism, sequence parallelism must be used in fleet set tp=1 .")
         self.paddleformers_config.parallel_output = self.paddleformers_config.tensor_model_parallel_size == 1
         self.paddleformers_config.max_seq_len = self.model_config.max_model_len
         self.paddleformers_config.params_dtype = "bfloat16"

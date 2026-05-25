@@ -304,9 +304,6 @@ class ModelConfig:
         self.is_unified_ckpt = check_unified_ckpt(self.model)
         self.runner_type = self._get_runner_type(self.architectures, self.runner)
         self.convert_type = self._get_convert_type(self.architectures, self.runner_type, self.convert)
-        print("self.architectures ", self.architectures)
-        print("self.runner_type ", self.runner_type)
-        print("self.convert_type ", self.convert_type)
         registry = self.registry
         is_generative_model = registry.is_text_generation_model(self.architectures, self)
         is_pooling_model = registry.is_pooling_model(self.architectures, self)
