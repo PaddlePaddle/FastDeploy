@@ -307,6 +307,19 @@ class FusedMoE(nn.Layer):
             tp_size={self.tp_size}."
         )
 
+    def _load_in_scale_weight(self, param, expert_id, loaded_weight):
+        # only spport ernie now
+        expert_param = param[expert_id - self.expert_id_offset]
+        loaded_weight = get_tensor(loaded_weight)
+        if len(expert_param.shape) != len(loaded_weight.shape):
+            loaded_weight = loaded_weight.reshape(expert_param.shape)
+        assert expert_param.shape == loaded_weight.shape, (
+            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({expert_param.shape})"
+        )
+        if expert_param.dtype != loaded_weight.dtype:
+            loaded_weight = loaded_weight.cast(expert_param.dtype)
+        param[expert_id - self.expert_id_offset].copy_(loaded_weight, False)
+
     def weight_loader(
         self,
         param,
@@ -338,6 +351,11 @@ class FusedMoE(nn.Layer):
 
         if weight_need_transpose:
             loaded_weight = loaded_weight.transpose([1, 0])
+
+        if SHARD_ID_TO_SHARDED_DIM["gate"] is None and SHARD_ID_TO_SHARDED_DIM["up"] is None:
+            # in scale
+            self._load_in_scale_weight(param, expert_id, loaded_weight)
+            return
 
         if shard_id is None:
             # 1.gate up fused in disk

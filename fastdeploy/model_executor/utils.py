@@ -16,6 +16,7 @@
 
 import importlib
 import importlib.util
+import math
 import os
 import re
 from collections.abc import Mapping
@@ -357,8 +358,8 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
-        if param.shape != loaded_weight.shape:
-            # for e_score_correction_bias
+        if param.shape != loaded_weight.shape and math.prod(param.shape) == math.prod(loaded_weight.shape):
+            # for e_score_correction_bias and kv cache scale
             loaded_weight = loaded_weight.reshape(param.shape)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
@@ -439,7 +440,7 @@ def v1_loader_support(fd_config):
         if current_platform.is_cuda():
             return {"w4a8", "wint2"}
         elif current_platform.is_xpu():
-            return {"w4a8", "w8a8"}
+            return {"w8a8"}
         return set()
 
     def _err_msg(msg: str) -> str:
@@ -543,6 +544,10 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         ckpt_weight_suffix: "weight",
         ckpt_act_suffix: "in_scale",
     }
+    w4a8_suffix_map = {
+        ckpt_weight_suffix: "weight",
+        ckpt_act_suffix: "in_scale",
+    }
     moe_quant_type = ""
     dense_quant_type = ""
     if fd_config.quant_config is not None:
@@ -560,8 +565,14 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         fd_suffix_map = {}
         if (is_moe and moe_quant_type == "block_wise_fp8") or (not is_moe and dense_quant_type == "block_wise_fp8"):
             fd_suffix_map = fp8_suffix_map
-        if (is_moe and moe_quant_type == "tensor_wise_fp8") or (not is_moe and dense_quant_type == "tensor_wise_fp8"):
+        elif (is_moe and moe_quant_type == "tensor_wise_fp8") or (
+            not is_moe and dense_quant_type == "tensor_wise_fp8"
+        ):
             fd_suffix_map = tensor_wise_fp8_suffix_map
+        elif is_moe and moe_quant_type in ("w4a8", "w4afp8"):
+            fd_suffix_map = w4a8_suffix_map
+        else:
+            fd_suffix_map = {}
         for ckpt_suffix, fd_suffix in fd_suffix_map.items():
             if re.search(rf"{ckpt_suffix}$", loaded_weight_name):
                 loaded_weight_name = loaded_weight_name.replace(ckpt_suffix, fd_suffix)
