@@ -16,10 +16,14 @@ jobs:
   clone:
     environment: CodeSync
     name: FD-Clone-Linux
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     outputs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Clone FastDeploy
         uses: actions/checkout@v6
         with:
@@ -64,8 +68,12 @@ jobs:
   resultshow:
     name: Show Code Archive Output
     needs: clone
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Print wheel path
         run: |
           echo "The code archive is located at: ${{ needs.clone.outputs.repo_archive_url }}"

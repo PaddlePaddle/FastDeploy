@@ -18,7 +18,8 @@ on:
 jobs:
   check-bypass:
     name: Check bypass
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     permissions:
       contents: read
     env:
