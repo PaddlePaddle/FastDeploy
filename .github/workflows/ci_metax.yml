@@ -18,8 +18,7 @@ concurrency:
 jobs:
   trigger-jenkins:
     name: Trigger Jenkins for PR
-    runs-on:
-      group: GZ_BD-CPU
+    runs-on: [self-hosted, XPU-P800]
     environment: Metax_ci
 
     steps:
