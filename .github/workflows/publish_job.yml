@@ -19,7 +19,8 @@ concurrency:
 
 jobs:
   publish_pre_check:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     if: |
       github.event.repository.fork == false &&
       (
@@ -40,6 +41,9 @@ jobs:
       compile_use_paddle_whl_url: ${{ steps.set_output.outputs.compile_use_paddle_whl_url }}
 
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Get tag version
         if: github.ref_type == 'tag'
         run: |
@@ -108,9 +112,13 @@ jobs:
           echo "with_nightly_build=${with_nightly_build:-OFF}" >> $GITHUB_OUTPUT
 
   print_publish_pre_check_outputs:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     needs: publish_pre_check
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Print outputs as JSON
         run: |
           echo '${{ toJSON(needs.publish_pre_check.outputs) }}'
@@ -118,12 +126,16 @@ jobs:
   clone:
     environment: CodeSync
     name: FD-Clone-Linux
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     needs: publish_pre_check
     if: ${{ needs.publish_pre_check.outputs.compile_continue == 'true' }}
     outputs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Clone FastDeploy
         uses: actions/checkout@v6
         with:
@@ -168,8 +180,12 @@ jobs:
   resultshow:
     name: Show Code Archive Output
     needs: clone
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Print wheel path
         run: |
           echo "The code archive is located at: ${{ needs.clone.outputs.repo_archive_url }}"
@@ -235,12 +251,16 @@ jobs:
     environment: CodeSync
     name: CE_UPLOAD_FD_ROUTER
     needs: build_fd_router
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
       FD_ROUTER_URL: ${{ needs.build_fd_router.outputs.fd_router_path }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
@@ -291,12 +311,16 @@ jobs:
     environment: PaddleSourceUpload
     name: PADDLE_PYPI_UPLOAD_cu126
     needs: build_cu126
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu126.outputs.wheel_path }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
@@ -323,12 +347,16 @@ jobs:
     environment: PaddleSourceUpload
     name: PADDLE_PYPI_UPLOAD_cu129
     needs: build_cu129
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu129.outputs.wheel_path_cu129 }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
@@ -355,12 +383,16 @@ jobs:
     environment: PaddleSourceUpload
     name: PADDLE_PYPI_UPLOAD_cu130
     needs: build_cu130
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_cu130.outputs.wheel_path_cu130 }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
