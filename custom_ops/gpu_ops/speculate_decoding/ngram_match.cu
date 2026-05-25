@@ -215,13 +215,14 @@ __global__ void ngram_match_gather_kernel(
       }
     }
 
-    // === Pad seq_lens_this_time to K+1 for cudagraph stability ===
-    // Variable seq_lens_this_time (range [1, K+1]) clashes with cudagraph's
-    // fixed launch params captured at warm-up time; downstream kernels read
-    // past valid cu_seqlens / slot_mapping when replay sees a smaller slt,
-    // leading to OOB / CUDA 700. When pad_to_max=true (cudagraph enabled),
-    // pad missing positions with a placeholder so slt is fixed at K+1.
-    // pad_to_max=false skips the padding cost when cudagraph is off.
+    // === Pad seq_lens_this_time to num_speculative_tokens+1 for cudagraph
+    // stability === Variable seq_lens_this_time (range [1,
+    // num_speculative_tokens+1]) clashes with cudagraph's fixed launch params
+    // captured at warm-up time; downstream kernels read past valid cu_seqlens /
+    // slot_mapping when replay sees a smaller slt, leading to OOB / CUDA 700.
+    // When pad_to_max=true (cudagraph enabled), pad missing positions with a
+    // placeholder so slt is fixed at num_speculative_tokens+1. pad_to_max=false
+    // skips the padding cost when cudagraph is off.
     if (pad_to_max) {
       int target_slt = max_draft_tokens_param + 1;
       if (actual < target_slt) {
