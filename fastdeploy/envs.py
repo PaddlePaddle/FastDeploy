@@ -288,7 +288,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to enable FP8 quantization with pow2scale.
     "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
     # Whether to enable top_p=1.0 optimization.
-    "FD_ENABLE_TOP_P_ONE_OPT": lambda: bool(int(os.getenv("FD_ENABLE_TOP_P_ONE_OPT", "1"))),
+    "FD_ENABLE_TOP_P_ONE_OPT": lambda: bool(int(os.getenv("FD_ENABLE_TOP_P_ONE_OPT", "0"))),
 }
 
 
