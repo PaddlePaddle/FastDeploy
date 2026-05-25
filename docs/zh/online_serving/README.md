@@ -209,6 +209,9 @@ prompt_token_ids: Optional[List[int]] = None
 disable_chat_template: Optional[bool] = False
 # 是否禁用聊天模板渲染，直接使用原始输入（默认 False 表示启用模板）。
 
+disable_prefix_caching: Optional[bool] = False
+# 是否对当前请求禁用 prefix caching，包括跳过 prefix cache 匹配、写入和释放等复用缓存流程（默认 False 表示按全局 prefix caching 配置执行）。
+
 temp_scaled_logprobs: Optional[bool] = False
 # 计算logprob时是否对logits除以温度系数（默认 False 表示不除以温度系数）。
 

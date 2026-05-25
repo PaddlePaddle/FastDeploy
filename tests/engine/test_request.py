@@ -32,7 +32,12 @@ from fastdeploy.engine.request import (
     SamplingParams,
     StructuralTagResponseFormat,
 )
-from fastdeploy.entrypoints.openai.protocol import ResponseFormat, StructuralTag
+from fastdeploy.entrypoints.openai.protocol import (
+    ChatCompletionRequest,
+    CompletionRequest,
+    ResponseFormat,
+    StructuralTag,
+)
 
 
 class TestRequestInit(unittest.TestCase):
@@ -60,6 +65,7 @@ class TestRequestInit(unittest.TestCase):
         self.assertEqual(request.num_cached_blocks, 0)
         self.assertFalse(request.disable_chat_template)
         self.assertIsNone(request.disaggregate_info)
+        self.assertFalse(request.disable_prefix_caching)
 
         # Test multi-modal defaults
         self.assertIsNone(request.multimodal_inputs)
@@ -102,6 +108,7 @@ class TestRequestInit(unittest.TestCase):
             eos_token_ids=[0],
             disable_chat_template=True,
             disaggregate_info={"key": "value"},
+            disable_prefix_caching=True,
             draft_token_ids=[4, 5],
             guided_json={"schema": "test"},
             guided_regex="test.*",
@@ -152,6 +159,7 @@ class TestRequestInit(unittest.TestCase):
 
         # Test boolean parameters
         self.assertTrue(request.disable_chat_template)
+        self.assertTrue(request.disable_prefix_caching)
         self.assertTrue(request.guided_json_object)
         self.assertTrue(request.enable_thinking)
         self.assertTrue(request.add_generation_prompt)
@@ -277,6 +285,7 @@ class TestRequestClassMethods(unittest.TestCase):
         mock_generic_request.prompt_token_ids = [1, 2, 3]
         mock_generic_request.messages = [{"role": "user", "content": "Hello"}]
         mock_generic_request.disable_chat_template = True
+        mock_generic_request.disable_prefix_caching = True
         mock_generic_request.tools = [Mock()]
         mock_generic_request.tools[0].model_dump.return_value = {"name": "test_tool"}
         mock_generic_request.suffix = {"test": "value"}
@@ -298,6 +307,7 @@ class TestRequestClassMethods(unittest.TestCase):
             self.assertEqual(request.prompt_token_ids, [1, 2, 3])
             self.assertEqual(request.messages, [{"role": "user", "content": "Hello"}])
             self.assertTrue(request.disable_chat_template)
+            self.assertTrue(request.disable_prefix_caching)
             self.assertEqual(request.tools, [{"name": "test_tool"}])
             self.assertIsInstance(request.metrics, RequestMetrics)
 
@@ -320,6 +330,7 @@ class TestRequestClassMethods(unittest.TestCase):
             "multimodal_data": {"images": ["img1"]},
             "disable_chat_template": True,
             "disaggregate_info": {"key": "value"},
+            "disable_prefix_caching": True,
             "draft_token_ids": [4, 5],
             "guided_json": {"schema": "test"},
             "guided_regex": "test.*",
@@ -363,6 +374,25 @@ class TestRequestClassMethods(unittest.TestCase):
         # Test metrics creation
         self.assertIsInstance(request.metrics, RequestMetrics)
         self.assertEqual(request.metrics.arrival_time, 1000.0)
+        self.assertTrue(request.disable_prefix_caching)
+
+    def test_openai_protocol_disable_prefix_caching(self):
+        """Test disable_prefix_caching defaults and request dict propagation."""
+        completion = CompletionRequest(model="test", prompt="hello")
+        self.assertFalse(completion.disable_prefix_caching)
+        self.assertFalse(completion.to_dict_for_infer("req-1")["disable_prefix_caching"])
+
+        completion = CompletionRequest(model="test", prompt="hello", disable_prefix_caching=True)
+        self.assertTrue(completion.to_dict_for_infer("req-2")["disable_prefix_caching"])
+
+        chat = ChatCompletionRequest(model="test", messages=[{"role": "user", "content": "hello"}])
+        self.assertFalse(chat.disable_prefix_caching)
+        self.assertFalse(chat.to_dict_for_infer("req-3")["disable_prefix_caching"])
+
+        chat = ChatCompletionRequest(
+            model="test", messages=[{"role": "user", "content": "hello"}], disable_prefix_caching=True
+        )
+        self.assertTrue(chat.to_dict_for_infer("req-4")["disable_prefix_caching"])
 
 
 class TestRequestInstanceMethods(unittest.TestCase):
@@ -396,6 +426,7 @@ class TestRequestInstanceMethods(unittest.TestCase):
         request.prompt = "Hello"
         request.prompt_token_ids = [1, 2, 3]
         request.prompt_token_ids_len = 3
+        request.disable_prefix_caching = True
         request.sampling_params = SamplingParams()
         request.metrics = RequestMetrics()
         request.metrics.prompt_token_ids_len = 3
@@ -406,6 +437,7 @@ class TestRequestInstanceMethods(unittest.TestCase):
         self.assertEqual(data["prompt"], "Hello")
         self.assertEqual(data["prompt_token_ids"], [1, 2, 3])
         self.assertEqual(data["prompt_token_ids_len"], 3)
+        self.assertTrue(data["disable_prefix_caching"])
 
     def test_to_dict_with_multimodal(self):
         """Test to_dict with multimodal inputs"""
