@@ -14,7 +14,8 @@ concurrency:
 
 jobs:
   ce_job_pre_check:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       COMPILE_BRANCH: ${{ vars.COMPILE_BRANCH }}
       CE_COMPILE_SELECTION: ${{ vars.CE_COMPILE_SELECTION }}
@@ -26,6 +27,9 @@ jobs:
       sm8090_match: ${{ steps.set_output.outputs.sm8090_match }}
 
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Set Version
         id: set_output
         env:
@@ -78,9 +82,13 @@ jobs:
           done
 
   print_ce_job_pre_check_outputs:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     needs: ce_job_pre_check
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Print outputs as JSON
         run: |
           echo '${{ toJSON(needs.ce_job_pre_check.outputs) }}'
@@ -89,12 +97,16 @@ jobs:
   clone:
     environment: CodeSync
     name: FD-Clone-Linux
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     needs: ce_job_pre_check
     if: ${{ needs.ce_job_pre_check.outputs.branch_match == 'true' }}
     outputs:
       repo_archive_url: ${{ steps.set_output.outputs.repo_archive_url }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Clone FastDeploy
         uses: actions/checkout@v6
         with:
@@ -154,8 +166,12 @@ jobs:
   resultshow:
     name: Show Code Archive Output
     needs: clone
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Print repo_archive_url path
         run: |
           echo "The code archive is located at: ${{ needs.clone.outputs.repo_archive_url }}"
@@ -207,13 +223,17 @@ jobs:
     environment: CodeSync
     name: CE_UPLOAD
     needs: build_sm8090
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090.outputs.wheel_path }}
       COMPILE_ARCH: "80,90"
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
@@ -257,13 +277,17 @@ jobs:
     environment: CodeSync
     name: CE_UPLOAD_RL
     needs: build_sm8090_rl
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8090_rl.outputs.wheel_path_rl }}
       COMPILE_ARCH: "80,90"
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
@@ -303,13 +327,17 @@ jobs:
     environment: CodeSync
     name: CE_UPLOAD
     needs: build_sm8689
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       AK: ${{ secrets.BOS_AK }}
       SK: ${{ secrets.BOS_SK }}
       FASTDEPLOY_WHEEL_URL: ${{ needs.build_sm8689.outputs.wheel_path }}
       COMPILE_ARCH: "86,89"
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - uses: actions/setup-python@v6
         with:
           python-version: '3.10'
