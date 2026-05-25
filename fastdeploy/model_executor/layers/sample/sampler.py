@@ -323,6 +323,7 @@ def _extract_sparse_indices(
     """
     return [indices_window_cpu[i, mask_window_cpu[i]] for i in range(real_bsz)]
 
+
 def _sample_from_probs(probs, sampling_metadata, top_p=None, top_k=None, topp_seed=None):
     """Sample next tokens from probability distributions with optional top-k and top-p filtering.
 
@@ -372,6 +373,7 @@ def _sample_from_probs(probs, sampling_metadata, top_p=None, top_k=None, topp_se
             topp_seed=topp_seed,
         )
     return next_tokens
+
 
 class GuidedDecoding:
     """
