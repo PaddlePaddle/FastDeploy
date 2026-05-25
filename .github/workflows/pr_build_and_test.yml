@@ -32,8 +32,12 @@ jobs:
   resultshow:
     name: Use Build Output
     needs: build
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Print wheel path
         run: |
           echo "The built wheel is located at: ${{ needs.build.outputs.wheel_path }}"
