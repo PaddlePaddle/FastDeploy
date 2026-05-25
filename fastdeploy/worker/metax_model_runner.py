@@ -123,8 +123,8 @@ class MetaxModelRunner(ModelRunnerBase):
         self.exist_prefill_flag = False
 
         if self.speculative_decoding:
-            self._real_output_token_num_host = paddle.empty([1], dtype="int32").pin_memory()
-            self.output_token_num_event = paddle.device.cuda.Event()
+            self._real_output_token_num_host = paddle.empty([1], dtype="int32")
+            self.output_token_num_event = paddle.device.Event()
 
         # VL model config:
         if self.enable_mm:

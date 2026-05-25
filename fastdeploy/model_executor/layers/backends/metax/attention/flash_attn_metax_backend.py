@@ -27,11 +27,11 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.ops.gpu import (
-    flash_attn_varlen_forward,
     flash_attn_kvcache_forward,
-    write_cache_kv_with_rope,
+    flash_attn_varlen_forward,
     rotary_position_embedding,
     write_cache_kv,
+    write_cache_kv_with_rope,
 )
 
 FA_SPLIT_ENABLED = envs.FD_METAX_ENABLE_FA_SPLIT
@@ -199,8 +199,8 @@ class MetaxFlashAttentionBackend(AttentionBackend):
         prefill_prefix_kv_lens = self.prefill_prefix_kv_lens_buffer[: num_prefills + 1]
         decode_cache_seq_lens = self.decode_cache_seq_lens_buffer[:num_decodes]
 
-        request_seq_lens_this_time = seq_lens_this_time[request_batch_ids].squeeze(-1)
-        request_seq_lens_decoder = seq_lens_decoder[request_batch_ids].squeeze(-1)
+        request_seq_lens_this_time = seq_lens_this_time[request_batch_ids].reshape([-1])
+        request_seq_lens_decoder = seq_lens_decoder[request_batch_ids].reshape([-1])
         request_seq_lens = request_seq_lens_decoder + request_seq_lens_this_time
 
         request_block_tables.copy_(block_tables[request_batch_ids])
@@ -273,8 +273,8 @@ class MetaxFlashAttentionBackend(AttentionBackend):
         num_requests = request_batch_ids.shape[0]
         num_actual_tokens = ids_remove_padding.shape[0]
 
-        request_seq_lens_this_time = seq_lens_this_time[request_batch_ids, 0]
-        request_seq_lens_decoder = seq_lens_decoder[request_batch_ids, 0]
+        request_seq_lens_this_time = seq_lens_this_time[request_batch_ids].reshape([-1])
+        request_seq_lens_decoder = seq_lens_decoder[request_batch_ids].reshape([-1])
         request_seq_lens = request_seq_lens_decoder + request_seq_lens_this_time
 
         request_block_tables = self.block_tables_buffer[:num_requests]

@@ -320,14 +320,24 @@ class InputBatch:
             )
             self.cu_batch_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
             # For mtp overlap
-            self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
-            self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
-            self.accept_tokens_cpu = paddle.full(
-                shape=[max_num_seqs, max_draft_token_num + 1],
-                fill_value=0,
-                dtype="int64",
-            ).pin_memory()
-            self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
+            if current_platform.is_maca():
+                self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+                self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64")
+                self.accept_tokens_cpu = paddle.full(
+                    shape=[max_num_seqs, max_draft_token_num + 1],
+                    fill_value=0,
+                    dtype="int64",
+                )
+                self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32")
+            else:
+                self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+                self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
+                self.accept_tokens_cpu = paddle.full(
+                    shape=[max_num_seqs, max_draft_token_num + 1],
+                    fill_value=0,
+                    dtype="int64",
+                ).pin_memory()
+                self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
         if self.enable_mm:
             head_dim = self.model_config.head_dim
             if (
