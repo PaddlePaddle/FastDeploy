@@ -121,7 +121,7 @@ void SpeculateSaveOutMmsgTopK(const paddle::Tensor& sampled_token_ids,
   msg_sed.mtype = 1;
   msg_sed.meta[0] = not_need_stop.data<bool>()[0] ? inference_msg_id_from_env
                                                   : -inference_msg_id_from_env;
-  // Pack message_flag (low 8 bits) and max_num_logprobs (high 16 bits) into
+  // Pack message_flag (low 8 bits) and max_num_logprobs (high 24 bits) into
   // meta[1]. Receiver unpacks both to avoid reading unused topk slots.
   int max_num_logprobs = logprob_token_ids.shape()[1];
   msg_sed.meta[1] = message_flag | (max_num_logprobs << 8);
