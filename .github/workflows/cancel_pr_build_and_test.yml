@@ -12,8 +12,12 @@ concurrency:
 jobs:
   cancel:
     name: Cancel PR Build and Test for ${{ github.event.pull_request.number }}
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Cancel PR Build and Test
         run: |
           exit 0
