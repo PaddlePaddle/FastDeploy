@@ -27,6 +27,7 @@ import numpy as np
 import paddle
 import zmq
 from paddle import nn
+from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
@@ -63,12 +64,9 @@ from fastdeploy.model_executor.xpu_pre_and_post_process import (
     xpu_process_output,
 )
 from fastdeploy.spec_decode import SpecMethod
-from fastdeploy.utils import get_logger
 from fastdeploy.worker.input_batch import InputBatch
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
-
-logger = get_logger("xpu_model_runner", "xpu_model_runner.log")
 
 
 @contextmanager
@@ -1310,8 +1308,6 @@ class XPUModelRunner(ModelRunnerBase):
             if not self.not_need_stop() and not is_dummy_run:
                 self._execute_empty_input(self.forward_meta)
                 return None
-
-            # 2. Padding inputs for cuda grph
 
             model_inputs = {}
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
