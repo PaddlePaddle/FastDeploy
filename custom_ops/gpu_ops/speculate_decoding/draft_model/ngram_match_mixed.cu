@@ -216,20 +216,21 @@ __global__ void ngram_match_mixed_gather_kernel(
       }
     }
 
-    // === Pad seq_lens_this_time to K+1 for cudagraph stability ===
-    // Hybrid MTP-ngram produces variable seq_lens_this_time depending on how
-    // many ngram positions hit (range: [num_model_steps+1, K+1]). cudagraph
-    // captures launch params (grid dim, kernel args) at capture time; if the
-    // captured slt differs from replay-time slt, downstream kernels read past
-    // valid ranges of cu_seqlens / slot_mapping etc., causing CUDA 700.
+    // === Pad seq_lens_this_time to num_speculative_tokens+1 for cudagraph
+    // stability === Hybrid MTP-ngram produces variable seq_lens_this_time
+    // depending on how many ngram positions hit (range: [num_model_steps+1,
+    // num_speculative_tokens+1]). cudagraph captures launch params (grid dim,
+    // kernel args) at capture time; if the captured slt differs from
+    // replay-time slt, downstream kernels read past valid ranges of cu_seqlens
+    // / slot_mapping etc., causing CUDA 700.
     //
-    // When pad_to_max=true (cudagraph enabled), force slt = K+1 =
-    // max_draft_tokens + 1: positions beyond actual ngram hits get padded
-    // with a placeholder token. The target model will verify these
-    // placeholders and (almost always) reject them, but the verify cost is
-    // fixed per iteration => grid dim is now invariant. When pad_to_max=
-    // false (cudagraph disabled), keep the natural variable slt to avoid
-    // wasting verify compute on placeholders.
+    // When pad_to_max=true (cudagraph enabled), force slt =
+    // num_speculative_tokens+1 = max_draft_tokens + 1: positions beyond actual
+    // ngram hits get padded with a placeholder token. The target model will
+    // verify these placeholders and (almost always) reject them, but the verify
+    // cost is fixed per iteration => grid dim is now invariant. When
+    // pad_to_max= false (cudagraph disabled), keep the natural variable slt to
+    // avoid wasting verify compute on placeholders.
     if (pad_to_max) {
       int target_slt = max_draft_tokens_param + 1;
       if (actual < target_slt) {

@@ -75,6 +75,7 @@ class TestNgramMatchMixed(unittest.TestCase):
         self.ref_draft_tokens = np.array([[8, 7, 6, 10, 9, 8], [8, 7, 6, 10, 9, 8]], dtype="int64")
 
     def test_ngram_match_mixed(self):
+        """pad_to_max=False: GPU output matches the CPU reference baseline."""
         hybrid_mtp_ngram(
             self.token_ids_all,
             self.prompt_lens,
@@ -93,6 +94,50 @@ class TestNgramMatchMixed(unittest.TestCase):
 
         np.testing.assert_allclose(self.seq_lens_this_time.numpy(), self.ref_seq_lens_this_time)
         np.testing.assert_allclose(self.draft_tokens.numpy(), self.ref_draft_tokens)
+
+    def test_ngram_match_mixed_pad_to_max(self):
+        """pad_to_max=True: slt is forced to K+1 and unfilled draft slots are
+        padded with the last valid draft token (placeholder for cudagraph
+        stability).
+
+        To exercise the pad path we drive step_idx below min_ngram_size so
+        the search kernel finds no ngram match. Without pad, slt stays at
+        ori_seq_len_this_time=2; with pad, slt becomes max_draft_tokens+1=6
+        and draft_tokens[2:6] are filled with draft_tokens[1] (=7).
+        """
+        # No ngram match path: step_idx < min_ngram_size short-circuits search.
+        self.step_idx[:] = self.min_ngram_size - 1
+
+        hybrid_mtp_ngram(
+            self.token_ids_all,
+            self.prompt_lens,
+            self.pre_ids,
+            self.step_idx,
+            self.draft_token_num,
+            self.draft_tokens,
+            self.seq_lens_this_time,
+            self.seq_lens_decoder,
+            self.max_dec_len,
+            self.max_ngram_size,
+            self.min_ngram_size,
+            self.max_draft_tokens,
+            True,  # pad_to_max
+        )
+
+        target_slt = self.max_draft_tokens + 1  # K+1 = 6
+        slt = self.seq_lens_this_time.numpy()
+        assert (slt == target_slt).all(), f"expected all slt == {target_slt}, got {slt.flatten().tolist()}"
+
+        # ori_seq_len_this_time was 2; positions [2..6) should be padded with
+        # draft_tokens[1] (= 7, the last valid draft token before padding).
+        drafts = self.draft_tokens.numpy()
+        expected_placeholder = 7
+        for b in range(self.max_bsz):
+            np.testing.assert_array_equal(
+                drafts[b, 2:target_slt],
+                np.full(target_slt - 2, expected_placeholder, dtype="int64"),
+                err_msg=f"batch {b}: padded slots [2:{target_slt}) should equal placeholder {expected_placeholder}",
+            )
 
 
 if __name__ == "__main__":

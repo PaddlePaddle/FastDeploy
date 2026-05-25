@@ -365,6 +365,7 @@ class TestNgramMatchKernel(unittest.TestCase):
             gpu_data["max_dec_len"],
             max_ngram_size,
             max_draft_tokens,
+            False,
         )
         paddle.device.synchronize()
 
@@ -395,6 +396,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                     data["max_dec_len"],
                     3,
                     10,
+                    False,
                 )
                 gpu_data = _to_gpu(data)
                 self.ngram_match(
@@ -409,6 +411,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                     gpu_data["max_dec_len"],
                     3,
                     10,
+                    False,
                 )
                 paddle.device.synchronize()
                 np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
@@ -456,6 +459,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                 gpu_data["max_dec_len"],
                 3,
                 10,
+                False,
             )
             paddle.device.synchronize()
         finally:
@@ -485,6 +489,7 @@ class TestNgramMatchKernel(unittest.TestCase):
             data["max_dec_len"],
             3,
             10,
+            False,
         )
         gpu_data = _to_gpu(data)
         self.ngram_match(
@@ -499,6 +504,7 @@ class TestNgramMatchKernel(unittest.TestCase):
             gpu_data["max_dec_len"],
             3,
             10,
+            False,
         )
         paddle.device.synchronize()
         np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
@@ -542,6 +548,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                 gpu_data["max_dec_len"],
                 3,
                 10,
+                False,
             )
             paddle.device.synchronize()
         finally:
@@ -569,6 +576,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                 d["max_dec_len"],
                 3,
                 10,
+                False,
             )
         paddle.device.synchronize()
 
@@ -591,6 +599,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                 gpu_data["max_dec_len"],
                 3,
                 10,
+                False,
             )
             paddle.device.synchronize()
         t1 = time.perf_counter()
@@ -641,6 +650,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                     gpu_data["max_dec_len"],
                     3,
                     10,
+                    False,
                 )
             paddle.device.synchronize()
 
@@ -660,6 +670,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                     gpu_data["max_dec_len"],
                     3,
                     10,
+                    False,
                 )
                 paddle.device.synchronize()
             gpu_ms = (time.perf_counter() - t0) / n_runs * 1000
@@ -742,6 +753,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                         gpu_data["max_dec_len"],
                         3,
                         10,
+                        False,
                     )
                 paddle.device.synchronize()
 
@@ -761,6 +773,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                         gpu_data["max_dec_len"],
                         3,
                         10,
+                        False,
                     )
                     paddle.device.synchronize()
                 t1 = time.perf_counter()
