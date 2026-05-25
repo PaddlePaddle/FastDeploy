@@ -8,7 +8,7 @@ deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy main restricted universe 
 deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-updates main restricted universe multiverse \n\
 deb https://mirrors.tuna.tsinghua.edu.cn/ubuntu/ jammy-backports main restricted universe multiverse" > /etc/apt/sources.list
 
-RUN apt-get update && apt-get install -y libibverbs-dev librdmacm-dev cmake pybind11-dev
+RUN apt-get update && apt-get install -y libibverbs-dev librdmacm-dev cmake pybind11-dev ffmpeg
 
 # uninstall existing package
 RUN python -m pip uninstall paddlepaddle-gpu paddlepaddle-xpu fastdeploy-xpu -y
