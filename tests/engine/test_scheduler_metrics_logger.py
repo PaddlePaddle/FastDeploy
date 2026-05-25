@@ -32,7 +32,7 @@ def test_on_decode_tokens_accumulates():
 
 
 def test_log_prefill_batch_logs_expected_message():
-    logger = SchedulerMetricsLogger(enabled=True, dp_rank=2)
+    logger = SchedulerMetricsLogger(enabled=True, dp_rank=2, splitwise_role="prefill")
     logger._logger = mock.Mock()
 
     reqs = [
@@ -46,6 +46,7 @@ def test_log_prefill_batch_logs_expected_message():
     message = logger._logger.info.call_args[0][0]
     assert "Prefill batch" in message
     assert "dp_rank: 2" in message
+    assert "splitwise_role: prefill" in message
     assert "#new-seq: 2" in message
     assert "#new-token: 4" in message
     assert "#cached-token: 3" in message
@@ -54,8 +55,31 @@ def test_log_prefill_batch_logs_expected_message():
     assert "#queue-req: 6" in message
 
 
+def test_log_decode_bootstrap_batch_logs_expected_message():
+    logger = SchedulerMetricsLogger(enabled=True, dp_rank=0, splitwise_role="decode")
+    logger._logger = mock.Mock()
+
+    reqs = [types.SimpleNamespace(prefill_start_index=4, prefill_end_index=5, num_cached_tokens=4)]
+
+    logger.log_decode_bootstrap_batch(
+        prefill_reqs=reqs,
+        running_cnt=1,
+        queue_cnt=0,
+        tokens_used=5,
+        token_usage=0.25,
+    )
+
+    logger._logger.info.assert_called_once()
+    message = logger._logger.info.call_args[0][0]
+    assert "Decode bootstrap batch" in message
+    assert "splitwise_role: decode" in message
+    assert "#new-seq: 1" in message
+    assert "#new-token: 1" in message
+    assert "#cached-token: 4" in message
+
+
 def test_log_decode_batch_computes_throughput(monkeypatch):
-    logger = SchedulerMetricsLogger(enabled=True, dp_rank=1)
+    logger = SchedulerMetricsLogger(enabled=True, dp_rank=1, splitwise_role="decode")
     logger._logger = mock.Mock()
     logger._decode_batch_count = logger._decode_log_interval - 1
     logger._decode_tokens_since_last = 10
@@ -69,6 +93,7 @@ def test_log_decode_batch_computes_throughput(monkeypatch):
     message = logger._logger.info.call_args[0][0]
     assert "Decode batch" in message
     assert "dp_rank: 1" in message
+    assert "splitwise_role: decode" in message
     assert "gen throughput (token/s): 5.00" in message
     assert "#queue-req: 7" in message
     assert logger._decode_tokens_since_last == 0
@@ -99,3 +124,8 @@ def test_decode_log_interval_non_positive_falls_back_to_default(monkeypatch):
     monkeypatch.setenv("FD_CONSOLE_DECODE_LOG_INTERVAL", "0")
     logger = SchedulerMetricsLogger(enabled=True, dp_rank=0)
     assert logger._decode_log_interval == SchedulerMetricsLogger.DEFAULT_DECODE_LOG_INTERVAL
+
+
+def test_default_splitwise_role_is_mixed():
+    logger = SchedulerMetricsLogger(enabled=True, dp_rank=0)
+    assert logger.splitwise_role == "mixed"

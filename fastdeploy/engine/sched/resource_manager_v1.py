@@ -1759,15 +1759,26 @@ class ResourceManagerV1(ResourceManager):
         prefill_reqs = [r for r in scheduled_reqs if isinstance(r, Request) and r.task_type == RequestType.PREFILL]
         has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in scheduled_reqs)
 
-        self.scheduler_metrics_logger.log_prefill_batch(
-            prefill_reqs=prefill_reqs,
-            running_cnt=running_cnt,
-            queue_cnt=queue_cnt,
-            tokens_used=tokens_used,
-            token_usage=token_usage,
-            free_blocks=free_blocks,
-            evictable_blocks=evictable_blocks,
-        )
+        if self.config.scheduler_config.splitwise_role == "decode":
+            self.scheduler_metrics_logger.log_decode_bootstrap_batch(
+                prefill_reqs=prefill_reqs,
+                running_cnt=running_cnt,
+                queue_cnt=queue_cnt,
+                tokens_used=tokens_used,
+                token_usage=token_usage,
+                free_blocks=free_blocks,
+                evictable_blocks=evictable_blocks,
+            )
+        else:
+            self.scheduler_metrics_logger.log_prefill_batch(
+                prefill_reqs=prefill_reqs,
+                running_cnt=running_cnt,
+                queue_cnt=queue_cnt,
+                tokens_used=tokens_used,
+                token_usage=token_usage,
+                free_blocks=free_blocks,
+                evictable_blocks=evictable_blocks,
+            )
         if has_decode:
             has_prefill = len(prefill_reqs) > 0
             graph_opt_cfg = self.config.graph_opt_config
