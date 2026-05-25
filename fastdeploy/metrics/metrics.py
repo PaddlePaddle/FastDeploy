@@ -40,6 +40,7 @@ from fastdeploy.metrics.prometheus_multiprocess_setup import (
 )
 from fastdeploy.metrics.stats import ZMQMetricsStats
 from fastdeploy.spec_decode import SpecMethod
+from fastdeploy.utils import llm_logger
 
 
 class SimpleCollector(Collector):
@@ -687,6 +688,8 @@ class MetricsManager(MetricsManagerInterface):
         except (json.JSONDecodeError, TypeError):
             self._default_labelvalues = {}
         self._enable_labels = isinstance(self._default_labelvalues, dict) and len(self._default_labelvalues) > 0
+        if self._enable_labels:
+            llm_logger.info(f"Metric labels are enabled with default values: {self._default_labelvalues}")
 
         # 在模块加载，指标注册先设置Prometheus环境变量
         setup_multiprocess_prometheus()
