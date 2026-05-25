@@ -69,6 +69,7 @@ class TokenProcessor:
         self.cached_generated_tokens = cached_generated_tokens
         self.resource_manager = None
         self.scheduler_metrics_logger = None
+        self._benchmark_logger = None
         self.engine_worker_queue = engine_worker_queue
         self.tokens_counter = Counter()
         self.split_connector = split_connector
@@ -235,6 +236,9 @@ class TokenProcessor:
 
     def set_scheduler_metrics_logger(self, scheduler_metrics_logger):
         self.scheduler_metrics_logger = scheduler_metrics_logger
+
+    def set_benchmark_logger(self, benchmark_logger):
+        self._benchmark_logger = benchmark_logger
 
     def _is_decode_stage(self, task):
         if task is None:
@@ -1120,6 +1124,10 @@ class TokenProcessor:
         if hasattr(task, "last_token_time") and task.last_token_time is not None:
             token_gen_time = current_time - task.last_token_time
             main_process_metrics.time_per_output_token.observe(token_gen_time)
+            if self._benchmark_logger:
+                if not hasattr(task, "_itl_samples"):
+                    task._itl_samples = []
+                task._itl_samples.append(token_gen_time)
         task.last_token_time = current_time
 
         # Record generation metrics
@@ -1154,6 +1162,25 @@ class TokenProcessor:
         main_process_metrics.request_success_total.inc()
         main_process_metrics.request_inference_time.observe(current_time - metrics.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
+
+        if self._benchmark_logger:
+            from fastdeploy.metrics.benchmark_metrics_logger import (
+                CompletedRequestRecord,
+            )
+
+            record = CompletedRequestRecord(
+                request_id=task.request_id,
+                completion_time=current_time,
+                arrival_time=metrics.arrival_time or 0.0,
+                inference_start_time=metrics.inference_start_time or 0.0,
+                first_token_time=metrics.engine_recv_first_token_time or 0.0,
+                last_token_time=metrics.engine_recv_latest_token_time or current_time,
+                input_len=getattr(task, "prompt_token_ids_len", 0) or 0,
+                output_len=self.tokens_counter[task.request_id],
+                num_cached_tokens=getattr(task, "num_cached_tokens", 0) or 0,
+                itl_samples=getattr(task, "_itl_samples", []),
+            )
+            self._benchmark_logger.on_request_completed(record)
 
     def _record_speculative_decoding_metrics(self, accept_num):
         """Record metrics of speculative decoding"""

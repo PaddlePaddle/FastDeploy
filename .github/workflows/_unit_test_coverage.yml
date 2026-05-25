@@ -416,11 +416,15 @@ jobs:
   diff_coverage_report:
     needs: run_tests_with_coverage
     if: always()
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     timeout-minutes: 15
     env:
       all_cov_file_url: ${{ needs.run_tests_with_coverage.outputs.all_cov_file_url }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Clone FastDeploy
         uses: actions/checkout@v6
         with:

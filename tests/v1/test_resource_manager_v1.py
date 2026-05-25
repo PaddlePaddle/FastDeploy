@@ -27,6 +27,7 @@ import paddle
 if not hasattr(paddle, "enable_compat"):
     paddle.enable_compat = lambda scope=None: None
 
+from fastdeploy import envs
 from fastdeploy.config import CacheConfig, FDConfig, ParallelConfig, SchedulerConfig
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.request import (
@@ -36,6 +37,7 @@ from fastdeploy.engine.request import (
     RequestMetrics,
     RequestOutput,
     RequestStatus,
+    RequestType,
 )
 from fastdeploy.engine.sched.resource_manager_v1 import (
     ResourceManagerV1,
@@ -568,6 +570,26 @@ class TestResourceManagerV1Additional(unittest.TestCase):
         self.assertTrue(manager_d.preallocate_resource_in_d(request_d))
         self.assertEqual(request_d.num_computed_tokens, request_d.need_prefill_tokens)
         self.assertEqual(request_d.disaggregate_info["block_tables"], [4, 5])
+
+    def test_decode_role_prefill_task_logs_decode_bootstrap_batch(self):
+        manager = _build_manager(splitwise_role="decode", enable_prefix_caching=False)
+        _register_manager_cleanup(self, manager)
+        manager.cache_manager = MagicMock()
+        manager.cache_manager.num_gpu_blocks = 8
+        manager.cache_manager.gpu_free_block_list = [0, 1, 2, 3]
+        manager.scheduler_metrics_logger = MagicMock()
+
+        request = _make_request(prompt_token_ids=[1, 2, 3, 4])
+        request.task_type = RequestType.PREFILL
+        request.prefill_start_index = 4
+        request.prefill_end_index = 5
+        batch_request = [request]
+
+        with patch.object(envs, "FD_CONSOLE_SCHEDULER_METRICS", True):
+            manager._log_console_scheduler_metrics(batch_request)
+
+        manager.scheduler_metrics_logger.log_decode_bootstrap_batch.assert_called_once()
+        manager.scheduler_metrics_logger.log_prefill_batch.assert_not_called()
 
     def test_prefilled_request_flow_and_resource_check(self):
         manager = _build_manager(splitwise_role="decode", speculative_method="mtp")
