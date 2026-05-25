@@ -45,6 +45,9 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.attention.decode_unified_attention_backend import (
+    allocate_decode_unified_related_buffer,
+)
 from fastdeploy.model_executor.layers.attention.dsa_attention_backend import (
     DSAAttentionBackend,
 )
@@ -1485,6 +1488,15 @@ class GPUModelRunner(ModelRunnerBase):
             routing_replay_table=routing_replay_table,
         )
 
+        # Decode attention split ops buffers (assigned after construction due to ForwardMeta __getattr__)
+        if "decode_block_indices" in self.share_inputs:
+            self.forward_meta.decode_block_indices = self.share_inputs["decode_block_indices"]
+            self.forward_meta.decode_num_blocks = self.share_inputs["decode_num_blocks"]
+            self.forward_meta.decode_chunk_size = self.share_inputs["decode_chunk_size"]
+            self.forward_meta.decode_tmp_workspace = self.share_inputs["decode_tmp_workspace"]
+            self.forward_meta.decode_tmp_m = self.share_inputs["decode_tmp_m"]
+            self.forward_meta.decode_tmp_d = self.share_inputs["decode_tmp_d"]
+
         dist_status = self.collect_distributed_status()
 
         if_only_decode = dist_status.if_only_decode
@@ -1731,8 +1743,15 @@ class GPUModelRunner(ModelRunnerBase):
             num_heads=num_heads,
             kv_num_heads=self.model_config.kv_num_heads,
             block_size=self.fd_config.cache_config.block_size,
+            head_dim=head_dim,
+            dtype=self.model_config.dtype,
         )
-        res_buffer = allocate_launch_related_buffer(**buffer_kwargs)
+
+        if envs.FD_ATTENTION_BACKEND == "DECODE_UNIFIED_ATTN":
+            res_buffer = allocate_decode_unified_related_buffer(**buffer_kwargs)
+        else:
+            res_buffer = allocate_launch_related_buffer(**buffer_kwargs)
+
         self.share_inputs.update(res_buffer)
 
         if int(os.getenv("USE_TBO", "0")) == 1:

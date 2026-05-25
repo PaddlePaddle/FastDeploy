@@ -31,7 +31,7 @@ struct AppendAttnMetaData {
 };
 
 __forceinline__ __host__ __device__ int div_up(int a, int b) {
-  return (a + b - 1) / b;
+  return a / b + (a % b != 0);
 }
 
 enum PosEncMode { kNonePos, kRoPE, kAliBi };
