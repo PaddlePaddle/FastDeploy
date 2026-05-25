@@ -213,6 +213,7 @@ jobs:
 
       - name: Upload case logs
         if: always()
+        continue-on-error: true
         uses: actions/upload-artifact@v6
         with:
           name: xpu-4cards-case-logs
