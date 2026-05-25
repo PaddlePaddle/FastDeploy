@@ -188,6 +188,10 @@ class EngineArgs:
     """
     Configuration for speculative execution.
     """
+    benchmark_metrics_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for in-process benchmark metrics logger.
+    """
     dynamic_load_weight: bool = False
     """
     dynamic load weight
@@ -848,6 +852,16 @@ class EngineArgs:
             help="Configuration for speculative execution.",
         )
         model_group.add_argument(
+            "--benchmark-metrics-config",
+            type=json.loads,
+            default=EngineArgs.benchmark_metrics_config,
+            help="Configuration for in-process benchmark metrics logger. "
+            "Pass '{}' for defaults or a JSON with keys: "
+            "window_size (int, 0=all requests), "
+            "percentiles (str, e.g. '50,90,95,99'), "
+            "metrics (str, 'all' or comma-separated subset).",
+        )
+        model_group.add_argument(
             "--dynamic-load-weight",
             action="store_true",
             default=EngineArgs.dynamic_load_weight,
@@ -1431,6 +1445,14 @@ class EngineArgs:
 
         return SpeculativeConfig(speculative_args)
 
+    def create_benchmark_metrics_config(self):
+        """Create BenchmarkMetricsConfig if --benchmark-metrics-config is provided."""
+        if self.benchmark_metrics_config is None:
+            return None
+        from fastdeploy.config import BenchmarkMetricsConfig
+
+        return BenchmarkMetricsConfig(self.benchmark_metrics_config)
+
     def create_scheduler_config(self) -> SchedulerConfig:
         """
         Create and return a SchedulerConfig object based on the current settings.
@@ -1510,6 +1532,7 @@ class EngineArgs:
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
 
         speculative_cfg = self.create_speculative_config()
+        benchmark_metrics_cfg = self.create_benchmark_metrics_config()
         if not self.enable_chunked_prefill:
             if (current_platform.is_cuda() or current_platform.is_maca()) and self.splitwise_role == "mixed":
                 # default enable chunked prefill
@@ -1574,5 +1597,6 @@ class EngineArgs:
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
             routing_replay_config=routing_replay_config,
+            benchmark_metrics_config=benchmark_metrics_cfg,
             deploy_modality=DeployModality.from_str(self.deploy_modality),
         )
