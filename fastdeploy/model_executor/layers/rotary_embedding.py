@@ -263,7 +263,7 @@ class DeepseekScalingRotaryEmbedding(nn.Layer):
         return query, key
 
 
-class GptOssScalingRotaryEmbedding:
+class YarnScalingRotaryEmbedding:
     def __init__(
         self,
         rotary_dim,
@@ -340,10 +340,29 @@ def get_rope_impl(
         rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
     elif architecture.startswith("Glm"):
-        rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        rope_scaling = getattr(model_config, "rope_scaling", None)
+        if (
+            rope_scaling is not None
+            and isinstance(rope_scaling, dict)
+            and rope_scaling.get("rope_type", rope_scaling.get("type", "")) == "yarn"
+            and "factor" in rope_scaling
+        ):
+            yarn_rotary_dim = int(rotary_dim * partial_rotary_factor) if partial_rotary_factor < 1.0 else rotary_dim
+            rotary_emb_layer = YarnScalingRotaryEmbedding(
+                rotary_dim=yarn_rotary_dim,
+                base=base,
+                original_max_position_embeddings=rope_scaling["original_max_position_embeddings"],
+                scale=rope_scaling["factor"],
+                mscale=rope_scaling.get("mscale", 1.0),
+                beta_fast=rope_scaling.get("beta_fast", 32),
+                beta_slow=rope_scaling.get("beta_slow", 1),
+                use_neox_rotary_style=False,
+            )
+        else:
+            rotary_emb_layer = GlmRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
         rotary_emb = rotary_emb_layer(position_ids)
     elif architecture.startswith("GptOss"):
-        rotary_emb_layer = GptOssScalingRotaryEmbedding(
+        rotary_emb_layer = YarnScalingRotaryEmbedding(
             rotary_dim=model_config.head_dim,
             base=model_config.rope_theta,
             original_max_position_embeddings=model_config.rope_scaling["original_max_position_embeddings"],
