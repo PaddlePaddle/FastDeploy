@@ -122,6 +122,12 @@ class MTPProposerCUDA(MTPProposer):
             kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
+            decode_block_indices=self.model_inputs["decode_block_indices"],
+            decode_num_blocks=self.model_inputs["decode_num_blocks"],
+            decode_chunk_size=self.model_inputs["decode_chunk_size"],
+            decode_tmp_workspace=self.model_inputs["decode_tmp_workspace"],
+            decode_tmp_m=self.model_inputs["decode_tmp_m"],
+            decode_tmp_d=self.model_inputs["decode_tmp_d"],
         )
 
         # Initialzie attention meta data
