@@ -399,6 +399,10 @@ class MTPProposerCUDA(MTPProposer):
             )
 
     def _extend_draft_token_with_ngram_match(self):
+        # pad_to_max forces hybrid kernel to write a fixed seq_lens_this_time
+        # = K + 1, padding unfilled ngram slots with a placeholder draft token.
+        # Required when target cudagraph is enabled (capture-time seq_lens_this_time
+        # must match replay-time seq_lens_this_time).
         hybrid_mtp_ngram(
             self.model_inputs["token_ids_all"],
             self.model_inputs["prompt_lens"],
@@ -412,6 +416,7 @@ class MTPProposerCUDA(MTPProposer):
             self.max_ngram_size,
             self.min_ngram_size,
             self.max_draft_token_num,
+            self.graph_opt_config.use_cudagraph,
         )
 
     def padding_cudagraph_inputs(self) -> None:

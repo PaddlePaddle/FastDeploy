@@ -88,6 +88,7 @@ class TestNgramMatchMixed(unittest.TestCase):
             self.max_ngram_size,
             self.min_ngram_size,
             self.max_draft_tokens,
+            False,
         )
 
         np.testing.assert_allclose(self.seq_lens_this_time.numpy(), self.ref_seq_lens_this_time)

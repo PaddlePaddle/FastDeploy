@@ -846,6 +846,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
             max_ngram_size,
             min_ngram_size,
             max_draft_tokens,
+            False,
         )
         paddle.device.synchronize()
 
@@ -889,6 +890,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                     3,
                     1,
                     10,
+                    False,
                 )
                 paddle.device.synchronize()
                 np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
@@ -936,6 +938,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 3,
                 1,
                 10,
+                False,
             )
             paddle.device.synchronize()
         finally:
@@ -979,6 +982,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
             3,
             1,
             10,
+            False,
         )
         paddle.device.synchronize()
         np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
@@ -1022,6 +1026,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 3,
                 1,
                 10,
+                False,
             )
             paddle.device.synchronize()
         finally:

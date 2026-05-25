@@ -1054,7 +1054,8 @@ void HybridMtpNgram(const paddle::Tensor& token_ids_all,
                     const paddle::Tensor& max_dec_len,
                     const int max_ngram_size,
                     const int min_ngram_size,
-                    const int max_draft_tokens);
+                    const int max_draft_tokens,
+                    const bool pad_to_max);
 
 // MTP
 void DraftModelPostprocess(const paddle::Tensor& base_model_draft_tokens,
