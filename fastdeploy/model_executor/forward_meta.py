@@ -124,6 +124,14 @@ class ForwardMeta:
 
     decoder_chunk_size_device: Optional[paddle.Tensor] = None
 
+    # Buffer for decode unified attention stage
+    decode_block_indices: Optional[paddle.Tensor] = None
+    decode_num_blocks: Optional[paddle.Tensor] = None
+    decode_chunk_size: Optional[paddle.Tensor] = None
+    decode_tmp_workspace: Optional[paddle.Tensor] = None
+    decode_tmp_m: Optional[paddle.Tensor] = None
+    decode_tmp_d: Optional[paddle.Tensor] = None
+
     # Sequence length of encoder for ever batch
     seq_lens_encoder: Optional[paddle.Tensor] = None
     # Sequence length of Encoder for ever batch

@@ -22,6 +22,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional, Tuple
 
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.platforms import current_platform
 
@@ -285,6 +286,41 @@ class DSAAttentionBackend(AttentionBackend):
         indexer_cache_shape = [max_num_blocks, self.block_size, fp8_indexer_dim]
 
         return key_cache_shape, value_cache_shape, indexer_cache_shape
+
+    def create_kv_cache(
+        self,
+        num_layers: int,
+        num_blocks: int,
+        cache_dtype=None,
+        kv_cache_quant_type: Optional[str] = None,
+        layer_offset: int = 0,
+    ):
+        """
+        DSA cache: uint8 key cache + uint8 indexer cache (no separate value, no scales).
+
+        `cache_dtype` is ignored; DSA always stores packed fp8+scales as uint8.
+        `kv_cache_quant_type` is coerced to "uint8" internally.
+        """
+        key_shape, _, indexer_shape = self.get_kv_cache_shape(max_num_blocks=num_blocks, kv_cache_quant_type="uint8")
+        logger.info(
+            f"[create_kv_cache][DSA] num_layers={num_layers} layer_offset={layer_offset} "
+            f"key_shape={key_shape} indexer_shape={indexer_shape} dtype=uint8"
+        )
+        caches = {}
+        for layer_idx in range(layer_offset, layer_offset + num_layers):
+            caches[("key", layer_idx)] = paddle.full(shape=key_shape, fill_value=0, dtype="uint8")
+            caches[("indexer", layer_idx)] = paddle.full(shape=indexer_shape, fill_value=0, dtype="uint8")
+        return caches
+
+    def create_host_kv_cache(self, *args, **kwargs):
+        """
+        DSA host cache offload is not supported yet.
+
+        TODO: implement following sglang's hierarchical-sparse cache design.
+        Until then CacheController catches NotImplementedError and skips swap
+        space allocation for DSA.
+        """
+        raise NotImplementedError("DSA host kv cache offload is not supported yet")
 
     def forward_mixed(
         self,

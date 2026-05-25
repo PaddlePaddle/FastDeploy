@@ -74,6 +74,7 @@ class TokenProcessor:
         self.cached_generated_tokens = cached_generated_tokens
         self.resource_manager = None
         self.scheduler_metrics_logger = None
+        self._benchmark_logger = None
         self.engine_worker_queue = engine_worker_queue
         self.tokens_counter = Counter()
         self.split_connector = split_connector
@@ -173,6 +174,9 @@ class TokenProcessor:
 
     def set_scheduler_metrics_logger(self, scheduler_metrics_logger):
         self.scheduler_metrics_logger = scheduler_metrics_logger
+
+    def set_benchmark_logger(self, benchmark_logger):
+        self._benchmark_logger = benchmark_logger
 
     def _is_decode_stage(self, task):
         if task is None:
@@ -789,10 +793,22 @@ class TokenProcessor:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
         elif self.use_logprobs:
-            batch = self.output_tokens[1, 0]
-            tokens = tokens[2 : batch * (K + 1) + 2].reshape([batch, K + 1])[:, : (K + 1)]
-            scores = self.output_scores[: batch * (K + 1)].numpy().reshape([batch, K + 1])[:, : (K + 1)]
+            # mtext[1] packs bsz (low 16 bits) and actual_topk (high 16 bits).
+            # actual_topk = max_num_logprobs written by save_output_topk, which
+            # equals the actual number of logprob columns in this step's message
+            # (top_logprobs+1 across the batch). Using actual_topk as stride
+            # avoids processing the K+1=21 fixed-size slots when fewer are needed.
+            packed = int(self.output_tokens[1, 0])
+            batch = packed & 0xFFFF
+            actual_topk = (packed >> 16) & 0xFFFF
+            tokens = tokens[2 : batch * actual_topk + 2].reshape([batch, actual_topk])
+            scores = self.output_scores[: batch * actual_topk].numpy().reshape([batch, actual_topk])
             ranks = self.output_ranks[:batch].numpy()
+            # Pre-convert the full [batch, actual_topk] arrays to Python lists once,
+            # avoiding per-row .tolist() calls inside the loop below.
+            tokens_lists = tokens.tolist()
+            scores_lists = scores.tolist()
+            ranks_list = ranks.tolist()
         else:
             batch = self.output_tokens[1, 0]
             tokens = tokens[2 : batch + 2]
@@ -977,10 +993,11 @@ class TokenProcessor:
                             topk_logprobs = scores[i, batch_token_index, :].tolist()
                             sampled_rank = ranks[i, batch_token_index].item()
                         else:
-                            result.outputs.logprob = float(scores[i, 0])
-                            topk_token_ids = tokens[i, :].tolist()
-                            topk_logprobs = scores[i, :].tolist()
-                            sampled_rank = ranks[i].item()
+                            # Use pre-converted lists (batch .tolist() done before the loop).
+                            result.outputs.logprob = scores_lists[i][0]
+                            topk_token_ids = tokens_lists[i]
+                            topk_logprobs = scores_lists[i]
+                            sampled_rank = ranks_list[i]
 
                         if result.outputs.top_logprobs is None:
                             result.outputs.top_logprobs = LogprobsLists(
@@ -1084,6 +1101,10 @@ class TokenProcessor:
         if hasattr(task, "last_token_time") and task.last_token_time is not None:
             token_gen_time = current_time - task.last_token_time
             main_process_metrics.time_per_output_token.observe(token_gen_time)
+            if self._benchmark_logger:
+                if not hasattr(task, "_itl_samples"):
+                    task._itl_samples = []
+                task._itl_samples.append(token_gen_time)
         task.last_token_time = current_time
 
         # Record generation metrics
@@ -1118,6 +1139,25 @@ class TokenProcessor:
         main_process_metrics.request_success_total.inc()
         main_process_metrics.request_inference_time.observe(current_time - metrics.inference_start_time)
         main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
+
+        if self._benchmark_logger:
+            from fastdeploy.metrics.benchmark_metrics_logger import (
+                CompletedRequestRecord,
+            )
+
+            record = CompletedRequestRecord(
+                request_id=task.request_id,
+                completion_time=current_time,
+                arrival_time=metrics.arrival_time or 0.0,
+                inference_start_time=metrics.inference_start_time or 0.0,
+                first_token_time=metrics.engine_recv_first_token_time or 0.0,
+                last_token_time=metrics.engine_recv_latest_token_time or current_time,
+                input_len=getattr(task, "prompt_token_ids_len", 0) or 0,
+                output_len=self.tokens_counter[task.request_id],
+                num_cached_tokens=getattr(task, "num_cached_tokens", 0) or 0,
+                itl_samples=getattr(task, "_itl_samples", []),
+            )
+            self._benchmark_logger.on_request_completed(record)
 
     def _record_speculative_decoding_metrics(self, accept_num):
         """Record metrics of speculative decoding"""

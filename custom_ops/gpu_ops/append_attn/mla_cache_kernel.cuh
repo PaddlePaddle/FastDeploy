@@ -27,7 +27,6 @@ __global__ void decode_absorb_cache_kernel(
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
-    const int max_seq_len,
     const int max_blocks_per_seq,
     const int kv_num_heads,
     const int nope_size,
@@ -98,7 +97,6 @@ __global__ void speculate_decode_absorb_cache_kernel(
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_encoder,  // [bsz]
-    const int max_seq_len,
     const int max_blocks_per_seq,
     const int kv_num_heads,
     const int nope_size,
@@ -168,18 +166,18 @@ __global__ void speculate_decode_absorb_cache_kernel(
   }
 }
 
-template <typename T, int VecSize = 1>
+template <typename T, int VecSize = 1, typename CT = T>
 __global__ void prefill_absorb_cache_kernel(
     const T* __restrict__ kv_nope,  // [bsz, kv_num_heads, pe_size] 512
     const T* __restrict__ kv_pe,    // [bsz, kv_num_heads, nope_size] 64
-    T* __restrict__ kv_cache,       // [num_blocks, kv_num_heads, block_size,
+    CT* __restrict__ kv_cache,      // [num_blocks, kv_num_heads, block_size,
                                     // nope_size]
     const int* __restrict__ block_tables,  // [bsz, max_blocks_per_seq]
+    const int64_t* __restrict__ slot_mapping,
     const int* __restrict__ batch_id_per_token,
     const int* __restrict__ cu_seqlens_q,
     const int* __restrict__ seq_lens,          // [bsz]
     const int* __restrict__ seq_lens_decoder,  // [bsz]
-    const int max_seq_len,
     const int max_blocks_per_seq,
     const int kv_num_heads,
     const int nope_size,
@@ -188,6 +186,8 @@ __global__ void prefill_absorb_cache_kernel(
     const uint32_t elem_cnt) {
   using LoadT = AlignedVector<T, VecSize>;
   LoadT src_vec;
+  using StoreT = AlignedVector<CT, VecSize>;
+  StoreT dst_vec;
 
   int64_t global_thread_idx = blockDim.x * blockIdx.x + threadIdx.x;
   const uint32_t nope_hidden_size = kv_num_heads * nope_size;
@@ -201,7 +201,8 @@ __global__ void prefill_absorb_cache_kernel(
        linear_index += step) {
     const uint32_t token_idx = linear_index / hidden_size;
     const uint32_t bias = linear_index % hidden_size;
-    const uint32_t ori_bi = batch_id_per_token[token_idx];
+    const int32_t ori_bi = batch_id_per_token[token_idx];
+    if (ori_bi == -1) continue;
     if (seq_lens[ori_bi] == 0) continue;
     const uint32_t ori_seq_id =
         (token_idx - cu_seqlens_q[ori_bi]) + seq_lens_decoder[ori_bi];
@@ -210,6 +211,14 @@ __global__ void prefill_absorb_cache_kernel(
     block_table_now = block_tables + ori_bi * max_blocks_per_seq;
     const uint32_t block_idx = block_table_now[ori_seq_id / block_size];
     const uint32_t block_offset = ori_seq_id % block_size;
+
+    const int32_t block_idx1 = slot_mapping[token_idx] / block_size;
+    if (block_idx1 != block_idx) {
+      printf("block_idx1 %d != block_idx %d\n", block_idx1, block_idx);
+      printf("token_idx %d\n", token_idx);
+      printf("slot_mapping %d\n", slot_mapping[token_idx]);
+      asm volatile("trap;");
+    }
 
     if (bias < nope_hidden_size) {  // pe
       const uint32_t inner_bias = bias;
@@ -220,7 +229,20 @@ __global__ void prefill_absorb_cache_kernel(
           hi * block_size * all_size + block_offset * all_size + h_bias;
       const uint32_t ori_idx = token_idx * nope_hidden_size + inner_bias;
       Load<T, VecSize>(&kv_nope[ori_idx], &src_vec);
-      Store<T, VecSize>(src_vec, &kv_cache[tgt_idx]);
+
+      if constexpr (std::is_same_v<CT, __nv_fp8_e4m3>) {
+        for (int i = 0; i < VecSize; i++) {
+          float quant_value = (float)(src_vec[i]);
+          quant_value = quant_value > 448.0f ? 448.0f : quant_value;
+          quant_value = quant_value < -448.0f ? -448.0f : quant_value;
+          dst_vec[i] = static_cast<__nv_fp8_e4m3>(quant_value);
+        }
+
+        Store<CT, VecSize>(dst_vec, &kv_cache[tgt_idx]);
+      } else {
+        Store<CT, VecSize>(src_vec, &kv_cache[tgt_idx]);
+      }
+
     } else {
       const uint32_t inner_bias = bias - nope_hidden_size;
       const uint32_t hi = inner_bias / pe_size;
@@ -231,7 +253,18 @@ __global__ void prefill_absorb_cache_kernel(
           h_bias;
       const uint32_t ori_idx = token_idx * pe_hidden_size + inner_bias;
       Load<T, VecSize>(&kv_pe[ori_idx], &src_vec);
-      Store<T, VecSize>(src_vec, &kv_cache[tgt_idx]);
+
+      if constexpr (std::is_same_v<CT, __nv_fp8_e4m3>) {
+        for (int i = 0; i < VecSize; i++) {
+          float quant_value = (float)(src_vec[i]);
+          quant_value = quant_value > 448.0f ? 448.0f : quant_value;
+          quant_value = quant_value < -448.0f ? -448.0f : quant_value;
+          dst_vec[i] = static_cast<__nv_fp8_e4m3>(quant_value);
+        }
+        Store<CT, VecSize>(dst_vec, &kv_cache[tgt_idx]);
+      } else {
+        Store<CT, VecSize>(src_vec, &kv_cache[tgt_idx]);
+      }
     }
   }
 }

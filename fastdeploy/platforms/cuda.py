@@ -76,8 +76,11 @@ class CUDAPlatform(Platform):
         elif selected_backend == _Backend.TRITON_MLA_ATTN:
             logger.info("Using TRITON MLA ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.TritonMLAAttentionBackend"
+        elif selected_backend == _Backend.DECODE_UNIFIED_ATTN:
+            logger.info("Using DECODE UNIFIED ATTN backend.")
+            return "fastdeploy.model_executor.layers.attention.DecodeUnifiedAttentionBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"
-                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN, TRITON_MLA_ATTN] in cuda place."
+                "Now only support [NATIVE_ATTN, MLA_ATTN, TRITON_MLA_ATTN, APPEND_ATTN, DECODE_UNIFIED_ATTN, FLASH_ATTN] in cuda place."
             )

@@ -554,6 +554,13 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
 
     if cc >= 90 and nvcc_version >= 12.0:
+        # decode unified attention
+        os.system(
+            "python utils/auto_gen_template_attention.py --config gpu_ops/decode_unified_attention/template_config.json --output gpu_ops/decode_unified_attention/template_instantiation/autogen"
+        )
+        sources += ["gpu_ops/decode_unified_attention.cu"]
+        sources += ["gpu_ops/decoder_write_cache_with_rope.cu"]
+        sources += find_end_files("gpu_ops/decode_unified_attention", ".cu")
         # Hopper optimized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]

@@ -44,7 +44,7 @@ for test_file in "${test_files[@]}"; do
 
         if [ -d "${REPO_ROOT}/log" ]; then
             echo ">>> grep error in ${REPO_ROOT}/log/"
-            grep -Rni --color=auto "error" "${REPO_ROOT}/log/" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" || true
+            grep -Rni --color=auto "error" "${REPO_ROOT}/log/" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" --exclude="cache_messager*" --exclude="*.log.[0-9]*" | awk -F: '{key=$1; for(i=3;i<=NF;i++) key=key":"$i; gsub(/[0-9]+-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+,[0-9]+ [0-9]+/, "", key); if (!seen[key]++) print}' || true
         else
             echo "${REPO_ROOT}/log directory not found"
         fi
