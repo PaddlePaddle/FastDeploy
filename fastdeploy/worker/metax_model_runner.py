@@ -1269,6 +1269,7 @@ class MetaxModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
+            rotary_embs_bf16=(None if self.enable_mm else self.share_inputs["rope_emb"].astype(paddle.bfloat16)),
         )
 
         dist_status = self.collect_distributed_status()
