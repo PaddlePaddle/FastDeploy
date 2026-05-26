@@ -51,7 +51,8 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     const float* q_norm_weight,
     const float* k_norm_weight,
     const float rms_norm_eps,
-    const bool rope_3d) {
+    const bool rope_3d,
+    const int* rope_3d_delta) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadFloat = AlignedVector<float, VecSize>;
   using LoadInT = AlignedVector<InT, VecSize>;
@@ -109,8 +110,15 @@ __global__ void append_speculate_cache_T_rope_qk_norm_kernel(
     if (hi < num_heads + gqa_group_size) {
       // q k rope
       const int64_t emb_idx = write_seq_id * half_head_size + h_bias / 2;
-      uint32_t new_emb_idx =
-          rope_3d ? emb_idx + ori_bi * max_seq_len * head_size : emb_idx;
+      uint32_t new_emb_idx;
+      if (rope_3d_delta) {
+        const int rope_pos = write_seq_id + rope_3d_delta[ori_bi];
+        new_emb_idx = rope_pos * half_head_size + h_bias / 2;
+      } else if (rope_3d) {
+        new_emb_idx = emb_idx + ori_bi * max_seq_len * head_size;
+      } else {
+        new_emb_idx = emb_idx;
+      }
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
@@ -366,7 +374,8 @@ __global__ void append_speculate_cache_rope_kernel(
     const int block_size,
     const int elem_cnt,
     const int gqa_group_size,
-    const bool rope_3d) {
+    const bool rope_3d,
+    const int* rope_3d_delta) {
   using LoadT = AlignedVector<T, VecSize>;
   using LoadFloat = AlignedVector<float, VecSize>;
   using LoadInT = AlignedVector<InT, VecSize>;
@@ -420,8 +429,15 @@ __global__ void append_speculate_cache_rope_kernel(
     if (hi < num_heads + gqa_group_size) {
       // q k rope
       const int64_t emb_idx = write_seq_id * half_head_size + h_bias / 2;
-      int64_t new_emb_idx =
-          rope_3d ? emb_idx + ori_bi * max_seq_len * head_size : emb_idx;
+      int64_t new_emb_idx;
+      if (rope_3d_delta) {
+        const int rope_pos = write_seq_id + rope_3d_delta[ori_bi];
+        new_emb_idx = rope_pos * half_head_size + h_bias / 2;
+      } else if (rope_3d) {
+        new_emb_idx = emb_idx + ori_bi * max_seq_len * head_size;
+      } else {
+        new_emb_idx = emb_idx;
+      }
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
     }
@@ -815,6 +831,7 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
     const float min_bound,
     const int gqa_group_size,
     const bool rope_3d,
+    const int* __restrict__ rope_3d_delta,
     const float rms_norm_eps) {
   static_assert(HeadDim == 128, "just support HeadDim be 128 now!");
   static_assert(VecSize == 4, "just support VecSize be 4 now, 32 * 4!");
@@ -874,8 +891,15 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
 
       // q rope
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx =
-          rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      uint32_t new_emb_idx;
+      if (rope_3d_delta) {
+        const int rope_pos = write_seq_id + rope_3d_delta[bid];
+        new_emb_idx = rope_pos * half_head_size + head_bias / 2;
+      } else if (rope_3d) {
+        new_emb_idx = emb_idx + bid * max_seq_len * HeadDim;
+      } else {
+        new_emb_idx = emb_idx;
+      }
       Load<float, HalfVecSize>(&cos_emb[new_emb_idx], &cos_emb_vec);
       Load<float, HalfVecSize>(&sin_emb[new_emb_idx], &sin_emb_vec);
 #pragma unroll
@@ -939,8 +963,15 @@ __global__ void append_speculate_cache_fp8_rope_qk_norm_dynamic_kernel(
     const int v_head_idx = head_idx - num_heads - gqa_group_size;
     if (head_idx < num_heads + gqa_group_size) {
       const uint32_t emb_idx = write_seq_id * half_head_size + head_bias / 2;
-      uint32_t new_emb_idx =
-          rope_3d ? emb_idx + bid * max_seq_len * HeadDim : emb_idx;
+      uint32_t new_emb_idx;
+      if (rope_3d_delta) {
+        const int rope_pos = write_seq_id + rope_3d_delta[bid];
+        new_emb_idx = rope_pos * half_head_size + head_bias / 2;
+      } else if (rope_3d) {
+        new_emb_idx = emb_idx + bid * max_seq_len * HeadDim;
+      } else {
+        new_emb_idx = emb_idx;
+      }
       Load<float, 1>(&cos_emb[new_emb_idx], &cos_emb_vec1);
       Load<float, 1>(&cos_emb[new_emb_idx + 4], &cos_emb_vec2);
       Load<float, 1>(&sin_emb[new_emb_idx], &sin_emb_vec1);

@@ -69,6 +69,8 @@ class ForwardMeta:
     ids_remove_padding: paddle.Tensor
     # Rotation position embedding
     rotary_embs: Optional[paddle.Tensor] = None
+    # Per-request offset for shared Ernie VL decode 3D RoPE.
+    rope_3d_delta: Optional[paddle.Tensor] = None
 
     # Use cuda graph in this step or not. Used to avoid run cuda graph when in dummy run or prefill stage.
     step_use_cudagraph: bool = False
