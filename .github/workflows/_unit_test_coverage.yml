@@ -227,7 +227,8 @@ jobs:
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt
-          python -m pip install ${fd_wheel_url}
+          python -m pip install ${fd_wheel_url} --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+
           rm -rf fastdeploy
           # coverage subprocess use
           python -m pip install ${fd_wheel_url} --no-deps --target=/workspace/FastDeploy
@@ -239,12 +240,6 @@ jobs:
           else
               echo "Warning: tests/plugins directory not found, skipping setup.py install"
           fi
-          python -m pip cache remove transformers
-          python -m pip cache remove paddleformers
-          python -m pip cache remove fastdeploy-gpu
-          python -m pip install paddleformers[paddlefleet]==1.1.0.dev20260507 --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-          python -m pip uninstall paddlepaddle-gpu -y || true
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
 
           export COVERAGE_FILE=/workspace/FastDeploy/coveragedata/.coverage
           export COVERAGE_RCFILE=/workspace/FastDeploy/scripts/.coveragerc

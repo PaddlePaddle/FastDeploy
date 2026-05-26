@@ -192,10 +192,6 @@ jobs:
           pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install ${fastdeploy_wheel_url}
-          python -m pip install paddleformers[paddlefleet]==1.1.0.dev20260507 --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-          python -m pip uninstall paddlepaddle-gpu -y || true
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
-
           wget --no-proxy https://paddle-qa.bj.bcebos.com/zhengtianyu/tools/llm-deploy-linux-amd64
           chmod +x ./llm-deploy-linux-amd64
           ./llm-deploy-linux-amd64 -python python3.10 \
