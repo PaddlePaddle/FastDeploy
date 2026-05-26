@@ -2,7 +2,7 @@ FROM ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:cuda126-dev
 RUN sed -i 's/archive.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list && \
     apt update && \
-    apt install -y jq psmisc
+    apt install -y jq psmisc ffmpeg
 COPY ../../requirements.txt ./requirements.txt
 RUN python -m pip install --no-cache-dir -r requirements.txt -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 COPY ./unittest_requirement.txt ./unittest_requirement.txt

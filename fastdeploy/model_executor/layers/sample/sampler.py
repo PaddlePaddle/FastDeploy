@@ -26,7 +26,7 @@ from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
-from fastdeploy.envs import FD_FILL_BITMASK_BATCH
+from fastdeploy.envs import FD_FILL_BITMASK_BATCH, FD_SAMPLING_CLASS
 from fastdeploy.logger.deterministic_logger import _record_logits_diagnostic
 from fastdeploy.model_executor.guided_decoding import LogitsProcessorBase
 from fastdeploy.model_executor.layers.sample.early_stopper import (
@@ -40,10 +40,15 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
+    dispatch_top_k_renorm_probs,
     min_p_sampling,
     reasoning_phase_token_constraint,
     speculate_insert_first_token,
     top_k_top_p_sampling,
+)
+from fastdeploy.model_executor.layers.sample.ops.top_k_top_p_triton import (
+    apply_top_k_top_p_triton,
+    seeded_gumbel_noise,
 )
 from fastdeploy.platforms import current_platform
 from fastdeploy.reasoning import ReasoningParser
@@ -56,6 +61,73 @@ if current_platform.is_cuda():
         build_sampling_params_logprob,
         naive_update_model_status,
     )
+
+
+def _apply_triton_top_k_top_p(
+    logits: paddle.Tensor,
+    top_p: paddle.Tensor,
+    top_k: Optional[paddle.Tensor] = None,
+    top_k_list: Optional[list] = None,
+    return_mask: bool = False,
+) -> paddle.Tensor | tuple[paddle.Tensor, paddle.Tensor]:
+    """
+    Apply combined top-k/top-p masking on logits using the Triton kernel.
+    Masked positions are set to -inf in-place. Call this BEFORE softmax.
+
+    Args:
+        return_mask: If True, return (logits, mask) where mask is a bool
+            tensor [B, V] computed inside the Triton kernel (zero extra cost).
+
+    Returns:
+        logits if return_mask is False, else (logits, mask).
+    """
+    if top_p is None and top_k is None:
+        return logits
+    batch_size = logits.shape[0]
+
+    top_p = top_p[:batch_size].squeeze(axis=-1)
+
+    has_top_k = top_k_list and any(x > 0 for x in top_k_list)
+    if has_top_k:
+        top_k = top_k[:batch_size].squeeze(axis=-1)
+    else:
+        top_k = None
+
+    return apply_top_k_top_p_triton(logits.astype("float32"), k=top_k, p=top_p, return_mask=return_mask)
+
+
+def _random_sample(
+    probs: paddle.Tensor,
+    topp_seed: Optional[paddle.Tensor] = None,
+) -> paddle.Tensor:
+    """
+    Sample from probabilities using the Gumbel-max trick.
+
+    Equivalent to multinomial sampling but avoids CPU-GPU synchronization.
+    When ``topp_seed`` is provided and Triton is available, a Triton kernel
+    generates per-row deterministic Gumbel noise using Philox PRNG entirely
+    on GPU, eliminating the Python for-loop and CPU-GPU sync overhead.
+
+    Args:
+        probs: [batch_size, vocab_size] float32 probabilities.
+        topp_seed: [batch_size, 1] int64 per-request seeds, or None.
+
+    Returns:
+        Token ids of shape [batch_size, 1].
+
+    Reference: vllm/v1/sample/ops/topk_topp_sampler.py::random_sample
+    """
+    # Sample from Exp(1): q = -log(u), u ~ Uniform(0, 1)
+    if topp_seed is not None:
+        seeds = topp_seed[: probs.shape[0]].reshape([-1])
+        if not seeds.place.is_gpu_place():
+            seeds = seeds.cuda()
+        q = seeded_gumbel_noise(probs, seeds)
+    else:
+        u = paddle.uniform(probs.shape, dtype=probs.dtype, min=0.0, max=1.0)
+        q = -paddle.log(u.clip(min=1e-10))
+    # Gumbel-max: argmax(probs / q) is equivalent to multinomial(probs)
+    return (probs / q).argmax(axis=-1).reshape([-1, 1])
 
 
 def top_p_normalize_probs_paddle(
@@ -107,6 +179,57 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
     topp_seed[:, 0] = (topp_seed[:, 0] + offsets) % MAX_INFER_SEED
 
     return top_p_padding, top_k_padding, topp_seed
+
+
+def _sample_from_probs(probs, sampling_metadata, top_p=None, top_k=None, topp_seed=None):
+    """Sample next tokens from probability distributions with optional top-k and top-p filtering.
+
+    When ``top_p_list`` is all 1.0 (no top-p filtering needed), uses
+    :func:`_random_sample` with an optional top-k renormalization pass via
+    :func:`dispatch_top_k_renorm_probs`.  Otherwise dispatches through
+    :func:`top_k_top_p_sampling` to apply joint top-k/top-p constraints.
+
+    Args:
+        probs: [token_num, vocab_size] float32 probability tensor (normalized logits).
+        sampling_metadata: Metadata carrying top_p, top_k, seed, top_k_list,
+            and top_p_list for the current batch of requests.
+        top_p: Override for per-row top-p values, shape [token_num, 1] or None.
+        top_k: Override for per-row top-k values, shape [token_num, 1] or None.
+        topp_seed: Override for per-row random seeds, shape [token_num, 1] or None.
+
+    Returns:
+        Sampled token ids of shape [token_num, 1].
+    """
+    token_num = probs.shape[0]
+    if top_p is None:
+        top_p = sampling_metadata.top_p
+    if top_k is None:
+        top_k = sampling_metadata.top_k
+    if topp_seed is None:
+        topp_seed = sampling_metadata.seed
+    top_k_list = sampling_metadata.top_k_list
+    top_p_list = sampling_metadata.top_p_list
+    need_top_k_sampling = False
+    need_top_p_sampling = True
+    if top_k_list is not None:
+        top_k_list = top_k_list[:token_num]
+        need_top_k_sampling = any(k > 0 for k in top_k_list)
+    if top_p_list is not None:
+        top_p_list = top_p_list[:token_num]
+        need_top_p_sampling = any(p != 1.0 for p in top_p_list)
+    if not need_top_p_sampling and current_platform.is_cuda():
+        if need_top_k_sampling:
+            probs = dispatch_top_k_renorm_probs(probs, top_k)
+        next_tokens = _random_sample(probs, topp_seed=topp_seed)
+    else:
+        _, next_tokens = top_k_top_p_sampling(
+            probs,
+            top_p,
+            top_k,
+            top_k_list,
+            topp_seed=topp_seed,
+        )
+    return next_tokens
 
 
 class GuidedDecoding:
@@ -550,6 +673,16 @@ class Sampler(nn.Layer):
             elif self.logprobs_mode == "processed_logits":
                 raw_logprobs = logits.clone()
 
+        # Triton path: mask logits in-place BEFORE softmax (no probs→log round-trip).
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            logits = _apply_triton_top_k_top_p(
+                logits,
+                sampling_metadata.top_p,
+                top_k=sampling_metadata.top_k,
+                top_k_list=sampling_metadata.top_k_list,
+                return_mask=False,
+            )
+
         probs = F.softmax(logits)
 
         # Record post-penalty logits and probs MD5 for determinism diagnosis
@@ -557,13 +690,10 @@ class Sampler(nn.Layer):
             _record_logits_diagnostic(logits, tag="post_penalty_logits", probs=probs)
 
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
-        _, next_tokens = top_k_top_p_sampling(
-            probs,
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            sampling_metadata.top_k_list,
-            topp_seed=sampling_metadata.seed,
-        )
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
+        else:
+            next_tokens = _sample_from_probs(probs, sampling_metadata)
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
@@ -828,19 +958,22 @@ class SpeculativeSampler(nn.Layer):
         target_tokens, candidate_ids, candidate_scores, candidate_lens = None, None, None, None
 
         if self.verify_strategy == VerifyStrategy.TARGET_MATCH:
-            # Only TARGET_MATCH needs stochastic sampling
-            top_p, top_k, topp_seed = build_sampling_params(
-                sampling_metadata.top_p,
-                sampling_metadata.top_k,
-                sampling_metadata.seed,
-                share_inputs["seq_lens_this_time"],
-                share_inputs["cu_seqlens_q_output"],
-                token_num_output_cpu,
-                increment_value,
-            )
-            _, target_tokens = top_k_top_p_sampling(
-                probs, top_p=top_p, top_k=top_k, top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed
-            )
+            if FD_SAMPLING_CLASS.lower() == "triton":
+                target_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
+            else:
+                # Only TARGET_MATCH needs stochastic sampling
+                top_p, top_k, topp_seed = build_sampling_params(
+                    sampling_metadata.top_p,
+                    sampling_metadata.top_k,
+                    sampling_metadata.seed,
+                    share_inputs["seq_lens_this_time"],
+                    share_inputs["cu_seqlens_q_output"],
+                    token_num_output_cpu,
+                    increment_value,
+                )
+                target_tokens = _sample_from_probs(
+                    probs, sampling_metadata, top_p=top_p, top_k=top_k, topp_seed=topp_seed
+                )
         elif self.verify_strategy == VerifyStrategy.GREEDY:
             # GREEDY: deterministic argmax in target_tokens, no candidates needed
             target_tokens = paddle.argmax(probs, axis=-1)
@@ -926,13 +1059,16 @@ class SpeculativeSampler(nn.Layer):
         probs = min_p_sampling(probs, sampling_metadata.min_p, sampling_metadata.min_p_list)
 
         # Sample tokens
-        _, next_tokens = top_k_top_p_sampling(
-            probs,
-            sampling_metadata.top_p,
-            sampling_metadata.top_k,
-            sampling_metadata.top_k_list,
-            topp_seed=sampling_metadata.seed,
-        )
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
+        else:
+            next_tokens = _sample_from_probs(
+                probs,
+                sampling_metadata,
+                top_p=sampling_metadata.top_p,
+                top_k=sampling_metadata.top_k,
+                topp_seed=sampling_metadata.seed,
+            )
 
         # Scatter sampled tokens into accept_tokens using cu_seqlens_q_output to
         # correctly handle mixed prefill+decode batches where token index != batch index.
@@ -1027,6 +1163,25 @@ class SpeculativeSampler(nn.Layer):
                 self.line_break_id,
             )
 
+        logits_ori = None
+        if FD_SAMPLING_CLASS.lower() == "triton":
+            logits_ori = logits.clone()
+            top_p, top_k, _ = build_sampling_params(
+                sampling_metadata.top_p,
+                sampling_metadata.top_k,
+                sampling_metadata.seed,
+                share_inputs["seq_lens_this_time"],
+                share_inputs["cu_seqlens_q_output"],
+                token_num_output_cpu,
+                increment_value,
+            )
+            logits = _apply_triton_top_k_top_p(
+                logits,
+                top_p,
+                top_k=top_k,
+                top_k_list=sampling_metadata.top_k_list,
+            )
+
         probs = F.softmax(logits)
 
         # Route based on spec_method
@@ -1049,7 +1204,7 @@ class SpeculativeSampler(nn.Layer):
         # Build logprobs via unified path (outside of sampling logic)
         if sampling_metadata.max_num_logprobs is not None:
             logprobs_tensors, cu_batch_token_offset = build_output_logprobs(
-                logits,
+                logits if logits_ori is None else logits_ori,
                 sampling_metadata,
                 share_inputs,
                 is_naive=is_naive,

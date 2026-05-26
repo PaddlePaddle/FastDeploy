@@ -272,7 +272,7 @@ jobs:
 
           curl -X POST http://0.0.0.0:${FLASK_PORT}/switch \
             -H "Content-Type: application/json" \
-            -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--max-concurrency\": 5000, \"--max-waiting-time\": 1 }"
+            -d "{ \"--model\": \"/MODELDATA/ERNIE-4.5-0.3B-Paddle\", \"--workers\": 1, \"--max-concurrency\": 5000, \"--max-waiting-time\": 1 }"
           check_service 90
           python -m pytest -sv test_max_waiting_time.py || TEST_EXIT_CODE=1
 

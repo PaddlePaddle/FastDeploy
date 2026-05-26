@@ -81,7 +81,7 @@ def call_prefill_permute_to_masked_gemm(
     if topk_ids.dtype != paddle.int64:
         topk_ids = topk_ids.cast(paddle.int64)
 
-    results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num)
+    results = prefill_permute_to_masked_gemm(x, scale, topk_ids, num_local_experts, max_token_num, False)
 
     return results[0], results[1], results[2], results[3]
 
@@ -779,7 +779,9 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x)
 
         if layer.topk_method == "noaux_tc":
-            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda()
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
             if not use_fused:
                 gate_out = gate_out.cast("float32")
             _, topk_weights, topk_ids = fastdeploy.model_executor.layers.moe.moe.get_moe_scores(

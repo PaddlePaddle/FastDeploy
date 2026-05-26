@@ -23,7 +23,11 @@ from .speculate_logprob_utils import (
     speculate_get_accept_tokens_and_logits,
     speculate_insert_first_token,
 )
-from .top_k_top_p_sampling import min_p_sampling, top_k_top_p_sampling
+from .top_k_top_p_sampling import (
+    dispatch_top_k_renorm_probs,
+    min_p_sampling,
+    top_k_top_p_sampling,
+)
 
 __all__ = [
     "apply_penalty_multi_scores",
@@ -33,4 +37,5 @@ __all__ = [
     "min_p_sampling",
     "speculate_get_accept_tokens_and_logits",
     "speculate_insert_first_token",
+    "dispatch_top_k_renorm_probs",
 ]

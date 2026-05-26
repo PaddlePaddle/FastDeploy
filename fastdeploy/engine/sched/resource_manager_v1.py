@@ -325,7 +325,7 @@ class ResourceManagerV1(ResourceManager):
                 del self.req_dict[request_id]
                 self.to_be_aborted_req_id_set.discard(request_id)
                 self.waiting_abort_req_id_set.discard(request_id)
-                llm_logger.debug(f"request_id:{request_id} recycle end")
+                llm_logger.debug(f"request_id:{request_id} recycle abort task end")
         self.update_metrics()
 
     def _trigger_abort(self, request_id, batch_request):
@@ -338,6 +338,7 @@ class ResourceManagerV1(ResourceManager):
             batch_request.add_request(self._prepare_abort_task(abort_request))
             self.to_be_aborted_req_id_set.add(request_id)
             self.waiting_abort_req_id_set.discard(request_id)
+            llm_logger.debug(f"request_id:{request_id} trigger abort")
 
     def _info_each_block(self):
         """
@@ -802,7 +803,7 @@ class ResourceManagerV1(ResourceManager):
             num_new_tokens = new_end_idx - pre_end_idx
 
             image_mask = input_ids[pre_end_idx:new_end_idx] == image_patch_id
-            request.with_image = image_mask.any()
+            request.with_image = bool(image_mask.any())
             if request.with_image:
                 pre_boundary_idx = np.searchsorted(img_boundaries_idx, pre_end_idx, side="left").item()
                 if pre_boundary_idx == len(img_boundaries_idx):
@@ -1069,9 +1070,12 @@ class ResourceManagerV1(ResourceManager):
                                     self.cache_manager.num_cpu_blocks > 0
                                     or self.config.cache_config.kvcache_storage_backend
                                 ):
-                                    if not self.cache_manager.can_allocate_gpu_blocks(
+                                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                                         (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                         // self.config.cache_config.block_size
+                                    )
+                                    if not self.cache_manager.can_allocate_gpu_blocks(
+                                        can_schedule_block_num_threshold
                                     ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                         break
                             success = self.get_prefix_cached_blocks(request)
@@ -1133,6 +1137,7 @@ class ResourceManagerV1(ResourceManager):
                                 self.req_dict[request.request_id] = allocated_position
                                 llm_logger.debug(f"req_id:{request.request_id} allocate pos end")
                         else:
+                            # Warning: _free_blocks before update_cache_blocks may cause storage blocks leak
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
                             break
@@ -1149,9 +1154,12 @@ class ResourceManagerV1(ResourceManager):
                                     self.cache_manager.num_cpu_blocks > 0
                                     or self.config.cache_config.kvcache_storage_backend
                                 ):
-                                    if not self.cache_manager.can_allocate_gpu_blocks(
+                                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                                         (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                         // self.config.cache_config.block_size
+                                    )
+                                    if not self.cache_manager.can_allocate_gpu_blocks(
+                                        can_schedule_block_num_threshold
                                     ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                         break
                             success = self.get_prefix_cached_blocks(request)
@@ -1195,6 +1203,7 @@ class ResourceManagerV1(ResourceManager):
                                 )
                             request.status = RequestStatus.RUNNING_PREFILL
                         else:
+                            # Warning: _free_blocks before update_cache_blocks may cause storage blocks leak
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
                             break
@@ -1794,15 +1803,26 @@ class ResourceManagerV1(ResourceManager):
         prefill_reqs = [r for r in batch_request if isinstance(r, Request) and r.task_type == RequestType.PREFILL]
         has_decode = any(getattr(r, "task_type", None) == RequestType.DECODE for r in batch_request)
 
-        self.scheduler_metrics_logger.log_prefill_batch(
-            prefill_reqs=prefill_reqs,
-            running_cnt=running_cnt,
-            queue_cnt=queue_cnt,
-            tokens_used=tokens_used,
-            token_usage=token_usage,
-            free_blocks=free_blocks,
-            evictable_blocks=evictable_blocks,
-        )
+        if self.config.scheduler_config.splitwise_role == "decode":
+            self.scheduler_metrics_logger.log_decode_bootstrap_batch(
+                prefill_reqs=prefill_reqs,
+                running_cnt=running_cnt,
+                queue_cnt=queue_cnt,
+                tokens_used=tokens_used,
+                token_usage=token_usage,
+                free_blocks=free_blocks,
+                evictable_blocks=evictable_blocks,
+            )
+        else:
+            self.scheduler_metrics_logger.log_prefill_batch(
+                prefill_reqs=prefill_reqs,
+                running_cnt=running_cnt,
+                queue_cnt=queue_cnt,
+                tokens_used=tokens_used,
+                token_usage=token_usage,
+                free_blocks=free_blocks,
+                evictable_blocks=evictable_blocks,
+            )
         if has_decode:
             has_prefill = len(prefill_reqs) > 0
             graph_opt_cfg = self.config.graph_opt_config

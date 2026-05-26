@@ -1,0 +1,30 @@
+[run]
+branch = True
+source = fastdeploy
+concurrency = multiprocessing
+patch = subprocess
+parallel = True
+include =
+    */fastdeploy/platforms/xpu.py
+    */fastdeploy/worker/xpu_*.py
+    */fastdeploy/model_executor/xpu_*.py
+    */fastdeploy/model_executor/ops/xpu/**
+    */fastdeploy/model_executor/layers/backends/xpu/**
+
+[paths]
+source =
+    fastdeploy
+    */site-packages/fastdeploy
+    */lib/python3.10/site-packages/fastdeploy
+    */fastdeploy
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    raise AssertionError
+    raise NotImplementedError
+    @abstractmethod
+    @abc.abstractmethod
+
+ignore_errors = True

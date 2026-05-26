@@ -91,9 +91,9 @@ class SpecMethod(str, Enum):
         if self == SpecMethod.NAIVE:
             return None
         elif self == SpecMethod.MTP:
-            from fastdeploy.spec_decode.mtp import MTPProposer
+            from fastdeploy.spec_decode.mtp import create_mtp_proposer
 
-            return MTPProposer(
+            return create_mtp_proposer(
                 fd_config,
                 kwargs["main_model"],
                 kwargs["local_rank"],

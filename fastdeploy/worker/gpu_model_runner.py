@@ -45,6 +45,9 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.attention.decode_unified_attention_backend import (
+    allocate_decode_unified_related_buffer,
+)
 from fastdeploy.model_executor.layers.attention.dsa_attention_backend import (
     DSAAttentionBackend,
 )
@@ -1043,6 +1046,7 @@ class GPUModelRunner(ModelRunnerBase):
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
+            self.share_inputs["top_p_list"][idx] = request.get("top_p", 0.7)
             self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             async_set_value(self.share_inputs["eos_token_id"][:], request.eos_token_ids)
@@ -1350,6 +1354,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
+            top_p_list=self.share_inputs["top_p_list"],
             top_k=self.share_inputs["top_k"],
             top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
@@ -1396,7 +1401,9 @@ class GPUModelRunner(ModelRunnerBase):
         )
         block_size = self.cache_config.block_size
         block_idx = position_ids // block_size  # [num_tokens]
-        assert self.forward_meta.batch_id_per_token.shape == block_idx.shape
+        assert (
+            self.forward_meta.batch_id_per_token.shape == block_idx.shape
+        ), f"batch_id_per_token.shape:{self.forward_meta.batch_id_per_token.shape} != block_idx.shape:{block_idx.shape}"
         block_ids = self.forward_meta.block_tables[self.forward_meta.batch_id_per_token, block_idx]  # [num_tokens]
         block_offset = position_ids % block_size  # [num_tokens]
         slot_mapping = self.share_inputs["slot_mapping_buffer"][:current_total_tokens]
@@ -1481,6 +1488,15 @@ class GPUModelRunner(ModelRunnerBase):
             attn_mask_offsets=self.share_inputs["attn_mask_offsets"] if self.enable_mm else None,
             routing_replay_table=routing_replay_table,
         )
+
+        # Decode attention split ops buffers (assigned after construction due to ForwardMeta __getattr__)
+        if "decode_block_indices" in self.share_inputs:
+            self.forward_meta.decode_block_indices = self.share_inputs["decode_block_indices"]
+            self.forward_meta.decode_num_blocks = self.share_inputs["decode_num_blocks"]
+            self.forward_meta.decode_chunk_size = self.share_inputs["decode_chunk_size"]
+            self.forward_meta.decode_tmp_workspace = self.share_inputs["decode_tmp_workspace"]
+            self.forward_meta.decode_tmp_m = self.share_inputs["decode_tmp_m"]
+            self.forward_meta.decode_tmp_d = self.share_inputs["decode_tmp_d"]
 
         dist_status = self.collect_distributed_status()
 
@@ -1728,8 +1744,15 @@ class GPUModelRunner(ModelRunnerBase):
             num_heads=num_heads,
             kv_num_heads=self.model_config.kv_num_heads,
             block_size=self.fd_config.cache_config.block_size,
+            head_dim=head_dim,
+            dtype=self.model_config.dtype,
         )
-        res_buffer = allocate_launch_related_buffer(**buffer_kwargs)
+
+        if envs.FD_ATTENTION_BACKEND == "DECODE_UNIFIED_ATTN":
+            res_buffer = allocate_decode_unified_related_buffer(**buffer_kwargs)
+        else:
+            res_buffer = allocate_launch_related_buffer(**buffer_kwargs)
+
         self.share_inputs.update(res_buffer)
 
         if int(os.getenv("USE_TBO", "0")) == 1:
@@ -2108,7 +2131,11 @@ class GPUModelRunner(ModelRunnerBase):
                     logger.info(
                         f"Warm up the model with the num_tokens:{num_tokens}, expected_decode_len:{expected_decode_len}"
                     )
-            elif self.speculative_decoding and self.spec_method in [SpecMethod.MTP, SpecMethod.SUFFIX]:
+            elif self.speculative_decoding and self.spec_method in [
+                SpecMethod.MTP,
+                SpecMethod.SUFFIX,
+                SpecMethod.NGRAM,
+            ]:
                 for capture_size in sorted(capture_sizes, reverse=True):
                     expected_decode_len = (self.speculative_config.num_speculative_tokens + 1) * 2
                     self._dummy_run(
@@ -2263,7 +2290,9 @@ class GPUModelRunner(ModelRunnerBase):
             PREEMPTED_TOKEN_ID,
             -1,
         ).astype("int64")
-        self.share_inputs["sampled_token_ids"][:bsz].copy_(fake_sampled_token_ids, False)
+        sampled_token_ids = self.share_inputs["sampled_token_ids"].cpu()
+        sampled_token_ids[:bsz].copy_(fake_sampled_token_ids, True)
+        self.share_inputs["sampled_token_ids"].copy_(sampled_token_ids, True)
 
         fake_logprobs_tensors = None
         if self.enable_logprob:
@@ -2274,10 +2303,12 @@ class GPUModelRunner(ModelRunnerBase):
             )
 
         if self.speculative_decoding:
-            self.share_inputs["accept_tokens_cpu"][:bsz].fill_(0)
-            self.share_inputs["accept_num_cpu"][:bsz].fill_(0)
-            self.share_inputs["seq_lens_decoder_cpu"][:bsz].copy_(self.share_inputs["seq_lens_decoder"][:bsz], False)
-            self.share_inputs["prompt_lens_cpu"][:bsz].copy_(self.share_inputs["prompt_lens"][:bsz], False)
+            self.share_inputs["accept_tokens"][:bsz].fill_(0)
+            self.share_inputs["accept_num"][:bsz].fill_(0)
+            self.share_inputs["accept_tokens_cpu"].copy_(self.share_inputs["accept_tokens"], True)
+            self.share_inputs["accept_num_cpu"].copy_(self.share_inputs["accept_num"], True)
+            self.share_inputs["seq_lens_decoder_cpu"].copy_(self.share_inputs["seq_lens_decoder"], True)
+            self.share_inputs["prompt_lens_cpu"].copy_(self.share_inputs["prompt_lens"], True)
             sampler_output = SamplerOutput(
                 sampled_token_ids=fake_sampled_token_ids,
                 logprobs_tensors=fake_logprobs_tensors,
@@ -3047,6 +3078,13 @@ class GPUModelRunner(ModelRunnerBase):
         # Clear CUDAGraph
         if self.use_cudagraph:
             self.model.clear_graph_opt_backend()
+
+            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
+                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+                    clear_all_block_wise_graphs,
+                )
+
+                clear_all_block_wise_graphs()
             if (
                 self.speculative_decoding
                 and self.spec_method == SpecMethod.MTP
@@ -3489,4 +3527,48 @@ class GPUModelRunner(ModelRunnerBase):
             fd_config=self.fd_config,
             block_table=self.share_inputs["block_tables"],
             total_block_num=self.num_gpu_blocks,
+        )
+
+    def capture_block_wise_graphs(self) -> None:
+        """
+        Independent capture loop for block-wise CUDA graphs.
+        Pre-captures graphs for designated token counts so that at runtime,
+        matching sizes replay the graph while other sizes fall back to eager.
+        """
+        if not envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
+            return
+
+        from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+            set_block_wise_capturing,
+        )
+
+        # Parse capture sizes from env var
+        sizes_str = envs.FD_BLOCK_WISE_CUDA_GRAPH_SIZES
+        capture_sizes = sorted([int(s.strip()) for s in sizes_str.split(",") if s.strip()], reverse=True)
+        if not capture_sizes:
+            logger.warning("FD_BLOCK_WISE_CUDA_GRAPH_SIZES is empty, skipping block-wise CUDA graph capture")
+            return
+
+        logger.info(f"Block-wise CUDA graph capture starting for sizes: {sorted(capture_sizes)}")
+        time_before_capture = time.perf_counter()
+
+        set_block_wise_capturing(True)
+        try:
+            for num_tokens in capture_sizes:
+                batch_size = min(num_tokens, self.scheduler_config.max_num_seqs)
+                if batch_size < 1:
+                    batch_size = 1
+                self._dummy_run(
+                    num_tokens=num_tokens,
+                    batch_size=batch_size,
+                    in_capturing=False,
+                )
+                logger.info(f"Block-wise CUDA graph captured for num_tokens={num_tokens}")
+        finally:
+            set_block_wise_capturing(False)
+
+        time_after_capture = time.perf_counter()
+        logger.info(
+            f"Block-wise CUDA graph capturing took {time_after_capture - time_before_capture:.3f} seconds "
+            f"for {len(capture_sizes)} sizes"
         )

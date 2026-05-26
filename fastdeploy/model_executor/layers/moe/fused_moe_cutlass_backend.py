@@ -365,11 +365,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         gate_out = gate(x)
         if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
             if layer.topk_method == "noaux_tc":
-                use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda() and not fc1_latent_proj
+                use_fused = (
+                    layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+                )
                 if not use_fused:
                     gate_out = gate_out.cast("float32")
-                    if fc1_latent_proj is not None:
-                        x = fc1_latent_proj(x)
+
+                if fc1_latent_proj is not None:
+                    x = fc1_latent_proj(x)
                 gate_out, topk_weights, topk_idx = get_moe_scores(
                     gate_out,
                     layer.n_group,
@@ -441,14 +444,16 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             return fused_moe_out
 
         if layer.topk_method == "noaux_tc":
-            use_fused = not fastdeploy.envs.FD_ENABLE_RL and current_platform.is_cuda() and not fc1_latent_proj
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
             if not use_fused:
                 gate_out = gate_out.cast("float32")
                 if envs.FD_RUN_DUMMY_FOR_PROFILE:
                     gate_out = paddle.randn_like(gate_out, dtype="float32")
-                if fc1_latent_proj is not None:
-                    x = fc1_latent_proj(x)
-            gate_out, topk_weights, topk_idx = get_moe_scores(
+            if fc1_latent_proj is not None:
+                x = fc1_latent_proj(x)
+            gate_out, _, __ = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
@@ -459,11 +464,6 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 topk_reduce_func=getattr(layer, "topk_reduce_func", None),
                 use_fused_cast=use_fused,
             )
-
-            if layer.routed_scaling_factor_learnable:
-                safe_topk_indices = paddle.clip(topk_idx, min=0)
-                gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
-                topk_weights = topk_weights * gathered_scales
 
             (
                 permute_input,
@@ -486,6 +486,12 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 self.moe_quant_type,
                 topk_only_mode=True,
             )
+
+            if layer.routed_scaling_factor_learnable:
+                safe_topk_indices = paddle.clip(topk_idx, min=0)
+                gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+                topk_weights = topk_weights * gathered_scales
+
         else:
             gate_out = gate_out.cast("float32")
             if envs.FD_RUN_DUMMY_FOR_PROFILE:

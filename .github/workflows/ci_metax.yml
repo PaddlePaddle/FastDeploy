@@ -7,7 +7,6 @@ on:
       - synchronize
     branches:
       - develop
-      - release/**
 
 permissions:
   contents: read
@@ -19,12 +18,15 @@ concurrency:
 jobs:
   trigger-jenkins:
     name: Trigger Jenkins for PR
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, XPU-P800]
     environment: Metax_ci
 
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Trigger Jenkins job
-        timeout-minutes: 120
+        timeout-minutes: 60
         uses: MetaX-MACA/simple-jenkins-githubaction@v1.1
         with:
           job_name: paddle_fastdeploy_metax_smoketest
