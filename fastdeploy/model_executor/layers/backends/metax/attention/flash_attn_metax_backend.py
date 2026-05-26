@@ -158,26 +158,10 @@ class MetaxFlashAttentionBackend(AttentionBackend):
     def _init_attention_metadata_split(self, metadata: FlashAttentionMetadata, forward_meta: MetaxForwardMeta):
         """Initialize attention metadata for split mode"""
         ids_remove_padding = forward_meta.ids_remove_padding
-        rotary_embs = forward_meta.rotary_embs
         seq_lens_this_time = forward_meta.seq_lens_this_time
         seq_lens_encoder = forward_meta.seq_lens_encoder
         seq_lens_decoder = forward_meta.seq_lens_decoder
-        batch_id_per_token = forward_meta.batch_id_per_token
-        cu_seqlens_q = forward_meta.cu_seqlens_q
-        cu_seqlens_k = forward_meta.cu_seqlens_k
         block_tables = forward_meta.block_tables
-
-        if envs.FD_DEBUG:
-            print(f"start_layer_index: {self.start_layer_index}")
-            print(f"ids_remove_padding: {ids_remove_padding}")
-            print(f"rotary_embs: {rotary_embs.shape}")
-            print(f"seq_lens_encoder: {seq_lens_encoder}")
-            print(f"seq_lens_decoder: {seq_lens_decoder}")
-            print(f"seq_lens_this_time: {seq_lens_this_time}")
-            print(f"batch_id_per_token: {batch_id_per_token}")
-            print(f"cu_seqlens_q: {cu_seqlens_q}")
-            print(f"cu_seqlens_k: {cu_seqlens_k}")
-            print(f"block_tables: {block_tables}")
 
         request_batch_ids = paddle.where(seq_lens_this_time > 0)[0]
         prefill_batch_ids = paddle.where(seq_lens_encoder > 0)[0]
@@ -227,10 +211,6 @@ class MetaxFlashAttentionBackend(AttentionBackend):
         if num_decodes < self.max_num_seqs:
             self.decode_cache_seq_lens_buffer[num_decodes:] = self.decode_cache_seq_lens_buffer[num_decodes - 1]
 
-        if envs.FD_DEBUG:
-            print(f"num_requests: {num_requests} = {num_prefills} + {num_decodes}")
-            print(f"num_actual_tokens: {num_actual_tokens} = {num_prefill_tokens} + {num_decode_tokens}")
-
         metadata.num_requests = num_requests
         metadata.num_actual_tokens = num_actual_tokens
 
@@ -250,24 +230,9 @@ class MetaxFlashAttentionBackend(AttentionBackend):
     def _init_attention_metadata_mix(self, metadata: FlashAttentionMetadata, forward_meta: MetaxForwardMeta):
         """Initialize attention metadata for mix mode"""
         ids_remove_padding = forward_meta.ids_remove_padding
-        rotary_embs = forward_meta.rotary_embs
         seq_lens_this_time = forward_meta.seq_lens_this_time
-        seq_lens_encoder = forward_meta.seq_lens_encoder
         seq_lens_decoder = forward_meta.seq_lens_decoder
-        batch_id_per_token = forward_meta.batch_id_per_token
-        cu_seqlens_q = forward_meta.cu_seqlens_q
         block_tables = forward_meta.block_tables
-
-        if envs.FD_DEBUG:
-            print(f"start_layer_index: {self.start_layer_index}")
-            print(f"ids_remove_padding: {ids_remove_padding}")
-            print(f"rotary_embs: {rotary_embs.shape}")
-            print(f"seq_lens_encoder: {seq_lens_encoder}")
-            print(f"seq_lens_decoder: {seq_lens_decoder}")
-            print(f"seq_lens_this_time: {seq_lens_this_time}")
-            print(f"batch_id_per_token: {batch_id_per_token}")
-            print(f"cu_seqlens_q: {cu_seqlens_q}")
-            print(f"block_tables: {block_tables}")
 
         request_batch_ids = paddle.where(seq_lens_this_time > 0)[0]
         num_requests = request_batch_ids.shape[0]

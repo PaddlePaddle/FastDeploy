@@ -101,37 +101,61 @@ class MTPProposerCUDA(MTPProposer):
         Initialize forward meta and attention meta data
         """
         # Initialize forward meta
-        forward_meta_kwargs = {
-            "ids_remove_padding": self.model_inputs["ids_remove_padding"],
-            "rotary_embs": self.model_inputs["rope_emb"],
-            "attn_backend": self.attn_backends[0],
-            "decoder_batch_ids": self.model_inputs["decoder_batch_ids"],
-            "decoder_tile_ids_per_batch": self.model_inputs["decoder_tile_ids_per_batch"],
-            "decoder_num_blocks_cpu": self.model_inputs["decoder_num_blocks_cpu"],
-            "decoder_num_blocks_device": self.model_inputs["decoder_num_blocks_device"],
-            "decoder_chunk_size_device": self.model_inputs["decoder_chunk_size_device"],
-            "max_len_tensor_cpu": self.model_inputs["max_len_tensor_cpu"],
-            "seq_lens_encoder": self.model_inputs["seq_lens_encoder"],
-            "seq_lens_decoder": self.model_inputs["seq_lens_decoder"],
-            "seq_lens_this_time": self.model_inputs["seq_lens_this_time"],
-            "batch_id_per_token": self.model_inputs["batch_id_per_token"],
-            "cu_seqlens_q": self.model_inputs["cu_seqlens_q"],
-            "cu_seqlens_k": self.model_inputs["cu_seqlens_k"],
-            "block_tables": self.model_inputs["block_tables"],
-            "caches": self.model_inputs["caches"],
-            "encoder_batch_ids": self.model_inputs["encoder_batch_ids"],
-            "encoder_tile_ids_per_batch": self.model_inputs["encoder_tile_ids_per_batch"],
-            "encoder_num_blocks_x_cpu": self.model_inputs["encoder_num_blocks_x_cpu"],
-            "kv_batch_ids": self.model_inputs["kv_batch_ids"],
-            "kv_tile_ids_per_batch": self.model_inputs["kv_tile_ids_per_batch"],
-            "kv_num_blocks_x_cpu": self.model_inputs["kv_num_blocks_x_cpu"],
-            "attn_mask_offsets": self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
-        }
         if current_platform.is_maca():
-            forward_meta_kwargs["rotary_embs_bf16"] = self.model_inputs["rope_emb_bf16"]
-            self.forward_meta = MetaxForwardMeta(**forward_meta_kwargs)
+            self.forward_meta = MetaxForwardMeta(
+                ids_remove_padding=self.model_inputs["ids_remove_padding"],
+                rotary_embs=self.model_inputs["rope_emb"],
+                rotary_embs_bf16=self.model_inputs.get("rope_emb_bf16", None),
+                attn_backend=self.attn_backends[0],
+                decoder_batch_ids=self.model_inputs["decoder_batch_ids"],
+                decoder_tile_ids_per_batch=self.model_inputs["decoder_tile_ids_per_batch"],
+                decoder_num_blocks_cpu=self.model_inputs["decoder_num_blocks_cpu"],
+                decoder_num_blocks_device=self.model_inputs["decoder_num_blocks_device"],
+                decoder_chunk_size_device=self.model_inputs["decoder_chunk_size_device"],
+                max_len_tensor_cpu=self.model_inputs["max_len_tensor_cpu"],
+                seq_lens_encoder=self.model_inputs["seq_lens_encoder"],
+                seq_lens_decoder=self.model_inputs["seq_lens_decoder"],
+                seq_lens_this_time=self.model_inputs["seq_lens_this_time"],
+                batch_id_per_token=self.model_inputs["batch_id_per_token"],
+                cu_seqlens_q=self.model_inputs["cu_seqlens_q"],
+                cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
+                block_tables=self.model_inputs["block_tables"],
+                caches=self.model_inputs["caches"],
+                encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
+                encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],
+                encoder_num_blocks_x_cpu=self.model_inputs["encoder_num_blocks_x_cpu"],
+                kv_batch_ids=self.model_inputs["kv_batch_ids"],
+                kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
+                kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+                attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
+            )
         else:
-            self.forward_meta = ForwardMeta(**forward_meta_kwargs)
+            self.forward_meta = ForwardMeta(
+                ids_remove_padding=self.model_inputs["ids_remove_padding"],
+                rotary_embs=self.model_inputs["rope_emb"],
+                attn_backend=self.attn_backends[0],
+                decoder_batch_ids=self.model_inputs["decoder_batch_ids"],
+                decoder_tile_ids_per_batch=self.model_inputs["decoder_tile_ids_per_batch"],
+                decoder_num_blocks_cpu=self.model_inputs["decoder_num_blocks_cpu"],
+                decoder_num_blocks_device=self.model_inputs["decoder_num_blocks_device"],
+                decoder_chunk_size_device=self.model_inputs["decoder_chunk_size_device"],
+                max_len_tensor_cpu=self.model_inputs["max_len_tensor_cpu"],
+                seq_lens_encoder=self.model_inputs["seq_lens_encoder"],
+                seq_lens_decoder=self.model_inputs["seq_lens_decoder"],
+                seq_lens_this_time=self.model_inputs["seq_lens_this_time"],
+                batch_id_per_token=self.model_inputs["batch_id_per_token"],
+                cu_seqlens_q=self.model_inputs["cu_seqlens_q"],
+                cu_seqlens_k=self.model_inputs["cu_seqlens_k"],
+                block_tables=self.model_inputs["block_tables"],
+                caches=self.model_inputs["caches"],
+                encoder_batch_ids=self.model_inputs["encoder_batch_ids"],
+                encoder_tile_ids_per_batch=self.model_inputs["encoder_tile_ids_per_batch"],
+                encoder_num_blocks_x_cpu=self.model_inputs["encoder_num_blocks_x_cpu"],
+                kv_batch_ids=self.model_inputs["kv_batch_ids"],
+                kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
+                kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
+                attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
+            )
 
         # Initialzie attention meta data
         for attn_backend in self.attn_backends:

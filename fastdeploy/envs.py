@@ -251,12 +251,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Whether to enable split-PD flash attention implementation on Metax.
     # True: split-PD, False: mixed-PD.
     "FD_METAX_ENABLE_FA_SPLIT": lambda: bool(int(os.getenv("FD_METAX_ENABLE_FA_SPLIT", "1"))),
-    # Whether to enable KV cache lock, enforcing mutual exclusion between
-    # PrefixCacheManager and Worker when accessing GPU KV cache.
-    # Under certain DP+EP configurations, concurrent access (even read-only)
-    # has been observed to cause NaN computation errors.
-    # Set to 1 to enable the lock; defaults to 0 (disabled).
-    "FD_USE_KVCACHE_LOCK": lambda: bool(int(os.getenv("FD_USE_KVCACHE_LOCK", "0"))),
     # Whether to probe MoE routing probabilities and use Fleet's fused SwiGLU kernel.
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use batch send data in zmq

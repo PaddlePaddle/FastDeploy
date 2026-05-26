@@ -26,7 +26,6 @@ class _Backend(enum.Enum):
     MLA_ATTN = enum.auto()
     DSA_ATTN = enum.auto()
     FLASH_ATTN = enum.auto()
-    TRITON_ATTN = enum.auto()
     BLOCK_ATTN = enum.auto()
     PLAS_ATTN = enum.auto()
     HPU_ATTN = enum.auto()

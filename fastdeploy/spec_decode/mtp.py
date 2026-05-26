@@ -94,11 +94,6 @@ class MTPProposer(Proposer):
         self.sampler = MTPSampler(fd_config)
         self.model_inputs = ProposerInputBatch(self.fd_config, self.target_model_inputs)
         self.model_inputs.init_share_inputs()
-        if current_platform.is_maca():
-            if not self.enable_mm:
-                self.model_inputs["rope_emb_bf16"] = self.model_inputs["rope_emb"].astype(paddle.bfloat16)
-            else:
-                self.model_inputs["rope_emb_bf16"] = None
 
         # CUDA Graph
         self.draft_model_use_cudagraph = self.graph_opt_config.draft_model_use_cudagraph

@@ -178,10 +178,6 @@ class MetaxModelRunner(ModelRunnerBase):
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
         self.share_inputs.init_share_inputs()
-        if not self.enable_mm:
-            self.share_inputs["rope_emb_bf16"] = self.share_inputs["rope_emb"].astype(paddle.bfloat16)
-        else:
-            self.share_inputs["rope_emb_bf16"] = None
         increment_value = (
             4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
         )
@@ -1273,7 +1269,6 @@ class MetaxModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
-            rotary_embs_bf16=self.share_inputs["rope_emb_bf16"],
         )
 
         dist_status = self.collect_distributed_status()

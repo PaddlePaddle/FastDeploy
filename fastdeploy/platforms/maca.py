@@ -63,14 +63,11 @@ class MACAPlatform(Platform):
         elif selected_backend == _Backend.FLASH_ATTN:
             logger.info("Using FLASH ATTN backend")
             return "fastdeploy.model_executor.layers.backends.metax.attention.flash_attn_metax_backend.MetaxFlashAttentionBackend"
-        elif selected_backend == _Backend.TRITON_ATTN:
-            logger.info("Using TRITON ATTN backend")
-            return "fastdeploy.model_executor.layers.backends.metax.attention.triton_attn_metax_backend.MetaxTritonAttentionBackend"
         elif selected_backend == _Backend.MLA_ATTN:
             logger.info("Using MLA ATTN backend.")
             return "fastdeploy.model_executor.layers.backends.metax.attention.mla_attn_metax_backend.MetaxMLAAttentionBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"
-                "Now only support [NATIVE_ATTN, FLASH_ATTN, TRITON_ATTN, MLA_ATTN, APPEND_ATTN] in cuda place."
+                "Now only support [NATIVE_ATTN, FLASH_ATTN, MLA_ATTN, APPEND_ATTN] in cuda place."
             )

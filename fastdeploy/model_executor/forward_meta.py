@@ -515,5 +515,3 @@ class MetaxForwardMeta(ForwardMeta):
     """
     MetaxForwardMeta is used to store the global meta information of the forward, and some Metax GPU specific meta info.
     """
-
-    rotary_embs_bf16: Optional[paddle.Tensor] = None
