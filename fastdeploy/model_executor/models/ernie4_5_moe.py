@@ -654,6 +654,9 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
                     continue
                 param = params_dict[model_param_name]
 
+            if "correction_bias" in model_param_name:
+                loaded_weight.reshape_(param.shape)
+
             # Get weight loader from parameter and set weight
             weight_loader = getattr(param, "weight_loader", default_weight_loader(self.fd_config))
             sig = inspect.signature(weight_loader)
