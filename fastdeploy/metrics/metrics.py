@@ -824,9 +824,10 @@ class MetricsManager(MetricsManagerInterface):
             return
 
         # 构建 zmq labelvalues: address + _default_labelvalues
-        zmq_labels = {"address": address}
+        zmq_labels = dict()
         if self._enable_labels:
             zmq_labels.update(self._default_labelvalues)
+        zmq_labels.update({"address": address})
 
         # 记录zmq统计信息
         self.msg_send_total.labels(**zmq_labels).inc(zmq_metrics_stats.msg_send_total)
@@ -844,9 +845,10 @@ class MetricsManager(MetricsManagerInterface):
         if hasattr(self, "cache_config_info") and isinstance(self.cache_config_info, Gauge):
             if metrics_info:
                 # 合并 default labelvalues
-                merged = dict(metrics_info)
+                merged = dict()
                 if self._enable_labels:
                     merged.update(self._default_labelvalues)
+                merged.update(metrics_info)
                 self.cache_config_info.labels(**merged).set(1)
             return
 
