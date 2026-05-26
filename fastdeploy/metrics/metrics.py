@@ -700,10 +700,14 @@ class MetricsManager(MetricsManagerInterface):
 
         When _enable_labels is True, returns (metric, merged_labels) where
         merged_labels is the union of _default_labelvalues and caller-provided
-        labelvalues. When False, returns (metric, None).
+        labelvalues. When False but caller provides labelvalues (for metrics
+        with their own labelnames like spec_decode_draft_single_head_acceptance_rate),
+        returns (metric, labelvalues). Otherwise returns (metric, None).
         """
         metric = getattr(self, name)
         if not self._enable_labels:
+            if labelvalues:
+                return metric, labelvalues
             return metric, None
         merged = dict(self._default_labelvalues)
         if labelvalues:
