@@ -59,6 +59,7 @@ class OpenAiServingBase(OpenAIServing):
         pid: int,
         ips,
         max_waiting_time: int,
+        output_fallback_manager=None,
     ) -> None:
         # Initialize parent class first to set up __semaphore
         super().__init__(models, config, pid, ips, max_waiting_time)
@@ -66,6 +67,7 @@ class OpenAiServingBase(OpenAIServing):
         self.models = models
         self.pid = pid
         self.max_waiting_time = max_waiting_time
+        self.output_fallback_manager = output_fallback_manager
         if ips is not None:
             if isinstance(ips, list):
                 self.master_ip = ips[0]
@@ -171,6 +173,8 @@ class OpenAiServingBase(OpenAIServing):
                     yield stream_response
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, ctx.request_id, getattr(ctx.request, "user", ""))
+            if self.output_fallback_manager is not None:
+                self.output_fallback_manager.cleanup(ctx.request_id)
 
     @abstractmethod
     async def _build_stream_response(
@@ -201,6 +205,8 @@ class OpenAiServingBase(OpenAIServing):
             return await self._build_full_response(ctx, accumula_output_map, response_ctx)
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, ctx.request_id, getattr(ctx.request, "user", ""))
+            if self.output_fallback_manager is not None:
+                self.output_fallback_manager.cleanup(ctx.request_id)
 
     async def _build_full_response(
         self,

@@ -51,6 +51,7 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.output.fallback import OutputFallbackContext
 from fastdeploy.utils import make_choice_id
 from fastdeploy.worker.output import LogprobsLists
 
@@ -71,8 +72,9 @@ class OpenAIServingChat(OpenAiServingBase):
         chat_template,
         enable_mm_output: Optional[bool] = False,
         tokenizer_base_url: Optional[str] = None,
+        output_fallback_manager=None,
     ) -> None:
-        super().__init__(engine_client, config, models, pid, ips, max_waiting_time)
+        super().__init__(engine_client, config, models, pid, ips, max_waiting_time, output_fallback_manager)
         self.chat_template = chat_template
         self.enable_mm_output = enable_mm_output
         self.tokenizer_base_url = tokenizer_base_url
@@ -287,7 +289,25 @@ class OpenAIServingChat(OpenAiServingBase):
                     }
                 ]
         else:
-            choice.delta.content = output.text or ""
+            delta_text = output.text or ""
+            if self.output_fallback_manager is not None and delta_text:
+                context = OutputFallbackContext(
+                    request=request,
+                    request_id=ctx.request_id,
+                    choice_index=output.index,
+                    stream=True,
+                    output=output.__dict__,
+                    delta_text=delta_text,
+                )
+                decision = self.output_fallback_manager.on_delta(ctx.request_id, output.index, delta_text, context)
+                if (
+                    decision.action in ("hold", "drop")
+                    and not request_output.finished
+                    and not request.return_token_ids
+                ):
+                    return
+                delta_text = "" if decision.action in ("hold", "drop") else decision.text
+            choice.delta.content = delta_text
 
         choice.delta.reasoning_content = output.reasoning_content or ""
         choice.delta.tool_calls = [output.tool_calls] if output.tool_calls else None
@@ -307,6 +327,17 @@ class OpenAIServingChat(OpenAiServingBase):
             max_tokens = request.max_completion_tokens or request.max_tokens
             choice_completion_tokens = response_ctx.choice_completion_tokens_dict[output.index]
             choice.finish_reason = self._calc_finish_reason(request_output, max_tokens, choice_completion_tokens)
+            if self.output_fallback_manager is not None and not self.enable_mm_output:
+                context = OutputFallbackContext(
+                    request=request,
+                    request_id=ctx.request_id,
+                    choice_index=output.index,
+                    stream=True,
+                    output=output.__dict__,
+                )
+                finish_decision = self.output_fallback_manager.on_finish(ctx.request_id, output.index, context)
+                if finish_decision.text:
+                    choice.delta.content = finish_decision.text + (choice.delta.content or "")
             log_request(
                 level=RequestLogLevel.LIFECYCLE,
                 message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
@@ -388,7 +419,18 @@ class OpenAIServingChat(OpenAiServingBase):
             message.multimodal_content = multipart
         else:
             request_output = request_output_list[-1]
-            message.content = request_output.outputs.text
+            text = request_output.outputs.text
+            if self.output_fallback_manager is not None and text:
+                context = OutputFallbackContext(
+                    request=request,
+                    request_id=ctx.request_id,
+                    choice_index=request_output.outputs.index,
+                    stream=False,
+                    output=request_output.outputs.__dict__,
+                    full_text=text,
+                )
+                text = self.output_fallback_manager.apply(text, context)
+            message.content = text
         output = request_output.outputs
         message.reasoning_content = output.reasoning_content
         message.tool_calls = request_output.accumulate_tool_calls if request_output.accumulate_tool_calls else None

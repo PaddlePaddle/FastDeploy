@@ -180,6 +180,14 @@ class EngineArgs:
     """
     tool parser plugin used to register user defined tool parsers
     """
+    output_fallback: str = None
+    """
+    output fallback strategies to apply, separated by commas
+    """
+    output_fallback_plugin: Optional[list[str]] = None
+    """
+    output fallback plugin used to register user defined fallback strategies
+    """
     enable_mm: bool = False
     """
     Flags to enable multi-modal model
@@ -850,6 +858,19 @@ class EngineArgs:
             type=str,
             default=EngineArgs.tool_parser_plugin,
             help="tool parser plugin used to register user defined tool parsers",
+        )
+        model_group.add_argument(
+            "--output-fallback",
+            type=str,
+            default=EngineArgs.output_fallback,
+            help="Output fallback strategies to apply, separated by commas.",
+        )
+        model_group.add_argument(
+            "--output-fallback-plugin",
+            type=str,
+            action="append",
+            default=EngineArgs.output_fallback_plugin,
+            help="Output fallback plugin used to register user defined fallback strategies.",
         )
         model_group.add_argument(
             "--speculative-config",

@@ -79,6 +79,7 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import get_filtered_metrics
+from fastdeploy.output.fallback import OutputFallbackManager
 from fastdeploy.utils import (
     ExceptionHandler,
     FlexibleArgumentParser,
@@ -102,6 +103,15 @@ args.model = retrive_model_from_server(args.model, args.revision)
 chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
+if args.output_fallback_plugin:
+    for output_fallback_plugin in args.output_fallback_plugin:
+        OutputFallbackManager.import_fallback_plugin(output_fallback_plugin)
+
+output_fallback_manager = None
+if args.output_fallback:
+    output_fallback_names = [name.strip() for name in args.output_fallback.split(",") if name.strip()]
+    output_fallback_manager = OutputFallbackManager(strategies=output_fallback_names)
+
 llm_engine = None
 
 MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
@@ -244,6 +254,7 @@ async def lifespan(app: FastAPI):
             chat_template,
             args.enable_mm_output,
             args.tokenizer_base_url,
+            output_fallback_manager,
         )
         completion_handler = OpenAIServingCompletionV1(
             llm_engine,
@@ -252,6 +263,7 @@ async def lifespan(app: FastAPI):
             pid,
             args.ips,
             args.max_waiting_time,
+            output_fallback_manager,
         )
     else:
         chat_handler = OpenAIServingChat(
@@ -263,6 +275,7 @@ async def lifespan(app: FastAPI):
             chat_template,
             args.enable_mm_output,
             args.tokenizer_base_url,
+            output_fallback_manager,
         )
         completion_handler = OpenAIServingCompletion(
             engine_client,
@@ -270,6 +283,7 @@ async def lifespan(app: FastAPI):
             pid,
             args.ips,
             args.max_waiting_time,
+            output_fallback_manager,
         )
 
     embedding_handler = OpenAIServingEmbedding(
@@ -827,6 +841,8 @@ def config_info() -> Response:
         "enable_mm_output": args.enable_mm_output,
         "tool_call_parser": args.tool_call_parser,
         "tool_parser_plugin": args.tool_parser_plugin,
+        "output_fallback": args.output_fallback,
+        "output_fallback_plugin": args.output_fallback_plugin,
     }
 
     # GPU info

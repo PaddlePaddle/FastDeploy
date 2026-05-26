@@ -50,6 +50,7 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.output.fallback import OutputFallbackContext
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
@@ -88,6 +89,7 @@ class OpenAIServingChat:
         chat_template,
         enable_mm_output: Optional[bool] = False,
         tokenizer_base_url: Optional[str] = None,
+        output_fallback_manager=None,
     ):
         self.engine_client = engine_client
         self.models = models
@@ -96,6 +98,7 @@ class OpenAIServingChat:
         self.chat_template = chat_template
         self.enable_mm_output = enable_mm_output
         self.tokenizer_base_url = tokenizer_base_url
+        self.output_fallback_manager = output_fallback_manager
         if ips is not None:
             if isinstance(ips, list):
                 self.master_ip = ips[0]
@@ -438,6 +441,34 @@ class OpenAIServingChat:
                     if output["skipped"] and not request.return_token_ids:
                         continue
 
+                    delta_text = "" if output["skipped"] else (output["text"] or "")
+                    if (
+                        self.output_fallback_manager is not None
+                        and delta_text
+                        and not response_processor.enable_multimodal_content()
+                    ):
+                        context = OutputFallbackContext(
+                            request=request,
+                            request_id=request_id,
+                            choice_index=idx,
+                            stream=True,
+                            output=output,
+                            delta_text=delta_text,
+                        )
+                        decision = self.output_fallback_manager.on_delta(
+                            request_id=request_id,
+                            choice_index=idx,
+                            delta_text=delta_text,
+                            context=context,
+                        )
+                        if (
+                            decision.action in ("hold", "drop")
+                            and not res["finished"]
+                            and not request.return_token_ids
+                        ):
+                            continue
+                        delta_text = "" if decision.action in ("hold", "drop") else decision.text
+
                     delta_message = DeltaMessage(
                         reasoning_content=output["reasoning_content"],
                         tool_calls=output["tool_calls"],
@@ -451,7 +482,7 @@ class OpenAIServingChat:
                             [{"type": "text", "text": ""}] if output["skipped"] else output["multipart"]
                         )
                     else:
-                        delta_message.content = "" if output["skipped"] else (output["text"] or "")
+                        delta_message.content = delta_text
 
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
@@ -495,6 +526,20 @@ class OpenAIServingChat:
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choice.finish_reason = "abort"
 
+                        if (
+                            self.output_fallback_manager is not None
+                            and not response_processor.enable_multimodal_content()
+                        ):
+                            context = OutputFallbackContext(
+                                request=request,
+                                request_id=request_id,
+                                choice_index=idx,
+                                stream=True,
+                                output=output,
+                            )
+                            finish_decision = self.output_fallback_manager.on_finish(request_id, idx, context)
+                            if finish_decision.text:
+                                delta_message.content = finish_decision.text + (delta_message.content or "")
                         inference_start_time[idx] = 0
 
                     if request.collect_metrics:
@@ -567,6 +612,8 @@ class OpenAIServingChat:
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             tracing.trace_req_finish(request_id)
+            if self.output_fallback_manager is not None:
+                self.output_fallback_manager.cleanup(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             log_request(
@@ -752,6 +799,8 @@ class OpenAIServingChat:
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             tracing.trace_req_finish(request_id)
+            if self.output_fallback_manager is not None:
+                self.output_fallback_manager.cleanup(request_id)
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
             log_request(
@@ -844,7 +893,18 @@ class OpenAIServingChat:
         if response_processor.enable_multimodal_content():
             message.multimodal_content = output.get("multipart")
         else:
-            message.content = output["text"]
+            text = output["text"]
+            if self.output_fallback_manager is not None and text:
+                context = OutputFallbackContext(
+                    request=request,
+                    request_id=data["request_id"],
+                    choice_index=idx,
+                    stream=False,
+                    output=output,
+                    full_text=text,
+                )
+                text = self.output_fallback_manager.apply(text, context)
+            message.content = text
 
         if output.get("audio_content", None) is not None:
             message.audio_content = output["audio_content"]

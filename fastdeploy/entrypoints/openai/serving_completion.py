@@ -46,6 +46,7 @@ from fastdeploy.logger.request_logger import (
     log_request,
     log_request_error,
 )
+from fastdeploy.output.fallback import OutputFallbackContext
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
@@ -69,11 +70,12 @@ NONES = itertools.repeat(None)
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time, output_fallback_manager=None):
         self.engine_client = engine_client
         self.models = models
         self.pid = pid
         self.max_waiting_time = max_waiting_time
+        self.output_fallback_manager = output_fallback_manager
         if ips is not None:
             if isinstance(ips, list):
                 self.master_ip = ips[0]
@@ -597,9 +599,33 @@ class OpenAIServingCompletion:
                     if output["skipped"] and not request.return_token_ids:
                         continue
 
+                    delta_text = "" if output["skipped"] else (output["text"] or "")
+                    if self.output_fallback_manager is not None and delta_text:
+                        context = OutputFallbackContext(
+                            request=request,
+                            request_id=request_id,
+                            choice_index=idx,
+                            stream=True,
+                            output=output,
+                            delta_text=delta_text,
+                        )
+                        decision = self.output_fallback_manager.on_delta(
+                            request_id=request_id,
+                            choice_index=idx,
+                            delta_text=delta_text,
+                            context=context,
+                        )
+                        if (
+                            decision.action in ("hold", "drop")
+                            and not res["finished"]
+                            and not request.return_token_ids
+                        ):
+                            continue
+                        delta_text = "" if decision.action in ("hold", "drop") else decision.text
+
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
-                        text="" if output["skipped"] else (output["text"] or ""),
+                        text=delta_text,
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=output["tool_calls"],
@@ -625,6 +651,17 @@ class OpenAIServingCompletion:
                         )
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choices[-1].finish_reason = "abort"
+                        if self.output_fallback_manager is not None:
+                            context = OutputFallbackContext(
+                                request=request,
+                                request_id=request_id,
+                                choice_index=idx,
+                                stream=True,
+                                output=output,
+                            )
+                            finish_decision = self.output_fallback_manager.on_finish(request_id, idx, context)
+                            if finish_decision.text:
+                                choices[-1].text = finish_decision.text + (choices[-1].text or "")
                         inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
@@ -713,6 +750,8 @@ class OpenAIServingCompletion:
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             tracing.trace_req_finish(request_id)
+            if self.output_fallback_manager is not None:
+                self.output_fallback_manager.cleanup(request_id)
             del request
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()
@@ -767,13 +806,24 @@ class OpenAIServingCompletion:
                 prompt_logprobs_res = self._build_prompt_logprobs(
                     prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
                 )
+            generated_text = output["text"]
+            if self.output_fallback_manager is not None and generated_text:
+                context = OutputFallbackContext(
+                    request=request,
+                    request_id=final_res["request_id"],
+                    choice_index=idx,
+                    stream=False,
+                    output=output,
+                    full_text=generated_text,
+                )
+                generated_text = self.output_fallback_manager.apply(generated_text, context)
             if request.echo:
                 prompt_text = self._echo_back_prompt(request, idx // (1 if request.n is None else request.n))
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
-                output_text = prompt_text + output["text"]
+                output_text = prompt_text + generated_text
             else:
                 token_ids = output["token_ids"]
-                output_text = output["text"]
+                output_text = generated_text
             finish_reason = self.calc_finish_reason(
                 max_tokens_list[idx // (1 if request.n is None else request.n)],
                 final_res["output_token_ids"],
