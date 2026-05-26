@@ -28,6 +28,10 @@ import warnings
 import paddle
 from paddle.utils.deprecated import VisibleDeprecationWarning
 
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
+
 # Suppress the VisibleDeprecationWarning from use_triton_in_paddle that fires
 # on every Triton kernel launch (paddle.device.cuda.current_stream /
 # synchronize).  In serving hot-paths this produces thousands of log lines per
@@ -112,6 +116,7 @@ def _update_min_larger_stats(data, above_mask, min_larger, num_min_larger, senti
     return min_larger, num_min_larger
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def _topk_topp_kernel(
     LOGITS,
@@ -936,6 +941,7 @@ def apply_top_k_top_p_triton(
     return logits
 
 
+@enable_compat_on_triton_kernel
 @triton.jit
 def _seeded_gumbel_kernel(
     OUT_ptr,

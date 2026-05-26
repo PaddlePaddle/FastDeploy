@@ -1097,6 +1097,7 @@ class SpeculativeSampler(nn.Layer):
         increment_value: int,
         accept_all_drafts: bool = False,
         reject_all_drafts: bool = False,
+        topp_seed: Optional[paddle.Tensor] = None,
     ) -> SamplerOutput:
         """
         Verify draft tokens against target model output and produce final samples.
@@ -1129,7 +1130,7 @@ class SpeculativeSampler(nn.Layer):
 
         if self.verify_strategy == VerifyStrategy.TARGET_MATCH:
             if FD_SAMPLING_CLASS.lower() == "triton":
-                target_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
+                target_tokens = _random_sample(probs, topp_seed=topp_seed)
             else:
                 # Only TARGET_MATCH needs stochastic sampling
                 top_p, top_k, topp_seed = build_sampling_params(
@@ -1208,6 +1209,7 @@ class SpeculativeSampler(nn.Layer):
         probs: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
         share_inputs: List[paddle.Tensor],
+        topp_seed: Optional[paddle.Tensor],
     ) -> SamplerOutput:
         """
         Normal sampling without draft token verification.
@@ -1230,7 +1232,7 @@ class SpeculativeSampler(nn.Layer):
 
         # Sample tokens
         if FD_SAMPLING_CLASS.lower() == "triton":
-            next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
+            next_tokens = _random_sample(probs, topp_seed=topp_seed)
         else:
             next_tokens = _sample_from_probs(
                 probs,
@@ -1333,9 +1335,10 @@ class SpeculativeSampler(nn.Layer):
             )
 
         logits_ori = None
+        topp_seed = None
         if FD_SAMPLING_CLASS.lower() == "triton":
             logits_ori = logits.clone()
-            top_p, top_k, _ = build_sampling_params(
+            top_p, top_k, topp_seed = build_sampling_params(
                 sampling_metadata.top_p,
                 sampling_metadata.top_k,
                 sampling_metadata.seed,
@@ -1356,7 +1359,7 @@ class SpeculativeSampler(nn.Layer):
         # Route based on spec_method
         is_naive = self.spec_method is None or self.spec_method == SpecMethod.NAIVE
         if is_naive:
-            sampler_output = self._normal_sample(logits, probs, sampling_metadata, share_inputs)
+            sampler_output = self._normal_sample(logits, probs, sampling_metadata, share_inputs, topp_seed=topp_seed)
         else:
             sampler_output = self._verify_and_sample(
                 logits,
@@ -1368,6 +1371,7 @@ class SpeculativeSampler(nn.Layer):
                 increment_value,
                 accept_all_drafts,
                 reject_all_drafts,
+                topp_seed=topp_seed,
             )
 
         keep_sampling_mask = sampling_metadata.keep_sampling_mask
