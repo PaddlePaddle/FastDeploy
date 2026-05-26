@@ -107,7 +107,7 @@ run_test_with_logging() {
             echo ">>>> Processing log directory: ${isolated_log_dir}"
 
             # workerlog
-            worker_logs=("${isolated_log_dir}"/workerlog.0)
+            worker_logs=("${isolated_log_dir}"/paddle/workerlog.0)
 
             if [ -f "${worker_logs[0]}" ]; then
                 for worker_log in "${worker_logs[@]}"; do
@@ -119,7 +119,7 @@ run_test_with_logging() {
             fi
 
             echo ">>> grep error in ${isolated_log_dir}"
-            grep -Rni --color=auto "error" "${isolated_log_dir}" --exclude="pytest_*_error.log" || true
+            grep -Rni --color=auto "error" "${isolated_log_dir}" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" --exclude="cache_messager*" --exclude="*.log.[0-9]*" | awk -F: '{key=$1; for(i=3;i<=NF;i++) key=key":"$i; gsub(/[0-9]+-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+,[0-9]+ [0-9]+/, "", key); if (!seen[key]++) print}' || true
         fi
 
         # print all server logs

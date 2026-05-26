@@ -98,12 +98,12 @@
 #### 启动 Router
 
 ```bash
-python -m fastdeploy.router.launch \
+python -m fastdeploy.golang_router.launch \
     --port 8109 \
     --splitwise
 ```
 
-注意：这里使用的是python版本router，如果有需要也可以使用高性能的[Golang版本router](../online_serving/router.md)
+注意：这里使用FastDeploy Python包内置的[Golang版本Router](../online_serving/router.md)，推荐使用此方式启动。更多Router选项参考[Router说明文档](../online_serving/router.md)。
 #### 启动 Prefill 节点
 
 ```bash
@@ -185,7 +185,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 ```bash
 unset http_proxy && unset https_proxy
 
-python -m fastdeploy.router.launch \
+python -m fastdeploy.golang_router.launch \
     --port 8109 \
     --splitwise
 ```

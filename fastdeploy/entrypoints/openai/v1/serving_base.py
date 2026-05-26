@@ -35,7 +35,7 @@ from fastdeploy.entrypoints.openai.serving_engine import OpenAIServing, ServeCon
 from fastdeploy.entrypoints.openai.serving_models import OpenAIServingModels
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import api_server_logger, get_host_ip
+from fastdeploy.utils import api_server_logger, get_host_ip, make_choice_id
 
 
 class ServingResponseContext:
@@ -99,7 +99,7 @@ class OpenAiServingBase(OpenAIServing):
     async def _preprocess(self, ctx: ServeContext[Union[ChatCompletionRequest, CompletionRequest]]) -> None:
         request = ctx.request
         request_id = ctx.request_id
-        current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
+        current_req_dict = request.to_dict_for_infer(make_choice_id(request_id, 0))
         ctx.preprocess_requests = [current_req_dict]
 
     @override

@@ -15,10 +15,11 @@
 """
 
 import pickle
+import threading
 import time
 import traceback
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 import zmq
 
@@ -58,6 +59,8 @@ class SplitwiseConnector:
         if self.cfg.scheduler_config.splitwise_role != "mixed":
             self.zmq_ctx = zmq.Context()
             self.push_sockets: Dict[str, zmq.Socket] = {}
+            self._push_socket_locks: Dict[str, threading.Lock] = {}
+            self._push_sockets_meta_lock = threading.Lock()
             self.pull_socket = None
             self.io_executor = ThreadPoolExecutor(max_workers=4)
             self._init_network()
@@ -105,13 +108,20 @@ class SplitwiseConnector:
                 self.logger.error(f"start_receiver: Receiver error: {e}, {str(traceback.format_exc())}")
                 time.sleep(1)
 
-    def _get_push_socket(self, addr):
-        """获取或创建 DEALER socket"""
+    def _get_push_socket(self, addr) -> Tuple[zmq.Socket, threading.Lock]:
+        """
+        获取或创建 DEALER socket 及其发送锁。
 
-        if addr in self.push_sockets:
-            sock = self.push_sockets[addr]
-            if not sock.closed:
-                return sock
+        Returns:
+            Tuple[zmq.Socket, threading.Lock]: 目标地址对应的 socket 和保护 multipart 发送的锁。
+        """
+        with self._push_sockets_meta_lock:
+            if addr in self.push_sockets:
+                sock = self.push_sockets[addr]
+                if not sock.closed:
+                    return sock, self._push_socket_locks[addr]
+                del self.push_sockets[addr]
+                self._push_socket_locks.pop(addr, None)
 
         try:
             self.logger.info(f"_get_push_socket: Establishing new connection to {addr}")
@@ -129,11 +139,20 @@ class SplitwiseConnector:
 
             sock.connect(f"tcp://{addr}")
 
-            self.push_sockets[addr] = sock
-            return sock
+            with self._push_sockets_meta_lock:
+                if addr in self.push_sockets:
+                    existing_sock = self.push_sockets[addr]
+                    if not existing_sock.closed:
+                        sock.close()
+                        return existing_sock, self._push_socket_locks[addr]
+                    del self.push_sockets[addr]
+                    self._push_socket_locks.pop(addr, None)
+                self.push_sockets[addr] = sock
+                self._push_socket_locks[addr] = threading.Lock()
+                return sock, self._push_socket_locks[addr]
 
         except zmq.ZMQError as e:
-            self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}")
+            self.logger.error(f"_get_push_socket: Connection to {addr} failed: {e}, {traceback.format_exc()}")
 
             raise ConnectionError(f"Failed to connect to {addr}") from e
 
@@ -144,8 +163,11 @@ class SplitwiseConnector:
             message = self._serialize_message(msg_type, payload)
             try:
                 self.logger.info(f"_send_message: msg_type={msg_type} addr={addr}")
-                sock = self._get_push_socket(addr)
-                sock.send_multipart(message)
+                sock, lock = self._get_push_socket(addr)
+                with lock:
+                    if sock.closed:
+                        raise ConnectionError(f"Connection to {addr} is closed")
+                    sock.send_multipart(message)
 
                 self.logger.info(f"Sent {msg_type} to {addr}")
 
@@ -158,15 +180,25 @@ class SplitwiseConnector:
                 main_process_metrics.send_cache_failed_num.inc()
                 self._close_connection(addr)
         except Exception as e:
-            self.logger.error(f"_send_message: Message preparation failed: {e}")
+            self.logger.error(f"_send_message: Message preparation failed: {e}, {traceback.format_exc()}")
 
     def _close_connection(self, addr):
         """
         Close the connection to the specified address.
         """
-        if addr in self.push_sockets:
-            self.push_sockets[addr].close()
-            del self.push_sockets[addr]
+        sock = None
+        lock = None
+        with self._push_sockets_meta_lock:
+            if addr in self.push_sockets:
+                sock = self.push_sockets.pop(addr)
+                lock = self._push_socket_locks.pop(addr, None)
+
+        if sock is not None:
+            if lock is not None:
+                with lock:
+                    sock.close()
+            else:
+                sock.close()
 
     def send_splitwise_tasks(self, tasks: List[Request], current_id):
         """
@@ -201,6 +233,27 @@ class SplitwiseConnector:
             f"send_first_token: send first token to decode ({addr}), {[x.request_id for x in tasks_list]}"
         )
         self._send_message(addr, "decode", tasks_list)
+
+    def send_drop_signal(self, request_id: str, disaggregate_info: dict):
+        """
+        Notify the decode side that this prefill request has been dropped
+        (e.g. paused gate rejected it on P). The decode side should recycle
+        its scheduler entry for this request_id, otherwise it would sit
+        there forever as a ghost and pause/abort drain would hang.
+        """
+        if not disaggregate_info:
+            return
+        decode_ip = disaggregate_info.get("decode_ip")
+        decode_port = disaggregate_info.get("decode_connector_port")
+        if not decode_ip or not decode_port:
+            self.logger.warning(
+                f"send_drop_signal: missing decode_ip/decode_connector_port in "
+                f"disaggregate_info for {request_id}; skip"
+            )
+            return
+        addr = f"{decode_ip}:{decode_port}"
+        self.logger.info(f"send_drop_signal: addr={addr}, request_id={request_id}")
+        self._send_message(addr, "drop", {"request_id": request_id})
 
     def check_decode_allocated(self, task):
         """Check whether the requests have been allocated resources in decode."""
@@ -348,6 +401,8 @@ class SplitwiseConnector:
                 self._handle_prefill(payload)
             elif msg_type == "decode":
                 self._handle_decode(payload)
+            elif msg_type == "drop":
+                self._handle_drop(payload)
             elif msg_type == "cache_sync":
                 for task in payload:
                     self.logger.info(f"_process_message: cache_sync task: {task}")
@@ -378,3 +433,15 @@ class SplitwiseConnector:
         for task in payload:
             tasks.append(RequestOutput.from_dict(task))
         self.engine_worker_queue.put_disaggregated_tasks(("decode", tasks))
+
+    def _handle_drop(self, payload):
+        """
+        Handle drop signal from prefill: forward to engine worker queue so the
+        decode engine main loop can recycle the corresponding scheduler entry.
+        """
+        request_id = payload.get("request_id") if isinstance(payload, dict) else None
+        if not request_id:
+            self.logger.warning(f"_handle_drop: invalid payload {payload}")
+            return
+        self.logger.info(f"_handle_drop: request_id={request_id}")
+        self.engine_worker_queue.put_disaggregated_tasks(("decode_drop", [request_id]))

@@ -25,6 +25,9 @@ from fastdeploy.distributed.communication import (
     decode_alltoall_transpose,
     tensor_model_parallel_all_reduce,
 )
+from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+    block_wise_cuda_graph_wrap,
+)
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
@@ -36,6 +39,22 @@ from fastdeploy.model_executor.utils import (
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor, modules_to_convert
+
+
+def may_be_do_cast(loaded_weight, param):
+
+    assert param.shape == loaded_weight.shape, (
+        f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+    )
+    # Ensure loaded weight dtype matches model param dtype
+    if loaded_weight.dtype != param.dtype:
+        if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+            loaded_weight = loaded_weight.view(param.dtype)
+        else:
+            assert (
+                loaded_weight.dtype == param.dtype
+            ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
+    return loaded_weight
 
 
 class UnquantizedLinearMethod(QuantMethodBase):
@@ -253,6 +272,7 @@ class LinearBase(nn.Layer):
             bias_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.bias_key)))
             self.bias.set_value(bias_tensor)
 
+    @block_wise_cuda_graph_wrap(inputs=["x"], self_attrs=["weight", "weight_scale_inv", "bias"])
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         """
         Forward function for Linear.
@@ -403,15 +423,7 @@ class MergedReplicatedLinear(ReplicatedLinear):
                 start=param_shard_offset,
                 end=param_shard_offset + param_shard_size,
             )
-        assert param.shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        # Ensure loaded weight dtype matches model param dtype
-        if loaded_weight.dtype != param.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.view(param.dtype)
-            else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+        loaded_weight = may_be_do_cast(loaded_weight, param)
         # (bukejiyu) After this fix, the early H2D copy for non-GPU devices is no longer needed and can be safely removed.
         h2d_copy(param, loaded_weight)
 
@@ -588,16 +600,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
-
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def load_state_dict(self, state_dict: dict):
@@ -749,15 +752,7 @@ class QKVParallelLinear(ColumnParallelLinear):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
@@ -868,7 +863,7 @@ class RowParallelLinear(LinearBase):
             with_bias (bool): Whether to include bias or not. Defaults to False.
             skip_quant (bool): Whether to skip quantization or not. Defaults to False.
             enable_all_reduce_fusion (bool, optional): Whether to enable all-reduce fusion.
-                If None, it is determined by the config flag and prefix. Defaults to None.
+                If None, it is determined by the config flag. Defaults to None.
         """
         self.fd_config = fd_config
         if enable_all_reduce_fusion is None:
@@ -1009,6 +1004,23 @@ class KVBatchLinear(nn.Layer):
 
         # Override weight keys to use the combined kv_b_proj
         self.weight_key = f"{prefix}.weight"  # e.g., "kv_b_proj.weight"
+
+        if self.fd_config.load_config.load_choices == "dummy":
+            # Create K projection weight
+            self.k_b_proj_weight = self.create_parameter(
+                shape=[self.num_heads_per_partition, qk_nope_head_dim, kv_lora_rank],
+                dtype=self.weight_dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            # Create V projection weight
+            self.v_b_proj_weight = self.create_parameter(
+                shape=[self.num_heads_per_partition, kv_lora_rank, v_head_dim],
+                dtype=self.weight_dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
 
     def process_weights_after_loading(self):
         if self.fd_config.load_config.dynamic_load_weight:
@@ -1258,15 +1270,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def gate_weight_loader(self, param, loaded_weight):
@@ -1298,15 +1302,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
         param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-        assert param.shape == loaded_weight.shape, (
-            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        # Ensure loaded weight dtype matches model param dtype
-        if loaded_weight.dtype != param.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.view(param.dtype)
-            else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+        loaded_weight = may_be_do_cast(loaded_weight, param)
         h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):

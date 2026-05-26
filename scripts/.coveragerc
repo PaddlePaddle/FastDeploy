@@ -30,6 +30,7 @@ omit =
     */site-packages/*/fastdeploy/model_executor/ops/gpu*
     */fastdeploy/benchmarks/lib/endpoint_request_func.py
     */fastdeploy/model_executor/graph_optimization/utils.py
+    */fastdeploy/model_executor/layers/sample/ops/top_k_top_p_triton.py
     */fastdeploy/model_executor/ops/gpu/fastdeploy_ops.py
     */fastdeploy/model_executor/ops/gpu/fastdeploy_ops/__init__.py
     */fastdeploy/model_executor/ops/gpu/deep_gemm/utils.py

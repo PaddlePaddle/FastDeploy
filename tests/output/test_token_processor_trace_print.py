@@ -14,7 +14,7 @@
 
 import logging
 import time
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from fastdeploy.engine.request import Request, RequestMetrics
 from fastdeploy.output.token_processor import TokenProcessor
@@ -22,7 +22,11 @@ from fastdeploy.output.token_processor import TokenProcessor
 
 class TestTokenProcessorMetrics:
     def setup_method(self):
+        self.fd_trace_patcher = patch("fastdeploy.trace.trace_logger.envs.FD_TRACE", "local")
+        self.fd_trace_patcher.start()
+
         self.mock_cfg = MagicMock()
+        self.mock_cfg.scheduler_config.splitwise_role = "decode"
         self.mock_cached_tokens = MagicMock()
         self.mock_engine_queue = MagicMock()
         self.mock_split_connector = MagicMock()
@@ -56,6 +60,9 @@ class TestTokenProcessorMetrics:
             inference_start_time=now + 0.2,
         )
 
+    def teardown_method(self):
+        self.fd_trace_patcher.stop()
+
     def test_record_first_token_metrics(self, caplog):
         current_time = time.time()
 
@@ -74,9 +81,10 @@ class TestTokenProcessorMetrics:
         with caplog.at_level(logging.INFO):
             self.processor._record_completion_metrics(self.task, current_time)
 
-        assert len(caplog.records) == 2
+        assert len(caplog.records) == 3
         assert "[request_id=test123]" in caplog.text
         assert "[event=INFERENCE_END]" in caplog.text
+        assert "[event=DECODE_INFERENCE_END]" in caplog.text
         assert "[event=POSTPROCESSING_START]" in caplog.text
 
         # Verify metrics are updated

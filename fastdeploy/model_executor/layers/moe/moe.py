@@ -36,9 +36,14 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.worker.experts_manager import RedundantExpertManger
 
 try:
-    from fastdeploy.model_executor.ops.gpu import noaux_tc, noaux_tc_redundant
+    from fastdeploy.model_executor.ops.gpu import (
+        grouped_topk,
+        noaux_tc,
+        noaux_tc_redundant,
+    )
 except:
     logger.warning("import noaux_tc Failed!")
+
 import numpy as np
 
 
@@ -48,6 +53,11 @@ def get_moe_method(layer=None):
     """
 
     if current_platform.is_cuda():
+        moe_backend = envs.FD_MOE_BACKEND.lower()
+        if moe_backend == "triton":
+            from .fused_moe_triton_backend import TritonMoEMethod
+
+            return TritonMoEMethod(None)
         from .fused_moe_cutlass_backend import CutlassMoEMethod
 
         return CutlassMoEMethod(None)
@@ -91,14 +101,12 @@ def get_moe_scores(
     tokens_per_expert_stats_list: paddle.Tensor = None,
     redundant_ep_rank_num_plus_one: int = 1,
     topk_reduce_func: Callable = lambda x: x.sum(axis=-1, keepdim=True) + 1e-20,
+    use_fused_cast: bool = False,
 ) -> paddle.Tensor:
     """
     compute moe scores using e_score_correction_bias.
     """
-    scores = paddle.nn.functional.sigmoid(gating_output)
     assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
-    scores_with_bias = scores + e_score_correction_bias
-
     if envs.FD_USE_PHI_MOE_TOPK:
         # calculate renormalize and routed_scaling_factor value outside the noaux_tc
         original_renormalize = renormalize
@@ -106,7 +114,9 @@ def get_moe_scores(
         renormalize = False
         routed_scaling_factor = 1.0
 
-    if expert_id_to_ep_rank_array is None:
+    if expert_id_to_ep_rank_array is None and not use_fused_cast:
+        scores = paddle.nn.functional.sigmoid(gating_output)
+        scores_with_bias = scores + e_score_correction_bias
         scores, topk_values, topk_idx = noaux_tc(
             scores,
             scores_with_bias,
@@ -116,9 +126,20 @@ def get_moe_scores(
             renormalize,
             routed_scaling_factor,
         )
+    elif expert_id_to_ep_rank_array is None and use_fused_cast:
+        # fused kernel: cast + sigmoid + add + noaux_tc
+        scores, topk_values, topk_idx = grouped_topk(
+            gating_output,
+            e_score_correction_bias,
+            n_group if n_group > 0 else 1,
+            topk_group if topk_group > 0 else 1,
+            top_k,
+            renormalize,
+            routed_scaling_factor,
+        )
     else:
-        # noaux_tc_redundant returns 4 values: scores, topk_values, topk_idx,
-        # and tokens_per_expert_stats_list_out (inplace updated)
+        scores = paddle.nn.functional.sigmoid(gating_output)
+        scores_with_bias = scores + e_score_correction_bias
         scores, topk_values, topk_idx, _ = noaux_tc_redundant(
             scores,
             scores_with_bias,
@@ -266,6 +287,15 @@ class FusedMoE(nn.Layer):
             self.gate_correction_bias = gate_correction_bias
         else:
             self.gate_correction_bias = None
+
+        self.routed_scaling_factor_learnable = getattr(
+            self.fd_config.model_config, "routed_scaling_factor_learnable", False
+        )
+        if self.routed_scaling_factor_learnable:
+            self.per_expert_scale = self.create_parameter(
+                shape=[self.num_experts], dtype="float32", default_initializer=nn.initializer.Constant(1.0)
+            )
+
         self.quant_method.create_weights(
             self,
             weight_loader=self.weight_loader,

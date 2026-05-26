@@ -723,5 +723,284 @@ class TestFreeCacheMethods(unittest.TestCase):
         self.assertEqual(len(self.controller.cache_kvs_map), 0)
 
 
+# ============================================================================
+# initialize_kv_cache / initialize_mtp_kv_cache dtype Tests (PR #7757)
+# ============================================================================
+
+
+def make_mock_attn_backend(key_shape=(10, 4, 16, 64), val_shape=None, val_shape_is_none=False):
+    """Create a mock attn_backend with a fixed get_kv_cache_shape and create_kv_cache."""
+    import paddle
+
+    backend = MagicMock()
+
+    if val_shape_is_none:
+        # Simulate MLA variants (e.g., DeepSeek) that return None for value_cache_shape
+        backend.get_kv_cache_shape.return_value = (list(key_shape), None)
+        resolved_val_shape = None
+    else:
+        if val_shape is None:
+            val_shape = key_shape
+        backend.get_kv_cache_shape.return_value = (list(key_shape), list(val_shape))
+        resolved_val_shape = list(val_shape)
+
+    key_shape_list = list(key_shape)
+
+    def fake_create_kv_cache(num_layers, num_blocks, cache_dtype, kv_cache_quant_type, layer_offset=0):
+        caches = {}
+        for i in range(num_layers):
+            layer_idx = layer_offset + i
+            caches[("key", layer_idx)] = paddle.zeros(key_shape_list, dtype=cache_dtype)
+            if resolved_val_shape is not None:
+                caches[("value", layer_idx)] = paddle.zeros(resolved_val_shape, dtype=cache_dtype)
+            if kv_cache_quant_type == "block_wise_fp8":
+                caches[("key_scale", layer_idx)] = paddle.zeros([1], dtype="float32")
+                if resolved_val_shape is not None:
+                    caches[("value_scale", layer_idx)] = paddle.zeros([1], dtype="float32")
+        return caches
+
+    backend.create_kv_cache.side_effect = fake_create_kv_cache
+    return backend
+
+
+class TestInitializeKVCacheDtype(unittest.TestCase):
+    """
+    Tests for the cache_dtype logic introduced in PR #7757:
+      cache_dtype = "uint8" if kv_cache_quant_type is not None else model_config.dtype
+    """
+
+    def _make_controller(self, model_dtype="bfloat16", num_layers=2):
+        config = get_default_test_fd_config()
+        config.cache_config.num_cpu_blocks = 0  # skip host cache init
+        config.model_config.num_hidden_layers = num_layers
+        config.model_config.dtype = model_dtype
+        from fastdeploy.cache_manager.v1.cache_controller import CacheController
+
+        return CacheController(config, local_rank=0, device_id=0)
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_kv_cache_non_quantized_uses_model_dtype(self, mock_quant_type):
+        """When kv_cache_quant_type is None, cache tensors use model_config.dtype."""
+        mock_quant_type.return_value = None
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=2)
+        backend = make_mock_attn_backend()
+
+        cache_list = controller.initialize_kv_cache(backend, num_gpu_blocks=10)
+
+        self.assertEqual(len(cache_list), 4)  # 2 layers * (key + value)
+        for tensor in cache_list:
+            self.assertEqual(str(tensor.dtype), "paddle.bfloat16")
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_kv_cache_quantized_uses_uint8(self, mock_quant_type):
+        """When kv_cache_quant_type is set, cache tensors use uint8 regardless of model dtype."""
+        mock_quant_type.return_value = "int8"
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=2)
+        backend = make_mock_attn_backend()
+
+        cache_list = controller.initialize_kv_cache(backend, num_gpu_blocks=10)
+
+        self.assertEqual(len(cache_list), 4)
+        for tensor in cache_list:
+            self.assertEqual(str(tensor.dtype), "paddle.uint8")
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_kv_cache_fp8_quantized_uses_uint8(self, mock_quant_type):
+        """When kv_cache_quant_type is block_wise_fp8, non-scale cache tensors use uint8."""
+        mock_quant_type.return_value = "block_wise_fp8"
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=2)
+        backend = make_mock_attn_backend()
+
+        cache_list = controller.initialize_kv_cache(backend, num_gpu_blocks=10)
+
+        # fp8 path also creates scale tensors (float32); filter to only key/value caches
+        kv_tensors = [t for t in cache_list if str(t.dtype) == "paddle.uint8"]
+        self.assertEqual(len(kv_tensors), 4)  # 2 layers * (key + value)
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_mtp_kv_cache_non_quantized_uses_model_dtype(self, mock_quant_type):
+        """When kv_cache_quant_type is None, MTP cache tensors use model_config.dtype."""
+        mock_quant_type.return_value = None
+        controller = self._make_controller(model_dtype="float16", num_layers=4)
+        backend = make_mock_attn_backend()
+
+        cache_list = controller.initialize_mtp_kv_cache(
+            attn_backend=backend, num_gpu_blocks=10, num_mtp_layers=2, layer_offset=4
+        )
+
+        self.assertEqual(len(cache_list), 4)  # 2 mtp layers * (key + value)
+        for tensor in cache_list:
+            self.assertEqual(str(tensor.dtype), "paddle.float16")
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_mtp_kv_cache_quantized_uses_uint8(self, mock_quant_type):
+        """When kv_cache_quant_type is set, MTP cache tensors use uint8."""
+        mock_quant_type.return_value = "int8"
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=4)
+        backend = make_mock_attn_backend()
+
+        cache_list = controller.initialize_mtp_kv_cache(
+            attn_backend=backend, num_gpu_blocks=10, num_mtp_layers=2, layer_offset=4
+        )
+
+        self.assertEqual(len(cache_list), 4)
+        for tensor in cache_list:
+            self.assertEqual(str(tensor.dtype), "paddle.uint8")
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_kv_cache_populates_cache_kvs_map(self, mock_quant_type):
+        """Tensors created in initialize_kv_cache are stored in cache_kvs_map with correct dtype."""
+        mock_quant_type.return_value = "int8"
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=2)
+        backend = make_mock_attn_backend()
+
+        controller.initialize_kv_cache(backend, num_gpu_blocks=10)
+
+        for name, tensor in controller.cache_kvs_map.items():
+            if "scale" not in name:
+                self.assertEqual(str(tensor.dtype), "paddle.uint8", f"wrong dtype for {name}")
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_kv_cache_null_value_cache_shape(self, mock_quant_type):
+        """MLA variant: when value_cache_shape is None, only key cache is created."""
+        mock_quant_type.return_value = None
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=2)
+        backend = make_mock_attn_backend(val_shape_is_none=True)
+
+        cache_list = controller.initialize_kv_cache(backend, num_gpu_blocks=10)
+
+        self.assertEqual(len(cache_list), 2)  # 2 layers * key only
+        for tensor in cache_list:
+            self.assertEqual(str(tensor.dtype), "paddle.bfloat16")
+        # Verify no value entries in cache_kvs_map
+        for name in controller.cache_kvs_map:
+            self.assertNotIn("value", name)
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_mtp_kv_cache_null_value_cache_shape(self, mock_quant_type):
+        """MLA variant: when value_cache_shape is None, only key cache is created for MTP."""
+        mock_quant_type.return_value = None
+        controller = self._make_controller(model_dtype="bfloat16", num_layers=4)
+        backend = make_mock_attn_backend(val_shape_is_none=True)
+
+        cache_list = controller.initialize_mtp_kv_cache(
+            attn_backend=backend, num_gpu_blocks=10, num_mtp_layers=2, layer_offset=4
+        )
+
+        self.assertEqual(len(cache_list), 2)  # 2 mtp layers * key only
+        for tensor in cache_list:
+            self.assertEqual(str(tensor.dtype), "paddle.bfloat16")
+
+
+# ============================================================================
+# _format_cache_name Tests
+# ============================================================================
+
+
+class TestFormatCacheName(unittest.TestCase):
+    """Test _format_cache_name method."""
+
+    def test_unknown_role_raises_value_error(self):
+        controller = create_cache_controller(num_layers=4)
+        with self.assertRaises(ValueError):
+            controller._format_cache_name("bad_role", 0)
+
+
+# ============================================================================
+# initialize_host_cache Tests
+# ============================================================================
+
+
+def _make_concrete_backend(key_shape=(4, 16, 64), value_shape=(4, 16, 64)):
+    """Create a minimal concrete AttentionBackend with get_kv_cache_shape."""
+    from fastdeploy.model_executor.layers.attention.base_attention_backend import (
+        AttentionBackend,
+    )
+
+    class _TestBackend(AttentionBackend):
+        def init_attention_metadata(self, forward_meta):
+            pass
+
+        def get_kv_cache_shape(self, max_num_blocks, kv_cache_quant_type=None):
+            ks = [max_num_blocks] + list(key_shape)
+            vs = [max_num_blocks] + list(value_shape) if value_shape is not None else []
+            return ks, vs
+
+    return _TestBackend()
+
+
+class TestInitializeHostCache(unittest.TestCase):
+    """Test initialize_host_cache method."""
+
+    def _make_controller_with_spec(self, num_host_blocks=50, num_layers=2):
+        controller = create_cache_controller(num_host_blocks=num_host_blocks, num_layers=num_layers)
+        from fastdeploy.config import SpeculativeConfig
+
+        controller.config.speculative_config = SpeculativeConfig({})
+        return controller
+
+    def test_zero_blocks_skips(self):
+        controller = self._make_controller_with_spec(num_host_blocks=0)
+        result = controller.initialize_host_cache(MagicMock())
+        self.assertIsNone(result)
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+    @patch("fastdeploy.model_executor.layers.attention.base_attention_backend.cuda_host_alloc")
+    def test_success_populates_host_cache_kvs_map(self, mock_alloc):
+        mock_alloc.return_value = 1000000
+        controller = self._make_controller_with_spec(num_host_blocks=50, num_layers=2)
+        backend = _make_concrete_backend(key_shape=(4, 16, 64), value_shape=(4, 16, 64))
+
+        controller.initialize_host_cache(backend)
+
+        self.assertGreater(len(controller.host_cache_kvs_map), 0)
+        # 2 layers * (key + value) = 4 entries
+        self.assertEqual(len(controller.host_cache_kvs_map), 4)
+        for name, ptr in controller.host_cache_kvs_map.items():
+            self.assertEqual(ptr, 1000000)
+
+    def test_not_implemented_error_skips(self):
+        controller = self._make_controller_with_spec(num_host_blocks=50, num_layers=2)
+        backend = _make_concrete_backend()
+        backend.create_host_kv_cache = MagicMock(side_effect=NotImplementedError("test"))
+
+        result = controller.initialize_host_cache(backend)
+
+        self.assertIsNone(result)
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+
+class TestFreeHostCache(unittest.TestCase):
+    """Test _free_host_cache method."""
+
+    def test_when_backend_is_none_clears_map(self):
+        controller = create_cache_controller(num_layers=4)
+        controller.host_cache_kvs_map = {"key_0": 12345}
+        controller.attn_backend = None
+
+        controller._free_host_cache()
+
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+    def test_with_backend_delegates_to_free_host_kv_cache(self):
+        controller = create_cache_controller(num_layers=4)
+        controller.host_cache_kvs_map = {"key_0": 12345, "value_0": 67890}
+        mock_backend = MagicMock()
+        controller.attn_backend = mock_backend
+
+        controller._free_host_cache()
+
+        mock_backend.free_host_kv_cache.assert_called_once_with(controller.host_cache_kvs_map)
+
+    def test_empty_host_cache_map_noop(self):
+        controller = create_cache_controller(num_layers=4)
+        controller.host_cache_kvs_map = {}
+        controller.attn_backend = MagicMock()
+
+        controller._free_host_cache()
+
+        controller.attn_backend.free_host_kv_cache.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -189,6 +189,84 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const int sliding_window,
     const int sink_size);
 
+std::vector<paddle::Tensor> DecoderWriteCacheWithRoPE(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& set_max_lengths,
+    const paddle::optional<paddle::Tensor>& rotary_embs,
+    const paddle::optional<paddle::Tensor>& qkv_bias,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const paddle::optional<paddle::Tensor>& kv_signal_data,
+    const paddle::optional<paddle::Tensor>& q_norm_weight,
+    const paddle::optional<paddle::Tensor>& k_norm_weight,
+    const float rms_norm_eps,
+    const std::string& cache_quant_type_str,
+    const bool use_neox_rotary_style,
+    const bool rope_3d,
+    const int max_input_length,
+    const float quant_max_bound,
+    const float quant_min_bound,
+    const bool speculate_decoder);
+
+std::vector<paddle::Tensor> DecodeUnifiedAttention(
+    const paddle::Tensor& qkv,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& tmp_workspace,
+    const paddle::Tensor& tmp_m,
+    const paddle::Tensor& tmp_d,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& block_indices,
+    const paddle::Tensor& num_blocks,
+    const paddle::Tensor& chunk_size,
+    const paddle::Tensor& set_max_lengths,
+    const paddle::optional<paddle::Tensor>& attn_mask,
+    const paddle::optional<paddle::Tensor>& cache_k_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_quant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_v_dequant_scales,
+    const paddle::optional<paddle::Tensor>& cache_k_zp,
+    const paddle::optional<paddle::Tensor>& cache_v_zp,
+    const paddle::optional<paddle::Tensor>& mask_offset,
+    const paddle::optional<paddle::Tensor>& sinks,
+    paddle::Tensor& fmha_out,
+    const std::string& cache_quant_type,
+    const int max_input_length,
+    const float quant_max_bound,
+    const float quant_min_bound,
+    const int max_tokens_per_batch,
+    const bool causal,
+    const int sliding_window);
+
+void ConfigForAttention(const paddle::Tensor& seq_lens_encoder,
+                        const paddle::Tensor& seq_lens_decoder,
+                        const paddle::Tensor& seq_lens_this_time,
+                        paddle::Tensor& block_indices,       // Inplace
+                        paddle::Tensor& num_blocks,          // Inplace
+                        paddle::Tensor& chunk_size,          // Inplace
+                        paddle::Tensor& max_len_tensor_cpu,  // Inplace, CPU
+                        const std::string cache_quant_type,
+                        const int group_size,
+                        const int kv_num_heads,
+                        const int max_tokens_per_batch);
+
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
@@ -425,8 +503,9 @@ void GetBlockShapeAndSplitKVBlock(
 std::vector<paddle::Tensor> GetPaddingOffset(
     const paddle::Tensor& input_ids,
     const paddle::Tensor& seq_len,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& seq_lens_decoder,
     const paddle::optional<paddle::Tensor>& draft_tokens,
-    const paddle::optional<paddle::Tensor>& seq_lens_encoder,
     const int64_t token_num_cpu);
 
 void SetValueByFlagsAndIdx(const paddle::Tensor& token_ids_all,
@@ -555,7 +634,6 @@ std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
     const std::string& cache_quant_type_str,
-    const int max_seq_len,
     const bool speculate_decoder);
 
 std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
@@ -567,9 +645,9 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
+    const paddle::Tensor& slot_mapping,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
-    const std::string& cache_quant_type_str,
-    const int max_seq_len);
+    const std::string& cache_quant_type_str);
 
 void FusedRotaryPositionEncoding(
     paddle::Tensor& query,  // [num_tokens, num_heads, head_size] or
@@ -690,6 +768,19 @@ std::vector<paddle::Tensor> NoauxTc(paddle::Tensor& scores,
                                     int topk,
                                     bool renormalize,
                                     float routed_scaling_factor);
+
+std::vector<paddle::Tensor> grouped_topk(
+    paddle::Tensor& gating_output,
+    paddle::Tensor& e_score_correction_bias,
+    int n_group,
+    int topk_group,
+    int topk,
+    bool renormalize,
+    float routed_scaling_factor);
+
+std::vector<paddle::Tensor> FusedCastSigmoidBias(const paddle::Tensor& input,
+                                                 const paddle::Tensor& bias,
+                                                 std::string cast_type);
 
 std::vector<paddle::Tensor> NoauxTcRedundant(
     paddle::Tensor& scores,
@@ -937,9 +1028,7 @@ void SpeculateScheduleCache(const paddle::Tensor& draft_tokens,
                             const int block_size,
                             const int max_draft_tokens);
 
-void NgramMatch(const paddle::Tensor& input_ids,
-                const paddle::Tensor& input_ids_len,
-                const paddle::Tensor& token_ids_all,
+void NgramMatch(const paddle::Tensor& token_ids_all,
                 const paddle::Tensor& prompt_lens,
                 const paddle::Tensor& step_idx,
                 const paddle::Tensor& draft_token_num,
@@ -1145,13 +1234,16 @@ void SpeculateInsertFirstToken(const paddle::Tensor& token_ids,
                                const paddle::Tensor& seq_lens_this_time,
                                const paddle::Tensor& seq_lens_encoder);
 
-void SpeculateGetTargetLogits(const paddle::Tensor& target_logits,
-                              const paddle::Tensor& logits,
-                              const paddle::Tensor& cu_batch_token_offset,
-                              const paddle::Tensor& ori_cu_batch_token_offset,
-                              const paddle::Tensor& seq_lens_this_time,
-                              const paddle::Tensor& seq_lens_encoder,
-                              const paddle::Tensor& accept_num);
+void SpeculateGetAcceptTokensAndLogits(
+    const paddle::Tensor& token_ids,
+    const paddle::Tensor& target_logits,
+    const paddle::Tensor& logits,
+    const paddle::Tensor& cu_batch_token_offset,
+    const paddle::Tensor& cu_seqlens_q_output,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& seq_lens_encoder,
+    const paddle::Tensor& accept_num,
+    const paddle::Tensor& accept_tokens);
 
 std::vector<paddle::Tensor> UpdateAttnMaskOffsets(
     const paddle::Tensor& ids_remove_padding,
@@ -1199,7 +1291,8 @@ std::vector<paddle::Tensor> PrefillPermuteToMaskedGemm(
     const paddle::Tensor& scale,
     const paddle::Tensor& topk_ids,
     const int num_local_experts,
-    const int max_token_num);
+    const int max_token_num,
+    const bool make_scale_interleaved);
 
 std::vector<paddle::Tensor> DepermutePrefillCombine(
     const paddle::Tensor& x,
@@ -1699,6 +1792,15 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
 
   m.def("noaux_tc", &NoauxTc, "noaux_tc for Deepseekv3 MoE compute");
 
+  m.def("grouped_topk", &grouped_topk, "fused grouped topk for MoE routing");
+
+  m.def("fused_cast_sigmoid_bias",
+        &FusedCastSigmoidBias,
+        "Fused cast+sigmoid+bias for MoE gating scores",
+        py::arg("input"),
+        py::arg("bias"),
+        py::arg("cast_type") = std::string("float32"));
+
   m.def("noaux_tc_redundant",
         &NoauxTcRedundant,
         "noaux_tc_redundant for MoE compute");
@@ -1879,9 +1981,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &SpeculateInsertFirstToken,
         "speculate_insert_first_token function");
 
-  m.def("speculate_get_target_logits",
-        &SpeculateGetTargetLogits,
-        "speculate_get_target_logits function");
+  m.def("speculate_get_accept_tokens_and_logits",
+        &SpeculateGetAcceptTokensAndLogits,
+        "speculate_get_accept_tokens_and_logits function");
 #endif
 
   m.def("update_attn_mask_offsets",
@@ -1912,6 +2014,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("topk_ids"),
         py::arg("num_local_experts"),
         py::arg("max_token_num"),
+        py::arg("make_scale_interleaved") = false,
         "Prefill permute to masked GEMM for MoE");
 
   m.def("depermute_prefill_combine",
@@ -1939,4 +2042,28 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("per_token_group_fp8_quant",
         &PerTokenGroupQuantFp8,
         "per_token_group_quant_fp8");
+
+  /**
+   * decoder_write_cache_with_rope.cu
+   * decoder_write_cache_with_rope
+   */
+  m.def("decoder_write_cache_with_rope",
+        &DecoderWriteCacheWithRoPE,
+        "decoder write cache with RoPE function");
+
+  /**
+   * decode_unified_attention.cu
+   * decode_unified_attention
+   */
+  m.def("decode_unified_attention",
+        &DecodeUnifiedAttention,
+        "decoder append attention function");
+
+  /**
+   * config_for_attention.cu
+   * config_for_attention
+   */
+  m.def("config_for_attention",
+        &ConfigForAttention,
+        "config for attention function");
 }

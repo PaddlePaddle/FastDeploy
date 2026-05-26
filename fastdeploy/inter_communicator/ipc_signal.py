@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import traceback
 from multiprocessing.shared_memory import SharedMemory
 
 import numpy as np
@@ -37,7 +38,7 @@ def shared_memory_exists(name: str) -> bool:
     except FileNotFoundError:
         return False
     except Exception as e:
-        llm_logger.error(f"Unexpected error: {e}")
+        llm_logger.error(f"Unexpected error: {e}, {traceback.format_exc()}")
         return False
 
 

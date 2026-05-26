@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+import traceback
 from dataclasses import field
 from enum import Enum
 from typing import Any, Dict, Literal, Optional, Union
@@ -1885,6 +1886,65 @@ class RoutingReplayConfig:
         return self.to_json_string()
 
 
+class BenchmarkMetricsConfig:
+    """Configuration for in-process benchmark metrics logger.
+
+    Args (passed as JSON dict via --benchmark-metrics-config):
+        enable: Whether to enable the benchmark metrics logger. Default: False.
+        window_size: Number of recent requests to aggregate. 0 = all requests (cumulative).
+        window_mode: Window aggregation mode. Default: "sliding".
+            "sliding" = sliding window (keep last N records),
+            "tumbling" = tumbling window (clear and restart after every N records).
+        percentiles: Comma-separated percentile values to compute, e.g. "50,90,95,99".
+        metrics: Comma-separated metric names to report, or "all".
+            Available metrics (aligned with benchmark_serving.py --percentile-metrics):
+                ttft          - Time to First Token (client arrival → first token)
+                s_ttft        - Server TTFT (inference start → first token)
+                tpot          - Time per Output Token (excluding first token)
+                s_itl         - Infer Inter-token Latency
+                e2el          - End-to-end Latency (client arrival → last token)
+                s_e2el        - Server E2EL (inference start → last token)
+                s_decode      - Decode speed (tokens/s, excluding first token)
+                input_len     - Prefix cache hit token count ("Cached Tokens" in benchmark_serving)
+                s_input_len   - Infer input length (total prompt tokens on inference side)
+                output_len    - Output token length per request
+    """
+
+    _DEFAULTS = {
+        "enable": False,
+        "window_size": 0,
+        "window_mode": "sliding",
+        "percentiles": "50,90,95,99",
+        "metrics": "all",
+    }
+
+    _ALL_METRICS = [
+        "ttft",  # Time to First Token
+        "s_ttft",  # Server TTFT
+        "tpot",  # Time per Output Token
+        "s_itl",  # Infer Inter-token Latency
+        "e2el",  # End-to-end Latency
+        "s_e2el",  # Server E2EL
+        "s_decode",  # Decode speed (tok/s)
+        "input_len",  # Prefix cache hit tokens (= "Cached Tokens" in benchmark_serving)
+        "s_input_len",  # Infer input length (total prompt tokens)
+        "output_len",  # Output token length
+    ]
+
+    def __init__(self, args: Optional[dict] = None):
+        for key, value in self._DEFAULTS.items():
+            setattr(self, key, value)
+        if args:
+            for key, value in args.items():
+                if key in self._DEFAULTS:
+                    setattr(self, key, value)
+        self.percentile_values = [float(p.strip()) for p in self.percentiles.split(",") if p.strip()]
+        if self.metrics == "all":
+            self.selected_metrics = set(self._ALL_METRICS)
+        else:
+            self.selected_metrics = {m.strip() for m in self.metrics.split(",") if m.strip()}
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1919,6 +1979,7 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
+        benchmark_metrics_config=None,
         deploy_modality: DeployModality = DeployModality.MIXED,
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
@@ -1936,6 +1997,7 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
+        self.benchmark_metrics_config = benchmark_metrics_config
         self.deploy_modality: DeployModality = deploy_modality
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
@@ -1963,6 +2025,7 @@ class FDConfig:
                     in [
                         SpecMethod.MTP,
                         SpecMethod.SUFFIX,
+                        SpecMethod.NGRAM,
                     ]
                 )
                 else 0
@@ -2122,8 +2185,8 @@ class FDConfig:
             self.structured_outputs_config is not None
             and self.structured_outputs_config.guided_decoding_backend != "off"
         ):
-            if current_platform.is_xpu() or self.speculative_config.method is not None:
-                logger.warning("Speculative Decoding and XPU currently do not support Guided decoding, set off.")
+            if self.speculative_config.method is not None:
+                logger.warning("Speculative Decoding currently does not support Guided decoding, set off.")
                 self.structured_outputs_config.guided_decoding_backend = "off"
             elif self.structured_outputs_config.guided_decoding_backend in ["auto", "xgrammar"]:
                 self.structured_outputs_config.guided_decoding_backend = "xgrammar"
@@ -2203,6 +2266,24 @@ class FDConfig:
         if self.speculative_config is not None and self.speculative_config.method is not None:
             num_spec_tokens = self.speculative_config.num_speculative_tokens
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
+
+            # For speculative, enlarge the threshold to trigger block preallocation earlier,
+            # since each step consumes num_spec_tokens + 1 slots at once
+            old_prealloc_threshold = self.cache_config.prealloc_dec_block_slot_num_threshold
+            prealloc_dec_block_slot = self.cache_config.prealloc_dec_block_slot_num_threshold * (num_spec_tokens + 1)
+            max_prealloc_dec_block_slot = max(
+                0, self.cache_config.block_size * self.cache_config.enc_dec_block_num - 1
+            )
+            self.cache_config.prealloc_dec_block_slot_num_threshold = min(
+                prealloc_dec_block_slot, max_prealloc_dec_block_slot
+            )
+            logger.info(
+                f"prealloc_dec_block_slot_num_threshold updated: {old_prealloc_threshold} -> "
+                f"{self.cache_config.prealloc_dec_block_slot_num_threshold} "
+                f"(num_spec_tokens={num_spec_tokens}, block_size={self.cache_config.block_size}, "
+                f"enc_dec_block_num={self.cache_config.enc_dec_block_num})"
+            )
+
         else:
             auto_dispatch_tokens = self.scheduler_config.max_num_seqs
         if (
@@ -2275,7 +2356,9 @@ class FDConfig:
                 else None
             )
         except Exception as e:
-            logger.error(f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}")
+            logger.error(
+                f"Failed to extract local devices or ports. Servers may not be able to start properly. {e}, {traceback.format_exc()}"
+            )
 
     def check(self):
         """
@@ -2294,7 +2377,7 @@ class FDConfig:
         ), f"max_num_seqs: {self.scheduler_config.max_num_seqs} should be larger than 1"
         tokens_per_seq = (
             (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
-            if self.speculative_config is not None
+            if self.speculative_config is not None and self.speculative_config.method is not None
             else 1
         )
         assert self.scheduler_config.max_num_batched_tokens >= self.scheduler_config.max_num_seqs * tokens_per_seq, (
@@ -2361,9 +2444,6 @@ class FDConfig:
                     self.speculative_config.method is None
                 ), "speculative decoding currently do not support guided_decoding"
 
-                # TODO: xpu support guided_decoding
-                assert not current_platform.is_xpu(), "XPU currently do not support guided_decoding"
-
                 try:
                     import xgrammar  # noqa
                 except Exception as e:
@@ -2393,6 +2473,33 @@ class FDConfig:
                 raise ImportError(
                     "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
                     "  CUDA 12.x → pip install cuda-python==12.*\n"
+                )
+
+        if self.benchmark_metrics_config is not None:
+            cfg = self.benchmark_metrics_config
+            assert isinstance(
+                cfg.enable, bool
+            ), f"BenchmarkMetricsConfig: 'enable' must be a bool, got {type(cfg.enable).__name__}"
+            assert (
+                isinstance(cfg.window_size, int) and cfg.window_size >= 0
+            ), f"BenchmarkMetricsConfig: 'window_size' must be a non-negative integer, got {cfg.window_size!r}"
+            assert cfg.window_mode in (
+                "sliding",
+                "tumbling",
+            ), f"BenchmarkMetricsConfig: 'window_mode' must be 'sliding' or 'tumbling', got {cfg.window_mode!r}"
+            assert (
+                isinstance(cfg.percentiles, str) and cfg.percentiles.strip()
+            ), f"BenchmarkMetricsConfig: 'percentiles' must be a non-empty string, got {cfg.percentiles!r}"
+            for p in cfg.percentile_values:
+                assert 0 <= p <= 100, f"BenchmarkMetricsConfig: percentile value {p} out of range [0, 100]"
+            assert (
+                isinstance(cfg.metrics, str) and cfg.metrics.strip()
+            ), f"BenchmarkMetricsConfig: 'metrics' must be a non-empty string, got {cfg.metrics!r}"
+            if cfg.metrics != "all":
+                invalid = cfg.selected_metrics - set(BenchmarkMetricsConfig._ALL_METRICS)
+                assert not invalid, (
+                    f"BenchmarkMetricsConfig: unknown metric(s): {invalid}. "
+                    f"Valid metrics: {BenchmarkMetricsConfig._ALL_METRICS}"
                 )
 
     def print(self):
@@ -2485,7 +2592,13 @@ class FDConfig:
             if paddle.is_compiled_with_xpu():
                 num_tokens = self.scheduler_config.max_num_batched_tokens
             else:
-                num_tokens = self.scheduler_config.max_num_seqs
+                # In MTP scenario, each sequence generates (num_speculative_tokens + 1) tokens per step
+                mtp_steps = (
+                    (getattr(self.speculative_config, "num_speculative_tokens", 0) + 1)
+                    if self.speculative_config is not None and self.speculative_config.method is not None
+                    else 1
+                )
+                num_tokens = self.scheduler_config.max_num_seqs * mtp_steps
         else:
             num_tokens = self.scheduler_config.max_num_batched_tokens
             if self.enable_mm_runtime and mm_max_tokens_per_item is not None:

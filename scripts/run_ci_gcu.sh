@@ -51,7 +51,7 @@ if grep -q "Failed to launch worker processes" server.log; then
     echo "Failed to launch worker processes..."
     stop_processes
     cat server.log
-    cat log/workerlog.0
+    cat log/paddle/workerlog.0
     exit 1
 fi
 
@@ -59,7 +59,7 @@ if grep -q "Traceback (most recent call last):" server.log; then
     echo "Some errors occurred..."
     stop_processes
     cat server.log
-    cat log/workerlog.0
+    cat log/paddle/workerlog.0
     exit 1
 fi
 
@@ -79,7 +79,7 @@ while true; do
         echo -e "\nServer start timeout: After $((TIMEOUT/60)) minutes, the service still doesn't start!"
         stop_processes
         cat server.log
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         exit 1
     fi
 
@@ -106,7 +106,7 @@ stop_processes
 echo "Stop server done."
 
 if [ ${exit_code} -ne 0 ]; then
-    echo "Exit with error, please refer to log/workerlog.0"
-    cat log/workerlog.0
+    echo "Exit with error, please refer to log/paddle/workerlog.0"
+    cat log/paddle/workerlog.0
     exit 1
 fi

@@ -27,9 +27,7 @@
 // the tentative new seq_lens_this_time to a copy buffer.
 // Phase 2 will decide which ones to keep (threshold logic).
 // ============================================================
-__global__ void ngram_match_search_kernel(const int64_t *input_ids,
-                                          const int64_t *input_ids_len,
-                                          const int64_t *token_ids_all,
+__global__ void ngram_match_search_kernel(const int64_t *token_ids_all,
                                           const int64_t *prompt_lens,
                                           const int64_t *step_idx,
                                           const int *draft_token_num,
@@ -38,7 +36,6 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
                                           const int64_t *max_dec_len,
                                           int64_t *draft_tokens_copy,
                                           int32_t *seq_lens_this_time_copy,
-                                          int64_t input_ids_stride,
                                           int64_t max_model_len,
                                           int64_t draft_tokens_stride,
                                           int64_t max_batch_size,
@@ -63,9 +60,9 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
   // Active decoder item: at least the base token.
   if (threadIdx.x == 0) seq_lens_this_time_copy[batch_idx] = 1;
 
-  const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
-  const int64_t cur_input_ids_len = input_ids_len[batch_idx];
   const int64_t prompt_len = prompt_lens[batch_idx];
+  const int64_t *cur_input_ids = token_ids_all + batch_idx * max_model_len;
+  const int64_t cur_input_ids_len = prompt_len;
   const int64_t *cur_pre_ids =
       token_ids_all + batch_idx * max_model_len + prompt_len;
   const int64_t cur_step_idx = step_idx[batch_idx];
@@ -79,7 +76,7 @@ __global__ void ngram_match_search_kernel(const int64_t *input_ids,
   for (int ngram_size = max_ngram_size; ngram_size >= 1; --ngram_size) {
     if (cur_step_idx < ngram_size) continue;
 
-    const int64_t *ngram = cur_pre_ids + (cur_step_idx + 1 - ngram_size);
+    const int64_t *ngram = cur_pre_ids + (cur_step_idx - ngram_size);
 
     int64_t pos = parallel_ngram_search(
         cur_input_ids, cur_input_ids_len, ngram, ngram_size, &s_min_pos);
@@ -235,9 +232,7 @@ static int sum_cpu(const int *value, int num) {
   return sum_value;
 }
 
-static void find_candidate_pred_tokens(const int64_t *input_ids,
-                                       const int64_t *input_ids_len,
-                                       const int64_t *token_ids_all,
+static void find_candidate_pred_tokens(const int64_t *token_ids_all,
                                        const int64_t *prompt_lens,
                                        const int64_t *step_idx,
                                        const int *draft_token_num,
@@ -246,7 +241,6 @@ static void find_candidate_pred_tokens(const int64_t *input_ids,
                                        int32_t *seq_lens_encoder,
                                        int32_t *seq_lens_decoder,
                                        int64_t *max_dec_len,
-                                       int64_t input_ids_stride,
                                        int64_t max_model_len,
                                        int64_t draft_tokens_stride,
                                        int64_t max_batch_size,
@@ -274,12 +268,12 @@ static void find_candidate_pred_tokens(const int64_t *input_ids,
       continue;
     }
 
-    const int64_t *cur_input_ids = input_ids + batch_idx * input_ids_stride;
+    const int64_t *cur_input_ids = token_ids_all + batch_idx * max_model_len;
+    const int64_t cur_input_ids_len = prompt_lens[batch_idx];
     int64_t *cur_draft_tokens = draft_tokens + batch_idx * draft_tokens_stride;
     const int64_t *cur_pre_ids =
-        token_ids_all + batch_idx * max_model_len + prompt_lens[batch_idx];
+        token_ids_all + batch_idx * max_model_len + cur_input_ids_len;
     const int64_t cur_step_idx = step_idx[batch_idx];
-    const int64_t cur_input_ids_len = input_ids_len[batch_idx];
     seq_lens_this_time[batch_idx] = 1;
     unprocessed_batch_size--;
 
@@ -301,7 +295,7 @@ static void find_candidate_pred_tokens(const int64_t *input_ids,
       if (cur_step_idx < ngram_size) {
         continue;
       }
-      const int64_t *ngram = cur_pre_ids + (cur_step_idx + 1 - ngram_size);
+      const int64_t *ngram = cur_pre_ids + (cur_step_idx - ngram_size);
 
       bool match_input = false;
       for (int64_t i = 0; i <= cur_input_ids_len - ngram_size; ++i) {
@@ -370,9 +364,7 @@ static void find_candidate_pred_tokens(const int64_t *input_ids,
 // bsz × NGRAM_BLOCK_THREADS threads.  Phase 2 is O(bsz) with scans.
 // ============================================================
 
-void NgramMatch(const paddle::Tensor &input_ids,
-                const paddle::Tensor &input_ids_len,
-                const paddle::Tensor &token_ids_all,
+void NgramMatch(const paddle::Tensor &token_ids_all,
                 const paddle::Tensor &prompt_lens,
                 const paddle::Tensor &step_idx,
                 const paddle::Tensor &draft_token_num,
@@ -383,9 +375,6 @@ void NgramMatch(const paddle::Tensor &input_ids,
                 const paddle::Tensor &max_dec_len,
                 const int max_ngram_size,
                 const int max_draft_tokens) {
-  auto input_ids_shape = input_ids.shape();
-  const int64_t input_ids_stride = input_ids_shape[1];
-
   const int64_t max_model_len = token_ids_all.shape()[1];
 
   auto draft_tokens_shape = draft_tokens.shape();
@@ -399,8 +388,8 @@ void NgramMatch(const paddle::Tensor &input_ids,
     threshold = std::stoi(env_var);
   }
 
-  if (input_ids.is_gpu()) {
-    auto stream = input_ids.stream();
+  if (token_ids_all.is_gpu()) {
+    auto stream = token_ids_all.stream();
 
     // Persistent scratch buffers for Phase 1 → Phase 2 communication.
     // Cached across calls to avoid per-invocation allocation overhead.
@@ -416,9 +405,9 @@ void NgramMatch(const paddle::Tensor &input_ids,
         draft_tokens_stride > s_scratch_stride) {
       s_draft_copy = paddle::empty({max_batch_size, draft_tokens_stride},
                                    paddle::DataType::INT64,
-                                   input_ids.place());
+                                   token_ids_all.place());
       s_seqlens_copy = paddle::empty(
-          {max_batch_size}, paddle::DataType::INT32, input_ids.place());
+          {max_batch_size}, paddle::DataType::INT32, token_ids_all.place());
       s_scratch_batch = max_batch_size;
       s_scratch_stride = draft_tokens_stride;
     }
@@ -435,8 +424,6 @@ void NgramMatch(const paddle::Tensor &input_ids,
                                 NGRAM_BLOCK_THREADS,
                                 0,
                                 stream>>>(
-        input_ids.data<int64_t>(),
-        input_ids_len.data<int64_t>(),
         token_ids_all.data<int64_t>(),
         prompt_lens.data<int64_t>(),
         step_idx.data<int64_t>(),
@@ -446,7 +433,6 @@ void NgramMatch(const paddle::Tensor &input_ids,
         max_dec_len.data<int64_t>(),
         draft_tokens_copy.data<int64_t>(),
         seq_lens_this_time_copy.data<int32_t>(),
-        input_ids_stride,
         max_model_len,
         draft_tokens_stride,
         max_batch_size,
@@ -465,8 +451,6 @@ void NgramMatch(const paddle::Tensor &input_ids,
         threshold);
   } else {
     find_candidate_pred_tokens(
-        input_ids.data<int64_t>(),
-        input_ids_len.data<int64_t>(),
         token_ids_all.data<int64_t>(),
         prompt_lens.data<int64_t>(),
         step_idx.data<int64_t>(),
@@ -476,7 +460,6 @@ void NgramMatch(const paddle::Tensor &input_ids,
         const_cast<int32_t *>(seq_lens_encoder.data<int32_t>()),
         const_cast<int32_t *>(seq_lens_decoder.data<int32_t>()),
         const_cast<int64_t *>(max_dec_len.data<int64_t>()),
-        input_ids_stride,
         max_model_len,
         draft_tokens_stride,
         max_batch_size,
@@ -486,9 +469,7 @@ void NgramMatch(const paddle::Tensor &input_ids,
 }
 
 PD_BUILD_STATIC_OP(ngram_match)
-    .Inputs({"input_ids",
-             "input_ids_len",
-             "token_ids_all",
+    .Inputs({"token_ids_all",
              "prompt_lens",
              "step_idx",
              "draft_token_num",

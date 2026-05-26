@@ -136,6 +136,7 @@ class MetricsManager:
 
     num_requests_running: "Gauge"
     num_requests_waiting: "Gauge"
+    num_requests_queuing: "Gauge"
     time_to_first_token: "Histogram"
     time_per_output_token: "Histogram"
     request_inference_time: "Histogram"
@@ -153,7 +154,6 @@ class MetricsManager:
     spec_decode_num_emitted_tokens_total: "Gauge"
     spec_decode_draft_single_head_acceptance_rate: "list[Gauge]"
 
-    # for YIYAN Adapter
     prefix_cache_token_num: "Counter"
     prefix_gpu_cache_token_num: "Counter"
     prefix_cpu_cache_token_num: "Counter"
@@ -192,6 +192,11 @@ class MetricsManager:
     request_prompt_tokens: "Histogram"
     request_token_ratio: "Histogram"
 
+    # for pd
+    decode_preallocated_req_num: "Gauge"
+    reschedule_req_num: "Counter"
+    failed_recv_first_token_req_num: "Counter"
+
     # 定义所有指标配置
 
     # gauge指标在多进程中，会有pid隔离，需要特殊处理，因此手动定义出来
@@ -205,7 +210,13 @@ class MetricsManager:
         "num_requests_waiting": {
             "type": Gauge,
             "name": "fastdeploy:num_requests_waiting",
-            "description": "Number of requests currently waiting",
+            "description": "Number of requests currently waiting in resource manager",
+            "kwargs": {},
+        },
+        "num_requests_queuing": {
+            "type": Gauge,
+            "name": "fastdeploy:num_requests_queuing",
+            "description": "Number of requests currently queuing in local scheduler",
             "kwargs": {},
         },
         "gpu_cache_usage_perc": {
@@ -296,6 +307,12 @@ class MetricsManager:
             "type": Gauge,
             "name": "fastdeploy:gpu_hit_token_rate",
             "description": "Token-level GPU prefix cache hit rate",
+            "kwargs": {},
+        },
+        "decode_preallocated_req_num": {
+            "type": Gauge,
+            "name": "fastdeploy:decode_preallocated_req_num",
+            "description": "Number of preallocated requests in decode instance",
             "kwargs": {},
         },
     }
@@ -458,6 +475,18 @@ class MetricsManager:
                     60,
                 ],
             },
+        },
+        "reschedule_req_num": {
+            "type": Counter,
+            "name": "fastdeploy:reschedule_req_num",
+            "description": "Total number of reschedule requests",
+            "kwargs": {},
+        },
+        "failed_recv_first_token_req_num": {
+            "type": Counter,
+            "name": "fastdeploy:failed_recv_first_token_req_num",
+            "description": "Total number of failed requests to receive the first token in decode",
+            "kwargs": {},
         },
     }
 
