@@ -46,6 +46,7 @@ class TestNgramProposer(unittest.TestCase):
         fd_config.speculative_config.max_ngram_size = 3
         fd_config.speculative_config.min_ngram_size = 1
         fd_config.scheduler_config.max_num_seqs = 2
+        fd_config.graph_opt_config.use_cudagraph = False
         self.fd_config = fd_config
 
         bsz = fd_config.scheduler_config.max_num_seqs
@@ -176,6 +177,29 @@ class TestNgramProposer(unittest.TestCase):
 
         slt = self.share_inputs["seq_lens_this_time"].numpy()
         np.testing.assert_array_equal(slt, [1, 1], err_msg="No drafts expected when max_dec_len budget exhausted")
+
+    # Pad-to-max path (cudagraph compatibility)
+    def test_run_pad_to_max_when_cudagraph_enabled(self):
+        """With use_cudagraph=True, NgramProposer passes pad_to_max=True to
+        the kernel; even with no ngram match, seq_lens_this_time is forced
+        to num_speculative_tokens + 1 so cudagraph capture/replay shapes
+        stay consistent.
+        """
+        self.fd_config.graph_opt_config.use_cudagraph = True
+        proposer = NgramProposer(self.fd_config)
+        # No-match scenario (same as test_run_no_proposal_step_idx_zero).
+        self.share_inputs["step_idx"][:] = 0
+
+        proposer.run(self.share_inputs)
+        paddle.device.synchronize()
+
+        target_slt = self.fd_config.speculative_config.num_speculative_tokens + 1
+        slt = self.share_inputs["seq_lens_this_time"].numpy()
+        np.testing.assert_array_equal(
+            slt,
+            np.full_like(slt, target_slt),
+            err_msg=f"pad_to_max should force slt to {target_slt}, got {slt.tolist()}",
+        )
 
 
 if __name__ == "__main__":

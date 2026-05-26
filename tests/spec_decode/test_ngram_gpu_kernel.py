@@ -396,7 +396,6 @@ class TestNgramMatchKernel(unittest.TestCase):
                     data["max_dec_len"],
                     3,
                     10,
-                    False,
                 )
                 gpu_data = _to_gpu(data)
                 self.ngram_match(
@@ -489,7 +488,6 @@ class TestNgramMatchKernel(unittest.TestCase):
             data["max_dec_len"],
             3,
             10,
-            False,
         )
         gpu_data = _to_gpu(data)
         self.ngram_match(
@@ -1049,6 +1047,60 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 os.environ["SPEC_TOKENUM_THRESHOLD"] = old_env
         np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
         np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
+
+    def test_pad_to_max(self):
+        """pad_to_max=True forces seq_lens_this_time to K+1 and fills unused
+        draft slots with a placeholder (= last valid draft token).
+
+        Exercises the cudagraph-stability path: even when ngram has 0 hits,
+        slt must end up at max_draft_tokens + 1 so capture-time and replay-
+        time launch params match.
+        """
+        # 8 batches with step_idx=0 → search short-circuits, no ngram match.
+        # ori_seq_len_this_time = 1 (the verified token only). Without pad,
+        # slt stays at 1; with pad_to_max=True it must be K+1.
+        data = _make_mixed_test_data(batch_size=8, seed=123)
+        data["step_idx"][:] = 0  # force no-match path
+        # Seed the verified token at position 0 of every draft_tokens row
+        # so we can identify the placeholder unambiguously.
+        data["draft_tokens"][:, 0] = 999
+        data["seq_lens_this_time"][:] = 1
+
+        gpu_data = _to_gpu(data)
+        max_draft_tokens = 10
+        self.hybrid_mtp_ngram(
+            gpu_data["token_ids_all"],
+            gpu_data["prompt_lens"],
+            gpu_data["pre_ids"],
+            gpu_data["step_idx"],
+            gpu_data["draft_token_num"],
+            gpu_data["draft_tokens"],
+            gpu_data["seq_lens_this_time"],
+            gpu_data["seq_lens_decoder"],
+            gpu_data["max_dec_len"],
+            3,
+            1,
+            max_draft_tokens,
+            True,  # pad_to_max
+        )
+        paddle.device.synchronize()
+
+        target_slt = max_draft_tokens + 1
+        slt = gpu_data["seq_lens_this_time"].numpy()
+        np.testing.assert_array_equal(
+            slt,
+            np.full_like(slt, target_slt),
+            err_msg=f"expected all slt == {target_slt} after pad, got {slt.tolist()}",
+        )
+
+        # ori was 1 so positions [1..K+1) should all hold the placeholder =
+        # draft_tokens[0] = 999.
+        drafts = gpu_data["draft_tokens"].numpy()
+        np.testing.assert_array_equal(
+            drafts[:, 1:target_slt],
+            np.full((drafts.shape[0], target_slt - 1), 999, dtype=drafts.dtype),
+            err_msg="padded slots should be filled with the placeholder (last valid draft token)",
+        )
 
 
 if __name__ == "__main__":
