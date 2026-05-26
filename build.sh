@@ -294,6 +294,16 @@ function extract_ops_from_precompiled_wheel() {
   rm -rf "${PRE_WHEEL_DIR}"
 }
 
+function is_sm8689_build() {
+  local building_arcs=${1:-""}
+  local normalized
+  normalized=$(echo "${building_arcs}" | tr -d '[][:space:]')
+  if [ "${normalized}" = "86,89" ] || [ "${normalized}" = "89,86" ]; then
+    return 0
+  fi
+  return 1
+}
+
 function build_custom_ops() {
   if [ "$FD_UNIFY_BUILD" ]; then
     mkdir -p ${OPS_SRC_DIR}/${OPS_TMP_DIR}
@@ -305,6 +315,17 @@ function build_custom_ops() {
     build_and_install_ops "[89]" "$custom_ops_dir"
 
     build_and_install_ops "[80, 90]" "${OPS_TMP_DIR}"
+    cp -r $OPS_SRC_DIR/$OPS_TMP_DIR/* ./fastdeploy/model_executor/ops/gpu
+  elif is_sm8689_build "$FD_BUILDING_ARCS"; then
+    echo -e "${BLUE}[build]${NONE} splitting SM86/SM89 custom ops to avoid oversized combined extension link"
+    mkdir -p ${OPS_SRC_DIR}/${OPS_TMP_DIR}
+
+    custom_ops_dir=${OPS_TMP_DIR}/fastdeploy_ops_86
+    build_and_install_ops "[86]" "$custom_ops_dir"
+
+    custom_ops_dir=${OPS_TMP_DIR}/fastdeploy_ops_89
+    build_and_install_ops "[89]" "$custom_ops_dir"
+
     cp -r $OPS_SRC_DIR/$OPS_TMP_DIR/* ./fastdeploy/model_executor/ops/gpu
   else
     build_and_install_ops "$FD_BUILDING_ARCS" "$OPS_TMP_DIR"
