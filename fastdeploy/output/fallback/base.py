@@ -23,23 +23,6 @@ from typing import Any, Literal, Optional
 
 @dataclass
 class OutputFallbackContext:
-    """Per-call context passed into every strategy method.
-
-    This is the extension surface for fallback strategies. Built-in strategies
-    today rely solely on ``text`` / ``delta_text``, but the surrounding request
-    metadata is exposed here so custom strategies (or future built-ins) can:
-
-    - branch on ``stream`` for streaming vs. non-streaming behavior;
-    - read fields from ``request`` (e.g. model name, user, sampling params)
-      to gate or parameterize the strategy per-request;
-    - use ``request_id`` / ``choice_index`` for correlation, dedup, or
-      rate-limiting across multiple calls within one request;
-    - inspect ``full_text`` for whole-output context during streaming;
-    - read ``output`` for upstream metadata (finish_reason, usage, etc.).
-
-    Do not remove fields that look unused — they are part of the strategy ABI.
-    """
-
     request: Any
     request_id: str
     choice_index: int
@@ -61,9 +44,10 @@ class StreamFallbackDecision:
     - ``drop``  : discard this delta entirely (also short-circuits the chain).
     - ``flush`` : used by ``on_finish`` to emit any remaining buffered text
                   after the stream ends.
+    - ``truncate``: send ``text`` as the final delta and stop further generation.
     """
 
-    action: Literal["send", "hold", "drop", "flush"]
+    action: Literal["send", "hold", "drop", "flush", "truncate"]
     text: str = ""
 
 

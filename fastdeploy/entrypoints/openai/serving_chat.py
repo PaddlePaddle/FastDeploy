@@ -249,6 +249,7 @@ class OpenAIServingChat:
         num_cached_tokens = 0
         num_image_tokens = [0] * num_choices
         tool_called = [False] * num_choices
+        fallback_truncated_choices = set()
         inference_start_time = [0] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
@@ -405,6 +406,8 @@ class OpenAIServingChat:
                         first_iteration = False
 
                     output = res["outputs"]
+                    if idx in fallback_truncated_choices:
+                        continue
                     output_top_logprobs = output["top_logprobs"]
                     output_draft_top_logprobs = output["draft_top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
@@ -442,11 +445,8 @@ class OpenAIServingChat:
                         continue
 
                     delta_text = "" if output["skipped"] else (output["text"] or "")
-                    if (
-                        self.output_fallback_manager is not None
-                        and delta_text
-                        and not response_processor.enable_multimodal_content()
-                    ):
+                    fallback_truncated = False
+                    if self.output_fallback_manager is not None and not response_processor.enable_multimodal_content():
                         context = OutputFallbackContext(
                             request=request,
                             request_id=request_id,
@@ -461,7 +461,10 @@ class OpenAIServingChat:
                             delta_text=delta_text,
                             context=context,
                         )
-                        if (
+                        if decision.action == "truncate":
+                            fallback_truncated = True
+                            res["finished"] = True
+                        elif (
                             decision.action in ("hold", "drop")
                             and not res["finished"]
                             and not request.return_token_ids
@@ -525,6 +528,11 @@ class OpenAIServingChat:
 
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choice.finish_reason = "abort"
+
+                        if fallback_truncated:
+                            choice.finish_reason = "repeat_truncate"
+                            fallback_truncated_choices.add(idx)
+                            await self.engine_client.abort(make_choice_id(request_id, idx), 1)
 
                         if (
                             self.output_fallback_manager is not None

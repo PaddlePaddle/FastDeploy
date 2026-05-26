@@ -188,6 +188,10 @@ class EngineArgs:
     """
     output fallback plugin used to register user defined fallback strategies
     """
+    output_fallback_config: Optional[Dict[str, Any]] = None
+    """
+    output fallback config keyed by strategy name
+    """
     enable_mm: bool = False
     """
     Flags to enable multi-modal model
@@ -871,6 +875,12 @@ class EngineArgs:
             action="append",
             default=EngineArgs.output_fallback_plugin,
             help="Output fallback plugin used to register user defined fallback strategies.",
+        )
+        model_group.add_argument(
+            "--output-fallback-config",
+            type=json.loads,
+            default=EngineArgs.output_fallback_config,
+            help="Output fallback config keyed by strategy name.",
         )
         model_group.add_argument(
             "--speculative-config",

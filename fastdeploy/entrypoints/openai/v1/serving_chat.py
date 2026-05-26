@@ -270,6 +270,7 @@ class OpenAIServingChat(OpenAiServingBase):
         if include_continuous_usage:
             chunk.usage = response_ctx.usage
 
+        fallback_truncated = False
         if self.enable_mm_output:
             if output.decode_type == 1:
                 image = {"type": "image"}
@@ -290,7 +291,7 @@ class OpenAIServingChat(OpenAiServingBase):
                 ]
         else:
             delta_text = output.text or ""
-            if self.output_fallback_manager is not None and delta_text:
+            if self.output_fallback_manager is not None:
                 context = OutputFallbackContext(
                     request=request,
                     request_id=ctx.request_id,
@@ -300,7 +301,10 @@ class OpenAIServingChat(OpenAiServingBase):
                     delta_text=delta_text,
                 )
                 decision = self.output_fallback_manager.on_delta(ctx.request_id, output.index, delta_text, context)
-                if (
+                if decision.action == "truncate":
+                    fallback_truncated = True
+                    request_output.finished = True
+                elif (
                     decision.action in ("hold", "drop")
                     and not request_output.finished
                     and not request.return_token_ids
@@ -327,6 +331,14 @@ class OpenAIServingChat(OpenAiServingBase):
             max_tokens = request.max_completion_tokens or request.max_tokens
             choice_completion_tokens = response_ctx.choice_completion_tokens_dict[output.index]
             choice.finish_reason = self._calc_finish_reason(request_output, max_tokens, choice_completion_tokens)
+            if fallback_truncated:
+                choice.finish_reason = "repeat_truncate"
+                if response_ctx.remain_choices is None:
+                    response_ctx.remain_choices = len(ctx.preprocess_requests) * (
+                        1 if request.n is None else request.n
+                    )
+                response_ctx.remain_choices -= 1
+                await self.engine_client.abort(make_choice_id(ctx.request_id, output.index), 1)
             if self.output_fallback_manager is not None and not self.enable_mm_output:
                 context = OutputFallbackContext(
                     request=request,

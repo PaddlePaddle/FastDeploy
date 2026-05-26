@@ -480,6 +480,7 @@ class OpenAIServingCompletion:
             reasoning_tokens = [0] * num_choices
             first_iteration = [True] * num_choices
             tool_called = [False] * num_choices
+            fallback_truncated_choices = set()
             max_streaming_response_tokens = (
                 request.max_streaming_response_tokens
                 if request.max_streaming_response_tokens is not None
@@ -518,6 +519,8 @@ class OpenAIServingCompletion:
 
                 for res in response:
                     idx = get_choice_index(res["request_id"])
+                    if idx in fallback_truncated_choices:
+                        continue
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
                     prompt_logprobs_res: Optional[PromptLogprobs] = None
@@ -600,7 +603,8 @@ class OpenAIServingCompletion:
                         continue
 
                     delta_text = "" if output["skipped"] else (output["text"] or "")
-                    if self.output_fallback_manager is not None and delta_text:
+                    fallback_truncated = False
+                    if self.output_fallback_manager is not None:
                         context = OutputFallbackContext(
                             request=request,
                             request_id=request_id,
@@ -615,7 +619,10 @@ class OpenAIServingCompletion:
                             delta_text=delta_text,
                             context=context,
                         )
-                        if (
+                        if decision.action == "truncate":
+                            fallback_truncated = True
+                            res["finished"] = True
+                        elif (
                             decision.action in ("hold", "drop")
                             and not res["finished"]
                             and not request.return_token_ids
@@ -651,6 +658,10 @@ class OpenAIServingCompletion:
                         )
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choices[-1].finish_reason = "abort"
+                        if fallback_truncated:
+                            choices[-1].finish_reason = "repeat_truncate"
+                            fallback_truncated_choices.add(idx)
+                            await self.engine_client.abort(make_choice_id(request_id, idx), 1)
                         if self.output_fallback_manager is not None:
                             context = OutputFallbackContext(
                                 request=request,

@@ -110,7 +110,10 @@ if args.output_fallback_plugin:
 output_fallback_manager = None
 if args.output_fallback:
     output_fallback_names = [name.strip() for name in args.output_fallback.split(",") if name.strip()]
-    output_fallback_manager = OutputFallbackManager(strategies=output_fallback_names)
+    output_fallback_manager = OutputFallbackManager(
+        strategies=output_fallback_names,
+        config=args.output_fallback_config,
+    )
 
 llm_engine = None
 
@@ -843,6 +846,7 @@ def config_info() -> Response:
         "tool_parser_plugin": args.tool_parser_plugin,
         "output_fallback": args.output_fallback,
         "output_fallback_plugin": args.output_fallback_plugin,
+        "output_fallback_config": args.output_fallback_config,
     }
 
     # GPU info

@@ -15,6 +15,8 @@
 """
 
 from fastdeploy.output.fallback import markdown_bold_colon  # noqa: F401
+from fastdeploy.output.fallback import markdown_table  # noqa: F401
+from fastdeploy.output.fallback import repeat_truncate  # noqa: F401
 from fastdeploy.output.fallback.base import (
     OutputFallbackContext,
     OutputFallbackStrategy,

@@ -85,9 +85,10 @@ class OutputFallbackManager:
                 "Failed to load output fallback module '%s' from %s.", module_name, plugin_path
             )
 
-    def __init__(self, strategies: list[str]):
+    def __init__(self, strategies: list[str], config: Optional[dict] = None):
         self.strategies = [name.replace("_", "-") for name in strategies]
-        self.instances = [self.get_strategy(name)() for name in self.strategies]
+        self.config = {name.replace("_", "-"): value for name, value in (config or {}).items()}
+        self.instances = [self.get_strategy(name)(self.config.get(name, {})) for name in self.strategies]
         self.states: dict[str, dict[tuple[int, str], dict]] = {}
 
     def apply(self, text: str, context: OutputFallbackContext) -> str:
@@ -114,8 +115,8 @@ class OutputFallbackManager:
                     "Failed to apply streaming output fallback strategy '%s'.", strategy.name
                 )
                 continue
-            if decision.action in ("hold", "drop"):
-                return StreamFallbackDecision(action=decision.action)
+            if decision.action in ("hold", "drop", "truncate"):
+                return StreamFallbackDecision(action=decision.action, text=decision.text)
             current_text = decision.text
             action = decision.action
         return StreamFallbackDecision(action=action, text=current_text)
@@ -139,8 +140,4 @@ class OutputFallbackManager:
         self.states.pop(request_id, None)
 
     def _get_state(self, request_id: str, choice_index: int, strategy_name: str) -> dict:
-        request_states = self.states.setdefault(request_id, {})
-        key = (choice_index, strategy_name)
-        if key not in request_states:
-            request_states[key] = {}
-        return request_states[key]
+        return self.states.setdefault(request_id, {}).setdefault((choice_index, strategy_name), {})
