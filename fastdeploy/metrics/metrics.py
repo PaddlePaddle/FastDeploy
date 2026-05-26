@@ -787,17 +787,19 @@ class MetricsManager(MetricsManagerInterface):
 
         for metric_name, config in patched_spec_metrics.items():
             if metric_name == "spec_decode_draft_single_head_acceptance_rate":
-                # list[Gauge] — keep original behavior, no label migration
+                # list[Gauge] — each head gets its own Gauge with patched kwargs
                 gauges = []
+                kwargs = config["kwargs"].copy()
+                kwargs["multiprocess_mode"] = "livesum"
                 for i in range(num_speculative_tokens):
                     gauges.append(
                         Gauge(
                             f"{config['name']}_{i}",
                             f"{config['description']} (head {i})",
-                            multiprocess_mode="livesum",
+                            **kwargs,
                         )
                     )
-                    setattr(self, metric_name, gauges)
+                setattr(self, metric_name, gauges)
             else:
                 # For Gauge metrics, automatically add multiprocess_mode="livesum"
                 kwargs = config["kwargs"].copy()
@@ -876,9 +878,10 @@ class MetricsManager(MetricsManagerInterface):
             multiprocess_mode="mostrecent",
         )
 
-        merged = dict(metrics_info)
+        merged = dict()
         if self._enable_labels:
             merged.update(self._default_labelvalues)
+        merged.update(metrics_info)  # Priority: metrics_info > default
         self.cache_config_info.labels(**merged).set(1)
 
     def register_speculative_metrics(self, registry: CollectorRegistry):
