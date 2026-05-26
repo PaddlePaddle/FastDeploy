@@ -43,6 +43,9 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.layers.attention.ops import (
     append_attention,
+    config_for_attention,
+    decode_unified_attention,
+    decoder_write_cache_with_rope,
     get_attn_mask_q,
     get_block_shape_and_split_kv_block,
     gqa_rope_write_cache,
@@ -272,8 +275,10 @@ class FlashAttentionBackend(AttentionBackend):
             self.rope_3d = False
         # Note(ZKK): here must be consistent with append_attn_backend.py
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 1024))
+        self.max_tokens_per_batch: int = self.speculate_max_draft_token_num + 1
         if FLASH_ATTN_VERSION is None:
             init_flash_attn_version()
+        print(f"num_heads: {self.num_heads}, kv_num_heads: {self.kv_num_heads}")
 
     def get_attention_meta(self):
         """get_attention_meta"""
@@ -414,6 +419,20 @@ class FlashAttentionBackend(AttentionBackend):
                     )
                 else:
                     forward_meta.attn_mask_q = None
+            if envs.USE_DECODE_UNIFIED_ATTENTION:
+                config_for_attention(
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.decode_block_indices,
+                    forward_meta.decode_num_blocks,
+                    forward_meta.decode_chunk_size,
+                    forward_meta.max_len_tensor_cpu,
+                    getattr(layer, "cache_quant_type_str", "none"),
+                    self.group_size,
+                    self.kv_num_heads,
+                    self.max_tokens_per_batch,
+                )
 
         use_fa_do_prefill = forward_meta.max_len_tensor_cpu[1].item() > 0
 
@@ -468,73 +487,148 @@ class FlashAttentionBackend(AttentionBackend):
                 head_dim=self.head_dim,
             )[0].reshape([-1, self.attn_outputsize_tp])
 
-        res_decoder = append_attention(
-            qkv,
-            cache_k,
-            cache_v,
-            forward_meta.seq_lens_encoder,
-            forward_meta.seq_lens_decoder,
-            forward_meta.seq_lens_this_time,
-            forward_meta.batch_id_per_token,
-            forward_meta.cu_seqlens_q,
-            forward_meta.block_tables,
-            forward_meta.encoder_batch_ids,
-            forward_meta.encoder_tile_ids_per_batch,
-            forward_meta.encoder_num_blocks_x_cpu,
-            forward_meta.kv_batch_ids,
-            forward_meta.kv_tile_ids_per_batch,
-            forward_meta.kv_num_blocks_x_cpu,
-            forward_meta.decoder_batch_ids,
-            forward_meta.decoder_tile_ids_per_batch,
-            forward_meta.decoder_num_blocks_cpu,
-            forward_meta.max_len_tensor_cpu_decoder if use_fa_do_prefill else forward_meta.max_len_tensor_cpu,
-            forward_meta.rotary_embs,
-            forward_meta.attn_mask,
-            layer.qkv_bias,
-            layer.qkv_scale,
-            cache_k_scales,
-            cache_v_scales,
-            getattr(layer, "cache_k_out_scale", None),
-            getattr(layer, "cache_v_out_scale", None),
-            getattr(layer, "cache_k_zp", None),
-            getattr(layer, "cache_v_zp", None),
-            layer.linear_shift,
-            layer.linear_smooth,
-            forward_meta.attn_mask_offsets,
-            metadata.kv_signal_data_list[layer.layer_id],
-            q_norm_weight,
-            k_norm_weight,
-            getattr(layer, "sinks", None),
-            getattr(layer, "rms_norm_eps", 1e-6),
-            metadata._fuse_kernel_compute_dtype,
-            getattr(layer, "cache_quant_type_str", "none"),
-            layer.use_neox_rotary_style,
-            self.rope_3d,
-            self.max_seq_len,
-            getattr(layer, "quant_max_bound", 0.0),
-            getattr(layer, "quant_min_bound", 0.0),
-            getattr(layer, "out_scale", -1.0),
-            self.encoder_block_shape_q,
-            self.decoder_block_shape_q,
-            self.max_partition_size,
-            self.max_seq_len,
-            self.speculate_max_draft_token_num + 1,
-            self.causal,
-            self.speculative_method is not None,
-        )
-
-        if use_fa_do_prefill:
-            merge_prefill_decode_output(
-                res_encoder,
-                res_decoder,
+        if envs.USE_DECODE_UNIFIED_ATTENTION:
+            qkv_out = decoder_write_cache_with_rope(
+                qkv,
+                cache_k,
+                cache_v,
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
                 forward_meta.seq_lens_this_time,
+                forward_meta.batch_id_per_token,
                 forward_meta.cu_seqlens_q,
-                self.num_heads,
-                self.head_dim,
-                self.speculate_max_draft_token_num + 1,
+                forward_meta.block_tables,
+                forward_meta.max_len_tensor_cpu,
+                forward_meta.rotary_embs,
+                layer.qkv_bias,
+                cache_k_scales,
+                cache_v_scales,
+                getattr(layer, "cache_k_out_scale", None),
+                getattr(layer, "cache_v_out_scale", None),
+                getattr(layer, "cache_k_zp", None),
+                getattr(layer, "cache_v_zp", None),
+                metadata.kv_signal_data_list[layer.layer_id],
+                q_norm_weight,
+                k_norm_weight,
+                getattr(layer, "rms_norm_eps", 1e-6),
+                getattr(layer, "cache_quant_type_str", "none"),
+                layer.use_neox_rotary_style,
+                self.rope_3d,
+                self.max_seq_len,
+                getattr(layer, "quant_max_bound", 0.0),
+                getattr(layer, "quant_min_bound", 0.0),
+                self.speculative_method is not None,
             )
-            return res_encoder
-        else:
+            if use_fa_do_prefill:
+                res_decoder = res_encoder
+            else:
+                res_decoder = paddle.empty(
+                    [qkv.shape[0], self.num_heads * self.head_dim],
+                    dtype=qkv.dtype,
+                )
+            decode_unified_attention(
+                qkv_out,
+                cache_k,
+                cache_v,
+                forward_meta.decode_tmp_workspace,
+                forward_meta.decode_tmp_m,
+                forward_meta.decode_tmp_d,
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
+                forward_meta.block_tables,
+                forward_meta.decode_block_indices,
+                forward_meta.decode_num_blocks,
+                forward_meta.decode_chunk_size,
+                forward_meta.max_len_tensor_cpu,
+                forward_meta.attn_mask,
+                cache_k_scales,
+                cache_v_scales,
+                getattr(layer, "cache_k_out_scale", None),
+                getattr(layer, "cache_v_out_scale", None),
+                getattr(layer, "cache_k_zp", None),
+                getattr(layer, "cache_v_zp", None),
+                forward_meta.attn_mask_offsets,
+                getattr(layer, "sinks", None),
+                res_decoder,
+                getattr(layer, "cache_quant_type_str", "none"),
+                self.max_seq_len,
+                getattr(layer, "quant_max_bound", 0.0),
+                getattr(layer, "quant_min_bound", 0.0),
+                self.speculate_max_draft_token_num + 1,
+                self.causal,
+            )
             return res_decoder
+        else:
+            res_decoder = append_attention(
+                qkv,
+                cache_k,
+                cache_v,
+                forward_meta.seq_lens_encoder,
+                forward_meta.seq_lens_decoder,
+                forward_meta.seq_lens_this_time,
+                forward_meta.batch_id_per_token,
+                forward_meta.cu_seqlens_q,
+                forward_meta.block_tables,
+                forward_meta.encoder_batch_ids,
+                forward_meta.encoder_tile_ids_per_batch,
+                forward_meta.encoder_num_blocks_x_cpu,
+                forward_meta.kv_batch_ids,
+                forward_meta.kv_tile_ids_per_batch,
+                forward_meta.kv_num_blocks_x_cpu,
+                forward_meta.decoder_batch_ids,
+                forward_meta.decoder_tile_ids_per_batch,
+                forward_meta.decoder_num_blocks_cpu,
+                forward_meta.max_len_tensor_cpu_decoder if use_fa_do_prefill else forward_meta.max_len_tensor_cpu,
+                forward_meta.rotary_embs,
+                forward_meta.attn_mask,
+                layer.qkv_bias,
+                layer.qkv_scale,
+                cache_k_scales,
+                cache_v_scales,
+                getattr(layer, "cache_k_out_scale", None),
+                getattr(layer, "cache_v_out_scale", None),
+                getattr(layer, "cache_k_zp", None),
+                getattr(layer, "cache_v_zp", None),
+                layer.linear_shift,
+                layer.linear_smooth,
+                forward_meta.attn_mask_offsets,
+                metadata.kv_signal_data_list[layer.layer_id],
+                q_norm_weight,
+                k_norm_weight,
+                getattr(layer, "sinks", None),
+                getattr(layer, "rms_norm_eps", 1e-6),
+                metadata._fuse_kernel_compute_dtype,
+                getattr(layer, "cache_quant_type_str", "none"),
+                layer.use_neox_rotary_style,
+                self.rope_3d,
+                self.max_seq_len,
+                getattr(layer, "quant_max_bound", 0.0),
+                getattr(layer, "quant_min_bound", 0.0),
+                getattr(layer, "out_scale", -1.0),
+                self.encoder_block_shape_q,
+                self.decoder_block_shape_q,
+                self.max_partition_size,
+                self.max_seq_len,
+                self.speculate_max_draft_token_num + 1,
+                self.causal,
+                self.speculative_method is not None,
+            )
+
+            if use_fa_do_prefill:
+                merge_prefill_decode_output(
+                    res_encoder,
+                    res_decoder,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    forward_meta.seq_lens_this_time,
+                    forward_meta.cu_seqlens_q,
+                    self.num_heads,
+                    self.head_dim,
+                    self.speculate_max_draft_token_num + 1,
+                )
+                return res_encoder
+            else:
+                return res_decoder

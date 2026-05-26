@@ -70,6 +70,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"
     # and "MLA_ATTN" can be set currently.
     "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
+    # enable decode attention
+    "USE_DECODE_UNIFIED_ATTENTION": lambda: bool(int(os.getenv("USE_DECODE_UNIFIED_ATTENTION", "0"))),
     # Set sampling class. "base", "base_non_truncated", "air", "rejection" and "triton" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
     # Set moe backend."cutlass","marlin", "triton", "flashinfer-cutlass", "flashinfer-cutedsl" and "flashinfer-trtllm" can be set currently.
@@ -192,7 +194,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Enable FP8 calibration on HPU"
     "FD_HPU_MEASUREMENT_MODE": lambda: os.getenv("FD_HPU_MEASUREMENT_MODE", "0"),
     # Number of worker threads for prepare requests in prefill instance
-    "FD_PREFILL_PREPARE_REQ_THREAD_NUM": lambda: int(os.getenv("FD_PREFILL_PREPARE_REQ_THREAD_NUM", "5")),
+    "FD_PREFILL_PREPARE_REQ_THREAD_NUM": lambda: int(os.getenv("FD_PREFILL_PREPARE_REQ_THREAD_NUM", "3")),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
     "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
         os.getenv("FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", "1")

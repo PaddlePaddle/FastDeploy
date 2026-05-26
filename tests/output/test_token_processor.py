@@ -749,7 +749,7 @@ def test_process_batch_output_speculative_logprob_handles_draft_batch():
     )
     processor._batch_result_buffer = [target]
     processor.cached_generated_tokens = mock.Mock()
-    processor.output_tokens[1, 0] = 4
+    processor.output_tokens[1, 0] = 4 | ((K + 1) << 8)
     processor.output_tokens[2, 0] = 1
     processor.output_tokens[3, 0] = 1
 
@@ -926,7 +926,7 @@ def test_process_batch_output_speculative_logprob_targets_topk_scores():
     task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
-    processor.output_tokens[1, 0] = 3
+    processor.output_tokens[1, 0] = 3 | ((K + 1) << 8)
     processor.output_tokens[2, 0] = 1
     processor.output_tokens[3, 0] = 2
     token_block = np.arange(MAX_DRAFT_TOKENS * (K + 1), dtype=np.int64).reshape([-1, 1]) + 3
