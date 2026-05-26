@@ -156,7 +156,7 @@ class MetricsManager(MetricsManagerInterface):
     spec_decode_num_accepted_tokens_total: "Gauge"
     spec_decode_num_draft_tokens_total: "Counter"
     spec_decode_num_emitted_tokens_total: "Gauge"
-    spec_decode_draft_single_head_acceptance_rate: "list[Gauge]"
+    spec_decode_draft_single_head_acceptance_rate: "Gauge"
 
     prefix_cache_token_num: "Counter"
     prefix_gpu_cache_token_num: "Counter"
@@ -806,43 +806,28 @@ class MetricsManager(MetricsManagerInterface):
                 "kwargs": {},
             }
             self.SPECULATIVE_METRICS["spec_decode_draft_single_head_acceptance_rate"] = {
-                "type": list[Gauge],
+                "type": Gauge,
                 "name": "fastdeploy:spec_decode_draft_single_head_acceptance_rate",
                 "description": "Single head acceptance rate of speculative decoding",
-                "kwargs": {},
+                "kwargs": {"labelnames": ["head"]},
             }
 
         patched_spec_metrics = self._patch_labelnames(self.SPECULATIVE_METRICS)
 
         for metric_name, config in patched_spec_metrics.items():
-            if metric_name == "spec_decode_draft_single_head_acceptance_rate":
-                # list[Gauge] — each head gets its own Gauge with patched kwargs
-                gauges = []
-                kwargs = config["kwargs"].copy()
+            # For Gauge metrics, automatically add multiprocess_mode="livesum"
+            kwargs = config["kwargs"].copy()
+            if config["type"] == Gauge and "multiprocess_mode" not in kwargs:
                 kwargs["multiprocess_mode"] = "livesum"
-                for i in range(num_speculative_tokens):
-                    gauges.append(
-                        Gauge(
-                            f"{config['name']}_{i}",
-                            f"{config['description']} (head {i})",
-                            **kwargs,
-                        )
-                    )
-                setattr(self, metric_name, gauges)
-            else:
-                # For Gauge metrics, automatically add multiprocess_mode="livesum"
-                kwargs = config["kwargs"].copy()
-                if config["type"] == Gauge and "multiprocess_mode" not in kwargs:
-                    kwargs["multiprocess_mode"] = "livesum"
-                setattr(
-                    self,
-                    metric_name,
-                    config["type"](
-                        config["name"],
-                        config["description"],
-                        **kwargs,
-                    ),
-                )
+            setattr(
+                self,
+                metric_name,
+                config["type"](
+                    config["name"],
+                    config["description"],
+                    **kwargs,
+                ),
+            )
 
     def init_zmq_metrics(self):
         # 用 _patch_labelnames 处理 ZMQ_METRICS dict 后再创建指标
@@ -916,11 +901,7 @@ class MetricsManager(MetricsManagerInterface):
     def register_speculative_metrics(self, registry: CollectorRegistry):
         """Register all speculative metrics to the specified registry"""
         for metric_name in self.SPECULATIVE_METRICS:
-            if metric_name == "spec_decode_draft_single_head_acceptance_rate":
-                for gauge in getattr(self, metric_name):
-                    registry.register(gauge)
-            else:
-                registry.register(getattr(self, metric_name))
+            registry.register(getattr(self, metric_name))
 
     def re_register_speculative_gauge(self, registry: CollectorRegistry):
         """Re-register gauge metrics from SPECULATIVE_METRICS to the specified registry"""
@@ -929,10 +910,7 @@ class MetricsManager(MetricsManagerInterface):
         if not hasattr(self, "spec_decode_draft_acceptance_rate"):
             return
         for metric_name, config in self.SPECULATIVE_METRICS.items():
-            if metric_name == "spec_decode_draft_single_head_acceptance_rate":
-                for gauge in getattr(self, metric_name):
-                    registry.register(gauge)
-            elif config["type"] == Gauge:
+            if config["type"] == Gauge:
                 registry.register(getattr(self, metric_name))
 
     def re_register_gauge(self, registry: CollectorRegistry):
@@ -964,7 +942,7 @@ class MetricsManager(MetricsManagerInterface):
         # Also add gauge metrics from SPECULATIVE_METRICS (if initialized)
         if hasattr(self, "SPECULATIVE_METRICS"):
             for config in self.SPECULATIVE_METRICS.values():
-                if config["type"] == Gauge or config["type"] == list[Gauge]:
+                if config["type"] == Gauge:
                     excluded.add(config["name"])
         return excluded
 
