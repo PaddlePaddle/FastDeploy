@@ -35,9 +35,6 @@ from fastdeploy.model_executor.model_loader import get_model_loader
 from fastdeploy.model_executor.models import ModelForCasualLM
 from fastdeploy.platforms import current_platform
 
-if current_platform.is_maca():
-    from fastdeploy.model_executor.forward_meta import MetaxForwardMeta
-
 if current_platform.is_xpu():
     from fastdeploy.model_executor.ops.xpu import set_data_ipc, share_external_data
     from fastdeploy.model_executor.xpu_pre_and_post_process import async_set_value
@@ -148,10 +145,7 @@ class MTPProposer(Proposer):
         """
         Update config for MTP from global config
         """
-        if current_platform.is_maca():
-            self.forward_meta: MetaxForwardMeta = None
-        else:
-            self.forward_meta: ForwardMeta = None
+        self.forward_meta: ForwardMeta = None
         self.model_config.architectures[0] = self.model_config.architectures[0].replace("Moe", "MTP")
         self.speculative_config.sharing_model = main_model
         # TODO (wangyanpeng): The number of MTP layers should be read from model config

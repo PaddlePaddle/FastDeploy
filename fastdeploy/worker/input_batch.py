@@ -320,24 +320,14 @@ class InputBatch:
             )
             self.cu_batch_token_offset = paddle.full(shape=[max_num_seqs + 1], fill_value=0, dtype="int32")
             # For mtp overlap
-            if current_platform.is_maca():
-                self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").cpu()
-                self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
-                self.accept_tokens_cpu = paddle.full(
-                    shape=[max_num_seqs, max_draft_token_num + 1],
-                    fill_value=0,
-                    dtype="int64",
-                ).cpu()
-                self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").cpu()
-            else:
-                self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
-                self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
-                self.accept_tokens_cpu = paddle.full(
-                    shape=[max_num_seqs, max_draft_token_num + 1],
-                    fill_value=0,
-                    dtype="int64",
-                ).pin_memory()
-                self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
+            self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
+            self.accept_tokens_cpu = paddle.full(
+                shape=[max_num_seqs, max_draft_token_num + 1],
+                fill_value=0,
+                dtype="int64",
+            ).pin_memory()
+            self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
         if self.enable_mm:
             head_dim = self.model_config.head_dim
             if (
@@ -676,24 +666,14 @@ class InputBatch:
                 fill_paddle_tensor(self, "draft_logits", -1)
                 fill_paddle_tensor(self, "cu_batch_token_offset", 0)
                 # for mtp overlap
-                if current_platform.is_maca():
-                    self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").cpu()
-                    self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").cpu()
-                    self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").cpu()
-                    self.accept_tokens_cpu = paddle.full(
-                        shape=[max_num_seqs, max_draft_token_num + 1],
-                        fill_value=0,
-                        dtype="int64",
-                    ).cpu()
-                else:
-                    self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
-                    self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
-                    self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
-                    self.accept_tokens_cpu = paddle.full(
-                        shape=[max_num_seqs, max_draft_token_num + 1],
-                        fill_value=0,
-                        dtype="int64",
-                    ).pin_memory()
+                self.prompt_lens_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int64").pin_memory()
+                self.seq_lens_decoder_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+                self.accept_num_cpu = paddle.full(shape=[max_num_seqs], fill_value=0, dtype="int32").pin_memory()
+                self.accept_tokens_cpu = paddle.full(
+                    shape=[max_num_seqs, max_draft_token_num + 1],
+                    fill_value=0,
+                    dtype="int64",
+                ).pin_memory()
 
             # Reset multimodal related tensors
             if self.enable_mm:
@@ -747,14 +727,9 @@ class InputBatch:
             fill_paddle_tensor(self, "last_preempted_idx", 0)
 
             # Reset tensors for overlap
-            if current_platform.is_maca():
-                self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").cpu()
-                self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").cpu()
-                self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").cpu()
-            else:
-                self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
-                self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
-                self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
 
             logger.info("share_inputs reset completed")
         except Exception as e:
