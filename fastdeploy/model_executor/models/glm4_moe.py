@@ -497,7 +497,7 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
 
             # special case!
             if "correction_bias" in loaded_weight_name:
-                loaded_weight.reshape_([loaded_weight.numel().item()])
+                loaded_weight.reshape_([1, loaded_weight.numel().item()])
 
             logger.debug(f"Loading weight: {loaded_weight_name}")
             for param_name, weight_name, shard_id in stacked_params_mapping:
