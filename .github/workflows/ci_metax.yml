@@ -22,9 +22,6 @@ jobs:
     environment: Metax_ci
 
     steps:
-      - name: Cleanup
-        run: |
-          rm -rf * .[^.]*
       - name: Trigger Jenkins job
         timeout-minutes: 60
         uses: MetaX-MACA/simple-jenkins-githubaction@v1.2
