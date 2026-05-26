@@ -1245,7 +1245,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-        self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
+        self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:batch_size]
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
