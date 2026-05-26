@@ -123,6 +123,7 @@ class InputBatch:
         )
         self.eos_token_id = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.top_p = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        self.top_p_list = [self.model_config.top_p] * max_num_seqs
         self.top_k = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.top_k_list = [0] * max_num_seqs
         self.min_p = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
@@ -207,6 +208,13 @@ class InputBatch:
         self.kv_batch_ids = None
         self.kv_tile_ids_per_batch = None
         self.kv_num_blocks_x_cpu = None  # CPU
+        # Decode unified attention split ops buffers (initialized by _initialize_attn_backend)
+        self.decode_block_indices = None
+        self.decode_num_blocks = None
+        self.decode_chunk_size = None
+        self.decode_tmp_workspace = None
+        self.decode_tmp_m = None
+        self.decode_tmp_d = None
 
         # Initialize thinking related buffers
         self.enable_thinking = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
@@ -416,6 +424,7 @@ class InputBatch:
         # swap_data(self.recompute_token_num, i1, i2)
 
         # # Swap list-based arrays (lists don't need clone)
+        self.top_p_list[i1], self.top_p_list[i2] = self.top_p_list[i2], self.top_p_list[i1]
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
         self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
 
@@ -570,6 +579,7 @@ class InputBatch:
             fill_paddle_tensor(self, "top_p_normalized_logprobs", False)
 
             # Reset list variables (not paddle tensors)
+            self.top_p_list = [self.model_config.top_p] * max_num_seqs
             self.top_k_list = [0] * max_num_seqs
             self.min_p_list = [0.0] * max_num_seqs
 
@@ -856,6 +866,13 @@ class ProposerInputBatch(InputBatch):
         self.kv_batch_ids = None
         self.kv_tile_ids_per_batch = None
         self.kv_num_blocks_x_cpu = None  # CPU
+        # Decode attention split ops buffers
+        self.decode_block_indices = None
+        self.decode_num_blocks = None
+        self.decode_chunk_size = None
+        self.decode_tmp_workspace = None
+        self.decode_tmp_m = None
+        self.decode_tmp_d = None
 
         # Input tokens
         self.draft_tokens = paddle.full(

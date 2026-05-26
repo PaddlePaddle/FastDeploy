@@ -45,6 +45,9 @@ from fastdeploy.model_executor.layers.attention.append_attn_backend import (
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionBackend,
 )
+from fastdeploy.model_executor.layers.attention.decode_unified_attention_backend import (
+    allocate_decode_unified_related_buffer,
+)
 from fastdeploy.model_executor.layers.attention.dsa_attention_backend import (
     DSAAttentionBackend,
 )
@@ -1043,6 +1046,7 @@ class GPUModelRunner(ModelRunnerBase):
                 continue
 
             assert len(request.eos_token_ids) == self.model_config.eos_tokens_lens
+            self.share_inputs["top_p_list"][idx] = request.get("top_p", 0.7)
             self.share_inputs["min_p_list"][idx] = request.get("min_p", 0.0)
             self.share_inputs["top_k_list"][idx] = request.get("top_k", 0)
             async_set_value(self.share_inputs["eos_token_id"][:], request.eos_token_ids)
@@ -1275,15 +1279,11 @@ class GPUModelRunner(ModelRunnerBase):
             req.sampling_params.top_p_normalized_logprobs and req.sampling_params.top_p != 1.0 for req in logprobs_reqs
         )
         if logprobs_reqs:
-            self.max_logprobs = (
-                max(
-                    [
-                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
-                        for req in logprobs_reqs
-                    ]
-                )
-                if not self.speculative_decoding
-                else 20
+            self.max_logprobs = max(
+                [
+                    self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                    for req in logprobs_reqs
+                ]
             )
         elif self.enable_logprob:
             self.max_logprobs = None if not self.speculative_decoding else 0
@@ -1349,6 +1349,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.sampling_metadata = SamplingMetadata(
             temperature=self.share_inputs["temperature"],
             top_p=self.share_inputs["top_p"],
+            top_p_list=self.share_inputs["top_p_list"],
             top_k=self.share_inputs["top_k"],
             top_k_list=self.share_inputs["top_k_list"],
             min_p=self.share_inputs["min_p"],
@@ -1482,6 +1483,15 @@ class GPUModelRunner(ModelRunnerBase):
             attn_mask_offsets=self.share_inputs["attn_mask_offsets"] if self.enable_mm else None,
             routing_replay_table=routing_replay_table,
         )
+
+        # Decode attention split ops buffers (assigned after construction due to ForwardMeta __getattr__)
+        if "decode_block_indices" in self.share_inputs:
+            self.forward_meta.decode_block_indices = self.share_inputs["decode_block_indices"]
+            self.forward_meta.decode_num_blocks = self.share_inputs["decode_num_blocks"]
+            self.forward_meta.decode_chunk_size = self.share_inputs["decode_chunk_size"]
+            self.forward_meta.decode_tmp_workspace = self.share_inputs["decode_tmp_workspace"]
+            self.forward_meta.decode_tmp_m = self.share_inputs["decode_tmp_m"]
+            self.forward_meta.decode_tmp_d = self.share_inputs["decode_tmp_d"]
 
         dist_status = self.collect_distributed_status()
 
@@ -1729,8 +1739,15 @@ class GPUModelRunner(ModelRunnerBase):
             num_heads=num_heads,
             kv_num_heads=self.model_config.kv_num_heads,
             block_size=self.fd_config.cache_config.block_size,
+            head_dim=head_dim,
+            dtype=self.model_config.dtype,
         )
-        res_buffer = allocate_launch_related_buffer(**buffer_kwargs)
+
+        if envs.FD_ATTENTION_BACKEND == "DECODE_UNIFIED_ATTN":
+            res_buffer = allocate_decode_unified_related_buffer(**buffer_kwargs)
+        else:
+            res_buffer = allocate_launch_related_buffer(**buffer_kwargs)
+
         self.share_inputs.update(res_buffer)
 
         if int(os.getenv("USE_TBO", "0")) == 1:

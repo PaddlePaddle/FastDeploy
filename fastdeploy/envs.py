@@ -63,8 +63,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ZMQ_SNDHWM": lambda: os.getenv("FD_ZMQ_SNDHWM", 0),
     # cache kv quant params directory
     "FD_CACHE_PARAMS": lambda: os.getenv("FD_CACHE_PARAMS", "none"),
-    # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"
-    # and "MLA_ATTN" can be set currently.
+    # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN", "DECODE_UNIFIED_ATTN",
+    # "FLASH_ATTN" and "MLA_ATTN" can be set currently.
     "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
     # Set sampling class. "base", "base_non_truncated", "air", "rejection" and "triton" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
@@ -244,6 +244,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_SPLIT_KV_SIZE": lambda: _validate_split_kv_size(
         int(os.getenv("FD_DETERMINISTIC_SPLIT_KV_SIZE", "16"))
     ),
+    # Whether to use unified attention kernel in mix
+    "USE_DECODE_UNIFIED_ATTENTION": lambda: bool(int(os.getenv("USE_DECODE_UNIFIED_ATTENTION", "0"))),
     # Enable determinism logging (print MD5 hashes and debug info)
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
