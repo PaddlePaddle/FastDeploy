@@ -42,7 +42,8 @@ void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
                                          const float* q_norm_weight,
                                          const float* k_norm_weight,
                                          const float rms_norm_eps,
-                                         const bool rope_3d) {
+                                         const bool rope_3d,
+                                         const int* rope_3d_delta) {
   int output_inner_dim = num_heads + 2 * kv_num_heads;
   const uint32_t elem_nums =
       use_neox_style ? token_num * (num_heads + 2 * kv_num_heads) * dim_head / 2
@@ -86,7 +87,8 @@ void append_speculate_cache_rope_qk_norm(const QKV_TYPE* qkv,
                                               q_norm_weight,
                                               k_norm_weight,
                                               rms_norm_eps,
-                                              rope_3d);
+                                              rope_3d,
+                                              rope_3d_delta);
   }
 }
 
@@ -116,7 +118,8 @@ void append_speculate_cache_rope(const QKV_TYPE* qkv,
                                  const int token_num,
                                  const cudaStream_t& stream,
                                  const bool use_neox_style,
-                                 const bool rope_3d) {
+                                 const bool rope_3d,
+                                 const int* rope_3d_delta) {
   int output_inner_dim = num_heads + 2 * kv_num_heads;
 
   const uint32_t elem_nums =
@@ -212,7 +215,8 @@ void append_speculate_cache_rope(const QKV_TYPE* qkv,
             block_size,
             elem_nums,
             kv_num_heads,
-            rope_3d);
+            rope_3d,
+            rope_3d_delta);
   }
 }
 
@@ -242,6 +246,7 @@ void append_speculate_cache_fp8_rope(const T* qkv,
                                      const int token_num,
                                      const cudaStream_t& stream,
                                      const bool rope_3d,
+                                     const int* rope_3d_delta,
                                      const float rms_norm_eps) {
   constexpr int num_warps = 4;
   const int all_warps =
@@ -291,6 +296,7 @@ void append_speculate_cache_fp8_rope(const T* qkv,
                                              -127.0f,
                                              kv_num_heads,
                                              rope_3d,
+                                             rope_3d_delta,
                                              rms_norm_eps);
 }
 
@@ -538,6 +544,7 @@ void SpeculateWriteCacheWithRoPEKernel(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
@@ -562,6 +569,21 @@ void SpeculateWriteCacheWithRoPEKernel(
 
   const float* cos_emb =
       rotary_embs ? rotary_embs.get().data<float>() : nullptr;
+  const int* rope_3d_delta_ptr =
+      rope_3d_delta ? rope_3d_delta.get().data<int>() : nullptr;
+  if (rope_3d_delta_ptr) {
+    if (use_neox_rotary_style) {
+      PD_THROW(
+          "rope_3d_delta is not supported with use_neox_rotary_style for "
+          "speculate decoder.");
+    }
+    if (cache_quant_type_str != "none" &&
+        cache_quant_type_str != "block_wise_fp8") {
+      PD_THROW(
+          "rope_3d_delta only supports cache_quant_type none/block_wise_fp8 "
+          "for speculate decoder.");
+    }
+  }
   const float* sin_emb;
   int rotary_dim = dim_head;
   if (rotary_embs) {
@@ -613,7 +635,8 @@ void SpeculateWriteCacheWithRoPEKernel(
           reinterpret_cast<const float*>(q_norm_weight.get().data<float>()),
           reinterpret_cast<const float*>(k_norm_weight.get().data<float>()),
           rms_norm_eps,
-          rope_3d);
+          rope_3d,
+          rope_3d_delta_ptr);
     } else if (cache_quant_type_str == "block_wise_fp8") {
       append_speculate_cache_fp8_rope<DataType_, true, EnforceFmulRN>(
           reinterpret_cast<const DataType_*>(qkv_ptr),
@@ -643,6 +666,7 @@ void SpeculateWriteCacheWithRoPEKernel(
           token_nums,
           stream,
           rope_3d,
+          rope_3d_delta_ptr,
           rms_norm_eps);
     } else if (cache_quant_type_str == "cache_fp8") {
       append_speculate_cache_fp8_rope<DataType_, false, EnforceFmulRN>(
@@ -673,6 +697,7 @@ void SpeculateWriteCacheWithRoPEKernel(
           token_nums,
           stream,
           rope_3d,
+          rope_3d_delta_ptr,
           rms_norm_eps);
     } else {
       PD_THROW(
@@ -710,7 +735,8 @@ void SpeculateWriteCacheWithRoPEKernel(
           token_nums,
           stream,
           use_neox_rotary_style,
-          rope_3d);
+          rope_3d,
+          rope_3d_delta_ptr);
     } else if (cache_quant_type_str == "cache_int8") {
       append_speculate_cache_int8_rope<DataType_,
                                        QKV_TYPE,
@@ -814,6 +840,7 @@ void SpeculateWriteCacheWithRoPEKernel(
           token_nums,
           stream,
           rope_3d,
+          rope_3d_delta_ptr,
           rms_norm_eps);
     } else if (cache_quant_type_str == "cache_int4_zp") {
       append_speculate_cache_int4_rope<DataType_, QKV_TYPE, EnforceFmulRN>(
@@ -883,6 +910,7 @@ template void SpeculateWriteCacheWithRoPEKernel<paddle::bfloat16, int>(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
@@ -913,6 +941,7 @@ SpeculateWriteCacheWithRoPEKernel<paddle::bfloat16, paddle::bfloat16>(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
@@ -942,6 +971,7 @@ template void SpeculateWriteCacheWithRoPEKernel<paddle::float16, int>(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
@@ -972,6 +1002,7 @@ SpeculateWriteCacheWithRoPEKernel<paddle::float16, paddle::float16>(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
@@ -1001,6 +1032,7 @@ template void SpeculateWriteCacheWithRoPEKernel<paddle::bfloat16, int, true>(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
@@ -1031,6 +1063,7 @@ SpeculateWriteCacheWithRoPEKernel<paddle::bfloat16, paddle::bfloat16, true>(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
@@ -1060,6 +1093,7 @@ template void SpeculateWriteCacheWithRoPEKernel<paddle::float16, int, true>(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
@@ -1090,6 +1124,7 @@ SpeculateWriteCacheWithRoPEKernel<paddle::float16, paddle::float16, true>(
     const std::string& cache_quant_type_str,
     const bool use_neox_rotary_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     const int max_seq_len,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,

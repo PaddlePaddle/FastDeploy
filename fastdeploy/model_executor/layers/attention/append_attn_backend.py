@@ -442,6 +442,7 @@ class AppendAttentionBackend(AttentionBackend):
                 layer.linear_smooth,
                 forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
+                forward_meta.rope_3d_delta,
                 q_norm_weight,
                 k_norm_weight,
                 getattr(layer, "sinks", None),
@@ -464,6 +465,13 @@ class AppendAttentionBackend(AttentionBackend):
                 sliding_window,
             )
         else:
+            # print("ddddddd fd_config.speculative_config.model_type", self.fd_config.speculative_config.model_type)
+            # print("ddddddd forward_meta.rotary_embs", forward_meta.rotary_embs.shape)
+            # print("ddddddd self.rope_3d", self.rope_3d)
+            # print("forward_meta.rope_3d_delta", forward_meta.rope_3d_delta)
+            # print("self.speculative_method", self.speculative_method)
+            # print("getattr cache_quant_type_str ", getattr(layer, "cache_quant_type_str", "none"))
+
             res = append_attention(
                 qkv,
                 cache_k,
@@ -498,6 +506,7 @@ class AppendAttentionBackend(AttentionBackend):
                 layer.linear_smooth,
                 forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
+                forward_meta.rope_3d_delta,
                 q_norm_weight,
                 k_norm_weight,
                 getattr(layer, "sinks", None),
@@ -521,4 +530,6 @@ class AppendAttentionBackend(AttentionBackend):
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
             )
+
+            # print("res res res res", res)
         return res

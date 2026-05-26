@@ -51,7 +51,10 @@ from fastdeploy.model_executor.layers.attention.decode_unified_attention_backend
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
-from fastdeploy.model_executor.layers.rotary_embedding import get_rope_3d
+from fastdeploy.model_executor.layers.rotary_embedding import (
+    get_ernie_rope_3d_decode,
+    get_rope_3d,
+)
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.sampler import Sampler, SpeculativeSampler
 from fastdeploy.model_executor.model_loader import get_model_loader
@@ -211,6 +214,8 @@ class GPUModelRunner(ModelRunnerBase):
         # Initialize input batch
         self.share_inputs = InputBatch(self.fd_config)
         self.share_inputs.init_share_inputs()
+        if getattr(self.share_inputs, "use_shared_ernie_decode_rope_3d", False):
+            self.share_inputs["rope_emb"][0] = self.prepare_shared_ernie_decode_rope3d()
         self.increment_value = (
             4 if not self.speculative_decoding else (self.speculative_config.num_speculative_tokens + 1) * 4
         )
@@ -261,6 +266,19 @@ class GPUModelRunner(ModelRunnerBase):
             self.async_output_copy_thread.start()
 
         self.enable_entropy = self.model_config.enable_entropy
+        self.start_step = 0
+        from paddle import profiler
+
+        self.global_step = 0
+        self.do_profile = False
+        if self.scheduler_config.splitwise_role == "prefill":
+            self.do_profile = False
+
+        if self.do_profile:
+            self.p = profiler.Profiler(
+                scheduler=[200, 210], on_trace_ready=self.my_on_trace_ready, timer_only=False
+            )  # 初始化Profiler对象
+            self.p.start()
 
         # init signal
         cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
@@ -284,6 +302,15 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_overlap_schedule:
             logger.info("Using overlap schedule")
         self.current_launch_token_num = 0
+
+    def my_on_trace_ready(self, prof):  # 定义回调函数，性能分析器结束采集数据时会被调用
+        from paddle import profiler
+
+        callback = profiler.export_chrome_tracing(
+            f"/root/paddlejob/workspace/env_run/output/zsf/profiler_new/baseline_{self.local_rank}"
+        )  # 创建导出性能数据到profiler_demo文件夹的回调函数
+        callback(prof)  # 执行该导出函数
+        prof.summary(sorted_by=profiler.SortedKeys.GPUTotal)  # 打印表单，按GPUTotal排序表单项
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
@@ -799,16 +826,23 @@ class GPUModelRunner(ModelRunnerBase):
                 # rope 3d
                 if self.enable_mm:
                     position_ids = request.multimodal_inputs["position_ids"]
-                    rope_3d_position_ids["position_ids_idx"].append(idx)
-                    rope_3d_position_ids["position_ids_lst"].append(position_ids)
-                    rope_3d_position_ids["position_ids_offset"].append(
-                        len(position_ids) + rope_3d_position_ids["position_ids_offset"][-1]
-                    )
-
-                    if self.is_pooling_model:
-                        rope_3d_position_ids["max_tokens_lst"].append(0)
+                    if getattr(self.share_inputs, "use_shared_ernie_decode_rope_3d", False):
+                        if isinstance(position_ids, paddle.Tensor):
+                            rope_3d_delta = int(paddle.max(position_ids).item()) + 1 - len(position_ids)
+                        else:
+                            rope_3d_delta = int(np.max(position_ids)) + 1 - len(position_ids)
+                        async_set_value(self.share_inputs["rope_3d_delta"][idx : idx + 1], rope_3d_delta)
                     else:
-                        rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
+                        rope_3d_position_ids["position_ids_idx"].append(idx)
+                        rope_3d_position_ids["position_ids_lst"].append(position_ids)
+                        rope_3d_position_ids["position_ids_offset"].append(
+                            len(position_ids) + rope_3d_position_ids["position_ids_offset"][-1]
+                        )
+
+                        if self.is_pooling_model:
+                            rope_3d_position_ids["max_tokens_lst"].append(0)
+                        else:
+                            rope_3d_position_ids["max_tokens_lst"].append(request.get("max_tokens", 2048))
 
                 # guided decoding
                 if (
@@ -1395,6 +1429,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
+            rope_3d_delta=self.share_inputs.get("rope_3d_delta", None),
             attn_backend=self.attn_backends[0],
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
@@ -2618,6 +2653,13 @@ class GPUModelRunner(ModelRunnerBase):
                 )
 
         self.exist_prefill_flag = False
+        self.global_step += 1
+        if self.do_profile:
+            self.p.step()
+            if self.global_step >= 300:
+                self.p.stop()
+                exit(-1)
+            logger.info(f"step: {self.global_step}")
         return model_output_data, sampler_output, post_process_event
 
     def _save_model_output(
@@ -3171,6 +3213,19 @@ class GPUModelRunner(ModelRunnerBase):
                     use_rope=True,
                     window_size=-1,
                 )
+
+    @paddle.no_grad()
+    def prepare_shared_ernie_decode_rope3d(self) -> paddle.Tensor:
+        """prepare shared Ernie VL decode rope3d"""
+
+        return get_ernie_rope_3d_decode(
+            rotary_dim=self.model_config.head_dim,
+            partial_rotary_factor=1.0,
+            base=self.model_config.rope_theta,
+            max_position=self.model_config.max_model_len,
+            freq_allocation=getattr(self.model_config, "freq_allocation", 20),
+            rope_scaling=getattr(self.model_config, "rope_scaling", {}),
+        )
 
     @paddle.no_grad()
     def prepare_rope3d(
