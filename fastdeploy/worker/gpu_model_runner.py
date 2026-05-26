@@ -991,7 +991,7 @@ class GPUModelRunner(ModelRunnerBase):
                         self._cached_launch_token_num += token_num_one_step
                         self._cached_real_bsz += 1
                     if self.speculative_decoding:
-                        if self.spec_method in (SpecMethod.MTP, SpecMethod.SUFFIX):
+                        if self.spec_method == SpecMethod.MTP:
                             # D first decode step, [Target first token, MTP first draft token]
                             # MTP in P only generate one draft token in any num_model_step config
                             draft_tokens_to_write = request.draft_token_ids[0:2]
