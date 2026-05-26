@@ -294,80 +294,6 @@ function extract_ops_from_precompiled_wheel() {
   rm -rf "${PRE_WHEEL_DIR}"
 }
 
-function normalize_building_arcs() {
-  echo "${1:-}" | tr -d '[][:space:]'
-}
-
-function append_arch() {
-  local archs=${1:-}
-  local arch=${2:-}
-  if [ -z "${arch}" ]; then
-    echo "${archs}"
-  elif [ -z "${archs}" ]; then
-    echo "${arch}"
-  else
-    echo "${archs}, ${arch}"
-  fi
-}
-
-function build_split_sm86_sm89_ops() {
-  local building_arcs=${1:-}
-  local normalized
-  normalized=$(normalize_building_arcs "${building_arcs}")
-  if [ -z "${normalized}" ] || [ "${normalized}" = "86" ] || [ "${normalized}" = "89" ]; then
-    return 1
-  fi
-
-  local split_any=false
-  local remaining_archs=""
-  local built_sm86=false
-  local built_sm89=false
-  local arch
-  local -a arch_array
-  IFS=',' read -ra arch_array <<< "${normalized}"
-  for arch in "${arch_array[@]}"; do
-    case "${arch}" in
-      86|89)
-        split_any=true
-        ;;
-      *)
-        remaining_archs=$(append_arch "${remaining_archs}" "${arch}")
-        ;;
-    esac
-  done
-
-  if [ "${split_any}" != "true" ]; then
-    return 1
-  fi
-
-  echo -e "${BLUE}[build]${NONE} splitting SM86/SM89 custom ops to avoid oversized combined extension link"
-  mkdir -p ${OPS_SRC_DIR}/${OPS_TMP_DIR}
-
-  for arch in "${arch_array[@]}"; do
-    case "${arch}" in
-      86)
-        if [ "${built_sm86}" != "true" ]; then
-          build_and_install_ops "[86]" "${OPS_TMP_DIR}/fastdeploy_ops_86"
-          built_sm86=true
-        fi
-        ;;
-      89)
-        if [ "${built_sm89}" != "true" ]; then
-          build_and_install_ops "[89]" "${OPS_TMP_DIR}/fastdeploy_ops_89"
-          built_sm89=true
-        fi
-        ;;
-    esac
-  done
-
-  if [ -n "${remaining_archs}" ]; then
-    build_and_install_ops "[${remaining_archs}]" "${OPS_TMP_DIR}"
-  fi
-
-  cp -r $OPS_SRC_DIR/$OPS_TMP_DIR/* ./fastdeploy/model_executor/ops/gpu
-  return 0
-}
-
 function build_custom_ops() {
   if [ "$FD_UNIFY_BUILD" ]; then
     mkdir -p ${OPS_SRC_DIR}/${OPS_TMP_DIR}
@@ -380,8 +306,6 @@ function build_custom_ops() {
 
     build_and_install_ops "[80, 90]" "${OPS_TMP_DIR}"
     cp -r $OPS_SRC_DIR/$OPS_TMP_DIR/* ./fastdeploy/model_executor/ops/gpu
-  elif build_split_sm86_sm89_ops "$FD_BUILDING_ARCS"; then
-    return
   else
     build_and_install_ops "$FD_BUILDING_ARCS" "$OPS_TMP_DIR"
     cd $OPS_SRC_DIR

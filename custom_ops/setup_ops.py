@@ -393,14 +393,6 @@ elif paddle.is_compiled_with_cuda():
 
     cc_compile_args = []
     nvcc_compile_args = get_gencode_flags(archs)
-    extra_link_args = ["-lcuda", "-lnvidia-ml"]
-    if len(sm_versions) > 1 and sys.platform.startswith("linux"):
-        # Multi-arch GPU builds pull in many CUTLASS template instantiations.
-        # Use the large code model so host objects and CUDA host stubs do not
-        # overflow x86_64 small-model PC-relative relocations at link time.
-        cc_compile_args += ["-mcmodel=large"]
-        nvcc_compile_args += ["-Xcompiler", "-mcmodel=large"]
-        extra_link_args += ["-mcmodel=large"]
     if disable_gelu_tanh:
         cc_compile_args += ["-DDISABLE_GELU_TANH_OP"]
         nvcc_compile_args += ["-DDISABLE_GELU_TANH_OP"]
@@ -597,7 +589,7 @@ elif paddle.is_compiled_with_cuda():
             sources=sources,
             extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
             libraries=["cublasLt"],
-            extra_link_args=extra_link_args,
+            extra_link_args=["-lcuda", "-lnvidia-ml"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},
