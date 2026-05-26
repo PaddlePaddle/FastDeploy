@@ -1044,8 +1044,10 @@ class TokenProcessor:
                     single_head_acceptance_rate = (
                         self.accept_token_num_per_head[i] / self.accept_token_num_per_head[i - 1]
                     )
-                main_process_metrics.spec_decode_draft_single_head_acceptance_rate[i - 1].set(
-                    single_head_acceptance_rate
+                main_process_metrics.set_value(
+                    "spec_decode_draft_single_head_acceptance_rate",
+                    single_head_acceptance_rate,
+                    labelvalues={"head": str(i - 1)},
                 )
 
     def _record_speculative_decoding_accept_num_per_request(self, req_id, accept_num):
