@@ -53,6 +53,11 @@ def get_moe_method(layer=None):
     """
 
     if current_platform.is_cuda():
+        moe_backend = envs.FD_MOE_BACKEND.lower()
+        if moe_backend == "triton":
+            from .fused_moe_triton_backend import TritonMoEMethod
+
+            return TritonMoEMethod(None)
         from .fused_moe_cutlass_backend import CutlassMoEMethod
 
         return CutlassMoEMethod(None)
