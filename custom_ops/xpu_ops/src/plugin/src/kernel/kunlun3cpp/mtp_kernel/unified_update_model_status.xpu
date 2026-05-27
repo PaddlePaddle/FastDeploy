@@ -76,18 +76,27 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
   if (clusterid > 0) return;
   __shared__ int sm_seq_lens_encoder[MAX_BATCH_SIZE];
   __shared__ int sm_seq_lens_decoder[MAX_BATCH_SIZE];
+  __shared__ int sm_step_output_len[MAX_BATCH_SIZE];
+  __shared__ int sm_seq_lens_this_time[MAX_BATCH_SIZE];
   __shared__ bool sm_stop_flags[MAX_BATCH_SIZE];
-  __shared__ int64_t sm_step_idx[MAX_BATCH_SIZE];
   __shared__ bool sm_is_paused[MAX_BATCH_SIZE];
+  __shared__ int64_t sm_step_idx[MAX_BATCH_SIZE];
+  __shared__ int64_t sm_max_dec_len[MAX_BATCH_SIZE];
+  __shared__ int64_t sm_prompt_lens[MAX_BATCH_SIZE];
   __shared__ int64_t sm_end_tokens[MAX_BATCH_SIZE];
 
   __shared__ int buffer_stop_flag_int[64];
   if (cid == 0) {
     GM2SM_ASYNC(seq_lens_encoder, sm_seq_lens_encoder, sizeof(int) * max_bsz);
     GM2SM_ASYNC(seq_lens_decoder, sm_seq_lens_decoder, sizeof(int) * max_bsz);
+    GM2SM_ASYNC(step_output_len, sm_step_output_len, sizeof(int) * max_bsz);
+    GM2SM_ASYNC(
+        seq_lens_this_time, sm_seq_lens_this_time, sizeof(int) * real_bsz);
     GM2SM_ASYNC(stop_flags, sm_stop_flags, sizeof(bool) * max_bsz);
-    GM2SM_ASYNC(step_idx, sm_step_idx, sizeof(int64_t) * max_bsz);
     GM2SM_ASYNC(is_paused, sm_is_paused, sizeof(bool) * max_bsz);
+    GM2SM_ASYNC(step_idx, sm_step_idx, sizeof(int64_t) * max_bsz);
+    GM2SM_ASYNC(max_dec_len, sm_max_dec_len, sizeof(int64_t) * max_bsz);
+    GM2SM_ASYNC(prompt_lens, sm_prompt_lens, sizeof(int64_t) * max_bsz);
     GM2SM_ASYNC(end_tokens, sm_end_tokens, sizeof(int64_t) * num_end_tokens);
   }
   buffer_stop_flag_int[cid] = 0;
@@ -97,7 +106,7 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
     int cur_seq_len_encoder = sm_seq_lens_encoder[batch_id];
     int cur_seq_len_decoder = sm_seq_lens_decoder[batch_id];
     bool cur_stop_flag = sm_stop_flags[batch_id];
-    int output_len = step_output_len[batch_id];
+    int output_len = sm_step_output_len[batch_id];
     int64_t cur_step_idx = sm_step_idx[batch_id];
     bool cur_is_paused = sm_is_paused[batch_id];
 
@@ -112,7 +121,7 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
         cur_step_idx++;
         int64_t token = output_ids[i];
         bool is_eos = is_end_token(token, sm_end_tokens, num_end_tokens);
-        bool max_len_hit = (cur_step_idx >= max_dec_len[batch_id]);
+        bool max_len_hit = (cur_step_idx >= sm_max_dec_len[batch_id]);
 
         if (is_eos || max_len_hit) {
           if (!is_eos) output_ids[i] = sm_end_tokens[0];
@@ -133,19 +142,20 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
 
       if (cur_stop_flag) {
         buffer_stop_flag_int[cid] += 1;
-        stop_flags[batch_id] = true;
+        sm_stop_flags[batch_id] = true;
       }
 
-      seq_lens_encoder[batch_id] = cur_seq_len_encoder;
-      seq_lens_decoder[batch_id] = cur_seq_len_decoder;
-      step_output_len[batch_id] = output_len;
-      step_idx[batch_id] = cur_step_idx;
+      sm_seq_lens_encoder[batch_id] = cur_seq_len_encoder;
+      sm_seq_lens_decoder[batch_id] = cur_seq_len_decoder;
+      sm_step_output_len[batch_id] = output_len;
+      sm_step_idx[batch_id] = cur_step_idx;
 
       // Write history to token_ids_all
       if (output_len > 0) {
-        if (prompt_lens[batch_id] + cur_step_idx < max_model_len) {
+        if (sm_prompt_lens[batch_id] + cur_step_idx < max_model_len) {
           __global_ptr__ int64_t *token_ids_all_now =
-              &token_ids_all[batch_id * max_model_len + prompt_lens[batch_id]];
+              &token_ids_all[batch_id * max_model_len +
+                             sm_prompt_lens[batch_id]];
           __global_ptr__ int64_t *output_ids =
               &step_output_ids[batch_id * max_step_tokens];
           int64_t base = cur_step_idx - output_len;
@@ -164,11 +174,11 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
       buffer_stop_flag_int[cid] += 1;
     } else {
       buffer_stop_flag_int[cid] += 1;
-      stop_flags[batch_id] = true;
-      seq_lens_encoder[batch_id] = 0;
-      seq_lens_decoder[batch_id] = 0;
-      seq_lens_this_time[batch_id] = 0;
-      step_output_len[batch_id] = 0;
+      sm_stop_flags[batch_id] = true;
+      sm_seq_lens_encoder[batch_id] = 0;
+      sm_seq_lens_decoder[batch_id] = 0;
+      sm_seq_lens_this_time[batch_id] = 0;
+      sm_step_output_len[batch_id] = 0;
     }
   }
   mfence_sm();
@@ -179,6 +189,14 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
       stop_flag_int += buffer_stop_flag_int[i];
     }
     has_running_seqs[0] = stop_flag_int < max_bsz;
+    SM2GM_ASYNC(sm_seq_lens_encoder, seq_lens_encoder, sizeof(int) * max_bsz);
+    SM2GM_ASYNC(sm_seq_lens_decoder, seq_lens_decoder, sizeof(int) * max_bsz);
+    SM2GM_ASYNC(sm_step_output_len, step_output_len, sizeof(int) * max_bsz);
+    SM2GM_ASYNC(sm_stop_flags, stop_flags, sizeof(bool) * max_bsz);
+    SM2GM_ASYNC(sm_step_idx, step_idx, sizeof(int64_t) * max_bsz);
+    SM2GM_ASYNC(
+        sm_seq_lens_this_time, seq_lens_this_time, sizeof(int) * real_bsz);
+    mfence();
   }
 }
 }  // namespace fd_xpu3

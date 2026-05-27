@@ -6,47 +6,17 @@
 
 namespace fd_xpu3 {
 
-static inline __device__ int v_reduce(int32x16_t &v0, int32x16_t &v1) {
-  int res;
-  v1 = vvadd_int32x16(v0, v1);
-  auto v = vsrlp_int32x16(256, v1);
-  v1 = vvadd_int32x16(v, v1);
-  v = vsrlp_int32x16(128, v1);
-  v1 = vvadd_int32x16(v, v1);
-  v = vsrlp_int32x16(64, v1);
-  v1 = vvadd_int32x16(v, v1);
-  v = vsrlp_int32x16(32, v1);
-  v1 = vvadd_int32x16(v, v1);
-  res = vextract_int32x16(v1, 1);
-  return res;
-}
-static inline __device__ int ClusterReduce(
-    const _shared_ptr_ int *stop_flag_now_int_sm, int len) {
-  int sum = 0;
-  if (core_id() == 0) {
-    int32x16_t vec_x_0;
-    int32x16_t vec_x_1;
-    int32x16_t vec_y_0 = vzero<int>();
-    int32x16_t vec_y_1 = vzero<int>();
-    for (int i = 0; i < len; i += 32) {
-      vload2_sm(stop_flag_now_int_sm + i, vec_x_0, vec_x_1);
-      vec_y_0 = vvadd_int32x16(vec_y_0, vec_x_0);
-      vec_y_1 = vvadd_int32x16(vec_y_1, vec_x_1);
-    }
-    sum = v_reduce(vec_y_0, vec_y_1);
-  }
-  return sum;
-}
+#define MAX_END_TOKENS 32
+
 __device__ bool is_in_end(const int64_t id,
-                          __global_ptr__ const int64_t *end_ids,
+                          const int64_t *end_ids,
                           int length) {
-  bool flag = false;
   for (int i = 0; i < length; i++) {
     if (id == end_ids[i]) {
       return true;
     }
   }
-  return flag;
+  return false;
 }
 __device__ inline bool is_in(__global_ptr__ const int64_t *candidates,
                              const int64_t draft,
@@ -59,23 +29,14 @@ __device__ inline bool is_in(__global_ptr__ const int64_t *candidates,
   return false;
 }
 
-static __device__ inline unsigned int xorwow(unsigned int &state) {
-  state ^= state >> 7;
-  state ^= state << 9;
-  state ^= state >> 13;
-  return state;
-}
-
 __device__ int64_t
 topp_sampling_kernel(__global_ptr__ const int64_t *candidate_ids,
                      __global_ptr__ const float *candidate_scores,
                      __global_ptr__ const float *dev_curand_states,
                      const int candidate_len,
                      const float topp) {
-  const int tid = core_id();
   float sum_scores = 0.0f;
   float rand_top_p = *dev_curand_states * topp;
-  // printf("debug rand_top_p:%f\n",rand_top_p);
   for (int i = 0; i < candidate_len; i++) {
     sum_scores += candidate_scores[i];
     if (rand_top_p <= sum_scores) {
@@ -100,15 +61,13 @@ __device__ inline bool verify_one_topp(
 
 // ============================================================
 // VerifyContext — per-batch mutable state + accept helpers.
-// Eliminates repeated EOS/max_dec_len check and output write
-// patterns across Phase 1 and Phase 2.
 // ============================================================
 struct VerifyContext {
   // Immutable per-batch (set once at kernel entry)
   int bid;
   int max_step_tokens;
   int end_length;
-  __global_ptr__ const int64_t *end_tokens;
+  int64_t lm_end_tokens[MAX_END_TOKENS];
   __global_ptr__ const int64_t *max_dec_len;
   __global_ptr__ const int64_t *step_input_ids_now;
   __global_ptr__ int64_t *step_output_ids;
@@ -118,15 +77,12 @@ struct VerifyContext {
   int output_len_now;
   bool stopped;
 
-  // Emit a token at position `pos` to output in Phase 1.
-  // Performs: step_idx check, EOS detection, token replacement, output write.
-  // Returns true if this sequence should stop (EOS or max_dec_len hit).
   __device__ bool emit_token(int pos, int64_t token) {
     cur_step_idx++;
-    bool is_eos = is_in_end(token, end_tokens, end_length);
+    bool is_eos = is_in_end(token, lm_end_tokens, end_length);
     bool max_len_hit = (cur_step_idx >= max_dec_len[bid]);
     if (max_len_hit && !is_eos) {
-      token = end_tokens[0];
+      token = lm_end_tokens[0];
     }
     step_output_ids[bid * max_step_tokens + pos] = token;
     output_len_now++;
@@ -137,28 +93,18 @@ struct VerifyContext {
     return false;
   }
 
-  // Emit the final token at position `pos` in Phase 2.
-  // Same EOS/max_dec_len logic. Increments output_len_now since
-  // Phase 2 produces one additional token.
   __device__ void emit_final_token(int pos, int64_t token) {
     cur_step_idx++;
-    bool is_eos = is_in_end(token, end_tokens, end_length);
+    bool is_eos = is_in_end(token, lm_end_tokens, end_length);
     bool max_len_hit = (cur_step_idx >= max_dec_len[bid]);
     if (max_len_hit && !is_eos) {
-      token = end_tokens[0];
+      token = lm_end_tokens[0];
     }
     step_output_ids[bid * max_step_tokens + pos] = token;
     output_len_now++;
   }
 
   // TOPP-only: verify_window bulk-accept fallback.
-  //
-  // When draft token is NOT in top-p set but IS the top-2 token,
-  // check verify_window consecutive positions for top-1 match.
-  // If all match, bulk-accept from position i through ii.
-  //
-  // Returns the new loop position (i) after handling.
-  // Sets *rejected=true if fallback was not triggered (caller should break).
   __device__ int try_verify_window_fallback(
       int i,
       bool *rejected,
@@ -170,7 +116,6 @@ struct VerifyContext {
     if (max_candidate_len >= 2 &&
         verify_tokens_now[ii * max_candidate_len + 1] ==
             step_input_ids_now[ii + 1]) {
-      // top-2 matches — scan verify_window consecutive top-1 matches
       int j = 0;
       ii += 1;
       for (; j < verify_window && ii < seq_len_this_time - 1; j++, ii++) {
@@ -180,14 +125,12 @@ struct VerifyContext {
         }
       }
       if (j >= verify_window) {
-        // Bulk accept all tokens from i to ii
         for (; i < ii; i++) {
           if (emit_token(i, step_input_ids_now[i + 1])) return i;
         }
-        return i;  // continue outer loop from position ii
+        return i;
       }
     }
-    // Fallback not triggered or insufficient window — reject
     *rejected = true;
     return i;
   }
@@ -233,6 +176,12 @@ __global__ void verify_draft_tokens(
   const int64_t tid = core_id() * cluster_num() + cluster_id();
   const int64_t nthreads = cluster_num() * core_num();
 
+  // Prefetch end_tokens to LM (accessed repeatedly in emit_token)
+  int64_t lm_end_tokens[MAX_END_TOKENS];
+  int actual_end_length =
+      end_length < MAX_END_TOKENS ? end_length : MAX_END_TOKENS;
+  GM2LM(end_tokens, lm_end_tokens, actual_end_length * sizeof(int64_t));
+
   // Initialize step_output_len and step_output_ids for ALL max_bsz slots
   for (int64_t bid = tid; bid < max_bsz; bid += nthreads) {
     step_output_len[bid] = 0;
@@ -260,8 +209,10 @@ __global__ void verify_draft_tokens(
     VerifyContext ctx;
     ctx.bid = bid;
     ctx.max_step_tokens = max_step_tokens;
-    ctx.end_length = end_length;
-    ctx.end_tokens = end_tokens;
+    ctx.end_length = actual_end_length;
+    for (int i = 0; i < actual_end_length; i++) {
+      ctx.lm_end_tokens[i] = lm_end_tokens[i];
+    }
     ctx.max_dec_len = max_dec_len;
     ctx.step_input_ids_now = step_input_ids + bid * max_step_tokens;
     ctx.step_output_ids = step_output_ids;
@@ -281,7 +232,7 @@ __global__ void verify_draft_tokens(
       // Accept-all override (debug/warmup)
       if (accept_all) {
         int64_t token = ctx.step_input_ids_now[i + 1];
-        if (is_in_end(token, end_tokens, end_length)) {
+        if (is_in_end(token, lm_end_tokens, actual_end_length)) {
           token = 5;
         }
         if (ctx.emit_token(i, token)) break;
