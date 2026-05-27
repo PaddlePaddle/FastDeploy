@@ -90,7 +90,8 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
       should_skip = true;
     }
 
-    // Default: preserve original seq_lens_decoder (prefill path doesn't modify it)
+    // Default: preserve original seq_lens_decoder (prefill path doesn't modify
+    // it)
     seq_lens_decoder_new = seq_lens_decoder_now;
 
     if (should_skip) {
