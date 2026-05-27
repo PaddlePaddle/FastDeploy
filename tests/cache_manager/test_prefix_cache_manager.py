@@ -190,6 +190,7 @@ def _create_manager(
         total_block_num=num_gpu_blocks,
         prefill_kvcache_block_num=num_gpu_blocks,
         num_cpu_blocks=num_cpu_blocks,
+        block_size=64,
         bytes_per_layer_per_block=1,
         enable_prefix_caching=enable_prefix_caching,
         enable_hierarchical_cache=False,
