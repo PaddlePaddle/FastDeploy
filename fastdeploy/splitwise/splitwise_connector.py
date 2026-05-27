@@ -267,7 +267,7 @@ class SplitwiseConnector:
             return True, ""
 
         while self.current_request_ids[task.request_id] == "init":
-            time.sleep(0.001)
+            time.sleep(0.005)
             if time.time() - start_time > envs.FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS:
                 del self.current_request_ids[task.request_id]
                 return False, "prefill waits for decode resource timeout"

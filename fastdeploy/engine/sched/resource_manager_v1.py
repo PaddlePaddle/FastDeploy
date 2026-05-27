@@ -245,7 +245,7 @@ class ResourceManagerV1(ResourceManager):
         block_num = (
             request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1
         ) // self.config.cache_config.block_size - len(request.block_tables)
-
+        block_num = max(block_num, 0)
         if self.config.speculative_config.method is not None:
             block_num = min(block_num + 1, self.config.cache_config.max_block_num_per_seq)
         else:
@@ -1001,7 +1001,13 @@ class ResourceManagerV1(ResourceManager):
                         req_index += 1
                         continue
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(num_new_block)
+                    if self.config.scheduler_config.splitwise_role == "prefill":
+                        # for prefill instance, do not set threshold for running requests
+                        can_schedule_block_num_threshold = 0
+                    else:
+                        can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
+                            num_new_block
+                        )
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                         request.block_tables.extend(
@@ -1063,9 +1069,12 @@ class ResourceManagerV1(ResourceManager):
                                 self.cache_manager.num_cpu_blocks > 0
                                 or self.config.cache_config.kvcache_storage_backend
                             ):
-                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                                     (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                     // self.config.cache_config.block_size
+                                )
+                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                    can_schedule_block_num_threshold
                                 ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                     break
                             success = self.get_prefix_cached_blocks(request)
@@ -1124,6 +1133,7 @@ class ResourceManagerV1(ResourceManager):
                                 self.req_dict[request.request_id] = allocated_position
                                 llm_logger.debug(f"req_id:{request.request_id} allocate pos end")
                         else:
+                            # Warning: _free_blocks before update_cache_blocks may cause storage blocks leak
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
                             break
@@ -1139,9 +1149,12 @@ class ResourceManagerV1(ResourceManager):
                                 self.cache_manager.num_cpu_blocks > 0
                                 or self.config.cache_config.kvcache_storage_backend
                             ):
-                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                                     (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                     // self.config.cache_config.block_size
+                                )
+                                if not self.cache_manager.can_allocate_gpu_blocks(
+                                    can_schedule_block_num_threshold
                                 ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                     break
                             success = self.get_prefix_cached_blocks(request)
@@ -1186,6 +1199,7 @@ class ResourceManagerV1(ResourceManager):
                                 )
                             request.status = RequestStatus.RUNNING_PREFILL
                         else:
+                            # Warning: _free_blocks before update_cache_blocks may cause storage blocks leak
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
                             break

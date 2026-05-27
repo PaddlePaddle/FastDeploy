@@ -1226,15 +1226,11 @@ class GPUModelRunner(ModelRunnerBase):
             req.sampling_params.top_p_normalized_logprobs and req.sampling_params.top_p != 1.0 for req in logprobs_reqs
         )
         if logprobs_reqs:
-            self.max_logprobs = (
-                max(
-                    [
-                        self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
-                        for req in logprobs_reqs
-                    ]
-                )
-                if not self.speculative_decoding
-                else 20
+            self.max_logprobs = max(
+                [
+                    self.ori_vocab_size if req.sampling_params.logprobs < 0 else req.sampling_params.logprobs
+                    for req in logprobs_reqs
+                ]
             )
         elif self.enable_logprob:
             self.max_logprobs = None if not self.speculative_decoding else 0
@@ -1422,6 +1418,15 @@ class GPUModelRunner(ModelRunnerBase):
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             device_routing_buffer=device_routing_buffer,
         )
+
+        # Decode attention split ops buffers (assigned after construction due to ForwardMeta __getattr__)
+        if "decode_block_indices" in self.share_inputs:
+            self.forward_meta.decode_block_indices = self.share_inputs["decode_block_indices"]
+            self.forward_meta.decode_num_blocks = self.share_inputs["decode_num_blocks"]
+            self.forward_meta.decode_chunk_size = self.share_inputs["decode_chunk_size"]
+            self.forward_meta.decode_tmp_workspace = self.share_inputs["decode_tmp_workspace"]
+            self.forward_meta.decode_tmp_m = self.share_inputs["decode_tmp_m"]
+            self.forward_meta.decode_tmp_d = self.share_inputs["decode_tmp_d"]
 
         dist_status = self.collect_distributed_status()
 
@@ -1651,6 +1656,8 @@ class GPUModelRunner(ModelRunnerBase):
             num_heads=num_heads,
             kv_num_heads=self.model_config.kv_num_heads,
             block_size=self.fd_config.cache_config.block_size,
+            head_dim=head_dim,
+            dtype=self.model_config.dtype,
         )
         self.share_inputs.update(res_buffer)
 

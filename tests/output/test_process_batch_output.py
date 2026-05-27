@@ -211,8 +211,9 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
 
         # stop_flag
         processor.output_tokens[0, 0].set_tensor(paddle.to_tensor(2))
-        # mtype target = 3, decode = 4
-        processor.output_tokens[1, 0].set_tensor(paddle.to_tensor(3))
+        # meta[1] packs mtype (low 8 bits) and actual_topk (high 16 bits)
+        actual_topk = K + 1
+        processor.output_tokens[1, 0].set_tensor(paddle.to_tensor(3 | (actual_topk << 8)))
         # batch
         processor.output_tokens[2, 0].set_tensor(paddle.to_tensor(2))
         # accept_num
@@ -244,12 +245,12 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
             assert len(request_output.outputs.token_ids) == accept_num[i]
             assert len(request_output.outputs.top_logprobs) == 3
             # tokens, scores, ranks
-            assert len(request_output.outputs.top_logprobs[0][0]) == K + 1
-            assert len(request_output.outputs.top_logprobs[1][0]) == K + 1
+            assert len(request_output.outputs.top_logprobs[0][0]) == actual_topk
+            assert len(request_output.outputs.top_logprobs[1][0]) == actual_topk
             assert len(request_output.outputs.top_logprobs[2]) == accept_num[i]
 
         # mtype = 4
-        processor.output_tokens[1, 0].set_tensor(paddle.to_tensor(4))
+        processor.output_tokens[1, 0].set_tensor(paddle.to_tensor(4 | (actual_topk << 8)))
         processor._process_batch_output()
         cached_generated_tokens: MockCachedGeneratedTokens = processor.cached_generated_tokens
         for c in cached_generated_tokens.cache:
@@ -258,8 +259,8 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
             assert len(request_output.outputs.top_logprobs) == 3
             assert len(request_output.outputs.draft_top_logprobs) == 3
             # tokens, scores, ranks
-            assert len(request_output.outputs.draft_top_logprobs[0][0]) == K + 1
-            assert len(request_output.outputs.draft_top_logprobs[1][0]) == K + 1
+            assert len(request_output.outputs.draft_top_logprobs[0][0]) == actual_topk
+            assert len(request_output.outputs.draft_top_logprobs[1][0]) == actual_topk
             assert len(request_output.outputs.draft_top_logprobs[2]) == accept_num[i]
 
     def test_process_batch_output_aborted_task_negative_token_speculative_decoding(self):
@@ -282,8 +283,8 @@ class TestTokenProcessorProcessBatchOutput(unittest.TestCase):
         # Set up output tokens with negative token
         # stop_flag
         processor.output_tokens[0, 0].set_tensor(paddle.to_tensor(2))
-        # mtype target = 3
-        processor.output_tokens[1, 0].set_tensor(paddle.to_tensor(3))
+        # mtype target = 3, actual_topk packed in high bits
+        processor.output_tokens[1, 0].set_tensor(paddle.to_tensor(3 | ((K + 1) << 8)))
         # batch = 2 (so batch_id=0 is < batch_size-1=1)
         processor.output_tokens[2, 0].set_tensor(paddle.to_tensor(2))
         # Set accept_num = PREEMPTED_TOKEN_ID (-9) for first task to trigger abort logic

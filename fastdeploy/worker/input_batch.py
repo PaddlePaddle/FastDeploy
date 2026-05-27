@@ -205,6 +205,13 @@ class InputBatch:
         self.kv_batch_ids = None
         self.kv_tile_ids_per_batch = None
         self.kv_num_blocks_x_cpu = None  # CPU
+        # Decode attention split ops buffers (initialized by _initialize_attn_backend)
+        self.decode_block_indices = None
+        self.decode_num_blocks = None
+        self.decode_chunk_size = None
+        self.decode_tmp_workspace = None
+        self.decode_tmp_m = None
+        self.decode_tmp_d = None
 
         # Initialize thinking related buffers
         self.enable_thinking = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
@@ -814,6 +821,13 @@ class ProposerInputBatch(InputBatch):
         self.kv_batch_ids = None
         self.kv_tile_ids_per_batch = None
         self.kv_num_blocks_x_cpu = None  # CPU
+        # Decode attention split ops buffers
+        self.decode_block_indices = None
+        self.decode_num_blocks = None
+        self.decode_chunk_size = None
+        self.decode_tmp_workspace = None
+        self.decode_tmp_m = None
+        self.decode_tmp_d = None
 
         # Input tokens
         self.draft_tokens = paddle.full(
