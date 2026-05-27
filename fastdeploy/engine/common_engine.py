@@ -660,7 +660,7 @@ class EngineService:
             cur_req.metrics = req_out.metrics
             cur_req.metrics.decode_inference_start_time = time.time()
             if (
-                self.cfg.speculative_config.method == SpecMethod.MTP
+                self.cfg.speculative_config.method in [SpecMethod.MTP, SpecMethod.NAIVE]
                 and self.cfg.scheduler_config.splitwise_role == "decode"
             ):
                 cur_req.draft_token_ids = copy.deepcopy(req_out.outputs.draft_token_ids)
@@ -893,8 +893,8 @@ class EngineService:
                 else:
                     continue
 
-                main_process_metrics.num_requests_waiting.dec(len(tasks))
-                main_process_metrics.num_requests_running.inc(len(tasks))
+                main_process_metrics.dec_value("num_requests_waiting", len(tasks))
+                main_process_metrics.inc_value("num_requests_running", len(tasks))
             except Exception as e:
                 err_msg = f"Error happened while insert task to engine: {e}, {traceback.format_exc()!s}."
                 self.llm_logger.error(err_msg)
@@ -1022,7 +1022,7 @@ class EngineService:
                                         )
                                     ]
                                 )
-                                main_process_metrics.reschedule_req_num.inc()
+                                main_process_metrics.inc_value("reschedule_req_num")
                                 need_delete_tasks.append(task)
                                 continue
                     for tmp_task in need_delete_tasks:
@@ -1130,7 +1130,7 @@ class EngineService:
                                     f"preallocated request. req:{task.request_id} "
                                 )
                                 self.llm_logger.error(msg)
-                                main_process_metrics.reschedule_req_num.inc()
+                                main_process_metrics.inc_value("reschedule_req_num")
                                 self.scheduler.put_results(
                                     [
                                         RequestOutput(
@@ -1337,7 +1337,7 @@ class EngineService:
                         request = Request.from_dict(data)
 
                         request.metrics.scheduler_recv_req_time = time.time()
-                        main_process_metrics.requests_number.inc()
+                        main_process_metrics.inc_value("requests_number")
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
                             request_id = get_base_request_id(data["request_id"])
@@ -1400,7 +1400,7 @@ class EngineService:
                             added_requests.pop(request_id)
 
                     if failed is None:
-                        main_process_metrics.num_requests_waiting.inc(1)
+                        main_process_metrics.inc_value("num_requests_waiting", 1)
                         continue
 
                     self._send_error_response(request_id, failed)
@@ -2096,7 +2096,7 @@ class EngineService:
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                         is_success = True
-                        main_process_metrics.decode_preallocated_req_num.inc()
+                        main_process_metrics.inc_value("decode_preallocated_req_num")
                 else:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
                         self.llm_logger.debug(f"D Resource available, processing task {task.request_id}")
@@ -2173,7 +2173,7 @@ class EngineService:
             else:
                 for req_output in ready_request_outputs:
                     request_id = req_output.request_id
-                    main_process_metrics.decode_preallocated_req_num.dec()
+                    main_process_metrics.dec_value("decode_preallocated_req_num")
                     trace_print(LoggingEventName.DECODE_PROCESS_PREFILLED_REQUEST_END, request_id, "")
                     if envs.FD_ENABLE_INTERNAL_ADAPTER and not req_output.outputs.token_ids:
                         # first token is eos in Prefill, just recycle resource and continue
@@ -2188,7 +2188,7 @@ class EngineService:
                         self.llm_logger.warning(
                             f"{request_id} prefill failed with msg:{req_output.error_msg}, recycle resource."
                         )
-                        main_process_metrics.failed_recv_first_token_req_num.inc()
+                        main_process_metrics.inc_value("failed_recv_first_token_req_num")
                         self.resource_manager.pre_recycle_resource(request_id)
                         if request_id in self.token_processor.tokens_counter:
                             del self.token_processor.tokens_counter[request_id]

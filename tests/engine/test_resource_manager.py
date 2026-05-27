@@ -107,16 +107,15 @@ def _noop_logger():
 
 def _stub_metrics():
     m = SimpleNamespace()
-    for n in (
-        "max_batch_size",
-        "batch_size",
-        "available_gpu_block_num",
-        "gpu_cache_usage_perc",
-        "prefix_cache_token_num",
-        "prefix_gpu_cache_token_num",
-        "prefix_cpu_cache_token_num",
-    ):
-        setattr(m, n, SimpleNamespace(set=lambda v: None, inc=lambda v: None))
+    m._store = {}
+
+    def _get(name):
+        if name not in m._store:
+            m._store[name] = SimpleNamespace(value=None)
+        return m._store[name]
+
+    m.set_value = lambda name, v, **kw: setattr(_get(name), "value", v)
+    m.inc_value = lambda name, v=1, **kw: setattr(_get(name), "value", (getattr(_get(name), "value") or 0) + v)
     return m
 
 

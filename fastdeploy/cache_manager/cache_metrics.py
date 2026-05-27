@@ -57,10 +57,10 @@ class CacheMetrics:
         self.gpu_hit_token_ratio = self.total_gpu_matched_token_num / self.total_token_num
         self.storage_hit_token_ratio = self.total_storage_matched_token_num / self.total_token_num
 
-        main_process_metrics.hit_req_rate.set(self.hit_req_ratio)
-        main_process_metrics.hit_token_rate.set(self.hit_token_ratio)
-        main_process_metrics.cpu_hit_token_rate.set(self.cpu_hit_token_ratio)
-        main_process_metrics.gpu_hit_token_rate.set(self.gpu_hit_token_ratio)
+        main_process_metrics.set_value("hit_req_rate", self.hit_req_ratio)
+        main_process_metrics.set_value("hit_token_rate", self.hit_token_ratio)
+        main_process_metrics.set_value("cpu_hit_token_rate", self.cpu_hit_token_ratio)
+        main_process_metrics.set_value("gpu_hit_token_rate", self.gpu_hit_token_ratio)
 
         logger.info(
             f"Metrics for all requests: req_count {self.req_count} hit_req_count {self.hit_req_count}"

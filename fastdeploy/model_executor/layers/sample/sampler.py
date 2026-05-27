@@ -40,6 +40,7 @@ from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.layers.sample.ops import (
     apply_penalty_multi_scores,
     apply_speculative_penalty_multi_scores,
+    dispatch_top_k_renorm_probs,
     min_p_sampling,
     reasoning_phase_token_constraint,
     speculate_insert_first_token,
@@ -178,6 +179,57 @@ def padding_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_le
     topp_seed[:, 0] = (topp_seed[:, 0] + offsets) % MAX_INFER_SEED
 
     return top_p_padding, top_k_padding, topp_seed
+
+
+def _sample_from_probs(probs, sampling_metadata, top_p=None, top_k=None, topp_seed=None):
+    """Sample next tokens from probability distributions with optional top-k and top-p filtering.
+
+    When ``top_p_list`` is all 1.0 (no top-p filtering needed), uses
+    :func:`_random_sample` with an optional top-k renormalization pass via
+    :func:`dispatch_top_k_renorm_probs`.  Otherwise dispatches through
+    :func:`top_k_top_p_sampling` to apply joint top-k/top-p constraints.
+
+    Args:
+        probs: [token_num, vocab_size] float32 probability tensor (normalized logits).
+        sampling_metadata: Metadata carrying top_p, top_k, seed, top_k_list,
+            and top_p_list for the current batch of requests.
+        top_p: Override for per-row top-p values, shape [token_num, 1] or None.
+        top_k: Override for per-row top-k values, shape [token_num, 1] or None.
+        topp_seed: Override for per-row random seeds, shape [token_num, 1] or None.
+
+    Returns:
+        Sampled token ids of shape [token_num, 1].
+    """
+    token_num = probs.shape[0]
+    if top_p is None:
+        top_p = sampling_metadata.top_p
+    if top_k is None:
+        top_k = sampling_metadata.top_k
+    if topp_seed is None:
+        topp_seed = sampling_metadata.seed
+    top_k_list = sampling_metadata.top_k_list
+    top_p_list = sampling_metadata.top_p_list
+    need_top_k_sampling = False
+    need_top_p_sampling = True
+    if top_k_list is not None:
+        top_k_list = top_k_list[:token_num]
+        need_top_k_sampling = any(k > 0 for k in top_k_list)
+    if top_p_list is not None:
+        top_p_list = top_p_list[:token_num]
+        need_top_p_sampling = any(p != 1.0 for p in top_p_list)
+    if not need_top_p_sampling and current_platform.is_cuda():
+        if need_top_k_sampling:
+            probs = dispatch_top_k_renorm_probs(probs, top_k)
+        next_tokens = _random_sample(probs, topp_seed=topp_seed)
+    else:
+        _, next_tokens = top_k_top_p_sampling(
+            probs,
+            top_p,
+            top_k,
+            top_k_list,
+            topp_seed=topp_seed,
+        )
+    return next_tokens
 
 
 class GuidedDecoding:
@@ -641,13 +693,7 @@ class Sampler(nn.Layer):
         if FD_SAMPLING_CLASS.lower() == "triton":
             next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
         else:
-            _, next_tokens = top_k_top_p_sampling(
-                probs,
-                sampling_metadata.top_p,
-                sampling_metadata.top_k,
-                sampling_metadata.top_k_list,
-                topp_seed=sampling_metadata.seed,
-            )
+            next_tokens = _sample_from_probs(probs, sampling_metadata)
 
         logprobs_tensors = (
             None if num_logprobs is None else self.gather_logprobs(raw_logprobs, num_logprobs, token_ids=next_tokens)
@@ -925,8 +971,8 @@ class SpeculativeSampler(nn.Layer):
                     token_num_output_cpu,
                     increment_value,
                 )
-                _, target_tokens = top_k_top_p_sampling(
-                    probs, top_p=top_p, top_k=top_k, top_k_list=sampling_metadata.top_k_list, topp_seed=topp_seed
+                target_tokens = _sample_from_probs(
+                    probs, sampling_metadata, top_p=top_p, top_k=top_k, topp_seed=topp_seed
                 )
         elif self.verify_strategy == VerifyStrategy.GREEDY:
             # GREEDY: deterministic argmax in target_tokens, no candidates needed
@@ -1016,11 +1062,11 @@ class SpeculativeSampler(nn.Layer):
         if FD_SAMPLING_CLASS.lower() == "triton":
             next_tokens = _random_sample(probs, topp_seed=sampling_metadata.seed)
         else:
-            _, next_tokens = top_k_top_p_sampling(
+            next_tokens = _sample_from_probs(
                 probs,
-                sampling_metadata.top_p,
-                sampling_metadata.top_k,
-                sampling_metadata.top_k_list,
+                sampling_metadata,
+                top_p=sampling_metadata.top_p,
+                top_k=sampling_metadata.top_k,
                 topp_seed=sampling_metadata.seed,
             )
 
@@ -1161,7 +1207,6 @@ class SpeculativeSampler(nn.Layer):
                 logits if logits_ori is None else logits_ori,
                 sampling_metadata,
                 share_inputs,
-                is_naive=is_naive,
                 logprobs_mode=self.logprobs_mode,
                 compute_logprobs_fn=self.compute_logprobs,
                 real_bsz=real_bsz,
