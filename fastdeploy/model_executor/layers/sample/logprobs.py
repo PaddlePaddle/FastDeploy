@@ -141,7 +141,6 @@ def build_output_logprobs(
     logits: paddle.Tensor,
     sampling_metadata,
     share_inputs: List[paddle.Tensor],
-    is_naive: bool = False,
     logprobs_mode: str = "default",
     compute_logprobs_fn: Optional[Callable] = None,
     real_bsz: int = 0,
@@ -149,17 +148,12 @@ def build_output_logprobs(
     """
     Build logprobs output for both NAIVE and speculative (MTP/Ngram) modes.
 
-    This is a standalone function (not tied to any sampler) so that both
-    naive and speculative decoding paths can share the same logprob logic.
-
-    For NAIVE mode: logits are already per-token, no extraction needed.
-    For speculative mode: extracts target logits for accepted token positions.
+    Extracts target logits and accepted token IDs via a fused CUDA kernel.
 
     Args:
         logits: Model output logits.
         sampling_metadata: Sampling parameters and metadata.
         share_inputs: Shared input tensors.
-        is_naive: True for NAIVE mode (single token per request).
         logprobs_mode: One of "raw_logprobs", "raw_logits", or "default".
         compute_logprobs_fn: Callable for computing logprobs with temperature
             scaling and top_p normalization. Used when logprobs_mode == "raw_logprobs".
@@ -175,35 +169,28 @@ def build_output_logprobs(
         return logprobs_tensors, cu_batch_token_offset
 
     max_draft_token_num = share_inputs["accept_tokens"].shape[1]
-    max_occupied_slots = share_inputs["seq_lens_this_time"].shape[0]
 
-    if is_naive:
-        # NAIVE mode: one token per request, logits are already correct
-        output_logits = logits
-        token_ids = share_inputs["accept_tokens"][:max_occupied_slots, 0]
-    else:
-        # Speculative mode: extract target logits for accepted positions
-        from fastdeploy.model_executor.layers.sample.ops import (
-            speculate_get_accept_tokens_and_logits,
-        )
+    from fastdeploy.model_executor.layers.sample.ops import (
+        speculate_get_accept_tokens_and_logits,
+    )
 
-        output_logits = paddle.empty(
-            [real_bsz * max_draft_token_num, logits.shape[1]],
-            dtype=logits.dtype,
-        )
-        token_ids = paddle.full([real_bsz * max_draft_token_num], fill_value=0, dtype="int64")
+    output_logits = paddle.empty(
+        [real_bsz * max_draft_token_num, logits.shape[1]],
+        dtype=logits.dtype,
+    )
+    token_ids = paddle.full([real_bsz * max_draft_token_num], fill_value=0, dtype="int64")
 
-        speculate_get_accept_tokens_and_logits(
-            token_ids,
-            output_logits,
-            logits,
-            share_inputs["cu_batch_token_offset"],
-            share_inputs["cu_seqlens_q_output"],
-            share_inputs["seq_lens_this_time"],
-            share_inputs["seq_lens_encoder"],
-            share_inputs["accept_num"],
-            share_inputs["accept_tokens"],
-        )
+    speculate_get_accept_tokens_and_logits(
+        token_ids,
+        output_logits,
+        logits,
+        share_inputs["cu_batch_token_offset"],
+        share_inputs["cu_seqlens_q_output"],
+        share_inputs["seq_lens_this_time"],
+        share_inputs["seq_lens_encoder"],
+        share_inputs["accept_num"],
+        share_inputs["accept_tokens"],
+    )
 
     # Compute logprobs with temperature scaling and top_p normalization
     if logprobs_mode == "raw_logprobs":
