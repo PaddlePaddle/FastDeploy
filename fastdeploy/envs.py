@@ -302,6 +302,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # When set to a valid JSON dict, metric labels are automatically enabled.
     # Example: '{"model_id":"my_model"}' adds model_id label to all metrics.
     "FD_DEFAULT_METRIC_LABEL_VALUES": lambda: os.getenv("FD_DEFAULT_METRIC_LABEL_VALUES", "{}"),
+    # Whether to enable top_p=1.0 optimization.
+    "FD_ENABLE_TOP_P_ONE_OPT": lambda: bool(int(os.getenv("FD_ENABLE_TOP_P_ONE_OPT", "0"))),
 }
 
 

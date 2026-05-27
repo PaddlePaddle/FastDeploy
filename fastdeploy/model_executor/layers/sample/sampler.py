@@ -217,7 +217,7 @@ def _sample_from_probs(probs, sampling_metadata, top_p=None, top_k=None, topp_se
     if top_p_list is not None:
         top_p_list = top_p_list[:token_num]
         need_top_p_sampling = any(p != 1.0 for p in top_p_list)
-    if not need_top_p_sampling and current_platform.is_cuda():
+    if not need_top_p_sampling and current_platform.is_cuda() and envs.FD_ENABLE_TOP_P_ONE_OPT:
         if need_top_k_sampling:
             probs = dispatch_top_k_renorm_probs(probs, top_k)
         next_tokens = _random_sample(probs, topp_seed=topp_seed)
