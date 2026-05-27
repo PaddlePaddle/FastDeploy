@@ -22,12 +22,9 @@ jobs:
     environment: Metax_ci
 
     steps:
-      - name: Cleanup
-        run: |
-          rm -rf * .[^.]*
       - name: Trigger Jenkins job
         timeout-minutes: 60
-        uses: MetaX-MACA/simple-jenkins-githubaction@v1.1
+        uses: MetaX-MACA/simple-jenkins-githubaction@v1.2
         with:
           job_name: paddle_fastdeploy_metax_smoketest
           username: fastdeploy_builder
