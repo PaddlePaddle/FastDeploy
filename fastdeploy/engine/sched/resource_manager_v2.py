@@ -158,6 +158,14 @@ class ResourceManagerV2(ResourceManagerV1):
         self._drain_messages()
         return super().schedule()
 
+    def prefill_schedule(self):
+        """
+        V2 override: drain messages first, then delegate to V1's
+        prefill_schedule().  V1's ``with self.lock:`` is a no-op.
+        """
+        self._drain_messages()
+        return super().prefill_schedule()
+
     # ==================================================================
     #  External-thread API — override V1 to use message queue
     # ==================================================================

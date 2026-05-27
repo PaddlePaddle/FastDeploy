@@ -1248,6 +1248,46 @@ class ResourceManagerV1(ResourceManager):
 
             return batch_request, error_reqs
 
+    def prefill_schedule(self):
+        """
+        P-instance-only fast path that replaces ``schedule()``.
+
+        After ``preallocate_resource_in_p`` all blocks are already
+        allocated and requests are already in ``self.running``
+        (via ``add_request_in_p``), so this method skips:
+
+        * ``can_allocate_gpu_blocks`` / ``_allocate_gpu_blocks`` re-check
+        * decode scheduling branch (P has no decode)
+        * waiting queue iteration (P bypasses the waiting queue)
+        * preemption / ``chunk_prefill_in_running_not_satisfied``
+        * ``_get_can_schedule_prefill_threshold_block`` computation
+
+        It directly iterates ``self.running`` and prepares prefill
+        tasks under the full ``max_num_batched_tokens`` budget.
+        """
+        with self.lock:
+            # P instance has no decode — full budget for prefill
+            batch_request = BatchRequest()
+            token_budget = self.config.scheduler_config.max_num_batched_tokens
+
+            # Prepare prefill tasks for all running requests
+            for request in list(self.running):
+                if self._is_decoding(request):
+                    # Request finished prefill, waiting for finish_requests.
+                    continue
+
+                num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                if num_new_tokens == 0:
+                    continue
+
+                # Blocks were preallocated — skip block checking
+                batch_request.add_request(self._prepare_prefill_task(request, num_new_tokens))
+                token_budget -= num_new_tokens
+                request.num_computed_tokens += num_new_tokens
+
+            self.update_metrics()
+            return batch_request, []
+
     def waiting_async_process(self, request: Request) -> None:
         """
         Check if async preprocessing is complete for a request.
