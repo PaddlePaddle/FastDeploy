@@ -325,10 +325,12 @@ class OpenAIServingChat:
                         raise ValueError("{}".format(res["error_msg"]))
 
                     if inference_start_time[idx] == 0:
-                        arrival_time = res["metrics"]["first_token_time"]
-                        inference_start_time[idx] = res["metrics"]["inference_start_time"]
+                        arrival_time = res["metrics"]["first_token_time"] or 0
+                        inference_start_time[idx] = res["metrics"]["inference_start_time"] or 0
                     else:
-                        arrival_time = res["metrics"]["engine_recv_latest_token_time"] - inference_start_time[idx]
+                        arrival_time = (res["metrics"]["engine_recv_latest_token_time"] or 0) - inference_start_time[
+                            idx
+                        ]
                     if first_iteration:
                         num_prompt_tokens = len(prompt_token_ids)
                         num_cached_tokens = res.get("num_cached_tokens", 0)
@@ -468,7 +470,7 @@ class OpenAIServingChat:
                         trace_carrier = res.get("trace_carrier")
                         if trace_carrier:
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
-                            start_time = res["metrics"]["engine_recv_latest_token_time"]
+                            start_time = res["metrics"]["engine_recv_latest_token_time"] or 0
                             tracing.trace_report_span(
                                 tracing.TraceSpanName.POSTPROCESSING,
                                 request_id,
@@ -480,7 +482,7 @@ class OpenAIServingChat:
                                 del res["trace_carrier"]
                         num_choices -= 1
                         main_process_metrics.e2e_request_latency.observe(
-                            time.time() - res["metrics"]["request_start_time"]
+                            time.time() - (res["metrics"]["request_start_time"] or 0)
                         )
                         if previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
@@ -715,7 +717,7 @@ class OpenAIServingChat:
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
                             tracing.trace_set_proc_propagate_context(request_id, trace_carrier)
-                            start_time = data["metrics"]["engine_recv_latest_token_time"]
+                            start_time = data["metrics"]["engine_recv_latest_token_time"] or 0
                             tracing.trace_report_span(
                                 tracing.TraceSpanName.POSTPROCESSING,
                                 request_id,
