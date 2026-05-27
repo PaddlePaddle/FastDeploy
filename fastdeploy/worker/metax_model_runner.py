@@ -1705,7 +1705,7 @@ class MetaxModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
         )
         self.exist_prefill_flag = False
         return pooler_output
@@ -1810,7 +1810,7 @@ class MetaxModelRunner(ModelRunnerBase):
             skip_save_output=True,
             async_output_queue=self.async_output_queue,
             think_end_id=self.model_config.think_end_id,
-            line_break_id=self.model_config.line_break_id,
+            splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
             enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
         )
         self.exist_prefill_flag = False
@@ -2457,7 +2457,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 skip_save_output=skip_save_output,
                 async_output_queue=self.async_output_queue,
                 think_end_id=self.model_config.think_end_id,
-                line_break_id=self.model_config.line_break_id,
+                splitwise_role_is_decode=self.scheduler_config.splitwise_role == "decode",
                 enable_entropy=self.enable_entropy and self.parallel_config.tensor_parallel_rank == 0,
             )
 
