@@ -46,6 +46,7 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
     bool stop_flags_now = false;
     int seq_lens_this_time_now = 0;
     int seq_lens_encoder_now = 0;
+    int seq_lens_decoder_now = 0;
     int seq_lens_decoder_new = 0;
     int accept_num_now = 0;
     int target_model_seq_lens_decoder_now = 0;
@@ -58,6 +59,7 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
                 &target_model_stop_flags_now,
                 sizeof(bool));
     GM2LM_ASYNC(seq_lens_encoder + tid, &seq_lens_encoder_now, sizeof(int));
+    GM2LM_ASYNC(seq_lens_decoder + tid, &seq_lens_decoder_now, sizeof(int));
     GM2LM_ASYNC(target_model_seq_lens_decoder + tid,
                 &target_model_seq_lens_decoder_now,
                 sizeof(int));
@@ -83,10 +85,13 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
     if (target_model_stop_flags_now) {
       should_skip = true;
     }
-    if (!is_splitwise_prefill &&
+    if (!should_skip && !is_splitwise_prefill &&
         target_model_step_idx_now + num_model_step >= max_dec_len_now) {
       should_skip = true;
     }
+
+    // Default: preserve original seq_lens_decoder (prefill path doesn't modify it)
+    seq_lens_decoder_new = seq_lens_decoder_now;
 
     if (should_skip) {
       stop_flags_now = true;
