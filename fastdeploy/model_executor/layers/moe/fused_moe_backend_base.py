@@ -30,7 +30,7 @@ from fastdeploy.model_executor.utils import (
 from fastdeploy.platforms import current_platform
 
 from ..quantization.quant_base import QuantMethodBase
-
+from fastdeploy import envs
 
 class MoEMethodBase(QuantMethodBase):
     """ """
@@ -232,24 +232,29 @@ class MoEMethodBase(QuantMethodBase):
         """
         if layer.ep_size > 1:
             is_moe_start_layer = layer.layer_idx == layer.fd_config.model_config.moe_layer_start_index
-            if layer.fd_config.model_config.moe_phase.phase == "prefill":
-                if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
-                    self.ep_prefill_runner.clean_low_latency_buffer()
-                return self.apply_ep_prefill(
-                    layer,
-                    x,
-                    gate,
-                    topk_ids_hookfunc,
-                    shared_experts,
-                    fc1_latent_proj,
-                    fc2_latent_proj,
-                )
-            else:
-                if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
-                    self.ep_decoder_runner.clean_low_latency_buffer()
-                return self.apply_ep_decode(
+            if envs.FD_ENABLE_MAGE_MOE:
+                return self.apply_mage_moe(
                     layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj
                 )
+            else:
+                if layer.fd_config.model_config.moe_phase.phase == "prefill":
+                    if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
+                        self.ep_prefill_runner.clean_low_latency_buffer()
+                    return self.apply_ep_prefill(
+                        layer,
+                        x,
+                        gate,
+                        topk_ids_hookfunc,
+                        shared_experts,
+                        fc1_latent_proj,
+                        fc2_latent_proj,
+                    )
+                else:
+                    if layer.fd_config.scheduler_config.splitwise_role == "mixed" and is_moe_start_layer:
+                        self.ep_decoder_runner.clean_low_latency_buffer()
+                    return self.apply_ep_decode(
+                        layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj
+                    )
         else:
             return self.apply_tp(layer, x, gate, topk_ids_hookfunc, fc1_latent_proj, fc2_latent_proj)
 

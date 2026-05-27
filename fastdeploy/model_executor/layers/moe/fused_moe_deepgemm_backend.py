@@ -28,17 +28,24 @@ from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     deep_gemm,
     paddlefleet_ops,
+    _interleave_weights,
+    _transpose_sf_for_utccp,
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import (
     count_tokens_per_expert_func,
     depermute_prefill_combine,
     prefill_permute_to_masked_gemm,
+    mega_moe_pre_dispatch,
 )
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import register_custom_python_op
+from fastdeploy.utils import register_custom_python_op, singleton
 from fastdeploy.worker.tbo import let_another_thread_run
-
+from fastdeploy.model_executor.utils import (
+    free_tensor,
+    process_weight_transpose,
+    weight_fully_copied,
+)
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
@@ -208,10 +215,65 @@ def m_grouped_fp8_gemm_nt_contiguous_custom_python_op(
     return ffn_out
 
 
+@singleton
+class MegaMoEBuffer:
+    """
+    A wrapper class for DeepEP engine.
+    Manages buffer lifecycle based on role and phase.
+    """
+
+    def __init__(
+        self,
+        ep_group,
+        num_experts: int,
+        num_max_tokens_per_rank: int,
+        top_k: int,
+        hidden_size: int,
+        moe_intermediate_size: int,
+    ):
+        self.buffer = deep_gemm.get_symm_buffer_for_mega_moe(
+            ep_group,
+            num_experts,
+            num_max_tokens_per_rank,
+            top_k,
+            hidden_size,
+            moe_intermediate_size,
+        )
+
 class DeepGemmFusedMoeMethod(MoEMethodBase):
     """
     DeepGemmFusedMoeMethod is a class that implements the MoEMethodBase interface for DeepGemm backend.
     """
+
+    def init_ep(self, layer: nn.Layer) -> None:
+        """
+        Initialize EP (Expert Parallel) related modules.
+        MegaMoE 下取消初始化 EP buffer 以及初始化 mega buffer
+        """
+        if fastdeploy.envs.FD_ENABLE_MAGE_MOE:
+            if layer.ep_size <= 1:
+                return
+
+            config = layer.fd_config
+            splitwise_role = config.scheduler_config.splitwise_role
+
+            if splitwise_role == "mixed" or splitwise_role == "prefill":
+                self.num_max_tokens_per_rank = config.scheduler_config.max_num_batched_tokens
+            elif splitwise_role == "decode":
+                self.num_max_tokens_per_rank = config.model_config.num_max_dispatch_tokens_per_rank
+            else:
+                raise ValueError(f"Unsupported splitwise role: {splitwise_role}")
+
+            self.mega_moe_buffer = MegaMoEBuffer(
+                layer.fd_config.parallel_config.ep_group,
+                layer.num_experts,
+                self.num_max_tokens_per_rank,
+                layer.top_k,
+                layer.hidden_size,
+                layer.moe_intermediate_size,
+            ).buffer
+        else:
+            super().init_ep(layer)
 
     def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
         """
@@ -221,7 +283,88 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
 
     def process_weights_after_loading(self, layer):
         """ """
-        BlockWiseFP8MoEMethod.process_weights_after_loading(self, layer)
+        if not fastdeploy.envs.FD_ENABLE_MAGE_MOE:
+            BlockWiseFP8MoEMethod.process_weights_after_loading(self, layer)
+        else:
+            def _process_quantize_mega_moe(weight_idx):
+                def cast_grouped_weights_to_fp4(bf16_weights: paddle.Tensor):
+                    num_groups, n, k = bf16_weights.shape
+                    w = paddle.empty((num_groups, n, k // 2), dtype=paddle.int8)
+                    w_sf = paddle.empty((num_groups, n, k // 32), dtype=paddle.float32)
+                    for i in range(num_groups):
+                        w[i], w_sf[i] = deep_gemm.per_token_cast_to_fp4(bf16_weights[i], use_ue8m0=True, gran_k=32)
+                    w = w.contiguous()
+                    w_sf = w_sf.contiguous()
+
+                    w_sf = deep_gemm.transform_sf_into_required_layout(w_sf, n, k, (1, 32), num_groups)
+                    return w, w_sf
+
+                # weight
+                weight_name = self.added_weight_attrs[weight_idx]
+                unquantized_weight_name = weight_name.replace("quant_weight", "weight")
+
+                weight_shape = self.up_gate_proj_weight_shape if weight_type == "gate_up" else self.down_proj_weight_shape
+                weight_dtype = paddle.bfloat16
+                # scale
+                scale_name = self.added_scale_attrs[weight_idx]
+
+                # 2.create tmp tensor and 3.quantize weight
+                weight = getattr(layer, unquantized_weight_name).transpose([0, 2, 1]) # [num_experts, 2 * moe_intermediate_size, hidden_size]
+                if list(weight.shape) != list(weight_shape):
+                    raise ValueError(
+                        f"MegaMoE weight shape mismatch for {unquantized_weight_name}: "
+                        f"got {list(weight.shape)}, expected {list(weight_shape)}"
+                    )
+                if weight.dtype != weight_dtype:
+                    weight = weight.astype(weight_dtype)
+                weight = weight.contiguous()
+
+                weight_quantized = cast_grouped_weights_to_fp4(weight)
+
+                if weight_type == "gate_up":
+                    l1_interleaved = _interleave_weights(weight_quantized)
+                    weight_quantized, scale = (l1_interleaved[0], _transpose_sf_for_utccp(l1_interleaved[1]))
+                else:
+                    weight_quantized, scale = (weight_quantized[0], _transpose_sf_for_utccp(weight_quantized[1]))
+
+                free_tensor(getattr(layer, weight_name))
+                free_tensor(getattr(layer, unquantized_weight_name))
+                setattr(
+                    layer,
+                    weight_name,
+                    layer.create_parameter(
+                        shape=weight_quantized.shape,
+                        dtype=paddle.int8,
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ),
+                )
+                setattr(
+                    layer,
+                    scale_name,
+                    layer.create_parameter(
+                        shape=scale.shape,
+                        dtype=paddle.int32,
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    ).as_strided(scale.shape, scale.stride()),
+                )
+                getattr(layer, weight_name).copy_(weight_quantized, False)
+                getattr(layer, scale_name).copy_(scale, False)
+
+            if self.quant_config.is_checkpoint_bf16:
+                # dynamic quantize
+                weight_id_map = {"gate_up": 0, "down": 1}
+                if weight_fully_copied(layer.up_gate_proj_weight):
+                    weight_type = "gate_up"
+                else:
+                    weight_type = "down"
+                if self.model_format == "torch":
+                    # pt model
+                    unquantized_weight_name = self.added_weight_attrs[weight_id_map[weight_type]].replace(
+                        "quant_weight", "weight"
+                    )
+                    process_weight_transpose(layer, unquantized_weight_name)
+                
+                _process_quantize_mega_moe(weight_id_map[weight_type])
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
         """
@@ -904,3 +1047,113 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 1.0,
             )
         return tmp_ffn_out
+
+
+    def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
+        if layer.redundant_table_manger is not None:
+            (
+                ep_rank_to_expert_id_list,
+                expert_id_to_ep_rank_array,
+                expert_in_rank_num_list,
+                tokens_per_expert_stats_list,
+            ) = layer.redundant_table_manger.get_ep_rank_to_expert_id_list_by_layer(layer.layer_idx)
+
+            if layer.topk_method == "noaux_tc":
+                from .moe import get_moe_scores
+
+                score, topk_weights, topk_idx = get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
+                    expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
+                    expert_in_rank_num_list=expert_in_rank_num_list,
+                    tokens_per_expert_stats_list=tokens_per_expert_stats_list,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
+                    topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                )
+            else:
+                topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_redundant_topk_select(
+                    gating_logits=gate_out,
+                    expert_id_to_ep_rank_array=expert_id_to_ep_rank_array,
+                    expert_in_rank_num_list=expert_in_rank_num_list,
+                    tokens_per_expert_stats_list=tokens_per_expert_stats_list,
+                    bias=layer.gate_correction_bias,
+                    moe_topk=layer.top_k,
+                    apply_norm_weight=True,
+                    enable_softmax_top_k_fused=False,
+                    redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
+                )
+        else:
+            if layer.topk_method == "noaux_tc":
+                from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
+
+                score, topk_weights, topk_idx = get_moe_scores(
+                    gate_out,
+                    layer.n_group,
+                    layer.topk_group,
+                    layer.top_k,
+                    layer.routed_scaling_factor,
+                    layer.gate_correction_bias,
+                    getattr(layer, "renormalize", True),
+                    topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                )
+            else:
+                topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                    gate_out,
+                    layer.gate_correction_bias,
+                    layer.top_k,
+                    True,
+                    False,
+                )
+        return topk_idx, topk_weights
+
+    def apply_mage_moe(self, layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj):
+        gate_out = gate(x).cast("float32")
+
+        hidden_size = layer.hidden_size
+        num_tokens = x.shape[0]
+
+        # 1. Select topk experts and weights.
+        topk_idx, topk_weights = self.moe_select(layer, gate_out)
+
+        mega_moe_pre_dispatch(
+            x,
+            topk_idx,
+            topk_weights,
+            self.mega_moe_buffer.x,
+            self.mega_moe_buffer.x_sf,
+            self.mega_moe_buffer.topk_idx,
+            self.mega_moe_buffer.topk_weights,
+            self.num_max_tokens_per_rank,
+            32, # group_size
+        )
+
+        buffer_capacity = self.mega_moe_buffer.x.shape[0]
+        if num_tokens > buffer_capacity:
+            raise ValueError(
+                f"MegaMoE buffer capacity exceeded: num_tokens={num_tokens}, capacity={buffer_capacity}"
+            )
+
+        l1_weight = getattr(layer, self.added_weight_attrs[0])
+        l1_scale = getattr(layer, self.added_scale_attrs[0])
+        l2_weight = getattr(layer, self.added_weight_attrs[1])
+        l2_scale = getattr(layer, self.added_scale_attrs[1])
+        y = paddle.empty((max(num_tokens, 1), hidden_size), dtype=paddle.bfloat16)
+
+        swiglu_limit = getattr(layer.fd_config.model_config, "swiglu_limit", None)
+        deep_gemm.fp8_fp4_mega_moe(
+            y,
+            (l1_weight, l1_scale),
+            (l2_weight, l2_scale),
+            self.mega_moe_buffer,
+            recipe=(1, 1, 32),
+            activation="swiglu",
+            activation_clamp=swiglu_limit,
+            fast_math=True,
+        )
+
+        return y
