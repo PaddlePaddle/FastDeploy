@@ -180,7 +180,7 @@ class EngineArgs:
     """
     tool parser plugin used to register user defined tool parsers
     """
-    output_fallback: str = None
+    output_fallback: Optional[str] = None
     """
     output fallback strategies to apply, separated by commas
     """

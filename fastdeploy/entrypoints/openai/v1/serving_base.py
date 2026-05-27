@@ -44,6 +44,7 @@ class ServingResponseContext:
         self.choice_completion_tokens_dict = {}
         self.inference_start_time_dict = {}
         self.remain_choices: Optional[int] = None
+        self.truncated_choices: set[int] = set()
 
 
 class OpenAiServingBase(OpenAIServing):
@@ -140,8 +141,10 @@ class OpenAiServingBase(OpenAIServing):
             generator: AsyncGenerator[RequestOutput] = self._pipeline(ctx)
             choice_accumulate_buffer: dict[int, RequestOutput] = {}
             async for request_output in generator:
-                response_ctx.usage.add(self._calc_usage(request_output))
                 outputs = request_output.outputs
+                if outputs.index in response_ctx.truncated_choices:
+                    continue
+                response_ctx.usage.add(self._calc_usage(request_output))
                 choice_completion_tokens = response_ctx.choice_completion_tokens_dict.get(outputs.index, 0)
                 choice_completion_tokens += len(outputs.token_ids)
                 response_ctx.choice_completion_tokens_dict[outputs.index] = choice_completion_tokens

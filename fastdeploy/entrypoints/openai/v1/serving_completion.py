@@ -306,6 +306,7 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 )
                 if fallback_truncated:
                     choice.finish_reason = "repeat_truncate"
+                    response_ctx.truncated_choices.add(output.index)
                     if response_ctx.remain_choices is None:
                         response_ctx.remain_choices = len(ctx.preprocess_requests) * (
                             1 if request.n is None else request.n

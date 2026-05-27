@@ -333,6 +333,7 @@ class OpenAIServingChat(OpenAiServingBase):
             choice.finish_reason = self._calc_finish_reason(request_output, max_tokens, choice_completion_tokens)
             if fallback_truncated:
                 choice.finish_reason = "repeat_truncate"
+                response_ctx.truncated_choices.add(output.index)
                 if response_ctx.remain_choices is None:
                     response_ctx.remain_choices = len(ctx.preprocess_requests) * (
                         1 if request.n is None else request.n
