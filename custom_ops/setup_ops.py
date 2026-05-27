@@ -554,6 +554,8 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
 
     if cc >= 90 and nvcc_version >= 12.0:
+        cc_compile_args += ["-DENABLE_DECODE_UNIFIED_ATTENTION"]
+        nvcc_compile_args += ["-DENABLE_DECODE_UNIFIED_ATTENTION"]
         # decode unified attention
         os.system(
             "python utils/auto_gen_template_attention.py --config gpu_ops/decode_unified_attention/template_config.json --output gpu_ops/decode_unified_attention/template_instantiation/autogen"
