@@ -38,6 +38,7 @@
 | KV缓存 | `fastdeploy:free_gpu_block_num`           | Gauge     | 缓存中的可用块数             | 个   |
 | KV缓存 | `fastdeploy:max_gpu_block_num`            | Gauge     | 服务启动时确定的 GPU 总块数        | 个   |
 | KV缓存 | `fastdeploy:max_cpu_block_num`            | Gauge     | 服务启动时确定的 CPU 总块数        | 个   |
+| KV缓存 | `fastdeploy:free_cpu_block_num`           | Gauge     | 缓存中的可用 CPU 块数            | 个   |
 | KV缓存 | `fastdeploy:available_gpu_resource`       | Gauge     | 可用块占比，即可用 GPU 块数量 / 最大GPU块数量| 百分比   |
 | KV缓存 | `fastdeploy:gpu_cache_usage_perc`         | Gauge     | GPU 上的 KV 缓存使用率          | 百分比    |
 | KV缓存 | `fastdeploy:send_cache_failed_num`        | Counter   | 发送缓存失败的总次数          | 个   |

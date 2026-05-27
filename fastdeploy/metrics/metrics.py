@@ -164,6 +164,7 @@ class MetricsManager:
     free_gpu_block_num: "Gauge"
     max_gpu_block_num: "Gauge"
     max_cpu_block_num: "Gauge"
+    free_cpu_block_num: "Gauge"
     available_gpu_resource: "Gauge"
     requests_number: "Counter"
     send_cache_failed_num: "Counter"
@@ -259,6 +260,12 @@ class MetricsManager:
             "type": Gauge,
             "name": "fastdeploy:max_cpu_block_num",
             "description": "Number of total CPU blocks determined when service started",
+            "kwargs": {},
+        },
+        "free_cpu_block_num": {
+            "type": Gauge,
+            "name": "fastdeploy:free_cpu_block_num",
+            "description": "Number of free CPU blocks in cache",
             "kwargs": {},
         },
         "available_gpu_resource": {
