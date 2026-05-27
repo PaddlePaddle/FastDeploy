@@ -142,6 +142,7 @@ __global__ void unified_update_model_status_kernel(int *seq_lens_encoder,
 
       if (cur_stop_flag) {
         buffer_stop_flag_int[cid] += 1;
+        if (output_len == 0) cur_seq_len_decoder = 0;
         sm_stop_flags[batch_id] = true;
       }
 
