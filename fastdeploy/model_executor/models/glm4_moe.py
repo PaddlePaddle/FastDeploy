@@ -64,6 +64,10 @@ class Glm4MoeMLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
+        self.enable_all_reduce_fusion = (
+            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and not reduce_results
+        )
+
         # shared experts not split when use_sequence_parallel_moe in ep + tp
         if (
             fd_config.parallel_config.use_sequence_parallel_moe
@@ -101,7 +105,7 @@ class Glm4MoeMLP(nn.Layer):
                 output_size=fd_config.model_config.hidden_size,
                 with_bias=False,
                 reduce_results=reduce_results,
-                enable_all_reduce_fusion=fd_config.parallel_config.enable_flashinfer_allreduce_fusion,
+                enable_all_reduce_fusion=self.enable_all_reduce_fusion,
             )
 
         self.act_fn = SiluAndMul(
