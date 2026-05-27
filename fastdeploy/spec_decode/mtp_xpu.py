@@ -115,6 +115,14 @@ class MTPProposerXPU(MTPProposer):
         for attn_backend in self.attn_backends:
             attn_backend.init_attention_metadata(self.forward_meta)
 
+        # 1. CUDA Graph capture sizes must be recorded in descending order (large → small).
+        # 2. In multi-step execution, only the first step should be captured.
+        # self.forward_meta.step_use_cudagraph = (
+        #     step_use_cudagraph and self.draft_model_use_cudagraph and not (substep > 0 and is_dummy_run)
+        # )
+        # TODO(chenhuan09): support cudagraph for draft model
+        self.forward_meta.step_use_cudagraph = False
+
     def _propose(self, step_use_cudagraph: bool = False, is_dummy_run: bool = False, real_bsz: int = 0):
         """
         Main process for MTP inference.
@@ -122,7 +130,22 @@ class MTPProposerXPU(MTPProposer):
         step_use_cudagraph: bool
             Whether to use cuda graph. Use the target model flag to avoid hanging problems with EP.
         """
+        # TODO(chenhuan09):remove not_need_stop
+        # is_blocking = (
+        #     (not self.fd_config.scheduler_config.enable_overlap_schedule)
+        #     or is_dummy_run
+        #     or self.exist_prefill()
+        #     or real_bsz == 0 # always True
+        # )
         for substep in range(self.num_model_steps):
+            # if is_blocking:
+            #     token_num_cpu = self.model_inputs["seq_lens_this_time"].numpy().sum().item()
+            # else:
+            #     if substep == 0:
+            #         token_num_cpu = self.model_inputs["target_hidden_states"].shape[0]
+            #     else:
+            #         token_num_cpu = real_bsz
+            # if token_num_cpu > 0:
             if self.model_inputs["not_need_stop"]:
                 self.model_inputs["substep"] = substep
                 # Remove padding
@@ -155,7 +178,12 @@ class MTPProposerXPU(MTPProposer):
                     )
                     self.model_inputs["attn_mask_offsets"].copy_(attn_mask_offsets, False)
 
-                self._initialize_forward_meta()
+                self._initialize_forward_meta(
+                    step_use_cudagraph=step_use_cudagraph, is_dummy_run=is_dummy_run, substep=substep
+                )
+                # Padding inputs for cuda graph
+                self.padding_cudagraph_inputs()
+
                 # Get sampling metadata
                 self.sampling_metadata = SamplingMetadata(
                     temperature=self.model_inputs["temperature"],
@@ -178,12 +206,15 @@ class MTPProposerXPU(MTPProposer):
 
                 if self.num_model_steps > 1:
                     self.model_inputs.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
-
+                real_num = self.model_inputs["ids_remove_padding"].shape[0]
+                target_hidden_states = self.model_inputs["target_hidden_states"][:real_num]
                 model_output = self.model(
                     ids_remove_padding=self.model_inputs["ids_remove_padding"],
-                    previous_hidden_states=self.model_inputs["target_hidden_states"],
+                    previous_hidden_states=target_hidden_states,
                     forward_meta=self.forward_meta,
                 )
+                if self.forward_meta.step_use_cudagraph:
+                    model_output = model_output[: self.real_token_num]
                 hidden_states = xpu_process_output(model_output, self.forward_meta, self.model_inputs)
                 # 4. Compute logits, Sample
                 logits = self.model.compute_logits(hidden_states, forward_meta=self.forward_meta)
@@ -323,3 +354,16 @@ class MTPProposerXPU(MTPProposer):
                 self.cache_config.block_size,
                 self.max_draft_token_num,
             )
+
+    def padding_cudagraph_inputs(self) -> None:
+        """
+        Clean buffers used for the CUDA graph when replaying the CUDA graph with the padded batch.
+        In FastDeploy, almost all input tensors have a buffer. So, just keep the buffer clean when replaying the CUDA graph with the padded batch.
+        """
+        # In init_attention_metadata, the decode buffer has already been cleared
+
+        # To adapt to CUDA Graph, keep the forward pass at the maximum batch size.
+        if self.forward_meta.step_use_cudagraph:
+            self.forward_meta.seq_lens_this_time = self.model_inputs["seq_lens_this_time"]
+            self.real_token_num = self.forward_meta.ids_remove_padding.shape[0]
+        return
