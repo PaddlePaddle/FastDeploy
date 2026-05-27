@@ -1311,7 +1311,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self._execute_empty_input(self.forward_meta)
                 return None
 
-            # 2. Padding inputs for cuda grph
+            # 2. Padding inputs for cuda graph
 
             model_inputs = {}
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
@@ -1408,7 +1408,8 @@ class XPUModelRunner(ModelRunnerBase):
                 min_tokens=self.share_inputs["min_dec_len"],
                 prompt_lens=self.share_inputs["prompt_lens"],
                 prompt_logprobs_list=prompt_logprobs_list,
-                mask_rollback=self.share_inputs["mask_rollback"],
+                index_to_batch_id=self.share_inputs["index_to_batch_id"],
+                enable_pd_reorder=getattr(self.share_inputs, "enable_pd_reorder", False),
             )
 
             skip_save_output = is_dummy_run or (

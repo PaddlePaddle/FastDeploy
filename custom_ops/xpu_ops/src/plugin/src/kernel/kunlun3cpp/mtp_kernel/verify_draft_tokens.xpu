@@ -232,9 +232,17 @@ __global__ void verify_draft_tokens(
     const bool accept_all) {
   const int64_t tid = core_id() * cluster_num() + cluster_id();
   const int64_t nthreads = cluster_num() * core_num();
-  for (int64_t bid = tid; bid < real_bsz; bid += nthreads) {
+
+  // Initialize step_output_len and step_output_ids for ALL max_bsz slots
+  for (int64_t bid = tid; bid < max_bsz; bid += nthreads) {
     step_output_len[bid] = 0;
-    if (bid >= real_bsz || is_block_step[bid] || stop_flags[bid]) continue;
+    for (int i = 0; i < max_step_tokens; i++) {
+      step_output_ids[bid * max_step_tokens + i] = -1;
+    }
+  }
+
+  for (int64_t bid = tid; bid < real_bsz; bid += nthreads) {
+    if (is_block_step[bid] || stop_flags[bid]) continue;
     const int start_token_id = cu_seqlens_q_output[bid];
     // Pointers are strategy-dependent (may be nullptr for unused params)
     auto *candidate_ids_now =
@@ -272,7 +280,11 @@ __global__ void verify_draft_tokens(
 
       // Accept-all override (debug/warmup)
       if (accept_all) {
-        if (ctx.emit_token(i, ctx.step_input_ids_now[i + 1])) break;
+        int64_t token = ctx.step_input_ids_now[i + 1];
+        if (is_in_end(token, end_tokens, end_length)) {
+          token = 5;
+        }
+        if (ctx.emit_token(i, token)) break;
         continue;
       }
 
