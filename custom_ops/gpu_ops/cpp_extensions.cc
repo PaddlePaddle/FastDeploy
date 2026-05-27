@@ -189,6 +189,8 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const int sliding_window,
     const int sink_size);
 
+#ifdef ENABLE_DECODE_UNIFIED_ATTENTION
+// These sources are compiled only for SM90+ CUDA 12 builds.
 std::vector<paddle::Tensor> DecoderWriteCacheWithRoPE(
     const paddle::Tensor& qkv,
     const paddle::Tensor& key_cache,
@@ -266,6 +268,7 @@ void ConfigForAttention(const paddle::Tensor& seq_lens_encoder,
                         const int group_size,
                         const int kv_num_heads,
                         const int max_tokens_per_batch);
+#endif
 
 std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     const paddle::Tensor& qkv,
@@ -2043,6 +2046,7 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         &PerTokenGroupQuantFp8,
         "per_token_group_quant_fp8");
 
+#ifdef ENABLE_DECODE_UNIFIED_ATTENTION
   /**
    * decoder_write_cache_with_rope.cu
    * decoder_write_cache_with_rope
@@ -2066,4 +2070,5 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("config_for_attention",
         &ConfigForAttention,
         "config for attention function");
+#endif
 }

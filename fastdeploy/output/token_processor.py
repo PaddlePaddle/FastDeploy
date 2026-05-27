@@ -739,12 +739,15 @@ class TokenProcessor:
                 metrics=None,
             )
 
-            token_ids = tokens[i][:, 0].tolist()[: accept_num[i]]
+            tokens_i = tokens[i].tolist()
+            scores_i = scores[i].tolist()
+            ranks_i = ranks[i].tolist()
+            token_ids = [row[0] for row in tokens_i[: accept_num[i]]]
             for batch_token_index in range(len(token_ids)):
-                result.outputs.logprob = float(scores[i, batch_token_index, 0])
-                topk_token_ids = tokens[i, batch_token_index, :].tolist()
-                topk_logprobs = scores[i, batch_token_index, :].tolist()
-                sampled_rank = ranks[i, batch_token_index].item()
+                result.outputs.logprob = scores_i[batch_token_index][0]
+                topk_token_ids = tokens_i[batch_token_index]
+                topk_logprobs = scores_i[batch_token_index]
+                sampled_rank = ranks_i[batch_token_index]
 
                 if result.outputs.draft_top_logprobs is None:
                     result.outputs.draft_top_logprobs = LogprobsLists(
@@ -771,16 +774,19 @@ class TokenProcessor:
         mtype = 3
         if self.cfg.speculative_config.method:
             if self.use_logprobs:
-                mtype = int(self.output_tokens[1, 0].item())
+                # meta[1] packs message_flag (low 8 bits) and actual_topk (high 24 bits).
+                packed_meta1 = int(self.output_tokens[1, 0].item())
+                mtype = packed_meta1 & 0xFF
+                actual_topk = packed_meta1 >> 8
                 batch = self.output_tokens[2, 0]
                 accept_num = [int(num[0]) for num in self.output_tokens[3 : batch + 3]]
                 tokens = tokens[3 + MAX_BSZ : 3 + MAX_BSZ + batch * MAX_DRAFT_TOKENS * (K + 1)].reshape(
                     [batch, MAX_DRAFT_TOKENS, K + 1]
-                )
+                )[:, :, :actual_topk]
                 scores = (
                     self.output_scores[: batch * MAX_DRAFT_TOKENS * (K + 1)]
                     .numpy()
-                    .reshape([batch, MAX_DRAFT_TOKENS, K + 1])
+                    .reshape([batch, MAX_DRAFT_TOKENS, K + 1])[:, :, :actual_topk]
                 )
                 ranks = self.output_ranks[: batch * MAX_DRAFT_TOKENS].numpy().reshape([batch, MAX_DRAFT_TOKENS])
 
@@ -789,6 +795,10 @@ class TokenProcessor:
                     batch_result = self._process_batch_draft_tokens(mtype, batch, accept_num, tokens, scores, ranks)
                     self.postprocess(batch_result, mtype)
                     return
+                # Pre-convert full arrays to Python lists once for MTP target token path.
+                tokens_lists = tokens.tolist()
+                scores_lists = scores.tolist()
+                ranks_list = ranks.tolist()
             else:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
@@ -856,7 +866,7 @@ class TokenProcessor:
                         )
                     token_ids = [RECOVERY_STOP_SIGNAL]
                 elif self.use_logprobs:
-                    token_ids = tokens[i][:, 0].tolist()[: accept_num[i]]
+                    token_ids = [row[0] for row in tokens_lists[i][: accept_num[i]]]
                 else:
                     token_ids = tokens[
                         2
@@ -975,7 +985,9 @@ class TokenProcessor:
                 result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
                 result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
-            if is_prefill and len(token_ids) > 1:
+            if is_prefill and (len(token_ids) > 1 or self.cfg.speculative_config.method == SpecMethod.NAIVE):
+                # NAIVE only generates 1 token in prefill, but decode node
+                # needs it as draft_token_ids to initialize the first decode step
                 result.outputs.draft_token_ids = copy.deepcopy(token_ids)
 
             for batch_token_index in range(len(token_ids)):
@@ -988,10 +1000,10 @@ class TokenProcessor:
                     task.output_token_ids.append(token_id)
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
-                            result.outputs.logprob = float(scores[i, batch_token_index, 0])
-                            topk_token_ids = tokens[i, batch_token_index, :].tolist()
-                            topk_logprobs = scores[i, batch_token_index, :].tolist()
-                            sampled_rank = ranks[i, batch_token_index].item()
+                            result.outputs.logprob = scores_lists[i][batch_token_index][0]
+                            topk_token_ids = tokens_lists[i][batch_token_index]
+                            topk_logprobs = scores_lists[i][batch_token_index]
+                            sampled_rank = ranks_list[i][batch_token_index]
                         else:
                             # Use pre-converted lists (batch .tolist() done before the loop).
                             result.outputs.logprob = scores_lists[i][0]
