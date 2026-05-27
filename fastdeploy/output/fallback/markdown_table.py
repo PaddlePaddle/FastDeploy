@@ -45,6 +45,8 @@ class MarkdownTableFallbackStrategy(OutputFallbackStrategy):
         return self.match_two_row_pattern.sub(self._replace_table_match, text)
 
     def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        if not delta_text:
+            return StreamFallbackDecision(action="send", text=delta_text)
         text = self._handle_stream_text(delta_text, state)
         if not text:
             return StreamFallbackDecision(action="hold")

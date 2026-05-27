@@ -40,6 +40,8 @@ class MarkdownBoldColonFallbackStrategy(OutputFallbackStrategy):
         return self.pattern.sub(r"\1\3\2", text)
 
     def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        if not delta_text:
+            return StreamFallbackDecision(action="send", text=delta_text)
         text = self._handle_stream_text(delta_text, state)
         if not text:
             return StreamFallbackDecision(action="hold")

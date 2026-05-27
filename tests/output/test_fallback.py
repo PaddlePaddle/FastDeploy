@@ -74,6 +74,12 @@ class TestMarkdownBoldColonFallbackStrategy:
             result = strategy.apply(source, make_context(source))
             assert result == expected
 
+    def test_on_delta_empty_text_sends_empty_text(self):
+        strategy = MarkdownBoldColonFallbackStrategy()
+        decision = strategy.on_delta("", make_context("", stream=True), {})
+        assert decision.action == "send"
+        assert decision.text == ""
+
     def test_on_delta_complete_bold(self):
         manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
         decision = manager.on_delta("request-1", 0, "**标题：**", make_context("**标题：**", stream=True))
@@ -156,6 +162,12 @@ class TestMarkdownTableFallbackStrategy:
         strategy = MarkdownTableFallbackStrategy()
         text = "| A | B |\n|-|-|-|"
         assert strategy.apply(text, make_context(text)) == "| A | B |\n|-|-|"
+
+    def test_on_delta_empty_text_sends_empty_text(self):
+        strategy = MarkdownTableFallbackStrategy()
+        decision = strategy.on_delta("", make_context("", stream=True), {})
+        assert decision.action == "send"
+        assert decision.text == ""
 
     def test_on_delta_complete_rows(self):
         manager = OutputFallbackManager(strategies=["markdown-table"])
