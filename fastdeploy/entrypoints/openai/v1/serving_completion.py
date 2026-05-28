@@ -16,6 +16,7 @@
 
 import time
 import traceback
+from dataclasses import asdict
 from typing import Any, AsyncGenerator, List, Optional
 
 from typing_extensions import override
@@ -275,13 +276,14 @@ class OpenAIServingCompletion(OpenAiServingBase):
                     )
             delta_text = output.text or ""
             fallback_truncated = False
+            original_finished = request_output.finished
             if self.output_fallback_manager is not None:
                 context = OutputFallbackContext(
                     request=request,
                     request_id=request_id,
                     choice_index=output.index,
                     stream=True,
-                    output=output.__dict__,
+                    output=asdict(output),
                     delta_text=delta_text,
                 )
                 decision = self.output_fallback_manager.on_delta(request_id, output.index, delta_text, context)
@@ -307,11 +309,12 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 if fallback_truncated:
                     choice.finish_reason = "repeat_truncate"
                     response_ctx.truncated_choices.add(output.index)
-                    if response_ctx.remain_choices is None:
-                        response_ctx.remain_choices = len(ctx.preprocess_requests) * (
-                            1 if request.n is None else request.n
-                        )
-                    response_ctx.remain_choices -= 1
+                    if not original_finished:
+                        if response_ctx.remain_choices is None:
+                            response_ctx.remain_choices = len(ctx.preprocess_requests) * (
+                                1 if request.n is None else request.n
+                            )
+                        response_ctx.remain_choices -= 1
                     await self.engine_client.abort(make_choice_id(request_id, output.index), 1)
                 if self.output_fallback_manager is not None:
                     context = OutputFallbackContext(
@@ -319,7 +322,7 @@ class OpenAIServingCompletion(OpenAiServingBase):
                         request_id=request_id,
                         choice_index=output.index,
                         stream=True,
-                        output=output.__dict__,
+                        output=asdict(output),
                     )
                     finish_decision = self.output_fallback_manager.on_finish(request_id, output.index, context)
                     if finish_decision.text:
@@ -423,7 +426,7 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 request_id=final_res.request_id,
                 choice_index=output.index,
                 stream=False,
-                output=output.__dict__,
+                output=asdict(output),
                 full_text=output_text,
             )
             output_text = self.output_fallback_manager.apply(output_text, context)

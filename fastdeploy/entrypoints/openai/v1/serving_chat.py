@@ -16,6 +16,7 @@
 
 import time
 import traceback
+from dataclasses import asdict
 from typing import Any, AsyncGenerator, List, Optional
 
 from typing_extensions import override
@@ -291,13 +292,14 @@ class OpenAIServingChat(OpenAiServingBase):
                 ]
         else:
             delta_text = output.text or ""
+            original_finished = request_output.finished
             if self.output_fallback_manager is not None:
                 context = OutputFallbackContext(
                     request=request,
                     request_id=ctx.request_id,
                     choice_index=output.index,
                     stream=True,
-                    output=output.__dict__,
+                    output=asdict(output),
                     delta_text=delta_text,
                 )
                 decision = self.output_fallback_manager.on_delta(ctx.request_id, output.index, delta_text, context)
@@ -334,11 +336,12 @@ class OpenAIServingChat(OpenAiServingBase):
             if fallback_truncated:
                 choice.finish_reason = "repeat_truncate"
                 response_ctx.truncated_choices.add(output.index)
-                if response_ctx.remain_choices is None:
-                    response_ctx.remain_choices = len(ctx.preprocess_requests) * (
-                        1 if request.n is None else request.n
-                    )
-                response_ctx.remain_choices -= 1
+                if not original_finished:
+                    if response_ctx.remain_choices is None:
+                        response_ctx.remain_choices = len(ctx.preprocess_requests) * (
+                            1 if request.n is None else request.n
+                        )
+                    response_ctx.remain_choices -= 1
                 await self.engine_client.abort(make_choice_id(ctx.request_id, output.index), 1)
             if self.output_fallback_manager is not None and not self.enable_mm_output:
                 context = OutputFallbackContext(
@@ -346,7 +349,7 @@ class OpenAIServingChat(OpenAiServingBase):
                     request_id=ctx.request_id,
                     choice_index=output.index,
                     stream=True,
-                    output=output.__dict__,
+                    output=asdict(output),
                 )
                 finish_decision = self.output_fallback_manager.on_finish(ctx.request_id, output.index, context)
                 if finish_decision.text:
@@ -439,7 +442,7 @@ class OpenAIServingChat(OpenAiServingBase):
                     request_id=ctx.request_id,
                     choice_index=request_output.outputs.index,
                     stream=False,
-                    output=request_output.outputs.__dict__,
+                    output=asdict(request_output.outputs),
                     full_text=text,
                 )
                 text = self.output_fallback_manager.apply(text, context)

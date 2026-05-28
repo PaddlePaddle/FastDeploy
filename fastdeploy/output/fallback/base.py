@@ -23,7 +23,7 @@ from typing import Any, Literal, Optional
 
 @dataclass
 class OutputFallbackContext:
-    request: Any
+    request: Optional[Any]
     request_id: str
     choice_index: int
     stream: bool
