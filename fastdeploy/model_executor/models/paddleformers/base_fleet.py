@@ -301,7 +301,7 @@ else:
             #     logger.warning("When using expert parallelism and tensor parallelism, sequence parallelism must be used in fleet set tp=1 .")
             self.paddleformers_config.parallel_output = self.paddleformers_config.tensor_model_parallel_size == 1
             self.paddleformers_config.max_seq_len = self.model_config.max_model_len
-            self.paddleformers_config.params_dtype = "bfloat16"
+            self.paddleformers_config.params_dtype = self.model_config.dtype or "bfloat16"
             # self.paddleformers_config.moe_grouped_gemm = True
             self.paddleformers_config.moe_token_dispatcher_type = "deepep"
             # self.paddleformers_config.use_cpu_initialization = True
