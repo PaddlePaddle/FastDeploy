@@ -1342,12 +1342,15 @@ class PrefixCacheManager:
         """
         GPU node eviction
         """
+        node.cache_status = CacheStatus.CPU
+
         self.node_id_pool.append(node.node_id)
         if node.node_id in self.node_map:
             del self.node_map[node.node_id]
         logger.info(f"_handle_free_gpu_node_without_cpu: free node {node.node_id}")
 
         blocks_to_recycle = list(node.reverved_dec_block_ids) + [node.block_id]
+        node.reverved_dec_block_ids = []
         if not defer_recycle:
             self.recycle_gpu_blocks(blocks_to_recycle)
             logger.info(
