@@ -1209,7 +1209,7 @@ class SpeculativeSampler(nn.Layer):
         probs: paddle.Tensor,
         sampling_metadata: SamplingMetadata,
         share_inputs: List[paddle.Tensor],
-        topp_seed: Optional[paddle.Tensor],
+        topp_seed: Optional[paddle.Tensor] = None,
     ) -> SamplerOutput:
         """
         Normal sampling without draft token verification.
