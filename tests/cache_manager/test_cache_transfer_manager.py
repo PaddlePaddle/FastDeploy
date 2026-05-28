@@ -449,7 +449,7 @@ class TestCacheTransferManager(unittest.TestCase):
 
         self.manager._run_write_back_storage.assert_not_called()
         self.manager.cache_task_queue.put_transfer_done_signal.assert_called_once_with(
-            (cache_transfer_manager.CacheStatus.GPU2STORAGE, "5", ["k1", "k2"], [])
+            (cache_transfer_manager.CacheStatus.GPU2STORAGE, "5", ["k1", "k2"], [0, 1])
         )
 
     def test_read_storage_task_no_matches(self):
@@ -737,7 +737,7 @@ class TestCacheTransferManager(unittest.TestCase):
     def test_write_back_storage_task_nonzero_rank_no_signal(self):
         self.manager.cache_task_queue.swap_to_storage_barrier = MagicMock()
         self.manager.cache_task_queue.put_transfer_done_signal = MagicMock()
-        self.manager._run_write_back_storage = MagicMock()
+        self.manager._run_write_back_storage = MagicMock(return_value=1)
         self.manager.rank = 1
 
         # Mock storage backend to return 0 matches (no keys exist)
@@ -761,7 +761,10 @@ class TestCacheTransferManager(unittest.TestCase):
             [0],
             0.1,
         )
-        self.manager.cache_task_queue.put_transfer_done_signal.assert_not_called()
+        # After the refactor, the done signal is always sent regardless of rank.
+        self.manager.cache_task_queue.put_transfer_done_signal.assert_called_once_with(
+            (cache_transfer_manager.CacheStatus.GPU2STORAGE, "9", ["k1"], [0])
+        )
 
     def test_get_key_prefix_from_version(self):
         with patch("fastdeploy.cache_manager.cache_transfer_manager.yaml.safe_load") as mock_load:
