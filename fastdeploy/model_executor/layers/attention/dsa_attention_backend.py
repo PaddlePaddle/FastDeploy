@@ -28,6 +28,7 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_cuda():
     paddle.enable_compat(scope={"flash_mla"})
 
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block,
     init_kv_signal_per_query,
@@ -243,7 +244,11 @@ class DSAAttentionBackend(AttentionBackend):
         # pd_disaggregation
         metadata.kv_signal_data_list = [None] * self.num_layers
         if self.pd_disaggregation_mode == "per_chunk":
-            if not self.keep_pd_step_flag and not forward_meta.is_dummy_or_profile_run:
+            if (
+                not self.keep_pd_step_flag
+                and not forward_meta.is_dummy_or_profile_run
+                and not envs.FD_PD_TRANSFER_VIA_STORAGE
+            ):
                 init_kv_signal_per_query(
                     forward_meta.seq_lens_encoder,
                     forward_meta.seq_lens_this_time,
@@ -251,7 +256,7 @@ class DSAAttentionBackend(AttentionBackend):
                     self.rank,
                     self.num_layers + self.num_layers_draft_model,
                 )
-        elif self.pd_disaggregation_mode == "per_query":
+        elif self.pd_disaggregation_mode == "per_query" and not envs.FD_PD_TRANSFER_VIA_STORAGE:
             metadata.kv_signal_metadata = open_shm_and_get_meta_signal(
                 self.rank, int(self.device_id), self.keep_pd_step_flag
             )
@@ -304,7 +309,7 @@ class DSAAttentionBackend(AttentionBackend):
         # speculate_decoder = self.speculative_method is not None
         # speculate_max_tokens = self.speculate_max_draft_token_num
 
-        if self.pd_disaggregation_mode == "per_query":
+        if self.pd_disaggregation_mode == "per_query" and not envs.FD_PD_TRANSFER_VIA_STORAGE:
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
                 layer.layer_id + self.start_layer_index,

@@ -254,6 +254,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
+    # PD disaggregation cache transfer mode:
+    #   0 (default): Direct transfer mode, P writes cache to D's GPU via RDMA/IPC
+    #   1: Storage pool mode, P writes cache to global storage pool, D reads from storage pool
+    "FD_PD_TRANSFER_VIA_STORAGE": lambda: int(os.getenv("FD_PD_TRANSFER_VIA_STORAGE", "0")),
     # Whether to enable KV cache lock, enforcing mutual exclusion between
     # PrefixCacheManager and Worker when accessing GPU KV cache.
     # Under certain DP+EP configurations, concurrent access (even read-only)

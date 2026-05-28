@@ -1131,13 +1131,42 @@ class CacheTransferManager:
                     target_sizes.extend([self.scale_buffer_stride_bytes] * block_num * 2)
 
                 start_time = time.time()
-                self.storage_backend.batch_set(keys=keys, target_locations=target_locations, target_sizes=target_sizes)
+                result = self.storage_backend.batch_set(
+                    keys=keys, target_locations=target_locations, target_sizes=target_sizes
+                )
                 write_cost_time = time.time() - start_time
+
+                # Per-block success validation (same pattern as _run_read_storage)
+                # batch_set returns List[int]: 0 = success, negative = error
+                if k_scale_keys and v_scale_keys:
+                    k_result = result[:block_num]
+                    v_result = result[block_num : 2 * block_num]
+                    k_scale_result = result[2 * block_num : 3 * block_num]
+                    v_scale_result = result[3 * block_num :]
+                    success_block_num = 0
+                    for k, v, ks, vs in zip(k_result, v_result, k_scale_result, v_scale_result):
+                        if not (k == 0 and v == 0 and ks == 0 and vs == 0):
+                            break
+                        success_block_num += 1
+                else:
+                    k_result = result[:block_num]
+                    v_result = result[block_num : 2 * block_num]
+                    success_block_num = 0
+                    for k, v in zip(k_result, v_result):
+                        if not (k == 0 and v == 0):
+                            break
+                        success_block_num += 1
+
+                if success_block_num < block_num:
+                    logger.error(
+                        f"_run_write_back_storage partial failure: "
+                        f"{success_block_num}/{block_num} blocks written, task_id: {task_id}"
+                    )
 
                 logger.debug(
                     f"_run_write_back_storage, swap_cost_time: {swap_cost_time:.6f}s, write_cost_time: {write_cost_time:.6f}s"
                 )
-                return block_num
+                return success_block_num
 
             elif self.storage_backend_type == "attention_store":
                 key_cache = []
@@ -1222,14 +1251,13 @@ class CacheTransferManager:
 
             if match_block_num >= len(k_cache_keys):
                 logger.info(f"No uncached keys found for task {task.task_id}")
-                gpu_block_ids = []
             else:
                 try:
                     k_cache_keys = k_cache_keys[match_block_num:]
                     v_cache_keys = v_cache_keys[match_block_num:]
                     k_scale_keys = k_scale_keys[match_block_num:] if k_scale_keys else None
                     v_scale_keys = v_scale_keys[match_block_num:] if v_scale_keys else None
-                    gpu_block_ids = gpu_block_ids[match_block_num:]
+                    write_gpu_block_ids = gpu_block_ids[match_block_num:]
                     cpu_block_ids = cpu_block_ids[match_block_num:]
                     # TODO: support timeout with actual block count
                     write_block_num = self._run_write_back_storage(
@@ -1240,19 +1268,28 @@ class CacheTransferManager:
                         v_cache_keys,
                         k_scale_keys,
                         v_scale_keys,
-                        gpu_block_ids,
+                        write_gpu_block_ids,
                         cpu_block_ids,
                         task.timeout,
                     )
                     logger.info(
                         f"Successfully wrote {write_block_num} blocks to cache storage for task {task.task_id}"
                     )
-                    # Write routing data to storage (shares dedup with KVCache)
-                    remaining_keys = task.keys[match_block_num:]
-                    self._write_routing_to_storage(remaining_keys, gpu_block_ids)
+                    # Check for partial write failure
+                    if write_block_num < len(write_gpu_block_ids):
+                        logger.error(
+                            f"Partial write failure for task {task.task_id}: "
+                            f"{write_block_num}/{len(write_gpu_block_ids)} blocks written"
+                        )
+                        # Report: match_block_num (already cached) + write_block_num (newly written)
+                        gpu_block_ids = gpu_block_ids[: match_block_num + write_block_num]
+                    # Write routing data to storage only for actually-written blocks
+                    written_block_ids = write_gpu_block_ids[:write_block_num]
+                    remaining_keys = task.keys[match_block_num : match_block_num + len(written_block_ids)]
+                    self._write_routing_to_storage(remaining_keys, written_block_ids)
                 except Exception as e:
                     logger.error(f"Error in write back storage task: {e}, traceback:{traceback.format_exc()}")
-                    gpu_block_ids = []
+                    gpu_block_ids = gpu_block_ids[:match_block_num]
                 finally:
                     try:
                         if (self.rank == 0) and self.storage_backend_type == "attention_store":
@@ -1265,14 +1302,19 @@ class CacheTransferManager:
 
             result = (CacheStatus.GPU2STORAGE, task.task_id, task.keys, gpu_block_ids)
             self.cache_task_queue.swap_to_storage_barrier.wait()
-            if self.rank == 0:  # 只有当rank为0时执行同步操作
-                self.cache_task_queue.swap_to_storage_barrier.reset()
-                self.cache_task_queue.put_transfer_done_signal(result)  # 发送传输完成信号
-                logger.debug(f"write_back_storage_task: put_transfer_done_signal {result}")
+            self.cache_task_queue.put_transfer_done_signal(result)
+            logger.debug(f"write_back_storage_task: put_transfer_done_signal {result}")
         except Exception as e:
             logger.error(
                 f"An error occurred in write_back_storage_task, " f"error: {e}, traceback:\n{traceback.format_exc()}"
             )
+            # Prevent caller from blocking forever: send empty done signal
+            try:
+                result = (CacheStatus.GPU2STORAGE, task.task_id, task.keys, [])
+                self.cache_task_queue.swap_to_storage_barrier.wait()
+                self.cache_task_queue.put_transfer_done_signal(result)
+            except Exception as barrier_err:
+                logger.error(f"Failed to send failure signal for task {task.task_id}: {barrier_err}")
 
     def _do_swap_to_cpu_task(
         self,

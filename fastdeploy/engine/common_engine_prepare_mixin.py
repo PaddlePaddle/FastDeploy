@@ -226,8 +226,8 @@ class EngineServicePrepareMixin:
                 tasks.remove(tmp_task)
                 self.resource_manager.pre_recycle_resource(tmp_task.request_id)
 
-        # Send cache info to messager
-        if tasks:
+        # Send cache info to messager (skip in storage pool mode - messager is bypassed)
+        if tasks and not envs.FD_PD_TRANSFER_VIA_STORAGE:
             self.split_connector.send_cache_info_to_messager(tasks, 0)
 
         # Fetch requests and add them to the scheduling queue

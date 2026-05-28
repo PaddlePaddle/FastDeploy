@@ -641,6 +641,10 @@ class EngineArgs:
                     "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
                 )
 
+        if envs.FD_PD_TRANSFER_VIA_STORAGE:
+            if self.kvcache_storage_backend is None:
+                raise ValueError("Must set kvcache_storage_backend when FD_PD_TRANSFER_VIA_STORAGE=1")
+
         valid_model_impls = ["auto", "fastdeploy", "paddleformers"]
         if self.model_impl not in valid_model_impls:
             raise NotImplementedError(

@@ -635,44 +635,80 @@ class TokenProcessor:
         recycle resources
         """
         if is_prefill:
-            start_time = time.time()
-            result.metrics.wait_for_sending_cache_time = time.time()
-            trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_START, task_id, getattr(task, "user", ""))
-
-            while True:
-                finished_task_ids = self.engine_worker_queue.get_finished_req()
-                if len(finished_task_ids) > 0:
-                    for finished_task_id in finished_task_ids:
-                        llm_logger.info(f"finished_task_id: {finished_task_id}")
-                        self.prefill_result_status[finished_task_id[0]] = finished_task_id[1]
-                if task_id in self.prefill_result_status:
-                    if self.prefill_result_status[task_id] != "finished":
-                        result.error_code = 501
-                        result.error_msg = (
-                            f"PD Error: prefill failed to send cache to decode, "
-                            f"{task_id}, {self.prefill_result_status[task_id]}"
-                        )
-                    self.prefill_result_status.pop(task_id)
-                    llm_logger.info(
-                        f"wait for sending cache, request_id: {task_id}, cost seconds: {time.time()-start_time:.5f}"
+            if envs.FD_PD_TRANSFER_VIA_STORAGE:
+                # Storage pool mode: bypass CacheMessager entirely.
+                # At this point, all transformer layers are complete and KV cache is in GPU memory.
+                # Directly write cache to storage and send first token to D.
+                result.metrics.wait_for_sending_cache_time = time.time()
+                trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_START, task_id, getattr(task, "user", ""))
+                if result.error_code == 200:
+                    write_cache_start_time = time.time()
+                    llm_logger.info(f"[PD Storage] P writing cache to storage (direct), request_id: {task_id}")
+                    write_success = self.resource_manager.cache_manager.write_all_cache_to_storage(
+                        task, include_output=False
                     )
-                    trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_END, task_id, getattr(task, "user", ""))
-                    result.metrics.send_request_output_to_decode_time = time.time()
-                    self.split_connector.send_first_token(task.disaggregate_info, [result])
-                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
-                        self.resource_manager.finish_requests_async(task_id)
+                    if not write_success:
+                        result.error_code = 501
+                        result.error_msg = f"P instance failed to write cache to storage for request {task_id}"
+                        llm_logger.error(f"[PD Storage] {result.error_msg}")
                     else:
-                        self.resource_manager.stop_flags[index] = True
-                        self.resource_manager.tasks_list[index] = None
-                        self.resource_manager._recycle_block_tables(task)
-                        if task_id in self.resource_manager.req_dict:
-                            del self.resource_manager.req_dict[task_id]
-                    break
+                        llm_logger.info(
+                            f"[PD Storage] P finished writing cache to storage (direct), "
+                            f"request_id: {task_id}, cost: {time.time()-write_cache_start_time:.5f}s"
+                        )
+                trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_END, task_id, getattr(task, "user", ""))
+                result.metrics.send_request_output_to_decode_time = time.time()
+                self.split_connector.send_first_token(task.disaggregate_info, [result])
+                if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    self.resource_manager.finish_requests_async(task_id)
                 else:
-                    # TODO: Refine checking sending cache and do not keep waiting
-                    if time.time() - start_time > 30:
-                        llm_logger.warning(f"wait for sending cache, {task_id}")
-                    time.sleep(0.005)
+                    self.resource_manager.stop_flags[index] = True
+                    self.resource_manager.tasks_list[index] = None
+                    self.resource_manager._recycle_block_tables(task)
+                    if task_id in self.resource_manager.req_dict:
+                        del self.resource_manager.req_dict[task_id]
+            else:
+                # RDMA/IPC mode: poll CacheMessager for transfer completion
+                start_time = time.time()
+                result.metrics.wait_for_sending_cache_time = time.time()
+                trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_START, task_id, getattr(task, "user", ""))
+
+                while True:
+                    finished_task_ids = self.engine_worker_queue.get_finished_req()
+                    if len(finished_task_ids) > 0:
+                        for finished_task_id in finished_task_ids:
+                            llm_logger.info(f"finished_task_id: {finished_task_id}")
+                            self.prefill_result_status[finished_task_id[0]] = finished_task_id[1]
+                    if task_id in self.prefill_result_status:
+                        if self.prefill_result_status[task_id] != "finished":
+                            result.error_code = 501
+                            result.error_msg = (
+                                f"PD Error: prefill failed to send cache to decode, "
+                                f"{task_id}, {self.prefill_result_status[task_id]}"
+                            )
+                        self.prefill_result_status.pop(task_id)
+                        llm_logger.info(
+                            f"wait for sending cache, request_id: {task_id}, "
+                            f"cost seconds: {time.time()-start_time:.5f}"
+                        )
+                        trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_END, task_id, getattr(task, "user", ""))
+
+                        result.metrics.send_request_output_to_decode_time = time.time()
+                        self.split_connector.send_first_token(task.disaggregate_info, [result])
+                        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                            self.resource_manager.finish_requests_async(task_id)
+                        else:
+                            self.resource_manager.stop_flags[index] = True
+                            self.resource_manager.tasks_list[index] = None
+                            self.resource_manager._recycle_block_tables(task)
+                            if task_id in self.resource_manager.req_dict:
+                                del self.resource_manager.req_dict[task_id]
+                        break
+                    else:
+                        # TODO: Refine checking sending cache and do not keep waiting
+                        if time.time() - start_time > 30:
+                            llm_logger.warning(f"wait for sending cache, {task_id}")
+                        time.sleep(0.005)
         else:
             if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.resource_manager.finish_requests_async(task_id)

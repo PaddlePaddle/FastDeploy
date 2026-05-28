@@ -705,6 +705,7 @@ class CacheMessagerV1:
             try:
                 batch_engine_signals = self.cache_prefilled_engine_ids_queue.get()
                 self.engine_worker_queue.begin_send_cache_barrier.wait()
+
                 block_start_end_list = []
                 current_prefilled_token_num_list = []
                 for engine_index, current_step_prefilled_token_num in batch_engine_signals:

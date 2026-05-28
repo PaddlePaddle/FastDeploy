@@ -18,7 +18,7 @@ metadata_port=15002
 
 export MOONCAKE_MASTER_SERVER_ADDR="${master_ip}:${master_port}"
 export MOONCAKE_METADATA_SERVER="http://${master_ip}:${metadata_port}/metadata"
-export MOONCAKE_GLOBAL_SEGMENT_SIZE="50000000000"
+export MOONCAKE_GLOBAL_SEGMENT_SIZE="50000000000"  # 50GB
 # export MOONCAKE_PROTOCOL="tcp"
 export MOONCAKE_PROTOCOL="rdma"
 # export MOONCAKE_RDMA_DEVICES="mlx5_0"

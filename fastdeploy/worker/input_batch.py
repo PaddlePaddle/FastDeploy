@@ -936,8 +936,12 @@ class ProposerInputBatch(InputBatch):
             self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
             self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
             fill_paddle_tensor(self, "input_ids_cpu", -1)
-            # acceptance rate decline when reset seq_lens_this_time
-            # self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
+            # NOTE(fix): Must reset seq_lens_this_time_buffer to avoid stale values from previous
+            # RL round causing illegal memory access during CUDAGraph recapture (error 700).
+            # When draft_model_use_cudagraph=true, padding_cudagraph_inputs() uses the full
+            # seq_lens_this_time_buffer tensor; residual non-zero values in high-index slots
+            # (from previous round) will make attention kernel access invalid block_table entries.
+            fill_paddle_tensor(self, "seq_lens_this_time_buffer", 0)
 
             self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
             self.seq_lens_decoder = paddle.clone(self.target_model_input_batch["seq_lens_decoder"])
@@ -946,8 +950,19 @@ class ProposerInputBatch(InputBatch):
             self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
             self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
             self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
+            self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
             self.index_to_batch_id = {}
             if current_platform.is_cuda():
+                # NOTE(fix): These tensors get reshaped during runtime inference, so we must
+                # recreate them at full initial size instead of cloning the (possibly resized)
+                # target_model_input_batch tensors. Otherwise CUDAGraph replay will write
+                # beyond tensor boundaries causing CUDA error(700).
+                max_num_seqs = self.scheduler_config.max_num_seqs
+                max_draft_token_num = self.speculative_config.num_speculative_tokens
+                self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+                self.batch_id_per_token_output = paddle.full(
+                    shape=[max_num_seqs * (max_draft_token_num + 1)], fill_value=0, dtype="int32"
+                )
                 if "token_ids_all" in self.target_model_input_batch:
                     self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
                     # TODO: delete pre_ids in mtp
@@ -967,13 +982,24 @@ class ProposerInputBatch(InputBatch):
                     self.token_ids_all = None
             else:
                 self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
-            self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
-            self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
-            self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
-            self.cu_seqlens_k = paddle.clone(self.target_model_input_batch["cu_seqlens_k"])
 
-            # Reset target hidden states
-            fill_paddle_tensor(self, "target_hidden_states", 0)
+            # NOTE(fix): These tensors are dynamically resized during runtime inference.
+            # Must recreate at full initial size to avoid CUDAGraph replay OOB access.
+            max_num_seqs = self.scheduler_config.max_num_seqs
+            self.ids_remove_padding = paddle.full([max_num_seqs * self.max_chunk_tokens], 0, dtype="int64")
+            self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
+            self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+            self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+
+            # Reset target hidden states - must recreate at full size
+            self.target_hidden_states = paddle.full(
+                [
+                    self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens,
+                    self.model_config.hidden_size,
+                ],
+                0,
+                dtype="bfloat16",
+            )
 
             # Reset rope embedding by recreating with default position_ids
             tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
