@@ -1052,7 +1052,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
             chunk_data = json.loads(result.replace("data: ", "").strip())
             choices.extend(chunk_data.get("choices", []))
 
-        truncated_choices = [choice for choice in choices if choice.get("finish_reason") == "repeat_truncate"]
+        truncated_choices = [choice for choice in choices if choice.get("finish_reason") == "length"]
         self.assertEqual(len(truncated_choices), 1)
         self.assertEqual(truncated_choices[0]["delta"]["content"], "flushed-truncated")
         self.assertFalse(any(choice.get("delta", {}).get("content") == "residual" for choice in choices))

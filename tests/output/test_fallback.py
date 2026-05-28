@@ -19,21 +19,25 @@ from pathlib import Path
 from fastdeploy.output.fallback import (
     OutputFallbackContext,
     OutputFallbackManager,
+    OutputFallbackStrategy,
     StreamFallbackDecision,
 )
-from fastdeploy.output.fallback.markdown_bold_colon import (
-    MarkdownBoldColonFallbackStrategy,
-)
-from fastdeploy.output.fallback.markdown_table import MarkdownTableFallbackStrategy
-from fastdeploy.output.fallback.repeat_truncate import (
-    RepeatTruncateFallbackStrategy,
-    RepeatTruncateWindow,
-)
 
 
-@OutputFallbackManager.register("test-finish-suffix", force=True)
-class FinishSuffixStrategy(MarkdownBoldColonFallbackStrategy):
-    name = "test-finish-suffix"
+@OutputFallbackManager.register("test-replace", force=True)
+class ReplaceStrategy(OutputFallbackStrategy):
+    name = "test-replace"
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return "bad" in text
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        return text.replace("bad", "good")
+
+
+@OutputFallbackManager.register("test-suffix", force=True)
+class SuffixStrategy(OutputFallbackStrategy):
+    name = "test-suffix"
 
     def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
         return True
@@ -43,6 +47,60 @@ class FinishSuffixStrategy(MarkdownBoldColonFallbackStrategy):
 
     def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
         return StreamFallbackDecision(action="send", text=self.apply(delta_text, context))
+
+
+@OutputFallbackManager.register("test-hold", force=True)
+class HoldStrategy(OutputFallbackStrategy):
+    name = "test-hold"
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return True
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        return text
+
+    def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        state["held"] = state.get("held", "") + delta_text
+        return StreamFallbackDecision(action="hold")
+
+    def on_finish(self, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        return StreamFallbackDecision(action="flush", text=state.get("held", ""))
+
+
+@OutputFallbackManager.register("test-truncate", force=True)
+class TruncateStrategy(OutputFallbackStrategy):
+    name = "test-truncate"
+
+    def __init__(self, config: dict | None = None):
+        super().__init__(config)
+        self.trigger = self.config.get("trigger", "truncate")
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return True
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        return text
+
+    def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        state["seen"] = delta_text
+        if self.trigger in delta_text:
+            return StreamFallbackDecision(action="truncate", text=delta_text)
+        return StreamFallbackDecision(action="send", text=delta_text)
+
+
+@OutputFallbackManager.register("test-token-observer", force=True)
+class TokenObserverStrategy(OutputFallbackStrategy):
+    name = "test-token-observer"
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return True
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        return text
+
+    def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        state["token_count"] = state.get("token_count", 0) + len(context.output.get("token_ids") or [])
+        return StreamFallbackDecision(action="send", text=delta_text)
 
 
 def make_context(text: str, stream: bool = False, token_ids: list[int] | None = None) -> OutputFallbackContext:
@@ -60,259 +118,71 @@ def make_context(text: str, stream: bool = False, token_ids: list[int] | None = 
     )
 
 
-class TestMarkdownBoldColonFallbackStrategy:
-    def test_apply(self):
-        strategy = MarkdownBoldColonFallbackStrategy()
-        cases = {
-            "**内容：**": "**内容**：",
-            "**内容:**": "**内容**:",
-            "**内容**：": "**内容**：",
-            "普通文本": "普通文本",
-            "**标题：** 内容 **小节:** 说明": "**标题**： 内容 **小节**: 说明",
-        }
-        for source, expected in cases.items():
-            result = strategy.apply(source, make_context(source))
-            assert result == expected
-
-    def test_on_delta_empty_text_sends_empty_text(self):
-        strategy = MarkdownBoldColonFallbackStrategy()
-        decision = strategy.on_delta("", make_context("", stream=True), {})
+class TestOutputFallbackStrategy:
+    def test_default_on_delta_applies_full_text_strategy(self):
+        strategy = ReplaceStrategy()
+        decision = strategy.on_delta("bad output", make_context("bad output", stream=True), {})
         assert decision.action == "send"
+        assert decision.text == "good output"
+
+    def test_default_on_finish_flushes_nothing(self):
+        strategy = ReplaceStrategy()
+        decision = strategy.on_finish(make_context("", stream=True), {})
+        assert decision.action == "flush"
         assert decision.text == ""
-
-    def test_on_delta_complete_bold(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        decision = manager.on_delta("request-1", 0, "**标题：**", make_context("**标题：**", stream=True))
-        assert decision.action == "send"
-        assert decision.text == "**标题**："
-
-    def test_on_delta_swaps_colon_before_closing_bold_across_delta(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        first_decision = manager.on_delta("request-1", 0, "**标题", make_context("**标题", stream=True))
-        assert first_decision.action == "send"
-        assert first_decision.text == "**标题"
-
-        second_decision = manager.on_delta("request-1", 0, "：** 后续", make_context("：** 后续", stream=True))
-        assert second_decision.action == "send"
-        assert second_decision.text == "**： 后续"
-
-    def test_on_delta_holds_colon_suffix_inside_bold(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        first_decision = manager.on_delta("request-1", 0, "**标题：", make_context("**标题：", stream=True))
-        assert first_decision.action == "send"
-        assert first_decision.text == "**"
-
-        second_decision = manager.on_delta("request-1", 0, "** 后续", make_context("** 后续", stream=True))
-        assert second_decision.action == "send"
-        assert second_decision.text == "标题**： 后续"
-
-    def test_on_delta_swaps_cached_colon_with_next_bold(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        first_decision = manager.on_delta("request-1", 0, "前缀 **标题：", make_context("前缀 **标题：", stream=True))
-        assert first_decision.action == "send"
-        assert first_decision.text == "前缀 **"
-
-        second_decision = manager.on_delta("request-1", 0, "**", make_context("**", stream=True))
-        assert second_decision.action == "send"
-        assert second_decision.text == "标题**："
-
-    def test_on_delta_releases_cached_colon_when_next_delta_has_prefix_before_bold(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        first_decision = manager.on_delta("request-1", 0, "**标题：", make_context("**标题：", stream=True))
-        assert first_decision.action == "send"
-        assert first_decision.text == "**"
-
-        second_decision = manager.on_delta("request-1", 0, " 补充** 后续", make_context(" 补充** 后续", stream=True))
-        assert second_decision.action == "send"
-        assert second_decision.text == "标题： 补充** 后续"
-
-    def test_on_delta_releases_cached_colon_when_next_delta_has_no_bold(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        first_decision = manager.on_delta("request-1", 0, "**标题：", make_context("**标题：", stream=True))
-        assert first_decision.action == "send"
-        assert first_decision.text == "**"
-
-        second_decision = manager.on_delta("request-1", 0, " 后续", make_context(" 后续", stream=True))
-        assert second_decision.action == "send"
-        assert second_decision.text == "标题： 后续"
-
-    def test_on_finish_flushes_cached_colon(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        first_decision = manager.on_delta("request-1", 0, "**标题：", make_context("**标题：", stream=True))
-        assert first_decision.action == "send"
-        assert first_decision.text == "**"
-
-        finish_decision = manager.on_finish("request-1", 0, make_context("", stream=True))
-        assert finish_decision.action == "flush"
-        assert finish_decision.text == "标题："
-
-
-class TestMarkdownTableFallbackStrategy:
-    def test_apply_normalizes_second_row(self):
-        strategy = MarkdownTableFallbackStrategy()
-        text = "| A | B |\n| | |"
-        assert strategy.apply(text, make_context(text)) == "| A | B |\n|-|-|"
-
-    def test_apply_pads_missing_columns(self):
-        strategy = MarkdownTableFallbackStrategy()
-        text = "| A | B | C |\n|-|"
-        assert strategy.apply(text, make_context(text)) == "| A | B | C |\n|-|-|-|"
-
-    def test_apply_truncates_extra_columns(self):
-        strategy = MarkdownTableFallbackStrategy()
-        text = "| A | B |\n|-|-|-|"
-        assert strategy.apply(text, make_context(text)) == "| A | B |\n|-|-|"
-
-    def test_on_delta_empty_text_sends_empty_text(self):
-        strategy = MarkdownTableFallbackStrategy()
-        decision = strategy.on_delta("", make_context("", stream=True), {})
-        assert decision.action == "send"
-        assert decision.text == ""
-
-    def test_on_delta_complete_rows(self):
-        manager = OutputFallbackManager(strategies=["markdown-table"])
-        text = "| A | B |\n| | |\n"
-        decision = manager.on_delta("request-1", 0, text, make_context(text, stream=True))
-        assert decision.action == "send"
-        assert decision.text == "| A | B |\n|-|-|\n"
-
-    def test_on_delta_across_delta(self):
-        manager = OutputFallbackManager(strategies=["markdown-table"])
-        first_decision = manager.on_delta("request-1", 0, "| A | B |", make_context("| A | B |", stream=True))
-        assert first_decision.action == "hold"
-        assert first_decision.text == ""
-
-        second_decision = manager.on_delta("request-1", 0, "\n| | |\n后续", make_context("\n| | |\n后续", stream=True))
-        assert second_decision.action == "send"
-        assert second_decision.text == "| A | B |\n|-|-|\n后续"
-
-    def test_on_delta_releases_invalid_first_row(self):
-        manager = OutputFallbackManager(strategies=["markdown-table"])
-        first_decision = manager.on_delta("request-1", 0, "| | |", make_context("| | |", stream=True))
-        assert first_decision.action == "hold"
-
-        second_decision = manager.on_delta("request-1", 0, "\n普通文本", make_context("\n普通文本", stream=True))
-        assert second_decision.action == "send"
-        assert second_decision.text == "| | |\n普通文本"
-
-    def test_on_finish_flushes_cached_markdown_table(self):
-        manager = OutputFallbackManager(strategies=["markdown-table"])
-        first_decision = manager.on_delta("request-1", 0, "| A | B |", make_context("| A | B |", stream=True))
-        assert first_decision.action == "hold"
-
-        finish_decision = manager.on_finish("request-1", 0, make_context("", stream=True))
-        assert finish_decision.action == "flush"
-        assert finish_decision.text == "| A | B |"
-
-
-class TestRepeatTruncateFallbackStrategy:
-    def test_window_keeps_recent_tokens_and_frequency(self):
-        window = RepeatTruncateWindow(max_size=3)
-        window.add_tokens([1, 2, 1, 3])
-        assert window.get_all_tokens() == [2, 1, 3]
-        assert window.get_unique_token_count() == 3
-        assert window.is_full() is True
-
-    def test_detects_single_token_repeat(self):
-        strategy = RepeatTruncateFallbackStrategy({"free_len": 3, "window_len": 3, "max_cycle_len": 2})
-        state = {}
-        decision = strategy.on_delta("aaa", make_context("aaa", stream=True, token_ids=[7, 7, 7]), state)
-        assert decision.action == "truncate"
-        assert decision.text == "aaa"
-
-    def test_detects_prefix_cycle_repeat(self):
-        strategy = RepeatTruncateFallbackStrategy({"free_len": 6, "window_len": 6, "max_cycle_len": 3})
-        state = {}
-        decision = strategy.on_delta(
-            "abcabc", make_context("abcabc", stream=True, token_ids=[1, 2, 3, 1, 2, 3]), state
-        )
-        assert decision.action == "truncate"
-        assert decision.text == "abcabc"
-
-    def test_skips_before_free_len(self):
-        strategy = RepeatTruncateFallbackStrategy({"free_len": 10, "window_len": 3, "max_cycle_len": 2})
-        state = {}
-        decision = strategy.on_delta("aaa", make_context("aaa", stream=True, token_ids=[7, 7, 7]), state)
-        assert decision.action == "send"
-        assert decision.text == "aaa"
-
-    def test_skips_when_unique_tokens_exceed_cycle_len(self):
-        strategy = RepeatTruncateFallbackStrategy({"free_len": 4, "window_len": 4, "max_cycle_len": 2})
-        state = {}
-        decision = strategy.on_delta("abcd", make_context("abcd", stream=True, token_ids=[1, 2, 3, 4]), state)
-        assert decision.action == "send"
-        assert decision.text == "abcd"
 
 
 class TestOutputFallbackManager:
-    def test_apply(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        text = "**标题：** 这是内容"
-        result = manager.apply(text, make_context(text))
-        assert result == "**标题**： 这是内容"
+    def test_apply_runs_enabled_strategies_in_order(self):
+        manager = OutputFallbackManager(strategies=["test-replace", "test-suffix"])
+        assert manager.apply("bad output", make_context("bad output")) == "good output-suffix"
 
-    def test_on_delta_repeat_truncate(self):
-        manager = OutputFallbackManager(
-            strategies=["repeat-truncate"],
-            config={"repeat-truncate": {"free_len": 3, "window_len": 3, "max_cycle_len": 2}},
-        )
-        decision = manager.on_delta("request-1", 0, "aaa", make_context("aaa", stream=True, token_ids=[7, 7, 7]))
-        assert decision.action == "truncate"
-        assert decision.text == "aaa"
+    def test_on_delta_send(self):
+        manager = OutputFallbackManager(strategies=["test-suffix"])
+        decision = manager.on_delta("request-1", 0, "hello", make_context("hello", stream=True))
+        assert decision.action == "send"
+        assert decision.text == "hello-suffix"
 
     def test_runs_later_strategy_after_hold(self):
-        manager = OutputFallbackManager(
-            strategies=["markdown-table", "repeat-truncate"],
-            config={"repeat-truncate": {"free_len": 3, "window_len": 3, "max_cycle_len": 2}},
-        )
-        decision = manager.on_delta(
-            "request-1", 0, "| A | B |", make_context("| A | B |", stream=True, token_ids=[7, 7, 7])
-        )
-        assert decision.action == "truncate"
+        manager = OutputFallbackManager(strategies=["test-hold", "test-token-observer"])
+        decision = manager.on_delta("request-1", 0, "hello", make_context("hello", stream=True, token_ids=[1, 2]))
+        assert decision.action == "hold"
         assert decision.text == ""
-        assert manager.states["request-1"][(0, "repeat-truncate")]["output_tokens"] == 3
+        assert manager.states["request-1"][(0, "test-token-observer")]["token_count"] == 2
 
     def test_truncate_continues_later_strategy(self):
         manager = OutputFallbackManager(
-            strategies=["repeat-truncate", "markdown-bold-colon"],
-            config={"repeat-truncate": {"free_len": 3, "window_len": 3, "max_cycle_len": 2}},
+            strategies=["test-truncate", "test-suffix"],
+            config={"test-truncate": {"trigger": "stop"}},
         )
-        decision = manager.on_delta(
-            "request-1",
-            0,
-            "**标题：**",
-            make_context("**标题：**", stream=True, token_ids=[7, 7, 7]),
-        )
+        decision = manager.on_delta("request-1", 0, "please stop", make_context("please stop", stream=True))
         assert decision.action == "truncate"
-        assert decision.text == "**标题**："
+        assert decision.text == "please stop-suffix"
 
     def test_finish_feeds_flush_to_later_strategy_without_token_ids(self):
-        manager = OutputFallbackManager(
-            strategies=["markdown-table", "test-finish-suffix", "repeat-truncate"],
-            config={"repeat-truncate": {"free_len": 1, "window_len": 1, "max_cycle_len": 1}},
-        )
-        manager.on_delta("request-1", 0, "| A | B |", make_context("| A | B |", stream=True, token_ids=[7]))
-        finish_decision = manager.on_finish("request-1", 0, make_context("", stream=True, token_ids=[7]))
+        manager = OutputFallbackManager(strategies=["test-hold", "test-suffix", "test-token-observer"])
+        manager.on_delta("request-1", 0, "held", make_context("held", stream=True, token_ids=[7]))
+        finish_decision = manager.on_finish("request-1", 0, make_context("", stream=True, token_ids=[8]))
         assert finish_decision.action == "flush"
-        assert finish_decision.text == "| A | B |-suffix"
-        assert manager.states["request-1"][(0, "repeat-truncate")]["output_tokens"] == 1
+        assert finish_decision.text == "held-suffix"
+        assert manager.states["request-1"][(0, "test-token-observer")]["token_count"] == 1
 
-    def test_normalizes_config_strategy_name(self):
+    def test_normalizes_strategy_and_config_names(self):
         manager = OutputFallbackManager(
-            strategies=["repeat_truncate"],
-            config={"repeat_truncate": {"free_len": 3, "window_len": 3, "max_cycle_len": 2}},
+            strategies=["test_truncate"],
+            config={"test_truncate": {"trigger": "stop"}},
         )
-        decision = manager.on_delta("request-1", 0, "aaa", make_context("aaa", stream=True, token_ids=[7, 7, 7]))
+        decision = manager.on_delta("request-1", 0, "please stop", make_context("please stop", stream=True))
         assert decision.action == "truncate"
-        assert decision.text == "aaa"
+        assert decision.text == "please stop"
 
     def test_cleanup(self):
-        manager = OutputFallbackManager(strategies=["markdown-bold-colon"])
-        manager._get_state("request-1", 0, "markdown-bold-colon")["gfm_cache"] = "held"
-        manager._get_state("request-2", 0, "markdown-bold-colon")["gfm_cache"] = "other"
+        manager = OutputFallbackManager(strategies=["test-suffix"])
+        manager._get_state("request-1", 0, "test-suffix")["cache"] = "held"
+        manager._get_state("request-2", 0, "test-suffix")["cache"] = "other"
         manager.cleanup("request-1")
         assert "request-1" not in manager.states
-        assert manager.states["request-2"][(0, "markdown-bold-colon")]["gfm_cache"] == "other"
+        assert manager.states["request-2"][(0, "test-suffix")]["cache"] == "other"
 
 
 class TestOutputFallbackPlugin:

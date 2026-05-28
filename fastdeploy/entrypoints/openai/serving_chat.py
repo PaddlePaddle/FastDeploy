@@ -530,7 +530,7 @@ class OpenAIServingChat:
                             choice.finish_reason = "abort"
 
                         if fallback_truncated:
-                            choice.finish_reason = "repeat_truncate"
+                            choice.finish_reason = "length"
                             fallback_truncated_choices.add(idx)
                             await self.engine_client.abort(make_choice_id(request_id, idx), 1)
 

@@ -659,7 +659,7 @@ class OpenAIServingCompletion:
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choices[-1].finish_reason = "abort"
                         if fallback_truncated:
-                            choices[-1].finish_reason = "repeat_truncate"
+                            choices[-1].finish_reason = "length"
                             fallback_truncated_choices.add(idx)
                             await self.engine_client.abort(make_choice_id(request_id, idx), 1)
                         if self.output_fallback_manager is not None:

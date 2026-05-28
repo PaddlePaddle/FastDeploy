@@ -138,9 +138,8 @@ class OutputFallbackManager:
         return StreamFallbackDecision(action="send", text=current_text)
 
     def on_finish(self, request_id: str, choice_index: int, context: OutputFallbackContext) -> StreamFallbackDecision:
-        # In flush phase no new tokens are produced; strip token_ids so per-token
-        # accounting strategies (e.g. repeat-truncate) don't double-count the
-        # last chunk's tokens that were already consumed in on_delta.
+        # In flush phase no new tokens are produced; strip token_ids so token-based
+        # strategies don't double-count the last chunk consumed in on_delta.
         flush_output = dict(context.output)
         flush_output.pop("token_ids", None)
         flush_context = replace(context, output=flush_output)

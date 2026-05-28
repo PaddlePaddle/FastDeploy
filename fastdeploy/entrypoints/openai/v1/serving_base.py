@@ -221,7 +221,7 @@ class OpenAiServingBase(OpenAIServing):
 
     def _calc_finish_reason(
         self, request_output: RequestOutput, max_tokens: Optional[int], token_nums: int
-    ) -> Literal["stop", "length", "tool_calls", "recover_stop", "repeat_truncate"]:
+    ) -> Literal["stop", "length", "tool_calls", "recover_stop"]:
         finish_reason = "stop"
         if request_output.outputs.tool_calls:
             finish_reason = "tool_calls"

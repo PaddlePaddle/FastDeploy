@@ -14,19 +14,21 @@
 # limitations under the License.
 """
 
-from fastdeploy.output.fallback.base import (
-    OutputFallbackContext,
-    OutputFallbackStrategy,
-    StreamFallbackDecision,
-)
-from fastdeploy.output.fallback.manager import OutputFallbackManager
-from fastdeploy.plugins import load_output_fallback_plugins
+from fastdeploy.plugins.utils import load_plugins_by_group
 
-__all__ = [
-    "OutputFallbackContext",
-    "OutputFallbackManager",
-    "OutputFallbackStrategy",
-    "StreamFallbackDecision",
-]
+# make sure one process only loads plugins once
+plugins_loaded = False
+PLUGINS_GROUP = "fastdeploy.output_fallback_plugins"
 
-load_output_fallback_plugins()
+
+def load_output_fallback_plugins():
+    """load_output_fallback_plugins"""
+    global plugins_loaded
+    if plugins_loaded:
+        return
+    plugins_loaded = True
+
+    plugins = load_plugins_by_group(group=PLUGINS_GROUP)
+    # general plugins, we only need to execute the loaded functions
+    for func in plugins.values():
+        func()
