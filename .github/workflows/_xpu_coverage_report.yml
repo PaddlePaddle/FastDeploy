@@ -265,11 +265,15 @@ jobs:
   xpu_codecov_upload:
     needs: xpu_coverage_combine
     if: always()
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     timeout-minutes: 15
     env:
       xpu_cov_xml_url: ${{ needs.xpu_coverage_combine.outputs.xpu_cov_xml_url }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Clone FastDeploy
         uses: actions/checkout@v6
         with:

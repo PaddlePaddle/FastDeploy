@@ -109,20 +109,21 @@ void SaveOutMmsgTopK(const paddle::Tensor& x,
                                         : -inference_msg_id_from_env;
   int bsz = x.shape()[0];
   int max_num_logprobs = logprob_token_ids.shape()[1];
-  msg_sed.mtext[1] = bsz;
+  // Pack bsz (low 16 bits) and max_num_logprobs (high 16 bits) into mtext[1].
+  // token_processor unpacks both fields to avoid reading unused topk slots.
+  msg_sed.mtext[1] = bsz | (max_num_logprobs << 16);
   for (int i = 0; i < bsz; i++) {
-    for (int j = 0; j < K + 1; j++) {
-      const int64_t offset = i * (K + 1) + j;
+    // Loop only over actual logprob columns (max_num_logprobs) instead of the
+    // fixed K+1=21, and use max_num_logprobs as the stride so data is packed
+    // densely in the message buffer.
+    for (int j = 0; j < max_num_logprobs; j++) {
+      const int64_t offset = i * max_num_logprobs + j;
       if (j == 0) {
         msg_sed.mtext[offset + 2] = (int)x_data[i];
-        msg_sed.mtext_f[offset] = logprob_scores_data[i * max_num_logprobs + j];
-      } else if (j < max_num_logprobs) {
-        msg_sed.mtext[offset + 2] =
-            (int)logprob_token_ids_data[i * max_num_logprobs + j];
-        msg_sed.mtext_f[offset] = logprob_scores_data[i * max_num_logprobs + j];
+        msg_sed.mtext_f[offset] = logprob_scores_data[offset];
       } else {
-        msg_sed.mtext[offset + 2] = -1;
-        msg_sed.mtext_f[offset] = 0.0;
+        msg_sed.mtext[offset + 2] = (int)logprob_token_ids_data[offset];
+        msg_sed.mtext_f[offset] = logprob_scores_data[offset];
       }
       if (preempted_idx_data[i] == 1) {
         msg_sed.mtext[offset + 2] = -9;

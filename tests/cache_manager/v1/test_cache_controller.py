@@ -1,4 +1,4 @@
-# Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
+# Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -729,16 +729,33 @@ class TestFreeCacheMethods(unittest.TestCase):
 
 
 def make_mock_attn_backend(key_shape=(10, 4, 16, 64), val_shape=None, val_shape_is_none=False):
-    """Create a mock attn_backend with a fixed get_kv_cache_shape."""
+    """Create a mock attn_backend with a fixed get_kv_cache_shape.
+
+    The mock delegates create_kv_cache / create_host_kv_cache to the real
+    AttentionBackend base class implementation so that tests exercise the
+    actual tensor allocation logic through CacheController.
+    """
+    from fastdeploy.model_executor.layers.attention.base_attention_backend import (
+        AttentionBackend,
+    )
+
     if val_shape_is_none:
         # Simulate MLA variants (e.g., DeepSeek) that return None for value_cache_shape
         backend = MagicMock()
         backend.get_kv_cache_shape.return_value = (list(key_shape), None)
+        # Wire real create_kv_cache to use the mock's get_kv_cache_shape
+        backend.create_kv_cache = lambda **kwargs: AttentionBackend.create_kv_cache(backend, **kwargs)
+        backend.create_host_kv_cache = lambda **kwargs: AttentionBackend.create_host_kv_cache(backend, **kwargs)
+        backend.free_host_kv_cache = lambda host_caches: AttentionBackend.free_host_kv_cache(backend, host_caches)
         return backend
     if val_shape is None:
         val_shape = key_shape
     backend = MagicMock()
     backend.get_kv_cache_shape.return_value = (list(key_shape), list(val_shape))
+    # Wire real create_kv_cache to use the mock's get_kv_cache_shape
+    backend.create_kv_cache = lambda **kwargs: AttentionBackend.create_kv_cache(backend, **kwargs)
+    backend.create_host_kv_cache = lambda **kwargs: AttentionBackend.create_host_kv_cache(backend, **kwargs)
+    backend.free_host_kv_cache = lambda host_caches: AttentionBackend.free_host_kv_cache(backend, host_caches)
     return backend
 
 
@@ -873,3 +890,661 @@ class TestInitializeKVCacheDtype(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# ============================================================================
+# Additional coverage tests for uncovered lines
+# ============================================================================
+
+
+class TestWritePolicyNone(unittest.TestCase):
+    """Test write_policy returns None when cache_config has no write_policy."""
+
+    def test_write_policy_returns_none_when_no_attr(self):
+        """Line 112: write_policy returns None when cache_config has no write_policy."""
+        controller = create_cache_controller()
+        # Remove write_policy attribute if exists
+        if hasattr(controller.cache_config, "write_policy"):
+            delattr(controller.cache_config, "write_policy")
+        self.assertIsNone(controller.write_policy)
+
+
+class TestGetKVCacheQuantType(unittest.TestCase):
+    """Test _get_kv_cache_quant_type method with various quant_config states."""
+
+    def test_returns_quant_type_when_set(self):
+        """Lines 202-208: returns kv_cache_quant_type from quant_config."""
+        controller = create_cache_controller()
+        # Mock quant_config with kv_cache_quant_type
+        mock_quant_config = MagicMock()
+        mock_quant_config.kv_cache_quant_type = "int8"
+        controller.quant_config = mock_quant_config
+        self.assertEqual(controller._get_kv_cache_quant_type(), "int8")
+
+    def test_returns_none_when_quant_config_is_none(self):
+        """Lines 202-208: returns None when quant_config is None."""
+        controller = create_cache_controller()
+        controller.quant_config = None
+        self.assertIsNone(controller._get_kv_cache_quant_type())
+
+    def test_returns_none_when_kv_cache_quant_type_is_none(self):
+        """Lines 202-208: returns None when kv_cache_quant_type is None."""
+        controller = create_cache_controller()
+        mock_quant_config = MagicMock()
+        mock_quant_config.kv_cache_quant_type = None
+        controller.quant_config = mock_quant_config
+        self.assertIsNone(controller._get_kv_cache_quant_type())
+
+
+class TestTransferManagerProperty(unittest.TestCase):
+    """Test transfer_manager property."""
+
+    def test_transfer_manager_returns_instance(self):
+        """Line 191: transfer_manager property returns CacheTransferManager."""
+        controller = create_cache_controller()
+        tm = controller.transfer_manager
+        self.assertIsNotNone(tm)
+        self.assertIs(tm, controller._transfer_manager)
+
+
+class TestWaitForPendingEvictCounters(unittest.TestCase):
+    """Test _wait_for_pending_evict_counters with actual pending counters."""
+
+    def test_waits_and_clears_pending_counters(self):
+        """Lines 175-184: waits on all pending counters then clears list."""
+        from fastdeploy.cache_manager.v1.cache_utils import LayerDoneCounter
+
+        controller = create_cache_controller(num_layers=4)
+
+        # Create pre-completed counters
+        counter1 = LayerDoneCounter(4)
+        counter1.mark_all_done()
+        counter2 = LayerDoneCounter(4)
+        counter2.mark_all_done()
+
+        controller._pending_evict_counters = [counter1, counter2]
+        self.assertEqual(len(controller._pending_evict_counters), 2)
+
+        controller._wait_for_pending_evict_counters()
+        self.assertEqual(len(controller._pending_evict_counters), 0)
+
+    def test_noop_when_empty(self):
+        """Line 172: returns immediately when no pending counters."""
+        controller = create_cache_controller(num_layers=4)
+        controller._pending_evict_counters = []
+        # Should not raise
+        controller._wait_for_pending_evict_counters()
+
+
+class TestSubmitSwapTasksWriteBack(unittest.TestCase):
+    """Test submit_swap_tasks with write_back policy (line 155)."""
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._submit_swap_task")
+    def test_write_back_waits_for_evict_before_swap_in(self, mock_submit):
+        """Line 155: write_back policy waits for evict before swap-in."""
+        from fastdeploy.cache_manager.v1.cache_controller import CacheController
+
+        config = get_default_test_fd_config()
+        config.cache_config.num_cpu_blocks = 50
+        config.model_config.num_hidden_layers = 4
+        config.cache_config.write_policy = "write_back"
+
+        controller = CacheController(config, local_rank=0, device_id=0)
+        setup_transfer_env(controller, num_layers=4)
+
+        mock_submit.return_value = make_done_counter()
+
+        evict_meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
+        swap_in_meta = CacheSwapMetadata(src_block_ids=[10], dst_block_ids=[0])
+
+        counter = controller.submit_swap_tasks(evict_meta, swap_in_meta)
+        self.assertIsNotNone(counter)
+        # In write_back mode, pending evict counters are cleared before swap-in
+        self.assertEqual(len(controller._pending_evict_counters), 0)
+
+
+class TestGetNumaNodeForGpu(unittest.TestCase):
+    """Test _get_numa_node_for_gpu method (lines 426-471)."""
+
+    @patch("subprocess.run")
+    def test_nvidia_smi_success(self, mock_run):
+        """Lines 426-445: nvidia-smi returns valid NUMA node."""
+        controller = create_cache_controller()
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="NUMA IDs of closest CPU: 0\n",
+        )
+
+        result = controller._get_numa_node_for_gpu(0)
+        self.assertEqual(result, 0)
+
+    @patch("subprocess.run")
+    def test_nvidia_smi_comma_separated(self, mock_run):
+        """Lines 440-444: handles comma-separated NUMA IDs."""
+        controller = create_cache_controller()
+        mock_run.return_value = MagicMock(
+            returncode=0,
+            stdout="NUMA IDs of closest CPU: 0,1\n",
+        )
+
+        result = controller._get_numa_node_for_gpu(0)
+        self.assertEqual(result, 0)
+
+    @patch("subprocess.run")
+    @patch("os.path.exists", return_value=False)
+    @patch("glob.glob", return_value=[])
+    def test_all_methods_fail_returns_negative(self, mock_glob, mock_exists, mock_run):
+        """Lines 468-471: returns -1 when all methods fail."""
+        controller = create_cache_controller()
+        mock_run.return_value = MagicMock(returncode=1, stdout="")
+
+        result = controller._get_numa_node_for_gpu(0)
+        self.assertEqual(result, -1)
+
+    @patch("glob.glob", return_value=[])
+    @patch("os.path.exists", return_value=False)
+    @patch("subprocess.run", side_effect=Exception("unexpected"))
+    def test_exception_returns_negative(self, mock_run, mock_exists, mock_glob):
+        """Lines 469-471: returns -1 on exception when all methods fail."""
+        controller = create_cache_controller()
+
+        result = controller._get_numa_node_for_gpu(0)
+        self.assertEqual(result, -1)
+
+
+class TestBindToClosestNumaNode(unittest.TestCase):
+    """Test _bind_to_closest_numa_node (lines 484-529)."""
+
+    def test_already_bound_returns_true(self):
+        """Line 484: returns True immediately if already bound."""
+        controller = create_cache_controller()
+        controller._numa_bound = True
+        self.assertTrue(controller._bind_to_closest_numa_node())
+
+    @patch("ctypes.CDLL", side_effect=OSError("libnuma not found"))
+    def test_libnuma_not_found_returns_false(self, mock_cdll):
+        """Lines 490-496: returns False when libnuma is not available."""
+        controller = create_cache_controller()
+        controller._numa_bound = False
+
+        result = controller._bind_to_closest_numa_node()
+        self.assertFalse(result)
+
+    @patch("ctypes.CDLL")
+    def test_numa_not_available_returns_false(self, mock_cdll):
+        """Lines 498-500: returns False when numa_available() < 0."""
+        controller = create_cache_controller()
+        controller._numa_bound = False
+
+        mock_libnuma = MagicMock()
+        mock_libnuma.numa_available.return_value = -1
+        mock_cdll.return_value = mock_libnuma
+
+        result = controller._bind_to_closest_numa_node()
+        self.assertFalse(result)
+
+    @patch("ctypes.CDLL")
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_numa_node_for_gpu")
+    def test_numa_node_negative_returns_false(self, mock_get_numa, mock_cdll):
+        """Lines 506-508: returns False when NUMA node cannot be determined."""
+        controller = create_cache_controller()
+        controller._numa_bound = False
+
+        mock_libnuma = MagicMock()
+        mock_libnuma.numa_available.return_value = 0
+        mock_cdll.return_value = mock_libnuma
+        mock_get_numa.return_value = -1
+
+        result = controller._bind_to_closest_numa_node()
+        self.assertFalse(result)
+
+    @patch("ctypes.CDLL")
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_numa_node_for_gpu")
+    def test_binding_success(self, mock_get_numa, mock_cdll):
+        """Lines 512-525: successful binding sets _numa_bound = True."""
+        controller = create_cache_controller()
+        controller._numa_bound = False
+
+        mock_libnuma = MagicMock()
+        mock_libnuma.numa_available.return_value = 0
+        mock_libnuma.numa_run_on_node.return_value = 0
+        mock_cdll.return_value = mock_libnuma
+        mock_get_numa.return_value = 1
+
+        result = controller._bind_to_closest_numa_node()
+        self.assertTrue(result)
+        self.assertTrue(controller._numa_bound)
+        mock_libnuma.numa_run_on_node.assert_called_once_with(1)
+        mock_libnuma.numa_set_preferred.assert_called_once_with(1)
+
+    @patch("ctypes.CDLL")
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_numa_node_for_gpu")
+    def test_numa_run_on_node_fails(self, mock_get_numa, mock_cdll):
+        """Lines 513-515: returns False when numa_run_on_node fails."""
+        controller = create_cache_controller()
+        controller._numa_bound = False
+
+        mock_libnuma = MagicMock()
+        mock_libnuma.numa_available.return_value = 0
+        mock_libnuma.numa_run_on_node.return_value = -1
+        mock_cdll.return_value = mock_libnuma
+        mock_get_numa.return_value = 0
+
+        result = controller._bind_to_closest_numa_node()
+        self.assertFalse(result)
+
+
+class TestInitializeHostCache(unittest.TestCase):
+    """Test initialize_host_cache (lines 552-642)."""
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._bind_to_closest_numa_node")
+    @patch("fastdeploy.model_executor.layers.attention.base_attention_backend.cuda_host_alloc", return_value=999)
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_host_cache_basic(self, mock_quant_type, mock_alloc, mock_numa):
+        """Lines 552-642: basic host cache initialization."""
+        mock_quant_type.return_value = None
+
+        config = get_default_test_fd_config()
+        config.cache_config.num_cpu_blocks = 10
+        config.model_config.num_hidden_layers = 2
+        config.model_config.dtype = "bfloat16"
+        config.cache_config.cache_dtype = "bfloat16"
+        # speculative_config is needed for num_extra_cache_layer
+        mock_spec_config = MagicMock()
+        mock_spec_config.num_extra_cache_layer = 0
+        config.speculative_config = mock_spec_config
+
+        from fastdeploy.cache_manager.v1.cache_controller import CacheController
+
+        controller = CacheController(config, local_rank=0, device_id=0)
+        backend = make_mock_attn_backend(key_shape=(10, 4, 16, 64))
+
+        controller.initialize_host_cache(backend)
+
+        # Should have allocated host memory
+        self.assertGreater(len(controller.host_cache_kvs_map), 0)
+        self.assertTrue(mock_alloc.called)
+
+    def test_initialize_host_cache_skip_when_zero_blocks(self):
+        """Lines 547-550: skips when num_cpu_blocks == 0."""
+        config = get_default_test_fd_config()
+        config.cache_config.num_cpu_blocks = 0
+        config.model_config.num_hidden_layers = 2
+
+        from fastdeploy.cache_manager.v1.cache_controller import CacheController
+
+        controller = CacheController(config, local_rank=0, device_id=0)
+        backend = make_mock_attn_backend()
+
+        controller.initialize_host_cache(backend)
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._bind_to_closest_numa_node")
+    @patch("fastdeploy.model_executor.layers.attention.base_attention_backend.cuda_host_alloc", return_value=888)
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_initialize_host_cache_skips_if_already_initialized(self, mock_quant_type, mock_alloc, mock_numa):
+        """Line 552-553: skips if host_cache_kvs_map already populated."""
+        mock_quant_type.return_value = None
+
+        config = get_default_test_fd_config()
+        config.cache_config.num_cpu_blocks = 10
+        config.model_config.num_hidden_layers = 2
+        config.cache_config.cache_dtype = "bfloat16"
+
+        from fastdeploy.cache_manager.v1.cache_controller import CacheController
+
+        controller = CacheController(config, local_rank=0, device_id=0)
+        controller.host_cache_kvs_map = {"existing_key": 12345}
+
+        backend = make_mock_attn_backend()
+        controller.initialize_host_cache(backend)
+
+        # Should not call alloc since already initialized
+        mock_alloc.assert_not_called()
+
+
+class TestSubmitSwapTaskInternal(unittest.TestCase):
+    """Test _submit_swap_task internal logic (lines 696-792)."""
+
+    def setUp(self):
+        self.controller = create_cache_controller(num_layers=2)
+        setup_transfer_env(self.controller, num_layers=2)
+
+    def test_force_all_layers_success(self):
+        """Lines 716-746: force_all_layers=True path with successful transfer."""
+        from fastdeploy.cache_manager.v1.metadata import CacheLevel
+
+        meta = CacheSwapMetadata(src_block_ids=[0, 1], dst_block_ids=[10, 11])
+        mock_transfer_all = MagicMock(return_value=True)
+        mock_transfer_layer = MagicMock()
+
+        counter = self.controller._submit_swap_task(
+            meta=meta,
+            src_location=CacheLevel.DEVICE,
+            dst_location=CacheLevel.HOST,
+            transfer_fn_all=mock_transfer_all,
+            transfer_fn_layer=mock_transfer_layer,
+            force_all_layers=True,
+        )
+
+        # Wait for background thread
+        counter.wait_all(timeout=5.0)
+        self.assertTrue(counter.is_all_done())
+        mock_transfer_all.assert_called_once_with([0, 1], [10, 11])
+        mock_transfer_layer.assert_not_called()
+
+    def test_layer_by_layer_success(self):
+        """Lines 747-771: layer-by-layer path with successful transfer."""
+        from fastdeploy.cache_manager.v1.metadata import CacheLevel
+
+        meta = CacheSwapMetadata(src_block_ids=[5], dst_block_ids=[0])
+
+        def fake_layer_transfer(layers, on_complete, src_ids, dst_ids):
+            for layer in layers:
+                on_complete(layer)
+            return True
+
+        counter = self.controller._submit_swap_task(
+            meta=meta,
+            src_location=CacheLevel.HOST,
+            dst_location=CacheLevel.DEVICE,
+            transfer_fn_all=None,
+            transfer_fn_layer=fake_layer_transfer,
+            force_all_layers=False,
+        )
+
+        counter.wait_all(timeout=5.0)
+        self.assertTrue(counter.is_all_done())
+        self.assertTrue(meta.success)
+
+    def test_transfer_exception_sets_error(self):
+        """Lines 777-786: exception in transfer sets error on meta."""
+        from fastdeploy.cache_manager.v1.metadata import CacheLevel
+
+        meta = CacheSwapMetadata(src_block_ids=[0], dst_block_ids=[10])
+
+        def failing_transfer(src_ids, dst_ids):
+            raise RuntimeError("GPU error")
+
+        self.controller._submit_swap_task(
+            meta=meta,
+            src_location=CacheLevel.DEVICE,
+            dst_location=CacheLevel.HOST,
+            transfer_fn_all=failing_transfer,
+            transfer_fn_layer=None,
+            force_all_layers=True,
+        )
+
+        # Wait for the background thread to complete
+        time.sleep(1.0)
+        self.assertFalse(meta.success)
+        self.assertIn("GPU error", meta.error_message)
+
+
+class TestClearStorage(unittest.TestCase):
+    """Test _clear_storage method (lines 1049-1061)."""
+
+    def test_clear_storage_with_clear_method(self):
+        """Lines 1049-1056: calls storage_connector.clear()."""
+        controller = create_cache_controller()
+        mock_connector = MagicMock()
+        mock_connector.clear.return_value = 5
+        controller._transfer_manager._storage_connector = mock_connector
+
+        controller._clear_storage()
+        mock_connector.clear.assert_called_once()
+
+    def test_clear_storage_with_disconnect(self):
+        """Lines 1057-1059: calls disconnect() if clear is not available."""
+        controller = create_cache_controller()
+        mock_connector = MagicMock(spec=["disconnect"])
+        controller._transfer_manager._storage_connector = mock_connector
+
+        controller._clear_storage()
+        mock_connector.disconnect.assert_called_once()
+
+    def test_clear_storage_no_connector(self):
+        """Lines 1049-1051: no-op when no storage_connector."""
+        controller = create_cache_controller()
+        controller._transfer_manager._storage_connector = None
+        # Should not raise
+        controller._clear_storage()
+
+    def test_clear_storage_exception_handled(self):
+        """Line 1061: exception is caught and logged."""
+        controller = create_cache_controller()
+        mock_connector = MagicMock()
+        mock_connector.clear.side_effect = RuntimeError("storage error")
+        controller._transfer_manager._storage_connector = mock_connector
+
+        # Should not raise
+        controller._clear_storage()
+
+
+class TestFreeCacheWithClearStorage(unittest.TestCase):
+    """Test free_cache with clear_storage=True (lines 1031, 1034-1035)."""
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._clear_storage")
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._free_host_cache")
+    def test_free_cache_clear_storage_true(self, mock_free_host, mock_clear_storage):
+        """Line 1031: clear_storage=True calls _clear_storage."""
+        controller = create_cache_controller()
+
+        result = controller.free_cache(clear_storage=True)
+        self.assertTrue(result)
+        mock_clear_storage.assert_called_once()
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._free_host_cache")
+    def test_free_cache_clear_storage_false(self, mock_free_host):
+        """Line 1031: clear_storage=False does not call _clear_storage."""
+        controller = create_cache_controller()
+
+        with patch.object(controller, "_clear_storage") as mock_clear:
+            result = controller.free_cache(clear_storage=False)
+            self.assertTrue(result)
+            mock_clear.assert_not_called()
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController.reset_cache", side_effect=Exception("oops"))
+    def test_free_cache_exception_returns_false(self, mock_reset):
+        """Lines 1034-1035: returns False on exception."""
+        controller = create_cache_controller()
+        result = controller.free_cache()
+        self.assertFalse(result)
+
+
+class TestResetCacheException(unittest.TestCase):
+    """Test reset_cache exception path (lines 1006-1007)."""
+
+    def test_reset_cache_exception_returns_false(self):
+        """Lines 1006-1007: returns False when exception occurs."""
+        controller = create_cache_controller()
+        # Make _pending_evict_counters.clear() raise
+        controller._pending_evict_counters = MagicMock()
+        controller._pending_evict_counters.clear.side_effect = RuntimeError("lock error")
+
+        result = controller.reset_cache()
+        self.assertFalse(result)
+
+
+class TestStartStop(unittest.TestCase):
+    """Test start() and stop() methods (lines 1077, 1081-1083)."""
+
+    def test_start(self):
+        """Line 1077: start() calls transfer_manager.start()."""
+        controller = create_cache_controller()
+        with patch.object(controller._transfer_manager, "start", create=True) as mock_start:
+            controller.start()
+            mock_start.assert_called_once()
+
+    def test_stop(self):
+        """Lines 1081-1083: stop() calls transfer_manager.stop() and shuts down executor."""
+        controller = create_cache_controller()
+        with (
+            patch.object(controller._transfer_manager, "stop", create=True) as mock_stop,
+            patch.object(controller._executor, "shutdown") as mock_shutdown,
+        ):
+            controller.stop()
+            mock_stop.assert_called_once()
+            mock_shutdown.assert_called_once_with(wait=False)
+
+
+class TestFreeHostCache(unittest.TestCase):
+    """Test _free_host_cache method (lines 1027-1045)."""
+
+    @patch("fastdeploy.model_executor.layers.attention.base_attention_backend.cuda_host_free")
+    def test_free_host_cache_releases_memory(self, mock_free):
+        """Lines 1027-1045: frees all host cache pointers via attn_backend."""
+        controller = create_cache_controller()
+        controller.host_cache_kvs_map = {
+            "key_cache_0": 1000,
+            "val_cache_0": 2000,
+        }
+        controller.attn_backend = make_mock_attn_backend()
+
+        controller._free_host_cache()
+
+        self.assertEqual(mock_free.call_count, 2)
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+    @patch("fastdeploy.model_executor.layers.attention.base_attention_backend.cuda_host_free")
+    def test_free_host_cache_skips_zero_ptr(self, mock_free):
+        """Skips freeing pointers that are 0/None."""
+        controller = create_cache_controller()
+        controller.host_cache_kvs_map = {
+            "key_cache_0": 0,
+            "val_cache_0": 5000,
+        }
+        controller.attn_backend = make_mock_attn_backend()
+
+        controller._free_host_cache()
+
+        mock_free.assert_called_once_with(5000)
+
+    def test_free_host_cache_noop_when_empty(self):
+        """Line 1095: no-op when host_cache_kvs_map is empty."""
+        controller = create_cache_controller()
+        controller.host_cache_kvs_map = {}
+        # Should not raise
+        controller._free_host_cache()
+
+    def test_free_host_cache_noop_when_no_attr(self):
+        """Line 1095: no-op when host_cache_kvs_map doesn't exist."""
+        controller = create_cache_controller()
+        if hasattr(controller, "host_cache_kvs_map"):
+            delattr(controller, "host_cache_kvs_map")
+        # Should not raise
+        controller._free_host_cache()
+
+    @patch(
+        "fastdeploy.model_executor.layers.attention.base_attention_backend.cuda_host_free",
+        side_effect=Exception("free error"),
+    )
+    def test_free_host_cache_handles_free_error(self, mock_free):
+        """Continues on free error."""
+        controller = create_cache_controller()
+        controller.host_cache_kvs_map = {
+            "key_cache_0": 1000,
+            "val_cache_0": 2000,
+        }
+        controller.attn_backend = make_mock_attn_backend()
+
+        # Should not raise
+        controller._free_host_cache()
+        # Map should still be cleared
+        self.assertEqual(len(controller.host_cache_kvs_map), 0)
+
+
+class TestDestructor(unittest.TestCase):
+    """Test __del__ method (lines 1089-1090)."""
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._free_host_cache")
+    def test_del_calls_free_host_cache(self, mock_free):
+        """Lines 1089-1090: __del__ calls _free_host_cache."""
+        controller = create_cache_controller()
+        controller.__del__()
+        mock_free.assert_called_once()
+
+    @patch(
+        "fastdeploy.cache_manager.v1.cache_controller.CacheController._free_host_cache", side_effect=Exception("err")
+    )
+    def test_del_swallows_exception(self, mock_free):
+        """Lines 1089-1090: __del__ swallows exceptions."""
+        controller = create_cache_controller()
+        # Should not raise
+        controller.__del__()
+
+
+class TestInitializeKVCacheFp8NoValueCache(unittest.TestCase):
+    """Test fp8 scale with no value_cache_shape (line 319)."""
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_fp8_no_value_creates_only_key_scale(self, mock_quant_type):
+        """Line 319: fp8 with value_cache_shape=None creates only key_scale."""
+        mock_quant_type.return_value = "block_wise_fp8"
+
+        config = get_default_test_fd_config()
+        config.cache_config.num_cpu_blocks = 0
+        config.model_config.num_hidden_layers = 1
+        config.model_config.dtype = "bfloat16"
+
+        from fastdeploy.cache_manager.v1.cache_controller import CacheController
+
+        controller = CacheController(config, local_rank=0, device_id=0)
+        backend = make_mock_attn_backend(val_shape_is_none=True)
+
+        cache_list = controller.initialize_kv_cache(backend, num_gpu_blocks=10)
+
+        # Should have: key_cache(uint8) + key_scale(float32) for 1 layer = 2 tensors
+        self.assertEqual(len(cache_list), 2)
+        # Verify no value entries
+        for name in controller.cache_kvs_map:
+            self.assertNotIn("value_caches", name)
+            self.assertNotIn("value_cache_scales", name)
+
+
+class TestInitializeMTPKVCacheFp8(unittest.TestCase):
+    """Test MTP fp8 scale creation (lines 390-401)."""
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_mtp_fp8_with_value_cache(self, mock_quant_type):
+        """Lines 390-399: MTP fp8 creates both key and value scales."""
+        mock_quant_type.return_value = "block_wise_fp8"
+
+        config = get_default_test_fd_config()
+        config.cache_config.num_cpu_blocks = 0
+        config.model_config.num_hidden_layers = 4
+        config.model_config.dtype = "bfloat16"
+
+        from fastdeploy.cache_manager.v1.cache_controller import CacheController
+
+        controller = CacheController(config, local_rank=0, device_id=0)
+        backend = make_mock_attn_backend()
+
+        cache_list = controller.initialize_mtp_kv_cache(
+            attn_backend=backend, num_gpu_blocks=5, num_mtp_layers=1, layer_offset=4
+        )
+
+        # Per layer: key(uint8) + value(uint8) + key_scale(float32) + value_scale(float32) = 4 tensors
+        self.assertEqual(len(cache_list), 4)
+
+    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._get_kv_cache_quant_type")
+    def test_mtp_fp8_no_value_cache(self, mock_quant_type):
+        """Lines 400-401: MTP fp8 with no value_cache_shape creates only key_scale."""
+        mock_quant_type.return_value = "block_wise_fp8"
+
+        config = get_default_test_fd_config()
+        config.cache_config.num_cpu_blocks = 0
+        config.model_config.num_hidden_layers = 4
+        config.model_config.dtype = "bfloat16"
+
+        from fastdeploy.cache_manager.v1.cache_controller import CacheController
+
+        controller = CacheController(config, local_rank=0, device_id=0)
+        backend = make_mock_attn_backend(val_shape_is_none=True)
+
+        cache_list = controller.initialize_mtp_kv_cache(
+            attn_backend=backend, num_gpu_blocks=5, num_mtp_layers=1, layer_offset=4
+        )
+
+        # Per layer: key(uint8) + key_scale(float32) = 2 tensors (no value)
+        self.assertEqual(len(cache_list), 2)

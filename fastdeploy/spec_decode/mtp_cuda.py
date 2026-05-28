@@ -122,6 +122,12 @@ class MTPProposerCUDA(MTPProposer):
             kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
+            decode_block_indices=self.model_inputs["decode_block_indices"],
+            decode_num_blocks=self.model_inputs["decode_num_blocks"],
+            decode_chunk_size=self.model_inputs["decode_chunk_size"],
+            decode_tmp_workspace=self.model_inputs["decode_tmp_workspace"],
+            decode_tmp_m=self.model_inputs["decode_tmp_m"],
+            decode_tmp_d=self.model_inputs["decode_tmp_d"],
         )
 
         # Initialzie attention meta data
@@ -393,10 +399,13 @@ class MTPProposerCUDA(MTPProposer):
             )
 
     def _extend_draft_token_with_ngram_match(self):
-        # TODO: replace with gpu tensor
+        # pad_to_max forces hybrid kernel to write a fixed seq_lens_this_time
+        # = num_speculative_tokens + 1, padding unfilled ngram slots with a placeholder draft token.
+        # Required when target cudagraph is enabled (capture-time seq_lens_this_time
+        # must match replay-time seq_lens_this_time).
         hybrid_mtp_ngram(
-            self.model_inputs["input_ids_cpu"].cuda(),
-            self.model_inputs["input_ids_len"].cuda(),
+            self.model_inputs["token_ids_all"],
+            self.model_inputs["prompt_lens"],
             self.model_inputs["pre_ids"],
             self.model_inputs["step_idx"],
             self.target_model_inputs["actual_draft_token_num"],
@@ -407,6 +416,7 @@ class MTPProposerCUDA(MTPProposer):
             self.max_ngram_size,
             self.min_ngram_size,
             self.max_draft_token_num,
+            self.graph_opt_config.use_cudagraph,
         )
 
     def padding_cudagraph_inputs(self) -> None:

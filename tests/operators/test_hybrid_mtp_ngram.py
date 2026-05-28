@@ -26,15 +26,19 @@ class TestNgramMatchMixed(unittest.TestCase):
     def setUp(self):
         self.max_bsz = 2
         self.max_draft_tokens = 5
-        self.max_len = 32
+        self.max_model_len = 32
+        self.prompt_len = 10
         self.max_dec_len = 10
         self.max_ngram_size = 5
         self.min_ngram_size = 2
 
-        # 初始化输入 tensor
-        self.input_ids = paddle.full(shape=[self.max_bsz, self.max_len], fill_value=-1, dtype="int64").cpu()
-        self.input_ids_len = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int64").cpu()
-        self.pre_ids = paddle.full(shape=[self.max_bsz, self.max_len], fill_value=-1, dtype="int64").cpu()
+        # token_ids_all layout:
+        #   [0 .. prompt_len-1]               <- prompt (Phase 1 search source)
+        #   [prompt_len .. ]                  <- pad (-1)
+        # pre_ids carries the generated tokens used as Phase 2 search source.
+        self.token_ids_all = paddle.full(shape=[self.max_bsz, self.max_model_len], fill_value=-1, dtype="int64").cpu()
+        self.prompt_lens = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int64").cpu()
+        self.pre_ids = paddle.full(shape=[self.max_bsz, self.max_model_len], fill_value=-1, dtype="int64").cpu()
         self.step_idx = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int64").cpu()
         self.draft_token_num = paddle.full(shape=[self.max_bsz, 1], fill_value=-1, dtype="int32").cpu()
         self.draft_tokens = paddle.full(
@@ -50,9 +54,10 @@ class TestNgramMatchMixed(unittest.TestCase):
             dtype="int64",
         ).cpu()
 
-        # 设置具体数据
-        self.input_ids[:, :10] = np.arange(0, 10)
-        self.input_ids_len[:] = 10
+        # Fill prompt 0..9 into token_ids_all (Phase 1 search source)
+        self.token_ids_all[:, : self.prompt_len] = np.arange(0, self.prompt_len)
+        self.prompt_lens[:] = self.prompt_len
+
         pre_ids_np = np.array([10, 9, 8, 7, 6, 10, 9, 8, 7], dtype="int32")
         self.pre_ids[:, : pre_ids_np.shape[0]] = pre_ids_np
         self.step_idx[:] = 8
@@ -63,14 +68,17 @@ class TestNgramMatchMixed(unittest.TestCase):
         self.seq_lens_decoder[:] = 12
         self.max_dec_len[:] = 512
 
-        # 期望结果
+        # Expected results (unchanged: kernel matching logic is identical;
+        # only the data source for prompt tokens moved from input_ids to
+        # token_ids_all[:, :prompt_len]).
         self.ref_seq_lens_this_time = np.array([[6], [6]], dtype="int32")
         self.ref_draft_tokens = np.array([[8, 7, 6, 10, 9, 8], [8, 7, 6, 10, 9, 8]], dtype="int64")
 
     def test_ngram_match_mixed(self):
+        """pad_to_max=False: GPU output matches the CPU reference baseline."""
         hybrid_mtp_ngram(
-            self.input_ids,
-            self.input_ids_len,
+            self.token_ids_all,
+            self.prompt_lens,
             self.pre_ids,
             self.step_idx,
             self.draft_token_num,
@@ -81,6 +89,7 @@ class TestNgramMatchMixed(unittest.TestCase):
             self.max_ngram_size,
             self.min_ngram_size,
             self.max_draft_tokens,
+            False,
         )
 
         np.testing.assert_allclose(self.seq_lens_this_time.numpy(), self.ref_seq_lens_this_time)
