@@ -1925,6 +1925,8 @@ class ServingLimitsConfig:
                 f"--input-max-tokens ({self.input_max_tokens}) > "
                 f"--max-model-len ({max_model_len}), it will have no effect."
             )
+
+
 class BenchmarkMetricsConfig:
     """Configuration for in-process benchmark metrics logger.
 
