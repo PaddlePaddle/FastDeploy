@@ -15,7 +15,6 @@
 """
 
 import paddle
-from paddleformers.utils.log import logger
 
 from fastdeploy.utils import data_processor_logger
 
@@ -53,8 +52,6 @@ def calculate_logits_entropy(logits, share_inputs, temperature):
         share_inputs["seq_lens_this_time"].squeeze(1),
     )
 
-    logger.info(f"  [entropy ernie5 non-MTP] logits.shape={logits.shape}, real_seq_lens={real_seq_lens.tolist()}")
-
     batch_indices = paddle.arange(real_bsz, dtype="int32")
     batch_id_per_token = paddle.repeat_interleave(batch_indices, real_seq_lens)
     for i in range(logits.shape[0]):
@@ -63,8 +60,6 @@ def calculate_logits_entropy(logits, share_inputs, temperature):
 
     entropy_tensor = get_entropy(logits)
     entropy = entropy_tensor.tolist()
-
-    logger.info(f"  [entropy ernie5 non-MTP] computed entropy: {entropy}")
 
     for i in range(real_bsz):
         for _ in range(real_seq_lens[i]):
@@ -93,11 +88,6 @@ def speculate_calculate_logits_entropy(logits, share_inputs, temperature):
     )
     accepted_idx = repeated_starts + offsets
 
-    logger.info(
-        f"  [entropy ernie5 MTP] logits.shape={logits.shape}, total_accepted_num={total_accepted_num}, "
-        f"real_seq_lens={real_seq_lens.tolist()}, accepted_idx={accepted_idx.tolist()}"
-    )
-
     accepted_logits = paddle.empty([total_accepted_num, logits.shape[1]], dtype=logits.dtype)
     for i in range(total_accepted_num):
         accepted_logits[i] = logits[accepted_idx[i]]
@@ -110,8 +100,6 @@ def speculate_calculate_logits_entropy(logits, share_inputs, temperature):
 
     entropy_tensor = get_entropy(accepted_logits)
     entropy = entropy_tensor.tolist()
-
-    logger.info(f"  [entropy ernie5 MTP] computed entropy: {entropy}")
 
     for i in range(real_bsz):
         for _ in range(share_inputs["accept_num"][i]):
@@ -143,8 +131,6 @@ def calculate_logits_entropy_fd(logits, share_inputs, temperature):
         seq_lens_this_time,
     )
 
-    logger.info(f"  [entropy_fd non-MTP] logits.shape={logits.shape}, real_seq_lens={real_seq_lens.tolist()}")
-
     for i in range(real_bsz):
         if int(real_seq_lens[i]) == 0:
             continue
@@ -153,8 +139,6 @@ def calculate_logits_entropy_fd(logits, share_inputs, temperature):
             logits[i] = logits[i].scale_(1 / t)
 
     entropy_tensor = get_entropy(logits[:real_bsz])
-
-    logger.info(f"  [entropy_fd non-MTP] entropy_tensor: {entropy_tensor.tolist()}")
 
     for i in range(real_bsz):
         if int(real_seq_lens[i]) == 0:
@@ -173,10 +157,7 @@ def speculate_calculate_logits_entropy_fd(logits, share_inputs, temperature):
     real_bsz = share_inputs["seq_lens_this_time"].shape[0]
     total_accepted_num = int(paddle.sum(share_inputs["accept_num"][:real_bsz]))
 
-    logger.info(f"  [entropy_fd] logits.shape={logits.shape}, total_accepted_num={total_accepted_num}")
-
     if total_accepted_num == 0:
-        logger.info("  [entropy_fd] total_accepted_num=0, checking flush only")
         for i in range(real_bsz):
             if (
                 share_inputs["stop_flags"][i]
@@ -204,8 +185,6 @@ def speculate_calculate_logits_entropy_fd(logits, share_inputs, temperature):
     )
     accepted_idx = repeated_starts + offsets
 
-    logger.info(f"  [entropy_fd] real_seq_lens={real_seq_lens.tolist()}, accepted_idx={accepted_idx.tolist()}")
-
     accepted_logits = paddle.empty([total_accepted_num, logits.shape[1]], dtype=logits.dtype)
     for i in range(total_accepted_num):
         accepted_logits[i] = logits[accepted_idx[i]]
@@ -220,8 +199,6 @@ def speculate_calculate_logits_entropy_fd(logits, share_inputs, temperature):
 
     entropy_tensor = get_entropy(accepted_logits)
     entropy = entropy_tensor.tolist()
-
-    logger.info(f"  [entropy_fd] computed entropy values: {entropy}")
 
     for i in range(real_bsz):
         accept_count = int(share_inputs["accept_num"][i])

@@ -2411,9 +2411,6 @@ class GPUModelRunner(ModelRunnerBase):
             model_forward_batch, num_running_requests, self._cached_launch_token_num, self._cached_real_bsz
         )
 
-        if self.share_inputs["ids_remove_padding"].shape[0] > 0:
-            logger.info("=" * 50 + "model execution starts")
-
         model_output = self._execute(model_inputs)
         # save output (last batch)
         if self._cached_model_output_data is not None:
