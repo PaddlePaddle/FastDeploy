@@ -1902,10 +1902,22 @@ class ServingLimitsConfig:
 
     def validate(self, max_model_len):
         """Validate serving limits against max_model_len at startup."""
+        for name in ("max_completion_tokens", "input_max_tokens", "response_max_tokens"):
+            value = getattr(self, name)
+            if value is not None and value <= 0:
+                flag = name.replace("_", "-")
+                raise ValueError(f"--{flag} ({value}) must be greater than 0.")
+
+        for name in ("reasoning_max_tokens", "min_completion_tokens"):
+            value = getattr(self, name)
+            if value is not None and value < 0:
+                flag = name.replace("_", "-")
+                raise ValueError(f"--{flag} ({value}) must be greater than or equal to 0.")
+
         if self.min_completion_tokens is not None:
-            if self.min_completion_tokens > max_model_len:
+            if self.min_completion_tokens >= max_model_len:
                 raise ValueError(
-                    f"--min-completion-tokens ({self.min_completion_tokens}) must not exceed "
+                    f"--min-completion-tokens ({self.min_completion_tokens}) must be less than "
                     f"--max-model-len ({max_model_len}). All requests would be rejected."
                 )
             if self.max_completion_tokens is not None and self.min_completion_tokens > self.max_completion_tokens:

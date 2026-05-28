@@ -526,6 +526,12 @@ class TextProcessorTestCase(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "exceeds the configured max_model_len 3"):
             self.processor.process_request_dict(request, max_model_len=3)
 
+    def test_process_request_dict_rejects_input_max_tokens_exceeded(self):
+        self.processor.input_max_tokens = 1
+        request = {"prompt": [1, 2], "temperature": 0, "top_p": 0}
+        with self.assertRaisesRegex(ValueError, "configured input_max_tokens limit 1"):
+            self.processor.process_request_dict(request, max_model_len=100)
+
     # ------------------------------------------------------------------
     # Server-level length control: max_completion_tokens
     # ------------------------------------------------------------------

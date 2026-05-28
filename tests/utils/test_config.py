@@ -499,15 +499,25 @@ class TestFDConfig(unittest.TestCase):
         slc = ServingLimitsConfig({"min_completion_tokens": 100, "max_completion_tokens": 200})
         slc.validate(max_model_len=4096)
 
-        # min > max_model_len: raise
-        slc_bad = ServingLimitsConfig({"min_completion_tokens": 5000})
-        with self.assertRaisesRegex(ValueError, "must not exceed.*max-model-len"):
+        # min >= max_model_len: raise
+        slc_bad = ServingLimitsConfig({"min_completion_tokens": 4096})
+        with self.assertRaisesRegex(ValueError, "must be less than.*max-model-len"):
             slc_bad.validate(max_model_len=4096)
 
         # min > max_completion_tokens: raise
         slc_bad2 = ServingLimitsConfig({"min_completion_tokens": 300, "max_completion_tokens": 100})
         with self.assertRaisesRegex(ValueError, "must not exceed.*max-completion-tokens"):
             slc_bad2.validate(max_model_len=4096)
+
+        for name in ("max_completion_tokens", "input_max_tokens", "response_max_tokens"):
+            slc_bad = ServingLimitsConfig({name: 0})
+            with self.assertRaisesRegex(ValueError, "must be greater than 0"):
+                slc_bad.validate(max_model_len=4096)
+
+        for name in ("reasoning_max_tokens", "min_completion_tokens"):
+            slc_bad = ServingLimitsConfig({name: -1})
+            with self.assertRaisesRegex(ValueError, "must be greater than or equal to 0"):
+                slc_bad.validate(max_model_len=4096)
 
         # max_completion_tokens > max_model_len: warning only, no raise
         slc_warn = ServingLimitsConfig({"max_completion_tokens": 8192})

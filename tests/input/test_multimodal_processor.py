@@ -794,6 +794,15 @@ class TestProcessRequestDict(unittest.TestCase):
         remaining = 100 - len(result["prompt_token_ids"])
         self.assertEqual(result["max_tokens"], remaining)
 
+    @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
+    def test_input_max_tokens_exceeded(self, mock_stop):
+        proc = _make_processor(QWEN_VL, input_max_tokens=4)
+        proc.text2ids = MagicMock(return_value=self._make_mock_outputs(QWEN_VL))
+
+        request = {"request_id": "test_input_max_tokens", "prompt": "hello"}
+        with self.assertRaisesRegex(ValueError, "configured input_max_tokens limit 4"):
+            proc.process_request_dict(request, max_model_len=100)
+
     # ------------------------------------------------------------------
     # Server-level length control: max_completion_tokens
     # ------------------------------------------------------------------
