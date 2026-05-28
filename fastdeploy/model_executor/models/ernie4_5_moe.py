@@ -636,6 +636,11 @@ class Ernie4_5_MoeForCausalLM(ModelForCasualLM):
         for loaded_weight_name, loaded_weight in weights_iterator:
             logger.debug(f"Loading weight: {loaded_weight_name}")
             loaded_weight_name = loaded_weight_name.replace("model", "ernie")
+
+            # special case!
+            if "correction_bias" in loaded_weight_name:
+                loaded_weight.reshape_([1, loaded_weight.numel().item()])
+
             for param_name, weight_name, exp_id, shard_id, is_moe in all_param_mapping:
                 loaded_weight_name = checkpoint_to_fd_key_fn(loaded_weight_name, is_moe)
                 model_param_name = loaded_weight_name.replace(weight_name, param_name)
