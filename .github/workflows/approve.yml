@@ -13,11 +13,15 @@ jobs:
   Approval:
     name: Approval
     if: ${{ github.repository_owner == 'PaddlePaddle' }}
-    runs-on: ubuntu-latest
+    runs-on:
+      group: APPROVAL
     env:
       PR_ID: ${{ github.event.pull_request.number }}
       BRANCH: ${{ github.event.pull_request.base.ref }}
     steps:
+      - name: Cleanup
+        run: |
+          rm -rf * .[^.]*
       - name: Checkout base repo
         uses: actions/checkout@v6
         with:

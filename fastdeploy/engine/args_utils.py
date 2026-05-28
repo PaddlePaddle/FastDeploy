@@ -635,6 +635,11 @@ class EngineArgs:
                     f"Running {self.splitwise_role} role with {self.scheduler_name} "
                     f"scheduler without --router. Router registration and request routing will be disabled."
                 )
+            if self.speculative_config is not None and self.speculative_config.get("method") == "suffix":
+                raise ValueError(
+                    "SpecMethod.SUFFIX does not support PD (Prefill/Decode) separation. "
+                    "Suffix speculative decoding can only be used in mixed mode (splitwise_role='mixed')."
+                )
 
         if not (
             current_platform.is_cuda()
