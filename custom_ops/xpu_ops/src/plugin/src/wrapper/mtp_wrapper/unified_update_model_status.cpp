@@ -22,9 +22,7 @@ __attribute__((global)) void unified_update_model_status_kernel(
     int *seq_lens_encoder,
     int *seq_lens_decoder,
     bool *has_running_seqs,
-    int *mask_rollback,
     int64_t *step_input_ids,
-    int *adaptive_step_input_len,
     int64_t *step_output_ids,
     int *step_output_len,
     bool *stop_flags,
@@ -39,9 +37,7 @@ __attribute__((global)) void unified_update_model_status_kernel(
     int max_bsz,
     int max_step_tokens,
     int max_model_len,
-    int num_end_tokens,
-    bool is_naive_mode,
-    bool prefill_one_step_stop);
+    int num_end_tokens);
 }  // namespace fd_xpu3
 
 namespace fastdeploy {
@@ -61,9 +57,7 @@ static int cpu_wrapper(api::Context *ctx,
                        int *seq_lens_encoder,
                        int *seq_lens_decoder,
                        bool *has_running_seqs,
-                       int *mask_rollback,
                        int64_t *step_input_ids,
-                       int *adaptive_step_input_len,
                        int64_t *step_output_ids,
                        int *step_output_len,
                        bool *stop_flags,
@@ -78,34 +72,21 @@ static int cpu_wrapper(api::Context *ctx,
                        int max_bsz,
                        int max_step_tokens,
                        int max_model_len,
-                       int num_end_tokens,
-                       bool is_naive_mode,
-                       bool prefill_one_step_stop) {
+                       int num_end_tokens) {
   int stop_flag_int = 0;
 
   for (int batch_id = 0; batch_id < max_bsz; batch_id++) {
-    // Read state
     int cur_seq_len_encoder = seq_lens_encoder[batch_id];
     int cur_seq_len_decoder = seq_lens_decoder[batch_id];
     bool cur_stop_flag = stop_flags[batch_id];
-    int output_len = 0;
+    int output_len = step_output_len[batch_id];
     int64_t cur_step_idx = step_idx[batch_id];
     bool cur_is_paused = is_paused[batch_id];
 
     bool is_running = !cur_stop_flag && !cur_is_paused;
 
-    // Compute output length
-    if (is_running) {
-      if (is_naive_mode) {
-        output_len = 1;
-      } else {
-        output_len = step_output_len[batch_id];
-      }
-    }
-
     // EOS detection
     if (is_running && output_len > 0) {
-      bool hit_stop = false;
       int64_t *output_ids = &step_output_ids[batch_id * max_step_tokens];
 
       for (int i = 0; i < output_len; i++) {
@@ -118,33 +99,22 @@ static int cpu_wrapper(api::Context *ctx,
           if (!is_eos) output_ids[i] = end_tokens[0];
           output_len = i + 1;
           cur_stop_flag = true;
-          hit_stop = true;
           break;
         }
       }
-
-      if (!hit_stop && prefill_one_step_stop && cur_seq_len_encoder > 0) {
-        cur_stop_flag = true;
-      }
     }
 
-    // Update state and write back
     if (is_running) {
-      if (cur_stop_flag) {
-        stop_flag_int += 1;
-        if (output_len == 0) cur_seq_len_decoder = 0;
-        stop_flags[batch_id] = true;
-        mask_rollback[batch_id] = 0;
-      } else if (cur_seq_len_encoder == 0) {
-        cur_seq_len_decoder += output_len;
-        mask_rollback[batch_id] = seq_lens_this_time[batch_id] - output_len;
-      } else {
-        mask_rollback[batch_id] = 0;
-      }
-
       if (cur_seq_len_encoder > 0) {
         cur_seq_len_decoder += cur_seq_len_encoder;
         cur_seq_len_encoder = 0;
+      } else if (cur_seq_len_decoder > 0) {
+        cur_seq_len_decoder += output_len;
+      }
+
+      if (cur_stop_flag) {
+        stop_flag_int += 1;
+        stop_flags[batch_id] = true;
       }
 
       seq_lens_encoder[batch_id] = cur_seq_len_encoder;
@@ -153,8 +123,7 @@ static int cpu_wrapper(api::Context *ctx,
       step_idx[batch_id] = cur_step_idx;
 
       // Write history to token_ids_all
-      if (cur_step_idx > 0 && output_len > 0) {
-        // Bounds check: highest write index is prompt_lens + cur_step_idx
+      if (output_len > 0) {
         if (prompt_lens[batch_id] + cur_step_idx < max_model_len) {
           int64_t *token_ids_all_now =
               &token_ids_all[batch_id * max_model_len + prompt_lens[batch_id]];
@@ -171,15 +140,9 @@ static int cpu_wrapper(api::Context *ctx,
         step_input_ids[batch_id * max_step_tokens] =
             step_output_ids[batch_id * max_step_tokens + output_len - 1];
       }
-
-      if (is_naive_mode) {
-        seq_lens_this_time[batch_id] = cur_stop_flag ? 0 : 1;
-      }
     } else if (batch_id >= real_bsz) {
-      // Padding slot: just count as stopped, don't modify state
       stop_flag_int += 1;
     } else {
-      // Stopped or paused slot (batch_id < real_bsz)
       stop_flag_int += 1;
       stop_flags[batch_id] = true;
       seq_lens_encoder[batch_id] = 0;
@@ -196,9 +159,7 @@ static int xpu3_wrapper(api::Context *ctx,
                         int *seq_lens_encoder,
                         int *seq_lens_decoder,
                         bool *has_running_seqs,
-                        int *mask_rollback,
                         int64_t *step_input_ids,
-                        int *adaptive_step_input_len,
                         int64_t *step_output_ids,
                         int *step_output_len,
                         bool *stop_flags,
@@ -213,9 +174,7 @@ static int xpu3_wrapper(api::Context *ctx,
                         int max_bsz,
                         int max_step_tokens,
                         int max_model_len,
-                        int num_end_tokens,
-                        bool is_naive_mode,
-                        bool prefill_one_step_stop) {
+                        int num_end_tokens) {
   using XPU_INT64 = typename api::XPUIndexType<int64_t>::type;
   int32_t ret_xre =
       fd_xpu3::unified_update_model_status_kernel<<<ctx->ncluster(),
@@ -224,9 +183,7 @@ static int xpu3_wrapper(api::Context *ctx,
           seq_lens_encoder,
           seq_lens_decoder,
           has_running_seqs,
-          mask_rollback,
           reinterpret_cast<XPU_INT64 *>(step_input_ids),
-          adaptive_step_input_len,
           reinterpret_cast<XPU_INT64 *>(step_output_ids),
           step_output_len,
           stop_flags,
@@ -241,9 +198,7 @@ static int xpu3_wrapper(api::Context *ctx,
           max_bsz,
           max_step_tokens,
           max_model_len,
-          num_end_tokens,
-          is_naive_mode,
-          prefill_one_step_stop);
+          num_end_tokens);
   KERNEL_ASSERT_SUCCESS(ctx, ret_xre);
   return api::SUCCESS;
 }
@@ -252,9 +207,7 @@ int unified_update_model_status(api::Context *ctx,
                                 int *seq_lens_encoder,
                                 int *seq_lens_decoder,
                                 bool *has_running_seqs,
-                                int *mask_rollback,
                                 int64_t *step_input_ids,
-                                int *adaptive_step_input_len,
                                 int64_t *step_output_ids,
                                 int *step_output_len,
                                 bool *stop_flags,
@@ -269,42 +222,37 @@ int unified_update_model_status(api::Context *ctx,
                                 int max_bsz,
                                 int max_step_tokens,
                                 int max_model_len,
-                                int num_end_tokens,
-                                bool is_naive_mode,
-                                bool prefill_one_step_stop) {
+                                int num_end_tokens) {
   WRAPPER_CHECK_CTX(ctx);
   WRAPPER_DUMP_FUNCTION_T1(ctx, "unified_update_model_status", int);
   WRAPPER_DUMP_PARAM6(ctx,
                       seq_lens_encoder,
                       seq_lens_decoder,
                       has_running_seqs,
-                      mask_rollback,
                       step_input_ids,
-                      adaptive_step_input_len);
-  WRAPPER_DUMP_PARAM6(ctx,
                       step_output_ids,
-                      step_output_len,
+                      step_output_len);
+  WRAPPER_DUMP_PARAM6(ctx,
                       stop_flags,
                       seq_lens_this_time,
                       is_paused,
-                      token_ids_all);
-  WRAPPER_DUMP_PARAM6(
-      ctx, prompt_lens, step_idx, end_tokens, max_dec_len, real_bsz, max_bsz);
-  WRAPPER_DUMP_PARAM5(ctx,
+                      token_ids_all,
+                      prompt_lens,
+                      step_idx);
+  WRAPPER_DUMP_PARAM6(ctx,
+                      end_tokens,
+                      max_dec_len,
+                      real_bsz,
+                      max_bsz,
                       max_step_tokens,
-                      max_model_len,
-                      num_end_tokens,
-                      is_naive_mode,
-                      prefill_one_step_stop);
+                      max_model_len);
+  WRAPPER_DUMP_PARAM1(ctx, num_end_tokens);
   WRAPPER_DUMP(ctx);
 
   WRAPPER_CHECK_PTR(ctx, int, max_bsz, seq_lens_encoder);
   WRAPPER_CHECK_PTR(ctx, int, max_bsz, seq_lens_decoder);
   WRAPPER_CHECK_PTR(ctx, bool, 1, has_running_seqs);
-  WRAPPER_CHECK_PTR(ctx, int, max_bsz, mask_rollback);
   WRAPPER_CHECK_PTR(ctx, int64_t, max_bsz * max_step_tokens, step_input_ids);
-  // WRAPPER_CHECK_PTR(ctx, int, 0, adaptive_step_input_len); // Temporarily
-  // unused
   WRAPPER_CHECK_PTR(ctx, int64_t, max_bsz * max_step_tokens, step_output_ids);
   WRAPPER_CHECK_PTR(ctx, int, max_bsz, step_output_len);
   WRAPPER_CHECK_PTR(ctx, bool, max_bsz, stop_flags);
@@ -323,9 +271,7 @@ int unified_update_model_status(api::Context *ctx,
                        seq_lens_encoder,
                        seq_lens_decoder,
                        has_running_seqs,
-                       mask_rollback,
                        step_input_ids,
-                       adaptive_step_input_len,
                        step_output_ids,
                        step_output_len,
                        stop_flags,
@@ -340,18 +286,14 @@ int unified_update_model_status(api::Context *ctx,
                        max_bsz,
                        max_step_tokens,
                        max_model_len,
-                       num_end_tokens,
-                       is_naive_mode,
-                       prefill_one_step_stop);
+                       num_end_tokens);
   }
   if (ctx->dev().type() == api::kXPU3) {
     return xpu3_wrapper(ctx,
                         seq_lens_encoder,
                         seq_lens_decoder,
                         has_running_seqs,
-                        mask_rollback,
                         step_input_ids,
-                        adaptive_step_input_len,
                         step_output_ids,
                         step_output_len,
                         stop_flags,
@@ -366,9 +308,7 @@ int unified_update_model_status(api::Context *ctx,
                         max_bsz,
                         max_step_tokens,
                         max_model_len,
-                        num_end_tokens,
-                        is_naive_mode,
-                        prefill_one_step_stop);
+                        num_end_tokens);
   }
   WRAPPER_UNIMPLEMENTED(ctx);
 }

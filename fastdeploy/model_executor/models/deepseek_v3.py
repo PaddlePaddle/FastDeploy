@@ -1258,6 +1258,11 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         for loaded_weight_name, loaded_weight in weights_iterator:
             logger.debug(f"Loading weight: {loaded_weight_name}")
             loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
+
+            # special case!
+            if "correction_bias" in loaded_weight_name:
+                loaded_weight.reshape_([1, loaded_weight.numel().item()])
+
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue

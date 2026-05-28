@@ -497,16 +497,10 @@ class MTPProposer(Proposer):
 
                 input_ids = request.prompt_token_ids + request.output_token_ids
 
-                self.model_inputs["input_ids_len"][idx] = length - 1
                 async_set_value(self.model_inputs["pre_ids"][idx : idx + 1], -1)
                 self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs["input_ids"][
                     idx : idx + 1, 1:length
                 ]
-                # TODO: use token_all_ids replace with input_ids_cpu
-                if getattr(self, "hybrid_mode", False) and "input_ids_cpu" in self.model_inputs:
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = self.target_model_inputs[
-                        "input_ids"
-                    ][idx : idx + 1, 1:length].cpu()
                 encoder_block_num = len(request.block_tables)
                 async_set_value(self.model_inputs["encoder_block_lens"][idx : idx + 1], encoder_block_num)
                 async_set_value(self.model_inputs["block_tables"][idx : idx + 1, :], -1)
@@ -594,7 +588,6 @@ class MTPProposer(Proposer):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
-            self.model_inputs.input_ids_len[idx] = length - 1
 
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
@@ -602,9 +595,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs[
                         "input_ids"
                     ][idx : idx + 1, 1:length]
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = np.array(
-                        request.prompt_token_ids
-                    )[1:]
                 self.model_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 prefill_token_num = self.max_draft_token_num + 1
                 self.model_inputs["draft_tokens"][idx : idx + 1, 0:1] = paddle.to_tensor(
@@ -633,9 +623,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs[
                         "input_ids"
                     ][idx : idx + 1, 1:length]
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = np.array(
-                        request.prompt_token_ids
-                    )[1:]
                 self.model_inputs["pre_ids"][idx : idx + 1] = -1
                 self.model_inputs["step_idx"][idx : idx + 1] = 0
                 if self.cache_config.enable_chunked_prefill:
