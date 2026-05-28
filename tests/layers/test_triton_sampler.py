@@ -121,6 +121,7 @@ def triton_mode(monkeypatch):
     import fastdeploy.envs as envs
 
     monkeypatch.setattr(envs, "FD_SAMPLING_CLASS", "triton")
+    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.FD_SAMPLING_CLASS", "triton")
 
 
 def _create_metadata(batch_size=1, min_seq_len=1, max_seq_len=3, max_num_logprobs=None, **overrides):
