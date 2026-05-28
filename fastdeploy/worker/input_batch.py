@@ -110,7 +110,7 @@ class InputBatch:
 
         # NOTE (changwenbin):Supports neox_rotary_style.
         rotary_percent = getattr(self.model_config, "rotary_percent", 1)
-        self.rotary_dim = int(rotary_percent * self.model_config.hidden_dim)
+        self.rotary_dim = int(rotary_percent * self.model_config.head_dim)
 
     def init_share_inputs(self):
         max_num_seqs = self.scheduler_config.max_num_seqs
