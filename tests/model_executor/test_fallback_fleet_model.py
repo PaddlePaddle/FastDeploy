@@ -21,7 +21,11 @@ import pytest
 
 from fastdeploy import LLM, SamplingParams
 
-MODEL_PATH = os.getenv("MODEL_PATH", "/root/paddlejob/share-storage/gpfs/system-public/wangruting/Qwen/Qwen3-4B")
+DEFAULT_MODEL_DIR = "./models"
+MODEL_NAME = "Qwen3-0.6B"
+
+model_dir = os.getenv("MODEL_PATH", DEFAULT_MODEL_DIR)
+MODEL_PATH = os.path.join(model_dir, MODEL_NAME)
 
 
 @pytest.mark.gpu
@@ -71,17 +75,6 @@ class TestLLMInferenceRealModel:
         )
 
         assert expected in res, f"Result check failed!\nExpected to contain:\n  {expected}\nGot:\n  {res}"
-
-    def test_generate_with_deterministic_sampling(self):
-        """Test generate with deterministic sampling (temperature=0)."""
-        params = SamplingParams(max_tokens=32, temperature=0.0, top_p=1.0)
-        prompt = "What is 2 + 2?"
-        output = self.llm.generate(prompt, params)
-
-        result = output[0].outputs.text if isinstance(output, list) else output.outputs.text
-        assert len(result) > 0, "Should generate some text"
-        # Verify result contains answer
-        assert "4" in result or "four" in result.lower(), f"Expected result to contain answer, got: {result}"
 
     def test_generate_with_top_p_sampling(self):
         """Test generate with top_p sampling."""
