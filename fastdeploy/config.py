@@ -170,7 +170,7 @@ class ErnieArchitectures:
 
 
 PRETRAINED_INIT_CONFIGURATION = {
-    "top_p": 0.95,
+    "top_p": 1.0,
     "temperature": 1.0,
     "rope_theta": 10000.0,
     "penalty_score": 1.0,
