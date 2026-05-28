@@ -108,6 +108,10 @@ class InputBatch:
         else:
             self.max_chunk_tokens = self.fd_config.get_max_chunk_tokens(self.model_config.mm_max_tokens_per_item)
 
+        # NOTE (changwenbin):Supports neox_rotary_style.
+        rotary_percent = getattr(self.model_config, "rotary_percent", 1)
+        self.rotary_dim = int(rotary_percent * self.model_config.head_dim)
+
     def init_share_inputs(self):
         max_num_seqs = self.scheduler_config.max_num_seqs
 
@@ -237,7 +241,7 @@ class InputBatch:
         # Initialize rotary position embedding
         if not self.enable_mm:
             self.rope_emb = get_rope(
-                rotary_dim=self.model_config.head_dim,
+                rotary_dim=self.rotary_dim,
                 position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
@@ -717,7 +721,7 @@ class InputBatch:
             else:
                 # Reset non-multimodal rope_emb
                 self.rope_emb = get_rope(
-                    rotary_dim=self.model_config.head_dim,
+                    rotary_dim=self.rotary_dim,
                     position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
                     base=self.model_config.rope_theta,
                     model_config=self.model_config,
@@ -760,6 +764,10 @@ class ProposerInputBatch(InputBatch):
         self.cache_config: CacheConfig = fd_config.cache_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
         self.enable_pd_reorder: bool = False
+
+        # NOTE (changwenbin):Supports neox_rotary_style.
+        rotary_percent = getattr(self.model_config, "rotary_percent", 1)
+        self.rotary_dim = int(rotary_percent * self.model_config.head_dim)
 
     def init_share_inputs(self):
         # share with targe model
@@ -817,7 +825,7 @@ class ProposerInputBatch(InputBatch):
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
 
         self.rope_emb = get_rope(
-            rotary_dim=self.model_config.head_dim,
+            rotary_dim=self.rotary_dim,
             position_ids=tmp_position_ids,
             base=self.model_config.rope_theta,
             model_config=self.model_config,
@@ -1041,7 +1049,7 @@ class ProposerInputBatch(InputBatch):
             # Reset rope embedding by recreating with default position_ids
             tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
             self.rope_emb = get_rope(
-                rotary_dim=self.model_config.head_dim,
+                rotary_dim=self.rotary_dim,
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
