@@ -16,7 +16,7 @@ if [ "$1" == "stable" ]; then
     version_xtdk="3.4.0.1"
 else
     version_xvllm="latest"
-    version_xtdk="3.6.2.1"
+    version_xtdk="latest"
 fi
 
 (

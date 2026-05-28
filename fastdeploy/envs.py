@@ -63,8 +63,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_ZMQ_SNDHWM": lambda: os.getenv("FD_ZMQ_SNDHWM", 0),
     # cache kv quant params directory
     "FD_CACHE_PARAMS": lambda: os.getenv("FD_CACHE_PARAMS", "none"),
-    # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN"
-    # and "MLA_ATTN" can be set currently.
+    # Set attention backend. "NATIVE_ATTN", "APPEND_ATTN", "DECODE_UNIFIED_ATTN",
+    # "FLASH_ATTN" and "MLA_ATTN" can be set currently.
     "FD_ATTENTION_BACKEND": lambda: os.getenv("FD_ATTENTION_BACKEND", "APPEND_ATTN"),
     # Set sampling class. "base", "base_non_truncated", "air", "rejection" and "triton" can be set currently.
     "FD_SAMPLING_CLASS": lambda: os.getenv("FD_SAMPLING_CLASS", "base"),
@@ -244,6 +244,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_SPLIT_KV_SIZE": lambda: _validate_split_kv_size(
         int(os.getenv("FD_DETERMINISTIC_SPLIT_KV_SIZE", "16"))
     ),
+    # Whether to use unified attention kernel in mix
+    "USE_DECODE_UNIFIED_ATTENTION": lambda: bool(int(os.getenv("USE_DECODE_UNIFIED_ATTENTION", "0"))),
     # Enable determinism logging (print MD5 hashes and debug info)
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
@@ -276,6 +278,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # train-infer consistency, used in RL
     # Whether to align RoPE and moe gate precision with training
     "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),
+    # Whether to enable FP4 communication quantization for DeepEP prefill dispatch
+    "FD_DISPATCH_USE_FP4": lambda: bool(int(os.getenv("FD_DISPATCH_USE_FP4", "0"))),
     # Whether to use phi FP8 quantization,if 1,use paddle default.
     "FD_USE_PHI_FP8_QUANT": lambda: bool(int(os.getenv("FD_USE_PHI_FP8_QUANT", "1"))),
     # Enables the Paddle/phi combined TopK operator only when topk_method == noaux_tc,
@@ -294,6 +298,10 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # When set to 1, print which op / shape enters the block-wise CUDA Graph
     # during the capture phase. Defaults to 0 (silent).
     "FD_BLOCK_WISE_DEBUG": lambda: bool(int(os.getenv("FD_BLOCK_WISE_DEBUG", "0"))),
+    # Default label values for Prometheus metrics, specified as a JSON dict string.
+    # When set to a valid JSON dict, metric labels are automatically enabled.
+    # Example: '{"model_id":"my_model"}' adds model_id label to all metrics.
+    "FD_DEFAULT_METRIC_LABEL_VALUES": lambda: os.getenv("FD_DEFAULT_METRIC_LABEL_VALUES", "{}"),
 }
 
 

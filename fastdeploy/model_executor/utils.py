@@ -177,6 +177,16 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
         if fd_config.quant_config and not fd_config.quant_config.is_checkpoint_bf16:
             # skip for offline quantization
             return
+        # Hybrid mix_quant case: the global quant_config may be bf16-checkpoint
+        # (for dense online quant), but individual sublayers (e.g. MoE with
+        # offline NVFP4) have an offline sub-config. Their per-weight-load
+        # hook would fire before all sibling tensors (weight_scale_2, etc.)
+        # are loaded and crash. Defer those to process_final_after_loading.
+        _sub_qm = getattr(model_sublayer, "quant_method", None)
+        if _sub_qm is not None:
+            _sub_qc = getattr(_sub_qm, "quant_config", None)
+            if _sub_qc is not None and getattr(_sub_qc, "is_checkpoint_bf16", True) is False:
+                return
         if hasattr(model_sublayer, "quant_method"):
             quant_method = getattr(model_sublayer, "quant_method", None)
             unquant_moe_layer = get_moe_method()
@@ -264,7 +274,13 @@ def process_final_after_loading(model, fd_config: FDConfig):
                 unquant_moe_cls = type(unquant_moe_layer)
             is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls
             is_offline_quantized_ckpt = not (fd_config.quant_config and fd_config.quant_config.is_checkpoint_bf16)
-            if is_unquant_cls or is_offline_quantized_ckpt:
+            # Hybrid mix_quant case: individual sublayer's sub-config may be
+            # offline even when global quant_config is bf16-checkpoint. Those
+            # sublayers were skipped by the incremental hook on purpose and
+            # need their final post-load here.
+            _sub_qc = getattr(quant_method, "quant_config", None)
+            sublayer_is_offline = _sub_qc is not None and getattr(_sub_qc, "is_checkpoint_bf16", True) is False
+            if is_unquant_cls or is_offline_quantized_ckpt or sublayer_is_offline:
                 if hasattr(quant_method, "process_weights_after_loading"):
                     quant_method.process_weights_after_loading(sublayer)
                 continue
@@ -341,9 +357,6 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
-        if param.shape != loaded_weight.shape:
-            # for e_score_correction_bias
-            loaded_weight = loaded_weight.reshape(param.shape)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
@@ -553,6 +566,30 @@ def rename_offline_ckpt_suffix_to_fd_suffix(
         return loaded_weight_name
 
     return fn
+
+
+def try_import(modules, name=None, fail_msg=None):
+    """
+    try_import
+    """
+    if not isinstance(modules, (list, tuple)):
+        modules = [modules]
+
+    for m in modules:
+        assert isinstance(m, str), m
+        try:
+            m = importlib.import_module(m)
+        except ImportError:
+            m = None
+
+        if m is not None:
+            if name is None:
+                return m
+            elif hasattr(m, name):
+                return getattr(m, name)
+
+    if fail_msg is not None:
+        logger.warning(fail_msg)
 
 
 def has_flashinfer():

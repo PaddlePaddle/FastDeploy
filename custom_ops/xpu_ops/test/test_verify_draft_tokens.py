@@ -250,6 +250,10 @@ def verify_draft_tokens_ref(
 
     dev_curand_states = [random.Random(0).random() for _ in range(max_step_tokens)]
 
+    # Initialize all slots (aligned with GPU kernel behavior)
+    step_output_ids[:] = -1
+    step_output_len[:] = 0
+
     step_output_ids_flat = step_output_ids.reshape(-1)
     step_input_ids_flat = step_input_ids.reshape(-1)
     candidate_ids_flat = candidate_ids.reshape(-1) if candidate_ids is not None else None
@@ -289,7 +293,10 @@ def verify_draft_tokens_ref(
             if reject_all or seq_lens_encoder[bid] != 0 or reasoning_status[bid] == 1:
                 break
             if accept_all:
-                if ctx.emit_token(i, step_input_ids_now[i + 1]):
+                token = int(step_input_ids_now[i + 1])
+                if is_in_end(token, end_tokens, end_length):
+                    token = 5
+                if ctx.emit_token(i, token):
                     break
                 i += 1
                 continue
