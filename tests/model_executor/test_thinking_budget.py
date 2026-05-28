@@ -803,7 +803,6 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         processor.reasoning_parser = None
         processor.input_max_tokens = None
         processor.max_completion_tokens = None
-        processor.truncate_prompt_tokens = True
         processor.reasoning_max_tokens = None
         processor.response_max_tokens = None
         processor.min_completion_tokens = None
@@ -840,7 +839,6 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         processor.reasoning_parser = None
         processor.input_max_tokens = None
         processor.max_completion_tokens = None
-        processor.truncate_prompt_tokens = True
         processor.reasoning_max_tokens = None
         processor.response_max_tokens = None
         processor.min_completion_tokens = None
@@ -882,7 +880,6 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         processor.pack_outputs = lambda outs: outs
         processor.input_max_tokens = None
         processor.max_completion_tokens = None
-        processor.truncate_prompt_tokens = True
         processor.reasoning_max_tokens = None
         processor.response_max_tokens = None
         processor.min_completion_tokens = None

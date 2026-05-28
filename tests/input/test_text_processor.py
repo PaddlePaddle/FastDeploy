@@ -474,7 +474,7 @@ class TextProcessorTestCase(unittest.TestCase):
 
     def test_process_request_dict_handles_sequences(self):
         request = {
-            "prompt": [1, 2, 3, 4, 5, 6],
+            "prompt": [1, 2, 3, 4],
             "stop": ["stop"],
             "bad_words": ["zz"],
             "temperature": 0,
@@ -521,12 +521,10 @@ class TextProcessorTestCase(unittest.TestCase):
         # empty list is falsy, should not extend prompt_token_ids
         self.assertEqual(processed["prompt_token_ids"], [2])
 
-    def test_process_request_dict_completion_token_ids_truncated(self):
-        # prompt "hi" -> [2], extend [10,11,12] -> [2,10,11,12] (len=4)
-        # max_model_len=3, 4 > 3 triggers truncation: [:3-1] = [:2] -> [2, 10]
+    def test_process_request_dict_completion_token_ids_exceed_max_model_len(self):
         request = {"prompt": "hi", "completion_token_ids": [10, 11, 12], "temperature": 0, "top_p": 0}
-        processed = self.processor.process_request_dict(request, max_model_len=3)
-        self.assertEqual(processed["prompt_token_ids"], [2, 10])
+        with self.assertRaisesRegex(ValueError, "exceeds the configured max_model_len 3"):
+            self.processor.process_request_dict(request, max_model_len=3)
 
     # ------------------------------------------------------------------
     # Server-level length control: max_completion_tokens

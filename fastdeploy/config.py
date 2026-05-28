@@ -1895,7 +1895,6 @@ class ServingLimitsConfig:
         self.response_max_tokens = None
         self.min_completion_tokens = None
         self.input_max_tokens = None
-        self.truncate_prompt_tokens = True
 
         for key, value in args.items():
             if hasattr(self, key) and value != "None":

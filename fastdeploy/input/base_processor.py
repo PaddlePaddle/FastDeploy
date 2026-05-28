@@ -116,7 +116,6 @@ class BaseTextProcessor(ABC):
         self.response_max_tokens = None
         self.min_completion_tokens = None
         self.input_max_tokens = None
-        self.truncate_prompt_tokens = True
 
     def set_server_defaults(self, serving_limits_config):
         """Set server-level default values from serving limits config.
@@ -131,7 +130,6 @@ class BaseTextProcessor(ABC):
         self.response_max_tokens = serving_limits_config.response_max_tokens
         self.min_completion_tokens = serving_limits_config.min_completion_tokens
         self.input_max_tokens = serving_limits_config.input_max_tokens
-        self.truncate_prompt_tokens = serving_limits_config.truncate_prompt_tokens
 
     # ------------------------------------------------------------------
     # Abstract interface
@@ -461,21 +459,17 @@ class BaseTextProcessor(ABC):
         if request.get("completion_token_ids"):
             request["prompt_token_ids"].extend(request["completion_token_ids"])
 
-        # Reject requests exceeding input_max_tokens (before truncation)
+        # Reject requests exceeding input_max_tokens
         if self.input_max_tokens is not None and len(request["prompt_token_ids"]) > self.input_max_tokens:
             raise ValueError(
                 f"Input token length {len(request['prompt_token_ids'])} exceeds the configured input_max_tokens limit {self.input_max_tokens}"
             )
 
-        # truncate prompts that exceed the length limit
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            if self.truncate_prompt_tokens:
-                request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
-            else:
-                raise ValueError(
-                    f"Input token length {len(request['prompt_token_ids'])} exceeds "
-                    f"the configured max_model_len {max_model_len}"
-                )
+            raise ValueError(
+                f"Input token length {len(request['prompt_token_ids'])} exceeds "
+                f"the configured max_model_len {max_model_len}"
+            )
 
         logits_processors_args = self._update_thinking_prompt_state(
             request["prompt_token_ids"], request.get("logits_processors_args") or {}

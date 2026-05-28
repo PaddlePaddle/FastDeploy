@@ -61,7 +61,6 @@ def _make_processor(model_type, **overrides):
     proc.tool_parser_dict = {}
     proc.input_max_tokens = None
     proc.max_completion_tokens = None
-    proc.truncate_prompt_tokens = True
     proc.reasoning_max_tokens = None
     proc.response_max_tokens = None
     proc.min_completion_tokens = None
@@ -753,8 +752,8 @@ class TestProcessRequestDict(unittest.TestCase):
         self.assertLessEqual(result["max_tokens"], 10)
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
-    def test_prompt_truncation(self, mock_stop):
-        """Prompt exceeding max_model_len is truncated."""
+    def test_prompt_exceeding_max_model_len(self, mock_stop):
+        """Prompt exceeding max_model_len is rejected."""
         proc = _make_processor(QWEN_VL)
         long_ids = list(range(200))
         outputs = {
@@ -768,9 +767,8 @@ class TestProcessRequestDict(unittest.TestCase):
         proc.text2ids = MagicMock(return_value=outputs)
 
         request = {"request_id": "test9", "prompt": "hello " * 100}
-        result = proc.process_request_dict(request, max_model_len=50)
-
-        self.assertLessEqual(len(result["prompt_token_ids"]), 49)
+        with self.assertRaisesRegex(ValueError, "exceeds the configured max_model_len 50"):
+            proc.process_request_dict(request, max_model_len=50)
 
     @patch("fastdeploy.input.multimodal_processor.process_stop_token_ids")
     def test_max_tokens_default(self, mock_stop):

@@ -69,7 +69,6 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
             self.multi_modal_processor._process_post_tokens = lambda request, outputs: None
             self.multi_modal_processor.input_max_tokens = None
             self.multi_modal_processor.max_completion_tokens = None
-            self.multi_modal_processor.truncate_prompt_tokens = True
             self.multi_modal_processor.reasoning_max_tokens = None
             self.multi_modal_processor.response_max_tokens = None
             self.multi_modal_processor.min_completion_tokens = None

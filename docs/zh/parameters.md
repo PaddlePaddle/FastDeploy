@@ -18,7 +18,6 @@
 | ```response_max_tokens```          | `int`       | 服务级回复token数硬上限。请求中的response_max_tokens会被截断至此值。默认：None（不限制） |
 | ```min_completion_tokens```        | `int`       | 服务级最小生成长度下限。实际min_tokens = max(服务值, 请求值)，请求不能低于此下限。默认：None（不限制） |
 | ```input_max_tokens```             | `int`       | 服务级输入token数上限。超过此值的请求将被拒绝。默认：None（不限制，受max_model_len约束） |
-| ```truncate_prompt_tokens```       | `bool`      | 是否截断超过max_model_len的prompt。为True（默认）时静默截断，为False时抛出错误。默认：True |
 | ```tensor_parallel_size```         | `int`       | 模型默认张量并行数，默认1 |
 | ```data_parallel_size```           | `int`       | 模型默认数据并行数，默认1 |
 | ```block_size```                   | `int`       | KVCache管理粒度(Token数)，推荐默认值64 |
