@@ -329,22 +329,6 @@ class MTPProposerXPU(MTPProposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.target_model_inputs["stop_flags"],
         )
-        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            mtp_step_paddle(
-                self.target_model_inputs["stop_flags"],
-                self.model_inputs["stop_flags"],
-                self.model_inputs["batch_drop"],
-                self.model_inputs["seq_lens_this_time"],
-                self.model_inputs["seq_lens_encoder"],
-                self.model_inputs["seq_lens_decoder"],
-                self.model_inputs["block_tables"],
-                self.model_inputs["encoder_block_lens"],
-                self.model_inputs["used_list_len"],
-                self.model_inputs["free_list"],
-                self.model_inputs["free_list_len"],
-                self.cache_config.block_size,
-                self.max_draft_token_num,
-            )
 
     def padding_cudagraph_inputs(self) -> None:
         """
