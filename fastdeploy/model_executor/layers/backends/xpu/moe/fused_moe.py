@@ -277,6 +277,26 @@ class XPUMoEMethod(MoEMethodBase):
                         default_initializer=paddle.nn.initializer.Constant(0),
                     ),
                 )
+                # Set weight loader for up_gate_proj_weight and down_proj_weight and their scales in W4A8 case.
+                for weight_scale_name in self.added_scale_attrs:
+                    set_weight_attrs(
+                        getattr(layer, weight_scale_name),
+                        {
+                            "weight_loader": extra_weight_attrs.get(
+                                "weight_loader", default_weight_loader(layer.fd_config)
+                            ),
+                        },
+                    )
+
+                for weight_name in self.added_weight_attrs:
+                    set_weight_attrs(
+                        getattr(layer, weight_name),
+                        {
+                            "weight_loader": extra_weight_attrs.get(
+                                "weight_loader", default_weight_loader(layer.fd_config)
+                            ),
+                        },
+                    )
 
             if self.moe_quant_type in ["w8a8", "w4a8"]:
                 for in_scale_name in self.added_in_scale_attrs:
@@ -288,6 +308,17 @@ class XPUMoEMethod(MoEMethodBase):
                             dtype=self.scale_dtype,
                             default_initializer=paddle.nn.initializer.Constant(0),
                         ),
+                    )
+                # Set weight_loader for offline in_scale
+                for in_scale_name in self.added_in_scale_attrs:
+                    set_weight_attrs(
+                        getattr(layer, in_scale_name),
+                        {
+                            "SHARD_ID_TO_SHARDED_DIM": {"gate": None, "up": None, "down": None},
+                            "weight_loader": extra_weight_attrs.get(
+                                "weight_loader", default_weight_loader(layer.fd_config)
+                            ),
+                        },
                     )
 
     def process_loaded_weights(self, layer: nn.Layer, state_dict):
