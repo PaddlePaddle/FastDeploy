@@ -74,6 +74,7 @@ class TokenProcessor:
         self.cached_generated_tokens = cached_generated_tokens
         self.resource_manager = None
         self.scheduler_metrics_logger = None
+        self._benchmark_logger = None
         self.engine_worker_queue = engine_worker_queue
         self.tokens_counter = Counter()
         self.split_connector = split_connector
@@ -173,6 +174,9 @@ class TokenProcessor:
 
     def set_scheduler_metrics_logger(self, scheduler_metrics_logger):
         self.scheduler_metrics_logger = scheduler_metrics_logger
+
+    def set_benchmark_logger(self, benchmark_logger):
+        self._benchmark_logger = benchmark_logger
 
     def _is_decode_stage(self, task):
         if task is None:
@@ -283,7 +287,7 @@ class TokenProcessor:
                     preempted_count=getattr(task.metrics, "preempted_count", 0),
                 )
 
-                main_process_metrics.request_token_ratio.observe(token_ratio)
+                main_process_metrics.obs_value("request_token_ratio", token_ratio)
                 llm_logger.info(self.resource_manager.info())
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
@@ -626,13 +630,13 @@ class TokenProcessor:
         num_blocks_used_by_tasks = sum(
             [len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list]
         )
-        main_process_metrics.available_gpu_block_num.set(
-            self.resource_manager.total_block_number() - num_blocks_used_by_tasks
+        main_process_metrics.set_value(
+            "available_gpu_block_num", self.resource_manager.total_block_number() - num_blocks_used_by_tasks
         )
-        main_process_metrics.batch_size.set(
-            self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
+        main_process_metrics.set_value(
+            "batch_size", self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
         )
-        main_process_metrics.available_batch_size.set(self.resource_manager.available_batch())
+        main_process_metrics.set_value("available_batch_size", self.resource_manager.available_batch())
 
         if task_id in self.tokens_counter:
             del self.tokens_counter[task_id]
@@ -735,12 +739,15 @@ class TokenProcessor:
                 metrics=None,
             )
 
-            token_ids = tokens[i][:, 0].tolist()[: accept_num[i]]
+            tokens_i = tokens[i].tolist()
+            scores_i = scores[i].tolist()
+            ranks_i = ranks[i].tolist()
+            token_ids = [row[0] for row in tokens_i[: accept_num[i]]]
             for batch_token_index in range(len(token_ids)):
-                result.outputs.logprob = float(scores[i, batch_token_index, 0])
-                topk_token_ids = tokens[i, batch_token_index, :].tolist()
-                topk_logprobs = scores[i, batch_token_index, :].tolist()
-                sampled_rank = ranks[i, batch_token_index].item()
+                result.outputs.logprob = scores_i[batch_token_index][0]
+                topk_token_ids = tokens_i[batch_token_index]
+                topk_logprobs = scores_i[batch_token_index]
+                sampled_rank = ranks_i[batch_token_index]
 
                 if result.outputs.draft_top_logprobs is None:
                     result.outputs.draft_top_logprobs = LogprobsLists(
@@ -767,16 +774,19 @@ class TokenProcessor:
         mtype = 3
         if self.cfg.speculative_config.method:
             if self.use_logprobs:
-                mtype = int(self.output_tokens[1, 0].item())
+                # meta[1] packs message_flag (low 8 bits) and actual_topk (high 24 bits).
+                packed_meta1 = int(self.output_tokens[1, 0].item())
+                mtype = packed_meta1 & 0xFF
+                actual_topk = packed_meta1 >> 8
                 batch = self.output_tokens[2, 0]
                 accept_num = [int(num[0]) for num in self.output_tokens[3 : batch + 3]]
                 tokens = tokens[3 + MAX_BSZ : 3 + MAX_BSZ + batch * MAX_DRAFT_TOKENS * (K + 1)].reshape(
                     [batch, MAX_DRAFT_TOKENS, K + 1]
-                )
+                )[:, :, :actual_topk]
                 scores = (
                     self.output_scores[: batch * MAX_DRAFT_TOKENS * (K + 1)]
                     .numpy()
-                    .reshape([batch, MAX_DRAFT_TOKENS, K + 1])
+                    .reshape([batch, MAX_DRAFT_TOKENS, K + 1])[:, :, :actual_topk]
                 )
                 ranks = self.output_ranks[: batch * MAX_DRAFT_TOKENS].numpy().reshape([batch, MAX_DRAFT_TOKENS])
 
@@ -785,6 +795,10 @@ class TokenProcessor:
                     batch_result = self._process_batch_draft_tokens(mtype, batch, accept_num, tokens, scores, ranks)
                     self.postprocess(batch_result, mtype)
                     return
+                # Pre-convert full arrays to Python lists once for MTP target token path.
+                tokens_lists = tokens.tolist()
+                scores_lists = scores.tolist()
+                ranks_list = ranks.tolist()
             else:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
@@ -852,7 +866,7 @@ class TokenProcessor:
                         )
                     token_ids = [RECOVERY_STOP_SIGNAL]
                 elif self.use_logprobs:
-                    token_ids = tokens[i][:, 0].tolist()[: accept_num[i]]
+                    token_ids = [row[0] for row in tokens_lists[i][: accept_num[i]]]
                 else:
                     token_ids = tokens[
                         2
@@ -971,7 +985,9 @@ class TokenProcessor:
                 result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
                 result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
-            if is_prefill and len(token_ids) > 1:
+            if is_prefill and (len(token_ids) > 1 or self.cfg.speculative_config.method == SpecMethod.NAIVE):
+                # NAIVE only generates 1 token in prefill, but decode node
+                # needs it as draft_token_ids to initialize the first decode step
                 result.outputs.draft_token_ids = copy.deepcopy(token_ids)
 
             for batch_token_index in range(len(token_ids)):
@@ -984,10 +1000,10 @@ class TokenProcessor:
                     task.output_token_ids.append(token_id)
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
-                            result.outputs.logprob = float(scores[i, batch_token_index, 0])
-                            topk_token_ids = tokens[i, batch_token_index, :].tolist()
-                            topk_logprobs = scores[i, batch_token_index, :].tolist()
-                            sampled_rank = ranks[i, batch_token_index].item()
+                            result.outputs.logprob = scores_lists[i][batch_token_index][0]
+                            topk_token_ids = tokens_lists[i][batch_token_index]
+                            topk_logprobs = scores_lists[i][batch_token_index]
+                            sampled_rank = ranks_list[i][batch_token_index]
                         else:
                             # Use pre-converted lists (batch .tolist() done before the loop).
                             result.outputs.logprob = scores_lists[i][0]
@@ -1058,7 +1074,7 @@ class TokenProcessor:
                         preempted_count=getattr(task.metrics, "preempted_count", 0),
                     )
 
-                    main_process_metrics.request_token_ratio.observe(token_ratio)
+                    main_process_metrics.obs_value("request_token_ratio", token_ratio)
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status(result)
                     self._record_completion_metrics(task, current_time)
@@ -1096,20 +1112,26 @@ class TokenProcessor:
         """Record all metrics for a task"""
         if hasattr(task, "last_token_time") and task.last_token_time is not None:
             token_gen_time = current_time - task.last_token_time
-            main_process_metrics.time_per_output_token.observe(token_gen_time)
+            main_process_metrics.obs_value("time_per_output_token", token_gen_time)
+            if self._benchmark_logger:
+                if not hasattr(task, "_itl_samples"):
+                    task._itl_samples = []
+                task._itl_samples.append(token_gen_time)
         task.last_token_time = current_time
 
         # Record generation metrics
-        main_process_metrics.generation_tokens_total.inc(len(token_ids))
+        main_process_metrics.inc_value("generation_tokens_total", len(token_ids))
 
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
         metrics = task.metrics
         trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
         trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
-        main_process_metrics.time_to_first_token.observe(current_time - metrics.arrival_time)
-        main_process_metrics.request_queue_time.observe(metrics.inference_start_time - metrics.preprocess_end_time)
-        main_process_metrics.request_prefill_time.observe(current_time - metrics.inference_start_time)
+        main_process_metrics.obs_value("time_to_first_token", current_time - metrics.arrival_time)
+        main_process_metrics.obs_value(
+            "request_queue_time", metrics.inference_start_time - metrics.preprocess_end_time
+        )
+        main_process_metrics.obs_value("request_prefill_time", current_time - metrics.inference_start_time)
 
     def _record_completion_metrics(self, task, current_time):
         """Record metrics when request completes"""
@@ -1119,7 +1141,7 @@ class TokenProcessor:
         if role in ("mixed", "decode"):
             if metrics.engine_recv_first_token_time:
                 decode_time = current_time - metrics.engine_recv_first_token_time
-                main_process_metrics.request_decode_time.observe(decode_time)
+                main_process_metrics.obs_value("request_decode_time", decode_time)
             trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
 
         if role == "prefill":
@@ -1128,9 +1150,28 @@ class TokenProcessor:
             trace_print(LoggingEventName.DECODE_INFERENCE_END, task.request_id, getattr(task, "user", ""))
 
         trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
-        main_process_metrics.request_success_total.inc()
-        main_process_metrics.request_inference_time.observe(current_time - metrics.inference_start_time)
-        main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
+        main_process_metrics.inc_value("request_success_total")
+        main_process_metrics.obs_value("request_inference_time", current_time - metrics.inference_start_time)
+        main_process_metrics.obs_value("request_generation_tokens", self.tokens_counter[task.request_id])
+
+        if self._benchmark_logger:
+            from fastdeploy.metrics.benchmark_metrics_logger import (
+                CompletedRequestRecord,
+            )
+
+            record = CompletedRequestRecord(
+                request_id=task.request_id,
+                completion_time=current_time,
+                arrival_time=metrics.arrival_time or 0.0,
+                inference_start_time=metrics.inference_start_time or 0.0,
+                first_token_time=metrics.engine_recv_first_token_time or 0.0,
+                last_token_time=metrics.engine_recv_latest_token_time or current_time,
+                input_len=getattr(task, "prompt_token_ids_len", 0) or 0,
+                output_len=self.tokens_counter[task.request_id],
+                num_cached_tokens=getattr(task, "num_cached_tokens", 0) or 0,
+                itl_samples=getattr(task, "_itl_samples", []),
+            )
+            self._benchmark_logger.on_request_completed(record)
 
     def _record_speculative_decoding_metrics(self, accept_num):
         """Record metrics of speculative decoding"""
@@ -1146,12 +1187,12 @@ class TokenProcessor:
         if self.num_emitted_tokens == 0:
             return
 
-        main_process_metrics.spec_decode_num_accepted_tokens_total.set(self.num_accepted_tokens)
-        main_process_metrics.spec_decode_num_emitted_tokens_total.set(self.num_emitted_tokens)
+        main_process_metrics.set_value("spec_decode_num_accepted_tokens_total", self.num_accepted_tokens)
+        main_process_metrics.set_value("spec_decode_num_emitted_tokens_total", self.num_emitted_tokens)
 
         if self.cfg.speculative_config.method == SpecMethod.NGRAM:
-            main_process_metrics.spec_decode_draft_acceptance_rate.set(
-                self.num_accepted_tokens / self.num_emitted_tokens
+            main_process_metrics.set_value(
+                "spec_decode_draft_acceptance_rate", self.num_accepted_tokens / self.num_emitted_tokens
             )
 
         if self.cfg.speculative_config.method == SpecMethod.MTP:
@@ -1162,19 +1203,23 @@ class TokenProcessor:
                 self.cfg.speculative_config.num_speculative_tokens + 1
             )
 
-            main_process_metrics.spec_decode_draft_acceptance_rate.set(
-                self.num_accepted_tokens / self.num_draft_tokens
+            main_process_metrics.set_value(
+                "spec_decode_draft_acceptance_rate", self.num_accepted_tokens / self.num_draft_tokens
             )
-            main_process_metrics.spec_decode_efficiency.set(self.num_emitted_tokens / self.max_num_emitted_tokens)
-            main_process_metrics.spec_decode_num_draft_tokens_total.inc(num_draft_tokens)
+            main_process_metrics.set_value(
+                "spec_decode_efficiency", self.num_emitted_tokens / self.max_num_emitted_tokens
+            )
+            main_process_metrics.inc_value("spec_decode_num_draft_tokens_total", num_draft_tokens)
 
             for i in range(1, self.cfg.speculative_config.num_speculative_tokens + 1):
                 if self.accept_token_num_per_head[i - 1] != 0:
                     single_head_acceptance_rate = (
                         self.accept_token_num_per_head[i] / self.accept_token_num_per_head[i - 1]
                     )
-                main_process_metrics.spec_decode_draft_single_head_acceptance_rate[i - 1].set(
-                    single_head_acceptance_rate
+                main_process_metrics.set_value(
+                    "spec_decode_draft_single_head_acceptance_rate",
+                    single_head_acceptance_rate,
+                    labelvalues={"head": str(i - 1)},
                 )
 
     def _record_speculative_decoding_accept_num_per_request(self, req_id, accept_num):

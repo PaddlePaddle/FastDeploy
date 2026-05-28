@@ -17,7 +17,7 @@ from .fused_moe_cutlass_backend import (
     CutlassW4AFP8MoEMethod,
     CutlassWeightOnlyMoEMethod,
 )
-from .fused_moe_triton_backend import TritonWeightOnlyMoEMethod
+from .fused_moe_triton_backend import TritonMoEMethod, TritonWeightOnlyMoEMethod
 from .moe import FusedMoE
 
 __all__ = [
@@ -26,4 +26,5 @@ __all__ = [
     CutlassW4AFP8MoEMethod,
     FusedMoE,
     TritonWeightOnlyMoEMethod,
+    TritonMoEMethod,
 ]

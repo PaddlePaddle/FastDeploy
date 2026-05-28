@@ -138,7 +138,9 @@ __global__ void ngram_match_gather_kernel(
     int32_t *seq_lens_this_time,
     int64_t draft_tokens_stride,
     int64_t max_batch_size,
-    int threshold) {
+    int threshold,
+    int max_draft_tokens_param,
+    bool pad_to_max) {
   typedef cub::BlockScan<int, NGRAM_GATHER_THREADS> BlockScanInt;
   __shared__ typename BlockScanInt::TempStorage temp_storage1;
   __shared__ typename BlockScanInt::TempStorage temp_storage2;
@@ -203,9 +205,8 @@ __global__ void ngram_match_gather_kernel(
       actual = min(tentative, budget);
     }
 
-    seq_lens_this_time[tid] = actual;
-
-    // Copy draft tokens (slots 1..actual-1) from scratch to output
+    // Copy draft tokens (slots 1..actual-1) from scratch to output FIRST
+    // (so subsequent padding doesn't overwrite real ngram hits)
     if (actual > 1) {
       int64_t *dst = draft_tokens + tid * draft_tokens_stride;
       const int64_t *src = draft_tokens_copy + tid * draft_tokens_stride;
@@ -213,6 +214,31 @@ __global__ void ngram_match_gather_kernel(
         dst[k] = src[k];
       }
     }
+
+    // === Pad seq_lens_this_time to num_speculative_tokens+1 for cudagraph
+    // stability === Variable seq_lens_this_time (range [1,
+    // num_speculative_tokens+1]) clashes with cudagraph's fixed launch params
+    // captured at warm-up time; downstream kernels read past valid cu_seqlens /
+    // slot_mapping when replay sees a smaller slt, leading to OOB / CUDA 700.
+    // When pad_to_max=true (cudagraph enabled), pad missing positions with a
+    // placeholder so slt is fixed at num_speculative_tokens+1. pad_to_max=false
+    // skips the padding cost when cudagraph is off.
+    if (pad_to_max) {
+      int target_slt = max_draft_tokens_param + 1;
+      if (actual < target_slt) {
+        int64_t *dst = draft_tokens + tid * draft_tokens_stride;
+        // Reuse the last valid draft token as placeholder. It is a token the
+        // model could plausibly have produced, so attention math stays
+        // well-defined; rejection happens at the sampler level.
+        int64_t pad_token = (actual > 0) ? dst[actual - 1] : 0;
+        for (int k = actual; k < target_slt; k++) {
+          dst[k] = pad_token;
+        }
+        actual = target_slt;
+      }
+    }
+
+    seq_lens_this_time[tid] = actual;
   }
 }
 
@@ -374,7 +400,8 @@ void NgramMatch(const paddle::Tensor &token_ids_all,
                 const paddle::Tensor &seq_lens_decoder,
                 const paddle::Tensor &max_dec_len,
                 const int max_ngram_size,
-                const int max_draft_tokens) {
+                const int max_draft_tokens,
+                const bool pad_to_max) {
   const int64_t max_model_len = token_ids_all.shape()[1];
 
   auto draft_tokens_shape = draft_tokens.shape();
@@ -448,7 +475,9 @@ void NgramMatch(const paddle::Tensor &token_ids_all,
         const_cast<int32_t *>(seq_lens_this_time.data<int32_t>()),
         draft_tokens_stride,
         max_batch_size,
-        threshold);
+        threshold,
+        max_draft_tokens,
+        pad_to_max);
   } else {
     find_candidate_pred_tokens(
         token_ids_all.data<int64_t>(),
@@ -478,7 +507,7 @@ PD_BUILD_STATIC_OP(ngram_match)
              "seq_lens_encoder",
              "seq_lens_decoder",
              "max_dec_len"})
-    .Attrs({"max_ngram_size: int", "max_draft_tokens: int"})
+    .Attrs({"max_ngram_size: int", "max_draft_tokens: int", "pad_to_max: bool"})
     .Outputs({"draft_tokens_out", "seq_lens_this_time_out"})
     .SetKernelFn(PD_KERNEL(NgramMatch))
     .SetInplaceMap({{"draft_tokens", "draft_tokens_out"},
