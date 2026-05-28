@@ -42,7 +42,7 @@ def check_package_version(package_name, required_version):
 
     Args:
         package_name: Name of the package
-        required_version: Required version string (e.g., "1.1.0.dev20250507")
+        required_version: Required version string (e.g., "1.1.0.dev20260508")
 
     Returns:
         bool: True if package is installed with required version, False otherwise
@@ -103,7 +103,7 @@ def pytest_collection_modifyitems(config, items):
     # Check if dependencies are already installed with correct versions
     # Define required versions
     REQUIRED_PADDLEFLEET_VERSION = "0.3.0.dev20260527"
-    REQUIRED_PADDLEFORMERS_VERSION = "1.1.0.dev20250507"
+    REQUIRED_PADDLEFORMERS_VERSION = "1.1.0.dev20260508"
 
     paddlefleet_ok = check_package_version("paddlefleet", REQUIRED_PADDLEFLEET_VERSION)
     paddleformers_ok = check_package_version("paddleformers", REQUIRED_PADDLEFORMERS_VERSION)
