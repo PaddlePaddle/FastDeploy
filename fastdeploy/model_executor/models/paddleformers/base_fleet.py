@@ -33,7 +33,6 @@ else:
     from paddlefleet.models.gpt.lm_head import GPTLMHead
     from paddlefleet.transformer.layer import FleetLayer
     from paddlefleet.transformer.transformer_config import TransformerConfig
-    from paddleformers.trainer.trainer_utils import set_random_seed
     from paddleformers.transformers import AutoConfig
     from paddleformers.transformers.auto.modeling import AutoModelForCausalLM
     from paddleformers.utils.log import logger
@@ -336,7 +335,6 @@ else:
                 "load_checkpoint_format": "flex_checkpoint",
             }
             # Set random seed before model construction for reproducibility
-            set_random_seed(seed_=42)
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_config.model,
                 **model_load_kwargs,
@@ -374,29 +372,82 @@ else:
             parallel_state internal variables.
             """
             from paddle.distributed import fleet
-            from paddlefleet.parallel_state import get_tensor_model_parallel_group
-            from paddlefleet.training import initialize_fleet
 
             parallel_config = fd_config.parallel_config
 
-            # Only call initialize_fleet when the TP group has not been initialized yet
-            if get_tensor_model_parallel_group is not None and get_tensor_model_parallel_group(False) is None:
-                strategy = fleet.DistributedStrategy()
-                strategy.hybrid_configs = {
-                    "dp_degree": parallel_config.data_parallel_size,
-                    "mp_degree": parallel_config.tensor_parallel_size,
-                    "pp_degree": 1,
-                    "sep_degree": 1,
-                    "ep_degree": parallel_config.expert_parallel_size,
-                }
-                initialize_fleet(strategy)
-                logger.info(
-                    f"Initialized PaddleFleet parallel_state via initialize_fleet "
-                    f"(dp={parallel_config.data_parallel_size}, "
-                    f"mp={parallel_config.tensor_parallel_size}, "
-                    f"ep={parallel_config.expert_parallel_size}, "
-                    f"sp={parallel_config.sequence_parallel})"
-                )
+            strategy = fleet.DistributedStrategy()
+            strategy.hybrid_configs = {
+                "dp_degree": 1,
+                "mp_degree": parallel_config.tensor_parallel_size,
+                "pp_degree": 1,
+                "sep_degree": 1,
+                "sharding_degree": parallel_config.data_parallel_size,
+                "ep_degree": parallel_config.expert_parallel_size,
+                "cp_degree": 1,
+                "moe_sharding_degree": 1,
+                "order": [
+                    "pp",
+                    "moe_sharding",
+                    "ep",
+                    "dp",
+                    "sharding",
+                    "sep",
+                    "cp",
+                    "mp",
+                ],
+            }
+            fleet.init(is_collective=True, strategy=strategy)
+            logger.info(
+                f"Initialized PaddleFleet parallel_state via initialize_fleet "
+                f"(sharddp={parallel_config.data_parallel_size}, "
+                f"mp={parallel_config.tensor_parallel_size}, "
+                f"ep={parallel_config.expert_parallel_size}, "
+                f"sp={parallel_config.sequence_parallel})"
+            )
+
+            import paddle.distributed as dist
+            from paddlefleet import parallel_state
+
+            hcg = fleet.get_hybrid_communicate_group()
+            expected_tp_size = parallel_config.tensor_parallel_size
+
+            # Check if we need to initialize or reinitialize TP group
+            need_init = False
+            if parallel_state._TENSOR_MODEL_PARALLEL_GROUP is None:
+                need_init = True
+                reason = "TP group not initialized"
+            else:
+                # Check if current TP group size matches expected
+                current_tp_group = parallel_state._TENSOR_MODEL_PARALLEL_GROUP
+                current_tp_size = getattr(current_tp_group, "nranks", None)
+                if current_tp_size is None:
+                    current_tp_size = getattr(current_tp_group, "world_size", None)
+                if current_tp_size != expected_tp_size:
+                    need_init = True
+                    reason = f"TP group size mismatch: current={current_tp_size}, expected={expected_tp_size}"
+
+            if need_init:
+                logger.warning(f"{reason}, reinitializing TP group with size={expected_tp_size}")
+                if expected_tp_size == 1:
+                    # Single process TP group - create manually
+                    current_rank = dist.get_rank()
+                    tp_ranks = [current_rank]
+                    default_pg = dist.new_group(ranks=tp_ranks)
+                    parallel_state._TENSOR_MODEL_PARALLEL_GROUP = default_pg
+                    parallel_state._TENSOR_MODEL_PARALLEL_GLOBAL_RANKS = tp_ranks
+                    logger.info(f"Reinitialized TP group with size=1, rank={current_rank}, ranks={tp_ranks}")
+                else:
+                    # Multiple processes - use hcg's mp group
+                    parallel_state.initialize_model_parallel(hcg)
+
+            from paddlefleet.tensor_parallel.random import (
+                model_parallel_cuda_manual_seed,
+            )
+
+            try:
+                model_parallel_cuda_manual_seed(seed=42)
+            except AssertionError:
+                pass
 
         def _sync_config_from_text_config(self) -> None:
             """
@@ -472,6 +523,13 @@ else:
             Returns:
                 hidden_states: [TotalTokens, HiddenDim]
             """
+            # Handle empty batch case (e.g., DP worker with no data in EP mode)
+            if getattr(forward_meta, "is_zero_size", False) or inputs["ids_remove_padding"].shape[0] == 0:
+                # Return zero tensor with correct shape: [0, hidden_size]
+                hidden_size = self.model_config.hidden_size
+                dtype = self.model_config.dtype
+                return paddle.empty([0, hidden_size], dtype=dtype)
+
             ids_remove_padding = inputs["ids_remove_padding"]
             num_tokens = ids_remove_padding.shape[0]
 
