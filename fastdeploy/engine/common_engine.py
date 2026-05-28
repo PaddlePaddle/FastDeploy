@@ -850,8 +850,8 @@ class EngineService:
                 else:
                     continue
 
-                main_process_metrics.num_requests_waiting.dec(len(tasks))
-                main_process_metrics.num_requests_running.inc(len(tasks))
+                main_process_metrics.dec_value("num_requests_waiting", len(tasks))
+                main_process_metrics.inc_value("num_requests_running", len(tasks))
             except Exception as e:
                 err_msg = f"Error happened while insert task to engine: {e}, {traceback.format_exc()!s}."
                 self.llm_logger.error(err_msg)
@@ -1246,7 +1246,7 @@ class EngineService:
                         request = Request.from_dict(data)
 
                         request.metrics.scheduler_recv_req_time = time.time()
-                        main_process_metrics.requests_number.inc()
+                        main_process_metrics.inc_value("requests_number")
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
                             request_id = data["request_id"].split("_")[0]
@@ -1293,7 +1293,7 @@ class EngineService:
                             added_requests.pop(request_id)
 
                     if failed is None:
-                        main_process_metrics.num_requests_waiting.inc(1)
+                        main_process_metrics.inc_value("num_requests_waiting", 1)
                         continue
 
                     self._send_error_response(request_id, failed)

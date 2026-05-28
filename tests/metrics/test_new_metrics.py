@@ -43,11 +43,11 @@ class TestCoverageFix(unittest.TestCase):
         # 调用目标方法
         metrics._update_history_hit_metrics()
 
-        # 断言 Prometheus 指标的 set 方法是否被正确的值调用
-        mock_main_process_metrics.hit_req_rate.set.assert_called_once_with(0.5)  # 10 / 20
-        mock_main_process_metrics.hit_token_rate.set.assert_called_once_with(0.6)  # 600 / 1000
-        mock_main_process_metrics.cpu_hit_token_rate.set.assert_called_once_with(0.25)  # 250 / 1000
-        mock_main_process_metrics.gpu_hit_token_rate.set.assert_called_once_with(0.35)  # 350 / 1000
+        # 断言 Prometheus 指标的 set_value 方法是否被正确的值调用
+        mock_main_process_metrics.set_value.assert_any_call("hit_req_rate", 0.5)  # 10 / 20
+        mock_main_process_metrics.set_value.assert_any_call("hit_token_rate", 0.6)  # 600 / 1000
+        mock_main_process_metrics.set_value.assert_any_call("cpu_hit_token_rate", 0.25)  # 250 / 1000
+        mock_main_process_metrics.set_value.assert_any_call("gpu_hit_token_rate", 0.35)  # 350 / 1000
 
         print("Test for CacheMetrics passed.")
 
@@ -98,7 +98,7 @@ class TestCoverageFix(unittest.TestCase):
         self.processor._recycle_resources(task_id=task_id, index=index, task=mock_task, result=None, is_prefill=False)
 
         # 核心断言：验证 available_batch_size 指标是否被正确设置
-        mock_main_process_metrics.available_batch_size.set.assert_called_once_with(8)
+        mock_main_process_metrics.set_value.assert_any_call("available_batch_size", 8)
 
         print("Test for TokenProcessor passed.")
 

@@ -172,29 +172,41 @@ class _Metric:
 
 class _Metrics:
     def __init__(self):
-        self.spec_decode_num_accepted_tokens_total = _Metric()
-        self.spec_decode_num_emitted_tokens_total = _Metric()
-        self.spec_decode_draft_acceptance_rate = _Metric()
-        self.spec_decode_efficiency = _Metric()
-        self.spec_decode_num_draft_tokens_total = _Metric()
-        self.spec_decode_draft_single_head_acceptance_rate = [_Metric() for _ in range(MAX_DRAFT_TOKENS)]
-        self.time_per_output_token = _Metric()
-        self.generation_tokens_total = _Metric()
-        self.time_to_first_token = _Metric()
-        self.request_queue_time = _Metric()
-        self.request_prefill_time = _Metric()
-        self.request_decode_time = _Metric()
-        self.request_inference_time = _Metric()
-        self.request_generation_tokens = _Metric()
-        self.num_requests_running = _Metric()
-        self.request_success_total = _Metric()
-        self.available_gpu_block_num = _Metric()
-        self.batch_size = _Metric()
-        self.available_batch_size = _Metric()
-        self.request_token_ratio = _Metric()
+        self._metric_store = {}
+
+    def _key(self, name, labelvalues=None):
+        if labelvalues:
+            return (name, frozenset(labelvalues.items()))
+        return (name, None)
+
+    def _get_metric(self, name, labelvalues=None):
+        key = self._key(name, labelvalues)
+        if key not in self._metric_store:
+            self._metric_store[key] = _Metric()
+        return self._metric_store[key]
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return self._get_metric(name)
+
+    def __hasattr__(self, name):
+        return any(k[0] == name for k in self._metric_store)
 
     def _init_speculative_metrics(self, method, num_speculative_tokens):
         return None
+
+    def set_value(self, name, value, labelvalues=None):
+        self._get_metric(name, labelvalues).set(value)
+
+    def inc_value(self, name, value=1, labelvalues=None):
+        self._get_metric(name, labelvalues).inc(value)
+
+    def dec_value(self, name, value=1, labelvalues=None):
+        self._get_metric(name, labelvalues).dec(value)
+
+    def obs_value(self, name, value, labelvalues=None):
+        self._get_metric(name, labelvalues).observe(value)
 
 
 def test_init_allocates_expected_buffers():
@@ -542,7 +554,12 @@ def test_record_speculative_decoding_metrics_tracks_acceptance():
         assert metrics.spec_decode_num_emitted_tokens_total.value == 5
         assert pytest.approx(metrics.spec_decode_draft_acceptance_rate.value) == 0.75
         assert pytest.approx(metrics.spec_decode_efficiency.value) == pytest.approx(5 / 6)
-        assert pytest.approx(metrics.spec_decode_draft_single_head_acceptance_rate[0].value) == 1.5
+        assert (
+            pytest.approx(
+                metrics._get_metric("spec_decode_draft_single_head_acceptance_rate", labelvalues={"head": "0"}).value
+            )
+            == 1.5
+        )
 
 
 def test_recycle_resources_prefill_sends_first_token():
@@ -1099,16 +1116,46 @@ def test_record_speculative_metrics_calls_init_when_missing():
 
     class _MinimalMetrics:
         def __init__(self):
+            self._metric_store = {}
+            self._created_attrs = set()
             self.init_called = False
 
+        def _get_metric(self, name, labelvalues=None):
+            key = (name, frozenset(labelvalues.items()) if labelvalues else None)
+            if key not in self._metric_store:
+                self._metric_store[key] = _Metric()
+            return self._metric_store[key]
+
+        def __getattr__(self, name):
+            if name.startswith("_"):
+                raise AttributeError(name)
+            if name not in self._created_attrs:
+                raise AttributeError(name)
+            return self._get_metric(name)
+
         def _init_speculative_metrics(self, method, num_speculative_tokens):
-            self.spec_decode_num_accepted_tokens_total = _Metric()
-            self.spec_decode_num_emitted_tokens_total = _Metric()
-            self.spec_decode_draft_acceptance_rate = _Metric()
-            self.spec_decode_efficiency = _Metric()
-            self.spec_decode_num_draft_tokens_total = _Metric()
-            self.spec_decode_draft_single_head_acceptance_rate = [_Metric() for _ in range(MAX_DRAFT_TOKENS)]
             self.init_called = True
+            for n in (
+                "spec_decode_num_accepted_tokens_total",
+                "spec_decode_num_emitted_tokens_total",
+                "spec_decode_draft_acceptance_rate",
+                "spec_decode_efficiency",
+                "spec_decode_num_draft_tokens_total",
+                "spec_decode_draft_single_head_acceptance_rate",
+            ):
+                self._created_attrs.add(n)
+
+        def set_value(self, name, value, labelvalues=None):
+            self._get_metric(name, labelvalues).set(value)
+
+        def inc_value(self, name, value=1, labelvalues=None):
+            self._get_metric(name, labelvalues).inc(value)
+
+        def dec_value(self, name, value=1, labelvalues=None):
+            self._get_metric(name, labelvalues).dec(value)
+
+        def obs_value(self, name, value, labelvalues=None):
+            self._get_metric(name, labelvalues).observe(value)
 
     processor.accept_token_num_per_head = [1, 1] + [0] * (MAX_DRAFT_TOKENS - 2)
     processor.num_accepted_tokens = 2

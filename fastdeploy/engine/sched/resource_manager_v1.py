@@ -183,7 +183,7 @@ class ResourceManagerV1(ResourceManager):
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
-        main_process_metrics.max_batch_size.set(max_num_seqs)
+        main_process_metrics.set_value("max_batch_size", max_num_seqs)
 
         self.using_extend_tables_req_id = set()
         self.reuse_block_num_map = dict()
@@ -1286,9 +1286,9 @@ class ResourceManagerV1(ResourceManager):
                 request.metrics.cpu_cache_prepare_time = metrics["cpu_cache_prepare_time"]
                 request.metrics.storage_cache_prepare_time = metrics["storage_cache_prepare_time"]
 
-                main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
-                main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
-                main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
+                main_process_metrics.inc_value("prefix_cache_token_num", request.num_computed_tokens)
+                main_process_metrics.inc_value("prefix_gpu_cache_token_num", request.metrics.gpu_cache_token_num)
+                main_process_metrics.inc_value("prefix_cpu_cache_token_num", request.metrics.cpu_cache_token_num)
 
             return True
         except Exception as e:
@@ -1550,11 +1550,13 @@ class ResourceManagerV1(ResourceManager):
         for task in self.tasks_list:
             if task is not None:
                 blocks_used_by_tasks.update(task.block_tables)
-        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
-        main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
-        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-        main_process_metrics.num_requests_running.set(len(self.running))
-        main_process_metrics.num_requests_waiting.set(num_tasks - len(self.running))
+        main_process_metrics.set_value(
+            "available_gpu_block_num", self.total_block_number() - len(blocks_used_by_tasks)
+        )
+        main_process_metrics.set_value("batch_size", self.max_num_seqs - self.available_batch())
+        main_process_metrics.set_value("gpu_cache_usage_perc", self.get_gpu_cache_usage_perc())
+        main_process_metrics.set_value("num_requests_running", len(self.running))
+        main_process_metrics.set_value("num_requests_waiting", num_tasks - len(self.running))
         if verbose:
             llm_logger.info(f"update metrics: running={len(self.running)}, waiting={num_tasks - len(self.running)}")
 

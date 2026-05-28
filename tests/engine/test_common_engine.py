@@ -1270,6 +1270,18 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.requests_number = Mock(inc=Mock())
                 self.num_requests_waiting = Mock(inc=Mock())
 
+            def inc_value(self, name, value=1, labelvalues=None):
+                getattr(self, name).inc(value)
+
+            def dec_value(self, name, value=1, labelvalues=None):
+                getattr(self, name).dec(value)
+
+            def set_value(self, name, value, labelvalues=None):
+                getattr(self, name).set(value)
+
+            def obs_value(self, name, value, labelvalues=None):
+                getattr(self, name).observe(value)
+
         class DummyRecv:
             def __init__(self):
                 self.calls = 0
@@ -3299,6 +3311,18 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self):
                 self.requests_number = Mock(inc=Mock())
                 self.num_requests_waiting = Mock(inc=Mock())
+
+            def inc_value(self, name, value=1, labelvalues=None):
+                getattr(self, name).inc(value)
+
+            def dec_value(self, name, value=1, labelvalues=None):
+                getattr(self, name).dec(value)
+
+            def set_value(self, name, value, labelvalues=None):
+                getattr(self, name).set(value)
+
+            def obs_value(self, name, value, labelvalues=None):
+                getattr(self, name).observe(value)
 
         with (
             patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),
