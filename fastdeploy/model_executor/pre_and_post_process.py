@@ -14,11 +14,13 @@
 # limitations under the License.
 """
 
+import os
 import queue
 from typing import Dict, List, Optional, Union
 
 import numpy as np
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.config import SpeculativeConfig
@@ -107,8 +109,14 @@ else:
 
 from fastdeploy.model_executor.entropy_utils import (
     calculate_logits_entropy,
+    calculate_logits_entropy_fd,
+    flush_entropy_on_stop,
     speculate_calculate_logits_entropy,
+    speculate_calculate_logits_entropy_fd,
 )
+
+_USE_FD_RUNNER = os.environ.get("EB5_ENABLE_FD_RUNNER", "0") == "1"
+
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
@@ -321,7 +329,30 @@ def post_process_normal(
         )
 
     if enable_entropy:
-        calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+        real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+        logger.info("-" * 30 + " [non-MTP] before entropy calculation")
+        logger.info(f"  sampler_output.logits.shape: {sampler_output.logits.shape}")
+        logger.info(
+            f"  seq_lens_this_time[:real_bsz]: {share_inputs['seq_lens_this_time'][:real_bsz].squeeze(-1).tolist() if share_inputs['seq_lens_this_time'].ndim == 2 else share_inputs['seq_lens_this_time'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  seq_lens_encoder[:real_bsz]: {share_inputs['seq_lens_encoder'][:real_bsz].squeeze(-1).tolist() if share_inputs['seq_lens_encoder'].ndim == 2 else share_inputs['seq_lens_encoder'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  seq_lens_decoder[:real_bsz]: {share_inputs['seq_lens_decoder'][:real_bsz].squeeze(-1).tolist() if share_inputs['seq_lens_decoder'].ndim == 2 else share_inputs['seq_lens_decoder'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  stop_flags[:real_bsz]: {share_inputs['stop_flags'][:real_bsz].squeeze(-1).tolist() if share_inputs['stop_flags'].ndim == 2 else share_inputs['stop_flags'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  step_idx[:real_bsz]: {share_inputs['step_idx'][:real_bsz].squeeze(-1).tolist() if share_inputs['step_idx'].ndim == 2 else share_inputs['step_idx'][:real_bsz].tolist()}"
+        )
+        logger.info(f"  temperature[:real_bsz]: {sampling_metadata.temperature[:real_bsz].tolist()}")
+        logger.info(f"  req_ids[:real_bsz]: {share_inputs['req_ids'][:real_bsz]}")
+        if _USE_FD_RUNNER:
+            calculate_logits_entropy_fd(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+        else:
+            calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
     # Routing replay
     if routing_replay_manager is not None:
@@ -471,7 +502,31 @@ def post_process_speculate(
     )
 
     if enable_entropy:
-        speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+        real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+        logger.info("-" * 30 + " [MTP] before entropy calculation")
+        logger.info(f"  sampler_output.logits.shape: {sampler_output.logits.shape}")
+        logger.info(
+            f"  seq_lens_this_time[:real_bsz]: {share_inputs['seq_lens_this_time'][:real_bsz].squeeze(-1).tolist() if share_inputs['seq_lens_this_time'].ndim == 2 else share_inputs['seq_lens_this_time'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  seq_lens_encoder[:real_bsz]: {share_inputs['seq_lens_encoder'][:real_bsz].squeeze(-1).tolist() if share_inputs['seq_lens_encoder'].ndim == 2 else share_inputs['seq_lens_encoder'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  seq_lens_decoder[:real_bsz]: {share_inputs['seq_lens_decoder'][:real_bsz].squeeze(-1).tolist() if share_inputs['seq_lens_decoder'].ndim == 2 else share_inputs['seq_lens_decoder'][:real_bsz].tolist()}"
+        )
+        logger.info(f"  accept_num[:real_bsz]: {share_inputs['accept_num'][:real_bsz].tolist()}")
+        logger.info(
+            f"  stop_flags[:real_bsz]: {share_inputs['stop_flags'][:real_bsz].squeeze(-1).tolist() if share_inputs['stop_flags'].ndim == 2 else share_inputs['stop_flags'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  step_idx[:real_bsz]: {share_inputs['step_idx'][:real_bsz].squeeze(-1).tolist() if share_inputs['step_idx'].ndim == 2 else share_inputs['step_idx'][:real_bsz].tolist()}"
+        )
+        logger.info(f"  temperature[:real_bsz]: {sampling_metadata.temperature[:real_bsz].tolist()}")
+        logger.info(f"  req_ids[:real_bsz]: {share_inputs['req_ids'][:real_bsz]}")
+        if _USE_FD_RUNNER:
+            speculate_calculate_logits_entropy_fd(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+        else:
+            speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
     # Routing replay
     if routing_replay_manager is not None:
@@ -503,6 +558,19 @@ def post_process_speculate(
     # paths (MTP, ngram, naive). Note: verify_draft_tokens intentionally does NOT write back
     # step_idx (it is read-only in that kernel); step_idx is always updated here.
 
+    if enable_entropy:
+        real_bsz = share_inputs["seq_lens_this_time"].shape[0]
+        logger.info("-" * 30 + " [MTP] before unified_update_model_status")
+        logger.info(
+            f"  stop_flags[:real_bsz]: {share_inputs['stop_flags'][:real_bsz].squeeze(-1).tolist() if share_inputs['stop_flags'].ndim == 2 else share_inputs['stop_flags'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  step_idx[:real_bsz]: {share_inputs['step_idx'][:real_bsz].squeeze(-1).tolist() if share_inputs['step_idx'].ndim == 2 else share_inputs['step_idx'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  max_dec_len[:real_bsz]: {share_inputs['max_dec_len'][:real_bsz].squeeze(-1).tolist() if share_inputs['max_dec_len'].ndim == 2 else share_inputs['max_dec_len'][:real_bsz].tolist()}"
+        )
+
     unified_update_model_status(
         model_output.seq_lens_encoder,  # seq_lens_encoder
         model_output.seq_lens_decoder,  # seq_lens_decoder
@@ -519,6 +587,18 @@ def post_process_speculate(
         model_output.eos_token_id,  # end_tokens
         model_output.max_dec_len,  # max_dec_len
     )
+
+    if enable_entropy:
+        logger.info("-" * 30 + " [MTP] after unified_update_model_status")
+        logger.info(
+            f"  stop_flags[:real_bsz]: {share_inputs['stop_flags'][:real_bsz].squeeze(-1).tolist() if share_inputs['stop_flags'].ndim == 2 else share_inputs['stop_flags'][:real_bsz].tolist()}"
+        )
+        logger.info(
+            f"  step_idx[:real_bsz]: {share_inputs['step_idx'][:real_bsz].squeeze(-1).tolist() if share_inputs['step_idx'].ndim == 2 else share_inputs['step_idx'][:real_bsz].tolist()}"
+        )
+        logger.info(f"  accept_num[:real_bsz]: {share_inputs['accept_num'][:real_bsz].tolist()}")
+        logger.info("-" * 30 + " [MTP] calling flush_entropy_on_stop")
+        flush_entropy_on_stop(share_inputs)
 
 
 def save_output_speculate(
