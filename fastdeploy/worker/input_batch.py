@@ -385,6 +385,7 @@ class InputBatch:
         self.mask_rollback = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
         self.preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32", device="cpu")
         self.last_preempted_idx = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32", device="cpu")
+        self.seq_lens_kv = paddle.full(shape=[max_num_seqs, 1], fill_value=0, dtype="int32")
 
     def swap_states(self, i1, i2) -> None:
         """Swap the data at indices i1 and i2 for all array-like attributes"""
@@ -909,6 +910,9 @@ class ProposerInputBatch(InputBatch):
         self.recompute_token_num = paddle.full(
             [self.scheduler_config.max_num_seqs, 1], self.num_model_steps - 1, dtype="int32"
         )
+
+        self.seq_lens_kv = paddle.full(shape=[self.scheduler_config.max_num_seqs, 1], fill_value=0, dtype="int32")
+
         # attn_mask
         if self.enable_mm:
             self.decode_states = paddle.full(

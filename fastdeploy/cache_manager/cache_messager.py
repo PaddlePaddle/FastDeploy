@@ -226,6 +226,8 @@ class CacheMessager:
             scale_block_bytes = math.prod(key_cache_scale.shape[1:])
             if key_cache_scale.dtype == paddle.bfloat16 or key_cache_scale.dtype == paddle.float16:
                 scale_block_bytes *= 2
+            elif key_cache_scale.dtype == paddle.float32:
+                scale_block_bytes *= 4
             logger.info(f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype}")
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
@@ -571,6 +573,8 @@ class CacheMessagerV1:
             scale_block_bytes = math.prod(key_cache_scale.shape[1:])
             if key_cache_scale.dtype == paddle.bfloat16 or key_cache_scale.dtype == paddle.float16:
                 scale_block_bytes *= 2
+            elif key_cache_scale.dtype == paddle.float32:
+                scale_block_bytes *= 4
             logger.info(f"scale_block_bytes: {scale_block_bytes}, dtype: {key_cache_scale.dtype}")
         logger.info(
             f"layers {num_layers} cache_shape: {cache_shape}, max_block_num: {max_block_num}, "
@@ -936,6 +940,8 @@ def main():
     if args.value_cache_shape:
         value_cache_shape_list = [int(i) for i in args.value_cache_shape.split(",")]
     total_gpu_blocks = key_cache_shape_list[0]
+    # key_cache_shape: [num_blocks, kv_head_num, block_size, head_dim]
+    block_size = key_cache_shape_list[2]
     num_extra_layer_gpu_blocks = int(total_gpu_blocks * speculative_config.num_gpu_block_expand_ratio)
     gpu_cache_kvs = {}
     gpu_cache_k_tensors = []
@@ -973,10 +979,14 @@ def main():
             f"key_caches_{i}_rank{rank}.device{device}",
         )
         if args.cache_dtype == "block_wise_fp8":
+            _scale_dtype = (
+                "float32" if envs.FD_ATTENTION_BACKEND == "FLASH_MASK_ATTN_BLACKWELL" else paddle.get_default_dtype()
+            )
+            _scale_last_dim = 4 if envs.FD_ATTENTION_BACKEND == "FLASH_MASK_ATTN_BLACKWELL" else key_cache_shape[2]
             gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
-                shape=[num_gpu_blocks, key_cache_shape[1], key_cache_shape[2]],
+                shape=[num_gpu_blocks, key_cache_shape[1], _scale_last_dim],
                 fill_value=0,
-                dtype=paddle.get_default_dtype(),
+                dtype=_scale_dtype,
             )
             set_data_ipc(
                 gpu_cache_kvs[f"key_cache_scales_{i}_rank{rank}_device{device}"],
@@ -996,9 +1006,9 @@ def main():
             )
             if args.cache_dtype == "block_wise_fp8":
                 gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"] = paddle.full(
-                    shape=[num_gpu_blocks, value_cache_shape[1], value_cache_shape[2]],
+                    shape=[num_gpu_blocks, value_cache_shape[1], _scale_last_dim],
                     fill_value=0,
-                    dtype=paddle.get_default_dtype(),
+                    dtype=_scale_dtype,
                 )
                 set_data_ipc(
                     gpu_cache_kvs[f"value_cache_scales_{i}_rank{rank}_device{device}"],
@@ -1023,6 +1033,7 @@ def main():
             gpu_id=device,
             rdma_port=args.rdma_port,
             cache_dtype=args.cache_dtype,
+            block_size=block_size,
         )
     else:
         cache_messager = CacheMessager(
@@ -1038,6 +1049,7 @@ def main():
             gpu_id=device,
             rdma_port=args.rdma_port,
             cache_dtype=args.cache_dtype,
+            block_size=block_size,
         )
 
     cache_ready_signal_data = np.zeros(shape=[args.mp_num], dtype=np.int32)

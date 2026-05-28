@@ -1420,6 +1420,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             attn_mask_offsets=self.share_inputs["attn_mask_offsets"] if self.enable_mm else None,
             routing_replay_table=routing_replay_table,
+            seq_lens_kv=self.share_inputs["seq_lens_kv"],
         )
 
         # Decode attention split ops buffers (assigned after construction due to ForwardMeta __getattr__)
@@ -1518,6 +1519,11 @@ class GPUModelRunner(ModelRunnerBase):
             indexer_cache_shape = []
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
+            kv_cache_scale_dtype = paddle.get_default_dtype()
+            if hasattr(self.attn_backends[0], "get_kv_cache_scale_shape"):
+                kv_cache_scale_shape, kv_cache_scale_dtype = self.attn_backends[0].get_kv_cache_scale_shape(
+                    max_num_blocks=max_block_num
+                )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         # Check if gpu runner needs to create kv cache
@@ -1569,13 +1575,13 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_kvs_list.extend([key_cache])
                 if kv_cache_quant_type == "block_wise_fp8":
                     key_cache_scales = paddle.full(
-                        shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                        shape=kv_cache_scale_shape, fill_value=0, dtype=kv_cache_scale_dtype
                     )
                     set_data_ipc(key_cache_scales, key_cache_scales_name)
                     self.cache_kvs_map[key_cache_scales_name] = key_cache_scales
                     if value_cache_shape:
                         val_cache_scales = paddle.full(
-                            shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
+                            shape=kv_cache_scale_shape, fill_value=0, dtype=kv_cache_scale_dtype
                         )
                         set_data_ipc(val_cache_scales, value_cache_scales_name)
                         self.cache_kvs_map[value_cache_scales_name] = val_cache_scales
@@ -1590,7 +1596,7 @@ class GPUModelRunner(ModelRunnerBase):
                 key_cache = share_external_data(key_cache, key_cache_name, key_cache_shape)
                 self.cache_kvs_map[key_cache_name] = key_cache
                 if kv_cache_quant_type == "block_wise_fp8":
-                    key_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    key_cache_scales = paddle.empty(shape=[], dtype=kv_cache_scale_dtype)
                     key_cache_scales = share_external_data(
                         key_cache_scales, key_cache_scales_name, kv_cache_scale_shape
                     )
@@ -1601,7 +1607,7 @@ class GPUModelRunner(ModelRunnerBase):
                     self.cache_kvs_map[val_cache_name] = val_cache
                     cache_kvs_list.extend([key_cache, val_cache])
                     if kv_cache_quant_type == "block_wise_fp8":
-                        val_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                        val_cache_scales = paddle.empty(shape=[], dtype=kv_cache_scale_dtype)
                         val_cache_scales = share_external_data(
                             val_cache_scales, value_cache_scales_name, kv_cache_scale_shape
                         )
