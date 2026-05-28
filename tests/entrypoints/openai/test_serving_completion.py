@@ -15,9 +15,10 @@
 """
 
 import asyncio
+import json
 import unittest
 from typing import List
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, Mock, patch
 
 import paddle
 
@@ -26,6 +27,7 @@ from fastdeploy.entrypoints.openai.serving_completion import (
     OpenAIServingCompletion,
     RequestOutput,
 )
+from fastdeploy.output.fallback import StreamFallbackDecision
 from fastdeploy.utils import get_host_ip
 from fastdeploy.worker.output import Logprob, LogprobsTensors
 
@@ -858,6 +860,132 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(found_logprobs, "logprobs field should be present")
         self.assertTrue(prompt_logprobs_null, "prompt_logprobs should be null when not requested")
         self.assertTrue(logprobs_null, "logprobs should be null when not requested")
+
+    async def test_completion_stream_generator_with_fallback_truncate(self):
+        """Test stream fallback truncate sets finish_reason and skips residual output."""
+        mock_engine_client = Mock()
+        mock_engine_client.semaphore = Mock()
+        mock_engine_client.semaphore.acquire = AsyncMock()
+        mock_engine_client.semaphore.release = Mock()
+        mock_engine_client.connection_manager = AsyncMock()
+        mock_engine_client.data_processor = Mock()
+        mock_engine_client.ori_vocab_size = 1000
+        mock_engine_client.check_model_weight_status.return_value = False
+        mock_engine_client.check_health.return_value = (True, "Healthy")
+        mock_engine_client.abort = AsyncMock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
+
+        request_id = "test_request_fallback_truncate"
+
+        def make_response(choice_index, text, finished):
+            return {
+                "request_id": f"{request_id}::n::{choice_index}",
+                "error_code": 200,
+                "metrics": {
+                    "arrival_time": 1234567890,
+                    "inference_start_time": 1234567880,
+                    "first_token_time": 1234567890,
+                },
+                "prompt_logprobs": None,
+                "outputs": {
+                    "text": text,
+                    "token_ids": [100],
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "send_idx": 0,
+                    "completion_tokens": "1",
+                    "num_cache_tokens": 0,
+                    "num_image_tokens": 0,
+                    "reasoning_token_num": 0,
+                    "tool_calls": None,
+                    "reasoning_content": "",
+                    "skipped": False,
+                },
+                "finished": finished,
+            }
+
+        truncated_response = make_response(0, "repeat", False)
+        residual_response = make_response(0, "residual", True)
+        normal_response = make_response(1, "normal", True)
+
+        mock_dealer = Mock()
+        mock_dealer.write = Mock()
+        mock_response_queue = AsyncMock()
+        mock_response_queue.get.side_effect = [
+            [truncated_response],
+            [residual_response],
+            [normal_response],
+        ]
+        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.cleanup_request = AsyncMock()
+
+        fallback_manager = Mock()
+
+        def on_delta_side_effect(request_id, choice_index, delta_text, context):
+            if choice_index == 0:
+                return StreamFallbackDecision(action="truncate", text="truncated")
+            return StreamFallbackDecision(action="send", text=delta_text)
+
+        def on_finish_side_effect(request_id, choice_index, context):
+            if choice_index == 0:
+                return StreamFallbackDecision(action="flush", text="flushed-")
+            return StreamFallbackDecision(action="flush")
+
+        fallback_manager.on_delta.side_effect = on_delta_side_effect
+        fallback_manager.on_finish.side_effect = on_finish_side_effect
+        serving_completion = OpenAIServingCompletion(
+            mock_engine_client,
+            None,
+            "pid",
+            None,
+            360,
+            output_fallback_manager=fallback_manager,
+        )
+
+        mock_request = Mock()
+        mock_request.prompt_logprobs = None
+        mock_request.logprobs = None
+        mock_request.include_draft_logprobs = False
+        mock_request.return_token_ids = False
+        mock_request.include_stop_str_in_output = False
+        mock_request.max_streaming_response_tokens = 1
+        mock_request.max_tokens = None
+        mock_request.stream_options = Mock()
+        mock_request.stream_options.include_usage = False
+        mock_request.n = 2
+        mock_request.echo = False
+        mock_request.collect_metrics = False
+        mock_request.suffix = None
+
+        result_generator = serving_completion.completion_stream_generator(
+            request=mock_request,
+            num_choices=2,
+            request_id=request_id,
+            created_time=1234567890,
+            model_name="test_model",
+            prompt_batched_token_ids=[[1, 2, 3]],
+            prompt_tokens_list=["hello"],
+            max_tokens_list=[100],
+        )
+
+        results = []
+        async for result in result_generator:
+            results.append(result)
+
+        choices = []
+        for result in results:
+            if result.strip() == "data: [DONE]":
+                continue
+            chunk_data = json.loads(result.replace("data: ", "").strip())
+            choices.extend(chunk_data.get("choices", []))
+
+        truncated_choices = [choice for choice in choices if choice.get("finish_reason") == "repeat_truncate"]
+        self.assertEqual(len(truncated_choices), 1)
+        self.assertEqual(truncated_choices[0]["text"], "flushed-truncated")
+        self.assertFalse(any(choice.get("text") == "residual" for choice in choices))
+        mock_engine_client.abort.assert_awaited_once()
+        fallback_manager.on_finish.assert_any_call(request_id, 0, ANY)
+        fallback_manager.cleanup.assert_called_once_with(request_id)
 
     async def test_completion_full_generator_with_prompt_logprobs(self):
         """Test completion_full_generator with prompt_logprobs enabled"""

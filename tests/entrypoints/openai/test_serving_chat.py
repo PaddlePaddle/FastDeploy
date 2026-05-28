@@ -18,7 +18,7 @@ import asyncio
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock, Mock, patch
+from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
 
 import paddle
 
@@ -26,6 +26,7 @@ import fastdeploy.envs as envs
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, StreamOptions
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
+from fastdeploy.output.fallback import StreamFallbackDecision
 from fastdeploy.utils import ErrorCode, ParameterError
 from fastdeploy.worker.output import Logprob, LogprobsLists, LogprobsTensors
 
@@ -951,6 +952,113 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(choice.get("prompt_logprobs"))
                     # logprobs should be None when not requested
                     self.assertIsNone(choice.get("logprobs"))
+
+    async def test_chat_completion_stream_generator_with_fallback_truncate(self):
+        """Test stream fallback truncate sets finish_reason and skips residual output."""
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=True,
+            n=2,
+        )
+        request_id = "test_request_fallback_truncate"
+        model_name = "test_model"
+        prompt_token_ids = [1, 2, 3]
+        prompt_tokens = "Hello world"
+
+        def make_response(choice_index, text, finished):
+            return {
+                "request_id": f"{request_id}::n::{choice_index}",
+                "error_code": 200,
+                "metrics": {
+                    "first_token_time": 1234567890,
+                    "inference_start_time": 1234567880,
+                    "arrival_time": 1234567890,
+                    "request_start_time": 1234567870,
+                },
+                "prompt_logprobs": None,
+                "outputs": {
+                    "token_ids": [5],
+                    "text": text,
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "tool_calls": None,
+                    "reasoning_content": "",
+                    "multipart": [{"type": "text", "text": text}],
+                    "skipped": False,
+                },
+                "finished": finished,
+                "num_cached_tokens": 0,
+                "num_input_image_tokens": 0,
+                "num_input_video_tokens": 0,
+            }
+
+        truncated_response = make_response(0, "repeat", False)
+        residual_response = make_response(0, "residual", True)
+        normal_response = make_response(1, "normal", True)
+
+        mock_dealer = MagicMock()
+        mock_response_queue = AsyncMock()
+        mock_response_queue.get.side_effect = [truncated_response, residual_response, normal_response]
+        self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request = AsyncMock()
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+        self.chat_completion_handler.engine_client.abort = AsyncMock()
+
+        fallback_manager = MagicMock()
+
+        def on_delta_side_effect(request_id, choice_index, delta_text, context):
+            if choice_index == 0:
+                return StreamFallbackDecision(action="truncate", text="truncated")
+            return StreamFallbackDecision(action="send", text=delta_text)
+
+        def on_finish_side_effect(request_id, choice_index, context):
+            if choice_index == 0:
+                return StreamFallbackDecision(action="flush", text="flushed-")
+            return StreamFallbackDecision(action="flush")
+
+        fallback_manager.on_delta.side_effect = on_delta_side_effect
+        fallback_manager.on_finish.side_effect = on_finish_side_effect
+        self.chat_completion_handler.output_fallback_manager = fallback_manager
+
+        mock_response_processor = MagicMock()
+        mock_response_processor.enable_multimodal_content.return_value = False
+
+        def process_response_chat(response, **kwargs):
+            async def mock_async_generator():
+                yield response
+
+            return mock_async_generator()
+
+        mock_response_processor.process_response_chat.side_effect = process_response_chat
+
+        with patch(
+            "fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor", return_value=mock_response_processor
+        ):
+            results = []
+            async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
+                request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
+            ):
+                results.append(chunk)
+
+        choices = []
+        for result in results:
+            if result.strip() == "data: [DONE]":
+                continue
+            chunk_data = json.loads(result.replace("data: ", "").strip())
+            choices.extend(chunk_data.get("choices", []))
+
+        truncated_choices = [choice for choice in choices if choice.get("finish_reason") == "repeat_truncate"]
+        self.assertEqual(len(truncated_choices), 1)
+        self.assertEqual(truncated_choices[0]["delta"]["content"], "flushed-truncated")
+        self.assertFalse(any(choice.get("delta", {}).get("content") == "residual" for choice in choices))
+        self.chat_completion_handler.engine_client.abort.assert_awaited_once()
+        fallback_manager.on_finish.assert_any_call(request_id, 0, ANY)
+        fallback_manager.cleanup.assert_called_once_with(request_id)
 
     async def test_chat_completion_full_generator_with_prompt_logprobs(self):
         """Test chat_completion_full_generator with prompt_logprobs enabled"""
