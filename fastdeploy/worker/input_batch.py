@@ -767,12 +767,6 @@ class ProposerInputBatch(InputBatch):
 
         self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
         self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
-        self.input_ids_cpu = paddle.full(
-            shape=[self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
-            fill_value=-1,
-            dtype="int64",
-            device="cpu",
-        )
         self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
 
         self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
@@ -785,7 +779,7 @@ class ProposerInputBatch(InputBatch):
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             if "token_ids_all" in self.target_model_input_batch:
-                self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                self.token_ids_all = self.target_model_input_batch["token_ids_all"]
                 # TODO: delete pre_ids in mtp
                 self.pre_ids = paddle.full(
                     [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
@@ -902,7 +896,6 @@ class ProposerInputBatch(InputBatch):
             self.last_seq_lens_this_time = paddle.full_like(
                 self.target_model_input_batch["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
-        self.input_ids_len = paddle.zeros(shape=[self.scheduler_config.max_num_seqs, 1], dtype="int64", device="cpu")
         self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
         self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
         self.accept_num = self.target_model_input_batch["accept_num"]
@@ -952,14 +945,12 @@ class ProposerInputBatch(InputBatch):
         self.index_to_batch_id[i1], self.index_to_batch_id[i2] = self.index_to_batch_id[i2], self.index_to_batch_id[i1]
         swap_data(self.block_tables, i1, i2)
         swap_data(self.input_ids, i1, i2)
-        swap_data(self.input_ids_cpu, i1, i2)
         swap_data(self.seq_lens_this_time_buffer, i1, i2)
         swap_data(self.seq_lens_encoder, i1, i2)
         swap_data(self.seq_lens_decoder, i1, i2)
         swap_data(self.step_idx, i1, i2)
         swap_data(self.pre_ids, i1, i2)
         swap_data(self.encoder_block_lens, i1, i2)
-        swap_data(self.input_ids_len, i1, i2)
         swap_data(self.mask_rollback, i1, i2)
         swap_data(self.recompute_token_num, i1, i2)
         if self.enable_mm:
@@ -982,7 +973,6 @@ class ProposerInputBatch(InputBatch):
             # Clone the target model inputs to restore initial values
             self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
             self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
-            fill_paddle_tensor(self, "input_ids_cpu", -1)
             # NOTE(fix): Must reset seq_lens_this_time_buffer to avoid stale values from previous
             # RL round causing illegal memory access during CUDAGraph recapture (error 700).
             # When draft_model_use_cudagraph=true, padding_cudagraph_inputs() uses the full
@@ -1011,7 +1001,7 @@ class ProposerInputBatch(InputBatch):
                     shape=[max_num_seqs * (max_draft_token_num + 1)], fill_value=0, dtype="int32"
                 )
                 if "token_ids_all" in self.target_model_input_batch:
-                    self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                    self.token_ids_all = self.target_model_input_batch["token_ids_all"]
                     # TODO: delete pre_ids in mtp
                     self.pre_ids = paddle.full(
                         [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
@@ -1103,9 +1093,6 @@ class ProposerInputBatch(InputBatch):
             # Reset last sequence lengths if applicable
             if self.num_model_steps > 1:
                 fill_paddle_tensor(self, "last_seq_lens_this_time", -1)
-
-            # Reset input IDs length
-            fill_paddle_tensor(self, "input_ids_len", 0)
 
             # Reset various scores and flags
             self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
