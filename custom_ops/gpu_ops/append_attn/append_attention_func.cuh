@@ -1007,8 +1007,7 @@ template <typename T,
           uint32_t num_warps,
           uint32_t num_frags_x,
           uint32_t num_frags_y,
-          uint32_t num_frags_z,
-          bool IS_SYSTEM = false>
+          uint32_t num_frags_z>
 __device__ __forceinline__ void mask_s(const bool* attn_mask,
                                        const uint32_t qo_idx_base,
                                        const uint32_t kv_idx_base,
@@ -1027,73 +1026,54 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
     for (uint32_t fz = 0; fz < num_frags_z; ++fz) {
 #pragma unroll
       for (uint32_t reg_id = 0; reg_id < 8; ++reg_id) {
-        if constexpr (!IS_SYSTEM) {
-          const uint32_t q_idx = (qo_idx_base + fx * 16 + tx / 4 +
-                                  8 * ((reg_id % 4) / 2)) /
-                                 group_size,
-                         kv_idx = kv_idx_base + fz * 16 + 2 * (tx % 4) +
-                                  8 * (reg_id / 4) + reg_id % 2;
-          bool out_of_boundary;
-          if (mask_offset) {
-            if (sliding_window > 0) {
-              int swa_part = mask_offset[q_idx * 2 + 1] - sliding_window;
-              if (swa_part < 0) swa_part = 0;
-              int sink_part =
-                  mask_offset[q_idx * 2] + sink_size;  // sink_size = 128
-              out_of_boundary =
-                  q_idx < qo_len ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
-                                    kv_idx < mask_offset[q_idx * 2] ||
-                                    (kv_idx >= sink_part && kv_idx < swa_part))
-                                 : true;
-            } else {
-              out_of_boundary = q_idx < qo_len
-                                    ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
-                                       kv_idx < mask_offset[q_idx * 2])
-                                    : true;
-            }
-          } else if (sliding_window > 0) {
-            bool out_of_window = int(kv_idx) <= (int)kv_len + (int)q_idx -
-                                                    (int)qo_len -
-                                                    sliding_window;
-            out_of_boundary = (causal ? (kv_idx > kv_len + q_idx - qo_len ||
-                                         out_of_window || (kv_idx >= chunk_end))
-                                      : kv_idx >= chunk_end);
+        const uint32_t q_idx = (qo_idx_base + fx * 16 + tx / 4 +
+                                8 * ((reg_id % 4) / 2)) /
+                               group_size,
+                       kv_idx = kv_idx_base + fz * 16 + 2 * (tx % 4) +
+                                8 * (reg_id / 4) + reg_id % 2;
+        bool out_of_boundary;
+        if (mask_offset) {
+          if (sliding_window > 0) {
+            int swa_part = mask_offset[q_idx * 2 + 1] - sliding_window;
+            if (swa_part < 0) swa_part = 0;
+            int sink_part =
+                mask_offset[q_idx * 2] + sink_size;  // sink_size = 128
+            out_of_boundary = q_idx < qo_len
+                                  ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
+                                     kv_idx < mask_offset[q_idx * 2] ||
+                                     (kv_idx >= sink_part && kv_idx < swa_part))
+                                  : true;
           } else {
-            out_of_boundary = (causal ? (kv_idx > kv_len + q_idx - qo_len ||
-                                         (kv_idx >= chunk_end))
-                                      : kv_idx >= chunk_end);
-            if (attn_mask != nullptr && kv_idx > kv_len - qo_len &&
-                kv_idx < chunk_end && q_idx < attn_mask_len) {
-              const int32_t mask_idx =
-                  q_idx * attn_mask_len + kv_idx - kv_len + qo_len;
-              bool mask = attn_mask[mask_idx];
-              out_of_boundary |= mask;
-            }
+            out_of_boundary = q_idx < qo_len
+                                  ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
+                                     kv_idx < mask_offset[q_idx * 2])
+                                  : true;
           }
-
-          if constexpr (std::is_same<T, half>::value) {
-            s_frag[fx][fz][reg_id] =
-                out_of_boundary ? -5e4f : s_frag[fx][fz][reg_id];
-          } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
-            s_frag[fx][fz][reg_id] =
-                out_of_boundary ? -3.0e+30f : s_frag[fx][fz][reg_id];
-          }
-
+        } else if (sliding_window > 0) {
+          bool out_of_window = int(kv_idx) <= (int)kv_len + (int)q_idx -
+                                                  (int)qo_len - sliding_window;
+          out_of_boundary = (causal ? (kv_idx > kv_len + q_idx - qo_len ||
+                                       out_of_window || (kv_idx >= chunk_end))
+                                    : kv_idx >= chunk_end);
         } else {
-          const uint32_t q_idx = qo_idx_base,
-                         kv_idx = kv_idx_base + fz * 16 + 2 * (tx % 4) +
-                                  8 * (reg_id / 4) + reg_id % 2;
-          const bool out_of_boundary =
-              (causal
-                   ? (kv_idx > kv_len + q_idx - qo_len || (kv_idx >= chunk_end))
-                   : kv_idx >= chunk_end);
-          if constexpr (std::is_same<T, half>::value) {
-            s_frag[fx][fz][reg_id] =
-                out_of_boundary ? -5e4f : s_frag[fx][fz][reg_id];
-          } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
-            s_frag[fx][fz][reg_id] =
-                out_of_boundary ? -3.0e+30f : s_frag[fx][fz][reg_id];
+          out_of_boundary = (causal ? (kv_idx > kv_len + q_idx - qo_len ||
+                                       (kv_idx >= chunk_end))
+                                    : kv_idx >= chunk_end);
+          if (attn_mask != nullptr && kv_idx > kv_len - qo_len &&
+              kv_idx < chunk_end && q_idx < attn_mask_len) {
+            const int32_t mask_idx =
+                q_idx * attn_mask_len + kv_idx - kv_len + qo_len;
+            bool mask = attn_mask[mask_idx];
+            out_of_boundary |= mask;
           }
+        }
+
+        if constexpr (std::is_same<T, half>::value) {
+          s_frag[fx][fz][reg_id] =
+              out_of_boundary ? -5e4f : s_frag[fx][fz][reg_id];
+        } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
+          s_frag[fx][fz][reg_id] =
+              out_of_boundary ? -3.0e+30f : s_frag[fx][fz][reg_id];
         }
       }
     }
