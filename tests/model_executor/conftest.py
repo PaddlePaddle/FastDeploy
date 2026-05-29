@@ -37,42 +37,13 @@ def get_package_version(package_name):
             return "not installed"
 
 
-def check_package_version(package_name, required_version):
-    """Check if a package is installed with the required version.
-
-    Args:
-        package_name: Name of the package
-        required_version: Required version string (e.g., "1.1.0.dev20260508")
-
-    Returns:
-        bool: True if package is installed with required version, False otherwise
-    """
-    try:
-        import importlib.metadata
-
-        installed_version = importlib.metadata.version(package_name)
-
-        # For dev versions, do exact match
-        if installed_version == required_version:
-            return True
-
-        # Also accept if major.minor.patch matches (ignore post/dev suffixes)
-        # e.g., "1.1.1.post20260401" matches "1.1.1"
-        if required_version in installed_version:
-            return True
-
-        return False
-    except Exception:
-        return False
-
-
 def print_package_versions():
     """Print versions of key packages (paddlepaddle, paddlefleet, paddleformers)."""
     print("\n" + "=" * 70)
     print("[conftest] Package Versions:")
     print("=" * 70)
 
-    packages = ["paddlepaddle-gpu", "paddlefleet", "paddleformers"]
+    packages = ["paddlepaddle-gpu", "paddlefleet", "paddleformers", "transformers"]
     for pkg in packages:
         version = get_package_version(pkg)
         status = "✓" if version != "not installed" else "✗"
@@ -96,35 +67,21 @@ def pytest_collection_modifyitems(config, items):
     """
     # Check if any test in this session requires paddlefleet
     has_paddlefleet_tests = any("test_fallback_fleet_model.py" in item.nodeid for item in items)
-
+    print("has_paddlefleet_tests:", has_paddlefleet_tests)
     if not has_paddlefleet_tests:
         return
 
     # Check if dependencies are already installed with correct versions
-    # Define required versions
-    REQUIRED_PADDLEFLEET_VERSION = "0.3.0.dev20260527"
-    REQUIRED_PADDLEFORMERS_VERSION = "1.1.0.dev20260508"
+    try:
+        import paddlefleet  # noqa: F401
 
-    paddlefleet_ok = check_package_version("paddlefleet", REQUIRED_PADDLEFLEET_VERSION)
-    paddleformers_ok = check_package_version("paddleformers", REQUIRED_PADDLEFORMERS_VERSION)
-
-    if paddlefleet_ok and paddleformers_ok:
         print("\n" + "=" * 70)
-        print("[conftest] paddlefleet and paddleformers already installed with required versions")
+        print("[conftest] paddlefleet already installed, skipping installation")
         print("=" * 70)
         print_package_versions()
         return
-
-    # If versions don't match, show what needs to be installed
-    if not paddlefleet_ok:
-        print("\n[conftest] paddlefleet version mismatch or not installed")
-        print(f"  Required: {REQUIRED_PADDLEFLEET_VERSION}")
-        print(f"  Current: {get_package_version('paddlefleet')}")
-
-    if not paddleformers_ok:
-        print("[conftest] paddleformers version mismatch or not installed")
-        print(f"  Required: {REQUIRED_PADDLEFORMERS_VERSION}")
-        print(f"  Current: {get_package_version('paddleformers')}")
+    except ImportError:
+        pass
 
     # Print versions before installation
     print("\n" + "=" * 70)
@@ -138,35 +95,26 @@ def pytest_collection_modifyitems(config, items):
     print("=" * 70)
 
     try:
-        # Install paddleformers if needed
-        if not paddleformers_ok:
-            paddleformers_url = os.getenv(
-                "PADDLEFORMERS_WHEEL_URL",
-                f"paddleformers=={REQUIRED_PADDLEFORMERS_VERSION} --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/",
-            )
+        # Install paddleformers
+        paddleformers_url = os.getenv(
+            "PADDLEFORMERS_WHEEL_URL",
+            "paddleformers==1.1.0.dev20260507 --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/",  # fallback to PyPI name
+        )
+        install_args = [sys.executable, "-m", "pip", "install"] + shlex.split(paddleformers_url) + ["--quiet"]
+        subprocess.check_call(install_args)
+        print(f"[conftest] ✓ Installed paddleformers 1.1.0.dev20250507 from {paddleformers_url}")
 
-            # Split the string into separate arguments (handles --extra-index-url flags)
-            install_args = (
-                [sys.executable, "-m", "pip", "install"] + shlex.split(paddleformers_url) + ["--no-deps", "--quiet"]
-            )
-            subprocess.check_call(install_args)
-            print(f"[conftest] ✓ Installed paddleformers (--no-deps) from {paddleformers_url}")
-        else:
-            print(f"[conftest] ℹ paddleformers {REQUIRED_PADDLEFORMERS_VERSION} already satisfied")
-
-        # Install paddlefleet if needed
-        if not paddlefleet_ok:
-            paddlefleet_url = os.getenv("PADDLEFLEET_WHEEL_URL", f"paddlefleet=={REQUIRED_PADDLEFLEET_VERSION}")
-
-            # Use --no-deps to avoid reinstalling paddlepaddle
-            # Split in case the URL contains spaces or flags
-            install_args = (
-                [sys.executable, "-m", "pip", "install"] + shlex.split(paddlefleet_url) + ["--no-deps", "--quiet"]
-            )
-            subprocess.check_call(install_args)
-            print(f"[conftest] ✓ Installed paddlefleet (--no-deps) from {paddlefleet_url}")
-        else:
-            print(f"[conftest] ℹ paddlefleet {REQUIRED_PADDLEFLEET_VERSION} already satisfied")
+        # Install paddlefleet (skip paddlepaddle dependency, use existing version)
+        paddlefleet_url = os.getenv(
+            "PADDLEFLEET_WHEEL_URL",
+            "paddlefleet==0.3.0.dev20260527 --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/",  # fallback to PyPI name
+        )
+        # Use --no-deps to avoid reinstalling paddlepaddle
+        install_args = (
+            [sys.executable, "-m", "pip", "install"] + shlex.split(paddlefleet_url) + ["--no-deps", "--quiet"]
+        )
+        subprocess.check_call(install_args)
+        print(f"[conftest] ✓ Installed paddlefleet 0.3.0.dev20260527 (--no-deps) from {paddlefleet_url}")
         print("[conftest] ℹ Using existing paddlepaddle from environment")
 
         # Print versions after installation
