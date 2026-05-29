@@ -10,6 +10,7 @@ from fastdeploy.config import FDConfig
 
 # Import the classes we need to test
 from fastdeploy.engine.async_llm import AsyncLLM
+from fastdeploy.engine.request import CompletionOutput, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     ChatCompletionRequest,
     ChatCompletionResponse,
@@ -21,6 +22,7 @@ from fastdeploy.entrypoints.openai.protocol import (
 from fastdeploy.entrypoints.openai.serving_engine import ServeContext
 from fastdeploy.entrypoints.openai.serving_models import OpenAIServingModels
 from fastdeploy.entrypoints.openai.v1.serving_chat import OpenAIServingChat
+from fastdeploy.output.fallback import StreamFallbackDecision
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -32,6 +34,7 @@ class ServingResponseContext:
         self.choice_completion_tokens_dict = {}
         self.inference_start_time_dict = {}
         self.remain_choices = 0
+        self.truncated_choices = set()
 
 
 class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
@@ -386,6 +389,52 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].startswith("data: "))
 
+    async def test_build_stream_response_with_fallback_truncate(self):
+        """Test _build_stream_response with output fallback truncate."""
+        output_fallback_manager = MagicMock()
+        output_fallback_manager.on_delta.return_value = StreamFallbackDecision(action="truncate", text="fixed")
+        output_fallback_manager.on_finish.return_value = StreamFallbackDecision(action="flush", text=" tail")
+        self.serving_chat.output_fallback_manager = output_fallback_manager
+
+        request = ChatCompletionRequest(
+            model="test_model",
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=True,
+            logprobs=False,
+            return_token_ids=False,
+        )
+        output = CompletionOutput(index=0, send_idx=1, token_ids=[1, 2, 3], text="raw")
+        request_output = RequestOutput(
+            request_id="test_request_id::n::0",
+            outputs=output,
+            finished=False,
+            metrics=MagicMock(
+                first_token_time=time.time(), inference_start_time=time.time(), request_start_time=time.time()
+            ),
+        )
+        ctx = ServeContext[ChatCompletionRequest](
+            request=request, model_name="test_model", request_id="test_request_id"
+        )
+        ctx.created_time = int(time.time())
+        ctx.preprocess_requests = [{}]
+        response_ctx = ServingResponseContext()
+        response_ctx.choice_completion_tokens_dict = {0: 3}
+        response_ctx.remain_choices = 1
+
+        results = []
+        async for result in self.serving_chat._build_stream_response(ctx, request_output, response_ctx):
+            results.append(result)
+
+        self.assertEqual(len(results), 2)
+        self.assertIn('"content":" tailfixed"', results[0])
+        self.assertIn('"finish_reason":"length"', results[0])
+        self.assertEqual(results[1], "data: [DONE]\n\n")
+        self.assertEqual(response_ctx.remain_choices, 0)
+        self.assertEqual(response_ctx.truncated_choices, {0})
+        self.mock_engine_client.abort.assert_awaited_once_with("test_request_id::n::0", 1)
+        output_fallback_manager.on_delta.assert_called_once()
+        output_fallback_manager.on_finish.assert_called_once()
+
     async def test_build_full_response(self):
         """Test _build_full_response method."""
         request = ChatCompletionRequest(
@@ -474,6 +523,31 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.message.role, "assistant")
         self.assertEqual(result.message.content, "Test response")
         self.assertEqual(result.finish_reason, "stop")
+
+    async def test_create_chat_completion_choice_with_output_fallback(self):
+        """Test _create_chat_completion_choice applies output fallback."""
+        output_fallback_manager = MagicMock()
+        output_fallback_manager.apply.return_value = "fixed response"
+        self.serving_chat.output_fallback_manager = output_fallback_manager
+        request = ChatCompletionRequest(
+            model="test_model", messages=[{"role": "user", "content": "Hello"}], logprobs=False, return_token_ids=False
+        )
+        output = CompletionOutput(index=0, send_idx=0, token_ids=[1, 2, 3], text="raw response")
+        request_output = RequestOutput(
+            request_id="test_request_id::n::0",
+            outputs=output,
+            prompt="Test prompt",
+            prompt_token_ids=[4, 5, 6],
+            metrics=MagicMock(request_start_time=time.time()),
+        )
+        ctx = ServeContext[ChatCompletionRequest](
+            request=request, model_name="test_model", request_id="test_request_id"
+        )
+
+        result = await self.serving_chat._create_chat_completion_choice([request_output], ctx)
+
+        self.assertEqual(result.message.content, "fixed response")
+        output_fallback_manager.apply.assert_called_once()
 
     async def test_create_chat_completion_choice_with_tool_calls(self):
         """Test _create_chat_completion_choice with tool calls."""
