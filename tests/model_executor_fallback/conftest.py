@@ -129,6 +129,19 @@ def pytest_collection_modifyitems(config, items):
         print(f"[conftest] ✓ Installed paddlefleet_ops 0.3.0.dev20260520+2702ba51 from {paddlefleet_ops_url}")
         print("[conftest] ℹ Using existing paddlepaddle from environment")
 
+        # Clear module cache to ensure fresh imports after version change
+        # This is critical when transformers version changes during pytest session
+        import importlib
+
+        keys_to_clear = [
+            k for k in sys.modules.keys() if "huggingface_hub" in k or "transformers" in k or "paddleformers" in k
+        ]
+        for key in keys_to_clear:
+            del sys.modules[key]
+        importlib.invalidate_caches()
+        if keys_to_clear:
+            print(f"[conftest] ✓ Cleared {len(keys_to_clear)} cached modules (transformers/paddleformers)")
+
         # Print versions after installation
         print("\n" + "=" * 70)
         print("[conftest] Package versions AFTER installing paddlefleet dependencies:")

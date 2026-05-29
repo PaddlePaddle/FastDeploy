@@ -22,7 +22,7 @@ import pytest
 from fastdeploy import LLM, SamplingParams
 
 DEFAULT_MODEL_DIR = "./models"
-MODEL_NAME = "Qwen3-0.6B"
+MODEL_NAME = "Qwen3-0.6B-Base"
 
 model_dir = os.getenv("MODEL_PATH", DEFAULT_MODEL_DIR)
 MODEL_PATH = os.path.join(model_dir, MODEL_NAME)
@@ -67,14 +67,22 @@ class TestLLMInferenceRealModel:
         else:
             res = outputs_generate
 
-        expected = (
+        expected1 = (
             "form a more perfect Union, establish Justice, insure domestic Tranquility, "
             "provide for the common defence, promote the general Welfare, and secure the "
             "Blessings of Liberty to ourselves and our Posterity, do ordain and establish "
             "this Constitution for the United States of America."
         )
+        expected2 = (
+            "form a more perfect Union, establish Justice, insure domestic Tranquility, "
+            "provide for the common defense, promote the general Welfare, and secure the "
+            "Blessings of Liberty to ourselves and our Posterity, do ordain and establish "
+            "this Constitution for the United States of America."
+        )
 
-        assert expected in res, f"Result check failed!\nExpected to contain:\n  {expected}\nGot:\n  {res}"
+        assert (
+            expected1 in res or expected2 in res
+        ), f"Result check failed!\nExpected to contain:\n  {expected1}\nGot:\n  {res}"
 
     def test_generate_with_top_p_sampling(self):
         """Test generate with top_p sampling."""
