@@ -14,7 +14,6 @@
 # limitations under the License.
 """
 
-import os
 import queue
 from typing import Dict, List, Optional, Union
 
@@ -108,14 +107,9 @@ else:
 
 from fastdeploy.model_executor.entropy_utils import (
     calculate_logits_entropy,
-    calculate_logits_entropy_fd,
     flush_entropy_on_stop,
     speculate_calculate_logits_entropy,
-    speculate_calculate_logits_entropy_fd,
 )
-
-_USE_FD_RUNNER = os.environ.get("EB5_ENABLE_FD_RUNNER", "0") == "1"
-
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
     RoutingReplayManager,
 )
@@ -328,10 +322,7 @@ def post_process_normal(
         )
 
     if enable_entropy:
-        if _USE_FD_RUNNER:
-            calculate_logits_entropy_fd(sampler_output.logits, share_inputs, sampling_metadata.temperature)
-        else:
-            calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+        calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
     # Routing replay
     if routing_replay_manager is not None:
@@ -481,10 +472,7 @@ def post_process_speculate(
     )
 
     if enable_entropy:
-        if _USE_FD_RUNNER:
-            speculate_calculate_logits_entropy_fd(sampler_output.logits, share_inputs, sampling_metadata.temperature)
-        else:
-            speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
+        speculate_calculate_logits_entropy(sampler_output.logits, share_inputs, sampling_metadata.temperature)
 
     # Routing replay
     if routing_replay_manager is not None:

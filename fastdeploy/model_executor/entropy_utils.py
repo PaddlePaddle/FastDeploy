@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import os
+
 import paddle
 
 from fastdeploy.utils import data_processor_logger
@@ -45,6 +47,22 @@ def _log_entropy(share_inputs, i):
 
 
 def calculate_logits_entropy(logits, share_inputs, temperature):
+    use_fd_runner = os.environ.get("EB5_ENABLE_FD_RUNNER", "0") == "1"
+    if use_fd_runner:
+        calculate_logits_entropy_fd(logits, share_inputs, temperature)
+    else:
+        calculate_logits_entropy_ori(logits, share_inputs, temperature)
+
+
+def specifical_calculate_logits_entropy(logits, share_inputs, temperature):
+    use_fd_runner = os.environ.get("EB5_ENABLE_FD_RUNNER", "0") == "1"
+    if use_fd_runner:
+        calculate_logits_entropy_fd(logits, share_inputs, temperature)
+    else:
+        calculate_logits_entropy_ori(logits, share_inputs, temperature)
+
+
+def calculate_logits_entropy_ori(logits, share_inputs, temperature):
     real_bsz = share_inputs["seq_lens_this_time"].shape[0]
     real_seq_lens = paddle.where(
         share_inputs["seq_lens_encoder"][:real_bsz].squeeze(1) != 0,
@@ -72,7 +90,7 @@ def calculate_logits_entropy(logits, share_inputs, temperature):
             _log_entropy(share_inputs, i)
 
 
-def speculate_calculate_logits_entropy(logits, share_inputs, temperature):
+def speculate_calculate_logits_entropy_ori(logits, share_inputs, temperature):
     # get accepted logits
     real_bsz = share_inputs["seq_lens_this_time"].shape[0]
     total_accepted_num = paddle.sum(share_inputs["accept_num"])
@@ -185,30 +203,31 @@ def speculate_calculate_logits_entropy_fd(logits, share_inputs, temperature):
     )
     accepted_idx = repeated_starts + offsets
 
-    accepted_logits = paddle.empty([total_accepted_num, logits.shape[1]], dtype=logits.dtype)
-    for i in range(total_accepted_num):
-        accepted_logits[i] = logits[accepted_idx[i]]
+    accepted_logits = paddle.index_select(logits, accepted_idx, axis=0)
 
     batch_indices = paddle.arange(real_bsz, dtype="int32")
     batch_id_per_token = paddle.repeat_interleave(batch_indices, share_inputs["accept_num"][:real_bsz])
-    for i in range(total_accepted_num):
-        bid = int(batch_id_per_token[i])
-        t = temperature[bid]
-        if t > 0 and t != 1.0:
-            accepted_logits[i] = accepted_logits[i].scale_(1 / t)
+    scale = paddle.where(
+        temperature[batch_id_per_token] > 0,
+        1.0 / temperature[batch_id_per_token],
+        paddle.ones_like(temperature[batch_id_per_token]),
+    )
+    accepted_logits = accepted_logits * scale.unsqueeze(-1)
 
     entropy_tensor = get_entropy(accepted_logits)
     entropy = entropy_tensor.tolist()
 
+    idx = 0
     for i in range(real_bsz):
         accept_count = int(share_inputs["accept_num"][i])
         if accept_count > 0:
-            req_id = share_inputs["req_ids"][i] if i < len(share_inputs["req_ids"]) else ""
-            is_valid_req = bool(req_id and str(req_id).strip())
-            for j in range(accept_count):
-                e_val = entropy.pop(0)
-                if is_valid_req:
-                    share_inputs["entropy_list"][i].append(e_val)
+            # req_id = share_inputs["req_ids"][i] if i < len(share_inputs["req_ids"]) else ""
+            # is_valid_req = bool(req_id and str(req_id).strip())
+            for _ in range(accept_count):
+                e_val = entropy[idx]
+                # if is_valid_req:
+                share_inputs["entropy_list"][i].append(e_val)
+                idx += 1
         if (
             share_inputs["stop_flags"][i]
             and share_inputs["seq_lens_decoder"][i] != 0

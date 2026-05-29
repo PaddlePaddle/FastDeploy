@@ -18,41 +18,17 @@ Unit tests for entropy_utils FD runner path.
 Run:  python tests/model_executor/test_entropy_utils_fd_runner_mtp.py
 """
 
-import importlib
-import logging
 import math
-import os
-import sys
-import types
 import unittest
-
-os.environ["EB5_ENABLE_FD_RUNNER"] = "1"
 
 import paddle
 
-# Mock fastdeploy.utils
-_mock_fd = types.ModuleType("fastdeploy")
-_mock_fd.__path__ = []
-_mock_utils = types.ModuleType("fastdeploy.utils")
-_mock_utils.data_processor_logger = logging.getLogger("test_entropy")
-_mock_fd.utils = _mock_utils
-sys.modules["fastdeploy"] = _mock_fd
-sys.modules["fastdeploy.utils"] = _mock_utils
-
-# Import module under test
-_spec = importlib.util.spec_from_file_location(
-    "fastdeploy.model_executor.entropy_utils",
-    os.path.join(os.path.dirname(__file__), "../../fastdeploy/model_executor/entropy_utils.py"),
+from fastdeploy.model_executor.entropy_utils import (
+    calculate_logits_entropy_fd,
+    flush_entropy_on_stop,
+    get_entropy,
+    speculate_calculate_logits_entropy_fd,
 )
-_mod = importlib.util.module_from_spec(_spec)
-sys.modules["fastdeploy.model_executor"] = types.ModuleType("fastdeploy.model_executor")
-sys.modules["fastdeploy.model_executor.entropy_utils"] = _mod
-_spec.loader.exec_module(_mod)
-
-get_entropy = _mod.get_entropy
-calculate_logits_entropy_fd = _mod.calculate_logits_entropy_fd
-speculate_calculate_logits_entropy_fd = _mod.speculate_calculate_logits_entropy_fd
-flush_entropy_on_stop = _mod.flush_entropy_on_stop
 
 
 def _make_share_inputs(
