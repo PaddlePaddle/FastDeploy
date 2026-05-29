@@ -279,7 +279,7 @@ __global__ void append_decode_cache_T_rope_kernel(
 
     const int bias_idx = hi * head_size + h_bias;
     Load<T, VecSize>(&quant_qkv[ori_idx], &src_vec);
-    if (hi < num_heads + kv_num_heads) {
+    if (hi < num_heads + kv_num_heads && cos_emb != nullptr) {
       // q k rope
       const uint32_t emb_idx = write_seq_id * half_head_size + h_bias / 2;
       uint32_t new_emb_idx =
@@ -293,7 +293,7 @@ __global__ void append_decode_cache_T_rope_kernel(
       float input_left = static_cast<float>(src_vec[2 * i]);
       float input_right = static_cast<float>(src_vec[2 * i + 1]);
 
-      if (hi < num_heads + kv_num_heads) {
+      if (hi < num_heads + kv_num_heads && cos_emb != nullptr) {
         const float cos_tmp = cos_emb_vec[i];
         const float sin_tmp = sin_emb_vec[i];
         out_vec[2 * i] =
