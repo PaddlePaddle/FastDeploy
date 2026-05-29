@@ -191,9 +191,9 @@ class MetaxWorker(WorkerBase):
         # accurate cache size
         self.model_runner.update_share_input_block_num(num_gpu_blocks=num_gpu_blocks)
 
-    def update_weights(self, version: str = None, verify_checksum: bool = False, transfer_mode: str = None):
+    def update_weights(self, version: str = None, verify_checksum: bool = False):
         """update weights in place"""
-        return self.model_runner.update_weights(version, verify_checksum, transfer_mode)
+        return self.model_runner.update_weights(version, verify_checksum)
 
     def execute_model(
         self,

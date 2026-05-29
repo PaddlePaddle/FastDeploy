@@ -471,23 +471,6 @@ async def update_weights(request: Request) -> Response:
             )
         args["verify_checksum"] = request_data["verify_checksum"]
 
-    if "transfer_mode" in request_data and request_data["transfer_mode"] is not None:
-        if not isinstance(request_data["transfer_mode"], str):
-            return JSONResponse(
-                status_code=400,
-                content={"error": "Invalid parameter type", "message": "transfer_mode must be a string"},
-            )
-        transfer_mode = request_data["transfer_mode"].lower()
-        if transfer_mode not in ("rdma", "gdr"):
-            return JSONResponse(
-                status_code=400,
-                content={
-                    "error": "Invalid parameter value",
-                    "message": "transfer_mode must be one of: rdma, gdr",
-                },
-            )
-        args["transfer_mode"] = transfer_mode
-
     control_request = ControlRequest(request_id, "update_weights", args)
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()

@@ -131,17 +131,22 @@ def slice_fn(weight_or_paramter, output_dim, start, end, step=1):
     return weight_or_paramter
 
 
-def _is_gdr_dynamic_load_config(fd_config: FDConfig) -> bool:
+def _is_gdr_checkpoint_transfer_dynamic_load_config(fd_config: FDConfig) -> bool:
     load_config = fd_config.load_config
-    if not load_config.dynamic_load_weight or getattr(load_config, "load_strategy", None) != "rsync":
+    if not load_config.dynamic_load_weight:
         return False
-    rsync_config = load_config.rsync_config or {}
-    transfer_mode = rsync_config.get("transfer_mode") or ("gdr" if rsync_config.get("gpu_direct") else None)
-    return str(transfer_mode).lower() == "gdr"
+    return envs.FD_USE_GDR_CHECKPOINT_TRANSFER
 
 
-def _copy_gdr_transposed_weight_attrs(src, dst):
-    attr_names = ("weight_loader", "output_dim", "weight_need_transpose", "is_distributed", "split_axis", "tp_row_bias")
+def _copy_gdr_checkpoint_transfer_transposed_weight_attrs(src, dst):
+    attr_names = (
+        "weight_loader",
+        "output_dim",
+        "weight_need_transpose",
+        "is_distributed",
+        "split_axis",
+        "tp_row_bias",
+    )
     for name in attr_names:
         if hasattr(src, name):
             setattr(dst, name, getattr(src, name))
@@ -167,8 +172,8 @@ def process_weight_transpose(layer, weight_name):
         default_initializer=paddle.nn.initializer.Constant(0),
         is_bias=False,
     )
-    if _is_gdr_dynamic_load_config(layer.fd_config):
-        _copy_gdr_transposed_weight_attrs(weight, weight_tmp)
+    if _is_gdr_checkpoint_transfer_dynamic_load_config(layer.fd_config):
+        _copy_gdr_checkpoint_transfer_transposed_weight_attrs(weight, weight_tmp)
     if layer.fd_config.load_config.dynamic_load_weight or getattr(layer.fd_config.model_config, "enable_cache", False):
         free_tensor(weight)
         setattr(layer, weight_name, weight_tmp)

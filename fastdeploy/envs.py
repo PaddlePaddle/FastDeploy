@@ -277,6 +277,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Whether to use GDR CheckpointTransfer for dynamic weight updates.
+    "FD_USE_GDR_CHECKPOINT_TRANSFER": lambda: bool(int(os.getenv("FD_USE_GDR_CHECKPOINT_TRANSFER", "0"))),
     # train-infer consistency, used in RL
     # Whether to align RoPE and moe gate precision with training
     "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),

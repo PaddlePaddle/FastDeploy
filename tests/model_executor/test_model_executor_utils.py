@@ -13,11 +13,16 @@
 # limitations under the License.
 
 import unittest
+import unittest.mock
+from types import SimpleNamespace
+
+import paddle
 
 from fastdeploy.model_executor.utils import (
     BitMaskTracker,
     TensorTracker,
     WeightsMapper,
+    process_weight_transpose,
     remap_weight_keys,
     set_weight_attrs,
     slice_fn,
@@ -155,6 +160,132 @@ class TestSetWeightAttrs(unittest.TestCase):
 
         p = Param()
         set_weight_attrs(p, None)  # should not raise
+
+
+class TestProcessWeightTranspose(unittest.TestCase):
+    def _make_layer(self, shape, dynamic_load_weight=True, load_strategy="rsync", rsync_config=None):
+        class Layer(paddle.nn.Layer):
+            def __init__(self):
+                super().__init__()
+                self.fd_config = SimpleNamespace(
+                    load_config=SimpleNamespace(
+                        dynamic_load_weight=dynamic_load_weight,
+                        load_strategy=load_strategy,
+                        rsync_config=rsync_config or {},
+                    ),
+                    model_config=SimpleNamespace(enable_cache=False),
+                )
+                self.weight = self.create_parameter(
+                    shape=shape,
+                    dtype="float32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                    is_bias=False,
+                )
+
+        return Layer()
+
+    def test_gdr_dynamic_transpose_preserves_loading_attrs_for_future_updates(self):
+        def loader():
+            return None
+
+        layer = self._make_layer([8, 4])
+        layer.weight.output_dim = True
+        layer.weight.weight_need_transpose = False
+        layer.weight.weight_loader = loader
+        layer.weight.is_distributed = True
+        layer.weight.split_axis = 1
+        layer.weight.tensor_track = object()
+
+        with unittest.mock.patch.dict("os.environ", {"FD_USE_GDR_CHECKPOINT_TRANSFER": "1"}):
+            process_weight_transpose(layer, "weight")
+
+        self.assertEqual(layer.weight.shape, [4, 8])
+        self.assertFalse(layer.weight.output_dim)
+        self.assertTrue(layer.weight.weight_need_transpose)
+        self.assertIs(layer.weight.weight_loader, loader)
+        self.assertTrue(layer.weight.is_distributed)
+        self.assertEqual(layer.weight.split_axis, 0)
+        self.assertFalse(hasattr(layer.weight, "tensor_track"))
+
+    def test_gpu_direct_dynamic_transpose_preserves_loading_attrs(self):
+        layer = self._make_layer([8, 4])
+        layer.weight.output_dim = True
+        layer.weight.split_axis = 1
+
+        with unittest.mock.patch.dict("os.environ", {"FD_USE_GDR_CHECKPOINT_TRANSFER": "1"}):
+            process_weight_transpose(layer, "weight")
+
+        self.assertFalse(layer.weight.output_dim)
+        self.assertTrue(layer.weight.weight_need_transpose)
+        self.assertEqual(layer.weight.split_axis, 0)
+
+    def test_rdma_dynamic_transpose_does_not_preserve_loading_attrs(self):
+        layer = self._make_layer([8, 4])
+        layer.weight.output_dim = True
+        layer.weight.split_axis = 1
+
+        process_weight_transpose(layer, "weight")
+
+        self.assertEqual(layer.weight.shape, [4, 8])
+        self.assertFalse(hasattr(layer.weight, "output_dim"))
+        self.assertFalse(hasattr(layer.weight, "weight_need_transpose"))
+        self.assertFalse(hasattr(layer.weight, "split_axis"))
+
+    def test_ct_ipc_dynamic_transpose_preserves_loading_attrs(self):
+        layer = self._make_layer([8, 4], load_strategy="ipc")
+        layer.weight.output_dim = True
+        layer.weight.split_axis = 1
+
+        with unittest.mock.patch.dict("os.environ", {"FD_USE_GDR_CHECKPOINT_TRANSFER": "1"}):
+            process_weight_transpose(layer, "weight")
+
+        self.assertFalse(layer.weight.output_dim)
+        self.assertTrue(layer.weight.weight_need_transpose)
+        self.assertEqual(layer.weight.split_axis, 0)
+
+    def test_gdr_transpose_preserves_loading_attrs_for_3d_weight(self):
+        layer = self._make_layer([2, 8, 4])
+        layer.weight.output_dim = False
+        layer.weight.split_axis = 1
+
+        with unittest.mock.patch.dict("os.environ", {"FD_USE_GDR_CHECKPOINT_TRANSFER": "1"}):
+            process_weight_transpose(layer, "weight")
+
+        self.assertEqual(layer.weight.shape, [2, 4, 8])
+        self.assertTrue(layer.weight.output_dim)
+        self.assertTrue(layer.weight.weight_need_transpose)
+        self.assertEqual(layer.weight.split_axis, 2)
+
+    def test_gdr_transpose_clears_weight_need_transpose_for_torch_format(self):
+        """Production scenario: torch format sets weight_need_transpose=True.
+        After transpose, param is in HF layout so no transpose needed on reload."""
+
+        def loader():
+            return None
+
+        layer = self._make_layer([8, 4])
+        layer.weight.output_dim = True
+        layer.weight.weight_need_transpose = True
+        layer.weight.weight_loader = loader
+        layer.weight.split_axis = 1
+
+        with unittest.mock.patch.dict("os.environ", {"FD_USE_GDR_CHECKPOINT_TRANSFER": "1"}):
+            process_weight_transpose(layer, "weight")
+
+        self.assertEqual(layer.weight.shape, [4, 8])
+        self.assertFalse(layer.weight.output_dim)
+        self.assertFalse(layer.weight.weight_need_transpose)
+        self.assertIs(layer.weight.weight_loader, loader)
+        self.assertEqual(layer.weight.split_axis, 0)
+
+    def test_gdr_transpose_preserves_none_output_dim(self):
+        layer = self._make_layer([8, 4])
+        layer.weight.output_dim = None
+
+        with unittest.mock.patch.dict("os.environ", {"FD_USE_GDR_CHECKPOINT_TRANSFER": "1"}):
+            process_weight_transpose(layer, "weight")
+
+        self.assertIsNone(layer.weight.output_dim)
 
 
 class TestSliceFn(unittest.TestCase):

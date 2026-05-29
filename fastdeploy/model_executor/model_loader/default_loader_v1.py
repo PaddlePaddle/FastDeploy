@@ -14,13 +14,8 @@
 # limitations under the License.
 """
 
-import hashlib
-import os
-
-import numpy as np
 import paddle
 from paddle import nn
-from paddleformers.utils.log import logger
 from typing_extensions import assert_never
 
 from fastdeploy.config import FDConfig, LoadConfig, ModelConfig
@@ -41,32 +36,6 @@ from fastdeploy.model_executor.utils import (
     reconstruct_memory,
 )
 from fastdeploy.platforms import current_platform
-
-
-DEFAULT_DEBUG_WEIGHT_DIGEST_NAMES = (
-    "qwen2.layers.0.self_attn.qkv_proj.weight",
-    "qwen2.layers.0.mlp.up_gate_proj.weight",
-    "qwen2.layers.0.mlp.down_proj.weight",
-    "qwen2.norm.weight",
-)
-
-
-def _tensor_to_numpy_for_digest(tensor):
-    tensor_for_copy = tensor.detach() if hasattr(tensor, "detach") else tensor
-    try:
-        return np.ascontiguousarray(tensor_for_copy.cpu().numpy())
-    except TypeError as exc:
-        if "cannot pickle" not in str(exc):
-            raise
-        attrs = getattr(tensor, "__dict__", None)
-        if attrs is None:
-            raise
-        saved_attrs = dict(attrs)
-        attrs.clear()
-        try:
-            return np.ascontiguousarray(tensor.cpu().numpy())
-        finally:
-            attrs.update(saved_attrs)
 
 
 class DefaultModelLoaderV1(BaseModelLoader):
@@ -95,35 +64,8 @@ class DefaultModelLoaderV1(BaseModelLoader):
             model.load_weights(weights_iterator)
         # Execute post-processing after weight loading
         process_final_after_loading(model, fd_config)
-        self._log_debug_weight_digests(model, fd_config)
 
         self.clean_memory_fragments()
-
-    def _log_debug_weight_digests(self, model, fd_config: FDConfig) -> None:
-        if os.getenv("FD_DEBUG_WEIGHT_DIGEST", "0").lower() not in ("1", "true", "yes", "on"):
-            return
-        names_text = os.getenv("FD_DEBUG_WEIGHT_DIGEST_NAMES")
-        if names_text:
-            names = [name.strip() for name in names_text.split(",") if name.strip()]
-        else:
-            names = list(DEFAULT_DEBUG_WEIGHT_DIGEST_NAMES)
-        state_dict = model.state_dict()
-        rank = fd_config.parallel_config.tensor_parallel_rank
-        for name in names:
-            param = state_dict.get(name)
-            if param is None:
-                logger.warning(f"DIRECT_PARAM_DIGEST rank={rank} name={name} not found in model params")
-                continue
-            cpu_array = _tensor_to_numpy_for_digest(param)
-            md5 = hashlib.md5(memoryview(cpu_array).cast("B")).hexdigest()
-            try:
-                tensor_sum = float(cpu_array.astype("float32").sum())
-            except Exception:
-                tensor_sum = None
-            logger.info(
-                f"DIRECT_PARAM_DIGEST rank={rank} name={name}, shape={list(param.shape)}, dtype={param.dtype}, "
-                f"nbytes={int(cpu_array.nbytes)}, md5={md5}, sum={tensor_sum}"
-            )
 
     def load_model(self, fd_config: FDConfig) -> nn.Layer:
         architectures = fd_config.model_config.architectures[0]
