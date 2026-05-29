@@ -118,6 +118,15 @@ def pytest_collection_modifyitems(config, items):
         )
         subprocess.check_call(install_args)
         print(f"[conftest] ✓ Installed paddlefleet 0.3.0.dev20260527 (--no-deps) from {paddlefleet_url}")
+
+        # Install paddlefleet_ops
+        paddlefleet_ops_url = os.getenv(
+            "PADDLEFLEET_OPS_WHEEL_URL",
+            "paddlefleet_ops==0.3.0.dev20260520+2702ba51 --extra-index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/ --extra-index-url https://www.paddlepaddle.org.cn/packages/nightly/cu126/",
+        )
+        install_args = [sys.executable, "-m", "pip", "install"] + shlex.split(paddlefleet_ops_url) + ["--quiet"]
+        subprocess.check_call(install_args)
+        print(f"[conftest] ✓ Installed paddlefleet_ops 0.3.0.dev20260520+2702ba51 from {paddlefleet_ops_url}")
         print("[conftest] ℹ Using existing paddlepaddle from environment")
 
         # Print versions after installation

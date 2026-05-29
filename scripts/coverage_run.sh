@@ -248,11 +248,6 @@ echo "===================================="
 echo "Coverage Test Execution with Parallel Single-GPU Tests"
 echo "===================================="
 
-# Print paddleformers version
-echo "Checking paddleformers version:"
-python -c "import paddleformers; print('paddleformers.__version__:', paddleformers.__version__)" 2>/dev/null || echo "paddleformers not installed"
-python -c "import importlib.metadata; print('paddleformers package version:', importlib.metadata.version('paddleformers'))" 2>/dev/null || echo "Cannot get package version"
-
 # ============================================================
 # Step 1: Collect & classify tests
 # ============================================================
