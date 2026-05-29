@@ -184,7 +184,7 @@ class DeepEPBuffer:
                     self.group,
                     self.num_nvl_bytes,
                     self.num_rdma_bytes,
-                    low_latency_mode=False,
+                    low_latency_mode=True,
                     num_qps_per_rank=num_qps_per_rank,
                 )
             else:

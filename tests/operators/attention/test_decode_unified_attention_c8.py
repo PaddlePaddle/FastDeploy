@@ -356,6 +356,7 @@ class TestDecodeUnifiedAttention(unittest.TestCase):
             None,  # linear_smooth
             None,  # mask_offset
             None,  # kv_signal_data
+            None,  # rope_3d_delta
             self.q_norm_weight,
             self.k_norm_weight,
             None,  # sinks

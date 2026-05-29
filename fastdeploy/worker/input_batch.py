@@ -97,7 +97,7 @@ class InputBatch:
         self.speculative_decoding = self.speculative_config.method is not None
         self.is_mm_model = self.model_config.enable_mm
         self.enable_mm = fd_config.enable_mm_runtime
-        model_type = self.model_config.model_type.lower()
+        model_type = getattr(self.model_config, "model_type", "").lower()
         self.use_shared_ernie_decode_rope_3d = (
             self.enable_mm
             and fd_config.enable_rope_3d_runtime
