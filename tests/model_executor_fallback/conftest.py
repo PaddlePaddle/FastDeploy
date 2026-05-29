@@ -65,10 +65,13 @@ def pytest_collection_modifyitems(config, items):
     It checks if any collected tests require paddlefleet dependencies
     and installs them in an isolated manner if needed.
     """
-    # Check if any test in this session requires paddlefleet
-    has_paddlefleet_tests = any("test_fallback_fleet_model.py" in item.nodeid for item in items)
-    print("has_paddlefleet_tests:", has_paddlefleet_tests)
-    if not has_paddlefleet_tests:
+    # IMPORTANT: Skip installation during collection phase (--collect-only)
+    if config.option.collectonly:
+        print("[conftest] Skipping dependency installation during collection phase")
+        return
+
+    # All tests in this directory require paddlefleet
+    if not items:
         return
 
     # Check if dependencies are already installed with correct versions

@@ -535,7 +535,6 @@ else:
 
             ids_remove_padding = inputs["ids_remove_padding"]
             num_tokens = ids_remove_padding.shape[0]
-
             batch_id_per_token = forward_meta.batch_id_per_token  # [num_tokens]
             seq_lens_decoder = forward_meta.seq_lens_decoder  # [batch_size, 1]
 
