@@ -217,18 +217,19 @@ def _sample_from_probs(probs, sampling_metadata, top_p=None, top_k=None, topp_se
     if top_p_list is not None:
         top_p_list = top_p_list[:token_num]
         need_top_p_sampling = any(p != 1.0 for p in top_p_list)
-    if not need_top_p_sampling and current_platform.is_cuda():
-        if need_top_k_sampling:
-            probs = dispatch_top_k_renorm_probs(probs, top_k)
-        next_tokens = _random_sample(probs, topp_seed=topp_seed)
-    else:
-        _, next_tokens = top_k_top_p_sampling(
-            probs,
-            top_p,
-            top_k,
-            top_k_list,
-            topp_seed=topp_seed,
-        )
+    for is_dummy in range(sampling_metadata.is_dummy_or_profile_run + 1):
+        if not is_dummy and not need_top_p_sampling and current_platform.is_cuda():
+            if need_top_k_sampling:
+                probs = dispatch_top_k_renorm_probs(probs, top_k)
+            next_tokens = _random_sample(probs, topp_seed=topp_seed)
+        else:
+            _, next_tokens = top_k_top_p_sampling(
+                probs,
+                top_p,
+                top_k,
+                top_k_list,
+                topp_seed=topp_seed,
+            )
     return next_tokens
 
 
