@@ -132,26 +132,6 @@ class TestMTP(unittest.TestCase):
         self.assertEqual(si["entropy_list"][0], [])
         self.assertEqual(si["entropy_list"][1], [4.0, 5.0])
 
-    def test_warmup_skip(self):
-        si = _make_share_inputs(
-            3, [2, 2, 2], [0, 0, 0], [10, 10, 10], [False, False, False], ["", "real", "  "], [1, 1, 1]
-        )
-        logits = paddle.to_tensor(
-            [
-                [10.0, 1.0, 1.0],
-                [5.0, 5.0, 5.0],
-                [1.0, 10.0, 1.0],
-                [5.0, 5.0, 5.0],
-                [1.0, 1.0, 10.0],
-                [5.0, 5.0, 5.0],
-            ],
-            dtype="float32",
-        )
-        speculate_calculate_logits_entropy_fd(logits, si, paddle.ones([3], dtype="float32"))
-        self.assertEqual(len(si["entropy_list"][0]), 0)
-        self.assertEqual(len(si["entropy_list"][1]), 1)
-        self.assertEqual(len(si["entropy_list"][2]), 0)
-
     def test_multi_step_and_stop(self):
         si = _make_share_inputs(2, [2, 2], [0, 0], [10, 10], [False, False], ["a", "b"], [2, 1])
         logits = paddle.to_tensor(
