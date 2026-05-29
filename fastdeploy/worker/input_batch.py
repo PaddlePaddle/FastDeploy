@@ -989,6 +989,10 @@ class ProposerInputBatch(InputBatch):
             # NOTE(fix): These tensors are dynamically resized during runtime inference.
             # Must recreate at full initial size to avoid CUDAGraph replay OOB access.
             max_num_seqs = self.scheduler_config.max_num_seqs
+            if self.enable_mm and self.model_config.mm_max_tokens_per_item is None:
+                self.max_chunk_tokens = self.model_config.max_model_len
+            else:
+                self.max_chunk_tokens = self.fd_config.get_max_chunk_tokens(self.model_config.mm_max_tokens_per_item)
             self.ids_remove_padding = paddle.full([max_num_seqs * self.max_chunk_tokens], 0, dtype="int64")
             self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
             self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
