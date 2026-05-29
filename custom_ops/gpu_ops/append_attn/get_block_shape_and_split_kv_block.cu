@@ -383,9 +383,8 @@ void GetBlockShapeAndSplitKVBlock(
   }
   // mla_backend not need run the following code.
   if (mla_backend) return;
-
-  // encoder
-  if (max_enc_len_this_time > 0) {
+  // deal with write cache kv!
+  {
     const uint32_t max_tile_size_per_bs_kv =
         div_up(max_enc_dec_len_this_time, block_size);
     const uint32_t kv_batch_shape = bsz * max_tile_size_per_bs_kv;
@@ -400,7 +399,7 @@ void GetBlockShapeAndSplitKVBlock(
 
     split_kv_block<<<1, 32, 0, seq_lens_encoder.stream()>>>(
         seq_lens_decoder.data<int>(),
-        seq_lens_encoder.data<int>(),
+        seq_lens_this_time.data<int>(),
         kv_batch_ids.data<int>(),
         kv_tile_ids_per_batch.data<int>(),
         kv_num_blocks_x.data<int>(),
@@ -408,8 +407,15 @@ void GetBlockShapeAndSplitKVBlock(
         block_size,
         block_size);
 
-    kv_num_blocks_x_cpu.copy_(
-        kv_num_blocks_x, kv_num_blocks_x_cpu.place(), true);
+#ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+    if (!phi::backends::gpu::IsCUDAGraphCapturing())
+#endif
+      kv_num_blocks_x_cpu.copy_(
+          kv_num_blocks_x, kv_num_blocks_x_cpu.place(), true);
+  }
+
+  // encoder
+  if (max_enc_len_this_time > 0) {
     // Clear buffer
     const uint32_t encoder_max_tile_size_per_bs_q =
         div_up((max_enc_dec_len_this_time * group_size), encoder_block_shape_q);
