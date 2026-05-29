@@ -604,13 +604,13 @@ async def test_update_weights_route_validation():
     api_server.app.state.engine_client.run_control_method = AsyncMock(return_value=mock_control_response)
 
     valid_req = MagicMock()
-    valid_req.body = AsyncMock(return_value=b'{"version":"v2","verify_checksum":true,"transfer_mode":"gdr"}')
-    valid_req.json = AsyncMock(return_value={"version": "v2", "verify_checksum": True, "transfer_mode": "gdr"})
+    valid_req.body = AsyncMock(return_value=b'{"version":"v2","verify_checksum":true}')
+    valid_req.json = AsyncMock(return_value={"version": "v2", "verify_checksum": True})
     valid_resp = await api_server.update_weights(valid_req)
     assert valid_resp.status_code == 200
     control_request = api_server.app.state.engine_client.run_control_method.await_args.args[0]
     assert control_request.method == "update_weights"
-    assert control_request.args == {"version": "v2", "verify_checksum": True, "transfer_mode": "gdr"}
+    assert control_request.args == {"version": "v2", "verify_checksum": True}
 
     invalid_version_req = MagicMock()
     invalid_version_req.body = AsyncMock(return_value=b'{"version":1}')
@@ -623,12 +623,6 @@ async def test_update_weights_route_validation():
     invalid_checksum_req.json = AsyncMock(return_value={"verify_checksum": "true"})
     invalid_checksum_resp = await api_server.update_weights(invalid_checksum_req)
     assert invalid_checksum_resp.status_code == 400
-
-    invalid_transfer_mode_req = MagicMock()
-    invalid_transfer_mode_req.body = AsyncMock(return_value=b'{"transfer_mode":"unknown"}')
-    invalid_transfer_mode_req.json = AsyncMock(return_value={"transfer_mode": "unknown"})
-    invalid_transfer_mode_resp = await api_server.update_weights(invalid_transfer_mode_req)
-    assert invalid_transfer_mode_resp.status_code == 400
 
 
 @pytest.mark.asyncio

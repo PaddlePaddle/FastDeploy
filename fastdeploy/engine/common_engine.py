@@ -1641,39 +1641,12 @@ class EngineService:
 
         if responses:
             new_version = None
-            response_list = responses if isinstance(responses, list) else [responses]
-            rsync_config = self.cfg.load_config.rsync_config or {}
-            transfer_mode = (
-                control_request.args.get("transfer_mode")
-                or rsync_config.get("transfer_mode")
-                or ("gdr" if rsync_config.get("gpu_direct") else "rdma")
-            )
-            if str(transfer_mode).lower() == "gdr":
-                versions = []
-                missing_version_indices = []
-                for idx, resp in enumerate(response_list):
-                    if isinstance(resp, dict) and resp.get("version") is not None:
-                        versions.append(resp.get("version"))
-                    else:
-                        missing_version_indices.append(idx)
-                if missing_version_indices:
-                    raise RuntimeError(
-                        "GDR update_weights requires every worker response to include version, "
-                        f"missing indices: {missing_version_indices}"
-                    )
-                if len(set(versions)) != 1:
-                    raise RuntimeError(
-                        f"GDR update_weights version mismatch across workers: {versions}"
-                    )
-                new_version = versions[0]
-                self.llm_logger.info(f"Update Weights Version in Config: {new_version}")
-            else:
-                for resp in response_list:
-                    # Expect each worker response to be a dict-like object
-                    if isinstance(resp, dict) and "version" in resp:
-                        new_version = resp.get("version")
-                        self.llm_logger.info(f"Update Weights Version in Config: {new_version}")
-                        break
+            for resp in responses:
+                # Expect each worker response to be a dict-like object
+                if isinstance(resp, dict) and "version" in resp:
+                    new_version = resp.get("version")
+                    self.llm_logger.info(f"Update Weights Version in Config: {new_version}")
+                    break
             if new_version is not None:
                 self.cfg.model_config.version = new_version
 

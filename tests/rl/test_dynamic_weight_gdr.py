@@ -14,15 +14,14 @@
 # limitations under the License.
 """
 
+import importlib.util
 import sys
 import types
 import unittest
-import importlib.util
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from unittest.mock import MagicMock, patch
-
 
 _DYNAMIC_WEIGHT_MODULE = None
 
@@ -56,7 +55,9 @@ def _install_dynamic_weight_manager_stubs():
                 memory_reserved=lambda: 0,
             )
         ),
-        base=types.SimpleNamespace(core=types.SimpleNamespace(LoDTensor=types.SimpleNamespace(_new_shared_cuda=MagicMock()))),
+        base=types.SimpleNamespace(
+            core=types.SimpleNamespace(LoDTensor=types.SimpleNamespace(_new_shared_cuda=MagicMock()))
+        ),
         load=MagicMock(),
         empty=MagicMock(),
         to_tensor=MagicMock(),
@@ -76,6 +77,8 @@ def _install_dynamic_weight_manager_stubs():
     fake_model_executor_utils = types.ModuleType("fastdeploy.model_executor.utils")
     fake_model_executor_utils.process_final_after_loading = MagicMock()
     fake_numpy = types.ModuleType("numpy")
+    fake_envs = types.ModuleType("fastdeploy.envs")
+    fake_envs.FD_USE_GDR_CHECKPOINT_TRANSFER = False
     fake_inter_communicator = types.ModuleType("fastdeploy.inter_communicator")
     fake_inter_communicator.KVCacheStatus = types.SimpleNamespace()
     fake_inter_communicator.ModelWeightsStatus = types.SimpleNamespace(NORMAL=0, CLEARED=1)
@@ -92,6 +95,7 @@ def _install_dynamic_weight_manager_stubs():
             "paddleformers.utils": types.ModuleType("paddleformers.utils"),
             "paddleformers.utils.log": types.SimpleNamespace(logger=fake_logger),
             "fastdeploy": fake_fastdeploy,
+            "fastdeploy.envs": fake_envs,
             "fastdeploy.config": fake_config,
             "fastdeploy.model_executor": fake_model_executor,
             "fastdeploy.model_executor.utils": fake_model_executor_utils,
@@ -156,16 +160,16 @@ class _FakeMTPModel(_FakeModel):
         self.num_mtp_layers = num_mtp_layers
 
 
-def _make_manager(rsync_config=None):
+def _make_manager(rsync_config=None, load_strategy="rsync"):
     DynamicWeightManager = _load_dynamic_weight_manager_module().DynamicWeightManager
 
     manager = object.__new__(DynamicWeightManager)
     fd_config = MagicMock()
     fd_config.load_config.rsync_config = rsync_config or {
         "backend": "mooncake",
-        "transfer_mode": "gdr",
         "output_framework": "paddle",
     }
+    fd_config.load_config.load_strategy = load_strategy
     fd_config.parallel_config.data_parallel_rank = 2
     fd_config.parallel_config.data_parallel_size = 1
     fd_config.parallel_config.tensor_parallel_rank = 1
@@ -176,9 +180,9 @@ def _make_manager(rsync_config=None):
     manager.local_rank = 5
     manager.nranks = 8
     manager.rdma_handle = None
-    manager.gdr_handle = None
     manager.model_list = [_FakeModel()]
     manager.state_dict = {}
+    manager.use_gdr_checkpoint_transfer = True
     return manager
 
 
@@ -190,6 +194,7 @@ class _FakeRole(Enum):
 class _FakePhase1Backend(Enum):
     GPU_DIRECT = "gpu_direct"
     MOONCAKE = "mooncake"
+    IPC = "ipc"
 
 
 @dataclass
@@ -213,6 +218,8 @@ class _FakeTransferConfig:
     log_file: str = None
     perf_log_file: str = None
     materialize_tensors: bool = True
+    qsize: int = 3
+    gpu_id: int = -1
 
     def __post_init__(self):
         self.kwargs = dict(self.__dict__)
@@ -220,12 +227,19 @@ class _FakeTransferConfig:
 
 
 def _patch_gdr_checkpoint_transfer(fake_checkpoint_transfer):
+    class FakeCheckpointTransferWithLifecycle(fake_checkpoint_transfer):
+        async def initialize(self):
+            self.initialized = True
+
+        async def cleanup(self):
+            self.cleaned = True
+
     fake_config_module = types.SimpleNamespace(
         Role=_FakeRole,
         TransferConfig=_FakeTransferConfig,
         Phase1Backend=_FakePhase1Backend,
     )
-    fake_transfer_module = types.SimpleNamespace(CheckpointTransfer=fake_checkpoint_transfer)
+    fake_transfer_module = types.SimpleNamespace(CheckpointTransfer=FakeCheckpointTransferWithLifecycle)
     return patch.dict(
         sys.modules,
         {
@@ -236,112 +250,98 @@ def _patch_gdr_checkpoint_transfer(fake_checkpoint_transfer):
 
 
 class TestDynamicWeightGDR(unittest.TestCase):
-    def test_update_weights_by_rdma_dispatches_to_gdr_stream(self):
+    def test_update_weights_by_gdr_gdr_mode(self):
         created = []
 
         class FakeCheckpointTransfer:
             def __init__(self, config):
                 self.config = config
-                self.initialized = False
-                self.cleaned = False
                 created.append(self)
 
-            async def initialize(self):
-                self.initialized = True
-
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 self.step_id = step_id
+                self.output_framework = output_framework
                 yield "model.layers.0.weight", object()
-
-            async def cleanup(self):
-                self.cleaned = True
 
         manager = _make_manager()
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
-            result = manager.update_weights_by_rdma(version="step-1", transfer_mode="gdr")
+            result = manager.update_weights_by_gdr(version="step-1")
 
-        self.assertEqual(result["transfer_mode"], "gdr")
         self.assertEqual(result["version"], "step-1")
         self.assertEqual(result["update_count"], 1)
-        self.assertEqual(result["gdr_prefetch_queue_size"], 2)
         self.assertIn("total_cost", result)
-        self.assertNotIn("sync_cost", result)
         self.assertEqual(manager.model_list[0].loaded[0][0], "model.layers.0.weight")
         self.assertTrue(created[0].initialized)
         self.assertTrue(created[0].cleaned)
         self.assertEqual(created[0].step_id, "step-1")
+        self.assertEqual(created[0].output_framework, "paddle")
         self.assertEqual(created[0].config.kwargs["role"], _FakeRole.INFERENCE)
         self.assertEqual(created[0].config.kwargs["phase1_backend"], _FakePhase1Backend.GPU_DIRECT)
         self.assertEqual(created[0].config.kwargs["global_rank"], 5)
         self.assertEqual(created[0].config.kwargs["group_size"], 8)
         self.assertNotIn("backend", created[0].config.kwargs)
-        self.assertNotIn("gpu_direct", created[0].config.kwargs)
-        self.assertNotIn("index", created[0].config.kwargs)
-        self.assertNotIn("local_rank", created[0].config.kwargs)
-        self.assertNotIn("transfer_mode", created[0].config.kwargs)
         self.assertNotIn("output_framework", created[0].config.kwargs)
 
-    def test_gdr_async_receive_exception_propagates_and_cleans_up(self):
+    def test_update_weights_by_gdr_ipc_mode(self):
         created = []
 
         class FakeCheckpointTransfer:
             def __init__(self, config):
-                self.cleaned = False
+                self.config = config
                 created.append(self)
 
-            async def initialize(self):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
+                self.step_id = step_id
+                yield "model.layers.0.weight", object()
+
+        manager = _make_manager(
+            rsync_config={"redis_host": "10.0.0.1", "redis_port": 6379},
+            load_strategy="ipc",
+        )
+
+        with (
+            _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer),
+            patch.dict("os.environ", {"FLAGS_selected_gpus": "3"}),
+        ):
+            result = manager.update_weights_by_gdr()
+
+        self.assertEqual(result["version"], "0")
+        self.assertEqual(created[0].step_id, "0")
+        self.assertEqual(created[0].config.kwargs["phase1_backend"], _FakePhase1Backend.IPC)
+        self.assertEqual(created[0].config.kwargs["global_rank"], 3)
+        self.assertEqual(created[0].config.kwargs["qsize"], 2)
+
+    def test_gdr_checkpoint_transfer_receive_exception_propagates(self):
+        class FakeCheckpointTransfer:
+            def __init__(self, config):
                 pass
 
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "model.layers.0.weight", object()
                 raise RuntimeError("receive failed")
-
-            async def cleanup(self):
-                self.cleaned = True
 
         class IncrementalModel(_FakeModel):
             def load_weights(self, weights_iterator):
                 for item in weights_iterator:
                     self.loaded.append(item)
 
-        manager = _make_manager({"transfer_mode": "gdr", "output_framework": "paddle", "gdr_prefetch_queue_size": 1})
+        manager = _make_manager()
         manager.model_list = [IncrementalModel()]
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
             with self.assertRaisesRegex(RuntimeError, "receive failed"):
-                manager.update_weights_by_rdma(version="step-error", transfer_mode="gdr")
+                manager.update_weights_by_gdr(version="step-error")
 
-        self.assertEqual([name for name, _ in manager.model_list[0].loaded], ["model.layers.0.weight"])
-        self.assertTrue(created[0].cleaned)
-
-    def test_gdr_rejects_non_paddle_output_framework(self):
-        manager = _make_manager(
-            {
-                "backend": "mooncake",
-                "transfer_mode": "gdr",
-                "output_framework": "torch",
-            }
-        )
-
-        with self.assertRaisesRegex(ValueError, "output_framework='paddle'"):
-            manager.update_weights_by_rdma(version="step-4", transfer_mode="gdr")
-
-    def test_gdr_refreshes_state_dict_after_model_loader(self):
+    def test_gdr_checkpoint_transfer_refreshes_state_dict_after_model_loader(self):
         loaded_param = object()
 
         class FakeCheckpointTransfer:
             def __init__(self, config):
                 pass
 
-            async def initialize(self):
-                pass
-
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "model.weight", loaded_param
-
-            async def cleanup(self):
-                pass
 
         class RefreshingModel(_FakeModel):
             def load_weights(self, weights_iterator):
@@ -352,62 +352,22 @@ class TestDynamicWeightGDR(unittest.TestCase):
         manager.model_list = [RefreshingModel()]
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
-            manager.update_weights_by_rdma(version="step-refresh", transfer_mode="gdr")
+            manager.update_weights_by_gdr(version="step-refresh")
 
         self.assertIs(manager.state_dict["model.weight"], loaded_param)
 
-    def test_gdr_runs_final_weight_postprocess(self):
-        class FakeCheckpointTransfer:
-            def __init__(self, config):
-                pass
-
-            async def initialize(self):
-                pass
-
-            async def receive_weights(self, step_id):
-                yield "model.layers.0.weight", object()
-
-            async def cleanup(self):
-                pass
-
-        manager = _make_manager()
-        process_final_after_loading = MagicMock()
-        fake_model_executor = types.ModuleType("fastdeploy.model_executor")
-        fake_model_executor_utils = types.ModuleType("fastdeploy.model_executor.utils")
-        fake_model_executor_utils.process_final_after_loading = process_final_after_loading
-
-        with (
-            _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer),
-            patch.dict(
-                sys.modules,
-                {
-                    "fastdeploy.model_executor": fake_model_executor,
-                    "fastdeploy.model_executor.utils": fake_model_executor_utils,
-                },
-            ),
-        ):
-            manager.update_weights_by_rdma(version="step-postprocess", transfer_mode="gdr")
-
-        process_final_after_loading.assert_called_once_with(manager.model_list[0], manager.fd_config)
-
-    def test_gdr_caches_mtp_subset_for_auxiliary_model(self):
+    def test_gdr_checkpoint_transfer_caches_mtp_subset_for_auxiliary_model(self):
         objects = [object() for _ in range(4)]
 
         class FakeCheckpointTransfer:
             def __init__(self, config):
                 pass
 
-            async def initialize(self):
-                pass
-
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "model.layers.0.self_attn.q_proj.weight", objects[0]
                 yield "model.layers.2.self_attn.q_proj.weight", objects[1]
                 yield "model.layers.20.self_attn.q_proj.weight", objects[2]
                 yield "ernie.mtp_linear_proj.0.weight", objects[3]
-
-            async def cleanup(self):
-                pass
 
         manager = _make_manager()
         main_model = _FakeModel()
@@ -415,36 +375,36 @@ class TestDynamicWeightGDR(unittest.TestCase):
         manager.model_list = [main_model, mtp_model]
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
-            result = manager.update_weights_by_rdma(version="step-5", transfer_mode="gdr")
+            result = manager.update_weights_by_gdr(version="step-5")
 
         self.assertEqual(result["update_count"], 4)
         self.assertEqual(result["mtp_cache_count"], 2)
-        self.assertEqual([name for name, _ in main_model.loaded], [
-            "model.layers.0.self_attn.q_proj.weight",
-            "model.layers.2.self_attn.q_proj.weight",
-            "model.layers.20.self_attn.q_proj.weight",
-            "ernie.mtp_linear_proj.0.weight",
-        ])
-        self.assertEqual([name for name, _ in mtp_model.loaded], [
-            "model.layers.2.self_attn.q_proj.weight",
-            "ernie.mtp_linear_proj.0.weight",
-        ])
+        self.assertEqual(
+            [name for name, _ in main_model.loaded],
+            [
+                "model.layers.0.self_attn.q_proj.weight",
+                "model.layers.2.self_attn.q_proj.weight",
+                "model.layers.20.self_attn.q_proj.weight",
+                "ernie.mtp_linear_proj.0.weight",
+            ],
+        )
+        self.assertEqual(
+            [name for name, _ in mtp_model.loaded],
+            [
+                "model.layers.2.self_attn.q_proj.weight",
+                "ernie.mtp_linear_proj.0.weight",
+            ],
+        )
 
-    def test_gdr_flushes_mtp_subset_by_chunk_limit(self):
+    def test_gdr_checkpoint_transfer_flushes_mtp_subset_by_chunk_limit(self):
         class FakeCheckpointTransfer:
             def __init__(self, config):
                 pass
 
-            async def initialize(self):
-                pass
-
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "model.layers.2.self_attn.q_proj.weight", object()
                 yield "ernie.mtp_linear_proj.0.weight", object()
                 yield "model.layers.2.self_attn.o_proj.weight", object()
-
-            async def cleanup(self):
-                pass
 
         class ChunkRecordingMTPModel(_FakeMTPModel):
             def __init__(self):
@@ -459,7 +419,6 @@ class TestDynamicWeightGDR(unittest.TestCase):
         manager = _make_manager(
             {
                 "backend": "mooncake",
-                "transfer_mode": "gdr",
                 "output_framework": "paddle",
                 "gdr_mtp_chunk_size": 2,
             }
@@ -469,45 +428,36 @@ class TestDynamicWeightGDR(unittest.TestCase):
         manager.model_list = [main_model, mtp_model]
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
-            result = manager.update_weights_by_rdma(version="step-8", transfer_mode="gdr")
+            result = manager.update_weights_by_gdr(version="step-8")
 
         self.assertEqual(result["mtp_cache_count"], 3)
-        self.assertEqual(result["gdr_mtp_chunk_size"], 2)
-        self.assertEqual(mtp_model.load_calls, [
+        self.assertEqual(
+            mtp_model.load_calls,
             [
-                "model.layers.2.self_attn.q_proj.weight",
-                "ernie.mtp_linear_proj.0.weight",
+                [
+                    "model.layers.2.self_attn.q_proj.weight",
+                    "ernie.mtp_linear_proj.0.weight",
+                ],
+                ["model.layers.2.self_attn.o_proj.weight"],
             ],
-            ["model.layers.2.self_attn.o_proj.weight"],
-        ])
+        )
 
-    def test_gdr_multi_model_requires_mtp_subset(self):
+    def test_gdr_checkpoint_transfer_multi_model_requires_mtp_subset(self):
         class FakeCheckpointTransfer:
             def __init__(self, config):
                 pass
 
-            async def initialize(self):
-                pass
-
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "model.layers.0.self_attn.q_proj.weight", object()
-
-            async def cleanup(self):
-                pass
 
         manager = _make_manager()
         manager.model_list = [_FakeModel(), _FakeMTPModel(mtp_start_layer_idx=2, num_mtp_layers=1)]
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
             with self.assertRaisesRegex(ValueError, "No MTP weights"):
-                manager.update_weights_by_rdma(version="step-5", transfer_mode="gdr")
+                manager.update_weights_by_gdr(version="step-5")
 
-    def test_gpu_direct_config_defaults_to_gdr(self):
-        manager = _make_manager({"backend": "mooncake", "gpu_direct": True})
-
-        self.assertEqual(manager._resolve_transfer_mode(), "gdr")
-
-    def test_config_transfer_mode_defaults_to_gdr_and_is_not_forwarded(self):
+    def test_gdr_checkpoint_transfer_config_not_forwarded_to_transfer_config(self):
         created = []
 
         class FakeCheckpointTransfer:
@@ -515,31 +465,24 @@ class TestDynamicWeightGDR(unittest.TestCase):
                 self.config = config
                 created.append(self)
 
-            async def initialize(self):
-                pass
-
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "w1", object()
-
-            async def cleanup(self):
-                pass
 
         manager = _make_manager(
             {
                 "backend": "mooncake",
-                "transfer_mode": "gdr",
                 "output_framework": "paddle",
             }
         )
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
-            manager.update_weights_by_rdma(version="step-6")
+            manager.update_weights_by_gdr(version="step-6")
 
-        self.assertNotIn("transfer_mode", created[0].config.kwargs)
         self.assertNotIn("gpu_direct", created[0].config.kwargs)
+        self.assertNotIn("output_framework", created[0].config.kwargs)
         self.assertEqual(created[0].config.kwargs["phase1_backend"], _FakePhase1Backend.GPU_DIRECT)
 
-    def test_gdr_computes_global_rank_from_node_index(self):
+    def test_gdr_checkpoint_transfer_computes_global_rank_from_node_index(self):
         created = []
 
         class FakeCheckpointTransfer:
@@ -547,20 +490,13 @@ class TestDynamicWeightGDR(unittest.TestCase):
                 self.config = config
                 created.append(self)
 
-            async def initialize(self):
-                pass
-
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "w1", object()
-
-            async def cleanup(self):
-                pass
 
         manager = _make_manager(
             {
                 "index": 1,
                 "backend": "mooncake",
-                "transfer_mode": "gdr",
                 "output_framework": "paddle",
                 "group_size": 16,
             }
@@ -569,13 +505,13 @@ class TestDynamicWeightGDR(unittest.TestCase):
         manager.nranks = 8
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
-            manager.update_weights_by_rdma(version="step-index", transfer_mode="gdr")
+            manager.update_weights_by_gdr(version="step-index")
 
         self.assertEqual(created[0].config.kwargs["global_rank"], 13)
         self.assertEqual(created[0].config.kwargs["group_size"], 16)
         self.assertNotIn("index", created[0].config.kwargs)
 
-    def test_checkpoint_transfer_config_is_deep_copied_before_forwarding(self):
+    def test_gdr_checkpoint_transfer_config_deep_copied_before_forwarding(self):
         created = []
 
         class FakeCheckpointTransfer:
@@ -583,28 +519,19 @@ class TestDynamicWeightGDR(unittest.TestCase):
                 self.config = config
                 created.append(self)
 
-            async def initialize(self):
-                pass
-
-            async def receive_weights(self, step_id):
+            def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "w1", object()
-
-            async def cleanup(self):
-                pass
 
         rsync_config = {
             "backend": "mooncake",
-            "transfer_mode": "gdr",
             "output_framework": "paddle",
             "device_name": "mlx5_0",
         }
         manager = _make_manager(rsync_config)
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
-            manager.update_weights_by_rdma(version="step-7", transfer_mode="gdr")
+            manager.update_weights_by_gdr(version="step-7")
 
-        self.assertEqual(rsync_config["transfer_mode"], "gdr")
-        self.assertNotIn("transfer_mode", created[0].config.kwargs)
         self.assertEqual(created[0].config.kwargs["device"], "mlx5_0")
         self.assertEqual(rsync_config["device_name"], "mlx5_0")
 
@@ -641,6 +568,7 @@ class TestDynamicWeightGDR(unittest.TestCase):
 
         fake_shared_memory.assert_called_once_with(create=False, size=4, name="model_weights_status.60572")
         self.assertEqual(fake_value.writes[0], module.ModelWeightsStatus.NORMAL)
+
 
 if __name__ == "__main__":
     unittest.main()

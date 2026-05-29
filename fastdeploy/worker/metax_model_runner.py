@@ -2550,46 +2550,8 @@ class MetaxModelRunner(ModelRunnerBase):
 
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
-    def update_weights(self, version: str = None, verify_checksum: bool = False, transfer_mode: str = None):
-        is_gdr_update = self.dynamic_weight_manager._resolve_transfer_mode(transfer_mode) == "gdr"
-        gdr_release_cache = bool(
-            (self.fd_config.load_config.rsync_config or {}).get("gdr_release_cache", False)
-        )
-        cache_clear_cost = 0.0
-        cache_rebuild_cost = 0.0
-        if is_gdr_update and gdr_release_cache:
-            clear_start = time.perf_counter()
-            self._clear_cache_for_gdr_weight_update()
-            cache_clear_cost = time.perf_counter() - clear_start
-
-        result = self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum, transfer_mode)
-
-        if is_gdr_update and gdr_release_cache:
-            rebuild_start = time.perf_counter()
-            self._rebuild_cache_after_gdr_weight_update()
-            cache_rebuild_cost = time.perf_counter() - rebuild_start
-        if is_gdr_update:
-            result["gdr_release_cache"] = gdr_release_cache
-            result["cache_clear_cost"] = cache_clear_cost
-            result["cache_rebuild_cost"] = cache_rebuild_cost
-
-        self.dynamic_weight_manager.finalize_update()
-        return result
-
-    def _clear_cache_for_gdr_weight_update(self):
-        if self.use_cudagraph:
-            self.model.clear_graph_opt_backend()
-        if self.speculative_method == SpecMethod.MTP:
-            self.proposer.clear_mtp_cache()
-        self.clear_cache()
-        paddle.device.empty_cache()
-
-    def _rebuild_cache_after_gdr_weight_update(self):
-        if self.speculative_method == SpecMethod.MTP:
-            self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
-        self.initialize_kv_cache()
-        if self.use_cudagraph:
-            self.capture_model()
+    def update_weights(self, version: str = None, verify_checksum: bool = False):
+        return self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum)
 
     def padding_cudagraph_inputs(self) -> None:
         """

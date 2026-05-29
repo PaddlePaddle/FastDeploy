@@ -188,9 +188,9 @@ class GpuWorker(WorkerBase):
         if self.fd_config.routing_replay_config.enable_routing_replay:
             self.model_runner.initialize_routing_replay_manager()
 
-    def update_weights(self, version: str = None, verify_checksum: bool = False, transfer_mode: str = None):
+    def update_weights(self, version: str = None, verify_checksum: bool = False):
         """update weights in place"""
-        return self.model_runner.update_weights(version, verify_checksum, transfer_mode)
+        return self.model_runner.update_weights(version, verify_checksum)
 
     def sleep(self, **kwargs) -> None:
         """Offload memory from GPU"""
