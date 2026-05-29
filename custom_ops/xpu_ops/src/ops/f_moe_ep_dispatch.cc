@@ -24,7 +24,7 @@
 #endif
 
 template <typename TX, typename TY>
-std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
+std::vector<paddle::Tensor> F_EPMoeExpertDispatchKernel(
     const paddle::Tensor& input,
     const paddle::Tensor& topk_ids,
     const paddle::Tensor& topk_weights,
@@ -48,6 +48,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
 
   auto block_num = xpu_ctx->x_context()->ncluster();
   paddle::Tensor permute_input;
+  paddle::Tensor permute_input_div;
   auto permute_indices_per_token =
       paddle::empty({m, topk}, paddle::DataType::INT32, place);
   auto expert_m = paddle::empty({expert_num}, paddle::DataType::INT32, place);
@@ -58,28 +59,42 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
   const int64_t ep_size = 1;
   const int64_t ep_rank = 0;
 
-  if (std::is_same<TY, int8_t>::value && !std::is_same<TX, int8_t>::value) {
+  if (std::is_same<TY, int8_t>::value) {
     permute_input =
         paddle::empty({token_nums_this_rank, n}, paddle::DataType::INT8, place);
+    permute_input_div =
+        paddle::empty({token_nums_this_rank, n}, input_type, place);
       
     if (token_nums_this_rank > 0) {
-      auto ret = infer_ops::moe_ffn_pre_sorted_quant_pe<XPU_TX, int>(
-          xpu_ctx->x_context(),
-          reinterpret_cast<const XPU_TX*>(input.data<TX>()),
-          topk_ids.data<int>(),
-          input_scales.get_ptr()->data<float>(),
-          nullptr,
-          reinterpret_cast<int8_t*>(permute_input.data<int8_t>()),
-          const_cast<int*>(permute_indices_per_token.data<int>()),
-          const_cast<int*>(expert_m.data<int>()),
-          const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
-          expand_input_scales.data<float>(),
-          m,
-          n,
-          expert_num,
-          topk,
-          block_num,
-          token_nums_this_rank);
+      if (token_nums_this_rank > 0) {
+        auto ret = infer_ops::moe_ep_ffn_pre_sorted<XPU_TX, int>(
+            xpu_ctx->x_context(),
+            reinterpret_cast<const XPU_TX*>(input.data<TX>()),
+            topk_ids.data<int>(),
+            nullptr,
+            reinterpret_cast<XPU_TX*>(permute_input_div.data<TX>()),
+            const_cast<int*>(permute_indices_per_token.data<int>()),
+            const_cast<int*>(expert_m.data<int>()),
+            const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
+            m,
+            n,
+            expert_num,
+            topk,
+            block_num,
+            ep_size,
+            ep_rank,
+            token_nums_this_rank);
+
+        ret = infer_ops::quant2d_per_expert<XPU_TX>(
+            xpu_ctx->x_context(),
+            reinterpret_cast<const XPU_TX*>(permute_input_div.data<TX>()),
+            input_scales.get_ptr()->data<float>(),
+            const_cast<int*>(recv_num_tokens_per_expert_list_cumsum.data<int>()),
+            reinterpret_cast<int8_t*>(permute_input.data<int8_t>()),
+            expand_input_scales.data<float>(),
+            expert_num,
+            token_nums_this_rank,
+            n);
 
       PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
     }
@@ -102,11 +117,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
           block_num,
           ep_size,
           ep_rank,
-          token_nums_this_rank,
-          std::is_same<TX, int8_t>::value
-              ? input_scales.get_ptr()->data<float>()
-              : nullptr,
-          expand_input_scales.data<float>());
+          token_nums_this_rank);
       PD_CHECK(ret == 0, "moe_ep_ffn_pre_sorted failed");
     }
   }
@@ -117,7 +128,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatchKernel(
           expand_input_scales};
 }
 
-std::vector<paddle::Tensor> EPMoeExpertDispatch(
+std::vector<paddle::Tensor> F_EPMoeExpertDispatch(
     const paddle::Tensor& input,
     const paddle::Tensor& topk_ids,
     const paddle::Tensor& topk_weights,
@@ -145,12 +156,10 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
   } else if (input_dtype == paddle::DataType::BFLOAT16 &&
              quant_method != "w4a8") {
     APPLY_KERNEL(paddle::bfloat16, paddle::bfloat16);
-  } else if (input_dtype == paddle::DataType::INT8) {
-    APPLY_KERNEL(int8_t, int8_t);
   } else {
     PD_THROW("EPMoeExpertDispatch not support input_dtype=",
              static_cast<int>(input_dtype),
-             ", quant_method=",
+             "quant_method=",
              quant_method);
     return {};
   }
@@ -158,7 +167,7 @@ std::vector<paddle::Tensor> EPMoeExpertDispatch(
 #undef APPLY_KERNEL
 }
 
-std::vector<std::vector<int64_t>> EPMoeExpertDispatchInferShape(
+std::vector<std::vector<int64_t>> F_EPMoeExpertDispatchInferShape(
     const std::vector<int64_t>& input_shape,
     const std::vector<int64_t>& topk_ids_shape,
     const std::vector<int64_t>& topk_weights_shape,
@@ -177,7 +186,7 @@ std::vector<std::vector<int64_t>> EPMoeExpertDispatchInferShape(
           {token_nums_this_rank}};
 }
 
-std::vector<paddle::DataType> EPMoeExpertDispatchInferDtype(
+std::vector<paddle::DataType> F_EPMoeExpertDispatchInferDtype(
     const paddle::DataType& input_dtype,
     const paddle::DataType& topk_ids_dtype,
     const paddle::DataType& topk_weights_dtype,
@@ -198,7 +207,7 @@ std::vector<paddle::DataType> EPMoeExpertDispatchInferDtype(
   };
 }
 
-PD_BUILD_STATIC_OP(ep_moe_expert_dispatch)
+PD_BUILD_STATIC_OP(f_ep_moe_expert_dispatch)
     .Inputs(
         {"input", "topk_ids", "topk_weights", paddle::Optional("input_scales")})
     .Outputs({"permute_input",
@@ -209,6 +218,6 @@ PD_BUILD_STATIC_OP(ep_moe_expert_dispatch)
     .Attrs({"token_nums_per_expert: std::vector<int>",
             "token_nums_this_rank: int",
             "quant_method: std::string"})
-    .SetKernelFn(PD_KERNEL(EPMoeExpertDispatch))
-    .SetInferShapeFn(PD_INFER_SHAPE(EPMoeExpertDispatchInferShape))
-    .SetInferDtypeFn(PD_INFER_DTYPE(EPMoeExpertDispatchInferDtype));
+    .SetKernelFn(PD_KERNEL(F_EPMoeExpertDispatch))
+    .SetInferShapeFn(PD_INFER_SHAPE(F_EPMoeExpertDispatchInferShape))
+    .SetInferDtypeFn(PD_INFER_DTYPE(F_EPMoeExpertDispatchInferDtype));
