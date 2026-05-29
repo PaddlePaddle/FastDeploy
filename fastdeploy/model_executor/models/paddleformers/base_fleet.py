@@ -602,6 +602,7 @@ else:
         @paddle.no_grad()
         def load_weights(self, weights: Iterable[tuple[str, paddle.Tensor]]):
             # use model.from_pretrained to load weight
+            logger.debug("load_weights called but skipped: weights already loaded via from_pretrained")
             pass
 
         def set_state_dict(self, state_dict):
@@ -658,7 +659,6 @@ else:
 
         # Patch core_attention for each TransformerLayer
         for layer in transformer_layers:
-            # Get layer_number (PaddleFleet starts from 1)
             layer_number = getattr(layer, "layer_number", None)
             if layer_number is None:
                 # Try to get from other attributes
@@ -704,7 +704,6 @@ else:
                 head_dim = getattr(core_attn, "hidden_size_per_attention_head", hidden_size_per_attention_head)
                 hidden_size_per_partition = num_attention_heads * head_dim
 
-            # Get FastDeploy layer ID (0-indexed)
             fd_layer_id = layer_number
 
             # Create Attention instance inside FastDeployAttention
