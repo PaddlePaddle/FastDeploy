@@ -573,11 +573,11 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
           : chunk_len,
       BLOCK_SIZE);
   const uint32_t mask_check_iteration =
-      (CAUSAL        ? (min(chunk_len,
-                     sub_if_greater_or_zero(kv_len - q_len, chunk_start)))
+      (CAUSAL
+           ? min(chunk_len, sub_if_greater_or_zero(kv_len - q_len, chunk_start))
        : mask_offset ? 0
                      : chunk_len) /
-      (BLOCK_SIZE);
+      BLOCK_SIZE;
 
   uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       wid * num_frags_z * 16 + 8 * (tid / 16) + tid % 8, (tid % 16) / 8);
