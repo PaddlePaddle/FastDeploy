@@ -565,11 +565,11 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
   const uint32_t num_iterations = div_up(
       CAUSAL
-          ? (min(chunk_len,
-                 sub_if_greater_or_zero(
-                     kv_len - q_len +
-                         div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE),
-                     chunk_start)))
+          ? min(chunk_len,
+                sub_if_greater_or_zero(
+                    kv_len - q_len +
+                        div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE),
+                    chunk_start))
           : chunk_len,
       BLOCK_SIZE);
   const uint32_t mask_check_iteration =
