@@ -43,6 +43,7 @@ void EncoderWriteCacheWithRopeKernel(
     const int max_seq_len,
     const bool use_neox_style,
     const bool rope_3d,
+    const paddle::optional<paddle::Tensor>& rope_3d_delta,
     cudaStream_t& stream,
     paddle::Tensor* qkv_out,
     paddle::Tensor* key_cache_out,
@@ -96,6 +97,7 @@ void EncoderWriteCacheWithRopeKernel(
           stream,
           use_neox_style,
           rope_3d,
+          rope_3d_delta ? rope_3d_delta.get().data<int>() : nullptr,
           q_norm_weight ? q_norm_weight.get().data<float>() : nullptr,
           k_norm_weight ? k_norm_weight.get().data<float>() : nullptr,
           rms_norm_eps);
@@ -123,7 +125,8 @@ void EncoderWriteCacheWithRopeKernel(
           head_dim,
           stream,
           use_neox_style,
-          rope_3d);
+          rope_3d,
+          rope_3d_delta ? rope_3d_delta.get().data<int>() : nullptr);
     } else {
       if (!is_scale_channel_wise) {
         gqa_rotary_qk_variable<T, QKV_TYPE, EnforceFmulRN>(
@@ -145,7 +148,8 @@ void EncoderWriteCacheWithRopeKernel(
             rotary_dim,
             stream,
             use_neox_style,
-            rope_3d);
+            rope_3d,
+            rope_3d_delta ? rope_3d_delta.get().data<int>() : nullptr);
       } else {
         gqa_rotary_qk_quant_variable<T, QKV_TYPE, EnforceFmulRN>(
             qkv_out->data<T>(),
@@ -167,7 +171,8 @@ void EncoderWriteCacheWithRopeKernel(
             head_dim,
             stream,
             use_neox_style,
-            rope_3d);
+            rope_3d,
+            rope_3d_delta ? rope_3d_delta.get().data<int>() : nullptr);
       }
     }
   }

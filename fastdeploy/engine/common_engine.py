@@ -978,6 +978,9 @@ class EngineService:
                             )
                             if finished_ids:
                                 for task in tasks:
+                                    # Fix
+                                    if task.request_id not in need_check_req_ids:
+                                        continue
                                     result = self.resource_manager.waiting_async_process(task)
                                     if result is None:
                                         self.scheduler.put_results(

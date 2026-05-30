@@ -97,6 +97,18 @@ class InputBatch:
         self.speculative_decoding = self.speculative_config.method is not None
         self.is_mm_model = self.model_config.enable_mm
         self.enable_mm = fd_config.enable_mm_runtime
+        model_type = getattr(self.model_config, "model_type", "")
+        if isinstance(model_type, list):
+            model_type = str(model_type[0]) if model_type else ""
+        model_type = model_type.lower()
+        self.use_shared_ernie_decode_rope_3d = (
+            self.enable_mm
+            and fd_config.enable_rope_3d_runtime
+            and "ernie" in model_type
+            and "qwen" not in model_type
+            and "paddleocr" not in model_type
+            and self.scheduler_config.splitwise_role == "decode"
+        )
         self.enable_expert_parallel = fd_config.parallel_config.enable_expert_parallel
         self.index_to_batch_id = {}
         self.enable_pd_reorder = False
@@ -343,9 +355,10 @@ class InputBatch:
             else:  # neox style = False
                 rope_head_dim = head_dim // 2
 
+            rope_batch_size = 1 if self.use_shared_ernie_decode_rope_3d else max_num_seqs
             self.rope_emb = paddle.full(
                 shape=[
-                    max_num_seqs,
+                    rope_batch_size,
                     2,
                     1,
                     self.model_config.max_model_len,
@@ -355,6 +368,8 @@ class InputBatch:
                 fill_value=0,
                 dtype="float32",
             )
+            if self.use_shared_ernie_decode_rope_3d:
+                self.rope_3d_delta = paddle.full([max_num_seqs], 0, dtype="int32")
             self.image_features = None  # Built before the forward
             self.image_grid_thws = None
             self.image_features_list = None
@@ -484,7 +499,10 @@ class InputBatch:
                     self.image_features_list[i2],
                     self.image_features_list[i1],
                 )
-            swap_data(self.share_inputs["rope_emb"], i1, i2)
+            if not self.use_shared_ernie_decode_rope_3d:
+                swap_data(self.rope_emb, i1, i2)
+            else:
+                swap_data(self.rope_3d_delta, i1, i2)
             swap_data(self.decode_states, i1, i2)
             swap_data(self.attn_mask_offsets_full, i1, i2)
         # Swap mask rollback
@@ -686,18 +704,21 @@ class InputBatch:
                 else:
                     rope_head_dim = head_dim // 2
 
-                self.rope_emb = paddle.full(
-                    shape=[
-                        max_num_seqs,
-                        2,
-                        1,
-                        self.model_config.max_model_len,
-                        1,
-                        rope_head_dim,
-                    ],
-                    fill_value=0,
-                    dtype="float32",
-                )
+                if self.use_shared_ernie_decode_rope_3d:
+                    fill_paddle_tensor(self, "rope_3d_delta", 0)
+                else:
+                    self.rope_emb = paddle.full(
+                        shape=[
+                            max_num_seqs,
+                            2,
+                            1,
+                            self.model_config.max_model_len,
+                            1,
+                            rope_head_dim,
+                        ],
+                        fill_value=0,
+                        dtype="float32",
+                    )
                 self.image_features = None
                 self.image_grid_thws = None
                 self.image_features_list = None
