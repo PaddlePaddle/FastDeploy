@@ -355,7 +355,6 @@ __global__ void multi_query_append_attention_c8_kernel(
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
-             partition_kv,
              CAUSAL,
              GROUP_SIZE,
              NUM_WARPS,
@@ -904,7 +903,6 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
-             partition_kv,
              CAUSAL,
              GROUP_SIZE,
              NUM_WARPS,

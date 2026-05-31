@@ -1001,7 +1001,6 @@ __device__ __forceinline__ void compute_qk_c8(smem_t* q_smem,
 }
 
 template <typename T,
-          bool partition_kv,
           bool causal,
           uint32_t group_size,
           uint32_t num_warps,

@@ -339,7 +339,6 @@ __global__ void multi_query_append_attention_c4_kernel(
 
     if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
-             partition_kv,
              CAUSAL,
              GROUP_SIZE,
              NUM_WARPS,
@@ -838,7 +837,6 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
         cache_k_zp_frag);
     if (iter >= mask_check_iteration || sliding_window > 0) {
       mask_s<T,
-             partition_kv,
              CAUSAL,
              GROUP_SIZE,
              NUM_WARPS,
