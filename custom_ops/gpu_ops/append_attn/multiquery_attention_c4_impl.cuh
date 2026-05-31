@@ -338,23 +338,18 @@ __global__ void multi_query_append_attention_c4_kernel(
         cache_k_zp_frag);
 
     if (iter >= mask_check_iteration || sliding_window > 0) {
-      mask_s<T,
-             CAUSAL,
-             GROUP_SIZE,
-             NUM_WARPS,
-             num_frags_x,
-             num_frags_y,
-             num_frags_z>(nullptr,
-                          q_base_seq_id_this_block,
-                          kv_idx_base,
-                          q_len,
-                          kv_len,
-                          chunk_end,
-                          -1,
-                          s_frag,
-                          mask_offset_this_seq,
-                          sliding_window,
-                          sink_size);
+      mask_s<T, CAUSAL, GROUP_SIZE, NUM_WARPS, num_frags_x, num_frags_z>(
+          nullptr,
+          q_base_seq_id_this_block,
+          kv_idx_base,
+          q_len,
+          kv_len,
+          chunk_end,
+          -1,
+          s_frag,
+          mask_offset_this_seq,
+          sliding_window,
+          sink_size);
     }
 
     update_mdo_states<num_frags_x, num_frags_y, num_frags_z>(
@@ -836,13 +831,7 @@ __global__ void multi_query_append_attention_c4_warp1_4_kernel(
         cache_k_scale_frag,
         cache_k_zp_frag);
     if (iter >= mask_check_iteration || sliding_window > 0) {
-      mask_s<T,
-             CAUSAL,
-             GROUP_SIZE,
-             NUM_WARPS,
-             num_frags_x,
-             num_frags_y,
-             num_frags_z>(
+      mask_s<T, CAUSAL, GROUP_SIZE, NUM_WARPS, num_frags_x, num_frags_z>(
           attn_mask ? attn_mask + batch_id * attn_mask_len * attn_mask_len
                     : nullptr,
           q_base_seq_id_this_block,

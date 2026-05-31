@@ -1005,7 +1005,6 @@ template <typename T,
           uint32_t group_size,
           uint32_t num_warps,
           uint32_t num_frags_x,
-          uint32_t num_frags_y,
           uint32_t num_frags_z>
 __device__ __forceinline__ void mask_s(const bool* attn_mask,
                                        const uint32_t qo_idx_base,
