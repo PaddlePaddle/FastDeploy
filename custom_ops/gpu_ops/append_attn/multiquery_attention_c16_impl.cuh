@@ -197,7 +197,7 @@ __global__ void multi_query_append_attention_kernel(
                      : chunk_len) /
       (num_frags_z * 16);
   uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
-      8 * (tid / 16) + tid % 8, (tid % 16) / 8);
+      tid / 16 * 8 + tid % 8, tid % 16 / 8);
 
   uint32_t v_smem_offset_r =
       smem_t::get_permuted_offset<num_vecs_per_head>(tid % 16, tid / 16);
