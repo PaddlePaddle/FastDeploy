@@ -246,7 +246,6 @@ else:
                                 output = fmqa_out
                         else:
                             output = fmqa_out
-                        # _log_md5(output, "output")
                 else:
                     # Standard mode: concatenate QKV
                     seq_len = int(q.shape[0])
@@ -259,10 +258,8 @@ else:
                     # Concatenate QKV: [seq, (q_heads + kv_heads + kv_heads) * head_dim]
                     qkv = paddle.concat([q_flat, k_flat, v_flat], axis=-1)
 
-                    # _log_md5(qkv, "qkv_out")
                     output = self.fd_attention.forward(qkv=qkv, forward_meta=forward_meta)
 
-                # _log_md5(output, "atten_out")
                 # Restore batch dimension: [seq, hidden] -> [b, seq, hidden]
                 # PaddleFleet expects 3D output format
                 output = output.unsqueeze(0)
