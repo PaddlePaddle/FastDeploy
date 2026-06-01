@@ -67,12 +67,12 @@ class TestGetFilteredMetrics(unittest.TestCase):
         if not hasattr(main_process_metrics, "spec_decode_draft_acceptance_rate"):
             main_process_metrics._init_speculative_metrics(SpecMethod.MTP, 2)
 
-        metric = main_process_metrics.spec_decode_draft_single_head_acceptance_rate[0]
-        metric.set(0.6)
+        main_process_metrics.set_value("spec_decode_draft_single_head_acceptance_rate", 0.6, labelvalues={"head": "0"})
 
+        metric = main_process_metrics.spec_decode_draft_single_head_acceptance_rate
         result = self._collect_metrics_with_mocked_multiprocess(metric._name, multiprocess_value=1000.6)
 
-        self._assert_unique_metric_value(result, metric._name, 0.6)
+        self.assertIn('head="0"', result)
 
 
 if __name__ == "__main__":

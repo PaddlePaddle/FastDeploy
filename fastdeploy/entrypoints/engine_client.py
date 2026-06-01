@@ -369,9 +369,9 @@ class EngineClient:
 
             if "messages" in task:
                 task["messages"] = None
-            main_process_metrics.request_params_max_tokens.observe(task["max_tokens"])
-            main_process_metrics.prompt_tokens_total.inc(input_ids_len)
-            main_process_metrics.request_prompt_tokens.observe(input_ids_len)
+            main_process_metrics.obs_value("request_params_max_tokens", task["max_tokens"])
+            main_process_metrics.inc_value("prompt_tokens_total", input_ids_len)
+            main_process_metrics.obs_value("request_prompt_tokens", input_ids_len)
         except Exception as e:
             log_request_error(
                 message="request[{request_id}] add_requests error: {error}, {traceback}",

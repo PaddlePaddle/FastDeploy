@@ -253,24 +253,18 @@ __global__ void multi_query_append_attention_kernel(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration || sliding_window > 0) {
-      mask_s<T,
-             partition_kv,
-             CAUSAL,
-             GROUP_SIZE,
-             NUM_WARPS,
-             num_frags_x,
-             num_frags_y,
-             num_frags_z>(nullptr,
-                          q_base_seq_id_this_block,
-                          kv_idx_base,
-                          q_len,
-                          kv_len,
-                          chunk_end,
-                          -1,
-                          s_frag,
-                          mask_offset_this_seq,
-                          sliding_window,
-                          sink_size);
+      mask_s<T, CAUSAL, GROUP_SIZE, NUM_WARPS, num_frags_x, num_frags_z>(
+          nullptr,
+          q_base_seq_id_this_block,
+          kv_idx_base,
+          q_len,
+          kv_len,
+          chunk_end,
+          -1,
+          s_frag,
+          mask_offset_this_seq,
+          sliding_window,
+          sink_size);
     }
 
     // update m,d
@@ -565,22 +559,22 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
   const uint32_t num_iterations = div_up(
       CAUSAL
-          ? (min(chunk_len,
-                 sub_if_greater_or_zero(
-                     kv_len - q_len +
-                         div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE),
-                     chunk_start)))
+          ? min(chunk_len,
+                sub_if_greater_or_zero(
+                    kv_len - q_len +
+                        div_up((tile_id + 1) * num_rows_per_block, GROUP_SIZE),
+                    chunk_start))
           : chunk_len,
       BLOCK_SIZE);
   const uint32_t mask_check_iteration =
-      (CAUSAL        ? (min(chunk_len,
-                     sub_if_greater_or_zero(kv_len - q_len, chunk_start)))
+      (CAUSAL
+           ? min(chunk_len, sub_if_greater_or_zero(kv_len - q_len, chunk_start))
        : mask_offset ? 0
                      : chunk_len) /
-      (BLOCK_SIZE);
+      BLOCK_SIZE;
 
   uint32_t k_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
-      wid * num_frags_z * 16 + 8 * (tid / 16) + tid % 8, (tid % 16) / 8);
+      wid * num_frags_z * 16 + tid / 16 * 8 + tid % 8, tid % 16 / 8);
 
   uint32_t v_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       wid * num_frags_z * 16 + tid % 16, tid / 16);
@@ -637,14 +631,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration || sliding_window > 0) {
-      mask_s<T,
-             partition_kv,
-             CAUSAL,
-             GROUP_SIZE,
-             NUM_WARPS,
-             num_frags_x,
-             num_frags_y,
-             num_frags_z>(
+      mask_s<T, CAUSAL, GROUP_SIZE, NUM_WARPS, num_frags_x, num_frags_z>(
           attn_mask ? attn_mask + batch_id * attn_mask_len * attn_mask_len
                     : nullptr,
           q_base_seq_id_this_block,

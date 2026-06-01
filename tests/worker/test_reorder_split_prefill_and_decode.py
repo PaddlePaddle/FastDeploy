@@ -1,4 +1,4 @@
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import paddle
 import pytest
@@ -12,7 +12,11 @@ from fastdeploy.config import (
     SpeculativeConfig,
     StructuredOutputsConfig,
 )
-from fastdeploy.worker.input_batch import InputBatch, reorder_split_prefill_and_decode
+from fastdeploy.worker.input_batch import (
+    InputBatch,
+    ProposerInputBatch,
+    reorder_split_prefill_and_decode,
+)
 
 
 def create_mock_config():
@@ -61,6 +65,7 @@ def create_mock_config():
     scheduler_config = Mock(spec=SchedulerConfig)
     scheduler_config.max_num_seqs = 10
     scheduler_config.max_num_batched_tokens = 2048
+    scheduler_config.max_extra_num_batched_tokens = 0
 
     speculative_config = Mock(spec=SpeculativeConfig)
     speculative_config.method = None
@@ -313,6 +318,120 @@ class TestReorderSplitPrefillAndDecode:
         # Order should remain the same
         for i in range(3):
             assert paddle.equal_all(input_batch.input_ids[i], original_data[i])
+
+
+class TestProposerInputBatchReset:
+    """Cover ProposerInputBatch.reset_model_inputs CUDA + token_ids_all branch
+    (fastdeploy/worker/input_batch.py:972-985)."""
+
+    def _make_config(self):
+        # Enable spec_decoding path so InputBatch.init_share_inputs allocates
+        # cu_seqlens_q_output / draft_tokens / accept_num etc.
+        fd_config = create_mock_config()
+        fd_config.speculative_config.method = "mtp"
+        fd_config.speculative_config.num_speculative_tokens = 1
+        fd_config.speculative_config.num_model_steps = 1
+        return fd_config
+
+    def _make_target(self, fd_config):
+        target = InputBatch(fd_config)
+        target.init_share_inputs()
+        return target
+
+    def _make_proposer(self, fd_config, target):
+        """Construct a ProposerInputBatch and manually populate only the
+        attributes that `reset_model_inputs` writes via `fill_paddle_tensor`.
+        Skipping full `init_share_inputs` avoids depending on rope_emb,
+        attention backends, and other heavy setup unrelated to the branch
+        under test."""
+        proposer = ProposerInputBatch(fd_config, target)
+
+        max_num_seqs = fd_config.scheduler_config.max_num_seqs
+        hidden_size = fd_config.model_config.hidden_size
+        max_draft_token_num = fd_config.speculative_config.num_speculative_tokens
+
+        proposer.target_hidden_states = paddle.full([max_num_seqs, hidden_size], 0, dtype="bfloat16")
+        proposer.draft_tokens = paddle.full([max_num_seqs, max_draft_token_num + 1], -1, dtype="int64")
+        proposer.is_block_step = paddle.full([max_num_seqs, 1], False, dtype="bool")
+        proposer.batch_drop = paddle.full([max_num_seqs, 1], False, dtype="bool")
+        proposer.used_list_len = paddle.full([max_num_seqs], 0, dtype="int32")
+        proposer.first_token_hidden_states = paddle.full([max_num_seqs, hidden_size], -1)
+        proposer.batch_token_num = paddle.full([max_num_seqs], 0, dtype="int32")
+        proposer.next_token_num = paddle.full([max_num_seqs], 0, dtype="int32")
+        proposer.cu_batch_token_offset = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+        proposer.cu_next_token_offset = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+        proposer.mask_rollback = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        proposer.recompute_token_num = paddle.full([max_num_seqs, 1], 0, dtype="int32")
+        return proposer
+
+    @patch("fastdeploy.worker.input_batch.current_platform")
+    def test_reset_rebinds_token_ids_all_on_cuda(self, mock_platform):
+        """When current_platform.is_cuda() and target has token_ids_all,
+        reset_model_inputs must re-pull token_ids_all from target (line 973)
+        and rebuild pre_ids from target.token_ids_all[bs_idx, prompt_len:]."""
+        mock_platform.is_cuda.return_value = True
+        mock_platform.is_xpu.return_value = False
+
+        fd_config = self._make_config()
+        target = self._make_target(fd_config)
+        proposer = self._make_proposer(fd_config, target)
+
+        max_num_seqs = fd_config.scheduler_config.max_num_seqs
+        max_model_len = fd_config.model_config.max_model_len
+
+        # Rebind target.token_ids_all to a NEW tensor with known content so
+        # we can distinguish "reset re-pulled it" from "init_share_inputs
+        # already bound to the old reference".
+        new_token_ids_all = paddle.arange(max_num_seqs * max_model_len, dtype="int64").reshape(
+            [max_num_seqs, max_model_len]
+        )
+        target.token_ids_all = new_token_ids_all
+
+        # Set a non-zero prompt_len so the slice [:, prompt_len:] is non-trivial.
+        prompt_len_value = 3
+        target.prompt_lens = paddle.full([max_num_seqs, 1], prompt_len_value, dtype="int64")
+
+        proposer.reset_model_inputs()
+
+        # Line 973 effect: token_ids_all rebound to target's new tensor.
+        assert proposer.token_ids_all is new_token_ids_all
+
+        # Line 975-985 effect: pre_ids has correct shape and the prefix is
+        # token_ids_all[bs_idx, prompt_len:], suffix remains -1.
+        assert proposer.pre_ids.shape == [max_num_seqs, max_model_len]
+        valid_len = max_model_len - prompt_len_value
+        expected_prefix = new_token_ids_all[:, prompt_len_value:]
+        assert paddle.equal_all(proposer.pre_ids[:, :valid_len], expected_prefix)
+        assert paddle.equal_all(
+            proposer.pre_ids[:, valid_len:],
+            paddle.full([max_num_seqs, prompt_len_value], -1, dtype="int64"),
+        )
+
+    @patch("fastdeploy.worker.input_batch.current_platform")
+    def test_reset_falls_back_to_pre_ids_clone_when_no_token_ids_all(self, mock_platform):
+        """When current_platform.is_cuda() but target lacks token_ids_all,
+        reset_model_inputs takes the else branch (line 986-988): clone pre_ids,
+        set token_ids_all to None."""
+        mock_platform.is_cuda.return_value = True
+        mock_platform.is_xpu.return_value = False
+
+        fd_config = self._make_config()
+        target = self._make_target(fd_config)
+        proposer = self._make_proposer(fd_config, target)
+
+        # Remove token_ids_all from target so the else branch fires.
+        del target.token_ids_all
+        # Provide a recognizable pre_ids on target.
+        max_num_seqs = fd_config.scheduler_config.max_num_seqs
+        max_model_len = fd_config.model_config.max_model_len
+        target.pre_ids = paddle.full([max_num_seqs, max_model_len], 42, dtype="int64")
+
+        proposer.reset_model_inputs()
+
+        assert proposer.token_ids_all is None
+        assert paddle.equal_all(proposer.pre_ids, paddle.full([max_num_seqs, max_model_len], 42, dtype="int64"))
+        # Clone, not reference share.
+        assert proposer.pre_ids is not target.pre_ids
 
 
 if __name__ == "__main__":

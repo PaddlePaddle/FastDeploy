@@ -127,7 +127,8 @@ class RMSNorm(nn.Layer):
         self.tp_group = self.fd_config.parallel_config.tp_group
         is_input_norm = prefix.endswith(".input_layernorm")
         self.enable_all_reduce_fusion = fd_config.parallel_config.enable_flashinfer_allreduce_fusion and (
-            ("post_attention_layernorm" in prefix) or (("input_layernorm" in prefix and layer_id != 0))
+            ("post_attention_layernorm" in prefix)
+            or (("input_layernorm" in prefix and layer_id != 0) and not fd_config.parallel_config.use_ep)
         )
 
         self.is_last_norm = prefix.endswith(".norm")
@@ -243,6 +244,13 @@ class RMSNorm(nn.Layer):
 
         if residual_input is None:
             residual_out = x
+        use_allreduce_fused = (
+            self.enable_all_reduce_fusion
+            and self.tp_size > 1
+            and x.shape[0] <= 2048
+            and residual_input is not None
+            and current_platform.is_cuda()
+        )
         if proxy_rmsnorm is None:
             if current_platform.is_gcu():
                 if residual_input is None:
@@ -250,7 +258,7 @@ class RMSNorm(nn.Layer):
                     return norm_out.astype(x_dtype), residual_out
                 norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
             # enable trtllm all reduce fusion
-            elif self.enable_all_reduce_fusion and x.shape[0] <= 2048:
+            elif use_allreduce_fused:
                 norm_out = flashinfer_allreduce_residual_rmsnorm(
                     fd_config=self.fd_config, input_tensor=x, residual=residual_input, weight=self.weight, eps=self.eps
                 )
@@ -276,9 +284,19 @@ class RMSNorm(nn.Layer):
                         quant_min_bound=self.quant_min_bound,
                     )
         else:
-            if residual_input is not None:
-                x = x + residual_input
-            norm_out = proxy_rmsnorm(x, self.weight, self.eps), x
+            if use_allreduce_fused:
+                norm_out = flashinfer_allreduce_residual_rmsnorm(
+                    fd_config=self.fd_config,
+                    input_tensor=x,
+                    residual=residual_input,
+                    weight=self.weight,
+                    eps=self.eps,
+                )
+                assert norm_out[0] is not None, "Trtllm-all-reduce fusion failed!"
+            else:
+                if residual_input is not None:
+                    x = x + residual_input
+                norm_out = proxy_rmsnorm(x, self.weight, self.eps), x
 
         out = norm_out[0].astype(x_dtype)
         if residual_input is not None:
