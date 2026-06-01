@@ -306,13 +306,9 @@ class OpenAIServingChat(OpenAiServingBase):
                 if decision.action == "truncate":
                     fallback_truncated = True
                     request_output.finished = True
-                elif (
-                    decision.action in ("hold", "drop")
-                    and not request_output.finished
-                    and not request.return_token_ids
-                ):
+                elif decision.action == "hold" and not request_output.finished and not request.return_token_ids:
                     return
-                delta_text = "" if decision.action in ("hold", "drop") else decision.text
+                delta_text = "" if decision.action == "hold" else decision.text
             choice.delta.content = delta_text
 
         choice.delta.reasoning_content = output.reasoning_content or ""

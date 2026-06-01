@@ -290,13 +290,9 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 if decision.action == "truncate":
                     fallback_truncated = True
                     request_output.finished = True
-                elif (
-                    decision.action in ("hold", "drop")
-                    and not request_output.finished
-                    and not request.return_token_ids
-                ):
+                elif decision.action == "hold" and not request_output.finished and not request.return_token_ids:
                     return
-                delta_text = "" if decision.action in ("hold", "drop") else decision.text
+                delta_text = "" if decision.action == "hold" else decision.text
             choice.text = delta_text
             choice.reasoning_content = output.reasoning_content or ""
             choice.tool_calls = request_output.accumulate_tool_calls if request_output.accumulate_tool_calls else None

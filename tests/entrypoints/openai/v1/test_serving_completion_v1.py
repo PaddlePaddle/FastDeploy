@@ -45,6 +45,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         """Set up test fixtures before each test method."""
         self.mock_engine_client = AsyncMock(spec=AsyncLLM)
+        self.mock_engine_client.abort = AsyncMock()
         self.mock_config = MagicMock(spec=FDConfig)
         self.mock_models = MagicMock(spec=OpenAIServingModels)
         self.pid = 12345

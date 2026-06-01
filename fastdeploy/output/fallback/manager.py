@@ -17,7 +17,6 @@
 from __future__ import annotations
 
 import os
-from dataclasses import replace
 from typing import Callable, Optional, Union
 
 from fastdeploy.output.fallback.base import (
@@ -106,7 +105,7 @@ class OutputFallbackManager:
         self, request_id: str, choice_index: int, delta_text: str, context: OutputFallbackContext
     ) -> StreamFallbackDecision:
         current_text = delta_text
-        blocked_action = None
+        held = False
         truncated = False
         for strategy in self.instances:
             state = self._get_state(request_id, choice_index, strategy.name)
@@ -121,63 +120,33 @@ class OutputFallbackManager:
                 # Mark terminal but keep iterating so downstream strategies can
                 # still post-process / buffer the final text.
                 truncated = True
-                current_text = decision.text
+                current_text = decision.text or current_text
                 continue
-            if decision.action in ("hold", "drop"):
-                blocked_action = decision.action
-                current_text = decision.text
+            if decision.action == "hold":
+                held = True
+                current_text = decision.text or current_text
                 continue
             current_text = decision.text
         if truncated:
-            return StreamFallbackDecision(
-                action="truncate",
-                text="" if blocked_action is not None else current_text,
-            )
-        if blocked_action is not None:
-            return StreamFallbackDecision(action=blocked_action, text="")
+            return StreamFallbackDecision(action="truncate", text="" if held else current_text)
+        if held:
+            return StreamFallbackDecision(action="hold", text="")
         return StreamFallbackDecision(action="send", text=current_text)
 
     def on_finish(self, request_id: str, choice_index: int, context: OutputFallbackContext) -> StreamFallbackDecision:
-        # In flush phase no new tokens are produced; strip token_ids so token-based
-        # strategies don't double-count the last chunk consumed in on_delta.
-        flush_output = dict(context.output)
-        flush_output.pop("token_ids", None)
-        flush_context = replace(context, output=flush_output)
-
         pending = ""
-        truncated = False
         for strategy in self.instances:
             state = self._get_state(request_id, choice_index, strategy.name)
-            if pending:
-                try:
-                    decision = strategy.on_delta(pending, replace(flush_context, delta_text=pending), state)
-                except Exception:
-                    data_processor_logger.exception(
-                        "Failed to apply streaming output fallback strategy '%s' on flush.", strategy.name
-                    )
-                    decision = StreamFallbackDecision(action="send", text=pending)
-                if decision.action == "truncate":
-                    truncated = True
-                    pending = decision.text
-                elif decision.action in ("hold", "drop"):
-                    pending = ""
-                else:
-                    pending = decision.text
             try:
-                decision = strategy.on_finish(flush_context, state)
+                decision = strategy.on_finish(context, state)
             except Exception:
                 data_processor_logger.exception(
                     "Failed to finish streaming output fallback strategy '%s'.", strategy.name
                 )
                 continue
-            if decision.action == "truncate":
-                truncated = True
             if decision.text:
-                pending += decision.text
-        return StreamFallbackDecision(
-            action="truncate" if truncated else "flush",
-            text=pending,
-        )
+                pending = decision.text
+        return StreamFallbackDecision(action="flush", text=pending)
 
     def cleanup(self, request_id: str) -> None:
         self.states.pop(request_id, None)

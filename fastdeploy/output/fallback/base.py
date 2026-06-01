@@ -41,13 +41,12 @@ class StreamFallbackDecision:
     - ``send``  : emit ``text`` downstream as the current delta.
     - ``hold``  : buffer this delta inside the strategy's ``state``; downstream
                   strategies still run, but the manager emits nothing this round.
-    - ``drop``  : discard this delta after downstream strategies observe it.
     - ``flush`` : used by ``on_finish`` to emit any remaining buffered text
                   after the stream ends.
     - ``truncate``: send ``text`` as the final delta and stop further generation.
     """
 
-    action: Literal["send", "hold", "drop", "flush", "truncate"]
+    action: Literal["send", "hold", "flush", "truncate"]
     text: str = ""
 
 

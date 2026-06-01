@@ -622,13 +622,9 @@ class OpenAIServingCompletion:
                         if decision.action == "truncate":
                             fallback_truncated = True
                             res["finished"] = True
-                        elif (
-                            decision.action in ("hold", "drop")
-                            and not res["finished"]
-                            and not request.return_token_ids
-                        ):
+                        elif decision.action == "hold" and not res["finished"] and not request.return_token_ids:
                             continue
-                        delta_text = "" if decision.action in ("hold", "drop") else decision.text
+                        delta_text = "" if decision.action == "hold" else decision.text
 
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
