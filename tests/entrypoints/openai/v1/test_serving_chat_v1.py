@@ -265,6 +265,8 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         mock_output.text = "Test response"
         mock_output.reasoning_content = ""
         mock_output.tool_calls = None
+        mock_output.skipped = False
+        mock_output.fallback_truncated = False
 
         mock_request_output = MagicMock()
         mock_request_output.outputs = mock_output
@@ -310,6 +312,8 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         mock_output.text = "Test response"
         mock_output.reasoning_content = ""
         mock_output.tool_calls = None
+        mock_output.skipped = False
+        mock_output.fallback_truncated = False
 
         mock_request_output = MagicMock()
         mock_request_output.outputs = mock_output
@@ -364,6 +368,8 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         mock_output.text = "Test response"
         mock_output.reasoning_content = ""
         mock_output.tool_calls = None
+        mock_output.skipped = False
+        mock_output.fallback_truncated = False
 
         mock_request_output = MagicMock()
         mock_request_output.outputs = mock_output
@@ -404,6 +410,7 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
             return_token_ids=False,
         )
         output = CompletionOutput(index=0, send_idx=1, token_ids=[1, 2, 3], text="corrected")
+        output.skipped = False
         output.fallback_truncated = True
         request_output = RequestOutput(
             request_id="test_request_id::n::0",

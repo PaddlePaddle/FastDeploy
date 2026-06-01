@@ -314,7 +314,6 @@ class BaseTextProcessor(ABC):
                     full_text=full_text,
                 )
                 full_text = output_fallback_manager.apply(full_text, context)
-                output_fallback_manager.cleanup(real_req_id)
 
             response_dict["outputs"]["completion_tokens"] = full_text
             response_dict["outputs"]["text"] = full_text
@@ -377,7 +376,7 @@ class BaseTextProcessor(ABC):
                 output=response_dict["outputs"],
                 delta_text=delta_text,
             )
-            decision = output_fallback_manager.on_delta(real_req_id, choice_index, delta_text, context)
+            decision = output_fallback_manager.on_delta(req_id, choice_index, delta_text, context)
             if decision.action == "truncate":
                 delta_text = decision.text
                 response_dict["finished"] = True
@@ -390,7 +389,7 @@ class BaseTextProcessor(ABC):
                 delta_text = decision.text
 
             if is_end:
-                finish_decision = output_fallback_manager.on_finish(real_req_id, choice_index, context)
+                finish_decision = output_fallback_manager.on_finish(req_id, choice_index, context)
                 if finish_decision.text:
                     delta_text = (delta_text or "") + finish_decision.text
                     fallback_held = False
@@ -469,8 +468,7 @@ class BaseTextProcessor(ABC):
             if req_id in self.fallback_decode_status:
                 del self.fallback_decode_status[req_id]
             if output_fallback_manager is not None:
-                real_req_id, _ = parse_choice_id(req_id)
-                output_fallback_manager.cleanup(real_req_id or req_id)
+                output_fallback_manager.cleanup(req_id)
 
         return response_dict
 

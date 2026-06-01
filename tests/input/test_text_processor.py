@@ -130,6 +130,7 @@ def _create_dummy_modules():
         info=lambda *args, **kwargs: None,
         warning=lambda *args, **kwargs: None,
         debug=lambda *args, **kwargs: None,
+        exception=lambda *args, **kwargs: None,
     )
 
     CHOICE_SEPARATOR = "::n::"
@@ -153,6 +154,24 @@ def _create_dummy_modules():
             return int(compound_id.rsplit(CHOICE_SEPARATOR, 1)[1])
         raise ValueError(f"No choice index in request_id: {compound_id}")
 
+    def is_list_of(value, typ, *, check="first"):
+        if not isinstance(value, list):
+            return False
+        if check == "first":
+            return len(value) == 0 or isinstance(value[0], typ)
+        if check == "all":
+            return all(isinstance(v, typ) for v in value)
+        raise AssertionError(check)
+
+    def import_from_path(module_name, file_path):
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        if spec is None:
+            raise ModuleNotFoundError(f"No module named '{module_name}'")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
+
     utils_module = types.ModuleType("fastdeploy.utils")
     utils_module.data_processor_logger = dummy_logger
     utils_module.CHOICE_SEPARATOR = CHOICE_SEPARATOR
@@ -160,6 +179,8 @@ def _create_dummy_modules():
     utils_module.parse_choice_id = parse_choice_id
     utils_module.get_base_request_id = get_base_request_id
     utils_module.get_choice_index = get_choice_index
+    utils_module.is_list_of = is_list_of
+    utils_module.import_from_path = import_from_path
 
     envs_module = types.ModuleType("fastdeploy.envs")
     envs_module.FD_USE_HF_TOKENIZER = False

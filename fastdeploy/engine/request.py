@@ -914,6 +914,7 @@ class CompletionOutput:
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
     fallback_truncated: Optional[bool] = False
+    skipped: Optional[bool] = False
 
     def to_dict(self):
         """
