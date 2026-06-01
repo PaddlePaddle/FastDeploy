@@ -913,6 +913,7 @@ class CompletionOutput:
     delta_message: Optional[DeltaMessage] = None
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
+    fallback_truncated: Optional[bool] = False
 
     def to_dict(self):
         """

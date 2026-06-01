@@ -237,6 +237,12 @@ async def lifespan(app: FastAPI):
         max_logprobs=args.max_logprobs,
     )
     await engine_client.connection_manager.initialize()
+    # The data_processor owns output-fallback application: strategies run on
+    # the raw decoded stream BEFORE reasoning/tool parsing, so all sub-streams
+    # (content / reasoning / tool calls) benefit. Serving handlers no longer
+    # invoke the manager themselves.
+    if output_fallback_manager is not None and getattr(engine_client, "data_processor", None) is not None:
+        engine_client.data_processor.output_fallback_manager = output_fallback_manager
     app.state.dynamic_load_weight = args.dynamic_load_weight
     model_handler = OpenAIServingModels(
         model_paths,

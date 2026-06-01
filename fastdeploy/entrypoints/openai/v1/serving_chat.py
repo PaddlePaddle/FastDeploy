@@ -16,7 +16,6 @@
 
 import time
 import traceback
-from dataclasses import asdict
 from typing import Any, AsyncGenerator, List, Optional
 
 from typing_extensions import override
@@ -52,7 +51,6 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.output.fallback import OutputFallbackContext
 from fastdeploy.utils import make_choice_id
 from fastdeploy.worker.output import LogprobsLists
 
@@ -292,23 +290,16 @@ class OpenAIServingChat(OpenAiServingBase):
                 ]
         else:
             delta_text = output.text or ""
-            original_finished = request_output.finished
-            if self.output_fallback_manager is not None:
-                context = OutputFallbackContext(
-                    request=request,
-                    request_id=ctx.request_id,
-                    choice_index=output.index,
-                    stream=True,
-                    output=asdict(output),
-                    delta_text=delta_text,
-                )
-                decision = self.output_fallback_manager.on_delta(ctx.request_id, output.index, delta_text, context)
-                if decision.action == "truncate":
-                    fallback_truncated = True
-                    request_output.finished = True
-                elif decision.action == "hold" and not request_output.finished and not request.return_token_ids:
+            fallback_truncated = bool(output.fallback_truncated)
+            # ``request_output.finished`` may have been set to True by the
+            # processor's fallback truncate; use this flag to recover the
+            # "was naturally finished before truncate" signal.
+            original_finished = request_output.finished and not fallback_truncated
+            if output.skipped:
+                # Held by output fallback in upstream processor.
+                if not request_output.finished and not request.return_token_ids:
                     return
-                delta_text = "" if decision.action == "hold" else decision.text
+                delta_text = ""
             choice.delta.content = delta_text
 
         choice.delta.reasoning_content = output.reasoning_content or ""
@@ -339,17 +330,6 @@ class OpenAIServingChat(OpenAiServingBase):
                         )
                     response_ctx.remain_choices -= 1
                 await self.engine_client.abort(make_choice_id(ctx.request_id, output.index), 1)
-            if self.output_fallback_manager is not None and not self.enable_mm_output:
-                context = OutputFallbackContext(
-                    request=request,
-                    request_id=ctx.request_id,
-                    choice_index=output.index,
-                    stream=True,
-                    output=asdict(output),
-                )
-                finish_decision = self.output_fallback_manager.on_finish(ctx.request_id, output.index, context)
-                if finish_decision.text:
-                    choice.delta.content = finish_decision.text + (choice.delta.content or "")
             log_request(
                 level=RequestLogLevel.LIFECYCLE,
                 message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
@@ -432,16 +412,6 @@ class OpenAIServingChat(OpenAiServingBase):
         else:
             request_output = request_output_list[-1]
             text = request_output.outputs.text
-            if self.output_fallback_manager is not None and text:
-                context = OutputFallbackContext(
-                    request=request,
-                    request_id=ctx.request_id,
-                    choice_index=request_output.outputs.index,
-                    stream=False,
-                    output=asdict(request_output.outputs),
-                    full_text=text,
-                )
-                text = self.output_fallback_manager.apply(text, context)
             message.content = text
         output = request_output.outputs
         message.reasoning_content = output.reasoning_content

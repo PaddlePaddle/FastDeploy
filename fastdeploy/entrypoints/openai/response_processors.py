@@ -168,6 +168,7 @@ class ChatResponseProcessor:
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
                             request=request,
+                            disable_output_fallback=True,
                         )
                     else:
                         self.data_processor.process_response_dict(
@@ -175,6 +176,7 @@ class ChatResponseProcessor:
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
                             request=request,
+                            disable_output_fallback=True,
                         )
                     text = {"type": "text", "text": request_output["outputs"]["text"]}
                     request_output["outputs"]["multipart"] = [text]
@@ -197,6 +199,7 @@ class ChatResponseProcessor:
                                     stream=False,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                     request=request,
+                                    disable_output_fallback=True,
                                 )
                             else:
                                 self.data_processor.process_response_dict(
@@ -204,6 +207,7 @@ class ChatResponseProcessor:
                                     stream=stream,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                     request=request,
+                                    disable_output_fallback=True,
                                 )
                             text = {"type": "text", "text": part["request_output"]["outputs"]["text"]}
                             multipart.append(text)

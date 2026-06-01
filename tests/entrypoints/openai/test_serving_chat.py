@@ -18,7 +18,7 @@ import asyncio
 import json
 import unittest
 from types import SimpleNamespace
-from unittest.mock import ANY, AsyncMock, MagicMock, Mock, patch
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
 
 import paddle
 
@@ -26,7 +26,6 @@ import fastdeploy.envs as envs
 from fastdeploy.engine.request import RequestOutput
 from fastdeploy.entrypoints.openai.protocol import ChatCompletionRequest, StreamOptions
 from fastdeploy.entrypoints.openai.serving_chat import OpenAIServingChat
-from fastdeploy.output.fallback import StreamFallbackDecision
 from fastdeploy.utils import ErrorCode, ParameterError
 from fastdeploy.worker.output import Logprob, LogprobsLists, LogprobsTensors
 
@@ -954,7 +953,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(choice.get("logprobs"))
 
     async def test_chat_completion_stream_generator_with_fallback_truncate(self):
-        """Test stream fallback truncate sets finish_reason and skips residual output."""
+        """Stream fallback truncate (signaled by processor) sets finish_reason and
+        triggers abort/cleanup at the serving layer.
+        """
         request = ChatCompletionRequest(
             messages=[{"role": "user", "content": "Hello"}],
             stream=True,
@@ -965,7 +966,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         prompt_token_ids = [1, 2, 3]
         prompt_tokens = "Hello world"
 
-        def make_response(choice_index, text, finished):
+        def make_response(choice_index, text, finished, fallback_truncated=False, skipped=False):
             return {
                 "request_id": f"{request_id}::n::{choice_index}",
                 "error_code": 200,
@@ -977,6 +978,8 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 },
                 "prompt_logprobs": None,
                 "outputs": {
+                    "send_idx": 0,
+                    "index": choice_index,
                     "token_ids": [5],
                     "text": text,
                     "top_logprobs": None,
@@ -984,7 +987,8 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     "tool_calls": None,
                     "reasoning_content": "",
                     "multipart": [{"type": "text", "text": text}],
-                    "skipped": False,
+                    "skipped": skipped,
+                    "fallback_truncated": fallback_truncated,
                 },
                 "finished": finished,
                 "num_cached_tokens": 0,
@@ -992,13 +996,13 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                 "num_input_video_tokens": 0,
             }
 
-        truncated_response = make_response(0, "repeat", False)
-        residual_response = make_response(0, "residual", True)
+        # Processor signals truncate on choice 0 (text already corrected upstream).
+        truncated_response = make_response(0, "corrected", True, fallback_truncated=True)
         normal_response = make_response(1, "normal", True)
 
         mock_dealer = MagicMock()
         mock_response_queue = AsyncMock()
-        mock_response_queue.get.side_effect = [truncated_response, residual_response, normal_response]
+        mock_response_queue.get.side_effect = [truncated_response, normal_response]
         self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
             return_value=(mock_dealer, mock_response_queue)
         )
@@ -1009,20 +1013,9 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
         self.chat_completion_handler.engine_client.abort = AsyncMock()
 
+        # Manager only used for cleanup() in finally; on_delta/on_finish are no
+        # longer invoked from the serving layer.
         fallback_manager = MagicMock()
-
-        def on_delta_side_effect(request_id, choice_index, delta_text, context):
-            if choice_index == 0:
-                return StreamFallbackDecision(action="truncate", text="truncated")
-            return StreamFallbackDecision(action="send", text=delta_text)
-
-        def on_finish_side_effect(request_id, choice_index, context):
-            if choice_index == 0:
-                return StreamFallbackDecision(action="flush", text="flushed-")
-            return StreamFallbackDecision(action="flush")
-
-        fallback_manager.on_delta.side_effect = on_delta_side_effect
-        fallback_manager.on_finish.side_effect = on_finish_side_effect
         self.chat_completion_handler.output_fallback_manager = fallback_manager
 
         mock_response_processor = MagicMock()
@@ -1054,11 +1047,12 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
 
         truncated_choices = [choice for choice in choices if choice.get("finish_reason") == "length"]
         self.assertEqual(len(truncated_choices), 1)
-        self.assertEqual(truncated_choices[0]["delta"]["content"], "flushed-truncated")
-        self.assertFalse(any(choice.get("delta", {}).get("content") == "residual" for choice in choices))
+        self.assertEqual(truncated_choices[0]["index"], 0)
         self.chat_completion_handler.engine_client.abort.assert_awaited_once()
-        fallback_manager.on_finish.assert_any_call(request_id, 0, ANY)
         fallback_manager.cleanup.assert_called_once_with(request_id)
+        # on_delta/on_finish moved to processor; serving layer must not call them.
+        fallback_manager.on_delta.assert_not_called()
+        fallback_manager.on_finish.assert_not_called()
 
     async def test_chat_completion_full_generator_with_prompt_logprobs(self):
         """Test chat_completion_full_generator with prompt_logprobs enabled"""

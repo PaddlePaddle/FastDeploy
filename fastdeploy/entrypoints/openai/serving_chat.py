@@ -50,7 +50,6 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.output.fallback import OutputFallbackContext
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
@@ -445,28 +444,9 @@ class OpenAIServingChat:
                         continue
 
                     delta_text = "" if output["skipped"] else (output["text"] or "")
-                    fallback_truncated = False
-                    if self.output_fallback_manager is not None and not response_processor.enable_multimodal_content():
-                        context = OutputFallbackContext(
-                            request=request,
-                            request_id=request_id,
-                            choice_index=idx,
-                            stream=True,
-                            output=output,
-                            delta_text=delta_text,
-                        )
-                        decision = self.output_fallback_manager.on_delta(
-                            request_id=request_id,
-                            choice_index=idx,
-                            delta_text=delta_text,
-                            context=context,
-                        )
-                        if decision.action == "truncate":
-                            fallback_truncated = True
-                            res["finished"] = True
-                        elif decision.action == "hold" and not res["finished"] and not request.return_token_ids:
-                            continue
-                        delta_text = "" if decision.action == "hold" else decision.text
+                    fallback_truncated = bool(output.get("fallback_truncated"))
+                    if fallback_truncated:
+                        res["finished"] = True
 
                     delta_message = DeltaMessage(
                         reasoning_content=output["reasoning_content"],
@@ -530,20 +510,6 @@ class OpenAIServingChat:
                             fallback_truncated_choices.add(idx)
                             await self.engine_client.abort(make_choice_id(request_id, idx), 1)
 
-                        if (
-                            self.output_fallback_manager is not None
-                            and not response_processor.enable_multimodal_content()
-                        ):
-                            context = OutputFallbackContext(
-                                request=request,
-                                request_id=request_id,
-                                choice_index=idx,
-                                stream=True,
-                                output=output,
-                            )
-                            finish_decision = self.output_fallback_manager.on_finish(request_id, idx, context)
-                            if finish_decision.text:
-                                delta_message.content = finish_decision.text + (delta_message.content or "")
                         inference_start_time[idx] = 0
 
                     if request.collect_metrics:
@@ -897,18 +863,7 @@ class OpenAIServingChat:
         if response_processor.enable_multimodal_content():
             message.multimodal_content = output.get("multipart")
         else:
-            text = output["text"]
-            if self.output_fallback_manager is not None and text:
-                context = OutputFallbackContext(
-                    request=request,
-                    request_id=data["request_id"],
-                    choice_index=idx,
-                    stream=False,
-                    output=output,
-                    full_text=text,
-                )
-                text = self.output_fallback_manager.apply(text, context)
-            message.content = text
+            message.content = output["text"]
 
         if output.get("audio_content", None) is not None:
             message.audio_content = output["audio_content"]

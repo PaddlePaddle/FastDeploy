@@ -46,7 +46,6 @@ from fastdeploy.logger.request_logger import (
     log_request,
     log_request_error,
 )
-from fastdeploy.output.fallback import OutputFallbackContext
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
 from fastdeploy.utils import (
@@ -603,28 +602,9 @@ class OpenAIServingCompletion:
                         continue
 
                     delta_text = "" if output["skipped"] else (output["text"] or "")
-                    fallback_truncated = False
-                    if self.output_fallback_manager is not None:
-                        context = OutputFallbackContext(
-                            request=request,
-                            request_id=request_id,
-                            choice_index=idx,
-                            stream=True,
-                            output=output,
-                            delta_text=delta_text,
-                        )
-                        decision = self.output_fallback_manager.on_delta(
-                            request_id=request_id,
-                            choice_index=idx,
-                            delta_text=delta_text,
-                            context=context,
-                        )
-                        if decision.action == "truncate":
-                            fallback_truncated = True
-                            res["finished"] = True
-                        elif decision.action == "hold" and not res["finished"] and not request.return_token_ids:
-                            continue
-                        delta_text = "" if decision.action == "hold" else decision.text
+                    fallback_truncated = bool(output.get("fallback_truncated"))
+                    if fallback_truncated:
+                        res["finished"] = True
 
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
@@ -658,17 +638,6 @@ class OpenAIServingCompletion:
                             choices[-1].finish_reason = "length"
                             fallback_truncated_choices.add(idx)
                             await self.engine_client.abort(make_choice_id(request_id, idx), 1)
-                        if self.output_fallback_manager is not None:
-                            context = OutputFallbackContext(
-                                request=request,
-                                request_id=request_id,
-                                choice_index=idx,
-                                stream=True,
-                                output=output,
-                            )
-                            finish_decision = self.output_fallback_manager.on_finish(request_id, idx, context)
-                            if finish_decision.text:
-                                choices[-1].text = finish_decision.text + (choices[-1].text or "")
                         inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
@@ -814,16 +783,6 @@ class OpenAIServingCompletion:
                     prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
                 )
             generated_text = output["text"]
-            if self.output_fallback_manager is not None and generated_text:
-                context = OutputFallbackContext(
-                    request=request,
-                    request_id=final_res["request_id"],
-                    choice_index=idx,
-                    stream=False,
-                    output=output,
-                    full_text=generated_text,
-                )
-                generated_text = self.output_fallback_manager.apply(generated_text, context)
             if request.echo:
                 prompt_text = self._echo_back_prompt(request, idx // (1 if request.n is None else request.n))
                 token_ids = [*prompt_token_ids, *output["token_ids"]]

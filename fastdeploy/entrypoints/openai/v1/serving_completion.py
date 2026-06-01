@@ -16,7 +16,6 @@
 
 import time
 import traceback
-from dataclasses import asdict
 from typing import Any, AsyncGenerator, List, Optional
 
 from typing_extensions import override
@@ -44,7 +43,6 @@ from fastdeploy.logger.request_logger import (
     log_request,
     log_request_error,
 )
-from fastdeploy.output.fallback import OutputFallbackContext
 from fastdeploy.utils import ErrorType, make_choice_id
 from fastdeploy.worker.output import LogprobsLists
 
@@ -275,24 +273,14 @@ class OpenAIServingCompletion(OpenAiServingBase):
                         output.draft_top_logprobs, request.logprobs, 0
                     )
             delta_text = output.text or ""
-            fallback_truncated = False
-            original_finished = request_output.finished
-            if self.output_fallback_manager is not None:
-                context = OutputFallbackContext(
-                    request=request,
-                    request_id=request_id,
-                    choice_index=output.index,
-                    stream=True,
-                    output=asdict(output),
-                    delta_text=delta_text,
-                )
-                decision = self.output_fallback_manager.on_delta(request_id, output.index, delta_text, context)
-                if decision.action == "truncate":
-                    fallback_truncated = True
-                    request_output.finished = True
-                elif decision.action == "hold" and not request_output.finished and not request.return_token_ids:
-                    return
-                delta_text = "" if decision.action == "hold" else decision.text
+            fallback_truncated = bool(output.fallback_truncated)
+            # ``request_output.finished`` may be set by upstream processor's
+            # fallback truncate; recover the "natural finish" signal.
+            original_finished = request_output.finished and not fallback_truncated
+            if output.skipped and not request_output.finished and not request.return_token_ids:
+                return
+            if output.skipped:
+                delta_text = ""
             choice.text = delta_text
             choice.reasoning_content = output.reasoning_content or ""
             choice.tool_calls = request_output.accumulate_tool_calls if request_output.accumulate_tool_calls else None
@@ -312,17 +300,6 @@ class OpenAIServingCompletion(OpenAiServingBase):
                             )
                         response_ctx.remain_choices -= 1
                     await self.engine_client.abort(make_choice_id(request_id, output.index), 1)
-                if self.output_fallback_manager is not None:
-                    context = OutputFallbackContext(
-                        request=request,
-                        request_id=request_id,
-                        choice_index=output.index,
-                        stream=True,
-                        output=asdict(output),
-                    )
-                    finish_decision = self.output_fallback_manager.on_finish(request_id, output.index, context)
-                    if finish_decision.text:
-                        choice.text = finish_decision.text + (choice.text or "")
                 log_request(
                     level=RequestLogLevel.LIFECYCLE,
                     message="Completion Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
@@ -416,16 +393,6 @@ class OpenAIServingCompletion(OpenAiServingBase):
             final_res.prompt = final_res.prompt + (output.text or "")
         finish_reason = self._calc_finish_reason(final_res, request.max_tokens, len(output.token_ids))
         output_text = output.text or ""
-        if self.output_fallback_manager is not None and output_text:
-            context = OutputFallbackContext(
-                request=request,
-                request_id=final_res.request_id,
-                choice_index=output.index,
-                stream=False,
-                output=asdict(output),
-                full_text=output_text,
-            )
-            output_text = self.output_fallback_manager.apply(output_text, context)
         choice_data = CompletionResponseChoice(
             index=index,
             text=output_text,
