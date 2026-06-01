@@ -25,7 +25,6 @@ from typing import Any, Literal, Optional
 class OutputFallbackContext:
     request: Optional[Any]
     request_id: str
-    choice_index: int
     stream: bool
     output: dict
     full_text: Optional[str] = None

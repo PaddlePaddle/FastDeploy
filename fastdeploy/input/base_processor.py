@@ -302,13 +302,9 @@ class BaseTextProcessor(ABC):
             # tool parsing so all sub-streams (content, reasoning, tools)
             # benefit from the rewrite.
             if output_fallback_manager is not None and full_text:
-                real_req_id, choice_index = parse_choice_id(req_id)
-                if choice_index is None:
-                    real_req_id, choice_index = req_id, 0
                 context = OutputFallbackContext(
                     request=request,
-                    request_id=real_req_id,
-                    choice_index=choice_index,
+                    request_id=req_id,
                     stream=False,
                     output=response_dict["outputs"],
                     full_text=full_text,
@@ -364,19 +360,15 @@ class BaseTextProcessor(ABC):
         # ------------------------------------------------------------------
         fallback_held = False
         if output_fallback_manager is not None:
-            real_req_id, choice_index = parse_choice_id(req_id)
-            if choice_index is None:
-                real_req_id, choice_index = req_id, 0
             state = self.fallback_decode_status.setdefault(req_id, {"previous_corrected": ""})
             context = OutputFallbackContext(
                 request=request,
-                request_id=real_req_id,
-                choice_index=choice_index,
+                request_id=req_id,
                 stream=True,
                 output=response_dict["outputs"],
                 delta_text=delta_text,
             )
-            decision = output_fallback_manager.on_delta(req_id, choice_index, delta_text, context)
+            decision = output_fallback_manager.on_delta(req_id, delta_text, context)
             if decision.action == "truncate":
                 delta_text = decision.text
                 response_dict["finished"] = True
@@ -389,7 +381,7 @@ class BaseTextProcessor(ABC):
                 delta_text = decision.text
 
             if is_end:
-                finish_decision = output_fallback_manager.on_finish(req_id, choice_index, context)
+                finish_decision = output_fallback_manager.on_finish(req_id, context)
                 if finish_decision.text:
                     delta_text = (delta_text or "") + finish_decision.text
                     fallback_held = False

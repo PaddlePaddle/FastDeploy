@@ -89,7 +89,7 @@ class OutputFallbackManager:
         self.strategies = [name.replace("_", "-") for name in strategies]
         self.config = {name.replace("_", "-"): value for name, value in (config or {}).items()}
         self.instances = [self.get_strategy(name)(self.config.get(name, {})) for name in self.strategies]
-        self.states: dict[str, dict[tuple[int, str], dict]] = {}
+        self.states: dict[str, dict[str, dict]] = {}
 
     def apply(self, text: str, context: OutputFallbackContext) -> str:
         result_text = text
@@ -101,14 +101,12 @@ class OutputFallbackManager:
                 data_processor_logger.exception("Failed to apply output fallback strategy '%s'.", strategy.name)
         return result_text
 
-    def on_delta(
-        self, request_id: str, choice_index: int, delta_text: str, context: OutputFallbackContext
-    ) -> StreamFallbackDecision:
+    def on_delta(self, request_id: str, delta_text: str, context: OutputFallbackContext) -> StreamFallbackDecision:
         current_text = delta_text
         held = False
         truncated = False
         for strategy in self.instances:
-            state = self._get_state(request_id, choice_index, strategy.name)
+            state = self._get_state(request_id, strategy.name)
             try:
                 decision = strategy.on_delta(current_text, context, state)
             except Exception:
@@ -128,15 +126,15 @@ class OutputFallbackManager:
                 continue
             current_text = decision.text
         if truncated:
-            return StreamFallbackDecision(action="truncate", text="" if held else current_text)
+            return StreamFallbackDecision(action="truncate", text=current_text)
         if held:
             return StreamFallbackDecision(action="hold", text="")
         return StreamFallbackDecision(action="send", text=current_text)
 
-    def on_finish(self, request_id: str, choice_index: int, context: OutputFallbackContext) -> StreamFallbackDecision:
+    def on_finish(self, request_id: str, context: OutputFallbackContext) -> StreamFallbackDecision:
         pending = ""
         for strategy in self.instances:
-            state = self._get_state(request_id, choice_index, strategy.name)
+            state = self._get_state(request_id, strategy.name)
             try:
                 decision = strategy.on_finish(context, state)
             except Exception:
@@ -151,5 +149,5 @@ class OutputFallbackManager:
     def cleanup(self, request_id: str) -> None:
         self.states.pop(request_id, None)
 
-    def _get_state(self, request_id: str, choice_index: int, strategy_name: str) -> dict:
-        return self.states.setdefault(request_id, {}).setdefault((choice_index, strategy_name), {})
+    def _get_state(self, request_id: str, strategy_name: str) -> dict:
+        return self.states.setdefault(request_id, {}).setdefault(strategy_name, {})

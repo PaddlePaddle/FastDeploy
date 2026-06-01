@@ -605,6 +605,27 @@ class TextProcessorTestCase(unittest.TestCase):
         self.assertEqual(result["outputs"]["text"], "7")
         self.assertNotIn(req_id, processor.decode_status)
 
+    def test_process_response_streaming_uses_compound_request_id_for_fallback_state(self):
+        processor = self.processor
+        manager = mock.Mock()
+        manager.on_delta.return_value = SimpleNamespace(action="send", text="7")
+        manager.on_finish.return_value = SimpleNamespace(text="")
+        processor.output_fallback_manager = manager
+
+        req_id = "stream::n::1"
+        processor.decode_status[req_id] = [0, 0, [], ""]
+        response = {"finished": True, "request_id": req_id, "outputs": {"token_ids": [7]}}
+
+        result = processor.process_response_dict_streaming(response, enable_thinking=False)
+        self.assertEqual(result["outputs"]["text"], "7")
+        manager.on_delta.assert_called_once()
+        self.assertEqual(manager.on_delta.call_args.args[0:2], (req_id, "7"))
+        self.assertEqual(manager.on_delta.call_args.args[2].request_id, req_id)
+        manager.on_finish.assert_called_once()
+        self.assertEqual(manager.on_finish.call_args.args[0], req_id)
+        manager.cleanup.assert_called_once_with(req_id)
+        self.assertNotIn(req_id, processor.fallback_decode_status)
+
     def test_process_response_streaming_with_reasoning_and_tools(self):
         processor = self.processor
         self.processor.model_status_dict["normal"] = "think_start"
