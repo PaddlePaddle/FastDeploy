@@ -66,12 +66,6 @@ run_test_with_logging() {
 
     echo "Running pytest file: $test_file"
 
-    # Set CUDA_VISIBLE_DEVICES for 4-card tests
-    if [[ "$test_file" =~ test_fallback_fleet_tp_model\.py ]]; then
-        export CUDA_VISIBLE_DEVICES="0,1"
-        echo "Setting CUDA_VISIBLE_DEVICES=0,1 for 2-card test"
-    fi
-
     # Create isolated log directory for this test to avoid race conditions
     # Format: unittest_logs/<test_dir>/<test_file_base>/log
     local test_rel_path="${test_file#tests/}"
@@ -175,12 +169,6 @@ run_test_with_logging() {
 
     # Unset FD_LOG_DIR to avoid affecting next test
     unset FD_LOG_DIR
-
-    # Unset CUDA_VISIBLE_DEVICES if it was set for 4-card test
-    if [[ "$test_file" =~ test_fallback_fleet_tp_model\.py ]]; then
-        unset CUDA_VISIBLE_DEVICES
-    fi
-
     return $status
 }
 
