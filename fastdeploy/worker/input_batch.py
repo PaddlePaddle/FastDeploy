@@ -236,8 +236,10 @@ class InputBatch:
 
         # Initialize rotary position embedding
         if not self.enable_mm:
+            rotary_percent = getattr(self.model_config, "rotary_percent", 1.0)
+            self.rotary_dim = int(self.model_config.head_dim * rotary_percent)
             self.rope_emb = get_rope(
-                rotary_dim=self.model_config.head_dim,
+                rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
                 position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
@@ -716,8 +718,10 @@ class InputBatch:
                 fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
             else:
                 # Reset non-multimodal rope_emb
+                rotary_percent = getattr(self.model_config, "rotary_percent", 1.0)
+                self.rotary_dim = int(self.model_config.head_dim * rotary_percent)
                 self.rope_emb = get_rope(
-                    rotary_dim=self.model_config.head_dim,
+                    rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
                     position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
                     base=self.model_config.rope_theta,
                     model_config=self.model_config,
@@ -816,8 +820,10 @@ class ProposerInputBatch(InputBatch):
 
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
 
+        rotary_percent = getattr(self.model_config, "rotary_percent", 1.0)
+        self.rotary_dim = int(self.model_config.head_dim * rotary_percent)
         self.rope_emb = get_rope(
-            rotary_dim=self.model_config.head_dim,
+            rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
             position_ids=tmp_position_ids,
             base=self.model_config.rope_theta,
             model_config=self.model_config,
@@ -1023,6 +1029,10 @@ class ProposerInputBatch(InputBatch):
             # NOTE(fix): These tensors are dynamically resized during runtime inference.
             # Must recreate at full initial size to avoid CUDAGraph replay OOB access.
             max_num_seqs = self.scheduler_config.max_num_seqs
+            if self.enable_mm and self.model_config.mm_max_tokens_per_item is None:
+                self.max_chunk_tokens = self.model_config.max_model_len
+            else:
+                self.max_chunk_tokens = self.fd_config.get_max_chunk_tokens(self.model_config.mm_max_tokens_per_item)
             self.ids_remove_padding = paddle.full([max_num_seqs * self.max_chunk_tokens], 0, dtype="int64")
             self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
             self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
@@ -1040,8 +1050,10 @@ class ProposerInputBatch(InputBatch):
 
             # Reset rope embedding by recreating with default position_ids
             tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
+            rotary_percent = getattr(self.model_config, "rotary_percent", 1.0)
+            self.rotary_dim = int(self.model_config.head_dim * rotary_percent)
             self.rope_emb = get_rope(
-                rotary_dim=self.model_config.head_dim,
+                rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
