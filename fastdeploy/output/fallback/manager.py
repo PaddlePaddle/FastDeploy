@@ -90,6 +90,7 @@ class OutputFallbackManager:
         self.config = {name.replace("_", "-"): value for name, value in (config or {}).items()}
         self.instances = [self.get_strategy(name)(self.config.get(name, {})) for name in self.strategies]
         self.states: dict[str, dict[str, dict]] = {}
+        self._buffers: dict[str, str] = {}
 
     def apply(self, text: str, context: OutputFallbackContext) -> str:
         result_text = text
@@ -102,36 +103,66 @@ class OutputFallbackManager:
         return result_text
 
     def on_delta(self, request_id: str, delta_text: str, context: OutputFallbackContext) -> StreamFallbackDecision:
-        current_text = delta_text
-        held = False
+        self._buffers[request_id] = self._buffers.get(request_id, "") + delta_text
+        buffer = self._buffers[request_id]
+
+        current_text = buffer
+        trial_states: dict[str, dict] = {}
         truncated = False
+
         for strategy in self.instances:
-            state = self._get_state(request_id, strategy.name)
+            original_state = self._get_state(request_id, strategy.name)
+            trial_state = dict(original_state)
             try:
-                decision = strategy.on_delta(current_text, context, state)
+                decision = strategy.on_delta(current_text, context, trial_state)
             except Exception:
                 data_processor_logger.exception(
                     "Failed to apply streaming output fallback strategy '%s'.", strategy.name
                 )
+                trial_states[strategy.name] = trial_state
                 continue
+
+            trial_states[strategy.name] = trial_state
+
+            if decision.action == "hold":
+                if not truncated:
+                    return StreamFallbackDecision(action="hold", text="")
+                continue
+
             if decision.action == "truncate":
-                # Mark terminal but keep iterating so downstream strategies can
-                # still post-process / buffer the final text.
                 truncated = True
                 current_text = decision.text or current_text
                 continue
-            if decision.action == "hold":
-                held = True
-                current_text = decision.text or current_text
-                continue
+
             current_text = decision.text
+
+        for name, ts in trial_states.items():
+            state = self._get_state(request_id, name)
+            state.clear()
+            state.update(ts)
+        self._buffers.pop(request_id, None)
+
         if truncated:
             return StreamFallbackDecision(action="truncate", text=current_text)
-        if held:
-            return StreamFallbackDecision(action="hold", text="")
         return StreamFallbackDecision(action="send", text=current_text)
 
     def on_finish(self, request_id: str, context: OutputFallbackContext) -> StreamFallbackDecision:
+        buffer = self._buffers.pop(request_id, "")
+        if buffer:
+            current_text = buffer
+            for strategy in self.instances:
+                state = self._get_state(request_id, strategy.name)
+                try:
+                    decision = strategy.on_delta(current_text, context, state)
+                except Exception:
+                    data_processor_logger.exception(
+                        "Failed to apply streaming output fallback strategy '%s'.", strategy.name
+                    )
+                    continue
+                if decision.action != "hold":
+                    current_text = decision.text
+            return StreamFallbackDecision(action="flush", text=current_text)
+
         pending = ""
         for strategy in self.instances:
             state = self._get_state(request_id, strategy.name)
@@ -148,6 +179,7 @@ class OutputFallbackManager:
 
     def cleanup(self, request_id: str) -> None:
         self.states.pop(request_id, None)
+        self._buffers.pop(request_id, None)
 
     def _get_state(self, request_id: str, strategy_name: str) -> dict:
         return self.states.setdefault(request_id, {}).setdefault(strategy_name, {})

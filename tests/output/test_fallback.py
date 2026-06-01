@@ -162,14 +162,14 @@ class TestOutputFallbackManager:
         decision = manager.on_delta("request-1", "hello", make_context("hello", stream=True, token_ids=[1, 2]))
         assert decision.action == "hold"
         assert decision.text == ""
-        assert manager.states["request-1"]["test-token-observer"]["token_count"] == 2
+        assert "test-token-observer" not in manager.states.get("request-1", {})
 
     def test_later_strategy_observes_text_when_hold_returns_empty_text(self):
         manager = OutputFallbackManager(strategies=["test-hold", "test-text-observer"])
         decision = manager.on_delta("request-1", "hello", make_context("hello", stream=True))
         assert decision.action == "hold"
         assert decision.text == ""
-        assert manager.states["request-1"]["test-text-observer"]["seen"] == "hello"
+        assert "test-text-observer" not in manager.states.get("request-1", {})
 
     def test_hold_is_preserved_after_later_send_strategy(self):
         manager = OutputFallbackManager(strategies=["test-hold", "test-suffix"])
@@ -195,12 +195,12 @@ class TestOutputFallbackManager:
         assert decision.action == "truncate"
         assert decision.text == "please stop"
 
-    def test_finish_only_flushes_strategy_cache_without_replaying_on_delta(self):
+    def test_finish_flushes_pending_buffer_through_pipeline(self):
         manager = OutputFallbackManager(strategies=["test-hold", "test-suffix", "test-token-observer"])
         manager.on_delta("request-1", "held", make_context("held", stream=True, token_ids=[7]))
         finish_decision = manager.on_finish("request-1", make_context("", stream=True, token_ids=[8]))
         assert finish_decision.action == "flush"
-        assert finish_decision.text == "held"
+        assert finish_decision.text == "held-suffix"
         assert manager.states["request-1"]["test-token-observer"]["token_count"] == 1
 
     def test_normalizes_strategy_and_config_names(self):
