@@ -60,7 +60,7 @@ ConvertType = Literal["none", "embed"]
 _ResolvedTask = Literal["generate", "encode", "embed"]
 
 # Model implementation backend options
-ModelImpl = Literal["auto", "fastdeploy", "paddleformers"]
+ModelImpl = Literal["auto", "fastdeploy", "paddleformers", "paddlefleet"]
 
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],

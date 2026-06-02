@@ -1010,9 +1010,9 @@ def parse_args():
     parser.add_argument(
         "--model-impl",
         type=str,
-        choices=["auto", "fastdeploy", "paddleformers"],
+        choices=["auto", "fastdeploy", "paddleformers", "paddlefleet"],
         default="auto",
-        help="Model implementation backend (auto, fastdeploy, paddleformers)",
+        help="Model implementation backend (auto, fastdeploy, paddleformers, paddlefleet)",
     )
 
     parser.add_argument(
