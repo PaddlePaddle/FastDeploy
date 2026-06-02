@@ -1852,7 +1852,14 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         Triton compute Fused MoE.
         """
 
-        gate_out = gate(x)
+        if isinstance(gate, nn.Layer):
+            gate_out = gate(x)
+        elif isinstance(gate, paddle.Tensor):
+            # This is for multi view latent moe.
+            gate_out = gate
+        else:
+            assert 0 == 1
+
         gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -1860,6 +1867,9 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
         E, N1, _ = getattr(layer, self.added_weight_attrs[0]).shape
         N2 = getattr(layer, self.added_weight_attrs[1]).shape[1]
+
+        assert hidden_size == x.shape[-1], "they must be same"
+        assert N1 == 2 * moe_intermediate_size, "they must be same"
 
         gate_correction_bias = layer.gate_correction_bias
         # for triton op input
