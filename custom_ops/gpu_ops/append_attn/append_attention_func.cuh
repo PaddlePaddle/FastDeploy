@@ -266,18 +266,15 @@ __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale(
 template <SharedMemFillMode fill_mode,
           uint32_t num_warps,
           uint32_t block_size,
-          uint32_t num_frags_y,
-          uint32_t num_frags_z,
+          uint32_t head_dim,
           uint32_t NUM_WARP_Q,
           typename T>
 __device__ __forceinline__ void produce_kv_blockwise_c16(
     smem_t smem,
     uint32_t* smem_offset,
     T** gptr,  // [max_block_num, num_heads, block_size, head_dim]
-    const uint32_t kv_b_stride,
     const uint32_t kv_idx_base,
     const uint32_t kv_len) {
-  constexpr uint32_t head_dim = num_frags_y * 16;
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
   uint32_t kv_idx = kv_idx_base + ty * 4 + tx / 8;  // kv_idx used to check
