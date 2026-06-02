@@ -842,14 +842,15 @@ class ToolPrefixCompensationTest(unittest.TestCase):
     def test_prepare_tool_prefix_idempotent(self):
         parser = _RecordingToolParser(self.processor.tokenizer)
         prompt = "history\n<tool_call>"
+        request = SimpleNamespace(chat_template_kwargs={"options": {"tool_choice": {"mode": "required"}}})
 
-        self.processor._prepare_tool_prefix(parser, prompt)
+        self.processor._prepare_tool_prefix(parser, prompt, request)
         self.assertTrue(parser._tool_prefix_computed)
         self.assertEqual(parser._tool_prefix, "<tool_call>")
         self.assertEqual(len(parser.detect_calls), 1)
 
         # Second call must not invoke detect again.
-        self.processor._prepare_tool_prefix(parser, prompt)
+        self.processor._prepare_tool_prefix(parser, prompt, request)
         self.assertEqual(len(parser.detect_calls), 1)
 
     def test_prepare_tool_prefix_no_prompt(self):
@@ -866,7 +867,8 @@ class ToolPrefixCompensationTest(unittest.TestCase):
 
     def test_prepare_tool_prefix_handles_exception(self):
         parser = _RecordingToolParser(self.processor.tokenizer, detect_raises=True)
-        self.processor._prepare_tool_prefix(parser, "history\n<tool_call>")
+        request = SimpleNamespace(chat_template_kwargs={"options": {"tool_choice": {"mode": "required"}}})
+        self.processor._prepare_tool_prefix(parser, "history\n<tool_call>", request)
         self.assertTrue(parser._tool_prefix_computed)
         self.assertEqual(parser._tool_prefix, "")
 
@@ -884,7 +886,7 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         }
         processor.process_response_dict_normal(
             response,
-            request=SimpleNamespace(chat_template_kwargs=None),
+            request=SimpleNamespace(chat_template_kwargs={"options": {"tool_choice": {"mode": "required"}}}),
             prompt_tokens="user msg\n<tool_call>",
         )
         self.assertEqual(len(parser.extract_calls), 1)
@@ -905,7 +907,7 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         }
         processor.process_response_dict_normal(
             response,
-            request=SimpleNamespace(chat_template_kwargs=None),
+            request=SimpleNamespace(chat_template_kwargs={"options": {"tool_choice": {"mode": "required"}}}),
             prompt_tokens="user msg without sentinel",
         )
         # detect_tool_prefix is called, but returns "" => no prefix prepended.
@@ -916,7 +918,7 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         processor = self.processor
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="<tool_call>")
         processor.tool_parser_obj = self._make_parser_factory(parser)
-        request = SimpleNamespace(chat_template_kwargs=None)
+        request = SimpleNamespace(chat_template_kwargs={"options": {"tool_choice": {"mode": "required"}}})
         prompt_tokens = "user msg\n<tool_call>"
 
         # First chunk
@@ -964,7 +966,7 @@ class ToolPrefixCompensationTest(unittest.TestCase):
         # like a forced rendering.
         parser = _RecordingToolParser(processor.tokenizer, tool_prefix="")
         processor.tool_parser_obj = self._make_parser_factory(parser)
-        request = SimpleNamespace(chat_template_kwargs=None)
+        request = SimpleNamespace(chat_template_kwargs={"options": {"tool_choice": {"mode": "required"}}})
 
         first = {
             "finished": False,

@@ -288,11 +288,25 @@ class BaseTextProcessor(ABC):
         else:
             return self.process_response_dict_normal(response_dict, **kwargs)
 
-    def _prepare_tool_prefix(self, tool_parser, prompt_tokens):
+    @staticmethod
+    def _is_forced_tool_choice(request):
+        """Return True if tool_choice mode requires forced prefix injection."""
+        if not request:
+            return False
+        chat_kwargs = getattr(request, "chat_template_kwargs", None) or {}
+        options = chat_kwargs.get("options") or {}
+        tool_choice = options.get("tool_choice") or {}
+        mode = tool_choice.get("mode", "") if isinstance(tool_choice, dict) else ""
+        return mode in ("required", "force")
+
+    def _prepare_tool_prefix(self, tool_parser, prompt_tokens, request=None):
         """Detect and cache on ``tool_parser`` the tool-call prefix that the
         chat template injected at the tail of ``prompt_tokens`` (the rendered
         prompt string from the serving layer). Computed once per parser
         instance via the parser's :meth:`ToolParser.detect_tool_prefix`.
+
+        Only performs detection when ``tool_choice`` mode indicates a forced
+        tool call (e.g. ``"required"`` or ``"force"``).
         """
         if tool_parser._tool_prefix_computed:
             return
@@ -300,6 +314,8 @@ class BaseTextProcessor(ABC):
         tool_parser._tool_prefix = ""
         tool_parser._tool_prefix_token_ids = []
         if not prompt_tokens or not isinstance(prompt_tokens, str):
+            return
+        if not self._is_forced_tool_choice(request):
             return
         try:
             prefix = tool_parser.detect_tool_prefix(prompt_tokens) or ""
@@ -354,7 +370,7 @@ class BaseTextProcessor(ABC):
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
                 parser_input = full_text
-                self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
+                self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"), request)
                 if tool_parser._tool_prefix:
                     parser_input = tool_parser._tool_prefix + full_text
                 tool_call_info = tool_parser.extract_tool_calls(parser_input, request)
@@ -417,7 +433,7 @@ class BaseTextProcessor(ABC):
             stream_previous_token_ids = previous_token_ids
             stream_current_token_ids = previous_token_ids + token_ids
             stream_delta_token_ids = token_ids
-            self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"))
+            self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"), request)
             prefix = tool_parser._tool_prefix
             prefix_ids = tool_parser._tool_prefix_token_ids
             # Splice the injected prefix back into both text and token-id
@@ -429,12 +445,12 @@ class BaseTextProcessor(ABC):
                 stream_previous = prefix + stream_previous
                 stream_current = prefix + stream_current
                 if prefix_ids:
-                    stream_previous_token_ids = list(prefix_ids) + list(stream_previous_token_ids)
-                    stream_current_token_ids = list(prefix_ids) + list(stream_current_token_ids)
+                    stream_previous_token_ids = prefix_ids + stream_previous_token_ids
+                    stream_current_token_ids = prefix_ids + stream_current_token_ids
                 if not tool_parser._tool_prefix_injected_to_delta:
                     stream_delta = prefix + stream_delta
                     if prefix_ids:
-                        stream_delta_token_ids = list(prefix_ids) + list(stream_delta_token_ids)
+                        stream_delta_token_ids = prefix_ids + stream_delta_token_ids
                     tool_parser._tool_prefix_injected_to_delta = True
             tool_call_delta_message = tool_parser.extract_tool_calls_streaming(
                 stream_previous,
