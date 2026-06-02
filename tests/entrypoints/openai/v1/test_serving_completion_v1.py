@@ -210,7 +210,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         ctx.preprocess_requests = [{}]
         response_ctx = ServingResponseContext()
         response_ctx.choice_completion_tokens_dict = {0: 3}
-        response_ctx.remain_choices = 1
+        response_ctx.remain_choices = 0
 
         results = []
         async for result in self.serving_completion._build_stream_response(ctx, request_output, response_ctx):

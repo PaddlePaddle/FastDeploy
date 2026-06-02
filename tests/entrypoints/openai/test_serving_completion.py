@@ -861,7 +861,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(logprobs_null, "logprobs should be null when not requested")
 
     async def test_completion_stream_generator_with_fallback_truncate(self):
-        """Test stream fallback truncate sets finish_reason and skips residual output."""
+        """Processor-level fallback truncate sets finish_reason and aborts generation."""
         mock_engine_client = Mock()
         mock_engine_client.semaphore = Mock()
         mock_engine_client.semaphore.acquire = AsyncMock()
@@ -918,16 +918,12 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
         mock_engine_client.connection_manager.cleanup_request = AsyncMock()
 
-        # Manager only used for cleanup() in finally; on_delta/on_finish are no
-        # longer invoked from the serving layer.
-        fallback_manager = Mock()
         serving_completion = OpenAIServingCompletion(
             mock_engine_client,
             None,
             "pid",
             None,
             360,
-            output_fallback_manager=fallback_manager,
         )
 
         mock_request = Mock()
@@ -971,10 +967,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(truncated_choices), 1)
         self.assertEqual(truncated_choices[0]["index"], 0)
         mock_engine_client.abort.assert_awaited_once()
-        fallback_manager.cleanup.assert_called_once_with(request_id)
-        # on_delta/on_finish moved to processor; serving layer must not call them.
-        fallback_manager.on_delta.assert_not_called()
-        fallback_manager.on_finish.assert_not_called()
 
     async def test_completion_full_generator_with_prompt_logprobs(self):
         """Test completion_full_generator with prompt_logprobs enabled"""

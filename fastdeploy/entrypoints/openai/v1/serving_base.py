@@ -176,8 +176,6 @@ class OpenAiServingBase(OpenAIServing):
                     yield stream_response
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, ctx.request_id, getattr(ctx.request, "user", ""))
-            if self.output_fallback_manager is not None:
-                self.output_fallback_manager.cleanup(ctx.request_id)
 
     @abstractmethod
     async def _build_stream_response(
@@ -208,8 +206,6 @@ class OpenAiServingBase(OpenAIServing):
             return await self._build_full_response(ctx, accumula_output_map, response_ctx)
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, ctx.request_id, getattr(ctx.request, "user", ""))
-            if self.output_fallback_manager is not None:
-                self.output_fallback_manager.cleanup(ctx.request_id)
 
     async def _build_full_response(
         self,

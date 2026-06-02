@@ -726,8 +726,6 @@ class OpenAIServingCompletion:
         finally:
             trace_print(LoggingEventName.POSTPROCESSING_END, request_id, getattr(request, "user", ""))
             tracing.trace_req_finish(request_id)
-            if self.output_fallback_manager is not None:
-                self.output_fallback_manager.cleanup(request_id)
             del request
             await self.engine_client.connection_manager.cleanup_request(request_id)
             self.engine_client.semaphore.release()

@@ -274,9 +274,6 @@ class OpenAIServingCompletion(OpenAiServingBase):
                     )
             delta_text = output.text or ""
             fallback_truncated = bool(output.fallback_truncated)
-            # ``request_output.finished`` may be set by upstream processor's
-            # fallback truncate; recover the "natural finish" signal.
-            original_finished = request_output.finished and not fallback_truncated
             if output.skipped and not request_output.finished and not request.return_token_ids:
                 return
             if output.skipped:
@@ -293,12 +290,6 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 if fallback_truncated:
                     choice.finish_reason = "length"
                     response_ctx.truncated_choices.add(output.index)
-                    if not original_finished:
-                        if response_ctx.remain_choices is None:
-                            response_ctx.remain_choices = len(ctx.preprocess_requests) * (
-                                1 if request.n is None else request.n
-                            )
-                        response_ctx.remain_choices -= 1
                     await self.engine_client.abort(make_choice_id(request_id, output.index), 1)
                 log_request(
                     level=RequestLogLevel.LIFECYCLE,
