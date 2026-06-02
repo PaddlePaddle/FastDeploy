@@ -217,7 +217,8 @@ class RoutedExpertsCapturer:
             if self.fd_config.scheduler_config.enable_overlap_schedule:
                 num_tokens = self.token_num_overlap
                 slot_mapping_gpu = slot_mapping_gpu[:num_tokens]
-                position_ids_gpu = position_ids_gpu[:num_tokens]
+                if position_ids_gpu is not None:
+                    position_ids_gpu = position_ids_gpu[:num_tokens]
 
             # D2D: GPU → staging
             self.routing_staging_buf.copy_(self.device_routing_buffer, False)
