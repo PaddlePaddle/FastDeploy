@@ -409,9 +409,17 @@ class MultiModalProcessor(BaseTextProcessor):
             request["prompt_token_ids"] = outputs["input_ids"].tolist()
         request["multimodal_inputs"] = outputs
 
-        # Truncation
+        # Reject requests exceeding input_max_tokens
+        if self.input_max_tokens is not None and len(request["prompt_token_ids"]) > self.input_max_tokens:
+            raise ValueError(
+                f"Input token length {len(request['prompt_token_ids'])} exceeds the configured input_max_tokens limit {self.input_max_tokens}"
+            )
+
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+            raise ValueError(
+                f"Input token length {len(request['prompt_token_ids'])} exceeds "
+                f"the configured max_model_len {max_model_len}"
+            )
 
         request["prompt_token_ids_len"] = len(request["prompt_token_ids"])
 
@@ -423,12 +431,45 @@ class MultiModalProcessor(BaseTextProcessor):
             )
             request["logits_processors_args"] = logits_processors_args
 
-        # max_tokens
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
+        # Compute effective length limits
+        def _min_non_none(*values):
+            return min(v for v in values if v is not None)
+
+        context_remaining = max(1, max_model_len - len(request["prompt_token_ids"]))
+
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
+            # User didn't specify: default to min(context_remaining, server_default)
+            if self.max_completion_tokens is not None:
+                request["max_tokens"] = max(1, min(context_remaining, self.max_completion_tokens))
+            else:
+                request["max_tokens"] = context_remaining
         else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
+            # User specified: clamp to min(context_remaining, max_completion_tokens)
+            request["max_tokens"] = _min_non_none(context_remaining, self.max_completion_tokens, request["max_tokens"])
+
+        max_tokens = request["max_tokens"]
+        if self.reasoning_max_tokens is not None or request.get("reasoning_max_tokens") is not None:
+            request["reasoning_max_tokens"] = _min_non_none(
+                max_tokens, self.reasoning_max_tokens, request.get("reasoning_max_tokens")
+            )
+        if self.response_max_tokens is not None or request.get("response_max_tokens") is not None:
+            request["response_max_tokens"] = _min_non_none(
+                max_tokens, self.response_max_tokens, request.get("response_max_tokens")
+            )
+
+        # min_tokens: take the larger of server-level and user value, reject if > max_tokens
+        server_min = self.min_completion_tokens
+        user_min = request.get("min_tokens")
+        if server_min is None:
+            effective_min = user_min
+        elif user_min is None:
+            effective_min = server_min
+        else:
+            effective_min = max(server_min, user_min)
+        if effective_min is not None:
+            if effective_min > max_tokens:
+                raise ValueError(f"min_tokens ({effective_min}) must not exceed max_tokens ({max_tokens})")
+            request["min_tokens"] = effective_min
 
         # Ernie: default reasoning_max_tokens
         if cfg.set_default_reasoning_max_tokens and request.get("reasoning_max_tokens") is None:

@@ -483,7 +483,7 @@ class TextProcessorTestCase(unittest.TestCase):
 
     def test_process_request_dict_handles_sequences(self):
         request = {
-            "prompt": [1, 2, 3, 4, 5, 6],
+            "prompt": [1, 2, 3, 4],
             "stop": ["stop"],
             "bad_words": ["zz"],
             "temperature": 0,
@@ -530,12 +530,213 @@ class TextProcessorTestCase(unittest.TestCase):
         # empty list is falsy, should not extend prompt_token_ids
         self.assertEqual(processed["prompt_token_ids"], [2])
 
-    def test_process_request_dict_completion_token_ids_truncated(self):
-        # prompt "hi" -> [2], extend [10,11,12] -> [2,10,11,12] (len=4)
-        # max_model_len=3, 4 > 3 triggers truncation: [:3-1] = [:2] -> [2, 10]
+    def test_process_request_dict_completion_token_ids_exceed_max_model_len(self):
         request = {"prompt": "hi", "completion_token_ids": [10, 11, 12], "temperature": 0, "top_p": 0}
-        processed = self.processor.process_request_dict(request, max_model_len=3)
-        self.assertEqual(processed["prompt_token_ids"], [2, 10])
+        with self.assertRaisesRegex(ValueError, "exceeds the configured max_model_len 3"):
+            self.processor.process_request_dict(request, max_model_len=3)
+
+    def test_process_request_dict_rejects_input_max_tokens_exceeded(self):
+        self.processor.input_max_tokens = 1
+        request = {"prompt": [1, 2], "temperature": 0, "top_p": 0}
+        with self.assertRaisesRegex(ValueError, "configured input_max_tokens limit 1"):
+            self.processor.process_request_dict(request, max_model_len=100)
+
+    # ------------------------------------------------------------------
+    # Server-level length control: max_completion_tokens
+    # ------------------------------------------------------------------
+
+    def test_max_completion_tokens_server_default(self):
+        """Server max_completion_tokens used when request omits max_tokens."""
+        self.processor.max_completion_tokens = 50
+        request = {"prompt": "hi"}
+        # prompt "hi" -> [2] (len=1), context_remaining=99, server=50
+        processed = self.processor.process_request_dict(request, max_model_len=100)
+        self.assertEqual(processed["max_tokens"], 50)
+
+    def test_max_completion_tokens_clamped_by_context(self):
+        """Server max_completion_tokens larger than context gets clamped."""
+        self.processor.max_completion_tokens = 5000
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=100)
+        # context_remaining=99, server=5000 → 99
+        self.assertEqual(processed["max_tokens"], 99)
+
+    def test_max_completion_tokens_request_smaller(self):
+        """Request max_tokens < server → request wins."""
+        self.processor.max_completion_tokens = 50
+        request = {"prompt": "hi", "max_tokens": 30}
+        processed = self.processor.process_request_dict(request, max_model_len=100)
+        # min(99, 50, 30) = 30
+        self.assertEqual(processed["max_tokens"], 30)
+
+    def test_max_completion_tokens_server_smaller_than_request(self):
+        """Request max_tokens > server → server clamps."""
+        self.processor.max_completion_tokens = 50
+        request = {"prompt": "hi", "max_tokens": 200}
+        processed = self.processor.process_request_dict(request, max_model_len=100)
+        # min(99, 50, 200) = 50
+        self.assertEqual(processed["max_tokens"], 50)
+
+    def test_max_completion_tokens_none_no_effect(self):
+        """Server max_completion_tokens=None has no effect."""
+        self.processor.max_completion_tokens = None
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=100)
+        self.assertEqual(processed["max_tokens"], 99)
+
+    # ------------------------------------------------------------------
+    # Server-level length control: reasoning_max_tokens
+    # ------------------------------------------------------------------
+
+    def test_reasoning_max_tokens_server_only(self):
+        """Only server reasoning_max_tokens set."""
+        self.processor.reasoning_max_tokens = 100
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        # max_tokens=299, reasoning=min(299,100)=100
+        self.assertEqual(processed["reasoning_max_tokens"], 100)
+
+    def test_reasoning_max_tokens_request_only(self):
+        """Only request reasoning_max_tokens set."""
+        self.processor.reasoning_max_tokens = None
+        request = {"prompt": "hi", "reasoning_max_tokens": 150}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["reasoning_max_tokens"], 150)
+
+    def test_reasoning_max_tokens_both_server_smaller(self):
+        """Both set, server < request → server wins."""
+        self.processor.reasoning_max_tokens = 100
+        request = {"prompt": "hi", "reasoning_max_tokens": 150}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["reasoning_max_tokens"], 100)
+
+    def test_reasoning_max_tokens_both_request_smaller(self):
+        """Both set, request < server → request wins."""
+        self.processor.reasoning_max_tokens = 200
+        request = {"prompt": "hi", "reasoning_max_tokens": 80}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["reasoning_max_tokens"], 80)
+
+    def test_reasoning_max_tokens_clamped_by_max_tokens(self):
+        """reasoning_max_tokens clamped by max_tokens."""
+        self.processor.reasoning_max_tokens = 100
+        self.processor.max_completion_tokens = 50
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["max_tokens"], 50)
+        self.assertEqual(processed["reasoning_max_tokens"], 50)
+
+    def test_reasoning_max_tokens_both_none_not_set(self):
+        """Both None → key not set."""
+        self.processor.reasoning_max_tokens = None
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertNotIn("reasoning_max_tokens", processed)
+
+    # ------------------------------------------------------------------
+    # Server-level length control: response_max_tokens
+    # ------------------------------------------------------------------
+
+    def test_response_max_tokens_server_only(self):
+        """Only server response_max_tokens set."""
+        self.processor.response_max_tokens = 100
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["response_max_tokens"], 100)
+
+    def test_response_max_tokens_request_only(self):
+        """Only request response_max_tokens set."""
+        self.processor.response_max_tokens = None
+        request = {"prompt": "hi", "response_max_tokens": 150}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["response_max_tokens"], 150)
+
+    def test_response_max_tokens_both_server_smaller(self):
+        """Both set, server < request → server wins."""
+        self.processor.response_max_tokens = 100
+        request = {"prompt": "hi", "response_max_tokens": 150}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["response_max_tokens"], 100)
+
+    def test_response_max_tokens_both_request_smaller(self):
+        """Both set, request < server → request wins."""
+        self.processor.response_max_tokens = 200
+        request = {"prompt": "hi", "response_max_tokens": 80}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["response_max_tokens"], 80)
+
+    def test_response_max_tokens_clamped_by_max_tokens(self):
+        """response_max_tokens clamped by max_tokens."""
+        self.processor.response_max_tokens = 100
+        self.processor.max_completion_tokens = 50
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["max_tokens"], 50)
+        self.assertEqual(processed["response_max_tokens"], 50)
+
+    def test_response_max_tokens_both_none_not_set(self):
+        """Both None → key not set."""
+        self.processor.response_max_tokens = None
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertNotIn("response_max_tokens", processed)
+
+    # ------------------------------------------------------------------
+    # Server-level length control: min_completion_tokens
+    # ------------------------------------------------------------------
+
+    def test_min_completion_tokens_server_only(self):
+        """Only server min_completion_tokens set."""
+        self.processor.min_completion_tokens = 20
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["min_tokens"], 20)
+
+    def test_min_completion_tokens_server_exceeds_max_tokens_raises(self):
+        """Server min_completion_tokens > max_tokens raises ValueError."""
+        self.processor.min_completion_tokens = 300
+        self.processor.max_completion_tokens = 50
+        request = {"prompt": "hi"}
+        with self.assertRaises(ValueError):
+            self.processor.process_request_dict(request, max_model_len=300)
+
+    def test_min_completion_tokens_request_only(self):
+        """Only request min_tokens set (server=None)."""
+        self.processor.min_completion_tokens = None
+        request = {"prompt": "hi", "min_tokens": 30}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertEqual(processed["min_tokens"], 30)
+
+    def test_min_completion_tokens_request_exceeds_max_tokens_raises(self):
+        """Request min_tokens > max_tokens raises ValueError."""
+        self.processor.min_completion_tokens = None
+        self.processor.max_completion_tokens = 50
+        request = {"prompt": "hi", "min_tokens": 500}
+        with self.assertRaises(ValueError):
+            self.processor.process_request_dict(request, max_model_len=300)
+
+    def test_min_completion_tokens_take_max_of_server_and_request(self):
+        """min_tokens = max(server, user), user is larger."""
+        self.processor.min_completion_tokens = 20
+        request = {"prompt": "hi", "min_tokens": 50}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        # max(server=20, user=50) = 50
+        self.assertEqual(processed["min_tokens"], 50)
+
+    def test_min_completion_tokens_server_larger_than_request(self):
+        """min_tokens = max(server, user), server is larger."""
+        self.processor.min_completion_tokens = 80
+        request = {"prompt": "hi", "min_tokens": 30}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        # max(server=80, user=30) = 80
+        self.assertEqual(processed["min_tokens"], 80)
+
+    def test_min_completion_tokens_both_none_not_set(self):
+        """Both None → min_tokens key not set."""
+        self.processor.min_completion_tokens = None
+        request = {"prompt": "hi"}
+        processed = self.processor.process_request_dict(request, max_model_len=300)
+        self.assertNotIn("min_tokens", processed)
 
     def test_ids2tokens_and_clear_request_status(self):
         delta, _, _ = self.processor.ids2tokens([3], "task-1")

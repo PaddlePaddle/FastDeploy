@@ -1711,6 +1711,7 @@ class TestEngineClientValidParameters(unittest.TestCase):
 def minimal_engine_client():
     client = EngineClient.__new__(EngineClient)
     client.max_model_len = 16
+    client.max_completion_tokens = None
     client.max_logprobs = 5
     client.ori_vocab_size = 8
     client.enable_logprob = True
