@@ -221,9 +221,6 @@ __global__ void multi_query_append_attention_kernel(
                        NUM_WARP_Q>(k_smem,
                                    &kv_smem_offset_w,
                                    &cache_k_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
                                    kv_b_stride,
                                    kv_idx_base,
                                    chunk_end);
@@ -236,9 +233,6 @@ __global__ void multi_query_append_attention_kernel(
                        NUM_WARP_Q>(v_smem,
                                    &kv_smem_offset_w,
                                    &cache_v_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
                                    kv_b_stride,
                                    kv_idx_base,
                                    chunk_end);
@@ -286,9 +280,6 @@ __global__ void multi_query_append_attention_kernel(
                          NUM_WARP_Q>(k_smem,
                                      &kv_smem_offset_w,
                                      &cache_k_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
                                      kv_b_stride,
                                      kv_idx_base,
                                      chunk_end);
@@ -310,9 +301,6 @@ __global__ void multi_query_append_attention_kernel(
                          NUM_WARP_Q>(v_smem,
                                      &kv_smem_offset_w,
                                      &cache_v_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
                                      kv_b_stride,
                                      kv_idx_base,
                                      chunk_end);
@@ -597,9 +585,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                        NUM_WARP_Q>(k_smem,
                                    &kv_smem_offset_w,
                                    &cache_k_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
                                    kv_b_stride,
                                    kv_idx_base,
                                    chunk_end);
@@ -613,9 +598,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                        NUM_WARP_Q>(v_smem,
                                    &kv_smem_offset_w,
                                    &cache_v_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
                                    kv_b_stride,
                                    kv_idx_base,
                                    chunk_end);
@@ -665,9 +647,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                          NUM_WARP_Q>(k_smem,
                                      &kv_smem_offset_w,
                                      &cache_k_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
                                      kv_b_stride,
                                      kv_idx_base,
                                      chunk_end);
@@ -689,9 +668,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                          NUM_WARP_Q>(v_smem,
                                      &kv_smem_offset_w,
                                      &cache_v_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
                                      kv_b_stride,
                                      kv_idx_base,
                                      chunk_end);

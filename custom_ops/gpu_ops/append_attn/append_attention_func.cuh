@@ -274,9 +274,6 @@ __device__ __forceinline__ void produce_kv_blockwise(
     smem_t smem,
     uint32_t* smem_offset,
     T** gptr,  // [max_block_num, num_heads, block_size, head_dim]
-    const uint32_t kv_head_idx,
-    const uint32_t kv_n_stride,
-    const uint32_t kv_h_stride,
     const uint32_t kv_b_stride,
     const uint32_t kv_idx_base,
     const uint32_t kv_len) {
