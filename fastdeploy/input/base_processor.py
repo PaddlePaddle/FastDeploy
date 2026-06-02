@@ -384,7 +384,7 @@ class BaseTextProcessor(ABC):
                 finish_decision = output_fallback_manager.on_finish(req_id, context)
                 if finish_decision.text:
                     delta_text = (delta_text or "") + finish_decision.text
-                    fallback_held = False
+                fallback_held = False
 
             # Override the parser-visible history with the corrected stream
             # (held deltas contribute nothing; sent/flushed text is appended
@@ -401,13 +401,8 @@ class BaseTextProcessor(ABC):
         response_dict["outputs"]["reasoning_content"] = ""
 
         if fallback_held:
-            # Suppress this delta entirely: no parser invocation, mark as
-            # skipped so the serving layer omits the chunk. When the stream
-            # has already finished, fall through so a final chunk (with
-            # finish_reason) is still emitted.
             response_dict["outputs"]["skipped"] = True
-            if not is_end:
-                return response_dict
+            return response_dict
 
         if self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(

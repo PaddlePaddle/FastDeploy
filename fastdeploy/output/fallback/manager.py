@@ -174,7 +174,7 @@ class OutputFallbackManager:
                 )
                 continue
             if decision.text:
-                pending = decision.text
+                pending += decision.text
         return StreamFallbackDecision(action="flush", text=pending)
 
     def cleanup(self, request_id: str) -> None:

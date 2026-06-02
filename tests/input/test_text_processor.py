@@ -626,6 +626,24 @@ class TextProcessorTestCase(unittest.TestCase):
         manager.cleanup.assert_called_once_with(req_id)
         self.assertNotIn(req_id, processor.fallback_decode_status)
 
+    def test_process_response_streaming_final_hold_finishes_without_flush_text(self):
+        processor = self.processor
+        manager = mock.Mock()
+        manager.on_delta.return_value = SimpleNamespace(action="hold", text="")
+        manager.on_finish.return_value = SimpleNamespace(text="")
+        processor.output_fallback_manager = manager
+
+        req_id = "stream::n::1"
+        processor.decode_status[req_id] = [0, 0, [], ""]
+        response = {"finished": True, "request_id": req_id, "outputs": {"token_ids": [7]}}
+
+        result = processor.process_response_dict_streaming(response, enable_thinking=False)
+        self.assertFalse(result["outputs"]["skipped"])
+        self.assertEqual(result["outputs"]["text"], "")
+        manager.on_finish.assert_called_once()
+        manager.cleanup.assert_called_once_with(req_id)
+        self.assertNotIn(req_id, processor.fallback_decode_status)
+
     def test_process_response_streaming_with_reasoning_and_tools(self):
         processor = self.processor
         self.processor.model_status_dict["normal"] = "think_start"
