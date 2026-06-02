@@ -2096,6 +2096,7 @@ class EngineService:
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                         is_success = True
+                        task.is_preallocated = True
                         main_process_metrics.inc_value("decode_preallocated_req_num")
                 else:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
@@ -2198,6 +2199,9 @@ class EngineService:
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
                         self.scheduler.put_results([req_output])
                     self.resource_manager.add_prefilled_request(req_output)
+                    req = self.resource_manager.requests.get(request_id)
+                    if req:
+                        req.is_preallocated = False
                     self.llm_logger.info(f"D has successfully added prefilled request, {request_id}")
 
         def decode_loop():
@@ -2227,30 +2231,26 @@ class EngineService:
             try:
                 now = time.time()
                 with self.resource_manager.lock:
-                    skip_ids = (
-                        {r.request_id for r in self.resource_manager.running}
-                        | self.resource_manager.to_be_aborted_req_id_set
-                        | self.resource_manager.waiting_abort_req_id_set
-                    )
                     timed_out = [
-                        rid for rid, req in self.resource_manager.requests.items()
-                        if rid not in skip_ids
-                        and getattr(req.metrics, 'decode_preallocate_req_time', 0)
+                        rid
+                        for rid, req in self.resource_manager.requests.items()
+                        if getattr(req, "is_preallocated", False)
                         and (now - req.metrics.decode_preallocate_req_time) > timeout
                     ]
                 for req_id in timed_out:
-                    with self.resource_manager.lock:
-                        if req_id not in self.resource_manager.requests:
-                            continue
-                        if any(r.request_id == req_id for r in self.resource_manager.running):
-                            continue
                     self.llm_logger.warning(f"Reclaiming preallocated blocks for {req_id}: timeout {timeout}s")
                     self.resource_manager.pre_recycle_resource(req_id)
                     main_process_metrics.dec_value("decode_preallocated_req_num")
-                    self.scheduler.put_results([RequestOutput(
-                        request_id=req_id, finished=True, error_code=408,
-                        error_msg=f"Preallocated blocks reclaimed: no prefill within {timeout}s",
-                    )])
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=req_id,
+                                finished=True,
+                                error_code=408,
+                                error_msg=f"Preallocated blocks reclaimed: no prefill within {timeout}s",
+                            )
+                        ]
+                    )
                     if req_id in self.token_processor.tokens_counter:
                         del self.token_processor.tokens_counter[req_id]
             except Exception as e:
