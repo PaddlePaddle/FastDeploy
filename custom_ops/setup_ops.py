@@ -341,6 +341,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/grouped_topk_kernels.cu",
         "gpu_ops/fused_cast_sigmoid_bias.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
+        "gpu_ops/trtllm_allreduce_op.cc",
         "gpu_ops/merge_prefill_decode_output.cu",
         "gpu_ops/limit_thinking_content_length.cu",
         "gpu_ops/update_attn_mask_offsets.cu",
@@ -407,6 +408,15 @@ elif paddle.is_compiled_with_cuda():
         "-Igpu_ops",
         "-Ithird_party/nlohmann_json/include",
     ]
+
+    # tvm_ffi include for trtllm_allreduce_op.cc
+    import tvm_ffi as _tvm_ffi_mod
+
+    _tvm_ffi_base = os.path.dirname(_tvm_ffi_mod.__file__)
+    _tvm_ffi_include = os.path.join(_tvm_ffi_base, "include")
+    _tvm_ffi_lib = os.path.join(_tvm_ffi_base, "lib")
+    cc_compile_args += [f"-I{_tvm_ffi_include}"]
+    nvcc_compile_args += [f"-I{_tvm_ffi_include}"]
     max_jobs, nvcc_threads = get_compile_parallelism()
     print(f"MAX_JOBS = {max_jobs}, nvcc -t = {nvcc_threads}")
     nvcc_compile_args += ["-t", str(nvcc_threads)]
@@ -588,8 +598,8 @@ elif paddle.is_compiled_with_cuda():
         ext_modules=CUDAExtension(
             sources=sources,
             extra_compile_args={"cxx": cc_compile_args, "nvcc": nvcc_compile_args},
-            libraries=["cublasLt"],
-            extra_link_args=["-lcuda", "-lnvidia-ml"],
+            libraries=["cublasLt", "tvm_ffi"],
+            extra_link_args=["-lcuda", "-lnvidia-ml", f"-L{_tvm_ffi_lib}", f"-Wl,-rpath,{_tvm_ffi_lib}", "-ldl"],
         ),
         packages=find_packages(where="third_party/DeepGEMM"),
         package_dir={"": "third_party/DeepGEMM"},

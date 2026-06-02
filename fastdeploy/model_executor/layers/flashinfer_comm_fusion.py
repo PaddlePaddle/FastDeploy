@@ -28,6 +28,10 @@ logger = get_logger("flashinfer", "flashinfer.log")
 _flashinfer_comm = None
 _workspace_manager = None
 
+# Oneshot heuristics from flashinfer: world_size -> comm_size_mb threshold
+# Source: flashinfer/comm/trtllm_ar.py::_use_oneshot_heuristics
+_USE_ONESHOT_HEURISTICS = {2: 512, 4: 64, 8: 42}
+
 
 def _get_flashinfer_comm():
     """Lazily import flashinfer.comm to avoid side effects at module load time."""
@@ -145,7 +149,11 @@ def flashinfer_allreduce_residual_rmsnorm(
     fp32_acc: bool = False,
 ) -> Tuple[paddle.Tensor, paddle.Tensor]:
     """
-    Use FlashInfer's fused allreduce + residual + RMS norm operation
+    Use FlashInfer's fused allreduce + residual + RMS norm operation.
+
+    The actual kernel is dispatched through trtllm_allreduce_residual_rmsnorm_op
+    (from flashinfer_comm_op.py), which is registered as a Paddle custom Python
+    op so that SOT treats the entire call as a single opaque node.
     """
     comm = _get_flashinfer_comm()
     if not has_flashinfer() or comm is None:
@@ -158,8 +166,6 @@ def flashinfer_allreduce_residual_rmsnorm(
         logger.debug("Single GPU, no need for allreduce fusion")
         return None, None
 
-    assert input_tensor.shape[0] <= max_token_num
-
     if not ensure_workspace_initialized(
         fd_config=fd_config,
         max_token_num=max_token_num,
@@ -169,38 +175,30 @@ def flashinfer_allreduce_residual_rmsnorm(
         logger.debug("FlashInfer workspace not available")
         return None, None
 
-    token_num, hidden_dim = input_tensor.shape
+    # Compute use_oneshot from concrete values before SOT-traced region.
+    # max_token_num is always a concrete Python int (model config parameter).
+    # input_tensor.shape[-1] is hidden_size, always a concrete model constant.
+    if use_oneshot is None:
+        hidden_dim = input_tensor.shape[-1]
+        comm_size_mb = max_token_num * hidden_dim * 2 * world_size * 2 / 1024 / 1024
+        use_oneshot = comm_size_mb <= _USE_ONESHOT_HEURISTICS.get(world_size, 0)
 
-    residual_out = paddle.empty_like(residual)
-    norm_out = paddle.empty_like(input_tensor)
-    # support empty tensor
-    if input_tensor.shape[0] == 0:
-        return norm_out, residual_out
-    comm.trtllm_allreduce_fusion(
-        allreduce_in=input_tensor,
-        world_size=world_size,
-        world_rank=dist.get_rank(),
-        token_num=token_num,
-        hidden_dim=hidden_dim,
-        workspace_ptrs=_workspace_manager.workspace_tensor,
-        launch_with_pdl=True,
-        use_oneshot=use_oneshot,
-        trigger_completion_at_end=trigger_completion_at_end,
-        fp32_acc=fp32_acc,
-        pattern_code=(comm.AllReduceFusionPattern.kARResidualRMSNorm),
-        allreduce_out=None,
-        residual_in=residual,
-        residual_out=residual_out,
-        norm_out=norm_out,
-        quant_out=None,
-        scale_out=None,
-        rms_gamma=weight,
-        rms_eps=eps,
-        scale_factor=None,
-        layout_code=None,
+    from fastdeploy.model_executor.layers.flashinfer_comm_op import (
+        trtllm_allreduce_residual_rmsnorm_op,
     )
 
-    return norm_out, residual_out
+    return trtllm_allreduce_residual_rmsnorm_op(
+        input_tensor,
+        residual,
+        weight,
+        _workspace_manager.workspace_tensor,
+        world_size,
+        dist.get_rank(),
+        bool(use_oneshot),
+        trigger_completion_at_end,
+        fp32_acc,
+        eps,
+    )
 
 
 def cleanup_flashinfer_workspace():
