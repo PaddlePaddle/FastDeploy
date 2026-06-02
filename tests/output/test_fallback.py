@@ -103,6 +103,21 @@ class TextObserverStrategy(OutputFallbackStrategy):
         return StreamFallbackDecision(action="send", text=delta_text)
 
 
+@OutputFallbackManager.register("test-mutable-state", force=True)
+class MutableStateStrategy(OutputFallbackStrategy):
+    name = "test-mutable-state"
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return True
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        return text
+
+    def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        state.setdefault("items", []).append(delta_text)
+        return StreamFallbackDecision(action="send", text=delta_text)
+
+
 @OutputFallbackManager.register("test-token-observer", force=True)
 class TokenObserverStrategy(OutputFallbackStrategy):
     name = "test-token-observer"
@@ -170,6 +185,13 @@ class TestOutputFallbackManager:
         assert decision.action == "hold"
         assert decision.text == ""
         assert "test-text-observer" not in manager.states.get("request-1", {})
+
+    def test_hold_does_not_commit_mutable_trial_state(self):
+        manager = OutputFallbackManager(strategies=["test-mutable-state", "test-hold"])
+        manager._get_state("request-1", "test-mutable-state")["items"] = []
+        decision = manager.on_delta("request-1", "hello", make_context("hello", stream=True))
+        assert decision.action == "hold"
+        assert manager.states["request-1"]["test-mutable-state"]["items"] == []
 
     def test_hold_is_preserved_after_later_send_strategy(self):
         manager = OutputFallbackManager(strategies=["test-hold", "test-suffix"])

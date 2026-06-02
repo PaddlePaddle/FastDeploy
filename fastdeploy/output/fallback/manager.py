@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import copy
 import os
 from typing import Callable, Optional, Union
 
@@ -112,7 +113,7 @@ class OutputFallbackManager:
 
         for strategy in self.instances:
             original_state = self._get_state(request_id, strategy.name)
-            trial_state = dict(original_state)
+            trial_state = copy.deepcopy(original_state)
             try:
                 decision = strategy.on_delta(current_text, context, trial_state)
             except Exception:

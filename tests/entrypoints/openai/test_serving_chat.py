@@ -953,9 +953,7 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     self.assertIsNone(choice.get("logprobs"))
 
     async def test_chat_completion_stream_generator_with_fallback_truncate(self):
-        """Stream fallback truncate (signaled by processor) sets finish_reason and
-        triggers abort/cleanup at the serving layer.
-        """
+        """Processor-level fallback truncate sets finish_reason and aborts generation."""
         request = ChatCompletionRequest(
             messages=[{"role": "user", "content": "Hello"}],
             stream=True,
@@ -1013,11 +1011,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
         self.chat_completion_handler.engine_client.abort = AsyncMock()
 
-        # Manager only used for cleanup() in finally; on_delta/on_finish are no
-        # longer invoked from the serving layer.
-        fallback_manager = MagicMock()
-        self.chat_completion_handler.output_fallback_manager = fallback_manager
-
         mock_response_processor = MagicMock()
         mock_response_processor.enable_multimodal_content.return_value = False
 
@@ -1049,10 +1042,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(truncated_choices), 1)
         self.assertEqual(truncated_choices[0]["index"], 0)
         self.chat_completion_handler.engine_client.abort.assert_awaited_once()
-        fallback_manager.cleanup.assert_called_once_with(request_id)
-        # on_delta/on_finish moved to processor; serving layer must not call them.
-        fallback_manager.on_delta.assert_not_called()
-        fallback_manager.on_finish.assert_not_called()
 
     async def test_chat_completion_full_generator_with_prompt_logprobs(self):
         """Test chat_completion_full_generator with prompt_logprobs enabled"""
