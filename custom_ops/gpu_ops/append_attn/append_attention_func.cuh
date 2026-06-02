@@ -270,7 +270,7 @@ template <SharedMemFillMode fill_mode,
           uint32_t num_frags_z,
           uint32_t NUM_WARP_Q,
           typename T>
-__device__ __forceinline__ void produce_kv_blockwise(
+__device__ __forceinline__ void produce_kv_blockwise_c16(
     smem_t smem,
     uint32_t* smem_offset,
     T** gptr,  // [max_block_num, num_heads, block_size, head_dim]
