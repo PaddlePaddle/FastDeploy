@@ -801,6 +801,11 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         processor._encode_literal_text_with_cache = lambda text: [201, 202]
         processor._update_thinking_prompt_state = lambda prompt_token_ids, args: args
         processor.reasoning_parser = None
+        processor.input_max_tokens = None
+        processor.max_completion_tokens = None
+        processor.reasoning_max_tokens = None
+        processor.response_max_tokens = None
+        processor.min_completion_tokens = None
 
         request = {
             "request_id": "req_text_dict",
@@ -832,6 +837,11 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         processor._encode_literal_text_with_cache = lambda text: [501, 502]
         processor.tokenizer = DummyTokenizerForTextProcessor()
         processor.reasoning_parser = None
+        processor.input_max_tokens = None
+        processor.max_completion_tokens = None
+        processor.reasoning_max_tokens = None
+        processor.response_max_tokens = None
+        processor.min_completion_tokens = None
 
         request = {
             "request_id": "req_ernie_text",
@@ -868,6 +878,11 @@ class TestThinkingBudgetSupplemental(unittest.TestCase):
         processor._check_mm_limits = lambda *args, **kwargs: None
         processor.append_completion_tokens = lambda *args, **kwargs: None
         processor.pack_outputs = lambda outs: outs
+        processor.input_max_tokens = None
+        processor.max_completion_tokens = None
+        processor.reasoning_max_tokens = None
+        processor.response_max_tokens = None
+        processor.min_completion_tokens = None
         processor.cfg = SimpleNamespace(
             stop_tokens_variant="default",
             has_bad_words=True,

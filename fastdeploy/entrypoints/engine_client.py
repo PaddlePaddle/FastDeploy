@@ -104,12 +104,14 @@ class EngineClient:
         )
         self.enable_logprob = self.fd_config.model_config.enable_logprob
         self.data_processor = input_processor.create_processor()
+        self.data_processor.set_server_defaults(self.fd_config.serving_limits_config)
         self.ori_vocab_size = (
             len(self.data_processor.tokenizer.sp_model)
             if hasattr(self.data_processor.tokenizer, "sp_model")
             else len(self.data_processor.tokenizer.vocab)
         )
         self.max_model_len = self.fd_config.model_config.max_model_len
+        self.max_completion_tokens = self.fd_config.serving_limits_config.max_completion_tokens
         self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
         self.enable_cache_transfer = (
             self.fd_config.cache_config.swap_space or self.fd_config.cache_config.kvcache_storage_backend
@@ -297,7 +299,10 @@ class EngineClient:
             request["request_id"] = request_id
 
         if "max_tokens" not in request:
-            request["max_tokens"] = self.max_model_len - 1
+            if self.max_completion_tokens is not None:
+                request["max_tokens"] = self.max_completion_tokens
+            else:
+                request["max_tokens"] = self.max_model_len - 1
 
         await self.add_requests(request)
         return request["prompt_token_ids"]
