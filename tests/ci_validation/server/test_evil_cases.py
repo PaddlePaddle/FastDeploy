@@ -169,7 +169,10 @@ def test_too_long_input():
     payload = build_request_payload(TEMPLATE, data)
     resp = send_request(URL, payload).json()
     # assert resp["detail"].get("object") == "error", "超长输入未被识别为错误"
-    assert "Input text is too long" in resp["error"].get("message", ""), "未检测到最大长度限制错误"
+    error_message = resp["error"].get("message", "")
+    assert (
+        "Input text is too long" in error_message or "exceeds the configured max_model_len" in error_message
+    ), "未检测到最大长度限制错误"
 
 
 def test_empty_input():

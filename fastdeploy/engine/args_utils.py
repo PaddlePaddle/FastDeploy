@@ -38,6 +38,7 @@ from fastdeploy.config import (
     RouterConfig,
     RoutingReplayConfig,
     RunnerOption,
+    ServingLimitsConfig,
     SpeculativeConfig,
     StructuredOutputsConfig,
     TaskOption,
@@ -110,6 +111,33 @@ class EngineArgs:
     max_model_len: int = 2048
     """
     Maximum context length supported by the model.
+    """
+    max_completion_tokens: Optional[int] = None
+    """
+    Server-level maximum allowed completion token length (hard cap).
+    Per-request max_tokens will be clamped to this value. None means no server-level cap
+    (bounded by max_model_len - input_len).
+    """
+    reasoning_max_tokens: Optional[int] = None
+    """
+    Server-level maximum allowed reasoning/thinking token length (hard cap).
+    Per-request reasoning_max_tokens will be clamped to this value. None means no server-level cap.
+    """
+    response_max_tokens: Optional[int] = None
+    """
+    Server-level maximum allowed response token length (hard cap).
+    Per-request response_max_tokens will be clamped to this value. None means no server-level cap.
+    """
+    min_completion_tokens: Optional[int] = None
+    """
+    Server-level minimum generation length floor.
+    Effective min_tokens = max(server_value, per-request value). Requests cannot set min_tokens
+    below this floor. None means no server-level floor.
+    """
+    input_max_tokens: Optional[int] = None
+    """
+    Server-level maximum input token length.
+    Requests with prompt longer than this will be rejected. None means no limit (bounded by max_model_len).
     """
     tensor_parallel_size: int = 1
     """
@@ -779,6 +807,43 @@ class EngineArgs:
             type=int,
             default=EngineArgs.max_model_len,
             help="Maximum context length supported by the model.",
+        )
+        model_group.add_argument(
+            "--max-completion-tokens",
+            type=int,
+            default=EngineArgs.max_completion_tokens,
+            help="Server-level maximum allowed completion token length (hard cap). "
+            "Per-request max_tokens will be clamped to this value. "
+            "Default: None (bounded by max_model_len - input_len).",
+        )
+        model_group.add_argument(
+            "--reasoning-max-tokens",
+            type=int,
+            default=EngineArgs.reasoning_max_tokens,
+            help="Server-level maximum allowed reasoning/thinking token length (hard cap). "
+            "Per-request reasoning_max_tokens will be clamped to this value. Default: None (no cap).",
+        )
+        model_group.add_argument(
+            "--response-max-tokens",
+            type=int,
+            default=EngineArgs.response_max_tokens,
+            help="Server-level maximum allowed response token length (hard cap). "
+            "Per-request response_max_tokens will be clamped to this value. Default: None (no cap).",
+        )
+        model_group.add_argument(
+            "--min-completion-tokens",
+            type=int,
+            default=EngineArgs.min_completion_tokens,
+            help="Server-level minimum generation length floor. "
+            "Effective min_tokens = max(server_value, per-request value). Default: None (no floor).",
+        )
+        model_group.add_argument(
+            "--input-max-tokens",
+            type=int,
+            default=EngineArgs.input_max_tokens,
+            help="Server-level maximum input token length. "
+            "Requests with prompt longer than this will be rejected. "
+            "Default: None (no limit, bounded by max_model_len).",
         )
         model_group.add_argument(
             "--block-size",
@@ -1608,6 +1673,8 @@ class EngineArgs:
         cache_cfg = CacheConfig(all_dict)
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
+        serving_limits_cfg = ServingLimitsConfig(all_dict)
+        serving_limits_cfg.validate(model_cfg.max_model_len)
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
@@ -1644,4 +1711,5 @@ class EngineArgs:
             routing_replay_config=routing_replay_config,
             benchmark_metrics_config=benchmark_metrics_cfg,
             deploy_modality=DeployModality.from_str(self.deploy_modality),
+            serving_limits_config=serving_limits_cfg,
         )

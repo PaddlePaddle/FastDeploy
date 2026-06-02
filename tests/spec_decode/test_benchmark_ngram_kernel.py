@@ -155,6 +155,7 @@ def _run_gpu(ngram_match_fn, gpu_data):
         gpu_data["max_dec_len"],
         MAX_NGRAM_SIZE,
         MAX_DRAFT_TOKENS,
+        False,  # pad_to_max: benchmark unrelated to cudagraph, measure no-pad cost
     )
 
 

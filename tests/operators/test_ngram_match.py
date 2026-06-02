@@ -61,6 +61,7 @@ class TestNgramMatchOp(unittest.TestCase):
             max_dec_len,
             3,
             4,
+            False,  # pad_to_max: match unchanged (no-pad) reference behavior
         )
 
         # Extract non-zero tokens and assert the results.
@@ -100,6 +101,7 @@ class TestNgramMatchOp(unittest.TestCase):
             max_dec_len,
             3,
             3,
+            False,  # pad_to_max: match unchanged (no-pad) reference behavior
         )
 
         # No match → should only keep 1 token
