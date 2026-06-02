@@ -190,6 +190,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Enable FP8 calibration on HPU"
     "FD_HPU_MEASUREMENT_MODE": lambda: os.getenv("FD_HPU_MEASUREMENT_MODE", "0"),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    # Timeout (seconds) for D to reclaim preallocated blocks if P never follows through. 0 to disable.
+    "FD_DECODE_PREALLOC_BLOCK_TIMEOUT": lambda: int(os.getenv("FD_DECODE_PREALLOC_BLOCK_TIMEOUT", "600")),
     "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
         os.getenv("FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", "1")
     ),
