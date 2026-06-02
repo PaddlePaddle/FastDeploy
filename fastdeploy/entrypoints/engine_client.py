@@ -49,7 +49,6 @@ from fastdeploy.inter_communicator import (
     RearrangeExpertStatus,
     ZmqIpcClient,
 )
-from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.platforms import current_platform
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
@@ -363,9 +362,6 @@ class EngineClient:
             if "messages" in task:
                 task["messages"] = None
             api_server_logger.info(f"task['max_tokens']:{task['max_tokens']}")
-            main_process_metrics.obs_value("request_params_max_tokens", task["max_tokens"])
-            main_process_metrics.inc_value("prompt_tokens_total", input_ids_len)
-            main_process_metrics.obs_value("request_prompt_tokens", input_ids_len)
         except Exception as e:
             api_server_logger.error(f"add_requests error: {e}, {str(traceback.format_exc())}")
             raise EngineError(str(e), error_code=400)
