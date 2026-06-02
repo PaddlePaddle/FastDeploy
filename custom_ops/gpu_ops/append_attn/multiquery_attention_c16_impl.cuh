@@ -45,7 +45,6 @@ __global__ void multi_query_append_attention_kernel(
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
-    const int max_seq_len,
     const int max_block_num_per_seq,
     const float scale,
     const float quant_max_bound,
@@ -430,7 +429,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
     const bool *__restrict__ attn_mask,  // [bsz, max_q, max_q] for tree-mask
-    const int max_seq_len,
     const int max_block_num_per_seq,
     const float scale,
     const float quant_max_bound,
@@ -923,7 +921,6 @@ void MultiQueryAppendAttention(
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           meta_data.mask_offset,
-          max_seq_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -991,7 +988,6 @@ void MultiQueryAppendAttention(
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           meta_data.mask_offset,
-          max_seq_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1047,7 +1043,6 @@ void MultiQueryAppendAttention(
           quant_max_bound,
           quant_min_bound,
           in_scale,
-          max_seq_len,
           num_chunks,
           num_heads,
           chunk_size,
@@ -1152,7 +1147,6 @@ void MultiQueryAppendAttention(
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
-          max_seq_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1210,7 +1204,6 @@ void MultiQueryAppendAttention(
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
-          max_seq_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1266,11 +1259,9 @@ void MultiQueryAppendAttention(
             quant_max_bound,
             quant_min_bound,
             in_scale,
-            max_seq_len,
             num_chunks,
             num_heads,
-            chunk_size,
-            HEAD_DIM);
+            chunk_size);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1310,7 +1301,6 @@ void MultiQueryAppendAttention(
             quant_max_bound,
             quant_min_bound,
             in_scale,
-            max_seq_len,
             num_chunks,
             num_heads,
             chunk_size,
