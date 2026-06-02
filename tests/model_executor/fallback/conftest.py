@@ -155,7 +155,7 @@ def pytest_collection_modifyitems(config, items):
         # Mark all paddlefleet tests to skip
         skip_marker = pytest.mark.skip(reason="Failed to install paddlefleet dependencies")
         for item in items:
-            if "test_fallback_fleet_model.py" in item.nodeid:
+            if "test_fallback_fleet_model.py" in item.nodeid or "test_fallback_fleet_model_coverge.py" in item.nodeid:
                 item.add_marker(skip_marker)
 
     print("=" * 70 + "\n")

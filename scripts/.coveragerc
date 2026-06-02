@@ -11,6 +11,7 @@ source =
     */site-packages/fastdeploy
     */lib/python3.10/site-packages/fastdeploy
     */fastdeploy
+    /workspace/FastDeploy/fastdeploy
 
 [report]
 exclude_lines =
