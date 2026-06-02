@@ -30,6 +30,7 @@ class _Backend(enum.Enum):
     PLAS_ATTN = enum.auto()
     HPU_ATTN = enum.auto()
     FLASH_MASK_ATTN = enum.auto()
+    DECODE_UNIFIED_ATTN = enum.auto()
 
 
 class Platform:

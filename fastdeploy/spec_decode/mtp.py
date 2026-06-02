@@ -23,6 +23,7 @@ import numpy as np
 import paddle
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.engine.request import Request, RequestType
 from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -364,42 +365,68 @@ class MTPProposer(Proposer):
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
 
-        self.model_inputs["decoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["decoder_batch_ids"])
-        self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_tile_ids_per_batch"]
-        )
-        if current_platform.is_xpu() or current_platform.is_maca():
-            self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
-                self.target_model_inputs["decoder_num_blocks_cpu"]
-            ).cpu()
-        else:
-            self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
-                self.target_model_inputs["decoder_num_blocks_cpu"]
-            ).pin_memory()
-        self.model_inputs["decoder_num_blocks_device"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_num_blocks_device"]
-        )
-        self.model_inputs["decoder_chunk_size_device"] = paddle.zeros_like(
-            self.target_model_inputs["decoder_chunk_size_device"]
-        )
         self.model_inputs["max_len_tensor_cpu"] = paddle.zeros_like(
             self.target_model_inputs["max_len_tensor_cpu"]
         ).cpu()
+        if envs.FD_ATTENTION_BACKEND == "DECODE_UNIFIED_ATTN":
+            self.model_inputs["decoder_batch_ids"] = None
+            self.model_inputs["decoder_tile_ids_per_batch"] = None
+            self.model_inputs["decoder_num_blocks_cpu"] = None
+            self.model_inputs["decoder_num_blocks_device"] = None
+            self.model_inputs["decoder_chunk_size_device"] = None
+            self.model_inputs["encoder_batch_ids"] = None
+            self.model_inputs["encoder_tile_ids_per_batch"] = None
+            self.model_inputs["encoder_num_blocks_x_cpu"] = None
+            self.model_inputs["kv_batch_ids"] = None
+            self.model_inputs["kv_tile_ids_per_batch"] = None
+            self.model_inputs["kv_num_blocks_x_cpu"] = None
+        else:
+            self.model_inputs["decoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["decoder_batch_ids"])
+            self.model_inputs["decoder_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_tile_ids_per_batch"]
+            )
+            if current_platform.is_xpu() or current_platform.is_maca():
+                self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
+                    self.target_model_inputs["decoder_num_blocks_cpu"]
+                ).cpu()
+            else:
+                self.model_inputs["decoder_num_blocks_cpu"] = paddle.zeros_like(
+                    self.target_model_inputs["decoder_num_blocks_cpu"]
+                ).pin_memory()
+            self.model_inputs["decoder_num_blocks_device"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_num_blocks_device"]
+            )
+            self.model_inputs["decoder_chunk_size_device"] = paddle.zeros_like(
+                self.target_model_inputs["decoder_chunk_size_device"]
+            )
+            self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["encoder_batch_ids"])
+            self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["encoder_tile_ids_per_batch"]
+            )
+            self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
+                self.target_model_inputs["encoder_num_blocks_x_cpu"]
+            ).cpu()
+            self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.target_model_inputs["kv_batch_ids"])
+            self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(
+                self.target_model_inputs["kv_tile_ids_per_batch"]
+            )
+            self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
+                self.target_model_inputs["kv_num_blocks_x_cpu"]
+            ).cpu()
+        # Decode attention split ops buffers
 
-        self.model_inputs["encoder_batch_ids"] = paddle.zeros_like(self.target_model_inputs["encoder_batch_ids"])
-        self.model_inputs["encoder_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["encoder_tile_ids_per_batch"]
-        )
-        self.model_inputs["encoder_num_blocks_x_cpu"] = paddle.zeros_like(
-            self.target_model_inputs["encoder_num_blocks_x_cpu"]
-        ).cpu()
-        self.model_inputs["kv_batch_ids"] = paddle.zeros_like(self.target_model_inputs["kv_batch_ids"])
-        self.model_inputs["kv_tile_ids_per_batch"] = paddle.zeros_like(
-            self.target_model_inputs["kv_tile_ids_per_batch"]
-        )
-        self.model_inputs["kv_num_blocks_x_cpu"] = paddle.zeros_like(
-            self.target_model_inputs["kv_num_blocks_x_cpu"]
-        ).cpu()
+        if (
+            "decode_block_indices" in self.target_model_inputs
+            and self.target_model_inputs["decode_block_indices"] is not None
+        ):
+            self.model_inputs["decode_block_indices"] = paddle.zeros_like(
+                self.target_model_inputs["decode_block_indices"]
+            )
+            self.model_inputs["decode_num_blocks"] = paddle.zeros_like(self.target_model_inputs["decode_num_blocks"])
+            self.model_inputs["decode_chunk_size"] = paddle.zeros_like(self.target_model_inputs["decode_chunk_size"])
+            self.model_inputs["decode_tmp_workspace"] = self.target_model_inputs["decode_tmp_workspace"]
+            self.model_inputs["decode_tmp_m"] = self.target_model_inputs["decode_tmp_m"]
+            self.model_inputs["decode_tmp_d"] = self.target_model_inputs["decode_tmp_d"]
 
         # Get the attention backend
         attn_cls = get_attention_backend()
@@ -470,16 +497,10 @@ class MTPProposer(Proposer):
 
                 input_ids = request.prompt_token_ids + request.output_token_ids
 
-                self.model_inputs["input_ids_len"][idx] = length - 1
                 async_set_value(self.model_inputs["pre_ids"][idx : idx + 1], -1)
                 self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs["input_ids"][
                     idx : idx + 1, 1:length
                 ]
-                # TODO: use token_all_ids replace with input_ids_cpu
-                if getattr(self, "hybrid_mode", False) and "input_ids_cpu" in self.model_inputs:
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = self.target_model_inputs[
-                        "input_ids"
-                    ][idx : idx + 1, 1:length].cpu()
                 encoder_block_num = len(request.block_tables)
                 async_set_value(self.model_inputs["encoder_block_lens"][idx : idx + 1], encoder_block_num)
                 async_set_value(self.model_inputs["block_tables"][idx : idx + 1, :], -1)
@@ -567,7 +588,6 @@ class MTPProposer(Proposer):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
-            self.model_inputs.input_ids_len[idx] = length - 1
 
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
@@ -575,9 +595,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs[
                         "input_ids"
                     ][idx : idx + 1, 1:length]
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = np.array(
-                        request.prompt_token_ids
-                    )[1:]
                 self.model_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 prefill_token_num = self.max_draft_token_num + 1
                 self.model_inputs["draft_tokens"][idx : idx + 1, 0:1] = paddle.to_tensor(
@@ -606,9 +623,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs[
                         "input_ids"
                     ][idx : idx + 1, 1:length]
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = np.array(
-                        request.prompt_token_ids
-                    )[1:]
                 self.model_inputs["pre_ids"][idx : idx + 1] = -1
                 self.model_inputs["step_idx"][idx : idx + 1] = 0
                 if self.cache_config.enable_chunked_prefill:

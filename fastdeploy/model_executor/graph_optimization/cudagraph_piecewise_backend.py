@@ -193,7 +193,11 @@ class CudaGraphPiecewiseBackend:
 
     def __call__(self, **kwargs) -> List[paddle.Tensor] | paddle.Tensor:
         # Get real shape (total num tokens)
-        if self.speculative_decoding and all(self.real_bsz_to_captured_size.values()):
+        if (
+            self.speculative_decoding
+            and self.real_bsz_to_captured_size
+            and all(self.real_bsz_to_captured_size.values())
+        ):
             seq_lens_this_time: paddle.Tensor = kwargs["forward_meta"].seq_lens_this_time
             real_bsz = kwargs["forward_meta"].real_bsz
             num_running_requests = real_bsz if real_bsz > 0 else int((seq_lens_this_time.flatten() > 0).sum().item())

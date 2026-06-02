@@ -133,9 +133,6 @@ def slice_fn(weight_or_parameter, output_dim, start, end, step=1):
 
 def process_weight_transpose(layer, weight_name):
     weight = getattr(layer, weight_name)
-    if not weight._is_initialized():
-        logger.warning(f"Weight {weight_name} not initialized, skipping transpose.")
-        return
     if len(weight.shape) == 2:
         weight_shape = weight.shape[::-1]
     elif len(weight.shape) == 3:
@@ -360,9 +357,6 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
 
         # mlp.gate.weight is precision-sensitive, so we cast it to float32 for computation
         loaded_weight = fd_cast(loaded_weight, param)
-        if param.shape != loaded_weight.shape:
-            # for e_score_correction_bias
-            loaded_weight = loaded_weight.reshape(param.shape)
         assert param.shape == loaded_weight.shape, (
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )

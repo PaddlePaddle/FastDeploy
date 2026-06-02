@@ -200,7 +200,7 @@ class ResourceManagerV1(ResourceManager):
         self.finish_execution_pool = ThreadPoolExecutor(max_workers=1)
         self.lock = threading.Lock()
         self.to_be_rescheduled_request_id_set = set()
-        main_process_metrics.max_batch_size.set(max_num_seqs)
+        main_process_metrics.set_value("max_batch_size", max_num_seqs)
 
         self.using_extend_tables_req_id = set()
         self.reuse_block_num_map = dict()
@@ -1070,9 +1070,12 @@ class ResourceManagerV1(ResourceManager):
                                     self.cache_manager.num_cpu_blocks > 0
                                     or self.config.cache_config.kvcache_storage_backend
                                 ):
-                                    if not self.cache_manager.can_allocate_gpu_blocks(
+                                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                                         (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                         // self.config.cache_config.block_size
+                                    )
+                                    if not self.cache_manager.can_allocate_gpu_blocks(
+                                        can_schedule_block_num_threshold
                                     ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                         break
                             success = self.get_prefix_cached_blocks(request)
@@ -1134,6 +1137,7 @@ class ResourceManagerV1(ResourceManager):
                                 self.req_dict[request.request_id] = allocated_position
                                 llm_logger.debug(f"req_id:{request.request_id} allocate pos end")
                         else:
+                            # Warning: _free_blocks before update_cache_blocks may cause storage blocks leak
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
                             break
@@ -1150,9 +1154,12 @@ class ResourceManagerV1(ResourceManager):
                                     self.cache_manager.num_cpu_blocks > 0
                                     or self.config.cache_config.kvcache_storage_backend
                                 ):
-                                    if not self.cache_manager.can_allocate_gpu_blocks(
+                                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                                         (request.need_prefill_tokens + self.config.cache_config.block_size - 1)
                                         // self.config.cache_config.block_size
+                                    )
+                                    if not self.cache_manager.can_allocate_gpu_blocks(
+                                        can_schedule_block_num_threshold
                                     ):  # to prevent block allocation for matching in hierarchical cache and cause dead lock
                                         break
                             success = self.get_prefix_cached_blocks(request)
@@ -1196,6 +1203,7 @@ class ResourceManagerV1(ResourceManager):
                                 )
                             request.status = RequestStatus.RUNNING_PREFILL
                         else:
+                            # Warning: _free_blocks before update_cache_blocks may cause storage blocks leak
                             if self.config.cache_config.enable_prefix_caching:
                                 self._free_blocks(request)
                             break
@@ -1466,9 +1474,9 @@ class ResourceManagerV1(ResourceManager):
                 request.metrics.storage_cache_prepare_time = metrics["storage_cache_prepare_time"]
                 request.metrics.prompt_token_ids_len = request.prompt_token_ids_len
 
-                main_process_metrics.prefix_cache_token_num.inc(request.num_computed_tokens)
-                main_process_metrics.prefix_gpu_cache_token_num.inc(request.metrics.gpu_cache_token_num)
-                main_process_metrics.prefix_cpu_cache_token_num.inc(request.metrics.cpu_cache_token_num)
+                main_process_metrics.inc_value("prefix_cache_token_num", request.num_computed_tokens)
+                main_process_metrics.inc_value("prefix_gpu_cache_token_num", request.metrics.gpu_cache_token_num)
+                main_process_metrics.inc_value("prefix_cpu_cache_token_num", request.metrics.cpu_cache_token_num)
 
             trace_print(LoggingEventName.PREPARE_PREFIX_CACHE_END, request.request_id, getattr(request, "user", ""))
 
@@ -1624,7 +1632,7 @@ class ResourceManagerV1(ResourceManager):
             request.output_token_ids.append(request_output.outputs.token_ids[0])
             request.num_cached_tokens = request_output.num_cached_tokens
             if (
-                self.config.speculative_config.method == SpecMethod.MTP
+                self.config.speculative_config.method in [SpecMethod.MTP, SpecMethod.NAIVE]
                 and self.config.scheduler_config.splitwise_role == "decode"
             ):
                 request.draft_token_ids = copy.deepcopy(request_output.outputs.draft_token_ids)
@@ -1743,12 +1751,14 @@ class ResourceManagerV1(ResourceManager):
             if task is not None:
                 blocks_used_by_tasks.update(getattr(task, "block_tables", []))
                 blocks_used_by_tasks.update(getattr(task, "extend_block_tables", []))
-        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - len(blocks_used_by_tasks))
-        main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
-        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
-        main_process_metrics.num_requests_running.set(num_requests_running)
-        main_process_metrics.num_requests_waiting.set(num_requests_waiting)
-        main_process_metrics.num_requests_queuing.set(num_requests_queuing)
+        main_process_metrics.set_value(
+            "available_gpu_block_num", self.total_block_number() - len(blocks_used_by_tasks)
+        )
+        main_process_metrics.set_value("batch_size", self.max_num_seqs - self.available_batch())
+        main_process_metrics.set_value("gpu_cache_usage_perc", self.get_gpu_cache_usage_perc())
+        main_process_metrics.set_value("num_requests_running", num_requests_running)
+        main_process_metrics.set_value("num_requests_waiting", num_requests_waiting)
+        main_process_metrics.set_value("num_requests_queuing", num_requests_queuing)
         if verbose:
             llm_logger.info(
                 f"update metrics: running={num_requests_running}, "

@@ -1886,6 +1886,118 @@ class RoutingReplayConfig:
         return self.to_json_string()
 
 
+class ServingLimitsConfig:
+    """Server-level request length limits and policies."""
+
+    def __init__(self, args):
+        self.max_completion_tokens = None
+        self.reasoning_max_tokens = None
+        self.response_max_tokens = None
+        self.min_completion_tokens = None
+        self.input_max_tokens = None
+
+        for key, value in args.items():
+            if hasattr(self, key) and value != "None":
+                setattr(self, key, value)
+
+    def validate(self, max_model_len):
+        """Validate serving limits against max_model_len at startup."""
+        for name in ("max_completion_tokens", "input_max_tokens", "response_max_tokens"):
+            value = getattr(self, name)
+            if value is not None and value <= 0:
+                flag = name.replace("_", "-")
+                raise ValueError(f"--{flag} ({value}) must be greater than 0.")
+
+        for name in ("reasoning_max_tokens", "min_completion_tokens"):
+            value = getattr(self, name)
+            if value is not None and value < 0:
+                flag = name.replace("_", "-")
+                raise ValueError(f"--{flag} ({value}) must be greater than or equal to 0.")
+
+        if self.min_completion_tokens is not None:
+            if self.min_completion_tokens >= max_model_len:
+                raise ValueError(
+                    f"--min-completion-tokens ({self.min_completion_tokens}) must be less than "
+                    f"--max-model-len ({max_model_len}). All requests would be rejected."
+                )
+            if self.max_completion_tokens is not None and self.min_completion_tokens > self.max_completion_tokens:
+                raise ValueError(
+                    f"--min-completion-tokens ({self.min_completion_tokens}) must not exceed "
+                    f"--max-completion-tokens ({self.max_completion_tokens})."
+                )
+
+        if self.max_completion_tokens is not None and self.max_completion_tokens > max_model_len:
+            logger.warning(
+                f"--max-completion-tokens ({self.max_completion_tokens}) > "
+                f"--max-model-len ({max_model_len}), it will have no effect."
+            )
+
+        if self.input_max_tokens is not None and self.input_max_tokens > max_model_len:
+            logger.warning(
+                f"--input-max-tokens ({self.input_max_tokens}) > "
+                f"--max-model-len ({max_model_len}), it will have no effect."
+            )
+
+
+class BenchmarkMetricsConfig:
+    """Configuration for in-process benchmark metrics logger.
+
+    Args (passed as JSON dict via --benchmark-metrics-config):
+        enable: Whether to enable the benchmark metrics logger. Default: False.
+        window_size: Number of recent requests to aggregate. 0 = all requests (cumulative).
+        window_mode: Window aggregation mode. Default: "sliding".
+            "sliding" = sliding window (keep last N records),
+            "tumbling" = tumbling window (clear and restart after every N records).
+        percentiles: Comma-separated percentile values to compute, e.g. "50,90,95,99".
+        metrics: Comma-separated metric names to report, or "all".
+            Available metrics (aligned with benchmark_serving.py --percentile-metrics):
+                ttft          - Time to First Token (client arrival → first token)
+                s_ttft        - Server TTFT (inference start → first token)
+                tpot          - Time per Output Token (excluding first token)
+                s_itl         - Infer Inter-token Latency
+                e2el          - End-to-end Latency (client arrival → last token)
+                s_e2el        - Server E2EL (inference start → last token)
+                s_decode      - Decode speed (tokens/s, excluding first token)
+                input_len     - Prefix cache hit token count ("Cached Tokens" in benchmark_serving)
+                s_input_len   - Infer input length (total prompt tokens on inference side)
+                output_len    - Output token length per request
+    """
+
+    _DEFAULTS = {
+        "enable": False,
+        "window_size": 0,
+        "window_mode": "sliding",
+        "percentiles": "50,90,95,99",
+        "metrics": "all",
+    }
+
+    _ALL_METRICS = [
+        "ttft",  # Time to First Token
+        "s_ttft",  # Server TTFT
+        "tpot",  # Time per Output Token
+        "s_itl",  # Infer Inter-token Latency
+        "e2el",  # End-to-end Latency
+        "s_e2el",  # Server E2EL
+        "s_decode",  # Decode speed (tok/s)
+        "input_len",  # Prefix cache hit tokens (= "Cached Tokens" in benchmark_serving)
+        "s_input_len",  # Infer input length (total prompt tokens)
+        "output_len",  # Output token length
+    ]
+
+    def __init__(self, args: Optional[dict] = None):
+        for key, value in self._DEFAULTS.items():
+            setattr(self, key, value)
+        if args:
+            for key, value in args.items():
+                if key in self._DEFAULTS:
+                    setattr(self, key, value)
+        self.percentile_values = [float(p.strip()) for p in self.percentiles.split(",") if p.strip()]
+        if self.metrics == "all":
+            self.selected_metrics = set(self._ALL_METRICS)
+        else:
+            self.selected_metrics = {m.strip() for m in self.metrics.split(",") if m.strip()}
+
+
 class FDConfig:
     """
     The configuration class which contains all fastdeploy-related configuration. This
@@ -1920,7 +2032,9 @@ class FDConfig:
         tool_parser: str = None,
         test_mode=False,
         routing_replay_config: Optional[RoutingReplayConfig] = None,
+        benchmark_metrics_config=None,
         deploy_modality: DeployModality = DeployModality.MIXED,
+        serving_limits_config: ServingLimitsConfig = None,  # resolved below
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1937,7 +2051,9 @@ class FDConfig:
         self.structured_outputs_config: StructuredOutputsConfig = structured_outputs_config
         self.router_config: RouterConfig = router_config
         self.routing_replay_config = routing_replay_config
+        self.benchmark_metrics_config = benchmark_metrics_config
         self.deploy_modality: DeployModality = deploy_modality
+        self.serving_limits_config: ServingLimitsConfig = serving_limits_config or ServingLimitsConfig({})
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
         if self.graph_opt_config.cudagraph_only_prefill:
@@ -2412,6 +2528,33 @@ class FDConfig:
                 raise ImportError(
                     "cuda-python not installed. Install the version matching your CUDA toolkit:\n"
                     "  CUDA 12.x → pip install cuda-python==12.*\n"
+                )
+
+        if self.benchmark_metrics_config is not None:
+            cfg = self.benchmark_metrics_config
+            assert isinstance(
+                cfg.enable, bool
+            ), f"BenchmarkMetricsConfig: 'enable' must be a bool, got {type(cfg.enable).__name__}"
+            assert (
+                isinstance(cfg.window_size, int) and cfg.window_size >= 0
+            ), f"BenchmarkMetricsConfig: 'window_size' must be a non-negative integer, got {cfg.window_size!r}"
+            assert cfg.window_mode in (
+                "sliding",
+                "tumbling",
+            ), f"BenchmarkMetricsConfig: 'window_mode' must be 'sliding' or 'tumbling', got {cfg.window_mode!r}"
+            assert (
+                isinstance(cfg.percentiles, str) and cfg.percentiles.strip()
+            ), f"BenchmarkMetricsConfig: 'percentiles' must be a non-empty string, got {cfg.percentiles!r}"
+            for p in cfg.percentile_values:
+                assert 0 <= p <= 100, f"BenchmarkMetricsConfig: percentile value {p} out of range [0, 100]"
+            assert (
+                isinstance(cfg.metrics, str) and cfg.metrics.strip()
+            ), f"BenchmarkMetricsConfig: 'metrics' must be a non-empty string, got {cfg.metrics!r}"
+            if cfg.metrics != "all":
+                invalid = cfg.selected_metrics - set(BenchmarkMetricsConfig._ALL_METRICS)
+                assert not invalid, (
+                    f"BenchmarkMetricsConfig: unknown metric(s): {invalid}. "
+                    f"Valid metrics: {BenchmarkMetricsConfig._ALL_METRICS}"
                 )
 
     def print(self):

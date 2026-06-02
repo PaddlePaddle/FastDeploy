@@ -30,6 +30,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
     const paddle::Tensor& slot_mapping,
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     cudaStream_t& stream,
+    const std::string& cache_quant_type_str,
     paddle::Tensor* kv_cache) {
   typedef PDTraits<T> traits_;
   typedef typename traits_::DataType DataType_;
@@ -50,27 +51,51 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
   int grid_size = 1;
   GetNumBlocks<128>(pack_num, &grid_size);
 
-  using CT = DataType_;
-
-  prefill_absorb_cache_kernel<DataType_, PackSize, CT>
-      <<<grid_size, blocksize, 0, stream>>>(
-          reinterpret_cast<DataType_*>(
-              const_cast<data_t*>(kv_nope.data<data_t>())),
-          reinterpret_cast<DataType_*>(
-              const_cast<data_t*>(kv_pe.data<data_t>())),
-          reinterpret_cast<DataType_*>(kv_cache->data<data_t>()),
-          block_tables.data<int>(),
-          slot_mapping.data<int64_t>(),
-          batch_id_per_token.data<int>(),
-          cu_seqlens_q.data<int>(),
-          seq_lens.data<int>(),
-          seq_lens_decoder.data<int>(),
-          max_blocks_per_seq,
-          kv_num_heads,
-          nope_size,
-          pe_size,
-          block_size,
-          elem_nums);
+  if (cache_quant_type_str == "cache_fp8") {
+    using CT = __nv_fp8_e4m3;
+    prefill_absorb_cache_kernel<DataType_, PackSize, CT>
+        <<<grid_size, blocksize, 0, stream>>>(
+            reinterpret_cast<DataType_*>(
+                const_cast<data_t*>(kv_nope.data<data_t>())),
+            reinterpret_cast<DataType_*>(
+                const_cast<data_t*>(kv_pe.data<data_t>())),
+            reinterpret_cast<CT*>(kv_cache->data<uint8_t>()),
+            block_tables.data<int>(),
+            slot_mapping.data<int64_t>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
+            seq_lens.data<int>(),
+            seq_lens_decoder.data<int>(),
+            max_blocks_per_seq,
+            kv_num_heads,
+            nope_size,
+            pe_size,
+            block_size,
+            elem_nums);
+  } else if (cache_quant_type_str == "none") {
+    prefill_absorb_cache_kernel<DataType_, PackSize, DataType_>
+        <<<grid_size, blocksize, 0, stream>>>(
+            reinterpret_cast<DataType_*>(
+                const_cast<data_t*>(kv_nope.data<data_t>())),
+            reinterpret_cast<DataType_*>(
+                const_cast<data_t*>(kv_pe.data<data_t>())),
+            reinterpret_cast<DataType_*>(kv_cache->data<data_t>()),
+            block_tables.data<int>(),
+            slot_mapping.data<int64_t>(),
+            batch_id_per_token.data<int>(),
+            cu_seqlens_q.data<int>(),
+            seq_lens.data<int>(),
+            seq_lens_decoder.data<int>(),
+            max_blocks_per_seq,
+            kv_num_heads,
+            nope_size,
+            pe_size,
+            block_size,
+            elem_nums);
+  } else {
+    PD_THROW("Unsupported cache_quant_type_str type: %s.",
+             cache_quant_type_str.c_str());
+  }
 
   const char* fmt_write_cache_completed_signal_str =
       std::getenv("FLAGS_fmt_write_cache_completed_signal");
@@ -142,6 +167,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
           slot_mapping,
           kv_signal_data,
           stream,
+          cache_quant_type_str,
           const_cast<paddle::Tensor*>(&kv_cache));
     }
     case paddle::DataType::FLOAT16: {
@@ -157,6 +183,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
           slot_mapping,
           kv_signal_data,
           stream,
+          cache_quant_type_str,
           const_cast<paddle::Tensor*>(&kv_cache));
     }
   }

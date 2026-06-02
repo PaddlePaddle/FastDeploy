@@ -70,7 +70,7 @@ class ResourceManager:
         self.real_bsz = 0
         self.abort_req_ids_set = set()
         llm_logger.info(f"{self.info()}")
-        main_process_metrics.max_batch_size.set(max_num_seqs)
+        main_process_metrics.set_value("max_batch_size", max_num_seqs)
 
     def reset_cache_config(self, cfg):
         """
@@ -180,7 +180,7 @@ class ResourceManager:
             ori_number = self.available_block_num()
             self.cache_manager.recycle_gpu_blocks(block_tables)
             cur_number = self.available_block_num()
-            main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+            main_process_metrics.set_value("gpu_cache_usage_perc", self.get_gpu_cache_usage_perc())
             llm_logger.info(f"recycle {req_id} {cur_number - ori_number} blocks.")
 
     def available_batch(self):
@@ -322,14 +322,14 @@ class ResourceManager:
 
         # record batch size here
         num_blocks_used_by_tasks = sum([len(task.block_tables) if task else 0 for task in self.tasks_list])
-        main_process_metrics.available_gpu_block_num.set(self.total_block_number() - num_blocks_used_by_tasks)
-        main_process_metrics.batch_size.set(self.max_num_seqs - self.available_batch())
-        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+        main_process_metrics.set_value("available_gpu_block_num", self.total_block_number() - num_blocks_used_by_tasks)
+        main_process_metrics.set_value("batch_size", self.max_num_seqs - self.available_batch())
+        main_process_metrics.set_value("gpu_cache_usage_perc", self.get_gpu_cache_usage_perc())
         llm_logger.info(
             f"Number of allocated requests: {len(tasks)}, number of " f"running requests in worker: {self.real_bsz}"
         )
         llm_logger.info(f"{self.info()}")
-        main_process_metrics.gpu_cache_usage_perc.set(self.get_gpu_cache_usage_perc())
+        main_process_metrics.set_value("gpu_cache_usage_perc", self.get_gpu_cache_usage_perc())
 
         return processed_tasks
 
@@ -357,9 +357,9 @@ class ResourceManager:
         task.cache_info = (cache_block_num, no_cache_block_num)
 
         # Report the number of cached tokens to Prometheus metrics
-        main_process_metrics.prefix_cache_token_num.inc(task.num_cached_tokens)
-        main_process_metrics.prefix_gpu_cache_token_num.inc(task.gpu_cache_token_num)
-        main_process_metrics.prefix_cpu_cache_token_num.inc(task.cpu_cache_token_num)
+        main_process_metrics.inc_value("prefix_cache_token_num", task.num_cached_tokens)
+        main_process_metrics.inc_value("prefix_gpu_cache_token_num", task.gpu_cache_token_num)
+        main_process_metrics.inc_value("prefix_cpu_cache_token_num", task.cpu_cache_token_num)
 
         cached_len = len(common_block_ids) * self.cfg.block_size
         task.block_tables = common_block_ids + unique_block_ids
