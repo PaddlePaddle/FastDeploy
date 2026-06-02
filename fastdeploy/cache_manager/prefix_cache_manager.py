@@ -1274,7 +1274,7 @@ class PrefixCacheManager:
                     f"wait_write_storage_task: write back to storage timed out after {timeout}s, "
                     f"req_id: {req_id}, skipping to avoid blocking scheduling"
                 )
-            del self.task_write_back_event[req_id]
+            self.task_write_back_event.pop(req_id, None)
 
     def issue_prefetch_storage_task(self, task: ReadStorageTask, is_sync=True):
         """
