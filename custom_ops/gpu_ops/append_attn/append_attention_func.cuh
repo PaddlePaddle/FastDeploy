@@ -280,6 +280,8 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
   uint32_t kv_idx = kv_idx_base + ty * 4 + tx / 8;  // kv_idx used to check
   static_assert(block_size % (4 * num_warps) == 0, "");
   static_assert(head_dim % 64 == 0, "");
+  const int32_t kv_b_stride = head_dim;
+
 #pragma unroll
   for (uint32_t i = 0; i < block_size / (num_warps * 4); ++i) {
 #pragma unroll
