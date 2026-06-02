@@ -746,7 +746,10 @@ class LLMEngine:
                     prompts["prompt"] = query_list
 
         if "max_tokens" not in prompts:
-            prompts["max_tokens"] = self.cfg.model_config.max_model_len
+            if self.cfg.serving_limits_config.max_completion_tokens is not None:
+                prompts["max_tokens"] = self.cfg.serving_limits_config.max_completion_tokens
+            else:
+                prompts["max_tokens"] = self.cfg.model_config.max_model_len
 
         self.add_requests(prompts)
         return prompts["request_id"]

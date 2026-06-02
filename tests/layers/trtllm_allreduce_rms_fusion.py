@@ -23,6 +23,91 @@ import paddle
 import paddle.distributed as dist
 
 
+class TestGlm4MoeMLPEnableAllReduceFusion(unittest.TestCase):
+    """Cover Glm4MoeMLP.__init__ line 67:
+
+        self.enable_all_reduce_fusion = (
+            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and not reduce_results
+        )
+
+    The flag must also be propagated into the down_proj (RowParallelLinear) so
+    fused-allreduce kicks in at that layer.
+    """
+
+    def _make_fd_config(self, enable_fusion: bool):
+        from types import SimpleNamespace
+
+        mc = SimpleNamespace(
+            hidden_size=16,
+            hidden_act="silu",
+            moe_layer_start_index=0,
+        )
+        pc = SimpleNamespace(
+            tensor_parallel_size=1,
+            expert_parallel_size=1,
+            tensor_parallel_rank=0,
+            tp_group=None,
+            enable_flashinfer_allreduce_fusion=enable_fusion,
+            use_sequence_parallel_moe=False,
+        )
+        return SimpleNamespace(model_config=mc, parallel_config=pc)
+
+    def _build_mlp(self, enable_fusion: bool, reduce_results: bool):
+        """Construct Glm4MoeMLP with all heavy linears stubbed and capture the
+        kwargs passed to RowParallelLinear (the down_proj branch we care about)."""
+        from fastdeploy.model_executor.models import glm4_moe
+
+        captured = {}
+
+        class _StubLinear(paddle.nn.Layer):
+            def __init__(self, *args, **kwargs):
+                super().__init__()
+
+            def forward(self, x):
+                return x
+
+        class _RowRecorder(_StubLinear):
+            def __init__(self, *args, **kwargs):
+                captured["down_proj"] = kwargs
+                super().__init__(*args, **kwargs)
+
+        with (
+            patch.object(glm4_moe, "MergedColumnParallelLinear", _StubLinear),
+            patch.object(glm4_moe, "RowParallelLinear", _RowRecorder),
+            patch.object(glm4_moe, "MergedReplicatedLinear", _StubLinear),
+            patch.object(glm4_moe, "ReplicatedLinear", _StubLinear),
+            patch.object(glm4_moe, "SiluAndMul", _StubLinear),
+        ):
+            mlp = glm4_moe.Glm4MoeMLP(
+                fd_config=self._make_fd_config(enable_fusion=enable_fusion),
+                intermediate_size=8,
+                layer_id=0,
+                reduce_results=reduce_results,
+            )
+        return mlp, captured
+
+    def test_fusion_true_when_flag_on_and_reduce_results_false(self):
+        """True iff flashinfer fusion is enabled AND reduce_results=False."""
+        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=False)
+        self.assertTrue(mlp.enable_all_reduce_fusion)
+        # Flag must be forwarded into down_proj.
+        self.assertTrue(captured["down_proj"]["enable_all_reduce_fusion"])
+        self.assertFalse(captured["down_proj"]["reduce_results"])
+
+    def test_fusion_false_when_reduce_results_true(self):
+        """reduce_results=True forces fusion off even if flag is set."""
+        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=True)
+        self.assertFalse(mlp.enable_all_reduce_fusion)
+        self.assertFalse(captured["down_proj"]["enable_all_reduce_fusion"])
+        self.assertTrue(captured["down_proj"]["reduce_results"])
+
+    def test_fusion_false_when_flag_disabled(self):
+        """flashinfer fusion flag off -> fusion off regardless of reduce_results."""
+        mlp, captured = self._build_mlp(enable_fusion=False, reduce_results=False)
+        self.assertFalse(mlp.enable_all_reduce_fusion)
+        self.assertFalse(captured["down_proj"]["enable_all_reduce_fusion"])
+
+
 class TestFlashInferAllReduceResidualRMSNorm(unittest.TestCase):
     """Test FlashInfer AllReduce + Residual + RMSNorm fused operator"""
 

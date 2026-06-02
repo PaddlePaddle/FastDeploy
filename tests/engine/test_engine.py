@@ -56,7 +56,17 @@ def _make_cfg(**ov):
     )
     soc = ns(guided_decoding_backend=None, logits_processors=None, reasoning_parser="none")
     soc.disable_any_whitespace = False
-    cfg = ns(model_config=mc, parallel_config=pc, scheduler_config=sc, cache_config=cc, load_config=lc)
+    slc = ns(
+        max_completion_tokens=None, reasoning_max_tokens=None, response_max_tokens=None, min_completion_tokens=None
+    )
+    cfg = ns(
+        model_config=mc,
+        parallel_config=pc,
+        scheduler_config=sc,
+        cache_config=cc,
+        load_config=lc,
+        serving_limits_config=slc,
+    )
     cfg.speculative_config = ns(model_type="main", to_json_string=_j)
     cfg.graph_opt_config = cfg.early_stop_config = cfg.eplb_config = ns(to_json_string=_j)
     cfg.routing_replay_config = cfg.plas_attention_config = ns(to_json_string=_j)

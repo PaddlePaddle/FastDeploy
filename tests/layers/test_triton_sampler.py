@@ -121,6 +121,7 @@ def triton_mode(monkeypatch):
     import fastdeploy.envs as envs
 
     monkeypatch.setattr(envs, "FD_SAMPLING_CLASS", "triton")
+    monkeypatch.setattr("fastdeploy.model_executor.layers.sample.sampler.FD_SAMPLING_CLASS", "triton")
 
 
 def _create_metadata(batch_size=1, min_seq_len=1, max_seq_len=3, max_num_logprobs=None, **overrides):
@@ -343,6 +344,7 @@ class TestSpeculativeSamplerTritonPath:
         m = _create_metadata(batch_size=1)
         logits = paddle.to_tensor([[1.0, 2.0, 3.0]], dtype="float32")
         probs = paddle.nn.functional.softmax(logits, axis=-1)
+        seeds = paddle.ones([probs.shape[0], 1], dtype="int64")
 
         out = sampler._verify_and_sample(
             logits,
@@ -352,6 +354,7 @@ class TestSpeculativeSamplerTritonPath:
             share_inputs=_spec_share_inputs(),
             token_num_output_cpu=1,
             increment_value=1,
+            topp_seed=seeds,
         )
         assert out.sampled_token_ids is not None
 
@@ -366,8 +369,9 @@ class TestSpeculativeSamplerTritonPath:
         m = _create_metadata(batch_size=1)
         logits = paddle.to_tensor([[1.0, 2.0, 3.0]], dtype="float32")
         probs = paddle.nn.functional.softmax(logits, axis=-1)
+        seeds = paddle.ones([probs.shape[0], 1], dtype="int64")
 
-        out = sampler._normal_sample(logits, probs, m, share_inputs=_spec_share_inputs())
+        out = sampler._normal_sample(logits, probs, m, share_inputs=_spec_share_inputs(), topp_seed=seeds)
         assert out.sampled_token_ids is not None
 
     def test_forward_cuda_triton_logit_mask(self, mock_ops, triton_mode, monkeypatch):
