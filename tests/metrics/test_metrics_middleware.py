@@ -71,12 +71,14 @@ def test_dispatch_successful_request(mock_request, mock_call_next):
     mock_call_next.assert_called_once_with(mock_request)
     assert result == mock_response
 
-    # 验证指标记录
-    mock_metrics.http_requests_total.labels.assert_called_once_with(method="POST", path="/test", status_code=200)
-    mock_metrics.http_requests_total.labels().inc.assert_called_once()
+    # 验证指标记录 (now using inc_value/obs_value interface)
+    mock_metrics.inc_value.assert_called_once_with(
+        "http_requests_total", labelvalues={"method": "POST", "path": "/test", "status_code": 200}
+    )
 
-    mock_metrics.http_request_duration_seconds.labels.assert_called_once_with(method="POST", path="/test")
-    mock_metrics.http_request_duration_seconds.labels().observe.assert_called_once_with(1.5)
+    mock_metrics.obs_value.assert_called_once_with(
+        "http_request_duration_seconds", 1.5, labelvalues={"method": "POST", "path": "/test"}
+    )
 
 
 def test_dispatch_with_exception(mock_request, mock_call_next):
@@ -95,12 +97,14 @@ def test_dispatch_with_exception(mock_request, mock_call_next):
         with pytest.raises(Exception, match="Test error"):
             run_async(middleware.dispatch(mock_request, mock_call_next))
 
-    # 验证即使抛出异常也记录了指标
-    mock_metrics.http_requests_total.labels.assert_called_once_with(method="GET", path="/error", status_code=500)
-    mock_metrics.http_requests_total.labels().inc.assert_called_once()
+    # 验证即使抛出异常也记录了指标 (now using inc_value/obs_value interface)
+    mock_metrics.inc_value.assert_called_once_with(
+        "http_requests_total", labelvalues={"method": "GET", "path": "/error", "status_code": 500}
+    )
 
-    mock_metrics.http_request_duration_seconds.labels.assert_called_once_with(method="GET", path="/error")
-    mock_metrics.http_request_duration_seconds.labels().observe.assert_called_once_with(2.0)
+    mock_metrics.obs_value.assert_called_once_with(
+        "http_request_duration_seconds", 2.0, labelvalues={"method": "GET", "path": "/error"}
+    )
 
 
 def test_all_excluded_paths(mock_request, mock_call_next):

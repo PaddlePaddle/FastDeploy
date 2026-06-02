@@ -25,7 +25,6 @@ from fastdeploy.model_executor.ops.xpu import (
     eagle_get_hidden_states,
     eagle_get_self_hidden_states,
     mtp_save_first_token,
-    mtp_step_paddle,
     update_attn_mask_offsets,
 )
 from fastdeploy.model_executor.xpu_pre_and_post_process import (
@@ -47,7 +46,6 @@ class MTPProposerXPU(MTPProposer):
     """
 
     def _prepare_inputs(self, full_hidden_states):
-        use_v1_cache_scheduler = bool(envs.ENABLE_V1_KVCACHE_SCHEDULER)
         draft_model_preprocess(
             self.model_inputs["draft_tokens"],
             self.model_inputs["input_ids"],
@@ -57,24 +55,17 @@ class MTPProposerXPU(MTPProposer):
             self.model_inputs["seq_lens_decoder"],
             self.model_inputs["step_idx"],
             self.model_inputs["not_need_stop"],
-            self.model_inputs["batch_drop"],
-            self.model_inputs["is_block_step"],
             self.model_inputs["pre_ids"],
-            self.model_inputs["mask_rollback"],
-            self.model_inputs["recompute_token_num"],
             self.target_model_inputs["accept_tokens"],
             self.target_model_inputs["accept_num"],
-            self.target_model_inputs["seq_lens_this_time"],
             self.target_model_inputs["seq_lens_encoder"],
             self.target_model_inputs["seq_lens_decoder"],
             self.target_model_inputs["step_idx"],
             self.target_model_inputs["stop_flags"],
-            self.target_model_inputs["is_block_step"],
+            self.model_inputs["max_dec_len"],
             self.target_model_inputs["draft_tokens"],
             self.num_model_steps,
-            True,
-            self.role == "prefill",
-            use_v1_cache_scheduler,
+            self.role == "prefill",  # is_splitwise_prefill
         )
 
         target_hidden_states = eagle_get_hidden_states(
@@ -307,19 +298,3 @@ class MTPProposerXPU(MTPProposer):
             self.target_model_inputs["seq_lens_encoder"],
             self.target_model_inputs["stop_flags"],
         )
-        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
-            mtp_step_paddle(
-                self.target_model_inputs["stop_flags"],
-                self.model_inputs["stop_flags"],
-                self.model_inputs["batch_drop"],
-                self.model_inputs["seq_lens_this_time"],
-                self.model_inputs["seq_lens_encoder"],
-                self.model_inputs["seq_lens_decoder"],
-                self.model_inputs["block_tables"],
-                self.model_inputs["encoder_block_lens"],
-                self.model_inputs["used_list_len"],
-                self.model_inputs["free_list"],
-                self.model_inputs["free_list_len"],
-                self.cache_config.block_size,
-                self.max_draft_token_num,
-            )

@@ -75,8 +75,11 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
 
   int bsz = msg_rcv.meta[2];
   output_tokens_data[0] = (int64_t)msg_rcv.meta[0];
+  // Unpack message_flag (low 8 bits) and actual_topk (high 24 bits) from
+  // meta[1]. Keep packed value; Python unpacks message_flag and actual_topk.
   output_tokens_data[1] = (int64_t)msg_rcv.meta[1];
   output_tokens_data[2] = (int64_t)msg_rcv.meta[2];
+  int actual_topk = msg_rcv.meta[1] >> 8;
 
   int output_tokens_offset = 3 + SPEC_LOGPROB_MAX_BSZ;
   for (int i = 0; i < bsz; i++) {
@@ -89,7 +92,7 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
         output_scores_data + i * (MAX_DRAFT_TOKEN_NUM * (SPEC_LOGPROB_K + 1));
     auto* cur_batch_msg_rcv = &msg_rcv.mtext[i];
     for (int j = 0; j < cur_token_num; j++) {
-      for (int k = 0; k < real_k + 1; k++) {
+      for (int k = 0; k < actual_topk; k++) {
         cur_output_token[j * (SPEC_LOGPROB_K + 1) + k] =
             (int64_t)cur_batch_msg_rcv->tokens[j * (SPEC_LOGPROB_K + 1) + k];
         cur_output_score[j * (SPEC_LOGPROB_K + 1) + k] =
@@ -102,7 +105,8 @@ void SpeculateGetOutMmsgTopK(const paddle::Tensor& output_tokens,
 #ifdef SPECULATE_GET_WITH_OUTPUT_DEBUG
   std::cout << "msg data: " << std::endl;
   std::cout << "stop_flag: " << output_tokens_data[0]
-            << ", message_flag: " << output_tokens_data[1]
+            << ", message_flag: " << (output_tokens_data[1] & 0xFF)
+            << ", max_num_logprobs: " << (output_tokens_data[1] >> 8)
             << ", bsz: " << output_tokens_data[2] << std::endl;
   for (int i = 0; i < output_tokens_data[2]; i++) {
     int cur_token_num = output_tokens_data[3 + i];

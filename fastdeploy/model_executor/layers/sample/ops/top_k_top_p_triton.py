@@ -947,7 +947,6 @@ def _seeded_gumbel_kernel(
     """Generate -log(u) with per-row Philox seeds, fully on GPU."""
     pid = tl.program_id(0)
     seed = tl.load(SEEDS_ptr + pid)
-    seed = seed.to(tl.int32)
     for start in tl.range(0, VOCAB_SIZE, BLOCK_SIZE):
         offsets = start + tl.arange(0, BLOCK_SIZE)
         mask = offsets < VOCAB_SIZE

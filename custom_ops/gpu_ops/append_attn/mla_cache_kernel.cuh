@@ -186,6 +186,8 @@ __global__ void prefill_absorb_cache_kernel(
     const uint32_t elem_cnt) {
   using LoadT = AlignedVector<T, VecSize>;
   LoadT src_vec;
+  using StoreT = AlignedVector<CT, VecSize>;
+  StoreT dst_vec;
 
   int64_t global_thread_idx = blockDim.x * blockIdx.x + threadIdx.x;
   const uint32_t nope_hidden_size = kv_num_heads * nope_size;
@@ -227,7 +229,20 @@ __global__ void prefill_absorb_cache_kernel(
           hi * block_size * all_size + block_offset * all_size + h_bias;
       const uint32_t ori_idx = token_idx * nope_hidden_size + inner_bias;
       Load<T, VecSize>(&kv_nope[ori_idx], &src_vec);
-      Store<T, VecSize>(src_vec, &kv_cache[tgt_idx]);
+
+      if constexpr (std::is_same_v<CT, __nv_fp8_e4m3>) {
+        for (int i = 0; i < VecSize; i++) {
+          float quant_value = (float)(src_vec[i]);
+          quant_value = quant_value > 448.0f ? 448.0f : quant_value;
+          quant_value = quant_value < -448.0f ? -448.0f : quant_value;
+          dst_vec[i] = static_cast<__nv_fp8_e4m3>(quant_value);
+        }
+
+        Store<CT, VecSize>(dst_vec, &kv_cache[tgt_idx]);
+      } else {
+        Store<CT, VecSize>(src_vec, &kv_cache[tgt_idx]);
+      }
+
     } else {
       const uint32_t inner_bias = bias - nope_hidden_size;
       const uint32_t hi = inner_bias / pe_size;
@@ -238,7 +253,18 @@ __global__ void prefill_absorb_cache_kernel(
           h_bias;
       const uint32_t ori_idx = token_idx * pe_hidden_size + inner_bias;
       Load<T, VecSize>(&kv_pe[ori_idx], &src_vec);
-      Store<T, VecSize>(src_vec, &kv_cache[tgt_idx]);
+
+      if constexpr (std::is_same_v<CT, __nv_fp8_e4m3>) {
+        for (int i = 0; i < VecSize; i++) {
+          float quant_value = (float)(src_vec[i]);
+          quant_value = quant_value > 448.0f ? 448.0f : quant_value;
+          quant_value = quant_value < -448.0f ? -448.0f : quant_value;
+          dst_vec[i] = static_cast<__nv_fp8_e4m3>(quant_value);
+        }
+        Store<CT, VecSize>(dst_vec, &kv_cache[tgt_idx]);
+      } else {
+        Store<CT, VecSize>(src_vec, &kv_cache[tgt_idx]);
+      }
     }
   }
 }

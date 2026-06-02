@@ -39,6 +39,11 @@ class NgramProposer(Proposer):
         """
         run
         """
+        # pad_to_max forces the kernel to write a fixed seq_lens_this_time =
+        # num_speculative_tokens + 1, padding unfilled draft slots with a placeholder token.
+        # Required when target cudagraph is enabled (capture-time slt must
+        # match replay-time slt; see ngram_match.cu for details). Disabled
+        # when cudagraph is off to avoid wasted verify on placeholders.
         ngram_match(
             share_inputs["token_ids_all"],
             share_inputs["prompt_lens"],
@@ -51,4 +56,5 @@ class NgramProposer(Proposer):
             share_inputs["max_dec_len"],
             self.max_ngram_size,
             self.max_draft_token_num,
+            self.graph_opt_config.use_cudagraph,
         )

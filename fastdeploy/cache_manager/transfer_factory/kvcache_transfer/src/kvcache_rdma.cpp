@@ -1189,6 +1189,10 @@ int RDMACommunicator::write_cache(const std::string& ip,
                        cache_key_rkey,
                        ip,
                        port)) {
+    ERR("post_block_send key failed - IP: %s, Port: %s, Layer: %d",
+        ip.c_str(),
+        port.c_str(),
+        layer_idx);
     return -1;
   }
 
@@ -1202,6 +1206,10 @@ int RDMACommunicator::write_cache(const std::string& ip,
                          cache_value_rkey,
                          ip,
                          port)) {
+      ERR("post_block_send value failed - IP: %s, Port: %s, Layer: %d",
+          ip.c_str(),
+          port.c_str(),
+          layer_idx);
       return -1;
     }
   }
@@ -1216,6 +1224,10 @@ int RDMACommunicator::write_cache(const std::string& ip,
                          cache_key_scale_rkey,
                          ip,
                          port)) {
+      ERR("post_block_send key_scale failed - IP: %s, Port: %s, Layer: %d",
+          ip.c_str(),
+          port.c_str(),
+          layer_idx);
       return -1;
     }
   }
@@ -1230,6 +1242,10 @@ int RDMACommunicator::write_cache(const std::string& ip,
                          cache_value_scale_rkey,
                          ip,
                          port)) {
+      ERR("post_block_send value_scale failed - IP: %s, Port: %s, Layer: %d",
+          ip.c_str(),
+          port.c_str(),
+          layer_idx);
       return -1;
     }
   }
@@ -1403,7 +1419,8 @@ bool RDMACommunicator::post_send_with_retry(struct RdmaContext* ctx,
       }
       return true;
     } else {
-      ERR("ibv_post_send failed: %s (errno: %d), retry %d/%d",
+      ERR("ibv_post_send failed: ret=%d, %s (errno: %d), retry %d/%d",
+          ret,
           strerror(errno),
           errno,
           retries + 1,
@@ -1413,10 +1430,11 @@ bool RDMACommunicator::post_send_with_retry(struct RdmaContext* ctx,
     }
   } while (retries < max_retries);
 
-  ERR("ibv_post_send failed after %d retries: %s (errno: %d)",
+  ERR("ibv_post_send failed after %d retries: %s (errno: %d), ret=%d",
       retries,
       strerror(errno),
-      errno);
+      errno,
+      ret);
   return false;
 }
 

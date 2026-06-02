@@ -79,6 +79,26 @@ class _DummyMainMetrics:
             self.metrics[name] = _DummyMetric()
         return self.metrics[name]
 
+    def set_value(self, name, value, labelvalues=None):
+        if name not in self.metrics:
+            self.metrics[name] = _DummyMetric()
+        self.metrics[name].set(value)
+
+    def inc_value(self, name, value=1, labelvalues=None):
+        if name not in self.metrics:
+            self.metrics[name] = _DummyMetric()
+        self.metrics[name].inc(value)
+
+    def dec_value(self, name, value=1, labelvalues=None):
+        if name not in self.metrics:
+            self.metrics[name] = _DummyMetric()
+        self.metrics[name].dec(value)
+
+    def obs_value(self, name, value, labelvalues=None):
+        if name not in self.metrics:
+            self.metrics[name] = _DummyMetric()
+        self.metrics[name].observe(value)
+
 
 # IPC signal stub that mirrors the real object's surface area.
 class _DummyIPCSignal:
@@ -190,6 +210,7 @@ def _create_manager(
         total_block_num=num_gpu_blocks,
         prefill_kvcache_block_num=num_gpu_blocks,
         num_cpu_blocks=num_cpu_blocks,
+        block_size=64,
         bytes_per_layer_per_block=1,
         enable_prefix_caching=enable_prefix_caching,
         enable_hierarchical_cache=False,

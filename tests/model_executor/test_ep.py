@@ -419,6 +419,7 @@ def test_eprunner_moe_select_noaux_tc_without_redundant(monkeypatch):
         routed_scaling_factor=1.0,
         gate_correction_bias=None,
         renormalize=False,
+        fd_config=SimpleNamespace(scheduler_config=SimpleNamespace(enable_moe_scores_elementwise_fuse=False)),
     )
     gate_out = paddle.randn([1, 4], dtype="float32")
 

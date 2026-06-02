@@ -23,6 +23,91 @@ import paddle
 import paddle.distributed as dist
 
 
+class TestGlm4MoeMLPEnableAllReduceFusion(unittest.TestCase):
+    """Cover Glm4MoeMLP.__init__ line 67:
+
+        self.enable_all_reduce_fusion = (
+            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and not reduce_results
+        )
+
+    The flag must also be propagated into the down_proj (RowParallelLinear) so
+    fused-allreduce kicks in at that layer.
+    """
+
+    def _make_fd_config(self, enable_fusion: bool):
+        from types import SimpleNamespace
+
+        mc = SimpleNamespace(
+            hidden_size=16,
+            hidden_act="silu",
+            moe_layer_start_index=0,
+        )
+        pc = SimpleNamespace(
+            tensor_parallel_size=1,
+            expert_parallel_size=1,
+            tensor_parallel_rank=0,
+            tp_group=None,
+            enable_flashinfer_allreduce_fusion=enable_fusion,
+            use_sequence_parallel_moe=False,
+        )
+        return SimpleNamespace(model_config=mc, parallel_config=pc)
+
+    def _build_mlp(self, enable_fusion: bool, reduce_results: bool):
+        """Construct Glm4MoeMLP with all heavy linears stubbed and capture the
+        kwargs passed to RowParallelLinear (the down_proj branch we care about)."""
+        from fastdeploy.model_executor.models import glm4_moe
+
+        captured = {}
+
+        class _StubLinear(paddle.nn.Layer):
+            def __init__(self, *args, **kwargs):
+                super().__init__()
+
+            def forward(self, x):
+                return x
+
+        class _RowRecorder(_StubLinear):
+            def __init__(self, *args, **kwargs):
+                captured["down_proj"] = kwargs
+                super().__init__(*args, **kwargs)
+
+        with (
+            patch.object(glm4_moe, "MergedColumnParallelLinear", _StubLinear),
+            patch.object(glm4_moe, "RowParallelLinear", _RowRecorder),
+            patch.object(glm4_moe, "MergedReplicatedLinear", _StubLinear),
+            patch.object(glm4_moe, "ReplicatedLinear", _StubLinear),
+            patch.object(glm4_moe, "SiluAndMul", _StubLinear),
+        ):
+            mlp = glm4_moe.Glm4MoeMLP(
+                fd_config=self._make_fd_config(enable_fusion=enable_fusion),
+                intermediate_size=8,
+                layer_id=0,
+                reduce_results=reduce_results,
+            )
+        return mlp, captured
+
+    def test_fusion_true_when_flag_on_and_reduce_results_false(self):
+        """True iff flashinfer fusion is enabled AND reduce_results=False."""
+        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=False)
+        self.assertTrue(mlp.enable_all_reduce_fusion)
+        # Flag must be forwarded into down_proj.
+        self.assertTrue(captured["down_proj"]["enable_all_reduce_fusion"])
+        self.assertFalse(captured["down_proj"]["reduce_results"])
+
+    def test_fusion_false_when_reduce_results_true(self):
+        """reduce_results=True forces fusion off even if flag is set."""
+        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=True)
+        self.assertFalse(mlp.enable_all_reduce_fusion)
+        self.assertFalse(captured["down_proj"]["enable_all_reduce_fusion"])
+        self.assertTrue(captured["down_proj"]["reduce_results"])
+
+    def test_fusion_false_when_flag_disabled(self):
+        """flashinfer fusion flag off -> fusion off regardless of reduce_results."""
+        mlp, captured = self._build_mlp(enable_fusion=False, reduce_results=False)
+        self.assertFalse(mlp.enable_all_reduce_fusion)
+        self.assertFalse(captured["down_proj"]["enable_all_reduce_fusion"])
+
+
 class TestFlashInferAllReduceResidualRMSNorm(unittest.TestCase):
     """Test FlashInfer AllReduce + Residual + RMSNorm fused operator"""
 
@@ -541,6 +626,193 @@ class TestCleanupFlashInferWorkspace(unittest.TestCase):
             cleanup_flashinfer_workspace()
 
             mock_manager.cleanup.assert_called_once()
+
+
+class TestRMSNormProxyAllreduceFused(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        # The outer test_run_distributed in test_trtllm_allreduce_rms_fusion.py
+        # has already done paddle.set_device + init_parallel_env, so we don't
+        # repeat that here. (unittest.main runs in the same process.)
+        cls.tp_size = dist.get_world_size()
+        cls.tp_rank = dist.get_rank()
+
+    def _make_fd_config(self, enable_fusion: bool):
+        """Mock fd_config with the minimal attributes RMSNorm.__init__ touches."""
+        fd_config = Mock()
+        fd_config.parallel_config = Mock()
+        fd_config.parallel_config.tensor_parallel_size = self.tp_size
+        fd_config.parallel_config.tensor_parallel_rank = self.tp_rank
+        fd_config.parallel_config.tp_group = dist.get_group()
+        fd_config.parallel_config.expert_parallel_size = 1
+        fd_config.parallel_config.enable_flashinfer_allreduce_fusion = enable_fusion
+        fd_config.parallel_config.use_sequence_parallel_moe = False
+        fd_config.model_config = Mock()
+        fd_config.model_config.moe_layer_start_index = -1
+        fd_config.quant_config = None
+        return fd_config
+
+    def _build_rmsnorm(self, enable_fusion: bool, hidden_size: int, layer_id: int = 1):
+        """Build a real RMSNorm whose enable_all_reduce_fusion resolves to
+        `enable_fusion` (use post_attention_layernorm prefix to ensure the
+        prefix-match in __init__ passes)."""
+        from fastdeploy.model_executor.layers.normalization import RMSNorm
+
+        fd_config = self._make_fd_config(enable_fusion=enable_fusion)
+        norm = RMSNorm(
+            fd_config=fd_config,
+            hidden_size=hidden_size,
+            eps=1e-6,
+            prefix=f"model.layers.{layer_id}.post_attention_layernorm",
+            layer_id=layer_id,
+            dtype="bfloat16",
+        )
+        # Initialize weight to a known reproducible value (constant=1.0 by default).
+        with paddle.no_grad():
+            paddle.seed(2024)
+            new_w = paddle.randn([hidden_size], dtype=paddle.bfloat16)
+            dist.broadcast(new_w, src=0)
+            norm.weight.set_value(new_w)
+        return norm
+
+    @staticmethod
+    def _proxy_rmsnorm_fn(x, weight, eps):
+        """Stand-in for phi rmsnorm used as proxy_rmsnorm — standard formula
+        in fp32 to keep reference numerics clean."""
+        x_fp32 = x.astype("float32")
+        var = x_fp32.pow(2).mean(axis=-1, keepdim=True)
+        out = x_fp32 * paddle.rsqrt(var + eps)
+        out = out * weight.astype("float32")
+        return out.astype(x.dtype)
+
+    def _reference(self, x_partial, residual, weight, eps):
+        """Manual: all_reduce(x_partial) + residual, then standard RMSNorm.
+        Mirrors what proxy path WOULD produce after explicit allreduce+add."""
+        x = x_partial.clone()
+        dist.all_reduce(x, op=dist.ReduceOp.SUM)
+        residual_out = x + residual
+        norm_out = self._proxy_rmsnorm_fn(residual_out, weight, eps)
+        return norm_out, residual_out
+
+    def _make_inputs(self, token_num, hidden_size, seed=123):
+        """Each rank gets a different x_partial (simulates RowParallelLinear's
+        un-reduced output); residual is identical across ranks."""
+        paddle.seed(seed + self.tp_rank * 7919)
+        x_partial = paddle.randn([token_num, hidden_size], dtype=paddle.bfloat16) * 0.1
+        paddle.seed(seed + 99)
+        residual = paddle.randn([token_num, hidden_size], dtype=paddle.bfloat16)
+        dist.broadcast(residual, src=0)
+        return x_partial, residual
+
+    def _assert_close_bf16(self, a, b, rtol=5e-2, atol=5e-2, msg=""):
+        a32 = a.astype("float32").numpy()
+        b32 = b.astype("float32").numpy()
+        np.testing.assert_allclose(a32, b32, rtol=rtol, atol=atol, err_msg=msg)
+
+    # ---------- Tests ----------
+
+    def test_proxy_path_takes_fused_branch(self):
+        """fusion=on, tp>1, shape<=2048, residual!=None
+            -> proxy branch picks flashinfer_allreduce_residual_rmsnorm.
+        Verify by patching the symbol and asserting it was called.
+        """
+        if self.tp_size < 2:
+            self.skipTest("Requires tp_size >= 2")
+        hidden = 512
+        norm = self._build_rmsnorm(enable_fusion=True, hidden_size=hidden)
+        self.assertTrue(norm.enable_all_reduce_fusion)
+        x_partial, residual = self._make_inputs(token_num=64, hidden_size=hidden)
+
+        # Patch within the normalization module's namespace.
+        with patch(
+            "fastdeploy.model_executor.layers.normalization.flashinfer_allreduce_residual_rmsnorm",
+            wraps=__import__(
+                "fastdeploy.model_executor.layers.normalization", fromlist=["flashinfer_allreduce_residual_rmsnorm"]
+            ).flashinfer_allreduce_residual_rmsnorm,
+        ) as spy:
+            out, res = norm.forward(
+                x_partial.clone(),
+                residual_input=residual.clone(),
+                proxy_rmsnorm=self._proxy_rmsnorm_fn,
+            )
+            spy.assert_called_once()
+
+        # Numerics: must match reference (allreduce + add + std rmsnorm).
+        ref_norm, ref_res = self._reference(x_partial, residual, norm.weight, norm.eps)
+        self._assert_close_bf16(out, ref_norm, msg="proxy fused-branch norm output mismatch")
+        self._assert_close_bf16(res, ref_res, msg="proxy fused-branch residual mismatch")
+
+    def test_proxy_path_falls_back_when_fusion_disabled(self):
+        """fusion=off -> proxy branch must call proxy_rmsnorm directly,
+        no fused allreduce path used. Input is treated as already-reduced."""
+        if self.tp_size < 2:
+            self.skipTest("Requires tp_size >= 2")
+        hidden = 512
+        norm = self._build_rmsnorm(enable_fusion=False, hidden_size=hidden)
+        self.assertFalse(norm.enable_all_reduce_fusion)
+
+        # Each rank uses the SAME x (already-reduced) — that's the contract
+        # when fusion is off (RowParallelLinear has done its own allreduce).
+        paddle.seed(777)
+        x = paddle.randn([64, hidden], dtype=paddle.bfloat16) * 0.1
+        dist.broadcast(x, src=0)
+        residual = paddle.randn([64, hidden], dtype=paddle.bfloat16)
+        dist.broadcast(residual, src=0)
+
+        proxy_called = {"n": 0}
+
+        def proxy_spy(_x, _w, _eps):
+            proxy_called["n"] += 1
+            return self._proxy_rmsnorm_fn(_x, _w, _eps)
+
+        with patch(
+            "fastdeploy.model_executor.layers.normalization.flashinfer_allreduce_residual_rmsnorm"
+        ) as fused_spy:
+            out, res = norm.forward(
+                x.clone(),
+                residual_input=residual.clone(),
+                proxy_rmsnorm=proxy_spy,
+            )
+            fused_spy.assert_not_called()
+
+        self.assertEqual(proxy_called["n"], 1, "proxy_rmsnorm must be invoked exactly once")
+
+        # Reference: x is already full -> just add + rmsnorm, no allreduce.
+        residual_full = x + residual
+        ref_norm = self._proxy_rmsnorm_fn(residual_full, norm.weight, norm.eps)
+        self._assert_close_bf16(out, ref_norm, msg="fallback norm output mismatch")
+        self._assert_close_bf16(res, residual_full, msg="fallback residual mismatch")
+
+    def test_proxy_path_falls_back_when_token_too_large(self):
+        """fusion=on but shape[0] > 2048 -> proxy branch must NOT call fused;
+        in this regime upstream RowParallelLinear didn't skip its own
+        all-reduce, so x is already full and proxy_rmsnorm is invoked directly."""
+        if self.tp_size < 2:
+            self.skipTest("Requires tp_size >= 2")
+        hidden = 256
+        norm = self._build_rmsnorm(enable_fusion=True, hidden_size=hidden)
+        # shape[0] > 2048 forces use_allreduce_fused=False
+        token_num = 2049
+        paddle.seed(555)
+        x = paddle.randn([token_num, hidden], dtype=paddle.bfloat16) * 0.1
+        dist.broadcast(x, src=0)
+        residual = paddle.randn([token_num, hidden], dtype=paddle.bfloat16)
+        dist.broadcast(residual, src=0)
+
+        with patch(
+            "fastdeploy.model_executor.layers.normalization.flashinfer_allreduce_residual_rmsnorm"
+        ) as fused_spy:
+            out, res = norm.forward(
+                x.clone(),
+                residual_input=residual.clone(),
+                proxy_rmsnorm=self._proxy_rmsnorm_fn,
+            )
+            fused_spy.assert_not_called()
+
+        residual_full = x + residual
+        ref_norm = self._proxy_rmsnorm_fn(residual_full, norm.weight, norm.eps)
+        self._assert_close_bf16(out, ref_norm, msg="large-shape fallback norm mismatch")
+        self._assert_close_bf16(res, residual_full, msg="large-shape fallback residual mismatch")
 
 
 if __name__ == "__main__":

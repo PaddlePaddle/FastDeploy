@@ -459,24 +459,20 @@ def xpu_post_process_speculate(
     )
 
     unified_update_model_status(
-        model_output.seq_lens_encoder,
-        model_output.seq_lens_decoder,
-        model_output.not_need_stop,
-        model_output.draft_tokens,
-        model_output.actual_draft_token_num,
-        model_output.accept_tokens,
-        model_output.accept_num,
-        model_output.stop_flags,
-        model_output.seq_lens_this_time,
-        model_output.is_block_step,
-        model_output.mask_rollback,
-        model_output.token_ids_all,
-        model_output.prompt_lens,
-        model_output.step_idx,
-        model_output.eos_token_id,
-        model_output.max_dec_len,
-        is_naive_mode,
-        prefill_one_step_stop,
+        model_output.seq_lens_encoder,  # seq_lens_encoder
+        model_output.seq_lens_decoder,  # seq_lens_decoder
+        model_output.not_need_stop,  # has_running_seqs
+        model_output.draft_tokens,  # step_input_ids
+        model_output.accept_tokens,  # step_output_ids (read-write)
+        model_output.accept_num,  # step_output_len (read-write)
+        model_output.stop_flags,  # stop_flags (read-write)
+        model_output.seq_lens_this_time,  # seq_lens_this_time
+        model_output.is_block_step,  # is_paused
+        model_output.token_ids_all,  # token_ids_all
+        model_output.prompt_lens,  # prompt_lens
+        model_output.step_idx,  # step_idx (read-write)
+        model_output.eos_token_id,  # end_tokens
+        model_output.max_dec_len,  # max_dec_len
     )
     if not skip_save_output:
         if sampler_output.logprobs_tensors is None:

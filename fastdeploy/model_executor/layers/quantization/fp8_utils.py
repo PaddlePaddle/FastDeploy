@@ -27,7 +27,7 @@ if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import per_token_group_fp8_quant
 
 
-paddlefleet_ops = try_import(["paddlefleet.ops"])
+paddlefleet_ops = try_import(["paddlefleet.ops", "paddlefleet_ops"])
 
 
 def load_deep_gemm():
@@ -45,7 +45,10 @@ def load_deep_gemm():
             try:
                 import logging
 
-                import paddlefleet_ops.deep_gemm as deep_gemm
+                try:
+                    import paddlefleet.ops.deep_gemm as deep_gemm
+                except:
+                    import paddlefleet_ops.deep_gemm as deep_gemm
 
                 logging.getLogger().handlers.clear()
                 logger.info("Detected sm100, use PaddleFleet DeepGEMM")
