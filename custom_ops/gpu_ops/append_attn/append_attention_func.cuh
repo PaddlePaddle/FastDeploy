@@ -280,7 +280,6 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
   uint32_t kv_idx = kv_idx_base + ty * 4 + tx / 8;  // kv_idx used to check
   static_assert(block_size % (4 * num_warps) == 0, "");
   static_assert(head_dim % 64 == 0, "");
-  const int32_t kv_b_stride = head_dim;
 
 #pragma unroll
   for (uint32_t i = 0; i < block_size / (num_warps * 4); ++i) {
@@ -294,9 +293,9 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
     *smem_offset = smem.advance_offset_by_row<num_warps * 4, num_vecs_per_head>(
                        *smem_offset) -
                    head_dim / 8;
-    *gptr += num_warps * 4 * kv_b_stride - head_dim;
+    *gptr += num_warps * 4 * head_dim - head_dim;
   }
-  *gptr -= block_size * kv_b_stride;
+  *gptr -= block_size * head_dim;
   *smem_offset -= block_size * num_vecs_per_head;
 }
 
