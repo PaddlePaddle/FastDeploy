@@ -279,13 +279,14 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
     const uint32_t kv_len) {
   constexpr uint32_t head_dim = num_frags_y * 16;
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
-  constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
   uint32_t kv_idx = kv_idx_base + ty * 4 + tx / 8;  // kv_idx used to check
+  static_assert(block_size % (4 * num_warps) == 0, "");
+  static_assert(head_dim % 64 == 0, "");
 #pragma unroll
-  for (uint32_t i = 0; i < NUM_WARP_KV * num_frags_z * 4 / num_warps; ++i) {
+  for (uint32_t i = 0; i < block_size / (num_warps * 4); ++i) {
 #pragma unroll
-    for (uint32_t j = 0; j < num_frags_y / 4; ++j) {
+    for (uint32_t j = 0; j < head_dim / 64; ++j) {
       smem.load_128b_async<fill_mode>(*smem_offset, *gptr, kv_idx < kv_len);
       *smem_offset = smem.advance_offset_by_column<8>(*smem_offset, j);
       *gptr += 8 * num_elems_per_128b<T>();
@@ -293,12 +294,11 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
     kv_idx += num_warps * 4;
     *smem_offset = smem.advance_offset_by_row<num_warps * 4, num_vecs_per_head>(
                        *smem_offset) -
-                   2 * num_frags_y;  // num_frags_y / 4 * 8
-    *gptr +=
-        num_warps * 4 * kv_b_stride - 2 * num_frags_y * num_elems_per_128b<T>();
+                   head_dim / 8;
+    *gptr += num_warps * 4 * kv_b_stride - head_dim;
   }
-  *gptr -= NUM_WARP_KV * num_frags_z * 16 * kv_b_stride;
-  *smem_offset -= NUM_WARP_KV * num_frags_z * 16 * num_vecs_per_head;
+  *gptr -= block_size * kv_b_stride;
+  *smem_offset -= block_size * num_vecs_per_head;
 }
 
 template <SharedMemFillMode fill_mode,
