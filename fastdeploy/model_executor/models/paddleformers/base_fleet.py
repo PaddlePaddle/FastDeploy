@@ -306,7 +306,7 @@ else:
             self.paddleformers_config.moe_token_dispatcher_type = "deepep"
             # self.paddleformers_config.use_cpu_initialization = True
             self.paddleformers_config.gated_attention = getattr(self.paddleformers_config, "use_gated_attn", False)
-            if self.paddleformers_config.multi_latent_attention:
+            if getattr(self.paddleformers_config, "multi_latent_attention", False):
                 self.paddleformers_config.qk_head_dim = (
                     self.paddleformers_config.qk_rope_head_dim + self.paddleformers_config.qk_nope_head_dim
                 )

@@ -105,7 +105,7 @@ def pytest_collection_modifyitems(config, items):
         )
         install_args = [sys.executable, "-m", "pip", "install"] + shlex.split(paddleformers_url) + ["--quiet"]
         subprocess.check_call(install_args)
-        print(f"[conftest] ✓ Installed paddleformers 1.1.0.dev20250507 from {paddleformers_url}")
+        print(f"[conftest] ✓ Installed paddleformers 1.1.0.dev20260507 from {paddleformers_url}")
 
         # Install paddlefleet (skip paddlepaddle dependency, use existing version)
         paddlefleet_url = os.getenv(
