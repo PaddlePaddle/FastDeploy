@@ -27,6 +27,7 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.config import MoEPhase
+from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import singleton
 
@@ -500,8 +501,6 @@ class EPRunner:
             ) = layer.redundant_table_manger.get_ep_rank_to_expert_id_list_by_layer(layer.layer_idx)
 
             if layer.topk_method == "noaux_tc":
-                from .moe import get_moe_scores
-
                 score, topk_weights, topk_idx = get_moe_scores(
                     gate_out,
                     layer.n_group,
@@ -530,8 +529,6 @@ class EPRunner:
                 )
         else:
             if layer.topk_method == "noaux_tc":
-                from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
-
                 use_fused = (
                     layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
                 )

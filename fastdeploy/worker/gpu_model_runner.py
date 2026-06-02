@@ -31,6 +31,7 @@ from fastdeploy.config import PREEMPTED_TOKEN_ID, FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import BatchRequest, ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
+    prefill_cudagraph_guard,
     profile_run_guard,
     sot_warmup_guard,
 )
@@ -2213,6 +2214,7 @@ class GPUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
+    @prefill_cudagraph_guard(True)
     @sot_warmup_guard(True)
     def capture_model_prefill_and_mixed(self) -> None:
         """
@@ -3144,12 +3146,6 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             self.model.clear_graph_opt_backend()
 
-            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
-                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
-                    clear_all_block_wise_graphs,
-                )
-
-                clear_all_block_wise_graphs()
             if (
                 self.speculative_decoding
                 and self.spec_method == SpecMethod.MTP
@@ -3692,48 +3688,4 @@ class GPUModelRunner(ModelRunnerBase):
             fd_config=self.fd_config,
             block_table=self.share_inputs["block_tables"],
             total_block_num=self.num_gpu_blocks,
-        )
-
-    def capture_block_wise_graphs(self) -> None:
-        """
-        Independent capture loop for block-wise CUDA graphs.
-        Pre-captures graphs for designated token counts so that at runtime,
-        matching sizes replay the graph while other sizes fall back to eager.
-        """
-        if not envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
-            return
-
-        from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
-            set_block_wise_capturing,
-        )
-
-        # Parse capture sizes from env var
-        sizes_str = envs.FD_BLOCK_WISE_CUDA_GRAPH_SIZES
-        capture_sizes = sorted([int(s.strip()) for s in sizes_str.split(",") if s.strip()], reverse=True)
-        if not capture_sizes:
-            logger.warning("FD_BLOCK_WISE_CUDA_GRAPH_SIZES is empty, skipping block-wise CUDA graph capture")
-            return
-
-        logger.info(f"Block-wise CUDA graph capture starting for sizes: {sorted(capture_sizes)}")
-        time_before_capture = time.perf_counter()
-
-        set_block_wise_capturing(True)
-        try:
-            for num_tokens in capture_sizes:
-                batch_size = min(num_tokens, self.scheduler_config.max_num_seqs)
-                if batch_size < 1:
-                    batch_size = 1
-                self._dummy_run(
-                    num_tokens=num_tokens,
-                    batch_size=batch_size,
-                    in_capturing=False,
-                )
-                logger.info(f"Block-wise CUDA graph captured for num_tokens={num_tokens}")
-        finally:
-            set_block_wise_capturing(False)
-
-        time_after_capture = time.perf_counter()
-        logger.info(
-            f"Block-wise CUDA graph capturing took {time_after_capture - time_before_capture:.3f} seconds "
-            f"for {len(capture_sizes)} sizes"
         )

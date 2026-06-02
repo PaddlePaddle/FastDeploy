@@ -106,7 +106,6 @@ def get_moe_scores(
     """
     compute moe scores using e_score_correction_bias.
     """
-    assert e_score_correction_bias is not None, "e_score_correction_bias is none!"
     if envs.FD_USE_PHI_MOE_TOPK:
         # calculate renormalize and routed_scaling_factor value outside the noaux_tc
         original_renormalize = renormalize

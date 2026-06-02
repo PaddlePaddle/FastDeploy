@@ -358,7 +358,10 @@ class Glm4MoeDecoderLayer(nn.Layer):
         # Fully Connected
         hidden_states, residual = self.post_attention_layernorm(hidden_states, residual, proxy_rmsnorm=proxy_rmsnorm)
 
-        hidden_states = self.mlp(hidden_states, forward_meta)
+        if isinstance(self.mlp, Glm4Moe):
+            hidden_states = self.mlp(hidden_states, forward_meta)
+        else:
+            hidden_states = self.mlp(hidden_states, forward_meta)
 
         return hidden_states, residual
 
