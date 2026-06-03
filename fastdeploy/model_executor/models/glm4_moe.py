@@ -64,8 +64,12 @@ class Glm4MoeMLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
-        self.enable_all_reduce_fusion = (
-            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and not reduce_results
+        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
+        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
+        self.use_tp = self.tensor_parallel_size > 1
+        self.use_ep = self.expert_parallel_size > 1
+        self.enable_all_reduce_fusion = fd_config.parallel_config.enable_flashinfer_allreduce_fusion and (
+            self.use_tp and not self.use_ep
         )
 
         # shared experts not split when use_sequence_parallel_moe in ep + tp
@@ -308,17 +312,11 @@ class Glm4MoeDecoderLayer(nn.Layer):
         ):
             self.mlp = Glm4Moe(fd_config, layer_id, prefix=f"{prefix}.mlp")
         else:
-            expert_parallel_size = fd_config.parallel_config.expert_parallel_size
-            tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
-            use_tp = tensor_parallel_size > 1
-            use_ep = expert_parallel_size > 1
-            merge_ffn_tp = use_tp and not use_ep
             self.mlp = Glm4MoeMLP(
                 fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 layer_id=layer_id,
                 prefix=f"{prefix}.mlp",
-                reduce_results=not merge_ffn_tp,
             )
 
         self.input_layernorm = RMSNorm(
