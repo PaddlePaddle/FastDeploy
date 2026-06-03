@@ -1866,7 +1866,8 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         E, N1, _ = getattr(layer, self.added_weight_attrs[0]).shape
         N2 = getattr(layer, self.added_weight_attrs[1]).shape[1]
 
-        assert hidden_size == x.shape[-1], "they must be same"
+        if fc1_latent_proj is None:
+            assert hidden_size == x.shape[-1], "they must be same"
         assert N1 == 2 * moe_intermediate_size, "they must be same"
 
         gate_correction_bias = layer.gate_correction_bias
