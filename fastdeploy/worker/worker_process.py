@@ -260,6 +260,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
+        self.worker.model_runner.kv_cache_status = self.kv_cache_status
 
         # init exist_task_signal
         workers_exist_task = np.zeros([1], dtype=np.int32)

@@ -1454,6 +1454,8 @@ class LoadConfig:
         self.rsync_config: Optional[Dict[str, Any]] = None
         for key, value in args.items():
             if hasattr(self, key):
+                if key == "rsync_config" and isinstance(value, str):
+                    value = json.loads(value)
                 setattr(self, key, value)
 
     def __str__(self) -> str:
