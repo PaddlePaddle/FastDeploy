@@ -774,7 +774,7 @@ __device__ __forceinline__ void produce_kv(smem_t smem,
 }
 
 template <uint32_t num_frags_x,
-          uint32_t num_frags_y,
+          uint32_t head_dim,
           uint32_t num_frags_z,
           typename T>
 __device__ __forceinline__ void compute_qk(smem_t* q_smem,
@@ -782,12 +782,12 @@ __device__ __forceinline__ void compute_qk(smem_t* q_smem,
                                            smem_t* k_smem,
                                            uint32_t* k_smem_offset_r,
                                            float (*s_frag)[num_frags_z][8]) {
-  constexpr uint32_t head_dim = num_frags_y * 16;
+  static_assert(head_dim % 16 == 0, "");
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
   uint32_t a_frag[num_frags_x][4], b_frag[4];
   // compute q*k^T
 #pragma unroll
-  for (uint32_t fy = 0; fy < num_frags_y; ++fy) {  // k
+  for (uint32_t fy = 0; fy < head_dim / 16; ++fy) {  // k
 #pragma unroll
     for (uint32_t fx = 0; fx < num_frags_x; ++fx) {  // m
       q_smem->ldmatrix_m8n8x4(*q_smem_offset_r, a_frag[fx]);
@@ -819,8 +819,8 @@ __device__ __forceinline__ void compute_qk(smem_t* q_smem,
         k_smem->advance_offset_by_column<2>(*k_smem_offset_r, fy) -
         num_frags_z * 16 * num_vecs_per_head;
   }
-  *q_smem_offset_r -= num_frags_y * 2;
-  *k_smem_offset_r -= num_frags_y * 2;
+  *q_smem_offset_r -= head_dim / 8;
+  *k_smem_offset_r -= head_dim / 8;
 }
 
 template <uint32_t num_frags_x,

@@ -240,7 +240,7 @@ __global__ void multi_query_append_attention_kernel(
     __syncthreads();
 
     // s = qk
-    compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
+    compute_qk<num_frags_x, HEAD_DIM, num_frags_z, T>(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration || sliding_window > 0) {
@@ -598,7 +598,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     __syncthreads();
 
     // s = qk
-    compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
+    compute_qk<num_frags_x, HEAD_DIM, num_frags_z, T>(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration || sliding_window > 0) {
