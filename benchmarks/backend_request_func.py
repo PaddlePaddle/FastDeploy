@@ -491,12 +491,15 @@ async def async_request_eb_openai_chat_completions(
                                             "arguments": "",
                                         }
 
+                                    if tc.get("id"):
+                                        tool_call_buffer[idx]["id"] = tc["id"]
+
                                     func = tc.get("function", {})
 
-                                    if "name" in func:
+                                    if func.get("name"):
                                         tool_call_buffer[idx]["name"] = func["name"]
 
-                                    if "arguments" in func:
+                                    if func.get("arguments"):
                                         tool_call_buffer[idx]["arguments"] += func["arguments"]
 
                             # 过滤 role / finish / usage 等空包，只用真正 token 包统计 TTFT/ITL。
