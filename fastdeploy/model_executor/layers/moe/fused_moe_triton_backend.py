@@ -1852,13 +1852,11 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         Triton compute Fused MoE.
         """
 
-        if isinstance(gate, nn.Layer):
-            gate_out = gate(x)
-        elif isinstance(gate, paddle.Tensor):
+        if isinstance(gate, paddle.Tensor):
             # This is for multi view latent moe.
             gate_out = gate
         else:
-            assert 0 == 1
+            gate_out = gate(x)
 
         gate_out = gate_out.cast("float32")
         top_k = layer.top_k
