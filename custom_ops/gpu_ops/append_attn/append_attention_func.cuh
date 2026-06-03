@@ -270,10 +270,13 @@ template <SharedMemFillMode fill_mode,
           uint32_t num_frags_z,
           uint32_t NUM_WARP_Q,
           typename T>
-__device__ __forceinline__ void produce_kv_blockwise_c16(
+__device__ __forceinline__ void produce_kv_blockwise(
     smem_t smem,
     uint32_t* smem_offset,
     T** gptr,  // [max_block_num, num_heads, block_size, head_dim]
+    const uint32_t kv_head_idx,
+    const uint32_t kv_n_stride,
+    const uint32_t kv_h_stride,
     const uint32_t kv_b_stride,
     const uint32_t kv_idx_base,
     const uint32_t kv_len) {
@@ -2276,9 +2279,11 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
+    const int max_seq_len,
     const int num_chunks,
     const int num_heads,
-    const int chunk_size) {
+    const int chunk_size,
+    const int head_dim) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int bid = blockIdx.x, hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
@@ -2334,7 +2339,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const float m_now = multi_m[offset];
     const float d_now = multi_d[offset];
     m = max(m_prev, m_now);
-    offset = offset * HEAD_DIM + vid * vec_size;
+    offset = offset * head_dim + vid * vec_size;
     Load<T, vec_size>(&multi_out[offset], &load_vec);
     const float scale1 = __expf(m_prev - m), scale2 = __expf(m_now - m);
     const T scale1_T = static_cast<T>(scale1),
@@ -2346,7 +2351,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     }
   }
   // store ty res
-  Store<T, vec_size>(res_vec, &smem[ty * HEAD_DIM + vid * vec_size]);
+  Store<T, vec_size>(res_vec, &smem[ty * head_dim + vid * vec_size]);
   md_smem[2 * ty] = m;
   md_smem[2 * ty + 1] = d;
   __syncthreads();
@@ -2356,7 +2361,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     st.init();
 #pragma unroll
     for (int i = 0; i < bdy; i++) {
-      Load<T, vec_size>(&smem[i * HEAD_DIM + vid * vec_size], &load_vec);
+      Load<T, vec_size>(&smem[i * head_dim + vid * vec_size], &load_vec);
       const float m_tmp = md_smem[2 * i], d_tmp = md_smem[2 * i + 1];
       st.merge(load_vec, m_tmp, d_tmp);
     }
@@ -2367,7 +2372,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
       st.normalize();
     }
 
-    const uint32_t shift_smooth_offset = hid * HEAD_DIM + vid * vec_size;
+    const uint32_t shift_smooth_offset = hid * head_dim + vid * vec_size;
     AlignedVector<T, vec_size> shift_bias_vec;
     AlignedVector<T, vec_size> smooth_weight_vec;
     AlignedVector<OutT, vec_size> out_vec;
@@ -2389,7 +2394,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     }
     Store<OutT, vec_size>(
         out_vec,
-        &out[(start_token_idx * num_heads + hid) * HEAD_DIM + vid * vec_size]);
+        &out[(start_token_idx * num_heads + hid) * head_dim + vid * vec_size]);
   }
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaTriggerProgrammaticLaunchCompletion();
@@ -2420,6 +2425,7 @@ __global__ void merge_multi_chunks_v2_kernel(
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
+    const int max_seq_len,
     const int num_chunks,
     const int num_heads,
     const int chunk_size,
