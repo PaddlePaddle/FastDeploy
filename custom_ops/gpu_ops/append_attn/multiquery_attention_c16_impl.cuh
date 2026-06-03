@@ -517,21 +517,18 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   cudaGridDependencySynchronize();
 #endif
 
-  load_q_global_smem_multi_warps<GROUP_SIZE,
-                                 num_frags_x,
-                                 num_frags_y,
-                                 HEAD_DIM,
-                                 T>(q_base_ptr,
-                                    &qo_smem,
-                                    q_base_seq_id_this_block,
-                                    q_len,
-                                    q_ori_n_stride,
-                                    HEAD_DIM);
+  load_q_global_smem_multi_warps<GROUP_SIZE, num_frags_x, HEAD_DIM, T>(
+      q_base_ptr,
+      &qo_smem,
+      q_base_seq_id_this_block,
+      q_len,
+      q_ori_n_stride,
+      HEAD_DIM);
   commit_group();
   wait_group<0>();
   __syncthreads();
 
-  q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, num_frags_y, T>(
+  q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, HEAD_DIM, T>(
       &qo_smem, scale);
 
   static_assert(num_rows_per_block == num_frags_x * 16);
