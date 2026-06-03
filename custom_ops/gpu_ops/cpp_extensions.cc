@@ -130,7 +130,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const bool causal,
     const bool speculate_decoder,
     const int sliding_window,
-    const int sink_size);
+    const int sink_size,
+    const bool only_do_attn);
 
 std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::Tensor& qkv,
