@@ -273,6 +273,7 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
     smem_t smem,
     uint32_t* smem_offset,
     T** gptr,  // [max_block_num, num_heads, block_size, head_dim]
+    const uint32_t kv_b_stride,
     const uint32_t kv_idx_base,
     const uint32_t kv_len) {
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
@@ -293,9 +294,9 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
     *smem_offset = smem.advance_offset_by_row<num_warps * 4, num_vecs_per_head>(
                        *smem_offset) -
                    head_dim / 8;
-    *gptr += num_warps * 4 * head_dim - head_dim;
+    *gptr += num_warps * 4 * kv_b_stride - head_dim;
   }
-  *gptr -= block_size * head_dim;
+  *gptr -= block_size * kv_b_stride;
   *smem_offset -= block_size * num_vecs_per_head;
 }
 
