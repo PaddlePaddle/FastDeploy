@@ -1298,7 +1298,6 @@ void MultiQueryAppendC4Attention(
           quant_max_bound,
           quant_min_bound,
           in_scale,
-          max_seq_len,
           num_chunks,
           num_heads,
           chunk_size,
@@ -1563,11 +1562,9 @@ void MultiQueryAppendC4Attention(
             quant_max_bound,
             quant_min_bound,
             in_scale,
-            max_seq_len,
             num_chunks,
             num_heads,
-            chunk_size,
-            HEAD_DIM);
+            chunk_size);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1606,7 +1603,6 @@ void MultiQueryAppendC4Attention(
             quant_max_bound,
             quant_min_bound,
             in_scale,
-            max_seq_len,
             num_chunks,
             num_heads,
             chunk_size,

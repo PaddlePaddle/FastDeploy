@@ -99,7 +99,7 @@ from fastdeploy import envs
 from fastdeploy.cache_manager.v1 import CacheController
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.image_processors.adaptive_processor import AdaptiveImageProcessor
-from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
+from fastdeploy.inter_communicator import IPCSignal, KVCacheStatus, ZmqIpcClient
 from fastdeploy.logger.deterministic_logger import DeterministicLogger
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
@@ -1254,7 +1254,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-        self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
+        self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:batch_size]
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
@@ -2415,6 +2415,7 @@ class GPUModelRunner(ModelRunnerBase):
         model_inputs, p_done_idxs, token_num_event = self._preprocess(
             model_forward_batch, num_running_requests, self._cached_launch_token_num, self._cached_real_bsz
         )
+
         model_output = self._execute(model_inputs)
         # save output (last batch)
         if self._cached_model_output_data is not None:
@@ -3119,9 +3120,16 @@ class GPUModelRunner(ModelRunnerBase):
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
         # Update parameters
-        self.dynamic_weight_manager.update_parameters(
-            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
-        )
+        if self.dynamic_weight_manager.use_gdr_checkpoint_transfer:
+            if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                self.dynamic_weight_manager.restart_communication_group()
+            if self.dynamic_weight_manager.parallel_config.enable_expert_parallel:
+                self.dynamic_weight_manager.recreate_deepep_buffer()
+            self.dynamic_weight_manager.update_weights_by_gdr(restore_cleared_params=True)
+        else:
+            self.dynamic_weight_manager.update_parameters(
+                pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+            )
 
         # Reset share_inputs
         self.share_inputs.reset_share_inputs()
@@ -3143,7 +3151,89 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
     def update_weights(self, version: str = None, verify_checksum: bool = False):
-        return self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum)
+        if self.dynamic_weight_manager.use_gdr_checkpoint_transfer:
+            release_cache = bool((self.fd_config.load_config.rsync_config or {}).get("gdr_release_cache", False))
+
+            cache_clear_cost = 0.0
+            cache_rebuild_cost = 0.0
+            if release_cache:
+                clear_start = time.perf_counter()
+                self._clear_cache_for_gdr_weight_update()
+                cache_clear_cost = time.perf_counter() - clear_start
+
+            result = self.dynamic_weight_manager.update_weights_by_gdr(version, verify_checksum)
+
+            if release_cache:
+                rebuild_start = time.perf_counter()
+                self._rebuild_cache_after_gdr_weight_update()
+                cache_rebuild_cost = time.perf_counter() - rebuild_start
+
+            result["release_cache"] = release_cache
+            result["cache_clear_cost"] = cache_clear_cost
+            result["cache_rebuild_cost"] = cache_rebuild_cost
+            self.dynamic_weight_manager.finalize_update()
+            return result
+        else:
+            result = self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum)
+            self.dynamic_weight_manager.finalize_update()
+            return result
+
+    def _clear_cache_for_gdr_weight_update(self):
+        cache_flag = (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend is not None
+        )
+        kv_cache_status = self.kv_cache_status if cache_flag else None
+        if kv_cache_status:
+            kv_cache_status.value[0] = KVCacheStatus.CLEARING
+        if self.use_cudagraph:
+            self.model.clear_graph_opt_backend()
+            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
+                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+                    clear_all_block_wise_graphs,
+                )
+
+                clear_all_block_wise_graphs()
+            if (
+                self.speculative_decoding
+                and self.spec_method == SpecMethod.MTP
+                and self.graph_opt_config.draft_model_use_cudagraph
+            ):
+                self.proposer.model.clear_graph_opt_backend()
+        if self.speculative_decoding and self.spec_method == SpecMethod.MTP:
+            self.proposer.clear_mtp_cache()
+        self.clear_cache()
+        if kv_cache_status:
+            while kv_cache_status.value[0] != KVCacheStatus.CLEARED:
+                time.sleep(0.01)
+        paddle.device.cuda.empty_cache()
+        self._cached_model_output_data = None
+        self._cached_sampler_output = None
+        self._cached_post_process_event = None
+        self._cached_launch_token_num = -1
+        self._cached_real_bsz = -1
+
+    def _rebuild_cache_after_gdr_weight_update(self):
+        cache_flag = (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend is not None
+        )
+        kv_cache_status = self.kv_cache_status if cache_flag else None
+        if kv_cache_status:
+            kv_cache_status.value[0] = KVCacheStatus.UPDATING
+        self.share_inputs.reset_share_inputs()
+        if self.spec_method == SpecMethod.MTP:
+            self.proposer.model_inputs.reset_model_inputs()
+            if not self.enable_cache_manager_v1:
+                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+        self.initialize_kv_cache()
+        if self.use_cudagraph:
+            self.capture_model()
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.update_suspend_routing_replay()
+        if kv_cache_status:
+            while kv_cache_status.value[0] != KVCacheStatus.NORMAL:
+                time.sleep(0.01)
 
     def sleep(self, tags):
 
