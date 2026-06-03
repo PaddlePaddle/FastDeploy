@@ -752,7 +752,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.decode_status = {"rid": (0, 2)}
 
             def ids2tokens(self, token_ids, req_id):
-                return "hi", [101, 102], None
+                # previous_token_ids snapshot is empty (first call); engine
+                # reconstructs cum = previous + input = [101, 102].
+                return "hi", [], None
 
         eng.data_processor = DummyProcessor()
 
@@ -782,7 +784,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.decode_status = {"rid": (0, 1)}
 
             def ids2tokens(self, token_ids, req_id):
-                return "", [7], None
+                # previous snapshot is empty; cum becomes [7].
+                return "", [], None
 
         eng.data_processor = DummyProcessor()
 
@@ -1987,7 +1990,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.decode_status = {"rid": (0, 2)}
 
             def ids2tokens(self, token_ids, req_id):
-                return "hi", [1, 2], None
+                # previous snapshot empty; cum = [] + [1, 2] = [1, 2].
+                return "hi", [], None
 
         eng.data_processor = DummyProcessor()
 
@@ -3477,7 +3481,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.decode_status = {"tok-req": (1, 3)}
 
             def ids2tokens(self, token_ids, req_id):
-                return "hello", [10, 20, 30], None
+                # previous snapshot empty; cum = [] + [10, 20, 30].
+                return "hello", [], None
 
         eng.data_processor = DummyProcessor()
 

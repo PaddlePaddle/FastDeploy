@@ -1383,6 +1383,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
+            is_dummy_or_profile_run=is_dummy_or_profile_run,
         )
         return token_num, token_num_event
 
