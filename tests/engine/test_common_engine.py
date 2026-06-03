@@ -338,6 +338,7 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self):
                 self.abort_req_ids_set = set()
                 self.waiting = []
+                self.running = []
                 self.real_bsz = 1
                 self.add_request_in_p = Mock()
                 self.pre_recycle_resource = Mock()
