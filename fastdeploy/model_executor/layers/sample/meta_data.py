@@ -67,3 +67,5 @@ class SamplingMetadata:
     # Add for HPU post-processing
     seq_lens_encoder: Optional[paddle.Tensor] = None
     seq_lens_decoder: Optional[paddle.Tensor] = None
+    # Add for sampler to distinguish dummy run and profile run
+    is_dummy_or_profile_run: bool = False

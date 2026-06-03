@@ -169,6 +169,28 @@ class BaseTextProcessor(ABC):
             )
         return tokens["input_ids"][0]
 
+    def _text_to_token_ids(self, text: str) -> list:
+        """Encode ``text`` to a ``list[int]``, shared by :meth:`messages2ids`
+        and :meth:`_prepare_tool_prefix`.
+
+        ``ernie4_5`` tokenizer hangs on long inputs via ``.encode()``, so it
+        goes through ``tokenize`` + ``convert_tokens_to_ids``. Other tokenizers
+        use ``.encode()`` and the result is normalized to a plain list.
+        """
+        if self.tokenizer_type == "ernie4_5":
+            # NOTE: ernie4_5 tokenizer will hang when meet long input when use .encode()
+            return self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(text))
+        token_ids = self.tokenizer.encode(text, add_special_tokens=False)
+        if hasattr(token_ids, "input_ids") or (isinstance(token_ids, dict) and "input_ids" in token_ids):
+            token_ids = token_ids["input_ids"]
+            if hasattr(token_ids, "ndim") and token_ids.ndim > 1:
+                token_ids = token_ids[0]
+        if hasattr(token_ids, "tolist"):
+            token_ids = token_ids.tolist()
+        if not isinstance(token_ids, list):
+            token_ids = list(token_ids)
+        return token_ids
+
     def messages2ids(self, request, **kwargs):
         """Convert a chat-template request into a token-ID list.
 
@@ -190,19 +212,7 @@ class BaseTextProcessor(ABC):
         )
         request["prompt_tokens"] = spliced_message
         req_id = request.get("request_id", None) if isinstance(request, dict) else None
-        if self.tokenizer_type == "ernie4_5":
-            # NOTE: ernie4_5 tokenizer will hang when meet long input when use .encode()
-            token_ids = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(spliced_message))
-        else:
-            token_ids = self.tokenizer.encode(spliced_message, add_special_tokens=False)
-            if hasattr(token_ids, "input_ids") or (isinstance(token_ids, dict) and "input_ids" in token_ids):
-                token_ids = token_ids["input_ids"]
-                if hasattr(token_ids, "ndim") and token_ids.ndim > 1:
-                    token_ids = token_ids[0]
-            if hasattr(token_ids, "tolist"):
-                token_ids = token_ids.tolist()
-            if not isinstance(token_ids, list):
-                token_ids = list(token_ids)
+        token_ids = self._text_to_token_ids(spliced_message)
         log_request(
             level=1,
             message="req_id:{req_id}, token_ids: {token_ids}",
@@ -235,9 +245,16 @@ class BaseTextProcessor(ABC):
         Returns:
             (delta_text, previous_token_ids, previous_texts)
 
-        Both the HF and the PaddleFormers/ERNIE tokeniser paths return the
-        same tuple shape.  The HF path sets ``previous_token_ids`` to ``[]``
-        since it does not expose per-token ids during batch-decode.
+        ``previous_token_ids`` and ``previous_texts`` are **snapshots of the
+        accumulated state BEFORE this call's tokens were appended** —
+        symmetric pre-delta views of what the caller had decoded so far.
+        Both are owned by the caller (no aliasing of internal state).
+
+        Callers that need the post-extend cumulative list should reconstruct
+        it locally via ``previous_token_ids + token_id``.
+
+        The HF path returns ``[]`` for ``previous_token_ids`` since it does
+        not expose per-token ids during batch-decode.
         """
         if envs.FD_USE_HF_TOKENIZER:
             if task_id not in self.decode_status:
@@ -256,7 +273,9 @@ class BaseTextProcessor(ABC):
                 status[2] = decode_str[0]
             else:
                 new_str = ""
-            # Return consistent three-tuple; previous_token_ids not available.
+            # NOTE: HF path historically returns the post-delta full string
+            # here, inconsistent with the non-HF branch (which returns the
+            # pre-delta snapshot). Preserved as-is to avoid behavior change.
             return new_str, [], status[2]
         else:
             if task_id not in self.decode_status:
@@ -264,12 +283,15 @@ class BaseTextProcessor(ABC):
                 self.decode_status[task_id] = [0, 0, [], ""]
             status = self.decode_status[task_id]
             previous_texts = status[3]
+            # Snapshot BEFORE extend so the returned list is owned by the
+            # caller and symmetric with ``previous_texts``.
+            previous_token_ids = list(status[2])
             status[2].extend(token_id)
             decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(status[2], status[0], status[1])
             status[0] = prefix_offset
             status[1] = read_offset
             status[3] += decode_str
-            return decode_str, status[2], previous_texts
+            return decode_str, previous_token_ids, previous_texts
 
     # ------------------------------------------------------------------
     # Response processing
@@ -296,6 +318,53 @@ class BaseTextProcessor(ABC):
             return self.process_response_dict_streaming(response_dict, **kwargs)
         else:
             return self.process_response_dict_normal(response_dict, **kwargs)
+
+    @staticmethod
+    def _is_forced_tool_choice(request):
+        """Return True if tool_choice mode requires forced prefix injection."""
+        if not request:
+            return False
+        chat_kwargs = getattr(request, "chat_template_kwargs", None) or {}
+        options = chat_kwargs.get("options") or {}
+        tool_choice = options.get("tool_choice") or {}
+        mode = tool_choice.get("mode", "") if isinstance(tool_choice, dict) else ""
+        return mode in ("required", "force")
+
+    def _prepare_tool_prefix(self, tool_parser, prompt_tokens, request=None):
+        """Detect and cache on ``tool_parser`` the tool-call prefix that the
+        chat template injected at the tail of ``prompt_tokens`` (the rendered
+        prompt string from the serving layer). Computed once per parser
+        instance via the parser's :meth:`ToolParser.detect_tool_prefix`.
+
+        Only performs detection when ``tool_choice`` mode indicates a forced
+        tool call (e.g. ``"required"`` or ``"force"``).
+        """
+        if tool_parser._tool_prefix_computed:
+            return
+        tool_parser._tool_prefix_computed = True
+        tool_parser._tool_prefix = ""
+        tool_parser._tool_prefix_token_ids = []
+        if not prompt_tokens or not isinstance(prompt_tokens, str):
+            return
+        if not self._is_forced_tool_choice(request):
+            return
+        try:
+            prefix = tool_parser.detect_tool_prefix(prompt_tokens) or ""
+        except Exception:
+            data_processor_logger.exception("detect_tool_prefix failed; falling back to empty prefix")
+            return
+        tool_parser._tool_prefix = prefix
+        if not prefix:
+            return
+        # Encode the prefix into token ids so the streaming path can also
+        # splice ``previous/current/delta_token_ids`` — some parsers gate on
+        # ``tool_call_start_token_id in current_token_ids`` rather than on
+        # text (e.g. ``Ernie45VLThinkingToolParser``).
+        try:
+            tool_parser._tool_prefix_token_ids = self._text_to_token_ids(prefix)
+        except Exception:
+            data_processor_logger.exception("encode tool prefix to token ids failed; token-id splice disabled")
+            tool_parser._tool_prefix_token_ids = []
 
     def process_response_dict_normal(self, response_dict, **kwargs):
         """Accumulate tokens and build the full completion text (non-streaming)."""
@@ -346,7 +415,11 @@ class BaseTextProcessor(ABC):
 
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, request)
+                parser_input = full_text
+                self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"), request)
+                if tool_parser._tool_prefix:
+                    parser_input = tool_parser._tool_prefix + full_text
+                tool_call_info = tool_parser.extract_tool_calls(parser_input, request)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
 
@@ -449,13 +522,38 @@ class BaseTextProcessor(ABC):
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parser_dict[req_id]
+            stream_previous = previous_texts
+            stream_current = previous_texts + delta_text
+            stream_delta = delta_text
+            stream_previous_token_ids = previous_token_ids
+            stream_current_token_ids = previous_token_ids + token_ids
+            stream_delta_token_ids = token_ids
+            self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"), request)
+            prefix = tool_parser._tool_prefix
+            prefix_ids = tool_parser._tool_prefix_token_ids
+            # Splice the injected prefix back into both text and token-id
+            # streaming args so parsers that gate on either form (e.g.
+            # ``Ernie45VLThinkingToolParser`` checks
+            # ``tool_call_start_token_id in current_token_ids``) work
+            # unchanged. ``delta_*`` only spliced on the first call.
+            if prefix:
+                stream_previous = prefix + stream_previous
+                stream_current = prefix + stream_current
+                if prefix_ids:
+                    stream_previous_token_ids = prefix_ids + stream_previous_token_ids
+                    stream_current_token_ids = prefix_ids + stream_current_token_ids
+                if not tool_parser._tool_prefix_injected_to_delta:
+                    stream_delta = prefix + stream_delta
+                    if prefix_ids:
+                        stream_delta_token_ids = prefix_ids + stream_delta_token_ids
+                    tool_parser._tool_prefix_injected_to_delta = True
             tool_call_delta_message = tool_parser.extract_tool_calls_streaming(
-                previous_texts,
-                previous_texts + delta_text,
-                delta_text,
-                previous_token_ids,
-                previous_token_ids + token_ids,
-                token_ids,
+                stream_previous,
+                stream_current,
+                stream_delta,
+                stream_previous_token_ids,
+                stream_current_token_ids,
+                stream_delta_token_ids,
                 request,
             )
             if tool_call_delta_message:

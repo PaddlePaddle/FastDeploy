@@ -263,6 +263,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Whether to use GDR CheckpointTransfer for dynamic weight updates.
+    "FD_USE_GDR_CHECKPOINT_TRANSFER": lambda: bool(int(os.getenv("FD_USE_GDR_CHECKPOINT_TRANSFER", "0"))),
     # Whether to enable block-wise CUDA Graph capture/replay.
     # When enabled, individual layer forward methods decorated with @block_wise_cuda_graph_wrap
     # will be captured and replayed as CUDA Graphs for improved performance.

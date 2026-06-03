@@ -320,6 +320,7 @@ class OpenAIServingChat:
                     stream=True,
                     include_stop_str_in_output=include_stop_str_in_output,
                     request=request,
+                    prompt_tokens=prompt_tokens,
                 )
 
                 async for res in generator:
@@ -665,6 +666,7 @@ class OpenAIServingChat:
                     stream=False,
                     include_stop_str_in_output=include_stop_str_in_output,
                     request=request,
+                    prompt_tokens=prompt_tokens,
                 )
                 async for data in generator:
                     idx = get_choice_index(data["request_id"])
