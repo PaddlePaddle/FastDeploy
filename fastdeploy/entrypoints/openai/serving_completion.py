@@ -69,12 +69,11 @@ NONES = itertools.repeat(None)
 
 
 class OpenAIServingCompletion:
-    def __init__(self, engine_client, models, pid, ips, max_waiting_time, output_fallback_manager=None):
+    def __init__(self, engine_client, models, pid, ips, max_waiting_time):
         self.engine_client = engine_client
         self.models = models
         self.pid = pid
         self.max_waiting_time = max_waiting_time
-        self.output_fallback_manager = output_fallback_manager
         if ips is not None:
             if isinstance(ips, list):
                 self.master_ip = ips[0]

@@ -263,7 +263,6 @@ async def lifespan(app: FastAPI):
             chat_template,
             args.enable_mm_output,
             args.tokenizer_base_url,
-            output_fallback_manager,
         )
         completion_handler = OpenAIServingCompletionV1(
             llm_engine,
@@ -272,7 +271,6 @@ async def lifespan(app: FastAPI):
             pid,
             args.ips,
             args.max_waiting_time,
-            output_fallback_manager,
         )
     else:
         chat_handler = OpenAIServingChat(
@@ -284,7 +282,6 @@ async def lifespan(app: FastAPI):
             chat_template,
             args.enable_mm_output,
             args.tokenizer_base_url,
-            output_fallback_manager,
         )
         completion_handler = OpenAIServingCompletion(
             engine_client,
@@ -292,7 +289,6 @@ async def lifespan(app: FastAPI):
             pid,
             args.ips,
             args.max_waiting_time,
-            output_fallback_manager,
         )
 
     embedding_handler = OpenAIServingEmbedding(

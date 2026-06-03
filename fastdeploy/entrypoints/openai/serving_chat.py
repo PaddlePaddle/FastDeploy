@@ -88,7 +88,6 @@ class OpenAIServingChat:
         chat_template,
         enable_mm_output: Optional[bool] = False,
         tokenizer_base_url: Optional[str] = None,
-        output_fallback_manager=None,
     ):
         self.engine_client = engine_client
         self.models = models
@@ -97,7 +96,6 @@ class OpenAIServingChat:
         self.chat_template = chat_template
         self.enable_mm_output = enable_mm_output
         self.tokenizer_base_url = tokenizer_base_url
-        self.output_fallback_manager = output_fallback_manager
         if ips is not None:
             if isinstance(ips, list):
                 self.master_ip = ips[0]

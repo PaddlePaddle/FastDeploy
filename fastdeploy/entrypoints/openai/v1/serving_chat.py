@@ -71,9 +71,8 @@ class OpenAIServingChat(OpenAiServingBase):
         chat_template,
         enable_mm_output: Optional[bool] = False,
         tokenizer_base_url: Optional[str] = None,
-        output_fallback_manager=None,
     ) -> None:
-        super().__init__(engine_client, config, models, pid, ips, max_waiting_time, output_fallback_manager)
+        super().__init__(engine_client, config, models, pid, ips, max_waiting_time)
         self.chat_template = chat_template
         self.enable_mm_output = enable_mm_output
         self.tokenizer_base_url = tokenizer_base_url

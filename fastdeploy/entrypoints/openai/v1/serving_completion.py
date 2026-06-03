@@ -56,10 +56,9 @@ class OpenAIServingCompletion(OpenAiServingBase):
         pid: int,
         ips,
         max_waiting_time: int,
-        output_fallback_manager=None,
     ) -> None:
         # Initialize parent class first to set up __semaphore
-        super().__init__(engine_client, config, models, pid, ips, max_waiting_time, output_fallback_manager)
+        super().__init__(engine_client, config, models, pid, ips, max_waiting_time)
 
     @override
     async def _preprocess(self, ctx: ServeContext[CompletionRequest]) -> None:

@@ -397,11 +397,6 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
 
     async def test_build_stream_response_with_fallback_truncate(self):
         """Test _build_stream_response handles processor's fallback truncate signal."""
-        # Manager is only used for cleanup() in finally; serving layer reads
-        # ``CompletionOutput.fallback_truncated`` from the upstream processor.
-        output_fallback_manager = MagicMock()
-        self.serving_chat.output_fallback_manager = output_fallback_manager
-
         request = ChatCompletionRequest(
             model="test_model",
             messages=[{"role": "user", "content": "Hello"}],
@@ -440,9 +435,6 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response_ctx.remain_choices, 0)
         self.assertEqual(response_ctx.truncated_choices, {0})
         self.mock_engine_client.abort.assert_awaited_once_with("test_request_id::n::0", 1)
-        # on_delta/on_finish moved to processor; serving layer must not call them.
-        output_fallback_manager.on_delta.assert_not_called()
-        output_fallback_manager.on_finish.assert_not_called()
 
     async def test_build_full_response(self):
         """Test _build_full_response method."""
@@ -539,8 +531,6 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         Output fallback now applies in the upstream processor; the serving
         layer must not reapply it.
         """
-        output_fallback_manager = MagicMock()
-        self.serving_chat.output_fallback_manager = output_fallback_manager
         request = ChatCompletionRequest(
             model="test_model", messages=[{"role": "user", "content": "Hello"}], logprobs=False, return_token_ids=False
         )
@@ -559,7 +549,6 @@ class TestOpenAIServingChat(unittest.IsolatedAsyncioTestCase):
         result = await self.serving_chat._create_chat_completion_choice([request_output], ctx)
 
         self.assertEqual(result.message.content, "already corrected")
-        output_fallback_manager.apply.assert_not_called()
 
     async def test_create_chat_completion_choice_with_tool_calls(self):
         """Test _create_chat_completion_choice with tool calls."""
