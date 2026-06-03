@@ -308,11 +308,17 @@ class Glm4MoeDecoderLayer(nn.Layer):
         ):
             self.mlp = Glm4Moe(fd_config, layer_id, prefix=f"{prefix}.mlp")
         else:
+            expert_parallel_size = fd_config.parallel_config.expert_parallel_size
+            tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
+            use_tp = tensor_parallel_size > 1
+            use_ep = expert_parallel_size > 1
+            merge_ffn_tp = use_tp and not use_ep
             self.mlp = Glm4MoeMLP(
                 fd_config,
                 intermediate_size=fd_config.model_config.intermediate_size,
                 layer_id=layer_id,
                 prefix=f"{prefix}.mlp",
+                reduce_results=not merge_ffn_tp,
             )
 
         self.input_layernorm = RMSNorm(
