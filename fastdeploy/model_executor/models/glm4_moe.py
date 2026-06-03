@@ -26,6 +26,7 @@ from paddleformers.transformers import PretrainedModel
 from paddleformers.utils.log import logger
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.distributed.communication import tensor_model_parallel_all_reduce
 from fastdeploy.model_executor.forward_meta import ForwardMeta
@@ -65,7 +66,9 @@ class Glm4MoeMLP(nn.Layer):
     ) -> None:
         super().__init__()
         self.enable_all_reduce_fusion = (
-            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and not reduce_results
+            fd_config.parallel_config.enable_flashinfer_allreduce_fusion
+            and envs.FD_ENABLE_MOE_ALLREDUCE_FUSION
+            and not reduce_results
         )
 
         # shared experts not split when use_sequence_parallel_moe in ep + tp
@@ -139,7 +142,9 @@ class Glm4Moe(nn.Layer):
         self.use_tp = self.tensor_parallel_size > 1
         self.last_layer_id = fd_config.model_config.num_hidden_layers - 1
         self.enable_all_reduce_fusion = (
-            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and layer_id != self.last_layer_id
+            fd_config.parallel_config.enable_flashinfer_allreduce_fusion
+            and envs.FD_ENABLE_MOE_ALLREDUCE_FUSION
+            and layer_id != self.last_layer_id
         )
         self.n_routed_experts: int = fd_config.model_config.n_routed_experts
         self.n_shared_experts: int = fd_config.model_config.n_shared_experts
@@ -239,7 +244,8 @@ class Glm4MoeAttention(nn.Layer):
             input_size=fd_config.model_config.num_attention_heads * fd_config.model_config.head_dim,
             output_size=fd_config.model_config.hidden_size,
             layer_id=layer_id,
-            enable_all_reduce_fusion=fd_config.parallel_config.enable_flashinfer_allreduce_fusion,
+            enable_all_reduce_fusion=fd_config.parallel_config.enable_flashinfer_allreduce_fusion
+            and envs.FD_ENABLE_ATTN_ALLREDUCE_FUSION,
         )
 
         self.attn = Attention(

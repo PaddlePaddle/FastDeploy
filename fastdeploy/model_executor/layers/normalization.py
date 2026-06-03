@@ -28,6 +28,7 @@ if current_platform.is_gcu():
 else:
     from paddle.incubate.nn.functional import fused_layer_norm, fused_rms_norm
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.ops.triton_ops import _TRITON_AVAILABLE, qk_rmsnorm_fused
 
@@ -123,9 +124,15 @@ class RMSNorm(nn.Layer):
         self.tp_rank = self.fd_config.parallel_config.tensor_parallel_rank
         self.tp_group = self.fd_config.parallel_config.tp_group
         is_input_norm = prefix.endswith(".input_layernorm")
+        # post_attention_layernorm fuses the attention-side allreduce; input_layernorm
+        # (of the next layer) fuses the moe-side allreduce. Allow disabling each via env.
         self.enable_all_reduce_fusion = fd_config.parallel_config.enable_flashinfer_allreduce_fusion and (
-            ("post_attention_layernorm" in prefix)
-            or (("input_layernorm" in prefix and layer_id != 0) and not fd_config.parallel_config.use_ep)
+            (("post_attention_layernorm" in prefix) and envs.FD_ENABLE_ATTN_ALLREDUCE_FUSION)
+            or (
+                ("input_layernorm" in prefix and layer_id != 0)
+                and not fd_config.parallel_config.use_ep
+                and envs.FD_ENABLE_MOE_ALLREDUCE_FUSION
+            )
         )
 
         self.is_last_norm = prefix.endswith(".norm")
