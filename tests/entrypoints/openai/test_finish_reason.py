@@ -267,7 +267,9 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         mock_processor_instance = Mock()
         mock_processor_instance.enable_multimodal_content.return_value = True
 
-        async def mock_process_response_chat_async(response, stream, include_stop_str_in_output, request=None):
+        async def mock_process_response_chat_async(
+            response, stream, include_stop_str_in_output, request=None, prompt_tokens=None
+        ):
             yield response
 
         mock_processor_instance.process_response_chat = mock_process_response_chat_async
@@ -450,7 +452,9 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         mock_processor_instance = Mock()
         mock_processor_instance.enable_multimodal_content.return_value = False
 
-        async def mock_process_response_chat_async(response, stream, include_stop_str_in_output, request=None):
+        async def mock_process_response_chat_async(
+            response, stream, include_stop_str_in_output, request=None, prompt_tokens=None
+        ):
             if isinstance(response, list):
                 for res in response:
                     yield res

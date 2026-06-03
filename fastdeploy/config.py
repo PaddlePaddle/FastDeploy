@@ -60,7 +60,7 @@ ConvertType = Literal["none", "embed"]
 _ResolvedTask = Literal["generate", "encode", "embed"]
 
 # Model implementation backend options
-ModelImpl = Literal["auto", "fastdeploy", "paddleformers"]
+ModelImpl = Literal["auto", "fastdeploy", "paddleformers", "paddlefleet"]
 
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
@@ -1456,6 +1456,8 @@ class LoadConfig:
         self.model_loader_extra_config: Optional[Dict[str, Any]] = None
         for key, value in args.items():
             if hasattr(self, key):
+                if key == "rsync_config" and isinstance(value, str):
+                    value = json.loads(value)
                 setattr(self, key, value)
 
     def __str__(self) -> str:
