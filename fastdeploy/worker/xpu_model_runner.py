@@ -1149,7 +1149,7 @@ class XPUModelRunner(ModelRunnerBase):
             self.proposer.dummy_prefill_inputs(
                 num_tokens=num_tokens,
                 batch_size=batch_size,
-                expected_decode_len=1,
+                expected_decode_len=expected_decode_len,
             )
 
         while True:
