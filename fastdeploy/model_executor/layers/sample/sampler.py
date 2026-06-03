@@ -364,6 +364,8 @@ def _sample_from_probs(probs, sampling_metadata, top_p=None, top_k=None, topp_se
         if need_top_k_sampling:
             probs = dispatch_top_k_renorm_probs(probs, top_k)
         next_tokens = _random_sample(probs, topp_seed=topp_seed)
+        if sampling_metadata.is_dummy_or_profile_run:  # warmup top_p != 1.0 path
+            _, next_tokens = top_k_top_p_sampling(probs, top_p, top_k, top_k_list, topp_seed=topp_seed)
     else:
         _, next_tokens = top_k_top_p_sampling(
             probs,
