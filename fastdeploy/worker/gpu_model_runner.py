@@ -1254,7 +1254,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.share_inputs["block_tables"][idx : idx + 1, :block_num] = np.arange(
                 idx * block_num, (idx + 1) * block_num, 1
             )
-        self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"][:batch_size]
+        self.share_inputs["seq_lens_this_time"] = self.share_inputs["seq_lens_this_time_buffer"]
 
     def _prepare_inputs(self, cached_token_num=-1, cached_real_bsz=-1, is_dummy_or_profile_run=False) -> None:
         """Prepare the model inputs"""
@@ -2416,7 +2416,6 @@ class GPUModelRunner(ModelRunnerBase):
         model_inputs, p_done_idxs, token_num_event = self._preprocess(
             model_forward_batch, num_running_requests, self._cached_launch_token_num, self._cached_real_bsz
         )
-
         model_output = self._execute(model_inputs)
         # save output (last batch)
         if self._cached_model_output_data is not None:

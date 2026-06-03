@@ -107,7 +107,6 @@ else:
 
 from fastdeploy.model_executor.entropy_utils import (
     calculate_logits_entropy,
-    flush_entropy_on_stop,
     speculate_calculate_logits_entropy,
 )
 from fastdeploy.model_executor.layers.moe.routing_indices_cache import (
@@ -520,9 +519,6 @@ def post_process_speculate(
         model_output.eos_token_id,  # end_tokens
         model_output.max_dec_len,  # max_dec_len
     )
-
-    if enable_entropy:
-        flush_entropy_on_stop(share_inputs)
 
 
 def save_output_speculate(
