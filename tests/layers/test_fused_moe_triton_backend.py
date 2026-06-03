@@ -965,96 +965,172 @@ class TestTritonMoEMethod:
             ), f"Expert {i} down_proj weight mean={actual_down}, expected {expected_down}"
 
     # ------------------------------------------------------------------
-    # ------------------------------------------------------------------
     # _get_default_config — tile heuristic
     # ------------------------------------------------------------------
 
-    def test_get_default_config_decode(self):
-        """M<=32 decode path → 16x64x64."""
+    def _mock_sm90(self, monkeypatch):
+        """Patch get_sm_version to return 90 (H100 / non-SM100 path).
+
+        The function is decorated with @cache, so we must replace the cached
+        object on the module directly (the local import inside _get_default_config
+        re-fetches from the module each call, so setattr is sufficient).
+        """
+        import fastdeploy.model_executor.utils as fd_utils
+
+        monkeypatch.setattr(fd_utils, "get_sm_version", lambda: 90)
+
+    def _mock_sm100(self, monkeypatch):
+        """Patch get_sm_version to return 100 (B200 / SM100 path)."""
+        import fastdeploy.model_executor.utils as fd_utils
+
+        monkeypatch.setattr(fd_utils, "get_sm_version", lambda: 100)
+
+    # -- SM90 (default heuristic) tests --
+
+    def test_get_default_config_decode(self, monkeypatch):
+        """SM90: M<=32 decode path → BLOCK_SIZE_M=16."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg = method._get_default_config(M=4, E=8)
         assert cfg["BLOCK_SIZE_M"] == 16
         assert cfg["BLOCK_SIZE_N"] == 64
         assert cfg["BLOCK_SIZE_K"] == 64
 
-    def test_get_default_config_mid(self):
-        """96 < M <= 512 mid path → 64x128x64."""
+    def test_get_default_config_mid(self, monkeypatch):
+        """SM90: 96 < M <= 512 mid path → BLOCK_SIZE_M=64."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg = method._get_default_config(M=128, E=8)
         assert cfg["BLOCK_SIZE_M"] == 64
         assert cfg["BLOCK_SIZE_N"] == 128
         assert cfg["BLOCK_SIZE_K"] == 64
 
-    def test_get_default_config_prefill(self):
-        """M > 512 prefill path → 128x128x64."""
+    def test_get_default_config_prefill(self, monkeypatch):
+        """SM90: M > 512 prefill path → BLOCK_SIZE_M=128."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg = method._get_default_config(M=1024, E=8)
         assert cfg["BLOCK_SIZE_M"] == 128
         assert cfg["BLOCK_SIZE_N"] == 128
         assert cfg["BLOCK_SIZE_K"] == 64
 
-    def test_get_default_config_boundary_32(self):
-        """M==32 is decode (<=32)."""
+    def test_get_default_config_boundary_32(self, monkeypatch):
+        """SM90: M==32 is decode (<=32)."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg = method._get_default_config(M=32, E=8)
         assert cfg["BLOCK_SIZE_M"] == 16
 
-    def test_get_default_config_boundary_96(self):
-        """M==96 is small-mid (32 < M <= 96) → BLOCK_SIZE_M=32."""
+    def test_get_default_config_boundary_96(self, monkeypatch):
+        """SM90: M==96 is small-mid (32 < M <= 96) → BLOCK_SIZE_M=32."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg = method._get_default_config(M=96, E=8)
         assert cfg["BLOCK_SIZE_M"] == 32
 
-    def test_get_default_config_boundary_512(self):
-        """M==512 is mid (<=512) → BLOCK_SIZE_M=64."""
+    def test_get_default_config_boundary_512(self, monkeypatch):
+        """SM90: M==512 is mid (<=512) → BLOCK_SIZE_M=64."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg = method._get_default_config(M=512, E=8)
         assert cfg["BLOCK_SIZE_M"] == 64
 
-    def test_get_default_config_has_group_size_m(self):
-        """All configs must include GROUP_SIZE_M key."""
+    def test_get_default_config_has_group_size_m(self, monkeypatch):
+        """SM90: all configs must include GROUP_SIZE_M key."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         for M in (1, 64, 1024):
             cfg = method._get_default_config(M=M, E=8)
             assert "GROUP_SIZE_M" in cfg
 
-    def test_get_default_config_block_n_boundary(self):
-        """M<=64 → BLOCK_SIZE_N=64; M>64 → BLOCK_SIZE_N=128."""
+    def test_get_default_config_block_n_boundary(self, monkeypatch):
+        """SM90: M<=64 → BLOCK_SIZE_N=64; M>64 → BLOCK_SIZE_N=128."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg64 = method._get_default_config(M=64, E=8)
         assert cfg64["BLOCK_SIZE_N"] == 64
         cfg65 = method._get_default_config(M=65, E=8)
         assert cfg65["BLOCK_SIZE_N"] == 128
 
-    def test_get_default_config_group_m_16(self):
-        """tokens_per_expert > 128 → GROUP_SIZE_M=16."""
+    def test_get_default_config_group_m_16(self, monkeypatch):
+        """SM90: tokens_per_expert > 128 → GROUP_SIZE_M=16."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         # M=1024, E=1 → tokens_per_expert=1024 > 128 → group_m=16
         cfg = method._get_default_config(M=1024, E=1)
         assert cfg["GROUP_SIZE_M"] == 16
 
-    def test_get_default_config_group_m_1(self):
-        """tokens_per_expert <= 128 → GROUP_SIZE_M=1."""
+    def test_get_default_config_group_m_1(self, monkeypatch):
+        """SM90: tokens_per_expert <= 128 → GROUP_SIZE_M=1."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         # M=128, E=8 → tokens_per_expert=16 <= 128 → group_m=1
         cfg = method._get_default_config(M=128, E=8)
         assert cfg["GROUP_SIZE_M"] == 1
 
-    def test_get_default_config_num_warps(self):
-        """M<=128 → num_warps=4; M>128 → num_warps=8."""
+    def test_get_default_config_num_warps(self, monkeypatch):
+        """SM90: M<=128 → num_warps=4; M>128 → num_warps=8."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg128 = method._get_default_config(M=128, E=8)
         assert cfg128["num_warps"] == 4
         cfg256 = method._get_default_config(M=256, E=8)
         assert cfg256["num_warps"] == 8
 
-    def test_get_default_config_num_stages(self):
-        """M<=32 → num_stages=4; M>32 → num_stages=3."""
+    def test_get_default_config_num_stages(self, monkeypatch):
+        """SM90: M<=32 → num_stages=4; M>32 → num_stages=3."""
+        self._mock_sm90(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg32 = method._get_default_config(M=32, E=8)
         assert cfg32["num_stages"] == 4
         cfg33 = method._get_default_config(M=33, E=8)
         assert cfg33["num_stages"] == 3
+
+    # -- SM100 (B200 lookup table) tests --
+
+    def test_get_default_config_sm100_small_batch(self, monkeypatch):
+        """SM100: M=8 → nearest key=8, BLOCK_SIZE_M=16, BLOCK_SIZE_N=64, BLOCK_SIZE_K=128."""
+        self._mock_sm100(monkeypatch)
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=8, E=64)
+        assert cfg["BLOCK_SIZE_M"] == 16
+        assert cfg["BLOCK_SIZE_N"] == 64
+        assert cfg["BLOCK_SIZE_K"] == 128
+
+    def test_get_default_config_sm100_large_batch(self, monkeypatch):
+        """SM100: M>=1536 → BLOCK_SIZE_M=256 (B200 advantage over H100's 128)."""
+        self._mock_sm100(monkeypatch)
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=2048, E=64)
+        assert cfg["BLOCK_SIZE_M"] == 256
+        assert cfg["BLOCK_SIZE_N"] == 256
+        assert cfg["BLOCK_SIZE_K"] == 64
+
+    def test_get_default_config_sm100_nearest_key(self, monkeypatch):
+        """SM100: M=100 is equidistant between 96 and 128; should pick one of them."""
+        self._mock_sm100(monkeypatch)
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=100, E=64)
+        # nearest key between 96 and 128: abs(96-100)=4, abs(128-100)=28 → picks 96
+        assert cfg["BLOCK_SIZE_M"] == 16
+        assert cfg["BLOCK_SIZE_K"] == 128
+
+    def test_get_default_config_sm100_mid_range(self, monkeypatch):
+        """SM100: M=512 → BLOCK_SIZE_M=64, BLOCK_SIZE_N=256."""
+        self._mock_sm100(monkeypatch)
+        method = backend.TritonMoEMethod()
+        cfg = method._get_default_config(M=512, E=64)
+        assert cfg["BLOCK_SIZE_M"] == 64
+        assert cfg["BLOCK_SIZE_N"] == 256
+
+    def test_get_default_config_sm100_all_keys_present(self, monkeypatch):
+        """SM100: every returned config must have all 6 required keys."""
+        self._mock_sm100(monkeypatch)
+        method = backend.TritonMoEMethod()
+        required = {"BLOCK_SIZE_M", "BLOCK_SIZE_N", "BLOCK_SIZE_K", "GROUP_SIZE_M", "num_warps", "num_stages"}
+        for M in (1, 16, 64, 256, 1024, 4096):
+            cfg = method._get_default_config(M=M, E=64)
+            assert required.issubset(cfg.keys()), f"Missing keys at M={M}: {required - set(cfg.keys())}"
 
     # ------------------------------------------------------------------
     # apply — empty-batch fast path
@@ -1161,29 +1237,61 @@ class TestTritonMoEMethod:
         assert list(out.shape) == [2, layer.hidden_size]
 
     # ------------------------------------------------------------------
-    # EP methods raise NotImplementedError
+    # EP methods (not yet implemented)
     # ------------------------------------------------------------------
 
     def test_apply_ep_prefill_raises(self):
+        """apply_ep_prefill raises NotImplementedError until EP is implemented."""
         method = backend.TritonMoEMethod()
         layer = self._make_layer()
         with pytest.raises(NotImplementedError):
             method.apply_ep_prefill(layer, None, None)
 
     def test_apply_ep_decode_raises(self):
+        """apply_ep_decode raises NotImplementedError until EP is implemented."""
         method = backend.TritonMoEMethod()
         layer = self._make_layer()
         with pytest.raises(NotImplementedError):
             method.apply_ep_decode(layer, None, None)
+
+    def test_apply_tp_calls_kernel_twice(self, fake_ops, monkeypatch):
+        """apply_tp must invoke fused_moe_kernel_bf16 exactly twice (GEMM1 + GEMM2)."""
+        import fastdeploy.model_executor.utils as fd_utils
+
+        monkeypatch.setattr(fd_utils, "get_sm_version", lambda: 90)
+
+        method = backend.TritonMoEMethod()
+        layer = self._make_layer(hidden_size=8)
+        self._create_weights(method, layer)
+        kernel = self._patch_bf16_kernel(monkeypatch)
+
+        x = paddle.randn([2, layer.hidden_size], dtype="bfloat16")
+        gate = DummyGate(layer.num_local_experts)
+        method.apply_tp(layer, x, gate)
+
+        assert len(kernel.calls) == 2
 
     # ------------------------------------------------------------------
     # apply — kernel argument verification
     # ------------------------------------------------------------------
 
     def test_apply_kernel_even_ks_true(self, fake_ops, monkeypatch):
-        """When hidden_size is divisible by BLOCK_SIZE_K, even_Ks=True in GEMM1."""
+        """When hidden_size is divisible by BLOCK_SIZE_K, even_Ks=True in GEMM1.
+
+        Patch _get_default_config at class level to fix BLOCK_SIZE_K=64 so the
+        test is independent of which GPU model (SM90 vs SM100) is running.
+        """
+        _fixed_cfg = {
+            "BLOCK_SIZE_M": 16,
+            "BLOCK_SIZE_N": 64,
+            "BLOCK_SIZE_K": 64,
+            "GROUP_SIZE_M": 1,
+            "num_warps": 4,
+            "num_stages": 3,
+        }
+        monkeypatch.setattr(backend.TritonMoEMethod, "_get_default_config", lambda self, M, E: _fixed_cfg)
         method = backend.TritonMoEMethod()
-        # hidden_size=64, BLOCK_SIZE_K=64 → even_Ks=True for GEMM1
+        # hidden_size=64 % BLOCK_SIZE_K=64 == 0 → even_Ks=True
         layer = self._make_layer(hidden_size=64, intermediate_size=32)
         self._create_weights(method, layer)
         kernel = self._patch_bf16_kernel(monkeypatch)
@@ -1197,8 +1305,17 @@ class TestTritonMoEMethod:
 
     def test_apply_kernel_even_ks_false(self, fake_ops, monkeypatch):
         """When hidden_size is NOT divisible by BLOCK_SIZE_K, even_Ks=False in GEMM1."""
+        _fixed_cfg = {
+            "BLOCK_SIZE_M": 16,
+            "BLOCK_SIZE_N": 64,
+            "BLOCK_SIZE_K": 64,
+            "GROUP_SIZE_M": 1,
+            "num_warps": 4,
+            "num_stages": 3,
+        }
+        monkeypatch.setattr(backend.TritonMoEMethod, "_get_default_config", lambda self, M, E: _fixed_cfg)
         method = backend.TritonMoEMethod()
-        # hidden_size=8, BLOCK_SIZE_K=64 → even_Ks=False for GEMM1
+        # hidden_size=8 % BLOCK_SIZE_K=64 != 0 → even_Ks=False
         layer = self._make_layer(hidden_size=8, intermediate_size=4)
         self._create_weights(method, layer)
         kernel = self._patch_bf16_kernel(monkeypatch)
@@ -1240,13 +1357,20 @@ class TestTritonMoEMethod:
         assert kernel.calls[1]["kwargs"]["MUL_ROUTED_WEIGHT"] is True
 
     def test_apply_large_batch_config(self, fake_ops, monkeypatch):
-        """Large token count picks larger tile config (BLOCK_SIZE_M=128, num_warps=8)."""
+        """Large token count picks larger tile config (BLOCK_SIZE_M=128, num_warps=8).
+
+        Force SM90 config so the expectation is GPU-model-independent.
+        """
+        import fastdeploy.model_executor.utils as fd_utils
+
+        monkeypatch.setattr(fd_utils, "get_sm_version", lambda: 90)
+
         method = backend.TritonMoEMethod()
         layer = self._make_layer(hidden_size=8)
         self._create_weights(method, layer)
         kernel = self._patch_bf16_kernel(monkeypatch)
 
-        # 1024 tokens → prefill config: BLOCK_SIZE_M=128
+        # 1024 tokens → SM90 prefill config: BLOCK_SIZE_M=128, num_warps=8
         x = paddle.randn([1024, layer.hidden_size], dtype="bfloat16")
         gate = DummyGate(layer.num_local_experts)
         method.apply(layer, x, gate)
