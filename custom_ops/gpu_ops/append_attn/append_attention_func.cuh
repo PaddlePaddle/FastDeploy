@@ -122,7 +122,6 @@ __device__ __forceinline__ void init_states(float (*o_frag)[num_frags_y][8],
 
 template <uint32_t group_size,
           uint32_t num_frags_x,
-          uint32_t num_frags_y,
           uint32_t HEAD_DIM,
           typename T>
 __device__ __forceinline__ void load_q_global_smem_multi_warps(
@@ -134,23 +133,22 @@ __device__ __forceinline__ void load_q_global_smem_multi_warps(
     const uint32_t qo_h_stride) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
 
+  static_assert(HEAD_DIM % 64 == 0, "");
+
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
   uint32_t q_smem_offset_w =  // [NUM_WARP_Q, num_frags_x, 16, head_dim]
       smem_t::get_permuted_offset<num_vecs_per_head>(ty * 4 + tx / 8,
                                                      tx % 8);  // 4 * 64
-
-  const uint32_t tx_offset = tx / 8;
+  // 4 warps will load (fx * 16) * (HEAD_DIM) data!
 #pragma unroll
   for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
-    const uint32_t base_offset = q_idx_base + fx * 16 + tx_offset;
 #pragma unroll
-    const int j = ty;
-    const uint32_t offset_now = base_offset + j * 4;
+    const uint32_t offset_now = q_idx_base + fx * 16 + ty * 4 + tx / 8;
     const uint32_t n_offset = offset_now / group_size;
     const uint32_t h_offset = offset_now % group_size;
     T* q_ptr = q_ptr_base + n_offset * qo_n_stride + h_offset * qo_h_stride;
 #pragma unroll
-    for (uint32_t fyo = 0; fyo < num_frags_y / 4; ++fyo) {
+    for (uint32_t fyo = 0; fyo < HEAD_DIM / 64; ++fyo) {
       q_smem->load_128b_async<SharedMemFillMode::kNoFill>(
           q_smem_offset_w, q_ptr, n_offset < qo_upper_bound);
       q_smem_offset_w =
@@ -159,7 +157,7 @@ __device__ __forceinline__ void load_q_global_smem_multi_warps(
     }
     q_smem_offset_w =
         q_smem->advance_offset_by_row<16, num_vecs_per_head>(q_smem_offset_w) -
-        2 * num_frags_y;
+        HEAD_DIM / 8;
   }
 }
 
@@ -209,16 +207,14 @@ __device__ __forceinline__ void load_q_global_smem(
   }
 }
 
-template <uint32_t num_frags_x, uint32_t num_frags_y, typename T>
+template <uint32_t num_frags_x, uint32_t head_dim, typename T>
 __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale_multi_warps(
-    smem_t* q_smem,  // [num_frags_x * 16, num_frags_y * 16]
+    smem_t* q_smem,  // [num_frags_x * 16, head_dim]
     const float sm_scale) {
   constexpr int vec_size = 16 / sizeof(T);
   using LoadT = AlignedVector<T, vec_size>;
   LoadT tmp_vec;
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
-  constexpr uint32_t head_dim = num_frags_y * 16;
-  constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
 
 #pragma unroll
   for (uint32_t i = 0; i < num_frags_x * 16 * head_dim / 1024; ++i) {
@@ -266,8 +262,7 @@ __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale(
 template <SharedMemFillMode fill_mode,
           uint32_t num_warps,
           uint32_t block_size,
-          uint32_t num_frags_y,
-          uint32_t num_frags_z,
+          uint32_t head_dim,
           uint32_t NUM_WARP_Q,
           typename T>
 __device__ __forceinline__ void produce_kv_blockwise_c16(
@@ -277,15 +272,16 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
     const uint32_t kv_b_stride,
     const uint32_t kv_idx_base,
     const uint32_t kv_len) {
-  constexpr uint32_t head_dim = num_frags_y * 16;
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
-  constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
   uint32_t kv_idx = kv_idx_base + ty * 4 + tx / 8;  // kv_idx used to check
+  static_assert(block_size % (4 * num_warps) == 0, "");
+  static_assert(head_dim % 64 == 0, "");
+
 #pragma unroll
-  for (uint32_t i = 0; i < NUM_WARP_KV * num_frags_z * 4 / num_warps; ++i) {
+  for (uint32_t i = 0; i < block_size / (num_warps * 4); ++i) {
 #pragma unroll
-    for (uint32_t j = 0; j < num_frags_y / 4; ++j) {
+    for (uint32_t j = 0; j < head_dim / 64; ++j) {
       smem.load_128b_async<fill_mode>(*smem_offset, *gptr, kv_idx < kv_len);
       *smem_offset = smem.advance_offset_by_column<8>(*smem_offset, j);
       *gptr += 8 * num_elems_per_128b<T>();
@@ -293,12 +289,11 @@ __device__ __forceinline__ void produce_kv_blockwise_c16(
     kv_idx += num_warps * 4;
     *smem_offset = smem.advance_offset_by_row<num_warps * 4, num_vecs_per_head>(
                        *smem_offset) -
-                   2 * num_frags_y;  // num_frags_y / 4 * 8
-    *gptr +=
-        num_warps * 4 * kv_b_stride - 2 * num_frags_y * num_elems_per_128b<T>();
+                   head_dim / 8;
+    *gptr += num_warps * 4 * kv_b_stride - head_dim;
   }
-  *gptr -= NUM_WARP_KV * num_frags_z * 16 * kv_b_stride;
-  *smem_offset -= NUM_WARP_KV * num_frags_z * 16 * num_vecs_per_head;
+  *gptr -= block_size * kv_b_stride;
+  *smem_offset -= block_size * num_vecs_per_head;
 }
 
 template <SharedMemFillMode fill_mode,
@@ -779,7 +774,7 @@ __device__ __forceinline__ void produce_kv(smem_t smem,
 }
 
 template <uint32_t num_frags_x,
-          uint32_t num_frags_y,
+          uint32_t head_dim,
           uint32_t num_frags_z,
           typename T>
 __device__ __forceinline__ void compute_qk(smem_t* q_smem,
@@ -787,12 +782,12 @@ __device__ __forceinline__ void compute_qk(smem_t* q_smem,
                                            smem_t* k_smem,
                                            uint32_t* k_smem_offset_r,
                                            float (*s_frag)[num_frags_z][8]) {
-  constexpr uint32_t head_dim = num_frags_y * 16;
+  static_assert(head_dim % 16 == 0, "");
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
   uint32_t a_frag[num_frags_x][4], b_frag[4];
   // compute q*k^T
 #pragma unroll
-  for (uint32_t fy = 0; fy < num_frags_y; ++fy) {  // k
+  for (uint32_t fy = 0; fy < head_dim / 16; ++fy) {  // k
 #pragma unroll
     for (uint32_t fx = 0; fx < num_frags_x; ++fx) {  // m
       q_smem->ldmatrix_m8n8x4(*q_smem_offset_r, a_frag[fx]);
@@ -824,8 +819,8 @@ __device__ __forceinline__ void compute_qk(smem_t* q_smem,
         k_smem->advance_offset_by_column<2>(*k_smem_offset_r, fy) -
         num_frags_z * 16 * num_vecs_per_head;
   }
-  *q_smem_offset_r -= num_frags_y * 2;
-  *k_smem_offset_r -= num_frags_y * 2;
+  *q_smem_offset_r -= head_dim / 8;
+  *k_smem_offset_r -= head_dim / 8;
 }
 
 template <uint32_t num_frags_x,

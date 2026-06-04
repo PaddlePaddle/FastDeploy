@@ -335,9 +335,11 @@ async def async_request_eb_openai_chat_completions(
         "model": request_func_input.model,
         "messages": request_func_input.history_QA,
         "stream": request_func_input.stream,
-        "max_tokens": request_func_input.output_len,
         "collect_metrics": request_func_input.pd_metrics,
     }
+
+    if request_func_input.output_len is not None:
+        payload["max_tokens"] = request_func_input.output_len
 
     # 流式模式返回usage
     if request_func_input.stream:
