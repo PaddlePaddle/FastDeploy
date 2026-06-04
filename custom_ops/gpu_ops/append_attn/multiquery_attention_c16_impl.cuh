@@ -772,7 +772,6 @@ void MultiQueryAppendAttention(
   constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;
   constexpr uint32_t num_frags_x = BLOCK_SHAPE_Q / (16 * NUM_WARP_Q);  // 1 or 2
   constexpr uint32_t num_frags_y = HEAD_DIM / 16;
-  constexpr uint32_t num_qrow_per_block = NUM_WARP_Q * num_frags_x * 16;
 
   auto *allocator = paddle::GetAllocator(qkv.place());
 
@@ -781,8 +780,7 @@ void MultiQueryAppendAttention(
   if constexpr (NUM_WARP_Q == 4) {
     constexpr uint32_t num_frags_z = BLOCK_SIZE / 16;
     constexpr uint32_t smem_size =
-        (num_warps * num_frags_x + NUM_WARP_KV * num_frags_z * 2) * 16 *
-        HEAD_DIM * sizeof(T);
+        (num_rows_per_block + BLOCK_SIZE * 2) * HEAD_DIM * sizeof(T);
 
     auto split_kv_kernel = multi_query_append_attention_kernel<NV_TYPE,
                                                                true,
