@@ -102,7 +102,6 @@ void AppendAttentionKernel(
   const int max_dec_len_this_time = set_max_lengths.data<int>()[2];
   const int max_enc_dec_len_this_time = set_max_lengths.data<int>()[3];
   const int max_just_dec_len_this_time = set_max_lengths.data<int>()[4];
-  const int max_kv_len_this_time = set_max_lengths.data<int>()[5];
 
   auto main_stream = qkv.stream();
   static cudaEvent_t main_event;
