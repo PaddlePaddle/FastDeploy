@@ -749,20 +749,10 @@ class Indexer(nn.Layer):
             k_scale_cache_real = k_scale_cache.flatten()[: k.shape[0]].contiguous()
             k_cache = k_fp8_cache.view(paddle.float8_e4m3fn), k_scale_cache_real
 
-            # TODO(changwenbin): Constructed using maskoffset
-            # ks,ke = forward_meta.attn_mask_offsets[::2].contiguous(),forward_meta.attn_mask_offsets[1::2].contiguous()
-            num_tokens = q_fp8.shape[0]
-            ks = paddle.zeros(num_tokens, dtype=paddle.int32)
-            ke = paddle.zeros(num_tokens, dtype=paddle.int32)
-
-            bsz = forward_meta.seq_lens_this_time.shape[0]
-            for i in range(bsz):
-                if forward_meta.seq_lens_encoder[i] > 0:
-                    token_start_k = forward_meta.cu_seqlens_k[i]
-                    token_end_k = forward_meta.cu_seqlens_k[i + 1]
-                    ks[token_start_k:token_end_k] = forward_meta.cu_seqlens_k[i]
-                    ke[token_start_k:token_end_k] = paddle.arange(token_start_k, token_end_k, dtype=paddle.int32) + 1
-
+            # indexer_attn_mask_offsets is pre-computed by the Triton kernel
+            # update_indexer_attn_mask_offsets in dsa_attention_backend and stored in forward_meta.
+            ks = forward_meta.indexer_attn_mask_offsets[::2].contiguous()
+            ke = forward_meta.indexer_attn_mask_offsets[1::2].contiguous()
             max_seqlen_k = (ke - ks).max().item()
 
             logits = deep_gemm.fp8_mqa_logits(

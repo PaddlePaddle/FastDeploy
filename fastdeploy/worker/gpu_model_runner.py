@@ -1774,7 +1774,6 @@ class GPUModelRunner(ModelRunnerBase):
             encoder_block_shape_q=encoder_block_shape_q,
             decoder_block_shape_q=decoder_block_shape_q,
         )
-
         self.attn_backends.append(attn_backend)
 
     def _dummy_pooler_run_task(

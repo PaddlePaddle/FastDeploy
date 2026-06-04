@@ -46,6 +46,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.ops.triton_ops import update_indexer_attn_mask_offsets
 
 
 def yarn_get_mscale(scale=1, mscale=1):
@@ -197,6 +198,16 @@ class DSAAttentionBackend(AttentionBackend):
         result = result.view(num_blocks, block_size, 1, -1)
         return result
 
+    def _update_forward_meta(self, forward_meta: ForwardMeta):
+        """Update forward meta data."""
+        # Indexer attn_mask_offset
+        forward_meta.indexer_attn_mask_offsets = update_indexer_attn_mask_offsets(
+            forward_meta.ids_remove_padding,
+            forward_meta.seq_lens_this_time,
+            forward_meta.seq_lens_encoder,
+            forward_meta.cu_seqlens_k,
+        )
+
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
         metadata = DSAAttentionMetadata()
@@ -257,6 +268,7 @@ class DSAAttentionBackend(AttentionBackend):
                 self.rank, int(self.device_id), self.keep_pd_step_flag
             )
 
+        self._update_forward_meta(forward_meta)
         self.attention_metadata: AttentionMetadata = metadata
 
     def get_attention_meta(self) -> AttentionMetadata:
