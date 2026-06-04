@@ -24,17 +24,22 @@ import paddle.distributed as dist
 
 
 class TestGlm4MoeMLPEnableAllReduceFusion(unittest.TestCase):
-    """Cover Glm4MoeMLP.__init__ line 67:
+    """Cover Glm4MoeMLP.__init__ L67-73:
 
+        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
+        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
+        self.use_tp = self.tensor_parallel_size > 1
+        self.use_ep = self.expert_parallel_size > 1
         self.enable_all_reduce_fusion = (
-            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and not reduce_results
+            fd_config.parallel_config.enable_flashinfer_allreduce_fusion
+            and (self.use_tp and not self.use_ep)
         )
 
-    The flag must also be propagated into the down_proj (RowParallelLinear) so
-    fused-allreduce kicks in at that layer.
+    Fusion requires: flashinfer flag ON, TP>1, and EP<=1. The resulting flag
+    must also be propagated into the down_proj (RowParallelLinear).
     """
 
-    def _make_fd_config(self, enable_fusion: bool):
+    def _make_fd_config(self, enable_fusion: bool, tp_size: int = 1, ep_size: int = 1):
         from types import SimpleNamespace
 
         mc = SimpleNamespace(
@@ -43,8 +48,8 @@ class TestGlm4MoeMLPEnableAllReduceFusion(unittest.TestCase):
             moe_layer_start_index=0,
         )
         pc = SimpleNamespace(
-            tensor_parallel_size=1,
-            expert_parallel_size=1,
+            tensor_parallel_size=tp_size,
+            expert_parallel_size=ep_size,
             tensor_parallel_rank=0,
             tp_group=None,
             enable_flashinfer_allreduce_fusion=enable_fusion,
@@ -52,7 +57,7 @@ class TestGlm4MoeMLPEnableAllReduceFusion(unittest.TestCase):
         )
         return SimpleNamespace(model_config=mc, parallel_config=pc)
 
-    def _build_mlp(self, enable_fusion: bool, reduce_results: bool):
+    def _build_mlp(self, enable_fusion: bool, reduce_results: bool, tp_size: int = 2, ep_size: int = 1):
         """Construct Glm4MoeMLP with all heavy linears stubbed and capture the
         kwargs passed to RowParallelLinear (the down_proj branch we care about)."""
         from fastdeploy.model_executor.models import glm4_moe
@@ -79,31 +84,52 @@ class TestGlm4MoeMLPEnableAllReduceFusion(unittest.TestCase):
             patch.object(glm4_moe, "SiluAndMul", _StubLinear),
         ):
             mlp = glm4_moe.Glm4MoeMLP(
-                fd_config=self._make_fd_config(enable_fusion=enable_fusion),
+                fd_config=self._make_fd_config(enable_fusion=enable_fusion, tp_size=tp_size, ep_size=ep_size),
                 intermediate_size=8,
                 layer_id=0,
                 reduce_results=reduce_results,
             )
         return mlp, captured
 
-    def test_fusion_true_when_flag_on_and_reduce_results_false(self):
-        """True iff flashinfer fusion is enabled AND reduce_results=False."""
-        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=False)
+    def test_parallel_size_attrs_assigned_from_config(self):
+        """L67-70: the four attrs mirror parallel_config and derive use_tp/use_ep."""
+        mlp, _ = self._build_mlp(enable_fusion=False, reduce_results=False, tp_size=4, ep_size=2)
+        self.assertEqual(mlp.tensor_parallel_size, 4)
+        self.assertEqual(mlp.expert_parallel_size, 2)
+        self.assertTrue(mlp.use_tp)
+        self.assertTrue(mlp.use_ep)
+
+    def test_use_tp_false_when_tp_size_one(self):
+        """L69: use_tp = tensor_parallel_size > 1."""
+        mlp, _ = self._build_mlp(enable_fusion=True, reduce_results=False, tp_size=1, ep_size=1)
+        self.assertFalse(mlp.use_tp)
+        self.assertFalse(mlp.use_ep)
+
+    def test_fusion_true_when_flag_on_tp_gt1_ep_eq1(self):
+        """L71-73: True iff flashinfer flag AND use_tp AND not use_ep."""
+        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=False, tp_size=2, ep_size=1)
         self.assertTrue(mlp.enable_all_reduce_fusion)
         # Flag must be forwarded into down_proj.
         self.assertTrue(captured["down_proj"]["enable_all_reduce_fusion"])
         self.assertFalse(captured["down_proj"]["reduce_results"])
 
-    def test_fusion_false_when_reduce_results_true(self):
-        """reduce_results=True forces fusion off even if flag is set."""
-        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=True)
+    def test_fusion_false_when_flag_disabled(self):
+        """L71: flashinfer flag off -> fusion off regardless of tp/ep."""
+        mlp, captured = self._build_mlp(enable_fusion=False, reduce_results=False, tp_size=2, ep_size=1)
         self.assertFalse(mlp.enable_all_reduce_fusion)
         self.assertFalse(captured["down_proj"]["enable_all_reduce_fusion"])
-        self.assertTrue(captured["down_proj"]["reduce_results"])
 
-    def test_fusion_false_when_flag_disabled(self):
-        """flashinfer fusion flag off -> fusion off regardless of reduce_results."""
-        mlp, captured = self._build_mlp(enable_fusion=False, reduce_results=False)
+    def test_fusion_false_when_no_tp(self):
+        """L72: use_tp=False (tp_size==1) -> fusion off."""
+        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=False, tp_size=1, ep_size=1)
+        self.assertFalse(mlp.enable_all_reduce_fusion)
+        self.assertFalse(captured["down_proj"]["enable_all_reduce_fusion"])
+
+    def test_fusion_false_when_ep_enabled(self):
+        """L72: use_ep=True (ep_size>1) -> fusion off even with TP and flag on."""
+        mlp, captured = self._build_mlp(enable_fusion=True, reduce_results=False, tp_size=2, ep_size=2)
+        self.assertTrue(mlp.use_tp)
+        self.assertTrue(mlp.use_ep)
         self.assertFalse(mlp.enable_all_reduce_fusion)
         self.assertFalse(captured["down_proj"]["enable_all_reduce_fusion"])
 
