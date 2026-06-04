@@ -48,6 +48,7 @@ void AppendAttentionKernel(
     const paddle::Tensor& batch_id_per_token,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& block_tables,
+    const paddle::optional<paddle::Tensor>& block_tables_headwise,
     const paddle::Tensor& encoder_batch_ids,
     const paddle::Tensor& encoder_tile_ids_per_batch,
     const paddle::Tensor& encoder_num_blocks,
@@ -155,6 +156,7 @@ void AppendAttentionKernel(
         batch_id_per_token,
         cu_seqlens_q,
         block_tables,
+        block_tables_headwise,
         lambda_batch_ids,
         lambda_tile_ids_per_batch,
         cache_quant_type_str,
@@ -488,6 +490,9 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& sinks,
+    const paddle::optional<paddle::Tensor>&
+        block_tables_headwise,  // logical 3D, physical rank-2 [max_num_seqs *
+                                // local_kv_heads, max_blocks_per_head]
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -595,6 +600,7 @@ std::vector<paddle::Tensor> AppendAttention(
         batch_id_per_token,
         cu_seqlens_q,
         block_tables,
+        block_tables_headwise,
         encoder_batch_ids,
         encoder_tile_ids_per_batch,
         encoder_num_blocks,
@@ -700,6 +706,9 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& sinks,
+    const paddle::optional<paddle::Tensor>&
+        block_tables_headwise,  // logical 3D, physical rank-2 [max_num_seqs *
+                                // local_kv_heads, max_blocks_per_head]
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -753,6 +762,7 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
         batch_id_per_token,
         cu_seqlens_q,
         block_tables,
+        block_tables_headwise,
         encoder_batch_ids,
         encoder_tile_ids_per_batch,
         encoder_num_blocks,
@@ -871,6 +881,7 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const paddle::optional<std::vector<int64_t>>& q_norm_weight_shape,
     const paddle::optional<std::vector<int64_t>>& k_norm_weight_shape,
     const paddle::optional<std::vector<int64_t>>& sinks_shape,
+    const paddle::optional<std::vector<int64_t>>& block_tables_headwise_shape,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -937,6 +948,7 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
     const paddle::optional<paddle::DataType>& q_norm_weight_dtype,
     const paddle::optional<paddle::DataType>& k_norm_weight_dtype,
     const paddle::optional<paddle::DataType>& sinks_dtype,
+    const paddle::optional<paddle::DataType>& block_tables_headwise_dtype,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -1024,6 +1036,7 @@ std::vector<std::vector<int64_t>> AppendAttentionWithOutputInferShape(
     const paddle::optional<std::vector<int64_t>>& q_norm_weight_shape,
     const paddle::optional<std::vector<int64_t>>& k_norm_weight_shape,
     const paddle::optional<std::vector<int64_t>>& sinks_shape,
+    const paddle::optional<std::vector<int64_t>>& block_tables_headwise_shape,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -1083,6 +1096,7 @@ std::vector<paddle::DataType> AppendAttentionWithOutputInferDtype(
     const paddle::optional<paddle::DataType>& q_norm_weight_dtype,
     const paddle::optional<paddle::DataType>& k_norm_weight_dtype,
     const paddle::optional<paddle::DataType>& sinks_dtype,
+    const paddle::optional<paddle::DataType>& block_tables_headwise_dtype,
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -1140,7 +1154,8 @@ PD_BUILD_STATIC_OP(append_attention)
              paddle::Optional("kv_signal_data"),
              paddle::Optional("q_norm_weight"),
              paddle::Optional("k_norm_weight"),
-             paddle::Optional("sinks")})
+             paddle::Optional("sinks"),
+             paddle::Optional("block_tables_headwise")})
     .Outputs({"fmha_out"})
     .Attrs({
         "rms_norm_eps: float",
@@ -1203,7 +1218,8 @@ PD_BUILD_STATIC_OP(append_attention_with_output)
              paddle::Optional("kv_signal_data"),
              paddle::Optional("q_norm_weight"),
              paddle::Optional("k_norm_weight"),
-             paddle::Optional("sinks")})
+             paddle::Optional("sinks"),
+             paddle::Optional("block_tables_headwise")})
     .Outputs({"fmha_out_out"})
     .SetInplaceMap({{"fmha_out", "fmha_out_out"}})
     .Attrs({

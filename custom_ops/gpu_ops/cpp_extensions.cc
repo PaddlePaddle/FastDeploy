@@ -113,6 +113,9 @@ std::vector<paddle::Tensor> AppendAttention(
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& sinks,
+    const paddle::optional<paddle::Tensor>&
+        block_tables_headwise,  // logical 3D, physical rank-2 [max_num_seqs *
+                                // local_kv_heads, max_blocks_per_head]
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,
@@ -170,6 +173,9 @@ std::vector<paddle::Tensor> AppendAttentionWithOutput(
     const paddle::optional<paddle::Tensor>& q_norm_weight,
     const paddle::optional<paddle::Tensor>& k_norm_weight,
     const paddle::optional<paddle::Tensor>& sinks,
+    const paddle::optional<paddle::Tensor>&
+        block_tables_headwise,  // logical 3D, physical rank-2 [max_num_seqs *
+                                // local_kv_heads, max_blocks_per_head]
     const float rms_norm_eps,
     const std::string& compute_dtype,
     const std::string& cache_quant_type_str,

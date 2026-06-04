@@ -39,6 +39,7 @@ void MultiQueryAppendAttention(
     const paddle::Tensor &batch_id_per_token,
     const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
+    const paddle::optional<paddle::Tensor> &block_table_headwise,
     const paddle::Tensor &batch_ids,
     const paddle::Tensor &tile_ids_per_batch,
     const int num_blocks_x_cpu,

@@ -44,8 +44,10 @@ __global__ void multi_query_append_attention_kernel(
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ block_table_hw,
     const int *__restrict__ mask_offset,
     const int max_block_num_per_seq,
+    const int max_blocks_per_head,
     const float scale,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -72,7 +74,11 @@ __global__ void multi_query_append_attention_kernel(
   const uint32_t batch_id = batch_ids[btid];
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = NUM_WARPS * num_frags_x * 16;
-  const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
+  const int *block_table_now =
+      (block_table_hw != nullptr)
+          ? block_table_hw +
+                (batch_id * kv_num_heads + kv_head_idx) * max_blocks_per_head
+          : block_table + batch_id * max_block_num_per_seq;
 
   // When cudagraph capture prefill, may launch more gridDim.x
   if (btid >= static_cast<uint32_t>(num_blocks_x_cpu)) {
@@ -205,7 +211,24 @@ __global__ void multi_query_append_attention_kernel(
       wid * 4 + tid / 8, tid % 8);
 
   uint32_t kv_idx_base = chunk_start;
+  // SWA sentinel guard (T53 PR1): block_id == -1 indicates the slot was
+  // recycled by recycle_request_swa_head_cache. The SWA mask built from
+  // chunk_start/chunk_end zeroes any contribution from this aged-out region,
+  // so the value loaded from block 0 is masked away in softmax.
+  // Invariant: recycle writes -1 ONLY at block positions < window_start_block.
+  // Current chunk's first position is chunk_start (or chunk_start aligned),
+  // and the loop guard ensures chunk_start >= window_start, so
+  //   block_idx >= window_start_block => recycle never wrote -1 here.
+  // This holds for BOTH sink configs:
+  //   sink_size > 0: sink blocks [0, sink_blocks) are kept; gap [-1] blocks
+  //                  lie in [sink_blocks, window_start_block) - not reachable.
+  //   sink_size == 0: recycle writes -1 only at pos < window_start; since
+  //                   chunk_start >= window_start, block_idx never falls there.
+  // Therefore block_id >= 0 is guaranteed and the clamp is a safety net only.
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
+  if (block_id < 0) {
+    block_id = 0;
+  }
   const uint32_t const_offset = kv_head_idx * kv_h_stride +
                                 (wid * 4 + tid / 8) * kv_b_stride +
                                 tid % 8 * num_elems_per_128b<T>();
@@ -266,6 +289,9 @@ __global__ void multi_query_append_attention_kernel(
     __syncthreads();
 
     kv_idx_base += num_frags_z * 16;
+    // SWA sentinel guard (T53 PR1): see top-of-loop comment.
+    // block_id >= 0 guaranteed for both sink_size > 0 and == 0 (see loop-level
+    // comment).
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
     if (block_id < 0) {
       block_id = 0;
@@ -427,9 +453,11 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const int *__restrict__ tile_ids_per_batch,
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
+    const int *__restrict__ block_table_hw,
     const int *__restrict__ mask_offset,
     const bool *__restrict__ attn_mask,  // [bsz, max_q, max_q] for tree-mask
     const int max_block_num_per_seq,
+    const int max_blocks_per_head,
     const float scale,
     const float quant_max_bound,
     const float quant_min_bound,
@@ -461,7 +489,11 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
   const uint32_t tile_id = tile_ids_per_batch[btid];
   const uint32_t num_rows_per_block = num_frags_x * 16;
-  const int *block_table_now = block_table + batch_id * max_block_num_per_seq;
+  const int *block_table_now =
+      (block_table_hw != nullptr)
+          ? block_table_hw +
+                (batch_id * kv_num_heads + kv_head_idx) * max_blocks_per_head
+          : block_table + batch_id * max_block_num_per_seq;
 
   const uint32_t q_len = seq_lens[batch_id];
   const uint32_t kv_len = seq_lens_kv[batch_id] + q_len;
@@ -568,7 +600,24 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
       wid * 4 + tid / 8, tid % 8);
 
   uint32_t kv_idx_base = chunk_start;
+  // SWA sentinel guard (T53 PR1): block_id == -1 indicates the slot was
+  // recycled by recycle_request_swa_head_cache. The SWA mask built from
+  // chunk_start/chunk_end zeroes any contribution from this aged-out region,
+  // so the value loaded from block 0 is masked away in softmax.
+  // Invariant: recycle writes -1 ONLY at block positions < window_start_block.
+  // Current chunk's first position is chunk_start (or chunk_start aligned),
+  // and the loop guard ensures chunk_start >= window_start, so
+  //   block_idx >= window_start_block => recycle never wrote -1 here.
+  // This holds for BOTH sink configs:
+  //   sink_size > 0: sink blocks [0, sink_blocks) are kept; gap [-1] blocks
+  //                  lie in [sink_blocks, window_start_block) - not reachable.
+  //   sink_size == 0: recycle writes -1 only at pos < window_start; since
+  //                   chunk_start >= window_start, block_idx never falls there.
+  // Therefore block_id >= 0 is guaranteed and the clamp is a safety net only.
   int block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
+  if (block_id < 0) {
+    block_id = 0;
+  }
   const uint32_t const_offset = kv_head_idx * kv_h_stride +
                                 (wid * 4 + tid / 8) * kv_b_stride +
                                 tid % 8 * num_elems_per_128b<T>();
@@ -632,6 +681,9 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     __syncthreads();
 
     kv_idx_base += BLOCK_SIZE;
+    // SWA sentinel guard (T53 PR1): see top-of-loop comment.
+    // block_id >= 0 guaranteed for both sink_size > 0 and == 0 (see loop-level
+    // comment).
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
     if (block_id < 0) {
       block_id = 0;
@@ -795,6 +847,7 @@ void MultiQueryAppendAttention(
     const paddle::Tensor &batch_id_per_token,
     const paddle::Tensor &cu_seqlens_q,
     const paddle::Tensor &block_table,
+    const paddle::optional<paddle::Tensor> &block_table_headwise,
     const paddle::Tensor &batch_ids,
     const paddle::Tensor &tile_ids_per_batch,
     const int num_blocks_x_cpu,
@@ -819,6 +872,50 @@ void MultiQueryAppendAttention(
   auto token_num = meta_data.token_nums;
   auto bsz = meta_data.batch_size;
   auto max_block_num_per_seq = meta_data.max_blocks_per_seq;
+  const int *block_table_hw_ptr =
+      block_table_headwise ? block_table_headwise.get().data<int>() : nullptr;
+  const int max_blocks_per_head =
+      block_table_headwise
+          ? static_cast<int>(block_table_headwise.get().shape().back())
+          : 0;
+  if (block_table_headwise) {
+    const auto &hw_shape = block_table_headwise.get().shape();
+    PADDLE_ENFORCE_EQ(
+        hw_shape.size(),
+        2u,
+        phi::errors::InvalidArgument(
+            "block_tables_headwise must be rank-2 (logical [bsz, "
+            "kv_num_heads, max_blocks_per_head] flattened to "
+            "[bsz*kv_num_heads, max_blocks_per_head]); got rank %zu.",
+            hw_shape.size()));
+    PADDLE_ENFORCE_EQ(
+        hw_shape[0],
+        static_cast<int64_t>(bsz) * static_cast<int64_t>(kv_num_heads),
+        phi::errors::InvalidArgument(
+            "block_tables_headwise dim 0 must equal bsz * kv_num_heads "
+            "(%d * %d = %d); got %ld.",
+            bsz,
+            kv_num_heads,
+            bsz * kv_num_heads,
+            static_cast<long>(hw_shape[0])));
+    PADDLE_ENFORCE_GT(
+        max_blocks_per_head,
+        0,
+        phi::errors::InvalidArgument(
+            "block_tables_headwise last dim (max_blocks_per_head) must be "
+            "> 0; got %d.",
+            max_blocks_per_head));
+    PADDLE_ENFORCE_GE(
+        max_blocks_per_head,
+        max_block_num_per_seq,
+        phi::errors::InvalidArgument(
+            "block_tables_headwise max_blocks_per_head (%d) must be >= "
+            "max_block_num_per_seq (%d) to satisfy the per-iteration "
+            "prefetch contract of multi_query_append_attention C16 "
+            "kernels.",
+            max_blocks_per_head,
+            max_block_num_per_seq));
+  }
 
   constexpr uint32_t num_warps = 4;
   constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;
@@ -920,8 +1017,10 @@ void MultiQueryAppendAttention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          block_table_hw_ptr,
           meta_data.mask_offset,
           max_block_num_per_seq,
+          max_blocks_per_head,
           scale,
           quant_max_bound,
           quant_min_bound,
@@ -987,8 +1086,10 @@ void MultiQueryAppendAttention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          block_table_hw_ptr,
           meta_data.mask_offset,
           max_block_num_per_seq,
+          max_blocks_per_head,
           scale,
           quant_max_bound,
           quant_min_bound,
@@ -1144,10 +1245,12 @@ void MultiQueryAppendAttention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          block_table_hw_ptr,
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
           max_block_num_per_seq,
+          max_blocks_per_head,
           scale,
           quant_max_bound,
           quant_min_bound,
@@ -1201,10 +1304,12 @@ void MultiQueryAppendAttention(
           tile_ids_per_batch.data<int>(),
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
+          block_table_hw_ptr,
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
           max_block_num_per_seq,
+          max_blocks_per_head,
           scale,
           quant_max_bound,
           quant_min_bound,
