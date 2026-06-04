@@ -978,21 +978,16 @@ class TestTritonMoEMethod:
     # ------------------------------------------------------------------
 
     def _mock_sm90(self, monkeypatch):
-        """Patch get_sm_version to return 90 (H100 / non-SM100 path).
+        """Patch get_sm_version to return 90 (H100 / non-SM100 path)."""
+        import fastdeploy.model_executor.layers.moe.fused_moe_triton_backend as backend
 
-        The function is decorated with @cache, so we must replace the cached
-        object on the module directly (the local import inside _get_default_config
-        re-fetches from the module each call, so setattr is sufficient).
-        """
-        import fastdeploy.model_executor.utils as fd_utils
-
-        monkeypatch.setattr(fd_utils, "get_sm_version", lambda: 90)
+        monkeypatch.setattr(backend, "get_sm_version", lambda: 90)
 
     def _mock_sm100(self, monkeypatch):
         """Patch get_sm_version to return 100 (B200 / SM100 path)."""
-        import fastdeploy.model_executor.utils as fd_utils
+        import fastdeploy.model_executor.layers.moe.fused_moe_triton_backend as backend
 
-        monkeypatch.setattr(fd_utils, "get_sm_version", lambda: 100)
+        monkeypatch.setattr(backend, "get_sm_version", lambda: 100)
 
     # -- SM90 (default heuristic) tests --
 
@@ -1265,9 +1260,9 @@ class TestTritonMoEMethod:
 
     def test_apply_tp_calls_kernel_twice(self, fake_ops, monkeypatch):
         """apply_tp must invoke fused_moe_kernel_bf16 exactly twice (GEMM1 + GEMM2)."""
-        import fastdeploy.model_executor.utils as fd_utils
+        import fastdeploy.model_executor.layers.moe.fused_moe_triton_backend as backend
 
-        monkeypatch.setattr(fd_utils, "get_sm_version", lambda: 90)
+        monkeypatch.setattr(backend, "get_sm_version", lambda: 90)
 
         method = backend.TritonMoEMethod()
         layer = self._make_layer(hidden_size=8)
@@ -1370,9 +1365,9 @@ class TestTritonMoEMethod:
 
         Force SM90 config so the expectation is GPU-model-independent.
         """
-        import fastdeploy.model_executor.utils as fd_utils
+        import fastdeploy.model_executor.layers.moe.fused_moe_triton_backend as backend
 
-        monkeypatch.setattr(fd_utils, "get_sm_version", lambda: 90)
+        monkeypatch.setattr(backend, "get_sm_version", lambda: 90)
 
         method = backend.TritonMoEMethod()
         layer = self._make_layer(hidden_size=8)
