@@ -418,7 +418,7 @@ void AppendAttentionKernel(
                                                 decoder_tile_ids_per_batch,
                                                 decoder_num_blocks_data,
                                                 decoder_block_shape_q,
-                                                max_kv_len_this_time,
+                                                -1,  // useless
                                                 !speculate_decoder,
                                                 !speculate_decoder,
                                                 exec_stream);
@@ -431,7 +431,7 @@ void AppendAttentionKernel(
                                                 decoder_tile_ids_per_batch,
                                                 decoder_num_blocks_data,
                                                 decoder_block_shape_q,
-                                                max_kv_len_this_time,
+                                                -1,  // useless
                                                 !speculate_decoder,
                                                 !speculate_decoder,
                                                 exec_stream);
@@ -445,7 +445,7 @@ void AppendAttentionKernel(
                                             decoder_tile_ids_per_batch,
                                             decoder_num_blocks_data,
                                             decoder_block_shape_q,
-                                            max_kv_len_this_time,
+                                            -1,  // useless
                                             !speculate_decoder,
                                             !speculate_decoder,
                                             exec_stream);
