@@ -1116,7 +1116,7 @@ class TestTritonMoEMethod:
         assert cfg["BLOCK_SIZE_K"] == 64
 
     def test_get_default_config_sm100_nearest_key(self, monkeypatch):
-        """SM100: M=100 is equidistant between 96 and 128; should pick one of them."""
+        """SM100: M=100 nearest key is 96 (abs_diff=4) not 128 (abs_diff=28)."""
         self._mock_sm100(monkeypatch)
         method = backend.TritonMoEMethod()
         cfg = method._get_default_config(M=100, E=64)
