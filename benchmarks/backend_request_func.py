@@ -356,14 +356,16 @@ async def async_request_eb_openai_chat_completions(
     if request_func_input.response_format:
         payload["response_format"] = request_func_input.response_format
 
-    # 随机输入开关
+    # Random-length input/output knob.
     if request_func_input.random_flag:
         payload["max_tokens"] = request_func_input.output_len
         payload["min_tokens"] = request_func_input.output_len
-        # 随机token_ids场景
-        if isinstance(request_func_input.prompt, list):
-            request_func_input.prompt_token_ids = request_func_input.prompt
-            request_func_input.prompt = ""
+
+    # When the prompt is a list of token ids, route through prompt_token_ids
+    # regardless of random_flag.
+    if isinstance(request_func_input.prompt, list):
+        request_func_input.prompt_token_ids = request_func_input.prompt
+        request_func_input.prompt = ""
 
     # 支持传入prompt_token_ids
     if request_func_input.prompt_token_ids:
@@ -634,7 +636,6 @@ async def async_request_eb_openai_chat_completions(
 
 async def simple_tool_call(model_output, tool_url: str, timeout=60):
     """调用工具函数"""
-    import re
 
     import httpx
 
@@ -646,18 +647,20 @@ async def simple_tool_call(model_output, tool_url: str, timeout=60):
         args = tc.get("arguments", {})
         tool_id = tc.get("id")
     else:
-        match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
-        if not match:
-            return "", False, "", tool_id
-
-        block = match.group(1).strip()
-        lines = block.splitlines()
-        tool_name = lines[0].strip()
-
-        key = re.search(r"<arg_key>(.*?)</arg_key>", block)
-        val = re.search(r"<arg_value>(.*?)</arg_value>", block)
-
-        args = {key.group(1): val.group(1)} if key and val else {}
+        # 取消正则逻辑
+        return "", False, "", tool_id
+        # match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
+        # if not match:
+        #     return "", False, "", tool_id
+        #
+        # block = match.group(1).strip()
+        # lines = block.splitlines()
+        # tool_name = lines[0].strip()
+        #
+        # key = re.search(r"<arg_key>(.*?)</arg_key>", block)
+        # val = re.search(r"<arg_value>(.*?)</arg_value>", block)
+        #
+        # args = {key.group(1): val.group(1)} if key and val else {}
 
     if not tool_name:
         return "", False, "", tool_id

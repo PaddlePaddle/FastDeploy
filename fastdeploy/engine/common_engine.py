@@ -913,10 +913,23 @@ class EngineService:
                 with self._pause_cond:
                     self._pause_cond.wait_for(lambda: not self.is_paused)
                 nonlocal is_fetching
-                num_prefill_batch = min(
-                    int(self.resource_manager.available_batch()),
-                    self.cfg.max_prefill_batch,
-                )
+                if self.cfg.scheduler_config.splitwise_role == "prefill":
+                    max_inflight_prefill = envs.FD_MAX_INFLIGHT_PREFILL
+                    inflight_prefill = len(self.resource_manager.running)
+                    if inflight_prefill >= max_inflight_prefill:
+                        is_fetching = False
+                        return
+                    available_for_new = max_inflight_prefill - inflight_prefill
+                    num_prefill_batch = min(
+                        int(self.resource_manager.available_batch()),
+                        self.cfg.max_prefill_batch,
+                        available_for_new,
+                    )
+                else:
+                    num_prefill_batch = min(
+                        int(self.resource_manager.available_batch()),
+                        self.cfg.max_prefill_batch,
+                    )
 
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     max_num_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
