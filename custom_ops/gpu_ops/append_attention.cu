@@ -91,7 +91,8 @@ void AppendAttentionKernel(
     const bool causal,
     const bool speculate_decoder,
     const int sliding_window,
-    const int sink_size = 0) {
+    const int sink_size = 0,
+    const bool only_do_attn = false) {
   typedef PDTraits<D> traits_;
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
@@ -505,7 +506,8 @@ std::vector<paddle::Tensor> AppendAttention(
     const bool causal,
     const bool speculate_decoder,
     const int sliding_window,
-    const int sink_size = 0) {
+    const int sink_size = 0,
+    const bool only_do_attn = false) {
   AppendAttnMetaData meta_data;
 
   const auto& qkv_dims = qkv.dims();
@@ -638,7 +640,8 @@ std::vector<paddle::Tensor> AppendAttention(
         causal,
         speculate_decoder,
         sliding_window,
-        sink_size);
+        sink_size,
+        only_do_attn);
   };
 
   phi::dtype::float16 fp16_dtype;
@@ -888,7 +891,8 @@ std::vector<std::vector<int64_t>> AppendAttentionInferShape(
     const bool causal,
     const bool speculate_decoder,
     const int sliding_window,
-    const int sink_size) {
+    const int sink_size,
+    const bool only_do_attn) {
   const int token_num = qkv_shape[0];
   const int kv_num_heads = key_cache_shape[1];
   int head_dim = key_cache_shape[3];
@@ -954,7 +958,8 @@ std::vector<paddle::DataType> AppendAttentionInferDtype(
     const bool causal,
     const bool speculate_decoder,
     const int sliding_window,
-    const int sink_size) {
+    const int sink_size,
+    const bool only_do_attn) {
   if (compute_dtype == "bf16") {
     if (out_linear_in_scale > 0.0) {
       if (fabs(quant_max_bound - 127.0f) < 0.000001) {
@@ -1161,6 +1166,7 @@ PD_BUILD_STATIC_OP(append_attention)
         "speculate_decoder: bool",
         "sliding_window: int",
         "sink_size: int",
+        "only_do_attn: bool",
     })
     .SetKernelFn(PD_KERNEL(AppendAttention))
     .SetInferShapeFn(PD_INFER_SHAPE(AppendAttentionInferShape))
