@@ -537,9 +537,6 @@ std::vector<paddle::Tensor> AppendAttention(
        meta_data.kv_num_heads * (meta_data.head_dims + meta_data.head_dims_v)) /
       meta_data.head_dims;
 
-  std::cout << "meta_data.q_num_heads" << meta_data.q_num_heads << std::endl;
-  std::cout << "meta_data.head_dims_v" << meta_data.head_dims_v << std::endl;
-
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = key_cache.dims()[2];
   meta_data.batch_size = seq_lens_this_time.dims()[0];
