@@ -35,6 +35,7 @@ from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.utils import (
     TensorTracker,
     free_tensor,
+    get_sm_version,
     process_weight_transpose,
     set_weight_attrs,
     weight_fully_copied,
@@ -1859,6 +1860,154 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         )
 
 
+_SM100_CONFIGS = {
+    1: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 4,
+        "num_stages": 5,
+    },
+    2: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    4: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 64,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    8: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    16: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    24: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    32: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    48: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    64: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    96: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    128: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    256: {
+        "BLOCK_SIZE_M": 32,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 5,
+    },
+    512: {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 5,
+    },
+    1024: {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4,
+    },
+    1536: {
+        "BLOCK_SIZE_M": 256,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 3,
+    },
+    2048: {
+        "BLOCK_SIZE_M": 256,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 3,
+    },
+    3072: {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4,
+    },
+    4096: {
+        "BLOCK_SIZE_M": 256,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 3,
+    },
+}
+
+
 class TritonMoEMethod(UnquantizedFusedMoEMethod):
     """
     Use Triton Group Gemm (BF16 unquantized) to compute Fused MoE.
@@ -1886,162 +2035,14 @@ class TritonMoEMethod(UnquantizedFusedMoEMethod):
         Others: original vLLM-ported heuristic.
 
         M: number of tokens (pre-expansion token count).
-        E: number of (local) experts.
+        E: number of (local) experts, SM100 not need.
         """
-        from fastdeploy.model_executor.utils import get_sm_version
 
         if get_sm_version() >= 100:
-            # SM100 (B200): use SGLang tuned lookup, nearest key by abs diff
-            _SM100_CONFIGS = {
-                1: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 64,
-                    "GROUP_SIZE_M": 32,
-                    "num_warps": 4,
-                    "num_stages": 5,
-                },
-                2: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 32,
-                    "num_warps": 4,
-                    "num_stages": 3,
-                },
-                4: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 64,
-                    "num_warps": 4,
-                    "num_stages": 4,
-                },
-                8: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 32,
-                    "num_warps": 4,
-                    "num_stages": 3,
-                },
-                16: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 4,
-                    "num_stages": 3,
-                },
-                24: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 128,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 16,
-                    "num_warps": 4,
-                    "num_stages": 4,
-                },
-                32: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 16,
-                    "num_warps": 4,
-                    "num_stages": 4,
-                },
-                48: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 4,
-                    "num_stages": 4,
-                },
-                64: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 4,
-                    "num_stages": 4,
-                },
-                96: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 4,
-                    "num_stages": 3,
-                },
-                128: {
-                    "BLOCK_SIZE_M": 16,
-                    "BLOCK_SIZE_N": 64,
-                    "BLOCK_SIZE_K": 128,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 4,
-                    "num_stages": 3,
-                },
-                256: {
-                    "BLOCK_SIZE_M": 32,
-                    "BLOCK_SIZE_N": 128,
-                    "BLOCK_SIZE_K": 64,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 4,
-                    "num_stages": 5,
-                },
-                512: {
-                    "BLOCK_SIZE_M": 64,
-                    "BLOCK_SIZE_N": 256,
-                    "BLOCK_SIZE_K": 64,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 8,
-                    "num_stages": 5,
-                },
-                1024: {
-                    "BLOCK_SIZE_M": 128,
-                    "BLOCK_SIZE_N": 256,
-                    "BLOCK_SIZE_K": 64,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 8,
-                    "num_stages": 4,
-                },
-                1536: {
-                    "BLOCK_SIZE_M": 256,
-                    "BLOCK_SIZE_N": 256,
-                    "BLOCK_SIZE_K": 64,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 8,
-                    "num_stages": 3,
-                },
-                2048: {
-                    "BLOCK_SIZE_M": 256,
-                    "BLOCK_SIZE_N": 256,
-                    "BLOCK_SIZE_K": 64,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 8,
-                    "num_stages": 3,
-                },
-                3072: {
-                    "BLOCK_SIZE_M": 128,
-                    "BLOCK_SIZE_N": 256,
-                    "BLOCK_SIZE_K": 64,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 8,
-                    "num_stages": 4,
-                },
-                4096: {
-                    "BLOCK_SIZE_M": 256,
-                    "BLOCK_SIZE_N": 256,
-                    "BLOCK_SIZE_K": 64,
-                    "GROUP_SIZE_M": 1,
-                    "num_warps": 8,
-                    "num_stages": 3,
-                },
-            }
             best_key = min(_SM100_CONFIGS.keys(), key=lambda x: abs(x - M))
             return _SM100_CONFIGS[best_key]
 
-        # Default heuristic for all other GPUs (ported from vLLM)
+        # Default heuristic for all other GPUs (SM80 & SM90) (ported from vLLM)
         if M <= 32:
             block_m = 16
         elif M <= 96:
