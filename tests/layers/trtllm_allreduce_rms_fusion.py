@@ -772,6 +772,74 @@ class TestRMSNormProxyAllreduceFused(unittest.TestCase):
         self._assert_close_bf16(res, residual_full, msg="large-shape fallback residual mismatch")
 
 
+class TestGlm4MoeMLPInit(unittest.TestCase):
+    """Cover Glm4MoeMLP.__init__ attribute assignments (glm4_moe.py:67-71)."""
+
+    def _make_fd_config(self, tp_size, ep_size, enable_fusion, use_seq_parallel_moe=False):
+        fd_config = Mock()
+        fd_config.parallel_config = Mock()
+        fd_config.parallel_config.tensor_parallel_size = tp_size
+        fd_config.parallel_config.expert_parallel_size = ep_size
+        fd_config.parallel_config.enable_flashinfer_allreduce_fusion = enable_fusion
+        fd_config.parallel_config.use_sequence_parallel_moe = use_seq_parallel_moe
+        fd_config.model_config = Mock()
+        fd_config.model_config.hidden_size = 64
+        fd_config.model_config.hidden_act = "silu"
+        fd_config.model_config.moe_layer_start_index = 0
+        return fd_config
+
+    def _build(self, fd_config, layer_id=1):
+        # Patch heavy submodules so Glm4MoeMLP.__init__ runs without real deps.
+        with (
+            patch("fastdeploy.model_executor.models.glm4_moe.MergedColumnParallelLinear"),
+            patch("fastdeploy.model_executor.models.glm4_moe.MergedReplicatedLinear"),
+            patch("fastdeploy.model_executor.models.glm4_moe.RowParallelLinear"),
+            patch("fastdeploy.model_executor.models.glm4_moe.ReplicatedLinear"),
+            patch("fastdeploy.model_executor.models.glm4_moe.SiluAndMul"),
+        ):
+            from fastdeploy.model_executor.models.glm4_moe import Glm4MoeMLP
+
+            return Glm4MoeMLP(
+                fd_config=fd_config,
+                intermediate_size=128,
+                layer_id=layer_id,
+                prefix="model.layers.1.mlp",
+            )
+
+    def test_tp_only_fusion_enabled(self):
+        """tp>1, ep=1, fusion=True -> enable_all_reduce_fusion=True."""
+        fd_config = self._make_fd_config(tp_size=4, ep_size=1, enable_fusion=True)
+        mlp = self._build(fd_config)
+        self.assertEqual(mlp.expert_parallel_size, 1)
+        self.assertEqual(mlp.tensor_parallel_size, 4)
+        self.assertTrue(mlp.use_tp)
+        self.assertFalse(mlp.use_ep)
+        self.assertTrue(mlp.enable_all_reduce_fusion)
+
+    def test_ep_disables_fusion(self):
+        """ep>1 -> enable_all_reduce_fusion forced False even if flag is True."""
+        fd_config = self._make_fd_config(tp_size=2, ep_size=2, enable_fusion=True)
+        mlp = self._build(fd_config)
+        self.assertTrue(mlp.use_tp)
+        self.assertTrue(mlp.use_ep)
+        self.assertFalse(mlp.enable_all_reduce_fusion)
+
+    def test_single_gpu_no_fusion(self):
+        """tp=1, ep=1 -> use_tp/use_ep False, fusion False."""
+        fd_config = self._make_fd_config(tp_size=1, ep_size=1, enable_fusion=True)
+        mlp = self._build(fd_config)
+        self.assertFalse(mlp.use_tp)
+        self.assertFalse(mlp.use_ep)
+        self.assertFalse(mlp.enable_all_reduce_fusion)
+
+    def test_fusion_flag_off(self):
+        """flag False -> enable_all_reduce_fusion False regardless of tp."""
+        fd_config = self._make_fd_config(tp_size=4, ep_size=1, enable_fusion=False)
+        mlp = self._build(fd_config)
+        self.assertTrue(mlp.use_tp)
+        self.assertFalse(mlp.enable_all_reduce_fusion)
+
+
 if __name__ == "__main__":
     """Run tests directly (called by subprocess after distributed launch)"""
     unittest.main(verbosity=2)
