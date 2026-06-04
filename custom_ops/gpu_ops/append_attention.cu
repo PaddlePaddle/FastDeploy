@@ -98,7 +98,6 @@ void AppendAttentionKernel(
   typedef typename traits_::data_t data_t;
 
   const int max_enc_len_this_time = set_max_lengths.data<int>()[1];
-  const int max_dec_len_this_time = set_max_lengths.data<int>()[2];
   const int max_enc_dec_len_this_time = set_max_lengths.data<int>()[3];
   const int max_just_dec_len_this_time = set_max_lengths.data<int>()[4];
 
@@ -649,7 +648,7 @@ std::vector<paddle::Tensor> AppendAttention(
         cache_quant_type_str,
         use_neox_rotary_style,
         rope_3d,
-        meta_data.block_size * meta_data.max_blocks_per_seq,
+        max_input_length,
         quant_max_bound,
         quant_min_bound,
         out_linear_in_scale,
