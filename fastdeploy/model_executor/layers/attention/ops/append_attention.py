@@ -85,6 +85,7 @@ def append_attention(
     sliding_window: int = 0,
     sink_size: int = 0,
     head_wise_full_hidden: int = 0,
+    only_do_attn: bool = False,
 ) -> paddle.Tensor:
     """
     append_attention
@@ -147,6 +148,7 @@ def append_attention(
                 speculate_decoder,
                 sliding_window,
                 sink_size,
+                only_do_attn,
             )
             sliding_window = 0
             sink_size = 0
@@ -206,6 +208,7 @@ def append_attention(
             speculate_decoder,
             sliding_window,
             sink_size,
+            only_do_attn,
         )
         if head_wise_full_hidden > 0:
             out_swa[:, :head_wise_full_hidden] = out[:, :head_wise_full_hidden]
