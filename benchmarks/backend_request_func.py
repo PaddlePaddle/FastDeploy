@@ -634,7 +634,6 @@ async def async_request_eb_openai_chat_completions(
 
 async def simple_tool_call(model_output, tool_url: str, timeout=60):
     """调用工具函数"""
-    import re
 
     import httpx
 
@@ -646,18 +645,20 @@ async def simple_tool_call(model_output, tool_url: str, timeout=60):
         args = tc.get("arguments", {})
         tool_id = tc.get("id")
     else:
-        match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
-        if not match:
-            return "", False, "", tool_id
-
-        block = match.group(1).strip()
-        lines = block.splitlines()
-        tool_name = lines[0].strip()
-
-        key = re.search(r"<arg_key>(.*?)</arg_key>", block)
-        val = re.search(r"<arg_value>(.*?)</arg_value>", block)
-
-        args = {key.group(1): val.group(1)} if key and val else {}
+        # 取消正则逻辑
+        return "", False, "", tool_id
+        # match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
+        # if not match:
+        #     return "", False, "", tool_id
+        #
+        # block = match.group(1).strip()
+        # lines = block.splitlines()
+        # tool_name = lines[0].strip()
+        #
+        # key = re.search(r"<arg_key>(.*?)</arg_key>", block)
+        # val = re.search(r"<arg_value>(.*?)</arg_value>", block)
+        #
+        # args = {key.group(1): val.group(1)} if key and val else {}
 
     if not tool_name:
         return "", False, "", tool_id
