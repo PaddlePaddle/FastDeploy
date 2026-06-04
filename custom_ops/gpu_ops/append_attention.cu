@@ -97,7 +97,6 @@ void AppendAttentionKernel(
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
 
-  const int max_len_this_time = set_max_lengths.data<int>()[0];
   const int max_enc_len_this_time = set_max_lengths.data<int>()[1];
   const int max_dec_len_this_time = set_max_lengths.data<int>()[2];
   const int max_enc_dec_len_this_time = set_max_lengths.data<int>()[3];
@@ -544,14 +543,10 @@ std::vector<paddle::Tensor> AppendAttention(
   meta_data.block_size = key_cache.dims()[2];
   meta_data.batch_size = seq_lens_this_time.dims()[0];
 
-  PADDLE_ENFORCE(
-      max_input_length == meta_data.block_size * meta_data.max_blocks_per_seq,
-      "Unmatched shape: ",
-      max_input_length,
-      " ",
-      meta_data.block_size,
-      " ",
-      meta_data.max_blocks_per_seq);
+  // PADDLE_ENFORCE(
+  //     max_input_length == meta_data.block_size *
+  //     meta_data.max_blocks_per_seq, "Unmatched shape: ", max_input_length, "
+  //     ", meta_data.block_size, " ", meta_data.max_blocks_per_seq);
 
   // template dtype generation
   phi::DataType dtype_id;
@@ -654,7 +649,7 @@ std::vector<paddle::Tensor> AppendAttention(
         cache_quant_type_str,
         use_neox_rotary_style,
         rope_3d,
-        max_input_length,
+        meta_data.block_size * meta_data.max_blocks_per_seq,
         quant_max_bound,
         quant_min_bound,
         out_linear_in_scale,
