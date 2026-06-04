@@ -546,7 +546,12 @@ std::vector<paddle::Tensor> AppendAttention(
 
   PADDLE_ENFORCE(
       max_input_length == meta_data.block_size * meta_data.max_blocks_per_seq,
-      "Unmatched shape");
+      "Unmatched shape: ",
+      max_input_length,
+      " ",
+      meta_data.block_size,
+      " ",
+      meta_data.max_blocks_per_seq);
 
   // template dtype generation
   phi::DataType dtype_id;
