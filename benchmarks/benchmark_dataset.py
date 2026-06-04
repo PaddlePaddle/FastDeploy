@@ -313,7 +313,7 @@ class EBChatDataset(BenchmarkDataset):
                 history_QA = []
                 prompt_len = len(prompt)
             else:
-                prompt = entry["messages"][-1].get("content", "")
+                prompt = ""
                 history_QA = entry.get("messages", [])
                 prompt_len = 0
                 if enable_multimodal_chat:
