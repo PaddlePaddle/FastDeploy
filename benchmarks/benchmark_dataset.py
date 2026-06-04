@@ -301,7 +301,8 @@ class EBChatDataset(BenchmarkDataset):
                 break
             json_data = entry
             response_format = entry.get("response_format")
-            new_output_len = int(entry.get("max_tokens", output_len if output_len else 12288))
+            new_output_len = entry.get("max_tokens", output_len)
+            new_output_len = int(new_output_len) if new_output_len is not None else None
 
             # If the sample already carries pre-tokenized input_ids, send them
             # directly via prompt_token_ids and skip the server-side
