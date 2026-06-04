@@ -780,7 +780,7 @@ void MultiQueryAppendAttention(
   if constexpr (NUM_WARP_Q == 4) {
     constexpr uint32_t num_frags_z = BLOCK_SIZE / 16;
     constexpr uint32_t smem_size =
-        (num_rows_per_block + BLOCK_SIZE * 2) * HEAD_DIM * sizeof(T);
+        (BLOCK_SHAPE_Q + BLOCK_SIZE * 2) * HEAD_DIM * sizeof(T);
 
     auto split_kv_kernel = multi_query_append_attention_kernel<NV_TYPE,
                                                                true,
