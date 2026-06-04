@@ -7,7 +7,7 @@ on:
         description: "Build Images"
         required: true
         type: string
-        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:fastdeploy-ciuse-cuda126"
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddle:fastdeploy-ciuse-cuda129"
       FASTDEPLOY_ARCHIVE_URL:
         description: "URL of the compressed FastDeploy code archive."
         required: true
@@ -42,7 +42,7 @@ jobs:
     runs-on: [self-hosted, PRE_CE_RUN_2Card]
     needs: check_bypass
     if: ${{ inputs.FASTDEPLOY_WHEEL_URL != '' && needs.check_bypass.outputs.can-skip != 'true' }}
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Print current runner name
         run: |
@@ -201,7 +201,8 @@ jobs:
           --gpus "\"device=${DEVICES}\"" ${docker_image} /bin/bash -c '
           git config --global --add safe.directory /workspace/FastDeploy
           cd FastDeploy
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip uninstall paddlepaddle-gpu -y || true
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu129/
           python -m pip install ${fd_wheel_url}
           bash scripts/run_pre_ce.sh
           '

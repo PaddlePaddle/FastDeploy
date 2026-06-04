@@ -8,7 +8,7 @@ on:
         description: "Build Images"
         required: true
         type: string
-        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda126-paddle-dev"
+        default: "ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/paddleqa:fastdeploy-ciuse-cuda129-paddle-dev"
       FASTDEPLOY_ARCHIVE_URL:
         description: "URL of the compressed FastDeploy code archive."
         required: true
@@ -218,7 +218,8 @@ jobs:
           cd FastDeploy
           git diff origin/${BASE_REF}..HEAD --unified=0 > diff.txt
 
-          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+          python -m pip uninstall paddlepaddle-gpu -y || true
+          python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu129/
           pip config set global.extra-index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
 
           python -m pip install -r scripts/unittest_requirement.txt

@@ -70,7 +70,7 @@ jobs:
       workflow-name: build_gpu
 
   fd-build:
-    runs-on: [self-hosted, GPU-Build]
+    runs-on: [self-hosted, GPU-Build-RL]
     needs: check_bypass
     if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     timeout-minutes: 360
@@ -194,9 +194,10 @@ jobs:
             if [[ "${PADDLE_WHL_URL}" != "" ]];then
               python -m pip install ${PADDLE_WHL_URL}
             elif [[ "${PADDLEVERSION}" != "" ]];then
-              python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu126/
+              python -m pip install paddlepaddle-gpu==${PADDLEVERSION} -i https://www.paddlepaddle.org.cn/packages/stable/cu129/
             else
-              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu126/
+              python -m pip uninstall paddlepaddle-gpu -y || true
+              python -m pip install --pre paddlepaddle-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/cu129/
             fi
 
             pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
