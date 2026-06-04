@@ -913,10 +913,23 @@ class EngineService:
                 with self._pause_cond:
                     self._pause_cond.wait_for(lambda: not self.is_paused)
                 nonlocal is_fetching
-                num_prefill_batch = min(
-                    int(self.resource_manager.available_batch()),
-                    self.cfg.max_prefill_batch,
-                )
+                if self.cfg.scheduler_config.splitwise_role == "prefill":
+                    max_inflight_prefill = envs.FD_MAX_INFLIGHT_PREFILL
+                    inflight_prefill = len(self.resource_manager.running)
+                    if inflight_prefill >= max_inflight_prefill:
+                        is_fetching = False
+                        return
+                    available_for_new = max_inflight_prefill - inflight_prefill
+                    num_prefill_batch = min(
+                        int(self.resource_manager.available_batch()),
+                        self.cfg.max_prefill_batch,
+                        available_for_new,
+                    )
+                else:
+                    num_prefill_batch = min(
+                        int(self.resource_manager.available_batch()),
+                        self.cfg.max_prefill_batch,
+                    )
 
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     max_num_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
@@ -1922,7 +1935,11 @@ class EngineService:
     def _decode_token(self, token_ids, req_id, is_end):
         delta_text = ""
         if envs.FD_ENABLE_RETURN_TEXT:
-            delta_text, cum_tokens, _ = self.data_processor.ids2tokens(token_ids, req_id)
+            delta_text, previous_token_ids, _ = self.data_processor.ids2tokens(token_ids, req_id)
+            # Reconstruct the post-extend cumulative list from the pre-delta
+            # snapshot + this call's input — ``ids2tokens`` only returns the
+            # snapshot to keep its return values aliasing-free.
+            cum_tokens = previous_token_ids + list(token_ids)
             if delta_text != "":
                 prefix_offset = self.data_processor.decode_status[req_id][0]
                 read_offset = self.data_processor.decode_status[req_id][1]

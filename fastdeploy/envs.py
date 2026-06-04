@@ -190,6 +190,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Enable FP8 calibration on HPU"
     "FD_HPU_MEASUREMENT_MODE": lambda: os.getenv("FD_HPU_MEASUREMENT_MODE", "0"),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    "FD_MAX_INFLIGHT_PREFILL": lambda: int(os.getenv("FD_MAX_INFLIGHT_PREFILL", "20")),
     "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
         os.getenv("FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", "1")
     ),
@@ -263,6 +264,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Whether to use GDR CheckpointTransfer for dynamic weight updates.
+    "FD_USE_GDR_CHECKPOINT_TRANSFER": lambda: bool(int(os.getenv("FD_USE_GDR_CHECKPOINT_TRANSFER", "0"))),
     # Whether to enable block-wise CUDA Graph capture/replay.
     # When enabled, individual layer forward methods decorated with @block_wise_cuda_graph_wrap
     # will be captured and replayed as CUDA Graphs for improved performance.

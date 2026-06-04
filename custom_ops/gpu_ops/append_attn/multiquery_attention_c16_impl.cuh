@@ -45,7 +45,6 @@ __global__ void multi_query_append_attention_kernel(
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
-    const int max_seq_len,
     const int max_block_num_per_seq,
     const float scale,
     const float quant_max_bound,
@@ -61,7 +60,6 @@ __global__ void multi_query_append_attention_kernel(
     const int speculate_max_draft_token_num = 5,
     const int sliding_window = 0,
     const int sink_size = 0) {
-  constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   const uint32_t btid = blockIdx.x, kv_head_idx = blockIdx.z;
   const uint32_t kv_num_heads = gridDim.z;
   const uint32_t q_num_heads = kv_num_heads * GROUP_SIZE;
@@ -154,6 +152,7 @@ __global__ void multi_query_append_attention_kernel(
       mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
   smem_t qo_smem(smem);
 
+  constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       wid * num_frags_x * 16 + tid % 16, tid / 16);  // 16 * 16
 
@@ -213,35 +212,27 @@ __global__ void multi_query_append_attention_kernel(
   const T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
   const T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
 
-  produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                       NUM_WARPS,
-                       BLOCK_SIZE,
-                       num_frags_y,
-                       num_frags_z,
-                       NUM_WARP_Q>(k_smem,
-                                   &kv_smem_offset_w,
-                                   &cache_k_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
-                                   kv_b_stride,
-                                   kv_idx_base,
-                                   chunk_end);
+  produce_kv_blockwise_c16<SharedMemFillMode::kNoFill,
+                           NUM_WARPS,
+                           BLOCK_SIZE,
+                           HEAD_DIM,
+                           NUM_WARP_Q>(k_smem,
+                                       &kv_smem_offset_w,
+                                       &cache_k_now,
+                                       kv_b_stride,
+                                       kv_idx_base,
+                                       chunk_end);
   commit_group();
-  produce_kv_blockwise<SharedMemFillMode::kFillZero,
-                       NUM_WARPS,
-                       BLOCK_SIZE,
-                       num_frags_y,
-                       num_frags_z,
-                       NUM_WARP_Q>(v_smem,
-                                   &kv_smem_offset_w,
-                                   &cache_v_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
-                                   kv_b_stride,
-                                   kv_idx_base,
-                                   chunk_end);
+  produce_kv_blockwise_c16<SharedMemFillMode::kFillZero,
+                           NUM_WARPS,
+                           BLOCK_SIZE,
+                           HEAD_DIM,
+                           NUM_WARP_Q>(v_smem,
+                                       &kv_smem_offset_w,
+                                       &cache_v_now,
+                                       kv_b_stride,
+                                       kv_idx_base,
+                                       chunk_end);
   commit_group();
 #pragma unroll 1
   for (uint32_t iter = 0; iter < num_iterations; ++iter) {
@@ -249,7 +240,7 @@ __global__ void multi_query_append_attention_kernel(
     __syncthreads();
 
     // s = qk
-    compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
+    compute_qk<num_frags_x, HEAD_DIM, num_frags_z, T>(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration || sliding_window > 0) {
@@ -278,20 +269,16 @@ __global__ void multi_query_append_attention_kernel(
       block_id = 0;
     }
     cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-    produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                         NUM_WARPS,
-                         BLOCK_SIZE,
-                         num_frags_y,
-                         num_frags_z,
-                         NUM_WARP_Q>(k_smem,
-                                     &kv_smem_offset_w,
-                                     &cache_k_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
-                                     kv_b_stride,
-                                     kv_idx_base,
-                                     chunk_end);
+    produce_kv_blockwise_c16<SharedMemFillMode::kNoFill,
+                             NUM_WARPS,
+                             BLOCK_SIZE,
+                             HEAD_DIM,
+                             NUM_WARP_Q>(k_smem,
+                                         &kv_smem_offset_w,
+                                         &cache_k_now,
+                                         kv_b_stride,
+                                         kv_idx_base,
+                                         chunk_end);
     commit_group();
     wait_group<1>();
     __syncthreads();
@@ -302,20 +289,16 @@ __global__ void multi_query_append_attention_kernel(
 
     __syncthreads();
     cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
-    produce_kv_blockwise<SharedMemFillMode::kFillZero,
-                         NUM_WARPS,
-                         BLOCK_SIZE,
-                         num_frags_y,
-                         num_frags_z,
-                         NUM_WARP_Q>(v_smem,
-                                     &kv_smem_offset_w,
-                                     &cache_v_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
-                                     kv_b_stride,
-                                     kv_idx_base,
-                                     chunk_end);
+    produce_kv_blockwise_c16<SharedMemFillMode::kFillZero,
+                             NUM_WARPS,
+                             BLOCK_SIZE,
+                             HEAD_DIM,
+                             NUM_WARP_Q>(v_smem,
+                                         &kv_smem_offset_w,
+                                         &cache_v_now,
+                                         kv_b_stride,
+                                         kv_idx_base,
+                                         chunk_end);
     commit_group();
   }
   wait_group<0>();
@@ -442,7 +425,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
     const bool *__restrict__ attn_mask,  // [bsz, max_q, max_q] for tree-mask
-    const int max_seq_len,
     const int max_block_num_per_seq,
     const float scale,
     const float quant_max_bound,
@@ -459,7 +441,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const uint32_t attn_mask_len = -1,
     const int sliding_window = 0,
     const int sink_size = 0) {
-  constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   static_assert(NUM_WARP_Q == 1, "NUM_WARP_Q must be 1");
   static_assert(NUM_WARP_KV == 4, "NUM_WARP_KV must be 4");
   const uint32_t btid = blockIdx.x, kv_head_idx = blockIdx.z;
@@ -528,6 +509,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
       mask_offset ? mask_offset + q_start_seq_id * 2 : nullptr;
   smem_t qo_smem(smem);
 
+  constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       tid % 16, tid / 16);  // 16 * 16
 
@@ -535,21 +517,18 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   cudaGridDependencySynchronize();
 #endif
 
-  load_q_global_smem_multi_warps<GROUP_SIZE,
-                                 num_frags_x,
-                                 num_frags_y,
-                                 HEAD_DIM,
-                                 T>(q_base_ptr,
-                                    &qo_smem,
-                                    q_base_seq_id_this_block,
-                                    q_len,
-                                    q_ori_n_stride,
-                                    HEAD_DIM);
+  load_q_global_smem_multi_warps<GROUP_SIZE, num_frags_x, HEAD_DIM, T>(
+      q_base_ptr,
+      &qo_smem,
+      q_base_seq_id_this_block,
+      q_len,
+      q_ori_n_stride,
+      HEAD_DIM);
   commit_group();
   wait_group<0>();
   __syncthreads();
 
-  q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, num_frags_y, T>(
+  q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, HEAD_DIM, T>(
       &qo_smem, scale);
 
   static_assert(num_rows_per_block == num_frags_x * 16);
@@ -589,36 +568,28 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   T *cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
   T *cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
 
-  produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                       NUM_WARPS,
-                       BLOCK_SIZE,
-                       num_frags_y,
-                       num_frags_z,
-                       NUM_WARP_Q>(k_smem,
-                                   &kv_smem_offset_w,
-                                   &cache_k_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
-                                   kv_b_stride,
-                                   kv_idx_base,
-                                   chunk_end);
+  produce_kv_blockwise_c16<SharedMemFillMode::kNoFill,
+                           NUM_WARPS,
+                           BLOCK_SIZE,
+                           HEAD_DIM,
+                           NUM_WARP_Q>(k_smem,
+                                       &kv_smem_offset_w,
+                                       &cache_k_now,
+                                       kv_b_stride,
+                                       kv_idx_base,
+                                       chunk_end);
   commit_group();
 
-  produce_kv_blockwise<SharedMemFillMode::kFillZero,
-                       NUM_WARPS,
-                       BLOCK_SIZE,
-                       num_frags_y,
-                       num_frags_z,
-                       NUM_WARP_Q>(v_smem,
-                                   &kv_smem_offset_w,
-                                   &cache_v_now,
-                                   kv_head_idx,
-                                   kv_n_stride,
-                                   kv_h_stride,
-                                   kv_b_stride,
-                                   kv_idx_base,
-                                   chunk_end);
+  produce_kv_blockwise_c16<SharedMemFillMode::kFillZero,
+                           NUM_WARPS,
+                           BLOCK_SIZE,
+                           HEAD_DIM,
+                           NUM_WARP_Q>(v_smem,
+                                       &kv_smem_offset_w,
+                                       &cache_v_now,
+                                       kv_b_stride,
+                                       kv_idx_base,
+                                       chunk_end);
   commit_group();
 
 #pragma unroll 1
@@ -627,7 +598,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     __syncthreads();
 
     // s = qk
-    compute_qk<num_frags_x, num_frags_y, num_frags_z, T>(
+    compute_qk<num_frags_x, HEAD_DIM, num_frags_z, T>(
         &qo_smem, &q_smem_offset_r, &k_smem, &k_smem_offset_r, s_frag);
     // mask according to kv_idx and q_idx
     if (iter >= mask_check_iteration || sliding_window > 0) {
@@ -657,20 +628,16 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
       block_id = 0;
     }
     cache_k_now = cache_k + block_id * kv_n_stride + const_offset;
-    produce_kv_blockwise<SharedMemFillMode::kNoFill,
-                         NUM_WARPS,
-                         BLOCK_SIZE,
-                         num_frags_y,
-                         num_frags_z,
-                         NUM_WARP_Q>(k_smem,
-                                     &kv_smem_offset_w,
-                                     &cache_k_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
-                                     kv_b_stride,
-                                     kv_idx_base,
-                                     chunk_end);
+    produce_kv_blockwise_c16<SharedMemFillMode::kNoFill,
+                             NUM_WARPS,
+                             BLOCK_SIZE,
+                             HEAD_DIM,
+                             NUM_WARP_Q>(k_smem,
+                                         &kv_smem_offset_w,
+                                         &cache_k_now,
+                                         kv_b_stride,
+                                         kv_idx_base,
+                                         chunk_end);
     commit_group();
     wait_group<1>();
     __syncthreads();
@@ -681,20 +648,16 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     __syncthreads();
 
     cache_v_now = cache_v + block_id * kv_n_stride + const_offset;
-    produce_kv_blockwise<SharedMemFillMode::kFillZero,
-                         NUM_WARPS,
-                         BLOCK_SIZE,
-                         num_frags_y,
-                         num_frags_z,
-                         NUM_WARP_Q>(v_smem,
-                                     &kv_smem_offset_w,
-                                     &cache_v_now,
-                                     kv_head_idx,
-                                     kv_n_stride,
-                                     kv_h_stride,
-                                     kv_b_stride,
-                                     kv_idx_base,
-                                     chunk_end);
+    produce_kv_blockwise_c16<SharedMemFillMode::kFillZero,
+                             NUM_WARPS,
+                             BLOCK_SIZE,
+                             HEAD_DIM,
+                             NUM_WARP_Q>(v_smem,
+                                         &kv_smem_offset_w,
+                                         &cache_v_now,
+                                         kv_b_stride,
+                                         kv_idx_base,
+                                         chunk_end);
     commit_group();
   }
   wait_group<0>();
@@ -947,7 +910,6 @@ void MultiQueryAppendAttention(
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           meta_data.mask_offset,
-          max_seq_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1015,7 +977,6 @@ void MultiQueryAppendAttention(
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           meta_data.mask_offset,
-          max_seq_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1071,7 +1032,6 @@ void MultiQueryAppendAttention(
           quant_max_bound,
           quant_min_bound,
           in_scale,
-          max_seq_len,
           num_chunks,
           num_heads,
           chunk_size,
@@ -1176,7 +1136,6 @@ void MultiQueryAppendAttention(
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
-          max_seq_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1234,7 +1193,6 @@ void MultiQueryAppendAttention(
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
-          max_seq_len,
           max_block_num_per_seq,
           scale,
           quant_max_bound,
@@ -1290,11 +1248,9 @@ void MultiQueryAppendAttention(
             quant_max_bound,
             quant_min_bound,
             in_scale,
-            max_seq_len,
             num_chunks,
             num_heads,
-            chunk_size,
-            HEAD_DIM);
+            chunk_size);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1334,7 +1290,6 @@ void MultiQueryAppendAttention(
             quant_max_bound,
             quant_min_bound,
             in_scale,
-            max_seq_len,
             num_chunks,
             num_heads,
             chunk_size,

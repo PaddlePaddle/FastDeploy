@@ -52,7 +52,6 @@ __global__ void multi_query_append_attention_c8_kernel(
     const int *__restrict__ cu_seqlens_q,
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
-    const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
     const float scale,
@@ -587,7 +586,6 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
     const int *__restrict__ block_table,  // [bsz, block_num_per_seq]
     const int *__restrict__ mask_offset,
     const bool *__restrict__ attn_mask,  // [bsz, max_q, max_q] for tree-mask
-    const int max_seq_len,
     const int max_dec_len,
     const int max_block_num_per_seq,
     const float scale,
@@ -737,21 +735,18 @@ __global__ void multi_query_append_attention_c8_warp1_4_kernel(
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       tid % 16, tid / 16);  // 16 * 16
-  load_q_global_smem_multi_warps<GROUP_SIZE,
-                                 num_frags_x,
-                                 num_frags_y,
-                                 HEAD_DIM,
-                                 T>(q_base_ptr,
-                                    &qo_smem,
-                                    q_base_seq_id_this_block,
-                                    q_end,
-                                    q_ori_n_stride,
-                                    HEAD_DIM);
+  load_q_global_smem_multi_warps<GROUP_SIZE, num_frags_x, HEAD_DIM, T>(
+      q_base_ptr,
+      &qo_smem,
+      q_base_seq_id_this_block,
+      q_end,
+      q_ori_n_stride,
+      HEAD_DIM);
   commit_group();
   wait_group<0>();
   __syncthreads();
 
-  q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, num_frags_y, T>(
+  q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, HEAD_DIM, T>(
       &qo_smem, scale);
 
   smem_t k_smem(smem + num_frags_x * 16 * HEAD_DIM * sizeof(T)),
@@ -1294,7 +1289,6 @@ void MultiQueryAppendC8Attention(
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           meta_data.mask_offset,
-          max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
           scale,
@@ -1363,7 +1357,6 @@ void MultiQueryAppendC8Attention(
           cu_seqlens_q.data<int>(),
           block_table.data<int>(),
           meta_data.mask_offset,
-          max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
           scale,
@@ -1418,7 +1411,6 @@ void MultiQueryAppendC8Attention(
           quant_max_bound,
           quant_min_bound,
           in_scale,
-          max_seq_len,
           num_chunks,
           num_heads,
           chunk_size,
@@ -1568,7 +1560,6 @@ void MultiQueryAppendC8Attention(
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
-          max_seq_len,
           max_dec_len,
           max_block_num_per_seq,
           scale,
@@ -1654,7 +1645,7 @@ void MultiQueryAppendC8Attention(
           meta_data.mask_offset,
           attn_mask ? const_cast<bool *>(attn_mask.get().data<bool>())
                     : nullptr,
-          max_seq_len,
+
           max_dec_len,
           max_block_num_per_seq,
           scale,
@@ -1710,11 +1701,9 @@ void MultiQueryAppendC8Attention(
             quant_max_bound,
             quant_min_bound,
             in_scale,
-            max_seq_len,
             num_chunks,
             num_heads,
-            chunk_size,
-            HEAD_DIM);
+            chunk_size);
       } else {
         constexpr int blockx = HEAD_DIM / vec_size;
         constexpr int blocky = (128 + blockx - 1) / blockx;
@@ -1753,7 +1742,6 @@ void MultiQueryAppendC8Attention(
             quant_max_bound,
             quant_min_bound,
             in_scale,
-            max_seq_len,
             num_chunks,
             num_heads,
             chunk_size,
