@@ -545,6 +545,10 @@ std::vector<paddle::Tensor> AppendAttention(
   meta_data.block_size = key_cache.dims()[2];
   meta_data.batch_size = seq_lens_this_time.dims()[0];
 
+  PADDLE_ENFORCE(
+      max_input_length == meta_data.block_size * meta_data.max_blocks_per_seq,
+      "Unmatched shape");
+
   // template dtype generation
   phi::DataType dtype_id;
   switch (qkv.dtype()) {
