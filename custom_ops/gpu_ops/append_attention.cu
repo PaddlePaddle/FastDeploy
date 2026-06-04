@@ -532,10 +532,14 @@ std::vector<paddle::Tensor> AppendAttention(
     meta_data.head_dims *= 2;
   }
 
-  meta_data.q_num_heads =
-      (qkv_dims[qkv_dims.size() - 1] -
-       meta_data.kv_num_heads * (meta_data.head_dims + meta_data.head_dims_v)) /
-      meta_data.head_dims;
+  auto q_size =
+      qkv_dims[qkv_dims.size() - 1] -
+      meta_data.kv_num_heads * (meta_data.head_dims + meta_data.head_dims_v);
+
+  PADDLE_ENFORCE(q_size % meta_data.head_dims == 0, "Unmatched shape");
+  PADDLE_ENFORCE(q_size > 0, "Unmatched shape");
+
+  meta_data.q_num_heads = q_size / meta_data.head_dims;
 
   meta_data.max_blocks_per_seq = block_tables.dims()[1];
   meta_data.block_size = key_cache.dims()[2];
