@@ -68,7 +68,7 @@ class XPUMoEMethod(MoEMethodBase):
 
     def _set_xpu_moe_quant_type(self):
         """
-        XPU_MOE_FFN_QUANT_TYPE_MAP options:
+        FD_XPU_MOE_FFN_QUANT_TYPE_MAP options:
         - defalut:
           - w16a16 -> w_bfloat16_a_bfloat16
           - weight_only_int8 -> w_channelwise_int8_a_tokenwise_float16
@@ -86,22 +86,28 @@ class XPUMoEMethod(MoEMethodBase):
         - TODO:
           - w_groupwise_int4_a_expertwise_int8
           - w_groupwise_int4_a_tokenwise_int8
-        for example: XPU_MOE_FFN_QUANT_TYPE_MAP="w_channelwise_int8_a_tokenwise_float16:3->5,7->9;w_channelwise_int8_a_tokenwise_int8:6,10->20"
+        A quant_type_map entry without ":" sets a global default for all layers
+        and should be placed first; subsequent entries with ranges may override it.
+        - example1: FD_XPU_MOE_FFN_QUANT_TYPE_MAP="w_channelwise_int8_a_tokenwise_int8"
+        - example2: FD_XPU_MOE_FFN_QUANT_TYPE_MAP="w_channelwise_int8_a_tokenwise_float16:3->5,7->9;w_channelwise_int8_a_tokenwise_int8:6,10->20"
         """
         if self.layer_idx < 0:
             return
         xpu_moe_ffn_quant_type_map = envs.FD_XPU_MOE_FFN_QUANT_TYPE_MAP
         self.xpu_moe_quant_type = "default"
         for quant_type_map in xpu_moe_ffn_quant_type_map.split(";"):
-            quant_type_info = quant_type_map.split(":")
-            if len(quant_type_info) != 2:
+            if not quant_type_map:
                 continue
-            for ids_info in quant_type_info[1].split(","):
-                ids = ids_info.split("->")
-                id_min = int(ids[0])
-                id_max = int(ids[-1])
-                if id_min <= self.layer_idx <= id_max:
-                    self.xpu_moe_quant_type = quant_type_info[0]
+            quant_type_info = quant_type_map.split(":")
+            if len(quant_type_info) == 1:
+                self.xpu_moe_quant_type = quant_type_info[0]
+            else:
+                for ids_info in quant_type_info[1].split(","):
+                    ids = ids_info.split("->")
+                    id_min = int(ids[0])
+                    id_max = int(ids[-1])
+                    if id_min <= self.layer_idx <= id_max:
+                        self.xpu_moe_quant_type = quant_type_info[0]
 
         if self.xpu_moe_quant_type == "default":
             default_quant_type_map = {
