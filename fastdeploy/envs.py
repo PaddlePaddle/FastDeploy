@@ -297,6 +297,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_FP8_QUANT_WITH_POW2SCALE": lambda: bool(int(os.getenv("FD_FP8_QUANT_WITH_POW2SCALE", "0"))),
     # Whether to enable top_p=1.0 optimization.
     "FD_ENABLE_TOP_P_ONE_OPT": lambda: bool(int(os.getenv("FD_ENABLE_TOP_P_ONE_OPT", "1"))),
+    # Timeout for request output queue get operation in seconds
+    "FD_REQUEST_WAIT_TIMEOUT": lambda: int(os.getenv("FD_REQUEST_WAIT_TIMEOUT", "60")),
 }
 
 
