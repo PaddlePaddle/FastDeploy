@@ -1004,7 +1004,7 @@ class ResourceManagerV1(ResourceManager):
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
                     if self.config.scheduler_config.splitwise_role == "prefill":
                         # for prefill instance, do not set threshold for running requests
-                        can_schedule_block_num_threshold = 0
+                        can_schedule_block_num_threshold = num_new_block
                     else:
                         can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
                             num_new_block
