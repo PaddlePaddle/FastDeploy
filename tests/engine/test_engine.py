@@ -42,6 +42,7 @@ def _make_cfg(**ov):
     pc.enable_flashinfer_allreduce_fusion = False
     sc = ns(max_num_seqs=256, max_num_batched_tokens=4096, splitwise_role="mixed", name="local")
     sc.enable_overlap_schedule = False
+    sc.enable_moe_scores_elementwise_fuse = False
     cc = ns(num_gpu_blocks_override=None, gpu_memory_utilization=0.9, block_size=16, enc_dec_block_num=0)
     cc.enable_prefix_caching = cc.enable_chunked_prefill = False
     cc.kv_cache_ratio, cc.kvcache_storage_backend, cc.num_cpu_blocks, cc.max_encoder_cache = 1.0, None, 0, 0
@@ -55,7 +56,17 @@ def _make_cfg(**ov):
     )
     soc = ns(guided_decoding_backend=None, logits_processors=None, reasoning_parser="none")
     soc.disable_any_whitespace = False
-    cfg = ns(model_config=mc, parallel_config=pc, scheduler_config=sc, cache_config=cc, load_config=lc)
+    slc = ns(
+        max_completion_tokens=None, reasoning_max_tokens=None, response_max_tokens=None, min_completion_tokens=None
+    )
+    cfg = ns(
+        model_config=mc,
+        parallel_config=pc,
+        scheduler_config=sc,
+        cache_config=cc,
+        load_config=lc,
+        serving_limits_config=slc,
+    )
     cfg.speculative_config = ns(model_type="main", to_json_string=_j)
     cfg.graph_opt_config = cfg.early_stop_config = cfg.eplb_config = ns(to_json_string=_j)
     cfg.routing_replay_config = cfg.plas_attention_config = ns(to_json_string=_j)
@@ -483,7 +494,9 @@ class TestLLMEngineStopProfile(unittest.TestCase):
         eng.worker_proc = Mock(poll=lambda: 1)
 
         with tempfile.TemporaryDirectory() as temp_dir:
-            worker_log = os.path.join(temp_dir, "workerlog.0")
+            paddle_log_dir = os.path.join(temp_dir, "paddle")
+            os.makedirs(paddle_log_dir)
+            worker_log = os.path.join(paddle_log_dir, "workerlog.0")
             with open(worker_log, "w", encoding="utf-8") as fp:
                 fp.write(
                     "Traceback (most recent call last):\n"

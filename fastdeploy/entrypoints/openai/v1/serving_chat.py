@@ -51,6 +51,7 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.utils import make_choice_id
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -189,7 +190,7 @@ class OpenAIServingChat(OpenAiServingBase):
     async def _preprocess(self, ctx: ServeContext[ChatCompletionRequest]) -> None:
         request = ctx.request
         request_id = ctx.request_id
-        current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
+        current_req_dict = request.to_dict_for_infer(make_choice_id(request_id, 0))
         current_req_dict["kwargs"] = {}
         current_req_dict["kwargs"]["enable_thinking"] = self._get_thinking_status(request)
         if "chat_template" not in current_req_dict:
@@ -300,8 +301,8 @@ class OpenAIServingChat(OpenAiServingBase):
 
         if request_output.finished:
             if request_output.metrics and request_output.metrics.request_start_time:
-                main_process_metrics.e2e_request_latency.observe(
-                    time.time() - request_output.metrics.request_start_time
+                main_process_metrics.obs_value(
+                    "e2e_request_latency", time.time() - request_output.metrics.request_start_time
                 )
             max_tokens = request.max_completion_tokens or request.max_tokens
             choice_completion_tokens = response_ctx.choice_completion_tokens_dict[output.index]
@@ -392,7 +393,9 @@ class OpenAIServingChat(OpenAiServingBase):
         message.reasoning_content = output.reasoning_content
         message.tool_calls = request_output.accumulate_tool_calls if request_output.accumulate_tool_calls else None
         if output is not None and request_output.metrics and request_output.metrics.request_start_time:
-            main_process_metrics.e2e_request_latency.observe(time.time() - request_output.metrics.request_start_time)
+            main_process_metrics.obs_value(
+                "e2e_request_latency", time.time() - request_output.metrics.request_start_time
+            )
 
         if request.return_token_ids:
             message.prompt_token_ids = request_output.prompt_token_ids

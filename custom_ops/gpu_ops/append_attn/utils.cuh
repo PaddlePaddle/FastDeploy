@@ -31,7 +31,7 @@ struct AppendAttnMetaData {
 };
 
 __forceinline__ __host__ __device__ int div_up(int a, int b) {
-  return (a + b - 1) / b;
+  return a / b + (a % b != 0);
 }
 
 enum PosEncMode { kNonePos, kRoPE, kAliBi };
@@ -444,6 +444,9 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
     __VA_ARGS__                                              \
   } else if (group_size == 16) {                             \
     constexpr size_t GROUP_SIZE = 16;                        \
+    __VA_ARGS__                                              \
+  } else if (group_size == 24) {                             \
+    constexpr size_t GROUP_SIZE = 24;                        \
     __VA_ARGS__                                              \
   } else {                                                   \
     PD_THROW("not support the group_size", group_size);      \

@@ -496,13 +496,8 @@ async def abort_requests(request: Request):
     if not abort_all and not req_ids:
         return JSONResponse(status_code=400, content={"error": "must provide abort_all=true or req_ids"})
 
-    control_request = ControlRequest(
-        request_id=f"control-{uuid.uuid4()}",
-        method="abort_requests",
-        args={"abort_all": abort_all, "req_ids": req_ids or []},
-    )
-    control_response = await app.state.engine_client.run_control_method(control_request)
-    return control_response.to_api_json_response()
+    await app.state.engine_client.abort_reqs(req_ids=req_ids or [], abort_all=abort_all)
+    return Response(status_code=200)
 
 
 def wrap_streaming_generator(original_generator: AsyncGenerator):
@@ -555,7 +550,7 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
     Create a chat completion for the provided prompt and parameters.
     """
     log_request(RequestLogLevel.FULL, message="Chat Received request: {request}", request=request.model_dump_json())
-    if envs.TRACES_ENABLE:
+    if envs.FD_TRACE in ("otel", "all"):
         if req.headers:
             headers = dict(req.headers)
             trace_context = extract(headers)
@@ -598,7 +593,7 @@ async def create_completion(request: CompletionRequest, req: Request):
     log_request(
         RequestLogLevel.FULL, message="Completion Received request: {request}", request=request.model_dump_json()
     )
-    if envs.TRACES_ENABLE:
+    if envs.FD_TRACE in ("otel", "all"):
         if req.headers:
             headers = dict(req.headers)
             trace_context = extract(headers)

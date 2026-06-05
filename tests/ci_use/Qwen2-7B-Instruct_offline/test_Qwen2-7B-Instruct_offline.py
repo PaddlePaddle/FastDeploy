@@ -13,9 +13,7 @@
 # limitations under the License.
 
 import os
-import signal
-import socket
-import subprocess
+import sys
 import time
 import traceback
 
@@ -23,21 +21,17 @@ import pytest
 
 from fastdeploy import LLM, SamplingParams
 
-FD_ENGINE_QUEUE_PORT = int(os.getenv("FD_ENGINE_QUEUE_PORT", 8313))
-FD_CACHE_QUEUE_PORT = int(os.getenv("FD_CACHE_QUEUE_PORT", 8333))
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
+sys.path.insert(0, project_root)
+from e2e.utils.serving_utils import (
+    FD_API_PORT,
+    FD_CACHE_QUEUE_PORT,
+    FD_ENGINE_QUEUE_PORT,
+    clean_ports,
+)
+
 MAX_WAIT_SECONDS = 60
-
-
-def is_port_open(host: str, port: int, timeout=1.0):
-    """
-    Check if a TCP port is open on the given host.
-    Returns True if connection succeeds, False otherwise.
-    """
-    try:
-        with socket.create_connection((host, port), timeout):
-            return True
-    except Exception:
-        return False
 
 
 def format_chat_prompt(messages):
@@ -74,19 +68,15 @@ def llm(model_path):
     """
     Fixture to initialize the LLM model with a given model path
     """
-    try:
-        output = subprocess.check_output(f"lsof -i:{FD_ENGINE_QUEUE_PORT} -t", shell=True).decode().strip()
-        for pid in output.splitlines():
-            os.kill(int(pid), signal.SIGKILL)
-            print(f"Killed process on port {FD_ENGINE_QUEUE_PORT}, pid={pid}")
-    except subprocess.CalledProcessError:
-        pass
+    # Clean ports before starting the test
+    clean_ports()
 
     try:
         start = time.time()
         llm = LLM(
             model=model_path,
             tensor_parallel_size=1,
+            port=FD_API_PORT,
             engine_worker_queue_port=FD_ENGINE_QUEUE_PORT,
             cache_queue_port=FD_CACHE_QUEUE_PORT,
             max_model_len=32768,
@@ -94,15 +84,7 @@ def llm(model_path):
             logits_processors=["LogitBiasLogitsProcessor"],
         )
 
-        # Wait for the port to be open
-        wait_start = time.time()
-        while not is_port_open("127.0.0.1", FD_ENGINE_QUEUE_PORT):
-            if time.time() - wait_start > MAX_WAIT_SECONDS:
-                pytest.fail(
-                    f"Model engine did not start within {MAX_WAIT_SECONDS} seconds on port {FD_ENGINE_QUEUE_PORT}"
-                )
-            time.sleep(1)
-
+        time.sleep(2)
         print(f"Model loaded successfully from {model_path} in {time.time() - start:.2f}s.")
         yield llm
     except Exception:

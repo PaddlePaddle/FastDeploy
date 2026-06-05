@@ -22,7 +22,7 @@ from fastdeploy.input.utils.common import (
 )
 from fastdeploy.input.utils.video import (
     VideoReaderWrapper,
-    read_video_decord,
+    read_video_paddlecodec,
     sample_frames,
     sample_frames_paddleocr,
     sample_frames_qwen,
@@ -34,7 +34,7 @@ __all__ = [
     "process_stop_token_ids",
     "validate_model_path",
     "VideoReaderWrapper",
-    "read_video_decord",
+    "read_video_paddlecodec",
     "sample_frames",
     "sample_frames_paddleocr",
     "sample_frames_qwen",

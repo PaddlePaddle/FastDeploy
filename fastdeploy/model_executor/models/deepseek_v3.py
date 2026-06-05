@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import math
+import os
 import re
 from typing import Dict
 
@@ -208,6 +209,11 @@ class DeepseekV3MLAAttention(nn.Layer):
         super().__init__()
 
         self.fd_config = fd_config
+        self.layer_id = layer_id
+        self.block_size: int = fd_config.cache_config.block_size
+        self.enable_chunked_prefill = self.fd_config.cache_config.enable_chunked_prefill
+        self.enable_prefix_caching = self.fd_config.cache_config.enable_prefix_caching
+
         self.use_gated_attn = getattr(self.fd_config.model_config, "use_gated_attn", False)
         self.use_bias = getattr(self.fd_config.model_config, "use_bias", False)
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
@@ -339,6 +345,9 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         self.prefix = prefix
 
+        prop = paddle.device.cuda.get_device_properties()
+        self.prop = prop
+
     @staticmethod
     def yarn_get_mscale(scale=1, mscale=1):
         """ """
@@ -351,7 +360,13 @@ class DeepseekV3MLAAttention(nn.Layer):
         forward_meta: ForwardMeta,
         hidden_states: paddle.Tensor,
     ):
-        """ """
+        """MLA attention forward with prefix cache support."""
+
+        from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
+            fused_read_cache_and_interleave,
+        )
+
+        q_total_token_num = hidden_states.shape[0]
 
         attn_out = None
         if self.use_gated_attn:
@@ -377,8 +392,27 @@ class DeepseekV3MLAAttention(nn.Layer):
         need_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
         need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
 
-        if need_do_prefill:  # max_enc_len_this_time
-            key_value = self.kv_b_proj(compressed_kv)
+        if need_do_prefill:
+            # Handle prefix cache: read cached latent from paged cache and interleave
+            # with the new-token latent in a single fused kernel call.
+            full_compressed_kv = compressed_kv
+            full_k_pe = key_pe.squeeze(1)
+            if self.enable_chunked_prefill or self.enable_prefix_caching:
+
+                full_compressed_kv, full_k_pe = fused_read_cache_and_interleave(
+                    forward_meta.caches[self.layer_id],
+                    forward_meta.block_tables,
+                    compressed_kv,
+                    key_pe.squeeze(1),
+                    forward_meta.cu_seqlens_k,
+                    forward_meta.cu_seqlens_q,
+                    self.kv_lora_rank,
+                    self.qk_rope_head_dim,
+                    self.block_size,
+                )
+
+            # Project latent KV to full key and value
+            key_value = self.kv_b_proj(full_compressed_kv)
             key_value.reshape_(
                 [
                     -1,
@@ -389,18 +423,19 @@ class DeepseekV3MLAAttention(nn.Layer):
             key_nope, value = key_value.split([self.qk_nope_head_dim, self.v_head_dim], axis=-1)
 
             query[..., self.qk_nope_head_dim :] = query_pe
-            key = paddle.empty_like(query)
+            key = paddle.empty([full_k_pe.shape[0], self.num_attention_heads_tp, self.qk_head_dim], dtype=query.dtype)
             key[..., : self.qk_nope_head_dim] = key_nope
-            key[..., self.qk_nope_head_dim :] = key_pe
-            value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
+            key[..., self.qk_nope_head_dim :] = full_k_pe.unsqueeze(1)
+            if self.qk_head_dim - self.v_head_dim != 0:
+                value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
 
             fmha_out = self.mla_attn(
                 q=query,
                 k=key,
                 v=value,
                 qkv=None,
-                compressed_kv=compressed_kv,
-                k_pe=key_pe,
+                compressed_kv=compressed_kv,  # Pass original (new only) for cache writing
+                k_pe=key_pe,  # Pass original (new only) for cache writing
                 forward_meta=forward_meta,
             )
 
@@ -410,6 +445,36 @@ class DeepseekV3MLAAttention(nn.Layer):
             attn_out = fmha_out
 
         if need_do_decode:  # max_dec_len_this_time
+
+            if int(os.getenv("USE_FLASH_MLA", "0")) == 0 and self.prop.major == 9:
+                pass
+            else:
+                from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
+                    extract_decoder_token_from_q,
+                    insert_decoder_result_back,
+                )
+
+                decoder_query_nope, cache_seqlens = extract_decoder_token_from_q(
+                    query_nope.reshape([0, -1]),
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                )
+
+                decoder_query_pe, cache_seqlens = extract_decoder_token_from_q(
+                    query_pe.reshape([0, -1]),
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                )
+                assert decoder_query_nope.shape[0] == forward_meta.seq_lens_encoder.shape[0]
+                assert decoder_query_pe.shape[0] == forward_meta.seq_lens_encoder.shape[0]
+
+                forward_meta.cache_seqlens = cache_seqlens
+
+                query_nope = decoder_query_nope.reshape([0, -1, self.qk_nope_head_dim])
+                query_pe = decoder_query_pe.reshape([0, -1, self.qk_rope_head_dim])
+
             q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
 
             q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
@@ -437,6 +502,17 @@ class DeepseekV3MLAAttention(nn.Layer):
                 .transpose([1, 0, 2])
                 .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
             )
+
+            if int(os.getenv("USE_FLASH_MLA", "0")) == 0 and self.prop.major == 9:
+                pass
+            else:
+                fmqa_out = insert_decoder_result_back(
+                    fmqa_out.reshape([0, 1, self.num_attention_heads_tp, self.v_head_dim]),
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    q_total_token_num,
+                )
 
             if need_do_prefill:
                 merge_prefill_decode_output(
@@ -1182,6 +1258,11 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
         for loaded_weight_name, loaded_weight in weights_iterator:
             logger.debug(f"Loading weight: {loaded_weight_name}")
             loaded_weight_name = loaded_weight_name.replace("deepseek_v3", "model")
+
+            # special case!
+            if "correction_bias" in loaded_weight_name:
+                loaded_weight.reshape_([1, loaded_weight.numel().item()])
+
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:
                     continue

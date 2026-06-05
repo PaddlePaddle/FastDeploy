@@ -212,11 +212,11 @@ def test_prefix_cache_text(api_url):
     if os.getenv("BASELINE") == "1":
         baseline_manager.save("base_21b_step3", result)
         baseline_manager.save("base_21b_mtp_metrics_step3", speculate_metrics_2)
-        baseline_manager.save("base_21b_logprobs_step3", logprobs_2)
+        baseline_manager.save("base_21b_logprobs_step3_new", logprobs_2)
 
     baseline_result = baseline_manager.load("base_21b_step3")
     baseline_mtp_metrics = baseline_manager.load("base_21b_mtp_metrics_step3")
-    baseline_logprobs = baseline_manager.load("base_21b_logprobs_step3")
+    baseline_logprobs = baseline_manager.load("base_21b_logprobs_step3_new")
 
     assert logprobs == logprobs_2, (
         "logprobs 前后不一致\n"

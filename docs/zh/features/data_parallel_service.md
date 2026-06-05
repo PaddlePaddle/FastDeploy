@@ -44,7 +44,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
 
 ### FastDeploy Router
 
-FastDeploy提供[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/router)（Python版本）来实现请求收发和请求调度。高性能版本Router正在开发中，敬请期待。
+FastDeploy提供Golang版本[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router)实现高性能请求收发和请求调度。Router二进制已随FastDeploy Python包打包，可直接通过Python命令行启动。
 
 使用方式和请求调度流程如下：
 - 启动Router
@@ -55,11 +55,11 @@ FastDeploy提供[Router](https://github.com/PaddlePaddle/FastDeploy/tree/develop
 - Router接收实例的生成结果，返回给用户
 
 上手示例：
-- 启动Router服务，日志信息输出在`log_router/router.log`。`fd-router`的安装方法参考[Router说明文档](../online_serving/router.md)。
-```
+- 启动Router服务，日志信息输出在`log_router/router.log`。更多Router选项参考[Router说明文档](../online_serving/router.md)。
+```bash
 export FD_LOG_DIR="log_router"
-/usr/local/bin/fd-router \
-    --port 30000 \
+python -m fastdeploy.golang_router.launch \
+    --port 30000
 ```
 
 - 同样以ERNIE-4.5-300B模型为例，启动DP8、TP1、EP8的服务，通过`--router`指定Router服务：

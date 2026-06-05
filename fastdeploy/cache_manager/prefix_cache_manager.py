@@ -131,11 +131,11 @@ class PrefixCacheManager:
             f"{self.cache_config.bytes_per_token_per_layer / self.config.parallel_config.tensor_parallel_size}"
         )
 
-        main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
-        main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.available_gpu_resource.set(1.0)
+        main_process_metrics.set_value("max_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("max_cpu_block_num", self.num_cpu_blocks)
+        main_process_metrics.set_value("available_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("free_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("available_gpu_resource", 1.0)
 
     def _get_kv_cache_shape(self, max_block_num):
         from fastdeploy.model_executor.layers.attention import get_attention_backend
@@ -296,6 +296,8 @@ class PrefixCacheManager:
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
             storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
+            if not self.enable_splitwise:
+                storage_arg_str += " --create_cache_tensor"
         else:
             storage_arg_str = " "
 
@@ -306,6 +308,7 @@ class PrefixCacheManager:
                     + visible_devices
                     + " NCCL_MAX_NCHANNELS=1 NCCL_BUFFSIZE=0"
                     + f" FD_ENABLE_SWAP_SPACE_CLEARING={envs.FD_ENABLE_SWAP_SPACE_CLEARING}"
+                    + f" FD_AS_ONLY_FLUSH={int(envs.FD_AS_ONLY_FLUSH)}"
                     + f" {sys.executable} {py_path}"
                     + f" --device_id {int(device_ids[i])}"
                     + f" --rank {i}"
@@ -325,7 +328,6 @@ class PrefixCacheManager:
                     + f" --rdma_port {cache_config.local_rdma_comm_ports[i] if cache_config.local_rdma_comm_ports is not None else '0'}"
                     + f" --speculative_config '{self.speculative_config.to_json_string()}'"
                     + f" --default_dtype '{self.config.model_config.dtype}'"
-                    + (" --create_cache_tensor" if not self.enable_splitwise else "")
                     + storage_arg_str
                     + f" --write_policy {cache_config.write_policy}"
                     + f" --max_model_len {self.config.model_config.max_model_len}"
@@ -460,11 +462,11 @@ class PrefixCacheManager:
         heapq.heapify(self.gpu_free_block_list)
         self.node_id_pool = list(range(self.num_gpu_blocks + self.num_cpu_blocks))
 
-        main_process_metrics.max_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.max_cpu_block_num.set(self.num_cpu_blocks)
-        main_process_metrics.available_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.free_gpu_block_num.set(self.num_gpu_blocks)
-        main_process_metrics.available_gpu_resource.set(1.0)
+        main_process_metrics.set_value("max_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("max_cpu_block_num", self.num_cpu_blocks)
+        main_process_metrics.set_value("available_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("free_gpu_block_num", self.num_gpu_blocks)
+        main_process_metrics.set_value("available_gpu_resource", 1.0)
 
     def can_allocate_gpu_blocks(self, num_blocks: int, try_free_gpu_blocks: bool = True):
         """
@@ -492,8 +494,8 @@ class PrefixCacheManager:
         logger.info(
             f"req_id:{req_id} allocate_gpu_blocks: {allocated_block_ids}, len(self.gpu_free_block_list) {len(self.gpu_free_block_list)}"
         )
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
         return allocated_block_ids
 
     def recycle_gpu_blocks(self, gpu_block_ids, req_id=None):
@@ -527,8 +529,8 @@ class PrefixCacheManager:
         else:
             heapq.heappush(self.gpu_free_block_list, gpu_block_ids)
         logger.debug(f"req_id:{req_id} recycle blocks end")
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
 
     def allocate_cpu_blocks(self, num_blocks):
         """
@@ -699,6 +701,8 @@ class PrefixCacheManager:
             req_id = task.request_id
             last_node, num_cached_tokens = self.req_to_radix_tree_info[req_id]
             can_cache_computed_tokens = num_computed_tokens - num_computed_tokens % block_size
+            if can_cache_computed_tokens <= num_cached_tokens:
+                return
             if req_id in self.leaf_req_map[last_node]:  # delete old leaf record, update later
                 self.leaf_req_map[last_node].remove(req_id)
             logger.debug(
@@ -828,7 +832,7 @@ class PrefixCacheManager:
                 storage_match_token_num = 0
                 match_storage_block_ids = []
 
-                if self.kvcache_storage_backend and no_match_token_num >= block_size:
+                if self.kvcache_storage_backend and no_match_token_num >= block_size and not envs.FD_AS_ONLY_FLUSH:
                     if not self.can_allocate_gpu_blocks(num_blocks=no_match_block_num, try_free_gpu_blocks=False):
                         raise Exception(
                             "request_match_blocks: Not enough GPU memory to allocate cache for matched Storage Cache"
@@ -921,7 +925,9 @@ class PrefixCacheManager:
                         f"request_match_blocks: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
-                    logger.error(f"request_match_blocks: request_block_ids: error: {type(e)} {e}")
+                    logger.error(
+                        f"request_match_blocks: request_block_ids: error: {type(e)} {e}, {traceback.format_exc()}"
+                    )
                     raise e
 
     def request_block_ids(self, task, block_size, dec_token_num, *args):
@@ -1005,6 +1011,11 @@ class PrefixCacheManager:
                 # 3. update metrics
                 if matched_block_num > 0:
                     self.metrics.hit_req_count += 1
+                    # Record CACHE_HIT trace event
+                    trace_print(LoggingEventName.CACHE_HIT, req_id, "")
+                else:
+                    # Record CACHE_MISS trace event
+                    trace_print(LoggingEventName.CACHE_MISS, req_id, "")
                 self.metrics.calculate_hit_metrics(
                     req_id,
                     cpu_match_token_num,
@@ -1126,10 +1137,7 @@ class PrefixCacheManager:
         if isinstance(token_ids, np.ndarray):
             token_ids = token_ids.tolist()
 
-        if self.config.cache_config.enable_output_caching:
-            input_token_ids = token_ids + request.output_token_ids
-        else:
-            input_token_ids = token_ids
+        input_token_ids = token_ids + request.output_token_ids
 
         req_id = request.request_id
         keys = []
@@ -1143,6 +1151,7 @@ class PrefixCacheManager:
 
         trace_print(LoggingEventName.WRITE_CACHE_TO_STORAGE_START, request.request_id, getattr(request, "user", ""))
         gpu_block_ids = request.block_tables[: len(keys)]
+        input_token_ids = input_token_ids[: len(keys) * self.config.cache_config.block_size]
         logger.info(f"start write cache back to storage, req_id: {req_id}, block num: {len(keys)}")
         write_storage_task = WriteStorageTask(
             task_id=req_id,
@@ -1240,14 +1249,15 @@ class PrefixCacheManager:
         if self.kvcache_storage_backend is None:
             return
 
-        if len(task.keys) != len(task.gpu_block_ids):
+        if not envs.FD_AS_ONLY_FLUSH and len(task.keys) != len(task.gpu_block_ids):
             err_msg = (
                 f"write_back_storage error: hash_keys({len(task.keys)}) != gpu_block_ids({len(task.gpu_block_ids)})"
             )
             logger.error(err_msg)
             raise ValueError(err_msg)
 
-        self.task_write_back_event[task.task_id] = Event()
+        if is_sync:
+            self.task_write_back_event[task.task_id] = Event()
         self.cache_task_queue.put_transfer_task((CacheStatus.GPU2STORAGE, task))
         if is_sync:
             self.wait_write_storage_task(task.task_id)
@@ -1325,7 +1335,7 @@ class PrefixCacheManager:
                         f"free_nodes_directly: an error occurred while prefix tree status is not normal, ignore it. {e}"
                     )
                 else:
-                    logger.error(f"free_nodes_directly: error: {type(e)} {e}")
+                    logger.error(f"free_nodes_directly: error: {type(e)} {e}, {traceback.format_exc()}")
                     raise e
 
     def _handle_free_gpu_node_without_cpu(self, node):
@@ -1434,6 +1444,7 @@ class PrefixCacheManager:
 
                 hash_value_swap_node_ids_map = defaultdict(list)
                 hash_value_gpu_block_ids_map = defaultdict(list)
+                hash_value_flush_info = {}  # {input_hash_value: (token_ids, min_depth)}
                 total_gpu_free_count = 0
 
                 while True:
@@ -1446,6 +1457,10 @@ class PrefixCacheManager:
                     self.gpu_lru_leaf_set.remove(node)
                     if self.cache_config.num_cpu_blocks < need_block_num:
                         if node.shared_count == 0 and node.is_gpu_leaf_node:  # 直接回收
+                            if envs.FD_AS_ONLY_FLUSH and self.kvcache_storage_backend == "attention_store":
+                                key = node.input_hash_value
+                                if key not in hash_value_flush_info or node.depth < hash_value_flush_info[key][1]:
+                                    hash_value_flush_info[key] = (node.input_ids, node.depth)
                             self._handle_free_gpu_node_without_cpu(node)
                             total_gpu_free_count += 1
                             cur_node = node
@@ -1494,6 +1509,22 @@ class PrefixCacheManager:
                 logger.info(
                     f"free_block_ids_async: need_block_num {need_block_num}, free_block_num {total_gpu_free_count}."
                 )
+
+                if (
+                    envs.FD_AS_ONLY_FLUSH
+                    and self.kvcache_storage_backend == "attention_store"
+                    and hash_value_flush_info
+                ):
+                    for input_hash_value, (token_ids, min_depth) in hash_value_flush_info.items():
+                        flush_task = WriteStorageTask(
+                            task_id=str(uuid.uuid4()),
+                            keys=[input_hash_value],
+                            token_ids=token_ids,
+                            gpu_block_ids=[],
+                            flush_cache_exists=False,
+                            start_write_block_idx=min_depth - 1,
+                        )
+                        self.issue_write_back_storage_task(flush_task, is_sync=False)
 
                 # swap cache to cpu
                 if hash_value_gpu_block_ids_map:
@@ -2263,9 +2294,9 @@ class PrefixCacheManager:
 
         # reset metrics
         self.metrics.reset_metrics()
-        main_process_metrics.free_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_block_num.set(len(self.gpu_free_block_list))
-        main_process_metrics.available_gpu_resource.set(self.available_gpu_resource)
+        main_process_metrics.set_value("free_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_block_num", len(self.gpu_free_block_list))
+        main_process_metrics.set_value("available_gpu_resource", self.available_gpu_resource)
 
     def clear_prefix_cache(self):
         """

@@ -34,8 +34,8 @@ if ! [[ $version == *"$VERSION"* ]]; then
     pip install clang-format==13.0.0
 fi
 
-# Exclude any files under the 'test/ce/server/' directory from code style checks.
-diff_files=$(git diff --name-only --diff-filter=ACMR ${BRANCH} | grep -v '^tests/ce/server/')
+# Exclude any files under the 'test/ci_validation/server/' directory from code style checks.
+diff_files=$(git diff --name-only --diff-filter=ACMR ${BRANCH} | grep -v '^tests/ci_validation/server/')
 num_diff_files=$(echo "$diff_files" | wc -l)
 echo -e "diff files between pr and ${BRANCH}:\n${diff_files}"
 

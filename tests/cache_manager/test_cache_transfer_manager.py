@@ -909,7 +909,17 @@ class TestCacheTransferManager(unittest.TestCase):
             "key_caches_0_rank0.device0": paddle.zeros([1]),
             "value_caches_0_rank0.device0": paddle.zeros([1]),
         }
-        self.manager.storage_backend.write.return_value = 1
+        call_order = []
+
+        def _flush_token_index(*args):
+            call_order.append("flush")
+
+        def _write(*args):
+            call_order.append("write")
+            return 1
+
+        self.manager.storage_backend.flush_token_index.side_effect = _flush_token_index
+        self.manager.storage_backend.write.side_effect = _write
 
         write_count = self.manager._run_write_back_storage(
             "task_write",
@@ -925,7 +935,9 @@ class TestCacheTransferManager(unittest.TestCase):
         )
 
         self.assertEqual(write_count, 1)
+        self.manager.storage_backend.flush_token_index.assert_called_once_with("task_write", [1, 2], 0, False)
         self.manager.storage_backend.write.assert_called_once()
+        self.assertEqual(call_order, ["flush", "write"])
 
     def test_run_write_back_storage_with_scales(self):
         self.manager.storage_backend = MagicMock()
@@ -960,28 +972,6 @@ class TestCacheTransferManager(unittest.TestCase):
 
         self.assertEqual(mock_swap.call_count, 4)
         self.manager.storage_backend.batch_set.assert_called_once()
-
-    def test_write_back_storage_task_flush_error_logs(self):
-        self.manager.cache_task_queue.swap_to_storage_barrier = MagicMock()
-        self.manager.cache_task_queue.put_transfer_done_signal = MagicMock()
-        self.manager.storage_backend = MagicMock()
-        self.manager.storage_backend_type = "attention_store"
-        self.manager.storage_backend.query.return_value = 0
-        self.manager.storage_backend.flush_token_index.side_effect = RuntimeError("flush failed")
-        self.manager._run_write_back_storage = MagicMock(return_value=0)
-        self.manager.rank = 0
-
-        task = WriteStorageTask(
-            task_id="flush_fail",
-            keys=["k1"],
-            token_ids=[1, 2],
-            gpu_block_ids=[0],
-            timeout=0.1,
-        )
-
-        self.manager.write_back_storage_task(task)
-
-        self.manager.storage_backend.flush_token_index.assert_called_once()
 
     def test_read_storage_task_handles_run_error(self):
         self.manager.cache_task_queue.swap_storage_to_gpu_barrier = MagicMock()
@@ -1667,6 +1657,63 @@ class TestCacheTransferManager(unittest.TestCase):
                 cache_transfer_manager.main()
 
         mock_manager.assert_called_once_with(cache_transfer_manager.args)
+
+    def test_check_cache_status_clearing_logs_error_on_exception(self):
+        """Test check_cache_status logs error with traceback when clearing fails."""
+
+        class DummySignal:
+            def __init__(self, value):
+                self.value = [value] if not isinstance(value, list) else value
+
+        args = Args()
+        args.splitwise_role = "mixed"
+        self.manager.num_cpu_blocks = 0
+        self.manager.kv_cache_status_signal = DummySignal(cache_transfer_manager.KVCacheStatus.CLEARING)
+        self.manager.pause = MagicMock()
+        self.manager._clear_gpu_cache = MagicMock(side_effect=RuntimeError("clear gpu failed"))
+
+        def fake_sleep(_):
+            raise StopIteration
+
+        with (
+            patch.object(cache_transfer_manager, "unset_data_ipc", MagicMock()),
+            patch.object(cache_transfer_manager.logger, "error") as mock_error,
+            patch("fastdeploy.cache_manager.cache_transfer_manager.time.sleep", side_effect=fake_sleep),
+        ):
+            with self.assertRaises(StopIteration):
+                self.manager.check_cache_status(args)
+
+        mock_error.assert_called_once()
+        error_msg = mock_error.call_args[0][0]
+        self.assertIn("check_cache_status: failed to clear caches", error_msg)
+
+    def test_check_cache_status_updating_logs_error_on_exception(self):
+        """Test check_cache_status logs error with traceback when restoring fails."""
+
+        class DummySignal:
+            def __init__(self, value):
+                self.value = [value] if not isinstance(value, list) else value
+
+        args = Args()
+        args.splitwise_role = "mixed"
+        self.manager.num_cpu_blocks = 0
+        self.manager.kv_cache_status_signal = DummySignal(cache_transfer_manager.KVCacheStatus.UPDATING)
+        self.manager._init_gpu_cache = MagicMock(side_effect=RuntimeError("init gpu failed"))
+
+        def fake_sleep(_):
+            raise StopIteration
+
+        with (
+            patch.object(cache_transfer_manager, "unset_data_ipc", MagicMock()),
+            patch.object(cache_transfer_manager.logger, "error") as mock_error,
+            patch("fastdeploy.cache_manager.cache_transfer_manager.time.sleep", side_effect=fake_sleep),
+        ):
+            with self.assertRaises(StopIteration):
+                self.manager.check_cache_status(args)
+
+        mock_error.assert_called_once()
+        error_msg = mock_error.call_args[0][0]
+        self.assertIn("check_cache_status: failed to restore caches", error_msg)
 
 
 if __name__ == "__main__":

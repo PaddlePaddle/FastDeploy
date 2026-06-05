@@ -19,6 +19,7 @@ from fastdeploy.model_executor.models.model_base import (
     ModelForCasualLM,
     ModelRegistry,
 )
+from fastdeploy.model_executor.utils import is_paddlefleet_available
 
 from .base import PaddleFormersModelBase
 from .causallm import CausalLMMixin
@@ -38,3 +39,19 @@ class PaddleFormersForCausalLM(CausalLMMixin, PaddleFormersModelBase, ModelForCa
     @classmethod
     def name(cls):
         return "PaddleFormersForCausalLM"
+
+
+if is_paddlefleet_available():
+    from .base_fleet import PaddleFleetModelBase
+
+    __all__ += ["PaddleFleetForCausalLM"]
+
+    @ModelRegistry.register_model_class(
+        architecture="PaddleFleetForCausalLM",
+        module_name="paddleformers",
+        category=ModelCategory.TEXT_GENERATION,
+    )
+    class PaddleFleetForCausalLM(PaddleFleetModelBase, ModelForCasualLM):
+        @classmethod
+        def name(cls):
+            return "PaddleFleetForCausalLM"

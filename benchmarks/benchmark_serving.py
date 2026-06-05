@@ -214,24 +214,51 @@ def calculate_metrics(
             # Note: if output_len <= 1, we regard tpot as 0 for goodput
             all_tpots.append(tpot)
             itls += outputs[i].itl
-            # 推理侧ITL
-            s_a = outputs[i].arrival_time[1:]
-            for j in range(len(s_a) - 2):
-                s_itls.append(s_a[j + 1] - s_a[j])
             ttfts.append(outputs[i].ttft)
-            # 推理侧TTFT
-            s_ttfts.append(outputs[i].arrival_time[1])
             res_ttfts.append(outputs[i].res_ttft)
             e2els.append(outputs[i].latency)
-            # 推理侧整句时延
-            s_e2els.append(outputs[i].arrival_time[-1])
-            # 解码速度去掉首token
-            if len(outputs[i].arrival_time) > 2:
-                s_decodes.append(
-                    (outputs[i].output_tokens - 1) / (outputs[i].arrival_time[-1] - outputs[i].arrival_time[1])
-                )
+
+            # arrival_time相关指标
+            if getattr(outputs[i], "has_arrival_time", False) and len(outputs[i].arrival_time) > 1:
+                # 推理侧ITL
+                s_a = outputs[i].arrival_time[1:]
+                for j in range(len(s_a) - 1):
+                    s_itls.append(s_a[j + 1] - s_a[j])
+
+                # 推理侧TTFT
+                s_ttfts.append(outputs[i].arrival_time[1])
+
+                # 推理侧整句时延
+                s_e2els.append(outputs[i].arrival_time[-1])
+
             else:
-                print("len(outputs[i].arrival_time) <= 2")
+                # sglang等不返回arrival_time
+                s_ttfts.append(0)
+                s_e2els.append(0)
+
+            # 解码速度（兼容无arrival_time场景）
+            if getattr(outputs[i], "has_arrival_time", False):
+                # FD有arrival_time场景
+                if len(outputs[i].arrival_time) > 2:
+                    decode_time = outputs[i].arrival_time[-1] - outputs[i].arrival_time[1]
+
+                    if decode_time > 0:
+                        s_decodes.append((outputs[i].output_tokens - 1) / decode_time)
+                    else:
+                        s_decodes.append(0)
+                else:
+                    s_decodes.append(0)
+            else:
+                # sglang等无arrival_time场景fallback
+                if outputs[i].output_tokens > 1:
+                    decode_time = outputs[i].latency - outputs[i].ttft
+
+                    if decode_time > 0:
+                        s_decodes.append((outputs[i].output_tokens - 1) / decode_time)
+                    else:
+                        s_decodes.append(0)
+                else:
+                    s_decodes.append(0)
             completed += 1
         else:
             actual_output_lens.append(0)
@@ -358,6 +385,8 @@ async def benchmark(
         raise ValueError(f"Unknown backend: {backend}")
 
     print("Starting initial single prompt test run...")
+    if not args.stream:
+        print("使用非流式请求")
     test_prompt, test_output_len, test_no, test_json_data = (
         input_requests[0].prompt,
         input_requests[0].expected_output_len,
@@ -391,6 +420,7 @@ async def benchmark(
         json_data=test_json_data,
         tokenizer_model=args.tokenizer_model,
         tokenizer_path=args.tokenizer_path,
+        stream=args.stream,
     )
 
     if not debug:
@@ -501,6 +531,7 @@ async def benchmark(
                 json_data=json_data,
                 tokenizer_model=args.tokenizer_model,
                 tokenizer_path=args.tokenizer_path,
+                stream=args.stream,
             )
             tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
 
@@ -589,6 +620,7 @@ async def benchmark(
                     json_data=json_data,
                     tokenizer_model=args.tokenizer_model,
                     tokenizer_path=args.tokenizer_path,
+                    stream=args.stream,
                 )
 
                 tasks.append(asyncio.create_task(limited_request_func_per_ip(req_input, semaphore, pbar)))
@@ -1205,7 +1237,7 @@ def main(args: argparse.Namespace):
     # 超参由yaml传入
     if args.hyperparameter_path:
         with open(args.hyperparameter_path, "r") as f:
-            hyper_parameters = yaml.safe_load(f)
+            hyper_parameters = yaml.safe_load(f) or {}
     else:
         hyper_parameters = {}
 
@@ -1449,6 +1481,13 @@ if __name__ == "__main__":
         action="store_true",
         help="按多轮对话方式请求",
     )
+    parser.add_argument(
+        "--no-stream",
+        action="store_false",
+        dest="stream",
+        help="关闭流式输出",
+    )
+    parser.set_defaults(stream=True)
     parser.add_argument(
         "--tokenizer-model",
         default="auto",

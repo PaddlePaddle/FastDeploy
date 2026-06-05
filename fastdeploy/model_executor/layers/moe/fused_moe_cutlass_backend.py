@@ -17,6 +17,7 @@
 from typing import Callable
 
 import paddle
+import paddle.nn.functional as F
 from paddle import nn
 from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
@@ -138,6 +139,12 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         gate_out = gate_out.cast("float32")
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+
+        if layer.routed_scaling_factor_learnable:
+            safe_topk_indices = paddle.clip(topk_idx, min=0)
+            gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+            topk_weights = topk_weights * gathered_scales
+
         # 2. EP Dispatch
         dispatch_kwargs = {"expert_alignment": 128} if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE else {}
         (
@@ -178,7 +185,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     )
                 )
 
-                if paddlefleet_ops is not None:
+                if fastdeploy.envs.FD_USE_DEEP_GEMM:
                     out = m_grouped_bf16_gemm_nn_contiguous(
                         permute_input, getattr(layer, self.added_weight_attrs[0]), m_indices
                     )
@@ -194,7 +201,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 else:
                     out = paddle.incubate.nn.functional.swiglu(out)
 
-                if paddlefleet_ops is not None:
+                if fastdeploy.envs.FD_USE_DEEP_GEMM:
                     ffn_out = m_grouped_bf16_gemm_nn_contiguous(
                         out, getattr(layer, self.added_weight_attrs[1]), m_indices
                     )
@@ -289,6 +296,11 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
+        if layer.routed_scaling_factor_learnable:
+            safe_topk_indices = paddle.clip(topk_idx, min=0)
+            gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+            topk_weights = topk_weights * gathered_scales
+
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
 
@@ -346,13 +358,16 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         Paddle Cutlass compute Fused MoE.
         """
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
-
-        if fc1_latent_proj is not None:
-            x = fc1_latent_proj(x)
-
         if fastdeploy.envs.FD_USE_PHI_MOE_PERMUTE and self.moe_quant_type == "w16a16":
             if layer.topk_method == "noaux_tc":
+                use_fused = (
+                    layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+                )
+                if not use_fused:
+                    gate_out = gate_out.cast("float32")
+
+                if fc1_latent_proj is not None:
+                    x = fc1_latent_proj(x)
                 gate_out, topk_weights, topk_idx = get_moe_scores(
                     gate_out,
                     layer.n_group,
@@ -361,8 +376,12 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     layer.routed_scaling_factor,
                     layer.gate_correction_bias,
                     getattr(layer, "renormalize", True),
+                    use_fused_cast=use_fused,
                 )
             else:
+                gate_out = gate_out.cast("float32")
+                if fc1_latent_proj is not None:
+                    x = fc1_latent_proj(x)
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                     gate_out,
                     layer.gate_correction_bias,
@@ -370,6 +389,11 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                     True,  # apply_norm_weight
                     False,
                 )
+            if layer.routed_scaling_factor_learnable:
+                safe_topk_indices = paddle.clip(topk_idx, min=0)
+                gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+                topk_weights = topk_weights * gathered_scales
+
             topk_idx_i32 = topk_idx.astype(paddle.int32)
             override_buffer_size = x.shape[0] * layer.top_k + layer.num_experts * (128 - 1)
             (permute_input, permute_indices_per_token, dst_weights, _scale_out) = (  # zipped_expertwise_rowmap
@@ -415,7 +439,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             return fused_moe_out
 
         if layer.topk_method == "noaux_tc":
-            gate_out, topk_weights, topk_idx = get_moe_scores(
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
+            if fc1_latent_proj is not None:
+                x = fc1_latent_proj(x)
+            gate_out, _, __ = get_moe_scores(
                 gate_out,
                 layer.n_group,
                 layer.topk_group,
@@ -424,6 +455,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
                 topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+                use_fused_cast=use_fused,
             )
 
             (
@@ -447,7 +479,16 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
                 self.moe_quant_type,
                 topk_only_mode=True,
             )
+
+            if layer.routed_scaling_factor_learnable:
+                safe_topk_indices = paddle.clip(topk_idx, min=0)
+                gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+                topk_weights = topk_weights * gathered_scales
+
         else:
+            gate_out = gate_out.cast("float32")
+            if fc1_latent_proj is not None:
+                x = fc1_latent_proj(x)
             (
                 permute_input,
                 token_nums_per_expert,

@@ -68,7 +68,13 @@ export FD_MOE_BACKEND="flashinfer-cutedsl"
 export FD_USE_PFCC_DEEP_EP=1
 export CUDA_VISIBLE_DEVICES=4,5,6,7
 
+开启block_wise_cuda_graph
+export FD_USE_BLOCK_WISE_CUDA_GRAPH=1
+自定义预捕获的token数(可选)
+export FD_BLOCK_WISE_CUDA_GRAPH_SIZES="1,2,4,8,16,32,64,128,256,512,1024,2048,4096"
 
+使用fp4通信量化
+export FD_DISPATCH_USE_FP4=1
 
 python -m fastdeploy.entrypoints.openai.multi_api_server \
        --ports "9811,9812,9813,9814" \
@@ -85,7 +91,7 @@ python -m fastdeploy.entrypoints.openai.multi_api_server \
        --gpu-memory-utilization 0.9 \
        --max-num-batched-tokens 512 \
        --ep-prefill-use-worst-num-tokens \
-       --graph-optimization-config '{"use_cudagraph":false}'
+       --quantization '{"quantization": "mix_quant", "dense_quant_type":"block_wise_fp8", "is_moe_quantized":true,"moe_quant_type":"modelopt_fp4"}' \
 ```
 
 ### 接口访问

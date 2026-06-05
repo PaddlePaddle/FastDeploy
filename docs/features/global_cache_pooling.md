@@ -232,7 +232,7 @@ mooncake_master \
 **Step 2: Start Router**
 
 ```bash
-python -m fastdeploy.router.launch \
+python -m fastdeploy.golang_router.launch \
     --port 52700 \
     --splitwise
 ```

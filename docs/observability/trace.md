@@ -32,8 +32,8 @@ docker compose -f examples/observability/tracing/tracing_compose.yaml up -d
 #### Configure FastDeploy Environment Variables
 
 ```shell
-# Enable tracing
-"TRACES_ENABLE": "true",
+# Enable tracing (off/local/otel/all)
+"FD_TRACE": "otel",
 
 # Service name
 "FD_SERVICE_NAME": "FastDeploy",

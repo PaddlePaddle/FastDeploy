@@ -174,6 +174,12 @@ def get_gencode_flags(archs):
                 "-gencode",
                 f"arch=compute_{arch_code},code=sm_{arch_code}",
             ]
+        elif cc_val == 103:
+            arch_code = "103a"
+            flags += [
+                "-gencode",
+                f"arch=compute_{arch_code},code=sm_{arch_code}",
+            ]
         else:
             flags += ["-gencode", f"arch=compute_{cc_val},code=sm_{cc_val}"]
     return flags
@@ -237,6 +243,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/set_data_ipc.cu",
         "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
+        "gpu_ops/moe/moe_align_kernel.cu",
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/get_output_ep.cc",
         "gpu_ops/speculate_decoding/speculate_get_padding_offset.cu",
@@ -331,6 +338,8 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/noaux_tc_redundant.cu",
+        "gpu_ops/grouped_topk_kernels.cu",
+        "gpu_ops/fused_cast_sigmoid_bias.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
         "gpu_ops/merge_prefill_decode_output.cu",
         "gpu_ops/limit_thinking_content_length.cu",
@@ -476,9 +485,10 @@ elif paddle.is_compiled_with_cuda():
         # of them instead of only the highest one.
         has_sm90 = 90 in sm_versions
         has_sm100 = 100 in sm_versions and nvcc_version >= 12.9
-        has_generic_fp8 = not has_sm90 and not has_sm100  # SM89 or other
+        has_sm103 = 103 in sm_versions and nvcc_version >= 13.0
+        has_generic_fp8 = not has_sm90 and not has_sm100 and not has_sm103  # SM89 or other
 
-        if has_sm90 or has_sm100:
+        if has_sm90 or has_sm100 or has_sm103:
             nvcc_compile_args += [
                 "-O3",
                 "-DNDEBUG",
@@ -501,8 +511,8 @@ elif paddle.is_compiled_with_cuda():
                 "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
             ]
 
-        if has_sm100:
-            print("SM100 (Blackwell): Applying SM100 configurations.")
+        if has_sm100 or has_sm103:
+            print("SM100 / 103 (Blackwell): Applying SM100 / SM103 configurations.")
             # Placeholder for SM100-specific kernel auto-generation scripts
             # These might be needed if Blackwell has new FP8 hardware features
             # not covered by existing generic CUTLASS templates or SM90 scripts.
@@ -544,6 +554,15 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
 
     if cc >= 90 and nvcc_version >= 12.0:
+        cc_compile_args += ["-DENABLE_DECODE_UNIFIED_ATTENTION"]
+        nvcc_compile_args += ["-DENABLE_DECODE_UNIFIED_ATTENTION"]
+        # decode unified attention
+        os.system(
+            "python utils/auto_gen_template_attention.py --config gpu_ops/decode_unified_attention/template_config.json --output gpu_ops/decode_unified_attention/template_instantiation/autogen"
+        )
+        sources += ["gpu_ops/decode_unified_attention.cu"]
+        sources += ["gpu_ops/decoder_write_cache_with_rope.cu"]
+        sources += find_end_files("gpu_ops/decode_unified_attention", ".cu")
         # Hopper optimized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
@@ -628,6 +647,7 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/w8a16_group_gemv.cu",
                 "iluvatar_ops/wi4a16_group_gemm.cu",
+                "iluvatar_ops/wi4a16_group_gemv.cu",
                 "iluvatar_ops/wi4a16_weight_quantize.cu",
                 "iluvatar_ops/restore_tokens_per_expert.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
@@ -686,6 +706,8 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/recover_decode_task.cu",
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/noaux_tc_redundant.cu",
+        "gpu_ops/grouped_topk_kernels.cu",
+        "gpu_ops/fused_cast_sigmoid_bias.cu",
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/text_image_gather_scatter.cu",
         "gpu_ops/text_image_index_out.cu",
@@ -695,6 +717,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/append_attn/mla_cache_kernel.cu",
         "gpu_ops/append_attn/get_block_shape_and_split_kv_block.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
+        "gpu_ops/moe/moe_align_kernel.cu",
         "gpu_ops/moe/moe_topk_select.cu",
         "gpu_ops/get_img_boundaries.cc",
         "gpu_ops/remote_cache_kv_ipc.cc",

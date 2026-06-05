@@ -11,9 +11,16 @@ export COVERAGE_RCFILE=${COVERAGE_RCFILE:-$DIR/../scripts/.coveragerc}
 #  Classify tests into one of the following categories
 #  - multi_gpu: requires multiple GPUs / ports (run sequentially)
 #  - single_gpu: independent tests (can run in parallel)
+#  - isolated: tests that install dependencies, run last (isolated)
 # ============================================================
 classify_tests() {
     local test_file=$1
+    # Rule 0: model_executor/fallback tests should run in isolation (last)
+    if [[ "$test_file" =~ tests/model_executor/fallback/.*\.py ]]; then
+        echo "isolated"
+        return
+    fi
+
     # Rule 1: distributed tests (explicit multi-GPU launch)
     if [[ "$test_file" =~ tests/distributed/.*test_.*\.py ]]; then
         echo "multi_gpu"
@@ -107,7 +114,7 @@ run_test_with_logging() {
             echo ">>>> Processing log directory: ${isolated_log_dir}"
 
             # workerlog
-            worker_logs=("${isolated_log_dir}"/workerlog.0)
+            worker_logs=("${isolated_log_dir}"/paddle/workerlog.0)
 
             if [ -f "${worker_logs[0]}" ]; then
                 for worker_log in "${worker_logs[@]}"; do
@@ -119,7 +126,7 @@ run_test_with_logging() {
             fi
 
             echo ">>> grep error in ${isolated_log_dir}"
-            grep -Rni --color=auto "error" "${isolated_log_dir}" --exclude="pytest_*_error.log" || true
+            grep -Rni --color=auto "error" "${isolated_log_dir}" --exclude="pytest_*_error.log" --exclude="backup_env.*.json" --exclude="default.*.log" --exclude="envlog.*" --exclude="cache_messager*" --exclude="*.log.[0-9]*" | awk -F: '{key=$1; for(i=3;i<=NF;i++) key=key":"$i; gsub(/[0-9]+-[0-9]+-[0-9]+ [0-9]+:[0-9]+:[0-9]+,[0-9]+ [0-9]+/, "", key); if (!seen[key]++) print}' || true
         fi
 
         # print all server logs
@@ -247,6 +254,7 @@ fi
 
 MULTI_GPU_TESTS=()
 SINGLE_GPU_TESTS=()
+ISOLATED_TESTS=()
 
 TOTAL_TESTS=0
 for file in $ALL_TEST_FILES; do
@@ -260,12 +268,17 @@ for file in $ALL_TEST_FILES; do
         "single_gpu")
             SINGLE_GPU_TESTS+=("$file")
             ;;
+        "isolated")
+            ISOLATED_TESTS+=("$file")
+            ;;
     esac
 done
 
 echo "Multi-GPU tests: ${#MULTI_GPU_TESTS[@]}"
 echo "Single-GPU tests: ${#SINGLE_GPU_TESTS[@]}"
+echo "Isolated tests: ${#ISOLATED_TESTS[@]}"
 echo "Total tests: $TOTAL_TESTS"
+
 
 # ============================================================
 # Step 2: Run multi-GPU tests (sequential)
@@ -327,9 +340,24 @@ else
 fi
 
 # ============================================================
-# Step 4: Summary
+# Step 4: Run isolated tests (last, to avoid dependency pollution)
 # ============================================================
-echo "Step 4: Summary"
+echo "Step 4: Running isolated tests (tests with special dependencies)"
+
+if [ ${#ISOLATED_TESTS[@]} -gt 0 ]; then
+    echo "Isolated tests will run last to avoid dependency pollution."
+    for file in "${ISOLATED_TESTS[@]}"; do
+        echo "Running isolated test: $file"
+        run_test_with_logging "$file" "$failed_tests_file"
+    done
+else
+    echo "No isolated tests to run."
+fi
+
+# ============================================================
+# Step 5: Summary
+# ============================================================
+echo "Step 5: Summary"
 
 # Count failed tests
 if [ -f "$failed_tests_file" ]; then
@@ -369,7 +397,7 @@ if [ "$failed_count" -ne 0 ]; then
 
     # Only package logs when there are failures
     echo "===================================="
-    echo "Step 5: Packaging logs (only on failure)"
+    echo "Step 6: Packaging logs (only on failure)"
     echo "===================================="
 
     if [ -d "${run_path}/unittest_logs" ]; then

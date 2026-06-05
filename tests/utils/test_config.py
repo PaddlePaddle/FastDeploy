@@ -40,6 +40,7 @@ from fastdeploy.config import (
     ParallelConfig,
     RoutingReplayConfig,
     SchedulerConfig,
+    ServingLimitsConfig,
     SpeculativeConfig,
     StructuredOutputsConfig,
     iter_architecture_defaults,
@@ -492,6 +493,43 @@ class TestFDConfig(unittest.TestCase):
         fd5._str_to_list("list_attr", str)
         assert fd5.list_attr == ["1", "2", "3"] and fd5._check_master() == fd5.is_master
         _mfd(self.mp, ips="0.0.0.0").check()
+
+    def test_serving_limits_validate(self):
+        # valid config: no error
+        slc = ServingLimitsConfig({"min_completion_tokens": 100, "max_completion_tokens": 200})
+        slc.validate(max_model_len=4096)
+
+        # min >= max_model_len: raise
+        slc_bad = ServingLimitsConfig({"min_completion_tokens": 4096})
+        with self.assertRaisesRegex(ValueError, "must be less than.*max-model-len"):
+            slc_bad.validate(max_model_len=4096)
+
+        # min > max_completion_tokens: raise
+        slc_bad2 = ServingLimitsConfig({"min_completion_tokens": 300, "max_completion_tokens": 100})
+        with self.assertRaisesRegex(ValueError, "must not exceed.*max-completion-tokens"):
+            slc_bad2.validate(max_model_len=4096)
+
+        for name in ("max_completion_tokens", "input_max_tokens", "response_max_tokens"):
+            slc_bad = ServingLimitsConfig({name: 0})
+            with self.assertRaisesRegex(ValueError, "must be greater than 0"):
+                slc_bad.validate(max_model_len=4096)
+
+        for name in ("reasoning_max_tokens", "min_completion_tokens"):
+            slc_bad = ServingLimitsConfig({name: -1})
+            with self.assertRaisesRegex(ValueError, "must be greater than or equal to 0"):
+                slc_bad.validate(max_model_len=4096)
+
+        # max_completion_tokens > max_model_len: warning only, no raise
+        slc_warn = ServingLimitsConfig({"max_completion_tokens": 8192})
+        slc_warn.validate(max_model_len=4096)
+
+        # input_max_tokens > max_model_len: warning only, no raise
+        slc_warn2 = ServingLimitsConfig({"input_max_tokens": 8192})
+        slc_warn2.validate(max_model_len=4096)
+
+        # all None: no error
+        slc_empty = ServingLimitsConfig({})
+        slc_empty.validate(max_model_len=4096)
 
 
 if __name__ == "__main__":
