@@ -474,11 +474,10 @@ class BaseTextProcessor(ABC):
             else:  # send
                 delta_text = decision.text
 
-            if is_end:
+            if is_end and decision.action != "truncate":
                 finish_decision = output_fallback_manager.on_finish(req_id, context)
                 if finish_decision.text:
                     delta_text = (delta_text or "") + finish_decision.text
-                fallback_held = False
 
             # Override the parser-visible history with the corrected stream
             # (held deltas contribute nothing; sent/flushed text is appended
@@ -494,7 +493,7 @@ class BaseTextProcessor(ABC):
         response_dict["outputs"]["tool_calls"] = None
         response_dict["outputs"]["reasoning_content"] = ""
 
-        if fallback_held:
+        if fallback_held and not is_end:
             response_dict["outputs"]["skipped"] = True
             return response_dict
 

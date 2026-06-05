@@ -38,8 +38,8 @@ class StreamFallbackDecision:
     ``action`` semantics (consumed by ``OutputFallbackManager``):
 
     - ``send``  : emit ``text`` downstream as the current delta.
-    - ``hold``  : buffer this delta inside the strategy's ``state``; downstream
-                  strategies still run, but the manager emits nothing this round.
+    - ``hold``  : keep this delta buffered by the manager; no later strategies
+                  run for this round, and the manager emits nothing.
     - ``flush`` : used by ``on_finish`` to emit any remaining buffered text
                   after the stream ends.
     - ``truncate``: send ``text`` as the final delta and stop further generation.

@@ -120,7 +120,6 @@ class OutputFallbackManager:
                 data_processor_logger.exception(
                     "Failed to apply streaming output fallback strategy '%s'.", strategy.name
                 )
-                trial_states[strategy.name] = trial_state
                 continue
 
             trial_states[strategy.name] = trial_state
@@ -168,8 +167,7 @@ class OutputFallbackManager:
                             "Failed to finish streaming output fallback strategy '%s'.", strategy.name
                         )
                         continue
-                    if finish_decision.text:
-                        current_text = finish_decision.text
+                    current_text = finish_decision.text
                 else:
                     current_text = decision.text
             return StreamFallbackDecision(action="flush", text=current_text)
