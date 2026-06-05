@@ -281,7 +281,9 @@ class ZmqOpenAIServing(OpenAIServing):
                 for pr in ctx.preprocess_requests:
                     dealer.write([b"", pr["request_id"].encode("utf-8")])
             while num_choices > 0:
-                request_output_dicts = await asyncio.wait_for(request_output_queue.get(), timeout=60)
+                request_output_dicts = await asyncio.wait_for(
+                    request_output_queue.get(), timeout=envs.FD_REQUEST_WAIT_TIMEOUT
+                )
                 for request_output_dict in request_output_dicts:
                     api_server_logger.debug(f"Received RequestOutput: {request_output_dict}")
                     if request_output_dict["finished"] is True:
