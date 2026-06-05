@@ -23,6 +23,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe.ep import deep_ep
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     deep_gemm,
@@ -623,6 +624,8 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+        if envs.FD_RUN_DUMMY_FOR_PROFILE:
+            gate_out = paddle.randn_like(gate_out, dtype="float32")
 
         hidden_size = x.shape[1]
 
@@ -963,6 +966,8 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+        if envs.FD_RUN_DUMMY_FOR_PROFILE:
+            gate_out = paddle.randn_like(gate_out, dtype="float32")
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
@@ -1050,6 +1055,8 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+        if envs.FD_RUN_DUMMY_FOR_PROFILE:
+            gate_out = paddle.randn_like(gate_out, dtype="float32")
 
         if layer.topk_method == "noaux_tc":
 

@@ -1314,7 +1314,7 @@ def run_worker_proc() -> None:
     # Instead of doing end to end tests which is very unstable, we can profile the following line of code to pick the best model.
     # so we add an environment variable RUN_DUMMY_FOR_PROFILE to control whether to run dummy run for profile.
     # Any Question refer to ChangWenBin.
-    if int(os.getenv("RUN_DUMMY_FOR_PROFILE", "0")) == 1:
+    if envs.FD_RUN_DUMMY_FOR_PROFILE:
         worker_proc.worker.model_runner._dummy_run(
             num_tokens=100, batch_size=1, expected_decode_len=10, step_use_cudagraph=True
         )

@@ -23,6 +23,7 @@ from paddle.nn.quant import weight_quantize
 from paddleformers.utils.log import logger
 
 import fastdeploy
+from fastdeploy import envs
 from fastdeploy.platforms import current_platform
 
 from ..utils import get_tensor, group_wise_int4_weight_quantize, pack, rotate_model
@@ -137,6 +138,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+        if envs.FD_RUN_DUMMY_FOR_PROFILE:
+            gate_out = paddle.randn_like(gate_out, dtype="float32")
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
@@ -292,6 +295,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+        if envs.FD_RUN_DUMMY_FOR_PROFILE:
+            gate_out = paddle.randn_like(gate_out, dtype="float32")
         estimate_total_token_nums = gate_out.shape[0] * layer.top_k
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
@@ -444,6 +449,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
             )
             if not use_fused:
                 gate_out = gate_out.cast("float32")
+                if envs.FD_RUN_DUMMY_FOR_PROFILE:
+                    gate_out = paddle.randn_like(gate_out, dtype="float32")
             if fc1_latent_proj is not None:
                 x = fc1_latent_proj(x)
             gate_out, _, __ = get_moe_scores(
@@ -487,6 +494,8 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
 
         else:
             gate_out = gate_out.cast("float32")
+            if envs.FD_RUN_DUMMY_FOR_PROFILE:
+                gate_out = paddle.randn_like(gate_out, dtype="float32")
             if fc1_latent_proj is not None:
                 x = fc1_latent_proj(x)
             (
