@@ -1312,6 +1312,7 @@ class GPUModelRunner(ModelRunnerBase):
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
             keep_sampling_mask=self.enable_keep_sampling_mask,
+            is_dummy_or_profile_run=is_dummy_or_profile_run,
         )
         return token_num, token_num_event
 

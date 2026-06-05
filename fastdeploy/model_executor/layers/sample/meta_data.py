@@ -69,3 +69,5 @@ class SamplingMetadata:
     seq_lens_decoder: Optional[paddle.Tensor] = None
     # Add for keep sampling mask
     keep_sampling_mask: Optional[bool] = None
+    # Add for sampler to distinguish dummy run and profile run
+    is_dummy_or_profile_run: bool = False
