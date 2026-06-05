@@ -160,7 +160,17 @@ class OutputFallbackManager:
                         "Failed to apply streaming output fallback strategy '%s'.", strategy.name
                     )
                     continue
-                if decision.action != "hold":
+                if decision.action == "hold":
+                    try:
+                        finish_decision = strategy.on_finish(context, state)
+                    except Exception:
+                        data_processor_logger.exception(
+                            "Failed to finish streaming output fallback strategy '%s'.", strategy.name
+                        )
+                        continue
+                    if finish_decision.text:
+                        current_text = finish_decision.text
+                else:
                     current_text = decision.text
             return StreamFallbackDecision(action="flush", text=current_text)
 
