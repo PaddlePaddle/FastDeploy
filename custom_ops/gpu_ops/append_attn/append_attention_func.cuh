@@ -163,7 +163,6 @@ __device__ __forceinline__ void load_q_global_smem_multi_warps(
 
 template <uint32_t group_size,
           uint32_t num_frags_x,
-          uint32_t num_frags_y,
           uint32_t HEAD_DIM,
           typename T>
 __device__ __forceinline__ void load_q_global_smem(
@@ -175,6 +174,7 @@ __device__ __forceinline__ void load_q_global_smem(
     const uint32_t qo_h_stride) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
 
+  static_assert(HEAD_DIM % 64 == 0, "");
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
 
   uint32_t q_smem_offset_w =  // [NUM_WARP_Q, num_frags_x, 16, head_dim]
@@ -193,7 +193,7 @@ __device__ __forceinline__ void load_q_global_smem(
       const T* q_ptr =
           q_ptr_base + n_offset * qo_n_stride + h_offset * qo_h_stride;
 #pragma unroll
-      for (uint32_t fyo = 0; fyo < num_frags_y / 4; ++fyo) {
+      for (uint32_t fyo = 0; fyo < HEAD_DIM / 64; ++fyo) {
         q_smem->load_128b_async<SharedMemFillMode::kNoFill>(
             q_smem_offset_w, q_ptr, n_offset < qo_upper_bound);
         q_smem_offset_w =
@@ -202,7 +202,7 @@ __device__ __forceinline__ void load_q_global_smem(
       }
       q_smem_offset_w =
           q_smem->advance_offset_by_row<4, num_vecs_per_head>(q_smem_offset_w) -
-          2 * num_frags_y;  // num_frags_y / 4 * 8
+          HEAD_DIM / 8;
     }
   }
 }
@@ -228,7 +228,7 @@ __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale_multi_warps(
   }
 }
 
-template <uint32_t num_frags_x, uint32_t num_frags_y, typename T>
+template <uint32_t num_frags_x, uint32_t head_dim, typename T>
 __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale(
     smem_t* q_smem,  // [num_frags_x * 16, num_frags_y * 16]
     const float sm_scale) {
@@ -236,7 +236,6 @@ __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale(
   using LoadT = AlignedVector<T, vec_size>;
   LoadT tmp_vec;
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
-  constexpr uint32_t head_dim = num_frags_y * 16;
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
 
 #pragma unroll
