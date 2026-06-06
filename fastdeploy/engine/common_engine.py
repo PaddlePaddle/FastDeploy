@@ -1352,6 +1352,14 @@ class EngineService:
 
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.inc_value("requests_number")
+                        main_process_metrics.inc_value("prompt_tokens_total", request.prompt_token_ids_len)
+                        main_process_metrics.obs_value("request_prompt_tokens", request.prompt_token_ids_len)
+                        if getattr(request, "sampling_params", None) and getattr(
+                            request.sampling_params, "max_tokens", None
+                        ):
+                            main_process_metrics.obs_value(
+                                "request_params_max_tokens", request.sampling_params.max_tokens
+                            )
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
                             request_id = get_base_request_id(data["request_id"])
