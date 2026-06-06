@@ -389,7 +389,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const float quant_min_bound,
     const float in_scale,
     const uint32_t chunk_size,
-    const int num_blocks_x_cpu,
     T *__restrict__ tmp_workspace,  // split kv [token_num, num_chunks,
                                     // num_heads, head_dim]
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
@@ -1079,7 +1078,6 @@ void MultiQueryAppendAttention(
           quant_min_bound,
           in_scale,
           chunk_size,
-          num_blocks_x_cpu,
           nullptr,
           nullptr,
           nullptr,
@@ -1136,7 +1134,6 @@ void MultiQueryAppendAttention(
           quant_min_bound,
           in_scale,
           chunk_size,
-          num_blocks_x_cpu,
           reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
