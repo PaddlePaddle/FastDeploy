@@ -211,7 +211,7 @@ __global__ void multi_query_append_attention_kernel(
   commit_group();
 
   kv_smem_offset_w =
-      smem_t::get_permuted_offset<128 / 8>(wid * 4 + tid / 8, tid % 8);
+      smem_t::get_permuted_offset<HEAD_DIM_V / 8>(wid * 4 + tid / 8, tid % 8);
 
   produce_kv_blockwise_c16<SharedMemFillMode::kFillZero,
                            NUM_WARPS,
@@ -285,7 +285,7 @@ __global__ void multi_query_append_attention_kernel(
     cache_v_now = cache_v + block_id * v_n_stride + const_offset_v;
 
     kv_smem_offset_w =
-        smem_t::get_permuted_offset<128 / 8>(wid * 4 + tid / 8, tid % 8);
+        smem_t::get_permuted_offset<HEAD_DIM_V / 8>(wid * 4 + tid / 8, tid % 8);
     produce_kv_blockwise_c16<SharedMemFillMode::kFillZero,
                              NUM_WARPS,
                              BLOCK_SIZE,
@@ -641,7 +641,7 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   // }
 
   kv_smem_offset_w =
-      smem_t::get_permuted_offset<128 / 8>(wid * 4 + tid / 8, tid % 8);
+      smem_t::get_permuted_offset<HEAD_DIM_V / 8>(wid * 4 + tid / 8, tid % 8);
 
   produce_kv_blockwise_c16<SharedMemFillMode::kFillZero,
                            NUM_WARPS,
