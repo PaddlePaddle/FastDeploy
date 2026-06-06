@@ -190,7 +190,7 @@ __global__ void multi_query_append_attention_c4_kernel(
 
   uint32_t q_smem_offset_r = smem_t::get_permuted_offset<num_vecs_per_head>(
       wid * num_frags_x * 16 + tid % 16, tid / 16);
-  load_q_global_smem<GROUP_SIZE, num_frags_x, num_frags_y, HEAD_DIM, T>(
+  load_q_global_smem<GROUP_SIZE, num_frags_x, HEAD_DIM, T>(
       q_base_ptr,
       &qo_smem,
       q_base_seq_id_this_block,
@@ -201,8 +201,7 @@ __global__ void multi_query_append_attention_c4_kernel(
   wait_group<0>();
   __syncthreads();
 
-  q_smem_inplace_multiply_sm_scale<num_frags_x, num_frags_y, T>(&qo_smem,
-                                                                scale);
+  q_smem_inplace_multiply_sm_scale<num_frags_x, HEAD_DIM, T>(&qo_smem, scale);
 
   T cache_k_scale_frag[num_frags_y][4];
   T cache_k_zp_frag[num_frags_y][4];

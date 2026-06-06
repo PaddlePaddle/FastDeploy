@@ -305,6 +305,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # When set to a valid JSON dict, metric labels are automatically enabled.
     # Example: '{"model_id":"my_model"}' adds model_id label to all metrics.
     "FD_DEFAULT_METRIC_LABEL_VALUES": lambda: os.getenv("FD_DEFAULT_METRIC_LABEL_VALUES", "{}"),
+    # Timeout for request output queue get operation in seconds
+    "FD_REQUEST_WAIT_TIMEOUT": lambda: int(os.getenv("FD_REQUEST_WAIT_TIMEOUT", "60")),
 }
 
 

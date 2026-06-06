@@ -140,8 +140,7 @@ __global__ void multi_query_append_attention_kernel(
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaGridDependencySynchronize();
 #endif
-
-  load_q_global_smem<GROUP_SIZE, num_frags_x, HEAD_DIM / 16, HEAD_DIM, T>(
+  load_q_global_smem<GROUP_SIZE, num_frags_x, HEAD_DIM, T>(
       q_base_ptr,
       &qo_smem,
       q_base_seq_id_this_block,
@@ -152,8 +151,7 @@ __global__ void multi_query_append_attention_kernel(
   wait_group<0>();
   __syncthreads();
 
-  q_smem_inplace_multiply_sm_scale<num_frags_x, HEAD_DIM / 16, T>(&qo_smem,
-                                                                  scale);
+  q_smem_inplace_multiply_sm_scale<num_frags_x, HEAD_DIM, T>(&qo_smem, scale);
 
   smem_t k_smem(smem + num_rows_per_block * HEAD_DIM * sizeof(T)),
       v_smem(smem + (num_rows_per_block + BLOCK_SIZE) * HEAD_DIM * sizeof(T));
@@ -419,7 +417,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     const float quant_min_bound,
     const float in_scale,
     const uint32_t chunk_size,
-    const int num_blocks_x_cpu,
     T *__restrict__ tmp_workspace,  // split kv [token_num, num_chunks,
                                     // num_heads, head_dim]
     float *__restrict__ tmp_m,      // [token_num, num_chunks, num_heads]
@@ -1236,7 +1233,6 @@ void MultiQueryAppendAttention(
           quant_min_bound,
           in_scale,
           chunk_size,
-          num_blocks_x_cpu,
           nullptr,
           nullptr,
           nullptr,
@@ -1293,7 +1289,6 @@ void MultiQueryAppendAttention(
           quant_min_bound,
           in_scale,
           chunk_size,
-          num_blocks_x_cpu,
           reinterpret_cast<NV_TYPE *>(tmp_workspace->ptr()),
           static_cast<float *>(tmp_m->ptr()),
           static_cast<float *>(tmp_d->ptr()),
