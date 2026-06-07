@@ -323,6 +323,8 @@ class TestAttentionPerformance(unittest.TestCase):
             state_dict = self.create_random_attention_state_dict(fd_config, prefix="test_layer")
             attention_layer[i].load_state_dict(state_dict)
 
+            attention_layer[i].attn.only_do_attn = True
+
         cache_quant_type_str = getattr(attention_layer[0].attn, "cache_quant_type_str", "none")
 
         print("===== Initialization Complete =====")

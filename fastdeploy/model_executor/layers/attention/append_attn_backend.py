@@ -520,6 +520,7 @@ class AppendAttentionBackend(AttentionBackend):
                 sliding_window,
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
+                getattr(layer, "only_do_attn", False),
             )
         return res
 
@@ -541,7 +542,7 @@ class AppendAttentionBackend(AttentionBackend):
         cache_k = forward_meta.caches[2 * layer.layer_id]
         cache_v = forward_meta.caches[2 * layer.layer_id + 1]
 
-        head_dim_q = 128
+        head_dim_q = 192
         head_dim_v = 128
 
         forward_meta.caches[2 * layer.layer_id] = paddle.randn(cache_k.shape[:3] + [head_dim_q])
