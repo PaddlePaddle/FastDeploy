@@ -833,8 +833,6 @@ void MultiQueryAppendAttention(
 
   const float scale = 1.f / sqrt(HEAD_DIM);
 
-  std::cout << "NUM_WARP_Q" << NUM_WARP_Q << std::endl;
-
   if constexpr (NUM_WARP_Q == 4) {
     constexpr uint32_t num_frags_z = BLOCK_SIZE / 16;
     constexpr uint32_t smem_size =
