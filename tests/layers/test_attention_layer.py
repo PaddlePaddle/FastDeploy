@@ -290,6 +290,8 @@ class TestAttentionPerformance(unittest.TestCase):
         prefill_batch_size = 2
         prefill_seq_len = 6400
 
+        paddle.seed(66)
+
         model_dir = self.model_dir
         tp_size = paddle.distributed.get_world_size()
         quantization = {

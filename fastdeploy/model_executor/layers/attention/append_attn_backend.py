@@ -609,7 +609,8 @@ class AppendAttentionBackend(AttentionBackend):
         res = self.forward_mixed(q, k, v, qkv, compressed_kv, k_pe, layer, forward_meta)
 
         # if you open this ,you should set only_do_attn to be true.
-        # assert (res - res_baseline).abs().max() <= 0.1
+        # print((res - res_baseline).abs().max())
+        assert (res - res_baseline).abs().max() <= 0.1
 
         return paddle.empty([res.shape[0], 7168])
 
