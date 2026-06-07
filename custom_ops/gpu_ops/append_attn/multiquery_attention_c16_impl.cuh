@@ -521,34 +521,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
   wait_group<0>();
   __syncthreads();
 
-  // if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 &&
-  //     blockIdx.y == 0 && blockIdx.x == 0 && blockIdx.z == 0) {
-
-  //     T* haha = (T*)(qo_smem.base);
-  //     T* haha1 = (T*)(q + q_start_seq_id * q_ori_n_stride + q_head_idx *
-  //     HEAD_DIM);
-
-  //   for (int i = 0; i < 14; i++) {
-  //     for (int j = 0;j < HEAD_DIM; j++) {
-
-  //       float v0 = (float)(*(haha1 + i * HEAD_DIM + j));
-
-  //       int tmp_row = i % 8;
-  //       int tmp_col = j / 8 % 8;
-  //       int tmp = tmp_row ^ tmp_col;
-
-  //       int real_col = (tmp + j / 8 / 8 * 8) * 8 + j % 8;
-  //       tmp = i * HEAD_DIM + real_col;
-
-  //       float v1 = (float)(*(haha + tmp));
-
-  //       if (v0 != v1) asm("trap;");
-
-  //     }
-  //   }
-  // }
-  // return;
-
   q_smem_inplace_multiply_sm_scale_multi_warps<num_frags_x, HEAD_DIM, T>(
       &qo_smem, scale);
 
@@ -608,35 +580,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                                        kv_idx_base,
                                        chunk_end);
   commit_group();
-
-  // wait_group<0>();
-  // __syncthreads();
-
-  // if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 &&
-  //     blockIdx.y == 0 && blockIdx.x == 0) {
-
-  //     T* haha = (T*)(k_smem.base);
-  //     T* haha1 = (T*)(cache_k + block_id * k_n_stride + kv_head_idx *
-  //     k_h_stride);
-  //   for (int i = 0; i < BLOCK_SIZE; i++) {
-  //     for (int j = 0;j < HEAD_DIM; j++) {
-
-  //       float v0 = (float)(*(haha1 + i * HEAD_DIM + j));
-
-  //       int tmp_row = i % 8;
-  //       int tmp_col = j / 8 % 8;
-  //       int tmp = tmp_row ^ tmp_col;
-
-  //       int real_col = (tmp + j / 8 / 8 * 8) * 8 + j % 8;
-  //       tmp = i * HEAD_DIM + real_col;
-
-  //       float v1 = (float)(*(haha + tmp));
-  //       if (v0 != v1) asm("trap;");
-
-  //     }
-  //   }
-  // }
-
   kv_smem_offset_w =
       smem_t::get_permuted_offset<HEAD_DIM_V / 8>(wid * 4 + tid / 8, tid % 8);
 
@@ -651,37 +594,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
                                        kv_idx_base,
                                        chunk_end);
   commit_group();
-
-  // wait_group<0>();
-  // __syncthreads();
-
-  // if (threadIdx.x == 0 && threadIdx.y == 0 && threadIdx.z == 0 &&
-  //     blockIdx.y == 0 && blockIdx.x == 0) {
-
-  //     T* haha = (T*)(v_smem.base);
-  //     T* haha1 = (T*)(cache_v + block_id * v_n_stride + kv_head_idx *
-  //     v_h_stride);
-  //   for (int i = 0; i < BLOCK_SIZE; i++) {
-  //     for (int j = 0;j < HEAD_DIM_V; j++) {
-
-  //       float v0 = (float)(*(haha1 + i * HEAD_DIM_V + j));
-
-  //       int tmp_row = i % 8;
-  //       int tmp_col = j / 8 % 8;
-  //       int tmp = tmp_row ^ tmp_col;
-
-  //       int real_col = (tmp + j / 8 / 8 * 8) * 8 + j % 8;
-  //       tmp = i * HEAD_DIM_V + real_col;
-
-  //       float v1 = (float)(*(haha + tmp));
-
-  //       if (v0 != v1) asm("trap;");
-
-  //     }
-  //   }
-  // }
-
-  // return;
 
 #pragma unroll 1
   for (uint32_t iter = begin_iter; iter < num_iterations; ++iter) {
@@ -808,7 +720,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
         q_num_heads * HEAD_DIM_V,
         HEAD_DIM_V);
   } else {
-    // asm("trap;");
     write_o_reg_gmem_multi_warps_shift_smooth_quant<GROUP_SIZE,
                                                     num_frags_x,
                                                     num_frags_y,
@@ -830,7 +741,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
 
   // nosplit: skip tmp_m/tmp_d write (no merge step, tmp_m/tmp_d may be nullptr)
   if (partition_kv && num_chunks_this_seq > 1) {
-    // asm("trap;");
     if (wid == 0) {
 #pragma unroll
       for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
@@ -1030,7 +940,6 @@ void MultiQueryAppendAttention(
           sink_size);
 
     } else {
-      exit(0);
       phi::Allocator::AllocationPtr tmp_workspace, tmp_m, tmp_d;
       tmp_workspace = allocator->Allocate(
           phi::SizeOf(qkv.dtype()) *
