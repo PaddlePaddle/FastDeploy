@@ -174,7 +174,6 @@ class ChatResponseProcessor:
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
                             request=request,
-                            disable_output_fallback=True,
                             prompt_tokens=prompt_tokens,
                         )
                     else:
@@ -183,7 +182,6 @@ class ChatResponseProcessor:
                             stream=stream,
                             include_stop_str_in_output=include_stop_str_in_output,
                             request=request,
-                            disable_output_fallback=True,
                             prompt_tokens=prompt_tokens,
                         )
                     text = {"type": "text", "text": request_output["outputs"]["text"]}
@@ -207,16 +205,14 @@ class ChatResponseProcessor:
                                     stream=False,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                     request=request,
-                                    disable_output_fallback=True,
                                     prompt_tokens=prompt_tokens,
                                 )
                             else:
                                 self.data_processor.process_response_dict(
-                                    response_dict=request_output,
-                                    stream=stream,
+                                    response_dict=part["request_output"],
+                                    stream=False,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                     request=request,
-                                    disable_output_fallback=True,
                                     prompt_tokens=prompt_tokens,
                                 )
                             text = {"type": "text", "text": part["request_output"]["outputs"]["text"]}
