@@ -17,7 +17,7 @@ import unittest
 import numpy as np
 import paddle
 import paddle.distributed as dist
-from ernie5_serving.mm_custom_ops import mega_moe_pre_dispatch
+from fastdeploy.model_executor.ops.gpu import mega_moe_pre_dispatch
 from paddle.distributed import fleet
 
 from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
