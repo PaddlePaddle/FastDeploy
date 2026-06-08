@@ -641,6 +641,37 @@ class QwenVlRotaryEmbedding3D:
         return rot_emb_list
 
 
+def get_ernie_rope_3d_decode(
+    rotary_dim: int,
+    base: float,
+    partial_rotary_factor: float,
+    max_position: int,
+    freq_allocation: int,
+    rope_scaling: dict,
+) -> paddle.Tensor:
+    """Build shared Ernie VL decode RoPE for text positions."""
+    rotary_emb3d_layer = ErnieVlRotaryEmbedding3D(
+        rotary_dim, base, partial_rotary_factor, max_position, freq_allocation, rope_scaling
+    )
+    position_ids_3d = paddle.tile(
+        paddle.arange(max_position, dtype="float32").unsqueeze(-1),
+        [1, 3],
+    )
+    expand_pos = paddle.index_select(
+        position_ids_3d / partial_rotary_factor,
+        rotary_emb3d_layer.using_position_axis,
+        axis=-1,
+    )
+    inv_freq = 1.0 / (base ** (paddle.arange(0, rotary_dim, 2, dtype="float32") / rotary_dim))
+    freqs = expand_pos * inv_freq
+    cos_emb = paddle.cos(freqs).unsqueeze(0).unsqueeze(0).unsqueeze(3)
+    sin_emb = paddle.sin(freqs).unsqueeze(0).unsqueeze(0).unsqueeze(3)
+    rot_emb = paddle.concat([cos_emb, sin_emb], axis=0)
+    if current_platform.is_iluvatar():
+        rot_emb = paddle.stack([rot_emb, rot_emb], axis=-1).reshape([2, 1, max_position, 1, rotary_dim])
+    return rot_emb
+
+
 def get_rope_3d(
     rotary_dim: int,
     base: float,

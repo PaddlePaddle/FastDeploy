@@ -598,6 +598,7 @@ class FlashAttentionBackend(AttentionBackend):
                 layer.linear_smooth,
                 forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
+                forward_meta.rope_3d_delta,
                 q_norm_weight,
                 k_norm_weight,
                 getattr(layer, "sinks", None),

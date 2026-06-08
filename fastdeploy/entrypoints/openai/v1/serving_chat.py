@@ -296,8 +296,8 @@ class OpenAIServingChat(OpenAiServingBase):
 
         if request_output.finished:
             if request_output.metrics and request_output.metrics.request_start_time:
-                main_process_metrics.e2e_request_latency.observe(
-                    time.time() - request_output.metrics.request_start_time
+                main_process_metrics.obs_value(
+                    "e2e_request_latency", time.time() - request_output.metrics.request_start_time
                 )
             max_tokens = request.max_completion_tokens or request.max_tokens
             choice_completion_tokens = response_ctx.choice_completion_tokens_dict[output.index]
@@ -377,7 +377,9 @@ class OpenAIServingChat(OpenAiServingBase):
         message.reasoning_content = output.reasoning_content
         message.tool_calls = request_output.accumulate_tool_calls if request_output.accumulate_tool_calls else None
         if output is not None and request_output.metrics and request_output.metrics.request_start_time:
-            main_process_metrics.e2e_request_latency.observe(time.time() - request_output.metrics.request_start_time)
+            main_process_metrics.obs_value(
+                "e2e_request_latency", time.time() - request_output.metrics.request_start_time
+            )
 
         if request.return_token_ids:
             message.prompt_token_ids = request_output.prompt_token_ids

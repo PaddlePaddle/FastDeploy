@@ -309,6 +309,7 @@ class TestTreeMask(unittest.TestCase):
                 None,  # linear_smooth
                 mask_offset,  # mask_offset
                 None,  # kv_signal_data
+                None,  # rope_3d_delta
                 self.q_norm_weight_tensor if use_qknorm else None,  # q_norm_weight
                 self.k_norm_weight_tensor if use_qknorm else None,  # k_norm_weight
                 None,  # sinks
