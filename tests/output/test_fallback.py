@@ -67,6 +67,24 @@ class HoldStrategy(OutputFallbackStrategy):
         return StreamFallbackDecision(action="flush", text=state.get("held", ""))
 
 
+@OutputFallbackManager.register("test-hold-drop", force=True)
+class HoldDropStrategy(OutputFallbackStrategy):
+    name = "test-hold-drop"
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return True
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        return text
+
+    def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        state["held"] = state.get("held", "") + delta_text
+        return StreamFallbackDecision(action="hold")
+
+    def on_finish(self, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        return StreamFallbackDecision(action="flush", text="")
+
+
 @OutputFallbackManager.register("test-truncate", force=True)
 class TruncateStrategy(OutputFallbackStrategy):
     name = "test-truncate"
@@ -116,6 +134,21 @@ class MutableStateStrategy(OutputFallbackStrategy):
     def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
         state.setdefault("items", []).append(delta_text)
         return StreamFallbackDecision(action="send", text=delta_text)
+
+
+@OutputFallbackManager.register("test-raising-state", force=True)
+class RaisingStateStrategy(OutputFallbackStrategy):
+    name = "test-raising-state"
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return True
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        return text
+
+    def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        state["phase"] = "partial"
+        raise RuntimeError("boom")
 
 
 @OutputFallbackManager.register("test-token-observer", force=True)
@@ -193,6 +226,14 @@ class TestOutputFallbackManager:
         assert decision.action == "hold"
         assert manager.states["request-1"]["test-mutable-state"]["items"] == []
 
+    def test_delta_exception_does_not_commit_partial_trial_state(self):
+        manager = OutputFallbackManager(strategies=["test-raising-state", "test-suffix"])
+        manager._get_state("request-1", "test-raising-state")["phase"] = "original"
+        decision = manager.on_delta("request-1", "hello", make_context("hello", stream=True))
+        assert decision.action == "send"
+        assert decision.text == "hello-suffix"
+        assert manager.states["request-1"]["test-raising-state"]["phase"] == "original"
+
     def test_hold_is_preserved_after_later_send_strategy(self):
         manager = OutputFallbackManager(strategies=["test-hold", "test-suffix"])
         decision = manager.on_delta("request-1", "hello", make_context("hello", stream=True))
@@ -225,6 +266,13 @@ class TestOutputFallbackManager:
         assert finish_decision.text == "held-suffix"
         assert manager.states["request-1"]["test-token-observer"]["token_count"] == 1
 
+    def test_finish_honors_empty_flush_after_hold(self):
+        manager = OutputFallbackManager(strategies=["test-hold-drop"])
+        manager.on_delta("request-1", "held", make_context("held", stream=True))
+        finish_decision = manager.on_finish("request-1", make_context("", stream=True))
+        assert finish_decision.action == "flush"
+        assert finish_decision.text == ""
+
     def test_normalizes_strategy_and_config_names(self):
         manager = OutputFallbackManager(
             strategies=["test_truncate"],
@@ -241,6 +289,125 @@ class TestOutputFallbackManager:
         manager.cleanup("request-1")
         assert "request-1" not in manager.states
         assert manager.states["request-2"]["test-suffix"]["cache"] == "other"
+
+
+@OutputFallbackManager.register("test-raising-apply", force=True)
+class RaisingApplyStrategy(OutputFallbackStrategy):
+    name = "test-raising-apply"
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return True
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        raise RuntimeError("apply boom")
+
+
+@OutputFallbackManager.register("test-raising-finish", force=True)
+class RaisingFinishStrategy(OutputFallbackStrategy):
+    name = "test-raising-finish"
+
+    def should_apply(self, text: str, context: OutputFallbackContext) -> bool:
+        return True
+
+    def apply(self, text: str, context: OutputFallbackContext) -> str:
+        return text
+
+    def on_delta(self, delta_text: str, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        return StreamFallbackDecision(action="hold")
+
+    def on_finish(self, context: OutputFallbackContext, state: dict) -> StreamFallbackDecision:
+        raise RuntimeError("finish boom")
+
+
+class TestGetStrategyNotFound:
+    def test_raises_key_error(self):
+        import pytest
+
+        with pytest.raises(KeyError, match="not found"):
+            OutputFallbackManager.get_strategy("nonexistent-strategy-xyz")
+
+
+class TestRegisterValidation:
+    def test_force_not_bool_raises(self):
+        import pytest
+
+        with pytest.raises(TypeError, match="force must be a boolean"):
+            OutputFallbackManager.register(name="x", force="yes")
+
+    def test_invalid_name_type_raises(self):
+        import pytest
+
+        with pytest.raises(TypeError, match="name must be None"):
+            OutputFallbackManager.register(name=123)
+
+    def test_register_with_module_param(self):
+        result = OutputFallbackManager.register(name="test-direct-reg", module=ReplaceStrategy)
+        assert result is ReplaceStrategy
+        assert OutputFallbackManager.get_strategy("test-direct-reg") is ReplaceStrategy
+
+    def test_not_subclass_raises(self):
+        import pytest
+
+        with pytest.raises(TypeError, match="must be subclass"):
+            OutputFallbackManager._register_strategy(module=str, strategy_name="bad")
+
+    def test_no_force_duplicate_raises(self):
+        import pytest
+
+        OutputFallbackManager._register_strategy(module=ReplaceStrategy, strategy_name="dup-test", force=True)
+        with pytest.raises(KeyError, match="already registered"):
+            OutputFallbackManager._register_strategy(module=SuffixStrategy, strategy_name="dup-test", force=False)
+
+    def test_strategy_name_from_module(self):
+        class MyStrat(OutputFallbackStrategy):
+            name = "auto-name-test"
+
+            def should_apply(self, text, context):
+                return False
+
+            def apply(self, text, context):
+                return text
+
+        OutputFallbackManager._register_strategy(module=MyStrat, strategy_name=None, force=True)
+        assert OutputFallbackManager.get_strategy("auto-name-test") is MyStrat
+
+
+class TestApplyException:
+    def test_apply_exception_is_swallowed(self):
+        manager = OutputFallbackManager(strategies=["test-raising-apply"])
+        result = manager.apply("hello", make_context("hello"))
+        assert result == "hello"
+
+
+class TestOnFinishNoBufBranch:
+    def test_on_finish_no_buffer_collects_strategy_finish(self):
+        manager = OutputFallbackManager(strategies=["test-hold"])
+        manager._get_state("r1", "test-hold")["held"] = "buffered"
+        decision = manager.on_finish("r1", make_context("", stream=True))
+        assert decision.action == "flush"
+        assert decision.text == "buffered"
+
+    def test_on_finish_no_buffer_exception_swallowed(self):
+        manager = OutputFallbackManager(strategies=["test-raising-finish"])
+        decision = manager.on_finish("r1", make_context("", stream=True))
+        assert decision.action == "flush"
+        assert decision.text == ""
+
+
+class TestOnFinishBufferExceptions:
+    def test_on_finish_buffer_on_delta_exception(self):
+        manager = OutputFallbackManager(strategies=["test-raising-state", "test-suffix"])
+        manager._buffers["r1"] = "hello"
+        decision = manager.on_finish("r1", make_context("", stream=True))
+        assert decision.action == "flush"
+        assert decision.text == "hello-suffix"
+
+    def test_on_finish_buffer_hold_then_finish_exception(self):
+        manager = OutputFallbackManager(strategies=["test-raising-finish"])
+        manager._buffers["r1"] = "data"
+        decision = manager.on_finish("r1", make_context("", stream=True))
+        assert decision.action == "flush"
+        assert decision.text == "data"
 
 
 class TestOutputFallbackPlugin:
@@ -260,3 +427,6 @@ class TestOutputFallbackPlugin:
         manager = OutputFallbackManager(strategies=["custom-plugin-test"])
         result = manager.apply("bad output", make_context("bad output"))
         assert result == "good output"
+
+    def test_import_invalid_path_swallowed(self):
+        OutputFallbackManager.import_fallback_plugin("/nonexistent/path/plugin.py")
