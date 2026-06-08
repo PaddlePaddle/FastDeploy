@@ -1732,6 +1732,7 @@ class GPUModelRunner(ModelRunnerBase):
             int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
         )
         head_dim = self.model_config.head_dim
+        v_head_dim = getattr(self.model_config, "v_head_dim", None)
 
         encoder_block_shape_q = 64
         decoder_block_shape_q = 16
@@ -1771,6 +1772,7 @@ class GPUModelRunner(ModelRunnerBase):
             kv_num_heads=self.model_config.kv_num_heads,
             num_heads=num_heads,
             head_dim=head_dim,
+            v_head_dim=v_head_dim,
             encoder_block_shape_q=encoder_block_shape_q,
             decoder_block_shape_q=decoder_block_shape_q,
         )
