@@ -1306,12 +1306,12 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
             getattr(layer, name).data = tensor
 
     def apply_ep_prefill(self, layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj):
-        return self.apply_mage_moe(layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj)
+        return self.apply_mega_moe(layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj)
 
     def apply_ep_decode(self, layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj):
-        return self.apply_mage_moe(layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj)
+        return self.apply_mega_moe(layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj)
 
-    def apply_mage_moe(self, layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj):
+    def apply_mega_moe(self, layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj):
         hidden_size = layer.hidden_size
         num_tokens = x.shape[0]
 

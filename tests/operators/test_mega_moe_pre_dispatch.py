@@ -16,13 +16,17 @@ import unittest
 
 import numpy as np
 import paddle
-import paddle.distributed as dist
-from fastdeploy.model_executor.ops.gpu import mega_moe_pre_dispatch
-from paddle.distributed import fleet
 
-from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
-    MegaMoEBuffer,
-)
+from fastdeploy.model_executor.ops.gpu import mega_moe_pre_dispatch
+from dataclasses import dataclass
+
+@dataclass
+class FakeBuffer:
+    x: paddle.Tensor
+    x_sf: paddle.Tensor
+    topk_idx: paddle.Tensor
+    topk_weights: paddle.Tensor
+
 
 
 def ceil_div(x: int, y: int) -> int:
@@ -72,16 +76,6 @@ class TestMegaMoEPreDispatch(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         paddle.seed(2025)
-        strategy = fleet.DistributedStrategy()
-        cls.expert_parallel_size = 2
-        strategy.hybrid_configs = {
-            "dp_degree": 1,
-            "mp_degree": cls.expert_parallel_size,
-            "pp_degree": 1,
-            "sharding_degree": 1,
-        }
-        fleet.init(is_collective=True, strategy=strategy)
-        cls.ep_group = dist.new_group(range(cls.expert_parallel_size))
 
     def setUp(self):
         self.num_experts = 160
@@ -99,17 +93,25 @@ class TestMegaMoEPreDispatch(unittest.TestCase):
         self.topk_weights = self.topk_weights.astype("float32")
 
     def _new_buffer(self):
-        return MegaMoEBuffer(
-            self.ep_group,
-            self.num_experts,
-            self.num_max_tokens_per_rank,
-            self.top_k,
-            self.hidden_size,
-            self.moe_intermediate_size,
-        ).buffer
+        x = paddle.zeros([self.num_max_tokens_per_rank, self.hidden_size], dtype=paddle.bfloat16).astype("float8_e4m3fn")
+        x_sf = paddle.zeros([self.num_max_tokens_per_rank, self.hidden_size // self.group_size // 4], paddle.int32)
+        topk_idx = paddle.zeros([self.num_max_tokens_per_rank, self.top_k], dtype=paddle.int64)
+        topk_weights = paddle.zeros([self.num_max_tokens_per_rank, self.top_k], dtype=paddle.float32)
+        fake_buffer = FakeBuffer(
+            x=x,
+            x_sf=x_sf,
+            topk_idx=topk_idx,
+            topk_weights=topk_weights
+        )
+
+        return fake_buffer
+
 
     def mega_moe_pre_dispatch_ref(self, x: paddle.Tensor, topk_idx: paddle.Tensor, topk_weights: paddle.Tensor):
-        x_fp8, x_scale_tensor = per_token_cast_to_fp8(x, use_ue8m0=True, gran_k=self.group_size, use_packed_ue8m0=True)
+        num_tokens = x.shape[0]
+        x_fp8, x_scale_tensor = per_token_cast_to_fp8(
+            x, use_ue8m0=True, gran_k=self.group_size, use_packed_ue8m0=True
+        )
         return (
             x_fp8,
             x_scale_tensor,
