@@ -137,6 +137,9 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+
+        if fc1_latent_proj is not None:
+            x = fc1_latent_proj(x)
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
@@ -275,6 +278,9 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         tmp_ffn_out, event = self.ep_prefill_runner.combine(tmp_ffn_out, handle, recv_topk_weights)
         if self.ep_prefill_runner.ep_engine.async_finish:
             event.current_stream_wait()
+
+        if fc2_latent_proj is not None:
+            tmp_ffn_out = fc2_latent_proj(tmp_ffn_out)
         return tmp_ffn_out
 
     def apply_ep_decode(
@@ -292,6 +298,10 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         """
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
+
+        if fc1_latent_proj is not None:
+            x = fc1_latent_proj(x)
+
         estimate_total_token_nums = gate_out.shape[0] * layer.top_k
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
@@ -341,9 +351,14 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         )
 
         # 4. EP combine
-        return self.ep_decoder_runner.combine(
+        fused_moe_out = self.ep_decoder_runner.combine(
             ffn_out, topk_idx, topk_weights, handle, quant_group_size=quant_group_size
         )
+
+        if fc2_latent_proj is not None:
+            fused_moe_out = fc2_latent_proj(fused_moe_out)
+
+        return fused_moe_out
 
     def apply_tp(
         self,

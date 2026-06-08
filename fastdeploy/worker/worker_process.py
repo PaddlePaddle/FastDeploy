@@ -264,6 +264,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
+        self.worker.model_runner.kv_cache_status = self.kv_cache_status
 
         # init exist_task_signal
         workers_exist_task = np.zeros([1], dtype=np.int32)
@@ -1010,9 +1011,9 @@ def parse_args():
     parser.add_argument(
         "--model-impl",
         type=str,
-        choices=["auto", "fastdeploy", "paddleformers"],
+        choices=["auto", "fastdeploy", "paddleformers", "paddlefleet"],
         default="auto",
-        help="Model implementation backend (auto, fastdeploy, paddleformers)",
+        help="Model implementation backend (auto, fastdeploy, paddleformers, paddlefleet)",
     )
 
     parser.add_argument(

@@ -444,7 +444,7 @@ class TestAsyncLLMEngine(unittest.TestCase):
                 await self.engine.add_request("test_validation", prompts, sampling_params)
             except Exception as e:
                 # Expected to fail due to validation
-                self.assertIn("min_dec_len", str(e).lower())
+                self.assertIn("min_tokens", str(e).lower())
 
             # Test max model len validation
             try:

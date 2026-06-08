@@ -67,6 +67,11 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
                 "input_ids": np.array([101, 9012, 3456, 102])
             }
             self.multi_modal_processor._process_post_tokens = lambda request, outputs: None
+            self.multi_modal_processor.input_max_tokens = None
+            self.multi_modal_processor.max_completion_tokens = None
+            self.multi_modal_processor.reasoning_max_tokens = None
+            self.multi_modal_processor.response_max_tokens = None
+            self.multi_modal_processor.min_completion_tokens = None
 
         self.engine_client = Mock()
         self.engine_client.connection_initialized = False
@@ -262,7 +267,9 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         mock_processor_instance = Mock()
         mock_processor_instance.enable_multimodal_content.return_value = True
 
-        async def mock_process_response_chat_async(response, stream, include_stop_str_in_output, request=None):
+        async def mock_process_response_chat_async(
+            response, stream, include_stop_str_in_output, request=None, prompt_tokens=None
+        ):
             yield response
 
         mock_processor_instance.process_response_chat = mock_process_response_chat_async
@@ -445,7 +452,9 @@ class TestMultiModalProcessorMaxTokens(IsolatedAsyncioTestCase):
         mock_processor_instance = Mock()
         mock_processor_instance.enable_multimodal_content.return_value = False
 
-        async def mock_process_response_chat_async(response, stream, include_stop_str_in_output, request=None):
+        async def mock_process_response_chat_async(
+            response, stream, include_stop_str_in_output, request=None, prompt_tokens=None
+        ):
             if isinstance(response, list):
                 for res in response:
                     yield res

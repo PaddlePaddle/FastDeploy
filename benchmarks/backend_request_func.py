@@ -72,6 +72,7 @@ class RequestFuncOutput:
     generated_text: str = ""
     reasoning_content: str = ""
     success: bool = False
+    has_arrival_time: bool = False
     latency: float = 0.0
     end_timestamp: float = 0.0  # 模型完全返回的时间戳（秒, perf_counter基准）
     output_tokens: int = 0
@@ -334,9 +335,11 @@ async def async_request_eb_openai_chat_completions(
         "model": request_func_input.model,
         "messages": request_func_input.history_QA,
         "stream": request_func_input.stream,
-        "max_tokens": request_func_input.output_len,
         "collect_metrics": request_func_input.pd_metrics,
     }
+
+    if request_func_input.output_len is not None:
+        payload["max_tokens"] = request_func_input.output_len
 
     # 流式模式返回usage
     if request_func_input.stream:
@@ -355,14 +358,16 @@ async def async_request_eb_openai_chat_completions(
     if request_func_input.response_format:
         payload["response_format"] = request_func_input.response_format
 
-    # 随机输入开关
+    # Random-length input/output knob.
     if request_func_input.random_flag:
         payload["max_tokens"] = request_func_input.output_len
         payload["min_tokens"] = request_func_input.output_len
-        # 随机token_ids场景
-        if isinstance(request_func_input.prompt, list):
-            request_func_input.prompt_token_ids = request_func_input.prompt
-            request_func_input.prompt = ""
+
+    # When the prompt is a list of token ids, route through prompt_token_ids
+    # regardless of random_flag.
+    if isinstance(request_func_input.prompt, list):
+        request_func_input.prompt_token_ids = request_func_input.prompt
+        request_func_input.prompt = ""
 
     # 支持传入prompt_token_ids
     if request_func_input.prompt_token_ids:
@@ -421,6 +426,7 @@ async def async_request_eb_openai_chat_completions(
     res_ttft = 0.0
     st = time.perf_counter()
     most_recent_timestamp = st
+    last_chunk_timestamp = st
     token_timestamps = []
     tool_call_buffer = {}
     try:
@@ -429,48 +435,79 @@ async def async_request_eb_openai_chat_completions(
             if response.status == 200:
                 # 默认流式模式
                 if request_func_input.stream:
+                    # Reader loop 保持极简：只记录收包时间和原始 chunk，避免解析/拼接影响 ITL。
+                    stream_chunks = []
                     async for chunk_bytes in response.content:
+                        timestamp = time.perf_counter()
+                        wall_timestamp = time.time()
                         chunk_bytes = chunk_bytes.strip()
                         if not chunk_bytes:
                             continue
+                        if chunk_bytes in (b"data: [DONE]", b"[DONE]"):
+                            break
+                        stream_chunks.append((chunk_bytes, timestamp, wall_timestamp))
 
+                    generated_text_parts = []
+                    reasoning_content_parts = []
+                    for chunk_bytes, timestamp, wall_timestamp in stream_chunks:
                         chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
-                        if chunk != "[DONE]":
-                            # print("####chunk:", chunk, type(chunk))
-                            timestamp = time.perf_counter()
-                            data = json.loads(chunk)
-                            # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
+                        if chunk == "[DONE]":
+                            continue
+                        # print("####chunk:", chunk, type(chunk))
+                        data = json.loads(chunk)
 
-                            if "metrics" in data:
-                                metrics_list.append(data["metrics"])
+                        # 新增：捕获服务端流式 error
+                        if "error" in data:
+                            err = data["error"]
 
-                            if request_id == "None" and "id" in data:
-                                request_id = data["id"]
+                            output.success = False
+                            output.error = err.get("message", str(err))
 
-                            if choices := data.get("choices"):
-                                content = choices[0]["delta"].get("content")
-                                reason_content = choices[0]["delta"].get("reasoning_content")
-                                tool_calls = choices[0]["delta"].get("tool_calls")
-                                completion_token_ids = choices[0]["delta"].get("completion_token_ids", [])
-                                if tool_calls:
-                                    for tc in tool_calls:
-                                        idx = tc.get("index", 0)
+                            # 可选：保存更多信息
+                            output.error_type = err.get("type")
+                            output.error_code = err.get("code")
 
-                                        if idx not in tool_call_buffer:
-                                            tool_call_buffer[idx] = {
-                                                "id": tc.get("id"),
-                                                "name": "",
-                                                "arguments": "",
-                                            }
+                            print("####server error:", json.dumps(err, ensure_ascii=False))
 
-                                        func = tc.get("function", {})
+                            break
+                        # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
 
-                                        if "name" in func:
-                                            tool_call_buffer[idx]["name"] = func["name"]
+                        if "metrics" in data:
+                            metrics_list.append(data["metrics"])
 
-                                        if "arguments" in func:
-                                            tool_call_buffer[idx]["arguments"] += func["arguments"]
+                        if request_id == "None" and "id" in data:
+                            request_id = data["id"]
 
+                        if choices := data.get("choices"):
+                            content = choices[0]["delta"].get("content")
+                            reason_content = choices[0]["delta"].get("reasoning_content")
+                            tool_calls = choices[0]["delta"].get("tool_calls")
+                            completion_token_ids = choices[0]["delta"].get("completion_token_ids", [])
+                            has_token_chunk = bool(content or reason_content or tool_calls or completion_token_ids)
+                            if tool_calls:
+                                for tc in tool_calls:
+                                    idx = tc.get("index", 0)
+
+                                    if idx not in tool_call_buffer:
+                                        tool_call_buffer[idx] = {
+                                            "id": tc.get("id"),
+                                            "name": "",
+                                            "arguments": "",
+                                        }
+
+                                    if tc.get("id"):
+                                        tool_call_buffer[idx]["id"] = tc["id"]
+
+                                    func = tc.get("function", {})
+
+                                    if func.get("name"):
+                                        tool_call_buffer[idx]["name"] = func["name"]
+
+                                    if func.get("arguments"):
+                                        tool_call_buffer[idx]["arguments"] += func["arguments"]
+
+                            # 过滤 role / finish / usage 等空包，只用真正 token 包统计 TTFT/ITL。
+                            if has_token_chunk:
                                 # First token
                                 if ttft == 0.0:
                                     ttft = timestamp - st
@@ -489,40 +526,48 @@ async def async_request_eb_openai_chat_completions(
                                 else:
                                     output.itl.append(timestamp - most_recent_timestamp)
 
-                                # response首token
-                                if res_ttft == 0.0:
-                                    if content:
-                                        res_ttft = choices[0].get("arrival_time", timestamp)
-                                        output.res_ttft = res_ttft
-                                        usage = data.get("usage") or {}
-                                        output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
+                                most_recent_timestamp = timestamp
+                                token_timestamps.append(wall_timestamp)
 
-                                output.generated_text += content or ""
-                                output.reasoning_content += reason_content or ""
-                                if completion_token_ids:
-                                    output.output_ids.extend(completion_token_ids)
-                                # print(f"####content:{data}")
-                                output.arrival_time.append(choices[0].get("arrival_time", timestamp))
-                            elif usage := data.get("usage", {}):
-                                output.output_tokens = usage.get("completion_tokens", 0)
-                                output.prompt_tokens = usage.get("prompt_tokens", 0)
-                                prompt_tokens_details = usage.get("prompt_tokens_details") or {}
-                                if output.prompt_len == 0:
-                                    output.prompt_len = prompt_tokens_details.get("cached_tokens", 0)
+                            # response首token
+                            if res_ttft == 0.0:
+                                if content:
+                                    res_ttft = choices[0].get("arrival_time", timestamp)
+                                    output.res_ttft = res_ttft
+                                    usage = data.get("usage") or {}
+                                    output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
 
-                            most_recent_timestamp = timestamp
-                            token_timestamps.append(time.time())
+                            if content:
+                                generated_text_parts.append(content)
+                            if reason_content:
+                                reasoning_content_parts.append(reason_content)
+                            if completion_token_ids:
+                                output.output_ids.extend(completion_token_ids)
+                            # print(f"####content:{data}")
+                            arrival = choices[0].get("arrival_time")
+                            if arrival is not None and has_token_chunk:
+                                output.has_arrival_time = True
+                                output.arrival_time.append(arrival)
+                        elif usage := data.get("usage", {}):
+                            output.output_tokens = usage.get("completion_tokens", 0)
+                            output.prompt_tokens = usage.get("prompt_tokens", 0)
+                            prompt_tokens_details = usage.get("prompt_tokens_details") or {}
+                            if output.prompt_len == 0:
+                                output.prompt_len = prompt_tokens_details.get("cached_tokens", 0)
 
-                    # output.generated_text = generated_text
-                    # 在流式结束时，记录最后一个 chunk 收到的时间戳
-                    output.end_timestamp = most_recent_timestamp
+                        last_chunk_timestamp = timestamp
+
+                    output.generated_text = "".join(generated_text_parts)
+                    output.reasoning_content = "".join(reasoning_content_parts)
+                    # 在流式结束时，记录最后一个非 DONE chunk 收到的时间戳
+                    output.end_timestamp = last_chunk_timestamp
                     # 截断case
-                    usage = data.get("usage") or {}
+                    usage = data.get("usage", {})
                     output.output_tokens = usage.get("completion_tokens", 0)
                     output.prompt_tokens = usage.get("prompt_tokens", 0)
-                    prompt_tokens_details = usage.get("prompt_tokens_details") or {}
                     if output.prompt_len == 0:
-                        output.prompt_len = prompt_tokens_details.get("cached_tokens", 0)
+                        prompt_details = usage.get("prompt_tokens_details") or {}
+                        output.prompt_len = prompt_details.get("cached_tokens", 0)
 
                     if tool_call_buffer:
                         for _, tc in tool_call_buffer.items():
@@ -533,14 +578,20 @@ async def async_request_eb_openai_chat_completions(
 
                             output.tool_calls.append({"id": tc["id"], "name": tc["name"], "arguments": args})
 
+                    # 如果没有thinking内容，则response首token等于ttft
+                    if not output.reasoning_content:
+                        output.res_ttft = output.ttft
                     # 新增metrics统计，计算首token过滤空包
                     output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
 
                     has_text = output.generated_text.strip() or output.reasoning_content.strip()
                     has_tool = getattr(output, "tool_calls", None)
 
+                    # 如果前面已经有服务端错误，保留原错误
+                    if output.error:
+                        output.success = False
                     # 兼容思考内容超长截断的情况，此时回复内容为空
-                    if not has_text and not has_tool:
+                    elif not has_text and not has_tool:
                         output.success = False
                         output.reasoning_tokens = output.output_tokens
                         output.error = "No generated text found!"
@@ -587,7 +638,6 @@ async def async_request_eb_openai_chat_completions(
 
 async def simple_tool_call(model_output, tool_url: str, timeout=60):
     """调用工具函数"""
-    import re
 
     import httpx
 
@@ -599,18 +649,20 @@ async def simple_tool_call(model_output, tool_url: str, timeout=60):
         args = tc.get("arguments", {})
         tool_id = tc.get("id")
     else:
-        match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
-        if not match:
-            return "", False, "", tool_id
-
-        block = match.group(1).strip()
-        lines = block.splitlines()
-        tool_name = lines[0].strip()
-
-        key = re.search(r"<arg_key>(.*?)</arg_key>", block)
-        val = re.search(r"<arg_value>(.*?)</arg_value>", block)
-
-        args = {key.group(1): val.group(1)} if key and val else {}
+        # 取消正则逻辑
+        return "", False, "", tool_id
+        # match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
+        # if not match:
+        #     return "", False, "", tool_id
+        #
+        # block = match.group(1).strip()
+        # lines = block.splitlines()
+        # tool_name = lines[0].strip()
+        #
+        # key = re.search(r"<arg_key>(.*?)</arg_key>", block)
+        # val = re.search(r"<arg_value>(.*?)</arg_value>", block)
+        #
+        # args = {key.group(1): val.group(1)} if key and val else {}
 
     if not tool_name:
         return "", False, "", tool_id
