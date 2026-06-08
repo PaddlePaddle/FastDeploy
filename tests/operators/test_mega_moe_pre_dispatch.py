@@ -73,7 +73,7 @@ class TestMegaMoEPreDispatch(unittest.TestCase):
     def setUpClass(cls):
         paddle.seed(2025)
         strategy = fleet.DistributedStrategy()
-        cls.expert_parallel_size = 8
+        cls.expert_parallel_size = 2
         strategy.hybrid_configs = {
             "dp_degree": 1,
             "mp_degree": cls.expert_parallel_size,
@@ -95,7 +95,7 @@ class TestMegaMoEPreDispatch(unittest.TestCase):
         self.x = paddle.randn([self.num_tokens, self.hidden_size], dtype=paddle.bfloat16)
         scores = paddle.randn((self.num_tokens, self.num_experts), dtype=paddle.float32)
         self.topk_weights, self.topk_idx = paddle.topk(scores, self.top_k, axis=-1, largest=True, sorted=False)
-        self.topk_idx = self.topk_idx.astype("int32")
+        self.topk_idx = self.topk_idx.astype("int64")
         self.topk_weights = self.topk_weights.astype("float32")
 
     def _new_buffer(self):
