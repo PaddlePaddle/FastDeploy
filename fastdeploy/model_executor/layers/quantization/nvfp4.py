@@ -25,6 +25,7 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe import FusedMoE
+from fastdeploy.model_executor.layers.moe.ep import EPRunner
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.utils import (
     create_parameter_and_copy,
@@ -33,7 +34,6 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
 )
 from fastdeploy.worker.tbo import let_another_thread_run
-from fastdeploy.model_executor.layers.moe.ep import EPRunner
 
 from .quant_base import QuantConfigBase, QuantMethodBase, is_nvfp4_supported
 

@@ -237,6 +237,7 @@ def fused_stack_transpose_quant(expert_weight_list, use_ue8m0=False):
 
     return w, scale
 
+
 def _interleave_weights(l1_weights):
     # [gate: 0..7, up: 0..7, gate: 8..15, up: 8..15, ...] instead of [gate | up]
     def interleave(t, gran: int = 8) -> paddle.Tensor:
@@ -248,15 +249,18 @@ def _interleave_weights(l1_weights):
 
     return interleave(l1_weights[0]), interleave(l1_weights[1])
 
+
 def _transpose_sf_for_utccp(sf: paddle.Tensor) -> paddle.Tensor:
     num_groups, mn, packed_sf_k = sf.shape
     assert sf.dtype == paddle.int and mn % 128 == 0
     # sf is MN-major: strides [mn*packed_sf_k, 1, mn]
     # We need to do the 4x32 transpose in data while preserving MN-major strides
     sf_c = sf.contiguous()  # make C-contiguous for reshape/transpose
-    result_c = (sf_c.reshape(num_groups, -1, 4, 32, packed_sf_k)
-                .transpose(2, 3)
-                .reshape(num_groups, mn, packed_sf_k)
-                .contiguous())
+    result_c = (
+        sf_c.reshape(num_groups, -1, 4, 32, packed_sf_k)
+        .transpose(2, 3)
+        .reshape(num_groups, mn, packed_sf_k)
+        .contiguous()
+    )
     # Convert back to MN-major layout: transpose last two dims, make contiguous, transpose back
     return result_c.transpose(1, 2).contiguous().transpose(1, 2)

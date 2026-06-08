@@ -22,6 +22,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
+from fastdeploy.model_executor.layers.moe.ep import EPRunner
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -39,7 +40,6 @@ from fastdeploy.model_executor.utils import (
     free_tensor,
     set_weight_attrs,
 )
-from fastdeploy.model_executor.layers.moe.ep import EPRunner
 
 from .utils import get_moe_scores
 

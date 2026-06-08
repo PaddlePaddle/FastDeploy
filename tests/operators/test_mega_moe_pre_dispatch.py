@@ -17,10 +17,12 @@ import unittest
 import numpy as np
 import paddle
 import paddle.distributed as dist
+from ernie5_serving.mm_custom_ops import mega_moe_pre_dispatch
 from paddle.distributed import fleet
 
-from ernie5_serving.mm_custom_ops import mega_moe_pre_dispatch
-from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import MegaMoEBuffer
+from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
+    MegaMoEBuffer,
+)
 
 
 def ceil_div(x: int, y: int) -> int:
@@ -108,9 +110,7 @@ class TestMegaMoEPreDispatch(unittest.TestCase):
 
     def mega_moe_pre_dispatch_ref(self, x: paddle.Tensor, topk_idx: paddle.Tensor, topk_weights: paddle.Tensor):
         num_tokens = x.shape[0]
-        x_fp8, x_scale_tensor = per_token_cast_to_fp8(
-            x, use_ue8m0=True, gran_k=self.group_size, use_packed_ue8m0=True
-        )
+        x_fp8, x_scale_tensor = per_token_cast_to_fp8(x, use_ue8m0=True, gran_k=self.group_size, use_packed_ue8m0=True)
         return (
             x_fp8,
             x_scale_tensor,

@@ -22,31 +22,33 @@ import paddle
 import paddle.nn.functional as F
 from paddle import nn
 from paddleformers.utils.log import logger
+
 import fastdeploy
-from fastdeploy.model_executor.layers.moe.ep import deep_ep, EPRunner, FakeEPRunner
+from fastdeploy.model_executor.layers.moe.ep import EPRunner, FakeEPRunner, deep_ep
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
-    deep_gemm,
-    paddlefleet_ops,
     _interleave_weights,
     _transpose_sf_for_utccp,
+    deep_gemm,
+    paddlefleet_ops,
 )
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import (
     count_tokens_per_expert_func,
     depermute_prefill_combine,
-    prefill_permute_to_masked_gemm,
     mega_moe_pre_dispatch,
+    prefill_permute_to_masked_gemm,
+)
+from fastdeploy.model_executor.utils import (
+    TensorTracker,
+    free_tensor,
+    get_sm_version,
+    set_weight_attrs,
+    weight_fully_copied,
 )
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import ceil_div, register_custom_python_op, singleton
 from fastdeploy.worker.tbo import let_another_thread_run
-from fastdeploy.model_executor.utils import (
-    TensorTracker,
-    set_weight_attrs,
-    free_tensor,
-    weight_fully_copied,
-    get_sm_version,
-)
+
 from .fused_moe_backend_base import MoEMethodBase
 from .fused_moe_triton_backend import BlockWiseFP8MoEMethod
 
@@ -953,7 +955,7 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
         """
         Triton MoE create weight process.
         """
-        logger.info("mega create_weights")
+        logger.info("MegaMoE create_weights...")
         self.model_format = extra_weight_attrs.get("model_format")
         self.up_gate_proj_quant_weight_shape = [
             layer.num_local_experts,
@@ -984,12 +986,12 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
         self.up_gate_proj_packed_weight_shape = [
             layer.num_local_experts,
             layer.moe_intermediate_size * 2,
-            layer.hidden_size // 2, # 4-bit packing
+            layer.hidden_size // 2,  # 4-bit packing
         ]
         self.down_proj_packed_weight_shape = [
             layer.num_local_experts,
             layer.hidden_size,
-            layer.moe_intermediate_size // 2, # 4-bit packing
+            layer.moe_intermediate_size // 2,  # 4-bit packing
         ]
         up_num_scales = ceil_div(layer.hidden_size, self.gran_k)
         down_num_scales = ceil_div(layer.moe_intermediate_size, self.gran_k)
@@ -1005,21 +1007,6 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
         ]
         self.up_gate_proj_weight_shape = self.up_gate_proj_quant_weight_shape
         self.down_proj_weight_shape = self.down_proj_quant_weight_shape
-
-        logger.info(
-            "MegaMoE create_weights: "
-            f"is_checkpoint_bf16={self.quant_config.is_checkpoint_bf16}, "
-            f"load_choices={layer.fd_config.load_config.load_choices}, "
-            f"model_format={self.model_format}, "
-            f"up_gate_bf16_shape={self.up_gate_proj_bf16_weight_shape}, "
-            f"down_bf16_shape={self.down_proj_bf16_weight_shape}, "
-            f"up_gate_quant_shape={self.up_gate_proj_quant_weight_shape}, "
-            f"down_quant_shape={self.down_proj_quant_weight_shape}, "
-            f"up_gate_packed_shape={self.up_gate_proj_packed_weight_shape}, "
-            f"down_packed_shape={self.down_proj_packed_weight_shape}, "
-            f"up_gate_scale_shape={self.up_gate_proj_scale_shape}, "
-            f"down_scale_shape={self.down_proj_scale_shape}"
-        )
 
         if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
             if self.model_format != "torch":
@@ -1134,7 +1121,7 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
             )
 
     def init_ep(self, layer: nn.Layer) -> None:
-        logger.info("USE MegaMoE backend")
+        logger.info("Use MegaMoE backend")
         if layer.ep_size <= 1:
             return
 
@@ -1158,24 +1145,25 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
             layer.moe_intermediate_size,
         ).buffer
         self.num_max_tokens_per_rank = self.mega_moe_buffer.num_max_tokens_per_rank
-        self.cumulative_local_expert_recv_stats = paddle.zeros(
-            (layer.num_local_experts,), dtype=paddle.int32
-        )
+        self.cumulative_local_expert_recv_stats = paddle.zeros((layer.num_local_experts,), dtype=paddle.int32)
 
         self.ep_prefill_runner = FakeEPRunner()
         self.ep_decoder_runner = FakeEPRunner()
-    
+
     def process_weights_after_loading(self, layer):
         def cast_grouped_weights_to_fp4(bf16_weights: paddle.Tensor):
             num_groups, n, k = bf16_weights.shape
             w = paddle.empty((num_groups, n, k // 2), dtype=paddle.int8)
             w_sf = paddle.empty((num_groups, n, k // self.gran_k), dtype=paddle.float32)
             for i in range(num_groups):
-                w[i], w_sf[i] = deep_gemm.per_token_cast_to_fp4(
-                    bf16_weights[i], use_ue8m0=True, gran_k=self.gran_k
-                )
+                w[i], w_sf[i] = deep_gemm.per_token_cast_to_fp4(bf16_weights[i], use_ue8m0=True, gran_k=self.gran_k)
             w = w.contiguous()
             w_sf = w_sf.contiguous()
+
+            # pack four scales into one and transform to specific stride.
+            # for example:
+            # shape: [48, 6144, 224] -> [48, 6144, 56]
+            # stride: [1376256, 224, 1] -> [344064, 1, 6144]
             w_sf = deep_gemm.transform_sf_into_required_layout(w_sf, n, k, (1, self.gran_k), num_groups)
             return w, w_sf
 
@@ -1194,9 +1182,13 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
                 self.up_gate_proj_quant_weight_shape if weight_type == "gate_up" else self.down_proj_quant_weight_shape
             )
             expected_packed_shape = (
-                self.up_gate_proj_packed_weight_shape if weight_type == "gate_up" else self.down_proj_packed_weight_shape
+                self.up_gate_proj_packed_weight_shape
+                if weight_type == "gate_up"
+                else self.down_proj_packed_weight_shape
             )
-            expected_scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
+            expected_scale_shape = (
+                self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
+            )
 
             if list(weight.shape) != list(expected_weight_shape):
                 raise ValueError(
@@ -1207,9 +1199,6 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
                 weight = weight.astype(paddle.bfloat16)
             weight = weight.contiguous()
 
-            logger.info(
-                f"MegaMoE dynamic quantize {weight_type}: input shape={list(weight.shape)}, dtype={weight.dtype}"
-            )
             weight_quantized, scale = cast_grouped_weights_to_fp4(weight)
             if weight_type == "gate_up":
                 weight_quantized, scale = _interleave_weights((weight_quantized, scale))
@@ -1251,10 +1240,6 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
             )
             getattr(layer, weight_name).copy_(weight_quantized, False)
             getattr(layer, scale_name).copy_(scale, False)
-            logger.info(
-                f"MegaMoE dynamic quantize {weight_type}: packed weight shape={list(weight_quantized.shape)}, "
-                f"scale shape={list(scale.shape)}"
-            )
 
         if not self.quant_config.is_checkpoint_bf16:
             return
@@ -1267,7 +1252,6 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
         """
         Paddle cutlass process prequanted weights.
         """
-        logger.info(f"start process_prequanted_weights in megamoe")
         up_gate_proj_expert_weight_key = layer.weight_key_map.get("up_gate_proj_expert_weight_key", None)
         down_proj_expert_weight_key = layer.weight_key_map.get("down_proj_expert_weight_key", None)
         up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
@@ -1304,20 +1288,11 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
                 layer.fd_config.model_config.model,
             )
 
-            up_gate_proj_weight_scale.append(
-                up_gate_weight_scale
-            )
-            down_proj_weight_scale.append(
-                down_weight_scale
-            )
+            up_gate_proj_weight_scale.append(up_gate_weight_scale)
+            down_proj_weight_scale.append(down_weight_scale)
 
-
-        up_gate_proj_weight = (
-            paddle.stack(up_gate_proj_weights, axis=0)
-        )
-        down_proj_weight = (
-            paddle.stack(down_proj_weights, axis=0)
-        )
+        up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_weight = paddle.stack(down_proj_weights, axis=0)
         up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1])
         down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1])
 
@@ -1331,14 +1306,10 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
             getattr(layer, name).data = tensor
 
     def apply_ep_prefill(self, layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj):
-        return self.apply_mage_moe(
-            layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj
-        )
+        return self.apply_mage_moe(layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj)
 
     def apply_ep_decode(self, layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj):
-        return self.apply_mage_moe(
-            layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj
-        )
+        return self.apply_mage_moe(layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj)
 
     def apply_mage_moe(self, layer, x, gate, topk_ids_hookfunc, shared_experts, fc1_latent_proj, fc2_latent_proj):
         hidden_size = layer.hidden_size
@@ -1351,9 +1322,7 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
 
         buffer_capacity = self.mega_moe_buffer.x.shape[0]
         if num_tokens > buffer_capacity:
-            raise ValueError(
-                f"MegaMoE buffer capacity exceeded: num_tokens={num_tokens}, capacity={buffer_capacity}"
-            )
+            raise ValueError(f"MegaMoE buffer capacity exceeded: num_tokens={num_tokens}, capacity={buffer_capacity}")
 
         # copy x, topk_idx, topk_weights to mega_moe_buffer and quantization.
         mega_moe_pre_dispatch(
@@ -1365,7 +1334,7 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
             self.mega_moe_buffer.topk_idx,
             self.mega_moe_buffer.topk_weights,
             self.num_max_tokens_per_rank,
-            32, # group_size
+            32,  # group_size
         )
 
         l1_weight = getattr(layer, self.added_weight_attrs[0])

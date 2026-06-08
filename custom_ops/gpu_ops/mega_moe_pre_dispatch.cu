@@ -138,7 +138,10 @@ void CheckSameShape(const paddle::Tensor& lhs,
                     const paddle::Tensor& rhs,
                     const char* lhs_name,
                     const char* rhs_name) {
-  PD_CHECK(lhs.shape() == rhs.shape(), lhs_name, " shape must equal ", rhs_name,
+  PD_CHECK(lhs.shape() == rhs.shape(),
+           lhs_name,
+           " shape must equal ",
+           rhs_name,
            " shape");
 }
 
@@ -153,16 +156,15 @@ void LaunchMegaMoEPreDispatch(const MegaMoEPreDispatchParams& params,
 
 }  // namespace
 
-void MegaMoePreDispatch(
-    const paddle::Tensor& x,
-    const paddle::Tensor& topk_idx,
-    const paddle::Tensor& topk_weights,
-    const paddle::Tensor& buf_x,
-    const paddle::Tensor& buf_x_sf,
-    const paddle::Tensor& buf_topk_idx,
-    const paddle::Tensor& buf_topk_weights,
-    int64_t num_max_tokens_per_rank,
-    int64_t group_size) {
+void MegaMoePreDispatch(const paddle::Tensor& x,
+                        const paddle::Tensor& topk_idx,
+                        const paddle::Tensor& topk_weights,
+                        const paddle::Tensor& buf_x,
+                        const paddle::Tensor& buf_x_sf,
+                        const paddle::Tensor& buf_topk_idx,
+                        const paddle::Tensor& buf_topk_weights,
+                        int64_t num_max_tokens_per_rank,
+                        int64_t group_size) {
   CheckShape2D(x, "x");
   CheckShape2D(topk_idx, "topk_idx");
   CheckShape2D(topk_weights, "topk_weights");
@@ -171,21 +173,27 @@ void MegaMoePreDispatch(
   CheckShape2D(buf_topk_idx, "buf_topk_idx");
   CheckShape2D(buf_topk_weights, "buf_topk_weights");
   CheckSameShape(topk_idx, topk_weights, "topk_idx", "topk_weights");
-  CheckSameShape(buf_topk_idx, buf_topk_weights, "buf_topk_idx",
-                 "buf_topk_weights");
+  CheckSameShape(
+      buf_topk_idx, buf_topk_weights, "buf_topk_idx", "buf_topk_weights");
 
   PD_CHECK(x.dtype() == paddle::DataType::BFLOAT16,
-           "x must be bfloat16, but got ", x.dtype());
+           "x must be bfloat16, but got ",
+           x.dtype());
   PD_CHECK(topk_idx.dtype() == paddle::DataType::INT64,
-           "topk_idx must be int64, but got ", topk_idx.dtype());
+           "topk_idx must be int64, but got ",
+           topk_idx.dtype());
   PD_CHECK(topk_weights.dtype() == paddle::DataType::FLOAT32,
-           "topk_weights must be float32, but got ", topk_weights.dtype());
+           "topk_weights must be float32, but got ",
+           topk_weights.dtype());
   PD_CHECK(buf_x.dtype() == paddle::DataType::FLOAT8_E4M3FN,
-           "buf_x must be float8_e4m3fn, but got ", buf_x.dtype());
+           "buf_x must be float8_e4m3fn, but got ",
+           buf_x.dtype());
   PD_CHECK(buf_x_sf.dtype() == paddle::DataType::INT32,
-           "buf_x_sf must be int32, but got ", buf_x_sf.dtype());
+           "buf_x_sf must be int32, but got ",
+           buf_x_sf.dtype());
   PD_CHECK(buf_topk_idx.dtype() == paddle::DataType::INT64,
-           "buf_topk_idx must be int64, but got ", buf_topk_idx.dtype());
+           "buf_topk_idx must be int64, but got ",
+           buf_topk_idx.dtype());
   PD_CHECK(buf_topk_weights.dtype() == paddle::DataType::FLOAT32,
            "buf_topk_weights must be float32, but got ",
            buf_topk_weights.dtype());
@@ -197,19 +205,24 @@ void MegaMoePreDispatch(
 
   PD_CHECK(num_max_tokens_per_rank <= padded_max_i64,
            "num_max_tokens_per_rank must not exceed buf_x.shape[0], but got ",
-           num_max_tokens_per_rank, " vs ", padded_max_i64);
+           num_max_tokens_per_rank,
+           " vs ",
+           padded_max_i64);
   PD_CHECK(num_tokens_i64 == topk_idx.shape()[0],
            "x.shape[0] must equal topk_idx.shape[0]");
   PD_CHECK(buf_x.shape()[1] == hidden_i64,
-           "buf_x.shape[1] must equal hidden, but got ", buf_x.shape()[1],
-           " vs ", hidden_i64);
+           "buf_x.shape[1] must equal hidden, but got ",
+           buf_x.shape()[1],
+           " vs ",
+           hidden_i64);
   PD_CHECK(buf_topk_idx.shape()[0] == padded_max_i64,
            "buf_topk_idx.shape[0] must equal padded_max");
   PD_CHECK(buf_topk_idx.shape()[1] == top_k_i64,
            "buf_topk_idx.shape[1] must equal top_k");
 
   PD_CHECK(group_size == 32 || group_size == 64 || group_size == 128,
-           "unsupported group_size: ", group_size);
+           "unsupported group_size: ",
+           group_size);
   PD_CHECK(num_tokens_i64 <= num_max_tokens_per_rank,
            "num_tokens must not exceed padded_max");
   PD_CHECK(hidden_i64 % group_size == 0,
@@ -220,7 +233,9 @@ void MegaMoePreDispatch(
            "buf_x_sf.shape[0] must equal padded_max");
   PD_CHECK(buf_x_sf.shape()[1] == num_groups_i64 / 4,
            "buf_x_sf.shape[1] must equal hidden/group_size/4, but got ",
-           buf_x_sf.shape()[1], " vs ", num_groups_i64 / 4);
+           buf_x_sf.shape()[1],
+           " vs ",
+           num_groups_i64 / 4);
   PD_CHECK(hidden_i64 % static_cast<int64_t>(kVecElems) == 0,
            "hidden must be a multiple of 8 (16B bf16 loads)");
   const int64_t num_threads_i64 = hidden_i64 / static_cast<int64_t>(kVecElems);
@@ -256,16 +271,16 @@ void MegaMoePreDispatch(
     auto stream = x.stream();
     switch (group_size) {
       case 32:
-        LaunchMegaMoEPreDispatch<32>(params, num_total_blocks, num_threads,
-                                     stream);
+        LaunchMegaMoEPreDispatch<32>(
+            params, num_total_blocks, num_threads, stream);
         break;
       case 64:
-        LaunchMegaMoEPreDispatch<64>(params, num_total_blocks, num_threads,
-                                     stream);
+        LaunchMegaMoEPreDispatch<64>(
+            params, num_total_blocks, num_threads, stream);
         break;
       case 128:
-        LaunchMegaMoEPreDispatch<128>(params, num_total_blocks, num_threads,
-                                      stream);
+        LaunchMegaMoEPreDispatch<128>(
+            params, num_total_blocks, num_threads, stream);
         break;
       default:
         PD_THROW("unsupported group_size: ", group_size);
@@ -283,7 +298,8 @@ std::vector<paddle::DataType> MegaMoePreDispatchInferDtype(
     const paddle::DataType& buf_x_sf_dtype,
     const paddle::DataType& buf_topk_idx_dtype,
     const paddle::DataType& buf_topk_weights_dtype) {
-  return {buf_x_dtype, buf_x_sf_dtype, buf_topk_idx_dtype, buf_topk_weights_dtype};
+  return {
+      buf_x_dtype, buf_x_sf_dtype, buf_topk_idx_dtype, buf_topk_weights_dtype};
 }
 
 std::vector<std::vector<int64_t>> MegaMoePreDispatchInferShape(
@@ -294,9 +310,9 @@ std::vector<std::vector<int64_t>> MegaMoePreDispatchInferShape(
     const std::vector<int64_t>& buf_x_sf_shape,
     const std::vector<int64_t>& buf_topk_idx_shape,
     const std::vector<int64_t>& buf_topk_weights_shape) {
-  return {buf_x_shape, buf_x_sf_shape, buf_topk_idx_shape, buf_topk_weights_shape};
+  return {
+      buf_x_shape, buf_x_sf_shape, buf_topk_idx_shape, buf_topk_weights_shape};
 }
-
 
 PD_BUILD_STATIC_OP(mega_moe_pre_dispatch)
     .Inputs({"x",

@@ -23,7 +23,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.model_executor.layers.moe.ep import deep_ep, EPRunner
+from fastdeploy.model_executor.layers.moe.ep import EPRunner, deep_ep
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     deep_gemm,
     paddlefleet_ops,

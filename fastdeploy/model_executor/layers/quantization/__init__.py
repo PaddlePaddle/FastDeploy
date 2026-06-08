@@ -68,11 +68,10 @@ def _is_full_quantization_config(quantization_dict):
         return True
     return False
 
+
 def _is_mega_moe_quantization_config(quantization_config):
-    return (
-        isinstance(quantization_config, dict)
-        and quantization_config.get("moe_quant_type") == "wfp4afp8"
-    )
+    return isinstance(quantization_config, dict) and quantization_config.get("moe_quant_type") == "wfp4afp8"
+
 
 def _get_mega_moe_quantization_config():
     return {
@@ -95,9 +94,7 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
         if args.quantization is None and model_config.quantization_config is None:
             args.quantization = mega_moe_quantization_config
         if args.quantization is not None and not _is_mega_moe_quantization_config(args.quantization):
-            raise ValueError(
-                "--enable-mega-moe requires moe_quant_type=wfp4afp8."
-            )
+            raise ValueError("--enable-mega-moe requires moe_quant_type=wfp4afp8.")
         if model_config.quantization_config is not None and not _is_mega_moe_quantization_config(
             model_config.quantization_config
         ):
@@ -282,9 +279,9 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .tensor_wise_fp8 import TensorWiseFP8Config
     from .w4a8 import W4A8Config
     from .w4afp8 import W4AFP8Config
-    from .wfp4afp8 import WFP4AFP8Config
     from .w8a8 import W8A8Config
     from .weight_only import WeightOnlyConfig, WINT4Config, WINT8Config
+    from .wfp4afp8 import WFP4AFP8Config
     from .wfp8afp8 import WFP8AFP8Config
     from .wint2 import WINT2Config
 

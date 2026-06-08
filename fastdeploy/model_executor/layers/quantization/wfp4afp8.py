@@ -16,13 +16,11 @@
 
 from typing import Optional
 
-import paddle
+from paddleformers.utils.log import logger
 
-import fastdeploy
 
 from ..moe import FusedMoE
 from .quant_base import QuantConfigBase, QuantMethodBase
-from paddleformers.utils.log import logger
 
 QUANT_SCALING_FACTOR = 6
 
@@ -58,9 +56,9 @@ class WFP4AFP8Config(QuantConfigBase):
         logger.info("Currently only support DeepGEMMMegaMoE for wfp4afp8")
         if isinstance(layer, FusedMoE):
             from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
-                DeepGemmMegaMoEMethod
+                DeepGemmMegaMoEMethod,
             )
+
             return DeepGemmMegaMoEMethod(self)
         else:
             raise NotImplementedError(f"wfp4afp8 quant method not supported for {type(layer)}")
-        

@@ -43,6 +43,7 @@ if current_platform.is_cuda():
     except:
         logger.warning("import w4afp8_gemm_scale_permute Failed!")
 
+from fastdeploy.model_executor.layers.moe.ep import EPRunner
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.quantization.fp8_utils import paddlefleet_ops
 from fastdeploy.model_executor.utils import (
@@ -52,7 +53,6 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     weight_fully_copied,
 )
-from fastdeploy.model_executor.layers.moe.ep import EPRunner
 
 
 def m_grouped_bf16_gemm_nn_contiguous(x, y, expert_idx_per_token):

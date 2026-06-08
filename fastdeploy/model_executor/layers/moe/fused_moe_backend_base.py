@@ -30,7 +30,7 @@ from fastdeploy.model_executor.utils import (
 from fastdeploy.platforms import current_platform
 
 from ..quantization.quant_base import QuantMethodBase
-from fastdeploy import envs
+
 
 class MoEMethodBase(QuantMethodBase):
     """ """

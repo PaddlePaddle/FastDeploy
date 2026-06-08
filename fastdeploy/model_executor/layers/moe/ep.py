@@ -793,6 +793,7 @@ class EPDecoderRunner(EPRunner):
 
 class FakeEPRunner:
     """ """
+
     def __init__(self, *args, **kwargs):
         pass
 
@@ -803,6 +804,6 @@ class FakeEPRunner:
     def combine(self, *args, **kwargs):
         """ """
         pass
-    
+
     def clean_low_latency_buffer(self):
         pass
