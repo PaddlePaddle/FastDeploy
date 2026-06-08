@@ -70,7 +70,7 @@ jobs:
       workflow-name: build_gpu
 
   fd-build:
-    runs-on: [self-hosted, GPU-Build]
+    runs-on: [self-hosted, GPU-h20-New-Driver]
     needs: check_bypass
     if: ${{ needs.check_bypass.outputs.can-skip != 'true' }}
     timeout-minutes: 360
