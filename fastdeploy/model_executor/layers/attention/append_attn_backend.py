@@ -20,6 +20,7 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
+import numpy as np
 import paddle
 
 from fastdeploy.model_executor.layers.attention.ops import (
@@ -34,7 +35,6 @@ from fastdeploy.model_executor.layers.attention.ops import (
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
-import numpy as np
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
@@ -524,5 +524,97 @@ class AppendAttentionBackend(AttentionBackend):
                 sliding_window,
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
+                getattr(layer, "only_do_attn", False),
             )
+        return res
+
+    def forward_unitest(
+        self,
+        q: paddle.Tensor,
+        k: paddle.Tensor,
+        v: paddle.Tensor,
+        qkv: paddle.Tensor,
+        compressed_kv: paddle.Tensor,
+        k_pe: paddle.Tensor,
+        layer: Attention,
+        forward_meta: ForwardMeta,
+    ) -> paddle.Tensor:
+        """
+        This is a utility function invoked in unitest only.
+        """
+
+        cache_k = forward_meta.caches[2 * layer.layer_id]
+        cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+
+        head_dim_q = 192
+        head_dim_v = 128
+
+        forward_meta.caches[2 * layer.layer_id] = paddle.randn(cache_k.shape[:3] + [head_dim_q])
+        forward_meta.caches[2 * layer.layer_id + 1] = paddle.randn(cache_v.shape[:3] + [head_dim_v])
+
+        cache_k = forward_meta.caches[2 * layer.layer_id]
+        cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+
+        qkv = paddle.randn([qkv.shape[0], 56 * head_dim_q + 4 * head_dim_q + 4 * head_dim_v])
+
+        bsz = forward_meta.cu_seqlens_q.shape[0] - 1
+
+        q_token_num = qkv.shape[0]
+        head_dim_q = cache_k.shape[3]
+        kv_heads = cache_k.shape[1]
+        head_dim_v = cache_v.shape[-1]
+
+        q_num_heads = (qkv.shape[-1] - kv_heads * (head_dim_q + head_dim_v)) // head_dim_q
+
+        q = qkv[:, : q_num_heads * head_dim_q].contiguous().reshape([0, q_num_heads, head_dim_q])
+
+        res_baseline = paddle.zeros([q_token_num, q_num_heads, head_dim_v], dtype=q.dtype)
+
+        page_size = 64
+
+        for batch_id in range(bsz):
+            kv_len = forward_meta.seq_lens_decoder[batch_id].item() + forward_meta.seq_lens_this_time[batch_id].item()
+            extract_k = paddle.zeros([kv_heads, kv_len, head_dim_q], dtype=q.dtype)
+            extract_v = paddle.zeros([kv_heads, kv_len, head_dim_v], dtype=q.dtype)
+
+            for local_seq_id in range(0, kv_len, page_size):
+                start = local_seq_id
+                end = min(local_seq_id + page_size, kv_len)
+                physical_id = forward_meta.block_tables[batch_id, local_seq_id // page_size].item()
+
+                page_end = page_size if end % page_size == 0 else end % page_size
+                extract_k[:, start:end, :] = cache_k[physical_id, :, :page_end, :]
+                extract_v[:, start:end, :] = cache_v[physical_id, :, :page_end, :]
+            extract_k = extract_k.reshape([kv_heads, 1, kv_len, head_dim_q]).tile([1, q_num_heads // kv_heads, 1, 1])
+            extract_v = extract_v.reshape([kv_heads, 1, kv_len, head_dim_v]).tile([1, q_num_heads // kv_heads, 1, 1])
+            extract_k.reshape_([q_num_heads, kv_len, head_dim_q])
+            extract_v.reshape_([q_num_heads, kv_len, head_dim_v])
+
+            start = forward_meta.cu_seqlens_q[batch_id].item()
+            end = forward_meta.cu_seqlens_q[batch_id + 1].item()
+            q_len = end - start
+            this_batch_q = q[start:end, :, :].contiguous().transpose([1, 0, 2]).contiguous()
+
+            p = paddle.matmul(this_batch_q, extract_k.transpose([0, 2, 1]).contiguous())
+            p = p * (head_dim_q**-0.5)
+
+            tmp_zeros = np.zeros((q_len, kv_len)) - 1
+            for i in range(q_len):
+                tmp_zeros[i][: kv_len - q_len + i + 1] = 0
+            mask = tmp_zeros * 1000
+            mask = paddle.to_tensor(mask, dtype=q.dtype)
+            p = p + mask[None, :]
+
+            p = paddle.nn.functional.softmax(p, -1)
+            out = paddle.matmul(p, extract_v).contiguous()
+            res_baseline[start:end, :, :] = out.transpose([1, 0, 2]).contiguous()
+        res_baseline.reshape_([q_token_num, q_num_heads * head_dim_v])
+
+        res = self.forward_mixed(q, k, v, qkv, compressed_kv, k_pe, layer, forward_meta)
+
+        # print((res - res_baseline).abs().max())
+        assert (res - res_baseline).abs().max() <= 0.1
+
+        return paddle.empty([res.shape[0], 7168])
+
         return res
