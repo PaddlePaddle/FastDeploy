@@ -348,7 +348,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/gelu_tanh.cu",
         "gpu_ops/reasoning_phase_token_constraint.cu",
         "gpu_ops/get_attn_mask_q.cu",
-        "gpu_ops/mega_moe_pre_dispatch.cu"
+        "gpu_ops/mega_moe_pre_dispatch.cu",
     ]
     sm_versions = get_sm_version(archs)
     # Some kernels in this file require SM75+ instructions. Exclude them when building SM70 (V100).
@@ -523,7 +523,7 @@ elif paddle.is_compiled_with_cuda():
 
             # Add SM100 specific sources if any, e.g., for new hardware intrinsics
             # sources += ["gpu_ops/cutlass_kernels/w8a8/c4x_sm100.cu"] # Example
-            pass # No SM100 specific sources identified yet beyond what CUTLASS handles
+            pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
 
         if has_generic_fp8:
             # For SM89 (Ada) or other architectures without dedicated paths
