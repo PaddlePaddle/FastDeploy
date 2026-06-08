@@ -403,14 +403,6 @@ def test_eprunner_moe_select_noaux_tc_without_redundant(monkeypatch):
 
     monkeypatch.setattr(moe_module, "get_moe_scores", fake_get_moe_scores, raising=True)
 
-    runner = ep.EPPrefillRunner(
-        top_k=2,
-        hidden_size=4,
-        num_experts=2,
-        splitwise_role="prefill",
-        num_max_dispatch_tokens_per_rank=1,
-    )
-
     layer = SimpleNamespace(
         redundant_table_manger=None,
         topk_method="noaux_tc",
@@ -440,14 +432,6 @@ def test_eprunner_moe_select_redundant_and_topk(monkeypatch):
     from fastdeploy.model_executor.ops import gpu as gpu_ops
 
     monkeypatch.setattr(gpu_ops, "moe_redundant_topk_select", fake_redundant_topk_select, raising=True)
-
-    runner = ep.EPPrefillRunner(
-        top_k=2,
-        hidden_size=4,
-        num_experts=2,
-        splitwise_role="prefill",
-        num_max_dispatch_tokens_per_rank=1,
-    )
 
     class FakeRedundantTableManager:
         def get_ep_rank_to_expert_id_list_by_layer(self, _layer_idx):
@@ -482,14 +466,6 @@ def test_eprunner_moe_select_topk_without_redundant(monkeypatch):
     from fastdeploy.model_executor.ops import gpu as gpu_ops
 
     monkeypatch.setattr(gpu_ops, "moe_topk_select", fake_topk_select, raising=True)
-
-    runner = ep.EPPrefillRunner(
-        top_k=2,
-        hidden_size=4,
-        num_experts=2,
-        splitwise_role="prefill",
-        num_max_dispatch_tokens_per_rank=1,
-    )
 
     layer = SimpleNamespace(
         redundant_table_manger=None,

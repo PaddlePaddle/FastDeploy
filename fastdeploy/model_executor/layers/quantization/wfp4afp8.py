@@ -18,7 +18,6 @@ from typing import Optional
 
 from paddleformers.utils.log import logger
 
-
 from ..moe import FusedMoE
 from .quant_base import QuantConfigBase, QuantMethodBase
 

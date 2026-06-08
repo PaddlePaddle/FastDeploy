@@ -109,7 +109,6 @@ class TestMegaMoEPreDispatch(unittest.TestCase):
         ).buffer
 
     def mega_moe_pre_dispatch_ref(self, x: paddle.Tensor, topk_idx: paddle.Tensor, topk_weights: paddle.Tensor):
-        num_tokens = x.shape[0]
         x_fp8, x_scale_tensor = per_token_cast_to_fp8(x, use_ue8m0=True, gran_k=self.group_size, use_packed_ue8m0=True)
         return (
             x_fp8,
