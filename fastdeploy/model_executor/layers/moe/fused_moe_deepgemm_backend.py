@@ -1334,7 +1334,7 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
             self.mega_moe_buffer.topk_idx,
             self.mega_moe_buffer.topk_weights,
             self.num_max_tokens_per_rank,
-            32,  # group_size
+            self.gran_k,  # group_size
         )
 
         l1_weight = getattr(layer, self.added_weight_attrs[0])
