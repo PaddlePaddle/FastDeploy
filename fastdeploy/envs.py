@@ -174,6 +174,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "ENCODE_FEATURE_BOS_SK": lambda: os.getenv("ENCODE_FEATURE_BOS_SK"),
     # The ENDPOINT of bos storing the features while multi_modal infer
     "ENCODE_FEATURE_ENDPOINT": lambda: os.getenv("ENCODE_FEATURE_ENDPOINT"),
+    # Max parallel workers for intra-request BOS feature download (per request).
+    # Set to 1 to fall back to sequential download.
+    "FD_BOS_DOWNLOAD_PARALLEL": lambda: int(os.getenv("FD_BOS_DOWNLOAD_PARALLEL", "8")),
     # Whether the Prefill instance continuously requests Decode resources in PD disaggregation
     "PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES": lambda: int(
         os.getenv("PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", "1")

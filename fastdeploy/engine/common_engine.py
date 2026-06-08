@@ -30,12 +30,106 @@ import threading
 import time
 import traceback
 import weakref
+from bisect import bisect_right
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import paddle
+
+
+def _balanced_mm_chunks(input_ids_np, grid_thw_np, image_patch_id, target):
+    """
+    Globally balanced partition for multimodal prefill chunks.
+
+    Replaces the local-greedy `get_mm_split_fuse` kernel: given the full
+    input_ids and image grid_thw, choose chunk boundaries so that the
+    maximum chunk length is minimized while respecting image atomicity
+    (no chunk boundary may fall inside an image patch span).
+
+    Returns (chunk_image_num_list, chunk_seq_len_list) matching the kernel's
+    contract (lists of Python ints).
+    """
+    n = int(len(input_ids_np))
+    if n == 0:
+        return [0], [0]
+
+    is_patch = input_ids_np == image_patch_id
+
+    # A position p in [0..N] is "splittable" iff it is not strictly inside
+    # an image patch span: not (is_patch[p-1] and is_patch[p]).
+    splittable_mask = np.ones(n + 1, dtype=bool)
+    if n >= 2:
+        inside = is_patch[:-1] & is_patch[1:]
+        splittable_mask[1:n] = ~inside
+    splittable = np.flatnonzero(splittable_mask).tolist()
+
+    # Lower bound on L: the largest atomic gap (an image span we cannot split).
+    sp_arr = np.asarray(splittable)
+    max_atomic = int(np.diff(sp_arr).max()) if len(sp_arr) >= 2 else n
+    k_target = max(1, (n + target - 1) // target)
+
+    def feasible(max_chunk_len):
+        cur = 0
+        cuts = 0
+        while cur < n:
+            j = bisect_right(splittable, cur + max_chunk_len) - 1
+            if j < 0 or splittable[j] <= cur:
+                return False
+            cur = splittable[j]
+            cuts += 1
+            if cuts > k_target:
+                return False
+        return cur == n
+
+    lo = max(max_atomic, (n + k_target - 1) // k_target)
+    hi = n
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if feasible(mid):
+            hi = mid
+        else:
+            lo = mid + 1
+    chosen_l = lo
+
+    # Build the actual partition with chosen_l.
+    cur = 0
+    cuts_pos = [0]
+    while cur < n:
+        j = bisect_right(splittable, cur + chosen_l) - 1
+        cur = splittable[j]
+        cuts_pos.append(cur)
+
+    chunk_seq_lens = [cuts_pos[i + 1] - cuts_pos[i] for i in range(len(cuts_pos) - 1)]
+
+    # Compute per-chunk image count (number of grid rows fully covered).
+    image_token_sum = np.zeros(n + 1, dtype=np.int64)
+    image_token_sum[1:] = np.cumsum(is_patch.astype(np.int64))
+    if grid_thw_np is None or len(grid_thw_np) == 0:
+        per_img = np.array([], dtype=np.int64)
+    else:
+        # Token count contributed by each row: h * w / 4 (matches kernel).
+        per_img = (grid_thw_np[:, 1].astype(np.int64) * grid_thw_np[:, 2].astype(np.int64)) // 4
+
+    chunk_image_num = []
+    last_ib = 0
+    img_total = int(len(per_img))
+    for i in range(len(chunk_seq_lens)):
+        chunk_img_token = int(image_token_sum[cuts_pos[i + 1]] - image_token_sum[cuts_pos[i]])
+        cnt = 0
+        acc = 0
+        ib = last_ib
+        while ib < img_total and acc < chunk_img_token:
+            acc += int(per_img[ib])
+            ib += 1
+            cnt += 1
+        chunk_image_num.append(cnt)
+        last_ib = ib
+
+    return chunk_image_num, chunk_seq_lens
+
+
 import zmq
 from tqdm import tqdm
 
@@ -737,19 +831,43 @@ class EngineService:
 
             from fastdeploy.model_executor.ops.gpu import get_mm_split_fuse
 
-            chunk_image_num, chunk_seq_len = get_mm_split_fuse(
-                input_ids,
-                image_type_ids,
-                image_token_sum,
-                grid_thw,
-                self.data_processor.image_patch_id,
-                len(grid_thw),
-                0,
-                len(input_ids),
-                0,
-                self.partial_chunked_tokens[1],
-                2048,
-            )
+            # mm 切分专用 step：默认与 partial_chunked_tokens[1] 一致；
+            # 可通过 FD_MM_CHUNK_STEP 放宽（建议 20480~24576），用于减少
+            # 因图像 patch 边界回退而产生的小 chunk（< chunk_step 的尾段）。
+            mm_chunk_step = int(os.getenv("FD_MM_CHUNK_STEP", str(self.partial_chunked_tokens[1])))
+            mm_chunk_step = mm_chunk_step // self.cfg.cache_config.block_size * self.cfg.cache_config.block_size
+            if mm_chunk_step <= 0:
+                mm_chunk_step = self.partial_chunked_tokens[1]
+
+            # 方案2：全局均衡切分（Python 层）。开启后绕过 kernel get_mm_split_fuse，
+            # 用二分 + 贪心在所有可切点中选 K 个切点，使最大 chunk 长度最小。
+            # 通过 FD_MM_BALANCED_CHUNKING=1 启用，默认关。
+            use_balanced = os.getenv("FD_MM_BALANCED_CHUNKING", "0") == "1"
+            if use_balanced:
+                input_ids_np = np.asarray(inputs["input_ids"], dtype=np.int64)
+                grid_thw_np = (
+                    grid_thw.numpy().reshape([-1, 3]) if grid_thw.shape[0] > 0 else np.zeros((0, 3), dtype=np.int64)
+                )
+                chunk_image_num, chunk_seq_len = _balanced_mm_chunks(
+                    input_ids_np,
+                    grid_thw_np,
+                    int(self.data_processor.image_patch_id),
+                    int(mm_chunk_step),
+                )
+            else:
+                chunk_image_num, chunk_seq_len = get_mm_split_fuse(
+                    input_ids,
+                    image_type_ids,
+                    image_token_sum,
+                    grid_thw,
+                    self.data_processor.image_patch_id,
+                    len(grid_thw),
+                    0,
+                    len(input_ids),
+                    0,
+                    mm_chunk_step,
+                    2048,
+                )
 
             grid_thw = grid_thw.numpy().reshape([-1, 3])
             num_chunks = len(chunk_image_num)
