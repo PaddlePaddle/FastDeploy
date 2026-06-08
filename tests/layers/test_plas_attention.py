@@ -93,7 +93,9 @@ class TestPlasAttention(unittest.TestCase):
             [self.tokens + self.attn_block_m, self.num_kv_heads, self.head_dim],
             dtype="bfloat16",
         )
-        self.rotary_embs = paddle.ones([2, self.seq_len, self.head_dim // 2], dtype="float32")
+        rotary_cos = paddle.ones([1, self.plas_max_seq_length, self.head_dim // 2], dtype="float32")
+        rotary_sin = paddle.zeros([1, self.plas_max_seq_length, self.head_dim // 2], dtype="float32")
+        self.rotary_embs = paddle.concat([rotary_cos, rotary_sin], axis=0)
 
         self.attn_gate_weight = paddle.randn(
             [self.num_kv_heads, self.plas_block_size, self.head_dim], dtype="bfloat16"
