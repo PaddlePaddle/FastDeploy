@@ -867,6 +867,13 @@ def parse_args():
         help="enable chunked moe",
     )
     parser.add_argument(
+        "--enable_mega_moe",
+        "--enable-mega-moe",
+        action="store_true",
+        dest="enable_mega_moe",
+        help="enable MegaMoE wfp4afp8 for MoE and block_wise_fp8 for dense Linear",
+    )
+    parser.add_argument(
         "--chunked_moe_size",
         type=int,
         default=256,

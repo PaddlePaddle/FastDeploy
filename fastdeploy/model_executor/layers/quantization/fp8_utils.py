@@ -237,7 +237,6 @@ def fused_stack_transpose_quant(expert_weight_list, use_ue8m0=False):
 
     return w, scale
 
-
 def _interleave_weights(l1_weights):
     # [gate: 0..7, up: 0..7, gate: 8..15, up: 8..15, ...] instead of [gate | up]
     def interleave(t, gran: int = 8) -> paddle.Tensor:
@@ -248,7 +247,6 @@ def _interleave_weights(l1_weights):
         return paddle.stack([gate, up], dim=2).reshape(g, n, *rest).contiguous()
 
     return interleave(l1_weights[0]), interleave(l1_weights[1])
-
 
 def _transpose_sf_for_utccp(sf: paddle.Tensor) -> paddle.Tensor:
     num_groups, mn, packed_sf_k = sf.shape

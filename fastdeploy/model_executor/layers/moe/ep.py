@@ -490,7 +490,8 @@ class EPRunner:
             top_k=self.top_k,
         )
 
-    def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
+    @staticmethod
+    def moe_select(layer: nn.Layer, gate_out: paddle.Tensor):
         if layer.redundant_table_manger is not None:
             (
                 ep_rank_to_expert_id_list,
@@ -523,7 +524,7 @@ class EPRunner:
                     expert_in_rank_num_list=expert_in_rank_num_list,
                     tokens_per_expert_stats_list=tokens_per_expert_stats_list,
                     bias=layer.gate_correction_bias,
-                    moe_topk=self.top_k,
+                    moe_topk=layer.top_k,
                     apply_norm_weight=True,
                     enable_softmax_top_k_fused=False,
                     redundant_ep_rank_num_plus_one=layer.fd_config.eplb_config.redundant_experts_num + 1,
@@ -550,7 +551,7 @@ class EPRunner:
                 topk_idx, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                     gate_out,
                     layer.gate_correction_bias,
-                    self.top_k,
+                    layer.top_k,
                     True,
                     False,
                 )
@@ -788,3 +789,20 @@ class EPDecoderRunner(EPRunner):
             combine_hook()
 
         return combined_hidden_states
+
+
+class FakeEPRunner:
+    """ """
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def dispatch(self, *args, **kwargs):
+        """ """
+        pass
+
+    def combine(self, *args, **kwargs):
+        """ """
+        pass
+    
+    def clean_low_latency_buffer(self):
+        pass

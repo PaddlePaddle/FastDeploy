@@ -21,6 +21,7 @@ import pytest
 
 from fastdeploy.config import MoEPhase
 from fastdeploy.model_executor.layers.moe import ep
+from fastdeploy.model_executor.layers.moe.ep import EPRunner
 
 
 class FakeConfig:
@@ -423,7 +424,7 @@ def test_eprunner_moe_select_noaux_tc_without_redundant(monkeypatch):
     )
     gate_out = paddle.randn([1, 4], dtype="float32")
 
-    topk_idx, topk_weights = runner.moe_select(layer, gate_out)
+    topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
     assert list(topk_idx.shape) == [1, 1]
     assert list(topk_weights.shape) == [1, 1]
     assert paddle.allclose(topk_idx, paddle.to_tensor([[1]], dtype="int64"))
@@ -465,7 +466,7 @@ def test_eprunner_moe_select_redundant_and_topk(monkeypatch):
     )
     gate_out = paddle.randn([1, 4], dtype="float32")
 
-    topk_idx, topk_weights = runner.moe_select(layer, gate_out)
+    topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
     assert list(topk_idx.shape) == [1, 1]
     assert list(topk_weights.shape) == [1, 1]
     assert paddle.allclose(topk_idx, paddle.to_tensor([[2]], dtype="int64"))
@@ -497,7 +498,7 @@ def test_eprunner_moe_select_topk_without_redundant(monkeypatch):
     )
     gate_out = paddle.randn([1, 4], dtype="float32")
 
-    topk_idx, topk_weights = runner.moe_select(layer, gate_out)
+    topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
     assert list(topk_idx.shape) == [1, 1]
     assert list(topk_weights.shape) == [1, 1]
     assert paddle.allclose(topk_idx, paddle.to_tensor([[3]], dtype="int64"))

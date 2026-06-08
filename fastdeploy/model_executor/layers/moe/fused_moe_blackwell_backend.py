@@ -23,7 +23,7 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.model_executor.layers.moe.ep import deep_ep
+from fastdeploy.model_executor.layers.moe.ep import deep_ep, EPRunner
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     deep_gemm,
     paddlefleet_ops,
@@ -642,7 +642,7 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
                 getattr(layer, "renormalize", True),
             )
         else:
-            topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+            topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)
@@ -964,7 +964,7 @@ class BlackwellGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)

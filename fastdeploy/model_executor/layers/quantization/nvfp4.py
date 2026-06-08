@@ -33,6 +33,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
 )
 from fastdeploy.worker.tbo import let_another_thread_run
+from fastdeploy.model_executor.layers.moe.ep import EPRunner
 
 from .quant_base import QuantConfigBase, QuantMethodBase, is_nvfp4_supported
 
@@ -672,7 +673,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
 
         # 1. top experts and weights
         gate_out = gate(x.cast("float32"))
-        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
         hidden_size = x.shape[1]
 
         if topk_ids_hookfunc is not None:
@@ -861,7 +862,7 @@ class ModelOptNvFp4FusedMoE(MoEMethodBase):
     ) -> paddle.Tensor:
 
         gate_out = gate(x.cast("float32"))
-        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
 
         if topk_ids_hookfunc is not None:
             topk_ids_hookfunc(topk_ids=topk_idx)

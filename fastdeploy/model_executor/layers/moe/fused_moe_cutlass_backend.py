@@ -52,6 +52,7 @@ from fastdeploy.model_executor.utils import (
     set_weight_attrs,
     weight_fully_copied,
 )
+from fastdeploy.model_executor.layers.moe.ep import EPRunner
 
 
 def m_grouped_bf16_gemm_nn_contiguous(x, y, expert_idx_per_token):
@@ -141,7 +142,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         if fc1_latent_proj is not None:
             x = fc1_latent_proj(x)
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
 
         if layer.routed_scaling_factor_learnable:
             safe_topk_indices = paddle.clip(topk_idx, min=0)
@@ -304,7 +305,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
 
         estimate_total_token_nums = gate_out.shape[0] * layer.top_k
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
 
         if layer.routed_scaling_factor_learnable:
             safe_topk_indices = paddle.clip(topk_idx, min=0)

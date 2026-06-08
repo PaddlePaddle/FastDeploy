@@ -685,6 +685,7 @@ class LLMEngine:
         worker_store_true_flag = {
             "enable_expert_parallel": self.cfg.parallel_config.enable_expert_parallel,
             "enable_chunked_moe": self.cfg.parallel_config.enable_chunked_moe,
+            "enable_mega_moe": self.cfg.parallel_config.enable_mega_moe,
             "enable_prefix_caching": self.cfg.cache_config.enable_prefix_caching,
             "enable_chunked_prefill": self.cfg.cache_config.enable_chunked_prefill,
             "do_profile": self.do_profile,
