@@ -355,7 +355,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         hidden_size = layer.hidden_size
 
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         if layer.routed_scaling_factor_learnable:
             safe_topk_indices = paddle.clip(topk_idx, min=0)
@@ -685,7 +685,7 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
         gate_out = gate(x)
         gate_out = gate_out.cast("float32")
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
         if layer.routed_scaling_factor_learnable:
             safe_topk_indices = paddle.clip(topk_idx, min=0)
@@ -1318,7 +1318,7 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
         gate_out = gate(x).cast("float32")
 
         # 1. Select topk experts and weights.
-        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = EPRunner.moe_select(None, layer, gate_out)
 
         buffer_capacity = self.mega_moe_buffer.x.shape[0]
         if num_tokens > buffer_capacity:
