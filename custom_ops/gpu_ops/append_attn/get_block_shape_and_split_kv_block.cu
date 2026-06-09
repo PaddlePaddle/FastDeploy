@@ -36,6 +36,7 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
   int max_len_decoder_this_thread = 0;
   int max_len_this_thread = 0;
   int max_just_dec_len_this_thread = 0;
+  int max_len_kv_this_thread = 0;
   for (int i = tid; i < batch_size; i += blockDim.x) {
     const int seq_len_this_time = seq_lens_this_time[i];
     const int seq_len_decoder = seq_lens_decoder[i];
@@ -52,6 +53,10 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
         max(seq_len_decoder + seq_len_this_time, max_len_this_thread);
     max_just_dec_len_this_thread =
         max(max_just_dec_len_this_thread, max_just_dec_len_now);
+
+    if (seq_len_decoder == 0) continue;
+    max_len_kv_this_thread =
+        max(seq_len_this_time + seq_len_decoder, max_len_kv_this_thread);
   }
   int total_max_len_this_time =
       BlockReduce(temp_storage)
@@ -66,12 +71,15 @@ __global__ void GetMaxLenKernel(const int *seq_lens_decoder,
       BlockReduce(temp_storage).Reduce(max_len_this_thread, MaxOp<int>());
   int total_just_dec = BlockReduce(temp_storage)
                            .Reduce(max_just_dec_len_this_thread, MaxOp<int>());
+  int total_max_len_kv =
+      BlockReduce(temp_storage).Reduce(max_len_kv_this_thread, MaxOp<int>());
   if (tid == 0) {
     max_lens[0] = total_max_len_this_time;
     max_lens[1] = total_max_len_encoder;
     max_lens[2] = total_max_len_decoder;
     max_lens[3] = total;
     max_lens[4] = total_just_dec;
+    max_lens[5] = total_max_len_kv;
   }
 }
 
@@ -296,6 +304,7 @@ void GetBlockShapeAndSplitKVBlock(
   int max_dec_len_this_time = max_len_cpu_ptr[2];
   int max_enc_dec_len_this_time = max_len_cpu_ptr[3];
   int max_just_dec_len_this_time = max_len_cpu_ptr[4];
+  int max_kv_len_this_time = max_len_cpu_ptr[5];
 
   const uint32_t decoder_batch_ele_num = decoder_batch_ids.shape()[0];
 
