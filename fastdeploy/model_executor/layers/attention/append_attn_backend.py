@@ -311,9 +311,24 @@ class AppendAttentionBackend(AttentionBackend):
         cache_k = forward_meta.caches[2 * layer.layer_id]
         cache_v = forward_meta.caches[2 * layer.layer_id + 1]
 
-        from fastdeploy.model_executor.ops.triton_ops import do_rope, write_cache
+        from fastdeploy.model_executor.ops.triton_ops import (
+            do_rope,
+            qk_rmsnorm_fused,
+            write_cache,
+        )
 
         if getattr(layer, "only_do_attn", False):
+            if getattr(layer, "q_norm_weight", None):
+                qk_rmsnorm_fused(
+                    qkv,
+                    getattr(layer, "q_norm_weight", None),
+                    getattr(layer, "k_norm_weight", None),
+                    getattr(layer, "rms_norm_eps", 1e-6),
+                    self.num_heads * cache_k.shape[3],
+                    cache_v.shape[1] * cache_k.shape[3],
+                    cache_v.shape[3],
+                )
+
             assert forward_meta.rotary_embs.shape[0] == 2
             do_rope(
                 qkv,
