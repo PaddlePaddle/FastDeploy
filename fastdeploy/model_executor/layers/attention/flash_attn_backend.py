@@ -77,6 +77,8 @@ from fastdeploy.spec_decode import SpecMethod
 
 FLASH_ATTN_VERSION = None
 
+from fastdeploy.model_executor.utils import try_import
+
 
 def init_flash_attn_version():
     """
@@ -88,12 +90,33 @@ def init_flash_attn_version():
         if sm_version >= 100:
             try:
                 paddle.enable_compat(scope={"cutlass"})
-                from flash_mask.cute.interface import flashmask_attention as fa4
+                try:
+                    old_api = try_import(["paddlefleet.ops"])
+                    if old_api is not None:
+                        from paddlefleet.ops import is_flash_mask_available
 
-                global flashmask_attention_v4
-                flashmask_attention_v4 = fa4
-                FLASH_ATTN_VERSION = 4
-                logger.info("The current platform supports Flash Attention V4.")
+                        if is_flash_mask_available():
+                            from paddlefleet.ops.flash_mask.cute.interface import (
+                                flashmask_attention as fa4,
+                            )
+                        else:
+                            raise ModuleNotFoundError("flash_mask not available.")
+                    else:
+                        from paddlefleet_ops import is_flash_mask_available
+
+                        if is_flash_mask_available():
+                            from paddlefleet_ops.flash_mask.cute.interface import (
+                                flashmask_attention as fa4,
+                            )
+                        else:
+                            raise ModuleNotFoundError("flash_mask not available.")
+
+                    global flashmask_attention_v4
+                    flashmask_attention_v4 = fa4
+                    FLASH_ATTN_VERSION = 4
+                    logger.info("The current platform supports Flash Attention V4.")
+                except (ImportError, ModuleNotFoundError):
+                    logger.info(f"The current platform[sm{get_sm_version()}] can't import fa V4.")
             except ImportError:
                 logger.info(f"The current platform[sm{get_sm_version()}] can't import Flash Attention V4.")
 
