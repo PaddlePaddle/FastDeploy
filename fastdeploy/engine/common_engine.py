@@ -1871,7 +1871,7 @@ class EngineService(EngineServicePrepareMixin):
                         processed_indices.append(idx)
                         is_success = True
                         task.is_preallocated = True
-                        main_process_metrics.inc_value("decode_preallocated_req_num")
+                        main_process_metrics.decode_preallocated_req_num.inc()
                 else:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
                         self.llm_logger.debug(f"D Resource available, processing task {task.request_id}")
