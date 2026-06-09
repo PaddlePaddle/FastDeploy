@@ -90,6 +90,7 @@ def init_flash_attn_version():
         if sm_version >= 100:
             try:
                 paddle.enable_compat(scope={"cutlass"})
+                fa4 = None
                 try:
                     old_api = try_import(["paddlefleet.ops"])
                     if old_api is not None:
@@ -114,10 +115,11 @@ def init_flash_attn_version():
                 except (ImportError, ModuleNotFoundError):
                     logger.info(f"The current platform[sm{get_sm_version()}] can't import Flash Attention V4.")
 
-                global flashmask_attention_v4
-                flashmask_attention_v4 = fa4
-                FLASH_ATTN_VERSION = 4
-                logger.info("The current platform supports Flash Attention V4.")
+                if fa4 is not None:
+                    global flashmask_attention_v4
+                    flashmask_attention_v4 = fa4
+                    FLASH_ATTN_VERSION = 4
+                    logger.info("The current platform supports Flash Attention V4.")
             except ImportError:
                 logger.info(f"The current platform[sm{get_sm_version()}] can't import Flash Attention V4.")
 

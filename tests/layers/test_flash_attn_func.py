@@ -323,12 +323,10 @@ class TestInitFlashAttnVersion(unittest.TestCase):
             mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
             mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
         ):
-            try:
-                flash_attn_backend.init_flash_attn_version()
-            except NameError:
-                pass
+            flash_attn_backend.init_flash_attn_version()
 
         self.assertNotEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
+        self.assertIsNone(flash_attn_backend.flashmask_attention_v4)
 
     def test_fa4_new_api_import_success(self):
         """Falls back to new API (`paddlefleet_ops`) when old API is missing."""
@@ -359,12 +357,10 @@ class TestInitFlashAttnVersion(unittest.TestCase):
             mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
             mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
         ):
-            try:
-                flash_attn_backend.init_flash_attn_version()
-            except NameError:
-                pass
+            flash_attn_backend.init_flash_attn_version()
 
         self.assertNotEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
+        self.assertIsNone(flash_attn_backend.flashmask_attention_v4)
 
     def test_fa4_paddlefleet_import_error(self):
         """Neither old nor new API is importable."""
@@ -378,12 +374,10 @@ class TestInitFlashAttnVersion(unittest.TestCase):
             mock.patch.object(flash_attn_backend, "get_sm_version", return_value=100),
             mock.patch.object(paddle, "enable_compat", create=True, return_value=None),
         ):
-            try:
-                flash_attn_backend.init_flash_attn_version()
-            except NameError:
-                pass
+            flash_attn_backend.init_flash_attn_version()
 
         self.assertNotEqual(flash_attn_backend.FLASH_ATTN_VERSION, 4)
+        self.assertIsNone(flash_attn_backend.flashmask_attention_v4)
 
 
 if __name__ == "__main__":
