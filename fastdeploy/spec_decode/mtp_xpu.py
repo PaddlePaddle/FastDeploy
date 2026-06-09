@@ -196,7 +196,7 @@ class MTPProposerXPU(MTPProposer):
                 )
 
                 if self.num_model_steps > 1:
-                    self.model_inputs.last_seq_lens_this_time = paddle.clone(self.model_inputs["seq_lens_this_time"])
+                    self.model_inputs.last_seq_lens_this_time.copy_(self.model_inputs["seq_lens_this_time"], False)
                 real_num = self.model_inputs["ids_remove_padding"].shape[0]
                 target_hidden_states = self.model_inputs["target_hidden_states"][:real_num]
                 model_output = self.model(
