@@ -43,7 +43,6 @@ if current_platform.is_cuda():
     except:
         logger.warning("import w4afp8_gemm_scale_permute Failed!")
 
-from fastdeploy.model_executor.layers.moe.ep import EPRunner
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
 from fastdeploy.model_executor.layers.quantization.fp8_utils import paddlefleet_ops
 from fastdeploy.model_executor.utils import (
@@ -142,7 +141,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
         if fc1_latent_proj is not None:
             x = fc1_latent_proj(x)
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         if layer.routed_scaling_factor_learnable:
             safe_topk_indices = paddle.clip(topk_idx, min=0)
@@ -305,7 +304,7 @@ class CutlassMoEMethod(UnquantizedFusedMoEMethod):
 
         estimate_total_token_nums = gate_out.shape[0] * layer.top_k
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
         if layer.routed_scaling_factor_learnable:
             safe_topk_indices = paddle.clip(topk_idx, min=0)

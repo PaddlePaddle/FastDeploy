@@ -490,8 +490,7 @@ class EPRunner:
             top_k=self.top_k,
         )
 
-    @staticmethod
-    def moe_select(layer: nn.Layer, gate_out: paddle.Tensor):
+    def moe_select(self, layer: nn.Layer, gate_out: paddle.Tensor):
         if layer.redundant_table_manger is not None:
             (
                 ep_rank_to_expert_id_list,
