@@ -15,16 +15,20 @@
 """
 
 try:
+    from .do_rope import do_rope
     from .pre_token_quant_fp8_kernel import _per_token_group_quant_fp8
     from .qk_rmsnorm_fused_kernel import qk_rmsnorm_fused
     from .repetition_early_stop_kernel import repetition_early_stopper_kernel
     from .wint2_fused_moe_kernel import moe_wint2_ffn_kernel
+    from .write_cache import write_cache
 
     _TRITON_AVAILABLE = True
 
     __all__ = [
         "moe_wint2_ffn_kernel",
         "repetition_early_stopper_kernel",
+        "do_rope",
+        "write_cache",
         "qk_rmsnorm_fused",
         "_per_token_group_quant_fp8",
     ]

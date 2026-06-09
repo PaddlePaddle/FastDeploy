@@ -375,7 +375,7 @@ class QKRMSNorm(nn.Layer):
         proxy_rmsnorm=None,
     ) -> paddle.Tensor:
         if proxy_rmsnorm is None and self.qk_norm_fused:
-            qkv_out = qk_rmsnorm_fused(
+            qk_rmsnorm_fused(
                 qkv_out,
                 self.q_norm.weight,
                 self.k_norm.weight,
