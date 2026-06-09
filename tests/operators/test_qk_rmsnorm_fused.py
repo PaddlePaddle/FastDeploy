@@ -79,7 +79,7 @@ class TestQKNorm(unittest.TestCase):
         return qkv_out
 
     def qk_norm_triton_fused(self, qkv_out):
-        qkv_out = qk_rmsnorm_fused(
+        qk_rmsnorm_fused(
             qkv_out,
             self.q_norm_weight,
             self.k_norm_weight,
