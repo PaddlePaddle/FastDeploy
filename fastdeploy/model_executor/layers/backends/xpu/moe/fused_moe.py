@@ -22,7 +22,6 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 from fastdeploy import envs
-from fastdeploy.model_executor.layers.moe.ep import EPRunner
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.layers.quantization.weight_only import WeightOnlyConfig
 from fastdeploy.model_executor.layers.utils import get_tensor
@@ -424,7 +423,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         gate_out = gate(x.cast("float32"))
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
         # 2. Dynamic compute blockwise quantization scales
         if "a_tokenwise_int8" in self.xpu_moe_quant_type:
@@ -519,7 +518,7 @@ class XPUMoEMethod(MoEMethodBase):
         gate_out = gate(x.cast("float32"))
 
         # 1. Select topk experts and weights
-        topk_idx, topk_weights = EPRunner.moe_select(layer, gate_out)
+        topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)
 
         # 2. EP Dispatch
         if "a_tokenwise_int8" in self.xpu_moe_quant_type:
