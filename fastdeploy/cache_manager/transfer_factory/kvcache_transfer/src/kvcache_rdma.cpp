@@ -128,14 +128,13 @@ RDMACommunicator::RDMACommunicator(std::string& role,
 
     // Start the server thread (if in decode role)
     if (splitwise_role == "decode") {
-      std::thread server_thread([this]() {
+      server_thread_ = std::thread([this]() {
         try {
           this->init_server();
         } catch (const std::exception& e) {
           ERR("Server thread failed: %s", e.what());
         }
       });
-      server_thread.detach();
     }
     RDMACommunicator_status = 1;
     INFO("RDMA communicator initialized successfully");
@@ -253,8 +252,21 @@ RDMACommunicator::~RDMACommunicator() {
   try {
     WARN("Destroying RDMA communicator");
 
-    // Mark as closed/shutdown state
+    // Signal threads to exit
     RDMACommunicator_status = 0;
+
+    // Signal server thread that destructor owns MR cleanup
+    server_mr_owned_by_destructor_ = true;
+
+    // Wait for server thread to finish before touching any shared state
+    if (server_thread_.joinable()) {
+      server_thread_.join();
+    }
+
+    // Wait for client listener thread to finish
+    if (client_thread_.joinable()) {
+      client_thread_.join();
+    }
 
     // Clean up all client connections in conn_map
     {
@@ -288,11 +300,17 @@ RDMACommunicator::~RDMACommunicator() {
     deregister_mrs(write_mr_value_list, "write value");
     deregister_mrs(write_mr_key_scale_list, "write key scale");
     deregister_mrs(write_mr_value_scale_list, "write value scale");
-    deregister_mrs(write_cache_key_server_mr_list, "server key");
-    deregister_mrs(write_cache_value_server_mr_list, "server value");
-    deregister_mrs(write_cache_key_scale_server_mr_list, "server key scale");
-    deregister_mrs(write_cache_value_scale_server_mr_list,
-                   "server value scale");
+
+    // Server MRs may have already been deregistered by start_server() exit
+    // path. Only deregister if they are still populated (destructor won the
+    // race, or start_server never ran).
+    if (!write_cache_key_server_mr_list.empty()) {
+      deregister_mrs(write_cache_key_server_mr_list, "server key");
+      deregister_mrs(write_cache_value_server_mr_list, "server value");
+      deregister_mrs(write_cache_key_scale_server_mr_list, "server key scale");
+      deregister_mrs(write_cache_value_scale_server_mr_list,
+                     "server value scale");
+    }
 
     // Clean up protection domain
     if (g_pd) {
@@ -497,20 +515,24 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
   }
   connectionContexts.clear();
 
-  // Deregister server MRs once (shared across all connections)
-  auto dereg_list = [](std::vector<ibv_mr*>& mrs, const char* name) {
-    for (auto*& mr : mrs) {
-      if (mr) {
-        ibv_dereg_mr(mr);
-        mr = nullptr;
+  // Deregister server MRs only if the destructor hasn't claimed ownership.
+  // If the destructor is running, it will handle MR cleanup after joining
+  // this thread, avoiding concurrent or double ibv_dereg_mr.
+  if (!server_mr_owned_by_destructor_.load()) {
+    auto dereg_list = [](std::vector<ibv_mr*>& mrs, const char* name) {
+      for (auto*& mr : mrs) {
+        if (mr) {
+          ibv_dereg_mr(mr);
+          mr = nullptr;
+        }
       }
-    }
-    mrs.clear();
-  };
-  dereg_list(write_cache_key_server_mr_list, "server key");
-  dereg_list(write_cache_value_server_mr_list, "server value");
-  dereg_list(write_cache_key_scale_server_mr_list, "server key scale");
-  dereg_list(write_cache_value_scale_server_mr_list, "server value scale");
+      mrs.clear();
+    };
+    dereg_list(write_cache_key_server_mr_list, "server key");
+    dereg_list(write_cache_value_server_mr_list, "server value");
+    dereg_list(write_cache_key_scale_server_mr_list, "server key scale");
+    dereg_list(write_cache_value_scale_server_mr_list, "server value scale");
+  }
 
   close(sockfd);
   close(epollfd);
@@ -748,14 +770,12 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   }
 
   // Start client listener thread if not already started
-  if (start_client_listener == false) {
-    std::thread client_thread =
-        std::thread([this]() { this->client_listener(); });
-    if (client_thread.joinable()) {
-      client_thread.detach();
-      std::lock_guard<std::mutex> lock(mutex_);
+  if (!start_client_listener.load()) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!start_client_listener.load()) {
+      client_thread_ = std::thread([this]() { this->client_listener(); });
+      start_client_listener = true;
     }
-    start_client_listener = true;
   }
 
   // Add socket to epoll for event monitoring
