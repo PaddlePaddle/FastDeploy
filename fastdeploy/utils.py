@@ -1135,7 +1135,8 @@ def download_from_bos(bos_client, bos_links, retry: int = 0, max_workers: int = 
     def _fetch_one(link):
         """Fetch + deserialize a single link, with optional retry on rate-limit.
 
-        Returns (True, obj) on success, (False, err_msg) on failure.
+        Returns (success, result) where result is the deserialized object on
+        success or an error message string on failure.
         """
         try:
             response = _bos_download(bos_client, link)
@@ -1166,9 +1167,9 @@ def download_from_bos(bos_client, bos_links, retry: int = 0, max_workers: int = 
     # Sequential path: keep behavior identical for single link or when parallel disabled.
     if max_workers <= 1 or len(bos_links) <= 1:
         for link in bos_links:
-            ok, data = _fetch_one(link)
-            yield ok, data
-            if not ok:
+            success, result = _fetch_one(link)
+            yield success, result
+            if not success:
                 break
         return
 
@@ -1178,9 +1179,9 @@ def download_from_bos(bos_client, bos_links, retry: int = 0, max_workers: int = 
     with ThreadPoolExecutor(max_workers=workers) as ex:
         futures = [ex.submit(_fetch_one, link) for link in bos_links]
         for fut in futures:
-            ok, data = fut.result()
-            yield ok, data
-            if not ok:
+            success, result = fut.result()
+            yield success, result
+            if not success:
                 # Cancel any not-yet-started downloads; in-flight ones will
                 # finish but their results are discarded.
                 for f in futures:
