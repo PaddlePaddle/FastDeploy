@@ -158,15 +158,16 @@ class RDMACommunicator {
 
   std::vector<std::string> main_ip_list;  // List of local IP addresses
   std::map<std::string, struct RdmaContext*>
-      conn_map;                        // Active connections map
-  std::mutex mutex_;                   // Thread synchronization mutex
-  int rdma_event_channel_epoll_fd;     // Epoll file descriptor
-  struct ibv_pd* g_pd = NULL;          // fd
+      conn_map;                              // Active connections map
+  std::mutex mutex_;                         // Thread synchronization mutex
+  int rdma_event_channel_epoll_fd;           // Epoll file descriptor
+  struct ibv_pd* g_pd = NULL;                // fd
   std::atomic<int> RDMACommunicator_status;  // Communicator status flag
   std::atomic<bool> start_client_listener{false};  // Client listener flag
-  std::thread server_thread_;          // Server listener thread handle
-  std::thread client_thread_;          // Client listener thread handle
-  std::atomic<bool> server_mr_owned_by_destructor_{false};  // True once destructor takes ownership of server MRs
+  std::thread server_thread_;  // Server listener thread handle
+  std::thread client_thread_;  // Client listener thread handle
+  std::atomic<bool> server_mr_owned_by_destructor_{
+      false};  // True once destructor takes ownership of server MRs
 
   bool has_value_cache_;  // MLA does not have value cache.
   bool has_key_scale_;
