@@ -1089,10 +1089,14 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
     }
     write_cache_key_server_mr_list.push_back(key_mr);
 
+    struct ibv_mr* value_mr = nullptr;
+    struct ibv_mr* key_scale_mr = nullptr;
+    struct ibv_mr* value_scale_mr = nullptr;
+
     if (has_value_cache_) {
       void* val_ptr =
           reinterpret_cast<void*>(local_cache_value_ptr_layer_head_[i]);
-      struct ibv_mr* value_mr = register_memory_region(
+      value_mr = register_memory_region(
           ctx->pd, val_ptr, size, "value_" + std::to_string(i), access_flags);
       if (!value_mr) {
         ERR("Failed to register value MR at layer %d", i);
@@ -1107,12 +1111,11 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
       size_t scale_size =
           static_cast<size_t>(scale_block_size_byte) * block_number;
 
-      struct ibv_mr* key_scale_mr =
-          register_memory_region(ctx->pd,
-                                 key_scale_ptr,
-                                 scale_size,
-                                 "key_scale_" + std::to_string(i),
-                                 access_flags);
+      key_scale_mr = register_memory_region(ctx->pd,
+                                            key_scale_ptr,
+                                            scale_size,
+                                            "key_scale_" + std::to_string(i),
+                                            access_flags);
       if (!key_scale_mr) {
         ERR("Failed to register key scale MR at layer %d", i);
         goto fail;
@@ -1126,7 +1129,7 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
       size_t scale_size =
           static_cast<size_t>(scale_block_size_byte) * block_number;
 
-      struct ibv_mr* value_scale_mr =
+      value_scale_mr =
           register_memory_region(ctx->pd,
                                  value_scale_ptr,
                                  scale_size,
