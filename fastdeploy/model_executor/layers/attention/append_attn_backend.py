@@ -314,6 +314,7 @@ class AppendAttentionBackend(AttentionBackend):
         from fastdeploy.model_executor.ops.triton_ops import do_rope, write_cache
 
         if getattr(layer, "only_do_attn", False):
+            assert forward_meta.rotary_embs.shape[0] == 2
             do_rope(
                 qkv,
                 forward_meta.rotary_embs[0],
