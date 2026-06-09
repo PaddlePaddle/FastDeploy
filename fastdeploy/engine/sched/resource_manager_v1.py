@@ -245,11 +245,11 @@ class ResourceManagerV1(ResourceManager):
         block_num = (
             request.num_computed_tokens + num_new_tokens + self.config.cache_config.block_size - 1
         ) // self.config.cache_config.block_size - len(request.block_tables)
-        block_num = max(block_num, 0)
         if self.config.speculative_config.method is not None:
             block_num = min(block_num + 1, self.config.cache_config.max_block_num_per_seq)
         else:
             block_num = min(block_num, self.config.cache_config.max_block_num_per_seq)
+        block_num = max(block_num, 0)
         return block_num
 
     def _is_decoding(self, request) -> bool:
@@ -488,6 +488,9 @@ class ResourceManagerV1(ResourceManager):
 
     def _get_can_schedule_prefill_threshold_block(self, num_chunk_new_block):
         """Compute the minimum free blocks required to admit a new prefill request."""
+        if self.config.scheduler_config.splitwise_role != "mixed":
+            return num_chunk_new_block
+
         if self.use_new_token_ratio_reserve:
             reserve_blocks = sum(self._get_running_request_reserve_blocks(req) for req in self.running)
             can_schedule_block_num_threshold = num_chunk_new_block + reserve_blocks
@@ -1002,13 +1005,7 @@ class ResourceManagerV1(ResourceManager):
                         req_index += 1
                         continue
                     num_new_block = self.get_new_block_nums(request, num_new_tokens)
-                    if self.config.scheduler_config.splitwise_role == "prefill":
-                        # for prefill instance, do not set threshold for running requests
-                        can_schedule_block_num_threshold = num_new_block
-                    else:
-                        can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(
-                            num_new_block
-                        )
+                    can_schedule_block_num_threshold = self._get_can_schedule_prefill_threshold_block(num_new_block)
                     # Allocate blocks to prefill
                     if self.cache_manager.can_allocate_gpu_blocks(can_schedule_block_num_threshold):
                         request.block_tables.extend(
