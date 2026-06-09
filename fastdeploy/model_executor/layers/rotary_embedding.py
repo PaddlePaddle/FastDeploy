@@ -47,7 +47,7 @@ class ErnieRotaryEmbedding:
         if current_platform.is_xpu() or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
             rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
             emb = paddle.concat([freqs, freqs], axis=-1)
-            assert emb.shape == (bsz, max_seq_len, self.rotary_dim)
+            assert emb.shape == [bsz, max_seq_len, self.rotary_dim]
         elif current_platform.is_gcu():
             # shape: [B, S, D]
             rot_emb = paddle.concat([freqs.cos(), freqs.sin()], axis=-1)
