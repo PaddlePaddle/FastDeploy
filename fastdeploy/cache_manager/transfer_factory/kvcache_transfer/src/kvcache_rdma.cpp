@@ -256,9 +256,21 @@ RDMACommunicator::~RDMACommunicator() {
     // Mark as closed/shutdown state
     RDMACommunicator_status = 0;
 
-    // Clean up all connections
+    // Clean up all client connections in conn_map
     {
       std::lock_guard<std::mutex> lock(mutex_);
+      for (auto& kv : conn_map) {
+        struct RdmaContext* ctx = kv.second;
+        if (ctx) {
+          for (size_t i = 0; i < ctx->conn.read_bufs.size(); ++i) {
+            if (ctx->conn.read_mrs[i]) ibv_dereg_mr(ctx->conn.read_mrs[i]);
+            if (ctx->conn.read_bufs[i]) free(ctx->conn.read_bufs[i]);
+          }
+          if (ctx->sock_fd > 0) close(ctx->sock_fd);
+          clear_qp_info(ctx);
+          delete ctx;
+        }
+      }
       conn_map.clear();
     }
 
@@ -274,8 +286,13 @@ RDMACommunicator::~RDMACommunicator() {
 
     deregister_mrs(write_mr_key_list, "write key");
     deregister_mrs(write_mr_value_list, "write value");
+    deregister_mrs(write_mr_key_scale_list, "write key scale");
+    deregister_mrs(write_mr_value_scale_list, "write value scale");
     deregister_mrs(write_cache_key_server_mr_list, "server key");
     deregister_mrs(write_cache_value_server_mr_list, "server value");
+    deregister_mrs(write_cache_key_scale_server_mr_list, "server key scale");
+    deregister_mrs(write_cache_value_scale_server_mr_list,
+                   "server value scale");
 
     // Clean up protection domain
     if (g_pd) {
@@ -309,6 +326,7 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
   if (g_ib_all_devs.size() == 0) {
     if (parse_port_ib_info() != 0) {
       ERR("decode parse_port_ib_info error, please set rdma nics info");
+      close(sockfd);
       return -1;
     }
   }
@@ -389,7 +407,8 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
         std::lock_guard<std::mutex> lock(mutex_);
         if (!server_mr_register_per_layer(ctx)) {
           ERR("server_mr_register_per_layer failed");
-          return -1;
+          close_server_connection(connfd, ctx, epollfd, connectionContexts);
+          continue;
         }
 
         if (get_port_info(ctx->context, ib_dev->port, &ctx->portinfo)) {
@@ -435,7 +454,11 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
           continue;
         }
 
-        server_exchange_mr(ctx);
+        if (!server_exchange_mr(ctx)) {
+          ERR("server_exchange_mr failed");
+          close_server_connection(connfd, ctx, epollfd, connectionContexts);
+          continue;
+        }
         INFO("connect successfully");
       } else {
         auto ctx_iter = connectionContexts.find(event_fd);
@@ -463,6 +486,32 @@ int RDMACommunicator::start_server(int sport, int sgid_idx, int gpu_index) {
     }
   }
 
+  // Clean up remaining connections when server loop exits
+  for (auto& kv : connectionContexts) {
+    struct RdmaContext* ctx = kv.second;
+    if (ctx) {
+      clear_qp_info(ctx);
+      delete ctx;
+    }
+    close(kv.first);
+  }
+  connectionContexts.clear();
+
+  // Deregister server MRs once (shared across all connections)
+  auto dereg_list = [](std::vector<ibv_mr*>& mrs, const char* name) {
+    for (auto*& mr : mrs) {
+      if (mr) {
+        ibv_dereg_mr(mr);
+        mr = nullptr;
+      }
+    }
+    mrs.clear();
+  };
+  dereg_list(write_cache_key_server_mr_list, "server key");
+  dereg_list(write_cache_value_server_mr_list, "server value");
+  dereg_list(write_cache_key_scale_server_mr_list, "server key scale");
+  dereg_list(write_cache_value_scale_server_mr_list, "server value scale");
+
   close(sockfd);
   close(epollfd);
   return 0;
@@ -474,11 +523,15 @@ void RDMACommunicator::close_server_connection(
     int epollfd,
     std::map<int, struct RdmaContext*>& connectionContexts) {
   if (ctx) {
-    if (!deregister_memory_regions(ctx)) {
-      WARN("Failed to clear memory regions for Connection fd %d", fd);
-    }
+    // Server MRs are shared across all connections (registered once, reused).
+    // Only clear the shallow copies in ctx->conn without deregistering.
+    ctx->conn.write_cache_key_server_mr_list.clear();
+    ctx->conn.write_cache_value_server_mr_list.clear();
+    ctx->conn.write_cache_key_scale_server_mr_list.clear();
+    ctx->conn.write_cache_value_scale_server_mr_list.clear();
+
     if (!clear_qp_info(ctx)) {
-      WARN("Failed to clear memory regions for Connection fd %d", fd);
+      WARN("Failed to clear QP info for Connection fd %d", fd);
     }
     delete ctx;
   }
@@ -524,32 +577,14 @@ bool RDMACommunicator::deregister_memory_regions(struct RdmaContext* ctx) {
     return false;
   }
 
-  if (!write_mr_key_list.empty()) {
-    for (int layer_idx = 0; layer_idx < layer_number; layer_idx++) {
-      if (write_mr_key_list[layer_idx]) {
-        if (ibv_dereg_mr(write_mr_key_list[layer_idx])) {
-          ERR("Failed to deregister memory region: write_mr_key_list, layer %d",
-              layer_idx);
-        }
-        write_mr_key_list[layer_idx] = nullptr;
-      }
-    }
-    write_mr_key_list.clear();
-  }
-
-  if (!write_mr_value_list.empty()) {
-    for (int layer_idx = 0; layer_idx < layer_number; layer_idx++) {
-      if (write_mr_value_list[layer_idx]) {
-        if (ibv_dereg_mr(write_mr_value_list[layer_idx])) {
-          ERR("Failed to deregister memory region: write_mr_value_list, layer "
-              "%d",
-              layer_idx);
-        }
-        write_mr_value_list[layer_idx] = nullptr;
-      }
-    }
-    write_mr_value_list.clear();
-  }
+  // Client write MRs and server MRs are class-level shared resources.
+  // They are registered once and reused across connections.
+  // Deregistration is only done in the destructor.
+  // Just clear the connection's shallow copies here.
+  ctx->conn.write_cache_key_server_mr_list.clear();
+  ctx->conn.write_cache_value_server_mr_list.clear();
+  ctx->conn.write_cache_key_scale_server_mr_list.clear();
+  ctx->conn.write_cache_value_scale_server_mr_list.clear();
 
   return true;
 }
@@ -638,11 +673,15 @@ int RDMACommunicator::connect(const std::string& dst_ip,
   // Get port information for the connection
   if (get_port_info(ctx->context, ib_dev->port, &ctx->portinfo)) {
     ERR("Couldn't get port info");
+    clear_qp_info(ctx);
+    delete ctx;
     return static_cast<int>(ConnStatus::kError);
   }
   // Register memory regions
   if (!client_mr_register_per_layer(ctx)) {
     ERR("client_mr_register_per_layer failed");
+    clear_qp_info(ctx);
+    delete ctx;
     return static_cast<int>(ConnStatus::kError);
   }
 
@@ -653,10 +692,21 @@ int RDMACommunicator::connect(const std::string& dst_ip,
           KVCacheConfig::getInstance().resolve_rdma_dest_port(dst_port),
           KVCacheConfig::getInstance().get_rdma_gid_index(),
           dst_ip)) {
-    ERR("Couldn't getexchange port infodestinations");
+    ERR("Couldn't exchange destinations with %s:%s",
+        dst_ip.c_str(),
+        dst_port.c_str());
+    if (ctx->sock_fd > 0) close(ctx->sock_fd);
+    clear_qp_info(ctx);
+    delete ctx;
     return static_cast<int>(ConnStatus::kError);
   } else {
-    client_exchange_mr(ctx);
+    if (!client_exchange_mr(ctx)) {
+      ERR("client_exchange_mr failed");
+      if (ctx->sock_fd > 0) close(ctx->sock_fd);
+      clear_qp_info(ctx);
+      delete ctx;
+      return static_cast<int>(ConnStatus::kError);
+    }
   }
 
   // Allocate RDMA read and register read buffers
@@ -668,6 +718,13 @@ int RDMACommunicator::connect(const std::string& dst_ip,
     ctx->conn.read_bufs[i] = malloc(block_size_byte);
     if (!ctx->conn.read_bufs[i]) {
       ERR("Failed to allocate read buffer");
+      for (size_t j = 0; j < i; ++j) {
+        if (ctx->conn.read_mrs[j]) ibv_dereg_mr(ctx->conn.read_mrs[j]);
+        free(ctx->conn.read_bufs[j]);
+      }
+      if (ctx->sock_fd > 0) close(ctx->sock_fd);
+      clear_qp_info(ctx);
+      delete ctx;
       return static_cast<int>(ConnStatus::kError);
     }
     // Register memory region for read buffer
@@ -677,6 +734,15 @@ int RDMACommunicator::connect(const std::string& dst_ip,
                                        IBV_ACCESS_LOCAL_WRITE);
     if (!ctx->conn.read_mrs[i]) {
       ERR("Failed to register memory for RDMA Read buffer");
+      free(ctx->conn.read_bufs[i]);
+      ctx->conn.read_bufs[i] = nullptr;
+      for (size_t j = 0; j < i; ++j) {
+        if (ctx->conn.read_mrs[j]) ibv_dereg_mr(ctx->conn.read_mrs[j]);
+        free(ctx->conn.read_bufs[j]);
+      }
+      if (ctx->sock_fd > 0) close(ctx->sock_fd);
+      clear_qp_info(ctx);
+      delete ctx;
       return static_cast<int>(ConnStatus::kError);
     }
   }
@@ -701,6 +767,13 @@ int RDMACommunicator::connect(const std::string& dst_ip,
         rdma_event_channel_epoll_fd, EPOLL_CTL_ADD, ctx->sock_fd, &ev);
     if (ret != 0) {
       ERR("failed to add event channel %d", ret);
+      for (size_t i = 0; i < block_number; ++i) {
+        if (ctx->conn.read_mrs[i]) ibv_dereg_mr(ctx->conn.read_mrs[i]);
+        free(ctx->conn.read_bufs[i]);
+      }
+      if (ctx->sock_fd > 0) close(ctx->sock_fd);
+      clear_qp_info(ctx);
+      delete ctx;
       return static_cast<int>(ConnStatus::kError);
     }
   }
@@ -778,7 +851,17 @@ void RDMACommunicator::remove_conn(const std::string& url) {
   if (conn_map.find(url) != conn_map.end()) {
     struct RdmaContext* ctx = conn_map[url];
     conn_map.erase(url);
-    free(ctx->context);
+    // Clean up read buffers and MRs
+    for (size_t i = 0; i < ctx->conn.read_bufs.size(); ++i) {
+      if (ctx->conn.read_mrs[i]) ibv_dereg_mr(ctx->conn.read_mrs[i]);
+      if (ctx->conn.read_bufs[i]) free(ctx->conn.read_bufs[i]);
+    }
+    ctx->conn.read_bufs.clear();
+    ctx->conn.read_mrs.clear();
+    if (ctx->sock_fd > 0) close(ctx->sock_fd);
+    deregister_memory_regions(ctx);
+    clear_qp_info(ctx);
+    delete ctx;
   }
 }
 
@@ -960,12 +1043,21 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
     ERR("Invalid RDMA context");
     return false;
   }
-  LOGD("Start server memory region registration...");
 
-  write_cache_key_server_mr_list.clear();
-  write_cache_value_server_mr_list.clear();
-  write_cache_key_scale_server_mr_list.clear();
-  write_cache_value_scale_server_mr_list.clear();
+  // Reuse existing MRs if already registered (supports multi-P connections)
+  if (!write_cache_key_server_mr_list.empty()) {
+    ctx->conn.write_cache_key_server_mr_list = write_cache_key_server_mr_list;
+    ctx->conn.write_cache_value_server_mr_list =
+        write_cache_value_server_mr_list;
+    ctx->conn.write_cache_key_scale_server_mr_list =
+        write_cache_key_scale_server_mr_list;
+    ctx->conn.write_cache_value_scale_server_mr_list =
+        write_cache_value_scale_server_mr_list;
+    LOGD("Reusing existing server MRs for new connection");
+    return true;
+  }
+
+  LOGD("Start server memory region registration...");
 
   const uint32_t access_flags =
       IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_WRITE | IBV_ACCESS_REMOTE_READ;
@@ -982,14 +1074,10 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
     }
     write_cache_key_server_mr_list.push_back(key_mr);
 
-    struct ibv_mr* value_mr = nullptr;
-    struct ibv_mr* key_scale_mr = nullptr;
-    struct ibv_mr* value_scale_mr = nullptr;
-
     if (has_value_cache_) {
       void* val_ptr =
           reinterpret_cast<void*>(local_cache_value_ptr_layer_head_[i]);
-      value_mr = register_memory_region(
+      struct ibv_mr* value_mr = register_memory_region(
           ctx->pd, val_ptr, size, "value_" + std::to_string(i), access_flags);
       if (!value_mr) {
         ERR("Failed to register value MR at layer %d", i);
@@ -1004,11 +1092,12 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
       size_t scale_size =
           static_cast<size_t>(scale_block_size_byte) * block_number;
 
-      key_scale_mr = register_memory_region(ctx->pd,
-                                            key_scale_ptr,
-                                            scale_size,
-                                            "key_scale_" + std::to_string(i),
-                                            access_flags);
+      struct ibv_mr* key_scale_mr =
+          register_memory_region(ctx->pd,
+                                 key_scale_ptr,
+                                 scale_size,
+                                 "key_scale_" + std::to_string(i),
+                                 access_flags);
       if (!key_scale_mr) {
         ERR("Failed to register key scale MR at layer %d", i);
         goto fail;
@@ -1022,7 +1111,7 @@ bool RDMACommunicator::server_mr_register_per_layer(RdmaContext* ctx) {
       size_t scale_size =
           static_cast<size_t>(scale_block_size_byte) * block_number;
 
-      value_scale_mr =
+      struct ibv_mr* value_scale_mr =
           register_memory_region(ctx->pd,
                                  value_scale_ptr,
                                  scale_size,
