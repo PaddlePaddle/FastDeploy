@@ -135,6 +135,7 @@ RDMACommunicator::RDMACommunicator(std::string& role,
           ERR("Server thread failed: %s", e.what());
         }
       });
+      server_thread_.detach();
     }
     RDMACommunicator_status = 1;
     INFO("RDMA communicator initialized successfully");
@@ -258,15 +259,8 @@ RDMACommunicator::~RDMACommunicator() {
     // Signal server thread that destructor owns MR cleanup
     server_mr_owned_by_destructor_ = true;
 
-    // Wait for server thread to finish before touching any shared state
-    if (server_thread_.joinable()) {
-      server_thread_.join();
-    }
-
-    // Wait for client listener thread to finish
-    if (client_thread_.joinable()) {
-      client_thread_.join();
-    }
+    // Detached threads will notice status change on next epoll wake-up;
+    // no need to join — kernel reclaims resources on process exit.
 
     // Clean up all client connections in conn_map
     {
@@ -774,6 +768,7 @@ int RDMACommunicator::connect(const std::string& dst_ip,
     std::lock_guard<std::mutex> lock(mutex_);
     if (!start_client_listener.load()) {
       client_thread_ = std::thread([this]() { this->client_listener(); });
+      client_thread_.detach();
       start_client_listener = true;
     }
   }
