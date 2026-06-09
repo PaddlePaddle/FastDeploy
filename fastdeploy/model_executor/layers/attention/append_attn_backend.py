@@ -325,7 +325,7 @@ class AppendAttentionBackend(AttentionBackend):
                     getattr(layer, "k_norm_weight", None),
                     getattr(layer, "rms_norm_eps", 1e-6),
                     self.num_heads * cache_k.shape[3],
-                    cache_v.shape[1] * cache_k.shape[3],
+                    cache_k.shape[1] * cache_k.shape[3],
                     cache_v.shape[3],
                 )
 
