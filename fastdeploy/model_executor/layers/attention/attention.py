@@ -89,11 +89,16 @@ class Attention(nn.Layer):
             fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_size
         )
         self.head_dim: int = fd_config.model_config.head_dim
+        self.layer_id: int = layer_id
+        num_key_value_heads = getattr(fd_config.model_config, "num_key_value_heads_list", None)
+        if num_key_value_heads is None:
+            num_key_value_heads = fd_config.model_config.num_key_value_heads
+        else:
+            num_key_value_heads = num_key_value_heads[self.layer_id]
         self.kv_num_heads: int = max(
             1,
-            fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_size,
+            int(num_key_value_heads) // fd_config.parallel_config.tensor_parallel_size,
         )
-        self.layer_id: int = layer_id
         self.v_head_dim: int = v_head_dim if v_head_dim > 0 else self.head_dim
         self.rope_type: str = rope_type
         self.qk_head_dim: int = self.head_dim
@@ -277,7 +282,11 @@ class Attention(nn.Layer):
         if forward_meta.layer_done_counter is not None:
             forward_meta.layer_done_counter.wait_for_layer(self.layer_id)
 
-        return forward_meta.attn_backend.forward(
+        attn_backend = forward_meta.attn_backend
+        if forward_meta.attn_backends is not None:
+            attn_backend = forward_meta.attn_backends[self.layer_id]
+
+        return attn_backend.forward(
             q,
             k,
             v,
