@@ -25,7 +25,6 @@ from paddleformers.utils.log import logger
 import fastdeploy
 from fastdeploy import envs
 from fastdeploy.model_executor.layers.moe import FusedMoE
-from fastdeploy.model_executor.layers.moe.ep import EPRunner
 from fastdeploy.model_executor.layers.moe.fused_moe_backend_base import MoEMethodBase
 from fastdeploy.model_executor.utils import (
     create_parameter_and_copy,
