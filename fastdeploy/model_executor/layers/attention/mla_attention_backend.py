@@ -468,6 +468,7 @@ class MLAAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
+        v_head_dim: int = None,
         encoder_block_shape_q: int = -1,
         decoder_block_shape_q: int = -1,
     ) -> None:
