@@ -271,13 +271,7 @@ class OpenAIServingCompletion(OpenAiServingBase):
                     choice.draft_logprobs = self._create_completion_logprobs(
                         output.draft_top_logprobs, request.logprobs, 0
                     )
-            delta_text = output.text or ""
-            fallback_truncated = bool(output.fallback_truncated)
-            if output.skipped and not request_output.finished and not request.return_token_ids:
-                return
-            if output.skipped:
-                delta_text = ""
-            choice.text = delta_text
+            choice.text = output.text or ""
             choice.reasoning_content = output.reasoning_content or ""
             choice.tool_calls = request_output.accumulate_tool_calls if request_output.accumulate_tool_calls else None
 
@@ -286,10 +280,6 @@ class OpenAIServingCompletion(OpenAiServingBase):
                 choice.finish_reason = self._calc_finish_reason(
                     request_output, request.max_tokens, choice_completion_tokens
                 )
-                if fallback_truncated:
-                    choice.finish_reason = "length"
-                    response_ctx.truncated_choices.add(output.index)
-                    await self.engine_client.abort(make_choice_id(request_id, output.index), 1)
                 log_request(
                     level=RequestLogLevel.LIFECYCLE,
                     message="Completion Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
@@ -382,10 +372,9 @@ class OpenAIServingCompletion(OpenAiServingBase):
             output.token_ids = [*final_res.prompt_token_ids, *output.token_ids]
             final_res.prompt = final_res.prompt + (output.text or "")
         finish_reason = self._calc_finish_reason(final_res, request.max_tokens, len(output.token_ids))
-        output_text = output.text or ""
         choice_data = CompletionResponseChoice(
             index=index,
-            text=output_text,
+            text=output.text or "",
             reasoning_content=output.reasoning_content or "",
             tool_calls=[output.tool_calls] if output.tool_calls else None,
             finish_reason=finish_reason,

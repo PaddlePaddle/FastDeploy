@@ -10,7 +10,6 @@ from fastdeploy.config import FDConfig
 
 # Import the classes we need to test
 from fastdeploy.engine.async_llm import AsyncLLM
-from fastdeploy.engine.request import CompletionOutput, RequestOutput
 from fastdeploy.entrypoints.openai.protocol import (
     CompletionLogprobs,
     CompletionRequest,
@@ -34,8 +33,6 @@ class ServingResponseContext:
         self.usage = UsageInfo()
         self.choice_completion_tokens_dict = {}
         self.inference_start_time_dict = {}
-        self.remain_choices = 0
-        self.truncated_choices = set()
 
 
 class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
@@ -44,7 +41,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         """Set up test fixtures before each test method."""
         self.mock_engine_client = AsyncMock(spec=AsyncLLM)
-        self.mock_engine_client.abort = AsyncMock()
         self.mock_config = MagicMock(spec=FDConfig)
         self.mock_models = MagicMock(spec=OpenAIServingModels)
         self.pid = 12345
@@ -181,44 +177,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].startswith("data: "))
 
-    async def test_build_stream_response_with_fallback_truncate(self):
-        """Test _build_stream_response handles processor's fallback truncate signal."""
-        output = CompletionOutput(index=0, send_idx=1, token_ids=[1, 2, 3], text="corrected")
-        output.fallback_truncated = True
-        request_output = RequestOutput(
-            request_id="test_request_id::n::0",
-            outputs=output,
-            finished=True,
-            metrics=MagicMock(first_token_time=time.time(), inference_start_time=time.time()),
-        )
-        request = CompletionRequest(
-            model="test_model",
-            prompt="Hello",
-            stream=True,
-            max_streaming_response_tokens=1,
-            return_token_ids=False,
-            logprobs=False,
-            include_draft_logprobs=False,
-        )
-        ctx = ServeContext[CompletionRequest](request=request, model_name="test_model", request_id="test_request_id")
-        ctx.created_time = int(time.time())
-        ctx.preprocess_requests = [{}]
-        response_ctx = ServingResponseContext()
-        response_ctx.choice_completion_tokens_dict = {0: 3}
-        response_ctx.remain_choices = 0
-
-        results = []
-        async for result in self.serving_completion._build_stream_response(ctx, request_output, response_ctx):
-            results.append(result)
-
-        self.assertEqual(len(results), 2)
-        self.assertIn('"text":"corrected"', results[0])
-        self.assertIn('"finish_reason":"length"', results[0])
-        self.assertEqual(results[1], "data: [DONE]\n\n")
-        self.assertEqual(response_ctx.remain_choices, 0)
-        self.assertEqual(response_ctx.truncated_choices, {0})
-        self.mock_engine_client.abort.assert_awaited_once_with("test_request_id::n::0", 1)
-
     async def test_build_full_response(self):
         """Test _build_full_response method."""
         # Create mock request outputs
@@ -299,28 +257,6 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result.index, 0)
         self.assertEqual(result.text, "Test response")
         self.assertEqual(result.finish_reason, "stop")
-
-    def test_build_completion_choice_passes_through_text(self):
-        """Test build_completion_choice returns text as-is.
-
-        Output fallback now applies in the upstream processor; the serving
-        layer must not reapply it.
-        """
-        output = CompletionOutput(index=0, send_idx=0, token_ids=[1, 2, 3], text="already corrected")
-        request_output = RequestOutput(
-            request_id="test_request_id::n::0",
-            outputs=output,
-            prompt="Test prompt",
-            prompt_token_ids=[4, 5, 6],
-        )
-        request = CompletionRequest(
-            model="test_model", prompt="Hello", max_tokens=None, logprobs=False, return_token_ids=False
-        )
-        ctx = ServeContext[CompletionRequest](request=request, model_name="test_model", request_id="test_request_id")
-
-        result = self.serving_completion.build_completion_choice(0, request_output, ctx)
-
-        self.assertEqual(result.text, "already corrected")
 
     def test_calc_finish_reason_stop(self):
         """Test finish reason calculation for normal stop."""

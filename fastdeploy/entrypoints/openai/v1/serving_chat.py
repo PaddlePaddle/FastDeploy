@@ -268,7 +268,6 @@ class OpenAIServingChat(OpenAiServingBase):
         if include_continuous_usage:
             chunk.usage = response_ctx.usage
 
-        fallback_truncated = False
         if self.enable_mm_output:
             if output.decode_type == 1:
                 image = {"type": "image"}
@@ -288,14 +287,7 @@ class OpenAIServingChat(OpenAiServingBase):
                     }
                 ]
         else:
-            delta_text = output.text or ""
-            fallback_truncated = bool(output.fallback_truncated)
-            if output.skipped:
-                # Held by output fallback in upstream processor.
-                if not request_output.finished and not request.return_token_ids:
-                    return
-                delta_text = ""
-            choice.delta.content = delta_text
+            choice.delta.content = output.text or ""
 
         choice.delta.reasoning_content = output.reasoning_content or ""
         choice.delta.tool_calls = [output.tool_calls] if output.tool_calls else None
@@ -315,10 +307,6 @@ class OpenAIServingChat(OpenAiServingBase):
             max_tokens = request.max_completion_tokens or request.max_tokens
             choice_completion_tokens = response_ctx.choice_completion_tokens_dict[output.index]
             choice.finish_reason = self._calc_finish_reason(request_output, max_tokens, choice_completion_tokens)
-            if fallback_truncated:
-                choice.finish_reason = "length"
-                response_ctx.truncated_choices.add(output.index)
-                await self.engine_client.abort(make_choice_id(ctx.request_id, output.index), 1)
             log_request(
                 level=RequestLogLevel.LIFECYCLE,
                 message="Chat Streaming response last send: request_id={request_id}, finish_reason={finish_reason}, completion_tokens={completion_tokens}, logprobs={logprobs}",
@@ -400,8 +388,7 @@ class OpenAIServingChat(OpenAiServingBase):
             message.multimodal_content = multipart
         else:
             request_output = request_output_list[-1]
-            text = request_output.outputs.text
-            message.content = text
+            message.content = request_output.outputs.text
         output = request_output.outputs
         message.reasoning_content = output.reasoning_content
         message.tool_calls = request_output.accumulate_tool_calls if request_output.accumulate_tool_calls else None
