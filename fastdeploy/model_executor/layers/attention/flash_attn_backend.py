@@ -262,7 +262,6 @@ class FlashAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
-        v_head_dim: int = None,
         encoder_block_shape_q: int = -1,
         decoder_block_shape_q: int = -1,
     ):
@@ -277,7 +276,6 @@ class FlashAttentionBackend(AttentionBackend):
         self.num_heads = num_heads
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim = fd_config.model_config.head_dim
-        self.v_head_dim = v_head_dim if v_head_dim is not None else self.head_dim
         self.attn_outputsize_tp = self.num_heads * self.head_dim
         self.block_size = fd_config.cache_config.block_size
         self.num_layers: int = fd_config.model_config.num_hidden_layers
@@ -322,9 +320,7 @@ class FlashAttentionBackend(AttentionBackend):
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             key_cache_shape[-1] = self.head_dim // 2
-        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.v_head_dim]
-        if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
-            value_cache_shape[-1] = self.v_head_dim // 2
+        value_cache_shape = key_cache_shape
         return key_cache_shape, value_cache_shape
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):

@@ -72,7 +72,6 @@ class BlockAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
-        v_head_dim: int = None,
         encoder_block_shape_q: int = -1,
         decoder_block_shape_q: int = -1,
     ):
@@ -89,7 +88,6 @@ class BlockAttentionBackend(AttentionBackend):
         self.kv_num_heads = kv_num_heads
         self.num_heads = num_heads
         self.head_dim = fd_config.model_config.head_dim
-        self.v_head_dim = v_head_dim if v_head_dim is not None else self.head_dim
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attntion metadata hence all layers in the forward pass can reuse it."""
@@ -119,7 +117,7 @@ class BlockAttentionBackend(AttentionBackend):
         Calculate kv cache shape
         """
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
-        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.v_head_dim]
+        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             key_cache_shape = [
                 max_num_blocks,
@@ -131,7 +129,7 @@ class BlockAttentionBackend(AttentionBackend):
                 max_num_blocks,
                 self.kv_num_heads,
                 self.block_size,
-                self.v_head_dim // 2,
+                self.head_dim // 2,
             ]
         return key_cache_shape, value_cache_shape
 

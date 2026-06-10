@@ -148,7 +148,6 @@ class AppendAttentionBackend(AttentionBackend):
         kv_num_heads: int,
         num_heads: int,
         head_dim: int,
-        v_head_dim: int = None,
         encoder_block_shape_q: int = -1,
         decoder_block_shape_q: int = -1,
     ) -> None:
@@ -178,7 +177,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
         self.v_head_dim: int = getattr(fd_config.model_config, "v_head_dim", self.head_dim)
-        self.external_norm_rope: bool = True if v_head_dim != head_dim else False
+        self.external_norm_rope: bool = True if self.v_head_dim != self.head_dim else False
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         # head wise sliding window attention

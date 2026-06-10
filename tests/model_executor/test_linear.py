@@ -287,6 +287,8 @@ def test_qkv_paths():
         num_heads_per_rank=2,
         kv_num_heads_per_rank=1,
         num_kv_head_replicas=2,
+        head_dim=2,
+        v_head_dim=2,
         tp_size=2,
         local_rank=0,
         fd_config=cfg_tp2,
