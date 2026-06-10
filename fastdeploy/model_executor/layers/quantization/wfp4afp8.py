@@ -52,7 +52,7 @@ class WFP4AFP8Config(QuantConfigBase):
         return cls(weight_scale_dict, act_scale_dict, is_permuted, is_quantized)
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
-        logger.info("Currently only support DeepGEMMMegaMoE for wfp4afp8")
+        logger.debug("Currently only support DeepGEMMMegaMoE for wfp4afp8")
         if isinstance(layer, FusedMoE):
             from fastdeploy.model_executor.layers.moe.fused_moe_deepgemm_backend import (
                 DeepGemmMegaMoEMethod,

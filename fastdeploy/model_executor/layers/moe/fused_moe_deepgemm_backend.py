@@ -1123,7 +1123,7 @@ class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
     def init_ep(self, layer: nn.Layer) -> None:
         logger.info("Use MegaMoE backend")
         if layer.ep_size <= 1:
-            return
+            raise ValueError("Ep size must be greater than 1 when use MegaMoE backend. Please set --enable-expert-parallel")
 
         config = layer.fd_config
         splitwise_role = config.scheduler_config.splitwise_role
