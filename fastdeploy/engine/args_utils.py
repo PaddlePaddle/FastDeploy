@@ -369,6 +369,11 @@ class EngineArgs:
     Whether use chunked moe.
     """
 
+    enable_mega_moe: bool = False
+    """
+    Whether use MegaMoE wfp4afp8 for MoE and block_wise_fp8 for dense Linear.
+    """
+
     chunked_moe_size: int = 256
     """
     Chunk size of moe input.
@@ -1175,6 +1180,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_chunked_moe,
             help="Use chunked moe.",
+        )
+        parallel_group.add_argument(
+            "--enable-mega-moe",
+            action="store_true",
+            default=EngineArgs.enable_mega_moe,
+            help="Use MegaMoE wfp4afp8 for MoE and block_wise_fp8 for dense Linear.",
         )
         parallel_group.add_argument(
             "--chunked-moe-size",
