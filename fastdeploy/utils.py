@@ -31,6 +31,7 @@ import sys
 import tarfile
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from enum import Enum
 from functools import cache
@@ -1102,13 +1103,15 @@ def init_bos_client():
     return client
 
 
-def download_from_bos(bos_client, bos_links, retry: int = 0):
+def download_from_bos(bos_client, bos_links, retry: int = 0, max_workers: int = None):
     """
     Download pickled objects from Baidu Object Storage (BOS).
     Args:
         bos_client: BOS client instance
         bos_links: Single link or list of BOS links in format "bos://bucket-name/path/to/object"
         retry: Number of times to retry on failure (only retries on network-related errors)
+        max_workers: Max parallel workers for downloading multiple links within one request.
+            Defaults to envs.FD_BOS_DOWNLOAD_PARALLEL. Use 1 for sequential.
     Yields:
         tuple: (success: bool, data: np.ndarray | error_msg: str)
             - On success: (True, deserialized_data)
@@ -1129,31 +1132,61 @@ def download_from_bos(bos_client, bos_links, retry: int = 0):
         object_key = link.split("/")[-1]
         return bos_client.get_object_as_string(bucket_name, object_key)
 
-    if not isinstance(bos_links, list):
-        bos_links = [bos_links]
+    def _fetch_one(link):
+        """Fetch + deserialize a single link, with optional retry on rate-limit.
 
-    for link in bos_links:
+        Returns (success, result) where result is the deserialized object on
+        success or an error message string on failure.
+        """
         try:
             response = _bos_download(bos_client, link)
-            yield True, pickle.loads(response)
+            return True, pickle.loads(response)
         except Exception:
-            # Only retry on network-related or timeout exceptions
             exceptions_msg = str(traceback.format_exc())
-
             if "request rate is too high" not in exceptions_msg or retry <= 0:
-                yield False, f"Failed to download {link}: {exceptions_msg}"
-                break
-
+                return False, f"Failed to download {link}: {exceptions_msg}"
             for attempt in range(retry):
                 try:
                     llm_logger.warning(f"Retry attempt {attempt + 1}/{retry} for {link}")
                     response = _bos_download(bos_client, link)
-                    yield True, pickle.loads(response)
-                    break
+                    return True, pickle.loads(response)
                 except Exception:
-                    if attempt == retry - 1:  # Last attempt failed
-                        yield False, f"Failed after {retry} retries for {link}: {str(traceback.format_exc())}"
-            break
+                    if attempt == retry - 1:
+                        return False, f"Failed after {retry} retries for {link}: {str(traceback.format_exc())}"
+            return False, f"Failed after {retry} retries for {link}"
+
+    if not isinstance(bos_links, list):
+        bos_links = [bos_links]
+
+    if max_workers is None:
+        try:
+            max_workers = envs.FD_BOS_DOWNLOAD_PARALLEL
+        except Exception:
+            max_workers = 1
+
+    # Sequential path: keep behavior identical for single link or when parallel disabled.
+    if max_workers <= 1 or len(bos_links) <= 1:
+        for link in bos_links:
+            success, result = _fetch_one(link)
+            yield success, result
+            if not success:
+                break
+        return
+
+    # Parallel path: submit all, yield in submission order so callers
+    # that build ordered lists (e.g. video chunks) stay correct.
+    workers = min(max_workers, len(bos_links))
+    with ThreadPoolExecutor(max_workers=workers) as ex:
+        futures = [ex.submit(_fetch_one, link) for link in bos_links]
+        for fut in futures:
+            success, result = fut.result()
+            yield success, result
+            if not success:
+                # Cancel any not-yet-started downloads; in-flight ones will
+                # finish but their results are discarded.
+                for f in futures:
+                    f.cancel()
+                break
 
 
 llm_logger = get_logger("fastdeploy", "fastdeploy.log")
