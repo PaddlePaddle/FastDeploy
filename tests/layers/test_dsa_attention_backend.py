@@ -64,8 +64,6 @@ class TestDSAAttentionMetadata(unittest.TestCase):
         self.assertIsNone(metadata.rotary_embs)
         self.assertIsNone(metadata.attn_mask)
         self.assertEqual(metadata._fuse_kernel_compute_dtype, "bf16")
-        self.assertIsNone(metadata.kv_signal_metadata)
-        self.assertEqual(metadata.kv_signal_data_list, [])
         self.assertIsNone(metadata.max_enc_len_this_time)
         self.assertIsNone(metadata.max_dec_len_this_time)
         self.assertIsNone(metadata.max_kv_len_this_time)
@@ -253,43 +251,6 @@ class TestDSAAttentionBackendInitAttentionMetadata(unittest.TestCase):
         backend.init_attention_metadata(forward_meta)
 
         self.assertEqual(backend.attention_metadata._fuse_kernel_compute_dtype, "fp16")
-
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.init_kv_signal_per_query")
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.get_block_shape_and_split_kv_block")
-    @patch("paddle.get_default_dtype", return_value="bfloat16")
-    def test_pd_disaggregation_per_chunk(self, mock_dtype, mock_block_shape, mock_init_signal):
-        """init_attention_metadata calls init_kv_signal_per_query for per_chunk mode."""
-        backend = self._make_backend()
-        backend.pd_disaggregation_mode = "per_chunk"
-        backend.keep_pd_step_flag = False
-        backend.num_layers_draft_model = 0
-
-        forward_meta = MagicMock()
-        forward_meta.max_len_tensor_cpu = [0, 0, 0, 0, 0, 0]
-        forward_meta.is_dummy_or_profile_run = False
-
-        backend.init_attention_metadata(forward_meta)
-
-        mock_init_signal.assert_called_once()
-
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.open_shm_and_get_meta_signal")
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.get_block_shape_and_split_kv_block")
-    @patch("paddle.get_default_dtype", return_value="bfloat16")
-    def test_pd_disaggregation_per_query(self, mock_dtype, mock_block_shape, mock_open_shm):
-        """init_attention_metadata calls open_shm_and_get_meta_signal for per_query mode."""
-        backend = self._make_backend()
-        backend.pd_disaggregation_mode = "per_query"
-        backend.keep_pd_step_flag = False
-        mock_open_shm.return_value = "signal_metadata"
-
-        forward_meta = MagicMock()
-        forward_meta.max_len_tensor_cpu = [0, 0, 0, 0, 0, 0]
-        forward_meta.is_dummy_or_profile_run = False
-
-        backend.init_attention_metadata(forward_meta)
-
-        mock_open_shm.assert_called_once()
-        self.assertEqual(backend.attention_metadata.kv_signal_metadata, "signal_metadata")
 
 
 class TestDSAAttentionBackendGetAttentionMeta(unittest.TestCase):
@@ -646,7 +607,6 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
         backend = DSAAttentionBackend(fd_config, kv_num_heads=1, num_heads=16, head_dim=128)
 
         metadata = DSAAttentionMetadata()
-        metadata.kv_signal_data_list = [None] * 32
         backend.attention_metadata = metadata
 
         layer = MagicMock()
@@ -739,7 +699,6 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
         backend = DSAAttentionBackend(fd_config, kv_num_heads=1, num_heads=16, head_dim=128)
 
         metadata = DSAAttentionMetadata()
-        metadata.kv_signal_data_list = [None] * 32
         backend.attention_metadata = metadata
 
         layer = MagicMock()
@@ -835,7 +794,6 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
         backend = DSAAttentionBackend(fd_config, kv_num_heads=1, num_heads=16, head_dim=128)
 
         metadata = DSAAttentionMetadata()
-        metadata.kv_signal_data_list = [None] * 32
         backend.attention_metadata = metadata
 
         layer = MagicMock()
