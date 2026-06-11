@@ -249,7 +249,6 @@ __global__ void multi_query_append_attention_kernel(
     // update m,d
     update_mdo_states<num_frags_x, num_frags_y, num_frags_z>(
         s_frag, o_frag, m_frag, d_frag);
-    __syncthreads();
 
     kv_idx_base += BLOCK_SIZE;
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
@@ -622,7 +621,6 @@ __global__ void multi_query_append_attention_warp1_4_kernel(
     // update m,d
     update_mdo_states<num_frags_x, num_frags_y, num_frags_z>(
         s_frag, o_frag, m_frag, d_frag);
-    __syncthreads();
 
     kv_idx_base += BLOCK_SIZE;
     block_id = __ldg(&block_table_now[kv_idx_base / BLOCK_SIZE]);
