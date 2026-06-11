@@ -68,7 +68,10 @@ def load_deep_gemm():
     if current_platform.is_cuda():
         if get_sm_version() >= 100:
             # SM100 should use PFCC DeepGemm
-            paddle.enable_compat(scope={"deep_gemm"})
+            try:
+                paddle.enable_compat(scope={"deep_gemm"})
+            except Exception as e:
+                paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
             try:
                 import logging
 

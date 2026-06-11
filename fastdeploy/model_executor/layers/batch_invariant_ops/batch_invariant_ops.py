@@ -806,12 +806,14 @@ def enable_batch_invariant_mode():
         return
 
     if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
-        paddle.enable_compat()
+        paddle.compat.enable_torch_proxy()
         # TODO(liujundong): Enabling torch proxy here has a global effect.
         # Do NOT call this function from module import time,
         # otherwise it may affect other test cases during pytest collection.
         # (ex: Could not import module 'PretrainedTokenizer' or No module named 'paddle.distributed.tensor')
         # Other side effects have not been observed yet, but they should be watched out for in the future.
+    elif hasattr(paddle, "enable_compat"):
+        paddle.enable_compat()
     else:
         raise RuntimeError(
             "Unable to enable batch-invariant mode: Paddle version is too old. " "Please upgrade PaddlePaddle."

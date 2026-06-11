@@ -106,7 +106,10 @@ from fastdeploy.utils import console_logger, current_package_version, get_versio
 # cause some unexpected issues in triton kernels. We use enable_compat_on_triton_kernel
 # for these cases.
 if not _is_package_installed("torch"):
-    paddle.enable_compat(scope={"triton"})
+    try:
+        paddle.enable_compat(scope={"triton"})
+    except Exception as e:
+        paddle.compat.enable_torch_proxy(scope={"triton"})
 
 if envs.FD_DEBUG != 1:
     # Log level has been configured above

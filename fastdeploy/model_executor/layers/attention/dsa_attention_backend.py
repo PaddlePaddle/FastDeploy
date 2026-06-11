@@ -26,7 +26,10 @@ import paddle
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda():
-    paddle.enable_compat(scope={"flash_mla"})
+    try:
+        paddle.enable_compat(scope={"flash_mla"})
+    except Exception as e:
+        paddle.compat.enable_torch_proxy(scope={"flash_mla"})
 
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block,
