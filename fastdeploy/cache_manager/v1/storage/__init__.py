@@ -64,55 +64,43 @@ def create_storage_scheduler(
 
         scheduler = MooncakeStorageScheduler(config)
 
-    elif config.kvcache_storage_backend == "attention_store":
-        from .attnstore.connector import AttnStoreScheduler
-
-        scheduler = AttnStoreScheduler(config)
-
     else:
-        raise ValueError(
-            f"Unsupported storage type: {config.kvcache_storage_backend}. "
-            f"Supported types: mooncake, attention_store, local"
-        )
+        raise ValueError(f"Unsupported storage type: {config.kvcache_storage_backend}. " "Supported types: mooncake")
 
     # Attempt connection
     if scheduler is not None:
         if not scheduler.connect():
-            # Log warning but still return the scheduler
-            pass
+            raise RuntimeError(
+                f"Failed to connect to storage backend '{config.kvcache_storage_backend}'. "
+                "Check server address, credentials, and network connectivity."
+            )
 
     return scheduler
 
 
 def create_storage_connector(
     config: Any,
+    tp_rank: Optional[int] = None,
 ) -> Optional[StorageConnector]:
     """
     Create a StorageConnector instance based on configuration.
 
     This is a factory function that creates the appropriate StorageConnector
     based on the storage backend type specified in the configuration.
+    The caller is responsible for calling ``connector.connect()`` when ready.
 
     Args:
         config: Configuration object, can be:
             - CacheConfig: FastDeploy configuration object
             - Dict: Dictionary with 'storage_type' and backend-specific settings
             - StorageConfig: StorageConfig dataclass instance
+        tp_rank: Tensor-parallel rank, passed to the connector for RDMA NIC
+            selection (Mooncake only). When None, the connector uses the
+            default device selection strategy.
 
     Returns:
-        StorageConnector instance if successful, None otherwise
-
-    Example:
-        # Using CacheConfig
-        connector = create_storage_connector(fd_config)
-
-        # Using dict config
-        config = {
-            'storage_type': 'mooncake',
-            'server_addr': 'localhost:8080',
-            'buffer_size': 1024 * 1024,
-        }
-        connector = create_storage_connector(config)
+        StorageConnector instance (not yet connected), or None if no backend
+        is configured.
     """
     if config.kvcache_storage_backend is None:
         return None
@@ -123,24 +111,10 @@ def create_storage_connector(
     if config.kvcache_storage_backend == "mooncake":
         from .mooncake.connector import MooncakeStorageConnector
 
-        connector = MooncakeStorageConnector(config)
-
-    elif config.kvcache_storage_backend == "attention_store":
-        from .attnstore.connector import AttnStoreConnector
-
-        connector = AttnStoreConnector(config)
+        connector = MooncakeStorageConnector(config, tp_rank=tp_rank)
 
     else:
-        raise ValueError(
-            f"Unsupported storage type: {config.kvcache_storage_backend}. "
-            f"Supported types: mooncake, attention_store, local"
-        )
-
-    # Attempt connection
-    if connector is not None:
-        if not connector.connect():
-            # Log warning but still return the connector
-            pass
+        raise ValueError(f"Unsupported storage type: {config.kvcache_storage_backend}. " "Supported types: mooncake")
 
     return connector
 

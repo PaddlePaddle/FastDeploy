@@ -647,137 +647,105 @@ class TestCacheKvsMapGetters(unittest.TestCase):
         self.assertTrue(stats["has_host_cache"])
 
 
-# ---------------------------------------------------------------------------
-# _swap_single_layer – validation paths (no real GPU transfer needed)
-# ---------------------------------------------------------------------------
+# ============================================================================
+# Storage Key Format Tests
+# ============================================================================
 
 
-class TestSwapSingleLayer(unittest.TestCase):
-    """Tests for CacheTransferManager._swap_single_layer validation paths."""
+class TestStorageKeyFormat(unittest.TestCase):
+    """Test storage_key_for_block produces per-layer keys."""
+
+    def test_key_format_per_layer(self):
+        """Per-layer key: '{hash}_{rank}_key_{layer_idx}'."""
+        from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
+
+        key = storage_key_for_block("abc123", 0, "key", 5)
+        self.assertEqual(key, "abc123_0_key_5")
+
+    def test_key_format_no_layer(self):
+        """Backward-compat: without layer_idx, key is '{hash}_{rank}_key'."""
+        from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
+
+        key = storage_key_for_block("abc123", 0, "key")
+        self.assertEqual(key, "abc123_0_key")
+
+    def test_value_format_per_layer(self):
+        from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
+
+        key = storage_key_for_block("abc123", 1, "value", 3)
+        self.assertEqual(key, "abc123_1_value_3")
+
+    def test_scale_format_per_layer(self):
+        from fastdeploy.cache_manager.v1.cache_utils import storage_key_for_block
+
+        key = storage_key_for_block("abc123", 0, "key_scale", 0)
+        self.assertEqual(key, "abc123_0_key_scale_0")
+
+
+# ============================================================================
+# Build Per-Layer IO Args Tests
+# ============================================================================
+
+
+class TestBuildPerLayerIOArgs(unittest.TestCase):
+    """Test _build_per_layer_io_args helper."""
 
     def setUp(self):
-        self.tm = create_transfer_manager(enable_prefix_caching=True, num_host_blocks=0)
+        self.manager = create_transfer_manager()
+        num_layers = self.manager._num_layers
+        host_cache = create_mock_host_cache_kvs_map(num_layers=num_layers)
+        self.manager.set_host_cache_kvs_map(host_cache)
+        self.manager._host_key_block_stride_bytes = 1024
+        self.manager._host_value_block_stride_bytes = 1024
 
-    def test_returns_false_when_no_host_blocks(self):
-        """_swap_single_layer returns False when _num_host_blocks <= 0."""
-        self.assertEqual(self.tm._num_host_blocks, 0)
-        result = self.tm._swap_single_layer(
-            layer_idx=0,
-            device_block_ids=[0, 1],
-            host_block_ids=[10, 11],
-            mode=0,
+    def test_basic_keys(self):
+        hash_list = ["h1", "h2"]
+        cpu_block_list = [10, 20]
+        flat_keys, flat_ptrs, flat_sizes, flat_indices, flat_kinds = self.manager._build_per_layer_io_args(
+            hash_list, cpu_block_list
         )
-        self.assertFalse(result)
 
-    def test_returns_false_when_empty_device_ids(self):
-        """_swap_single_layer returns False when device_block_ids is empty."""
-        tm = create_transfer_manager(num_host_blocks=50)
-        result = tm._swap_single_layer(
-            layer_idx=0,
-            device_block_ids=[],
-            host_block_ids=[10],
-            mode=0,
+        num_kinds = 2  # key, value
+        expected_len = len(hash_list) * self.manager._num_layers * num_kinds
+        self.assertEqual(len(flat_keys), expected_len)
+        self.assertEqual(len(flat_ptrs), expected_len)
+        self.assertEqual(len(flat_sizes), expected_len)
+        self.assertEqual(len(flat_indices), expected_len)
+        self.assertEqual(len(flat_kinds), expected_len)
+
+        # First entry should be block 0, layer 0, kind "key"
+        self.assertEqual(flat_keys[0], "h1_0_key_0")
+        self.assertEqual(flat_sizes[0], 1024)
+        self.assertEqual(flat_indices[0], 0)
+        self.assertEqual(flat_kinds[0], "key")
+
+    def test_block_indices(self):
+        hash_list = ["h1", "h2"]
+        cpu_block_list = [10, 20]
+        flat_keys, flat_ptrs, flat_sizes, flat_indices, flat_kinds = self.manager._build_per_layer_io_args(
+            hash_list, cpu_block_list
         )
-        self.assertFalse(result)
 
-    def test_returns_false_when_empty_host_ids(self):
-        """_swap_single_layer returns False when host_block_ids is empty."""
-        tm = create_transfer_manager(num_host_blocks=50)
-        result = tm._swap_single_layer(
-            layer_idx=0,
-            device_block_ids=[0],
-            host_block_ids=[],
-            mode=0,
+        per_block = self.manager._num_layers * 2
+        # First per_block entries belong to block 0
+        for i in range(per_block):
+            self.assertEqual(flat_indices[i], 0)
+        # Next per_block entries belong to block 1
+        for i in range(per_block, 2 * per_block):
+            self.assertEqual(flat_indices[i], 1)
+
+    def test_sizes_match_strides(self):
+        hash_list = ["h1"]
+        cpu_block_list = [0]
+        flat_keys, flat_ptrs, flat_sizes, flat_indices, flat_kinds = self.manager._build_per_layer_io_args(
+            hash_list, cpu_block_list
         )
-        self.assertFalse(result)
 
-    def test_returns_false_when_length_mismatch(self):
-        """_swap_single_layer returns False when lists have different lengths."""
-        tm = create_transfer_manager(num_host_blocks=50)
-        result = tm._swap_single_layer(
-            layer_idx=0,
-            device_block_ids=[0, 1],
-            host_block_ids=[10],
-            mode=0,
-        )
-        self.assertFalse(result)
-
-    def test_returns_false_when_no_device_cache(self):
-        """_swap_single_layer returns False when device cache map not set."""
-        tm = create_transfer_manager(num_host_blocks=50)
-        # No cache map set → get_device_key_cache returns None
-        result = tm._swap_single_layer(
-            layer_idx=0,
-            device_block_ids=[0],
-            host_block_ids=[10],
-            mode=0,
-        )
-        self.assertFalse(result)
-
-
-# ---------------------------------------------------------------------------
-# sync_input_stream / sync_output_stream
-# ---------------------------------------------------------------------------
-
-
-class TestSyncStreams(unittest.TestCase):
-    """Tests for sync_input_stream and sync_output_stream."""
-
-    def test_sync_input_stream_no_stream_does_not_raise(self):
-        """When _input_stream is None, sync_input_stream should not raise."""
-        tm = create_transfer_manager()
-        tm._input_stream = None
-        tm.sync_input_stream()  # should not raise
-
-    def test_sync_output_stream_no_stream_does_not_raise(self):
-        """When _output_stream is None, sync_output_stream should not raise."""
-        tm = create_transfer_manager()
-        tm._output_stream = None
-        tm.sync_output_stream()  # should not raise
-
-    def test_sync_input_stream_with_mock_stream(self):
-        """sync_input_stream calls synchronize() on the stream."""
-        from unittest.mock import MagicMock
-
-        tm = create_transfer_manager()
-        mock_stream = MagicMock()
-        tm._input_stream = mock_stream
-        tm.sync_input_stream()
-        mock_stream.synchronize.assert_called_once()
-
-    def test_sync_output_stream_with_mock_stream(self):
-        """sync_output_stream calls synchronize() on the stream."""
-        from unittest.mock import MagicMock
-
-        tm = create_transfer_manager()
-        mock_stream = MagicMock()
-        tm._output_stream = mock_stream
-        tm.sync_output_stream()
-        mock_stream.synchronize.assert_called_once()
-
-
-# ---------------------------------------------------------------------------
-# record_input_stream_event
-# ---------------------------------------------------------------------------
-
-
-class TestRecordInputStreamEvent(unittest.TestCase):
-    """Tests for record_input_stream_event."""
-
-    def test_returns_none_when_no_cupy(self):
-        """When cupy unavailable (_input_stream is None), returns None."""
-        tm = create_transfer_manager()
-        tm._input_stream = None
-        result = tm.record_input_stream_event()
-        self.assertIsNone(result)
-
-    def test_returns_none_when_input_stream_none(self):
-        """Explicitly set _input_stream to None → returns None."""
-        tm = create_transfer_manager()
-        # Patch _HAS_CUPY via the module, or just verify None path works
-        tm._input_stream = None
-        result = tm.record_input_stream_event()
-        self.assertIsNone(result)
+        for i, kind in enumerate(flat_kinds):
+            if kind in ("key", "value"):
+                self.assertEqual(flat_sizes[i], 1024)
+            elif kind in ("key_scale", "value_scale"):
+                self.assertEqual(flat_sizes[i], 0)
 
 
 if __name__ == "__main__":

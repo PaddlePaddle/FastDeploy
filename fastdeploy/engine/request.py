@@ -34,7 +34,11 @@ from pydantic import BaseModel
 from typing_extensions import TypeVar
 
 from fastdeploy import envs
-from fastdeploy.cache_manager.v1.metadata import CacheLevel, CacheSwapMetadata
+from fastdeploy.cache_manager.v1.metadata import (
+    CacheLevel,
+    CacheSwapMetadata,
+    PendingPrefetch,
+)
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.sampling_params import SamplingParams
 from fastdeploy.entrypoints.openai.protocol import (
@@ -256,6 +260,10 @@ class Request:
     @property
     def match_result(self) -> Optional[MatchResult]:
         return self._match_result
+
+    @match_result.setter
+    def match_result(self, value: Optional[MatchResult]) -> None:
+        self._match_result = value
 
     def set_block_hasher(self, block_hasher: callable):
         """Set the block hasher for dynamic hash computation."""
@@ -619,6 +627,7 @@ class BatchRequest:
 
         self.cache_swap_metadata: Optional[CacheSwapMetadata] = None
         self.cache_evict_metadata: Optional[CacheSwapMetadata] = None
+        self.storage_prefetch_tasks: Optional[List[PendingPrefetch]] = None
 
     def add_request(self, request):
         if hasattr(request, "cache_swap_metadata") and request.cache_swap_metadata:
@@ -660,9 +669,17 @@ class BatchRequest:
                     hash_values=meta.hash_values,
                 )
 
+    def append_prefetch_tasks(self, tasks: List[PendingPrefetch]):
+        if self.storage_prefetch_tasks is None:
+            self.storage_prefetch_tasks = []
+        self.storage_prefetch_tasks.extend(tasks)
+
     def __repr__(self):
         requests_repr = repr(self.requests)
-        return f"BatchRequest(requests={requests_repr}, swap_metadata={self.cache_swap_metadata}, evict_metadata={self.cache_evict_metadata})"
+        return (
+            f"BatchRequest(requests={requests_repr}, swap_metadata={self.cache_swap_metadata}, "
+            f"evict_metadata={self.cache_evict_metadata}, prefetch_tasks={self.storage_prefetch_tasks})"
+        )
 
     def __getstate__(self):
         state = self.__dict__.copy()
@@ -691,12 +708,24 @@ class BatchRequest:
     def __len__(self):
         return len(self.requests)
 
+    @property
+    def has_pending_work(self) -> bool:
+        """Whether there is any pending work (inference requests, prefetch/swap/evict tasks)."""
+        return (
+            len(self.requests) > 0
+            or bool(self.storage_prefetch_tasks)
+            or bool(self.cache_swap_metadata)
+            or bool(self.cache_evict_metadata)
+        )
+
     def append(self, batch_request: "BatchRequest"):
         self.requests.extend(batch_request.requests)
         if batch_request.cache_swap_metadata:
             self.append_swap_metadata([batch_request.cache_swap_metadata])
         if batch_request.cache_evict_metadata:
             self.append_evict_metadata([batch_request.cache_evict_metadata])
+        if batch_request.storage_prefetch_tasks:
+            self.append_prefetch_tasks(batch_request.storage_prefetch_tasks)
 
     def extend(self, batch_requests: list["BatchRequest"]):
         for br in batch_requests:

@@ -24,24 +24,33 @@ class StorageScheduler(ABC):
     Abstract base class for storage scheduler operations.
 
     Used by CacheManager (Scheduler process) to query storage
-    existence and metadata without performing actual data transfer.
+    existence without performing actual data transfer.
+
+    Minimal interface for backend implementations:
+      - ``connect`` / ``disconnect`` — lifecycle
+      - ``batch_exists`` — the only query method required by CacheManager
     """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """
-        Initialize the storage scheduler.
+        from fastdeploy.utils import get_logger
 
-        Args:
-            config: Storage configuration
-        """
         self.config = config or {}
         self._lock = threading.RLock()
         self._connected = False
+        self.logger = get_logger("mooncake_storage", "cache_manager.log")
+
+    # ------------------------------------------------------------------
+    # Abstract methods — must be implemented by every backend
+    # ------------------------------------------------------------------
 
     @abstractmethod
     def connect(self) -> bool:
         """
         Connect to the storage backend.
+
+        Implementations must be idempotent: if already connected
+        (``self._connected is True``) return ``True`` immediately without
+        re-initialising the underlying client.
 
         Returns:
             True if connection was successful
@@ -54,56 +63,21 @@ class StorageScheduler(ABC):
         pass
 
     @abstractmethod
-    def exists(self, key: str) -> bool:
+    def batch_exists(self, keys: List[str]) -> List[bool]:
         """
-        Check if a key exists in storage.
+        Batch check existence of multiple keys.
 
         Args:
-            key: Storage key to check
+            keys: List of storage keys to check
 
         Returns:
-            True if key exists
+            List of booleans corresponding to each key's existence
         """
         pass
 
-    @abstractmethod
-    def query(self, keys: List[str]) -> Dict[str, bool]:
-        """
-        Query multiple keys for existence.
-
-        Args:
-            keys: List of keys to query
-
-        Returns:
-            Dictionary mapping keys to existence status
-        """
-        pass
-
-    @abstractmethod
-    def get_metadata(self, key: str) -> Optional[Dict[str, Any]]:
-        """
-        Get metadata for a key.
-
-        Args:
-            key: Storage key
-
-        Returns:
-            Metadata dictionary or None if not found
-        """
-        pass
-
-    @abstractmethod
-    def list_keys(self, prefix: str = "") -> List[str]:
-        """
-        List keys with a given prefix.
-
-        Args:
-            prefix: Key prefix to filter
-
-        Returns:
-            List of matching keys
-        """
-        pass
+    # ------------------------------------------------------------------
+    # Concrete methods
+    # ------------------------------------------------------------------
 
     def is_connected(self) -> bool:
         """Check if connected to storage."""
@@ -123,23 +97,37 @@ class StorageConnector(ABC):
 
     Used by CacheController (Worker process) to perform actual
     data transfer operations with the storage backend.
+
+    All get/set operations use zero-copy semantics: callers pass raw memory
+    pointers (int) and sizes (int, bytes) so the backend can perform direct
+    RDMA transfers without an intermediate copy.
+
+    Minimal interface for backend implementations:
+      - ``connect`` / ``disconnect`` — lifecycle
+      - ``batch_get`` — prefetch from storage
+      - ``batch_set`` — backup to storage
     """
 
     def __init__(self, config: Optional[Dict[str, Any]] = None):
-        """
-        Initialize the storage connector.
+        from paddleformers.utils.log import logger
 
-        Args:
-            config: Storage configuration
-        """
         self.config = config or {}
         self._lock = threading.RLock()
         self._connected = False
+        self.logger = logger
+
+    # ------------------------------------------------------------------
+    # Abstract methods — must be implemented by every backend
+    # ------------------------------------------------------------------
 
     @abstractmethod
     def connect(self) -> bool:
         """
         Connect to the storage backend.
+
+        Implementations must be idempotent: if already connected
+        (``self._connected is True``) return ``True`` immediately without
+        re-initialising the underlying client.
 
         Returns:
             True if connection was successful
@@ -152,59 +140,86 @@ class StorageConnector(ABC):
         pass
 
     @abstractmethod
-    def get(self, key: str, dst_buffer: Any) -> bool:
+    def batch_get(
+        self,
+        keys: List[str],
+        dst_ptrs: List[int],
+        sizes: List[int],
+    ) -> List[bool]:
         """
-        Get data from storage.
+        Batch get multiple objects from storage into pre-allocated zero-copy buffers.
 
         Args:
-            key: Storage key
-            dst_buffer: Destination buffer to write data
+            keys: List of storage keys
+            dst_ptrs: List of destination memory pointers (must be registered if RDMA)
+            sizes: List of expected sizes in bytes
 
         Returns:
-            True if get was successful
+            List of booleans indicating success for each key
         """
         pass
 
     @abstractmethod
-    def set(self, key: str, src_buffer: Any, size: int) -> bool:
+    def batch_set(
+        self,
+        keys: List[str],
+        src_ptrs: List[int],
+        sizes: List[int],
+    ) -> List[bool]:
         """
-        Set data in storage.
+        Batch set multiple objects into storage from zero-copy source buffers.
 
         Args:
-            key: Storage key
-            src_buffer: Source buffer to read data from
-            size: Size of data in bytes
+            keys: List of storage keys
+            src_ptrs: List of source memory pointers (must be registered if RDMA)
+            sizes: List of data sizes in bytes
 
         Returns:
-            True if set was successful
+            List of booleans indicating success for each key
         """
         pass
 
-    @abstractmethod
-    def delete(self, key: str) -> bool:
+    # ------------------------------------------------------------------
+    # Concrete methods — backends may override for efficiency
+    # ------------------------------------------------------------------
+
+    def register_buffer(self, buffer_ptr: int, buffer_size: int) -> None:
         """
-        Delete data from storage.
+        Register a memory buffer with the storage backend for zero-copy transfer.
+
+        This must be called before using the buffer pointer in get/set operations
+        when the backend requires RDMA memory registration (e.g., Mooncake).
+        Backends that do not need registration can leave this as a no-op.
 
         Args:
-            key: Storage key to delete
+            buffer_ptr: Raw pointer (int) to the start of the memory region
+            buffer_size: Size of the memory region in bytes
 
-        Returns:
-            True if deletion was successful
+        Raises:
+            RuntimeError: If registration fails
         """
         pass
 
-    @abstractmethod
-    def clear(self, prefix: str = "") -> int:
+    def batch_exists(self, keys: List[str]) -> List[bool]:
         """
-        Clear data from storage.
-
-        Args:
-            prefix: Key prefix to clear (empty for all)
-
-        Returns:
-            Number of keys cleared
+        Batch check key existence. Backends that support it should override.
+        Default returns False for all keys (conservative: assume missing).
         """
-        pass
+        return [False] * len(keys)
+
+    def batch_delete(self, keys: List[str]) -> List[bool]:
+        """
+        Delete multiple keys. Backends can override for efficiency.
+        Default returns False for all keys.
+        """
+        return [False] * len(keys)
+
+    def clear(self) -> int:
+        """
+        Clear all data from storage. Optional — backends that support it
+        should override. Default is a no-op returning 0.
+        """
+        return 0
 
     def is_connected(self) -> bool:
         """Check if connected to storage."""

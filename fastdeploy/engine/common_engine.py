@@ -1135,7 +1135,7 @@ class EngineService:
                 batch_request, error_tasks = self.resource_manager.schedule()
 
                 # 3. Send to engine
-                if len(batch_request) > 0:
+                if batch_request.has_pending_work:
                     if self.cfg.scheduler_config.splitwise_role == "decode":
                         for task in batch_request:
                             if task.task_type == RequestType.PREEMPTED:
@@ -1191,6 +1191,12 @@ class EngineService:
                                 task.metrics.decode_inference_start_time = time.time()
                             elif not task.has_been_preempted_before:
                                 task.metrics.inference_start_time = time.time()
+                    if batch_request.storage_prefetch_tasks:
+                        self.llm_logger.info(
+                            f"[Debug][StoragePrefetch][Dispatch] put_tasks with "
+                            f"{len(batch_request.storage_prefetch_tasks)} prefetch tasks, "
+                            f"{len(batch_request.requests)} inference requests"
+                        )
                     self.engine_worker_queue.put_tasks((batch_request, self.resource_manager.real_bsz))
 
                 # 4. Response error tasks
@@ -1201,7 +1207,7 @@ class EngineService:
                             continue
                         self._send_error_response(request_id, failed)
 
-                if len(batch_request) <= 0 and not error_tasks:
+                if not batch_request.has_pending_work and not error_tasks:
                     time.sleep(0.005)
 
             except RuntimeError as e:
@@ -1349,7 +1355,6 @@ class EngineService:
                     err_msg = None
                     try:
                         request = Request.from_dict(data)
-
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.inc_value("requests_number")
                         main_process_metrics.inc_value("prompt_tokens_total", request.prompt_token_ids_len)

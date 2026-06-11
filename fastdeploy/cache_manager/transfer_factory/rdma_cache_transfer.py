@@ -16,7 +16,7 @@
 
 import traceback
 
-from fastdeploy.cache_manager.transfer_factory.utils import get_rdma_nics
+from fastdeploy.cache_manager.v1.cache_utils import get_rdma_nics
 from fastdeploy.utils import get_logger
 
 logger = get_logger("cache_messager", "cache_messager.log")

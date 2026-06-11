@@ -386,11 +386,6 @@ class TestGetBlockHashExtraKeysBoundaryPrecision(unittest.TestCase):
         self.assertIn("h-exact-end", keys)
 
 
-# ---------------------------------------------------------------------------
-# hash_block_tokens
-# ---------------------------------------------------------------------------
-
-
 class TestHashBlockTokens(unittest.TestCase):
     """Direct tests for hash_block_tokens."""
 

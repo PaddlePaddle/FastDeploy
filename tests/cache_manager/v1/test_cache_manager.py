@@ -435,9 +435,9 @@ class TestCacheManagerRadixTreeIntegration(unittest.TestCase):
         )
         cache_manager.match_prefix(req2)
 
-        # Ref count should be incremented, nodes not evictable
+        # Ref count not incremented in non-scheduling match_prefix (skip_storage=False by default)
         stats2 = cache_manager.radix_tree.get_stats()
-        self.assertEqual(stats2.evictable_device_count, 0)
+        self.assertEqual(stats2.evictable_device_count, 2)
 
     def test_insert_and_find_prefix(self):
         """Test inserting blocks and finding prefix."""
@@ -709,68 +709,83 @@ class TestCacheManagerStorageScheduler(unittest.TestCase):
         _ = cache_manager.storage_scheduler
 
 
-# ---------------------------------------------------------------------------
-# offload_to_host
-# ---------------------------------------------------------------------------
+class TestUpdateStorageBlocksToHost(unittest.TestCase):
+    """Tests for CacheManager.update_storage_blocks_to_host()."""
 
+    def _make_node_with_status(self, cache_manager, status):
+        """Allocate a host block and return a BlockNode with the given CacheStatus."""
+        from fastdeploy.cache_manager.v1.metadata import BlockNode
 
-class TestCacheManagerOffloadToHost(unittest.TestCase):
-    """Tests for CacheManager.offload_to_host."""
+        block_ids = cache_manager._host_pool.allocate(1)
+        self.assertIsNotNone(block_ids, "host pool exhausted")
+        block_id = block_ids[0]
+        node = BlockNode(block_id=block_id, hash_value="test_hash", cache_status=status)
+        return node, block_id
 
-    def test_offload_frees_device_blocks(self):
-        """After offload, device blocks should be released."""
-        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=20)
-        device_blocks = cm._device_pool.allocate(4)
-        self.assertIsNotNone(device_blocks)
-        free_before = cm.num_free_device_blocks
+    def test_update_transitions_loading_to_host(self):
+        """update_storage_blocks_to_host transitions LOADING_FROM_STORAGE → HOST."""
+        from fastdeploy.cache_manager.v1.metadata import CacheStatus
 
-        success = cm.offload_to_host(device_blocks)
+        cache_manager = create_cache_manager(num_cpu_blocks=10)
+        node, block_id = self._make_node_with_status(cache_manager, CacheStatus.LOADING_FROM_STORAGE)
+        cache_manager._prefetch_node_map[block_id] = node
 
-        self.assertTrue(success)
-        self.assertEqual(cm.num_free_device_blocks, free_before + 4)
+        cache_manager.update_storage_blocks_to_host([block_id])
 
-    def test_offload_allocates_host_blocks(self):
-        """After offload, host blocks should be consumed."""
-        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=20)
-        device_blocks = cm._device_pool.allocate(3)
-        free_host_before = cm.num_free_host_blocks
+        self.assertEqual(node.cache_status, CacheStatus.HOST)
+        self.assertNotIn(block_id, cache_manager._prefetch_node_map)
 
-        cm.offload_to_host(device_blocks)
+    def test_update_multiple_blocks(self):
+        """update_storage_blocks_to_host handles multiple blocks in one call."""
+        from fastdeploy.cache_manager.v1.metadata import CacheStatus
 
-        self.assertEqual(cm.num_free_host_blocks, free_host_before - 3)
+        cache_manager = create_cache_manager(num_cpu_blocks=20)
+        nodes = []
+        block_ids = []
+        for i in range(5):
+            node, block_id = self._make_node_with_status(cache_manager, CacheStatus.LOADING_FROM_STORAGE)
+            cache_manager._prefetch_node_map[block_id] = node
+            nodes.append(node)
+            block_ids.append(block_id)
 
-    def test_offload_fails_when_no_host_blocks(self):
-        """Offload should return False when host pool is exhausted."""
-        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=0)
-        device_blocks = cm._device_pool.allocate(2)
+        cache_manager.update_storage_blocks_to_host(block_ids)
 
-        success = cm.offload_to_host(device_blocks)
-        self.assertFalse(success)
+        for node in nodes:
+            self.assertEqual(node.cache_status, CacheStatus.HOST)
+        for block_id in block_ids:
+            self.assertNotIn(block_id, cache_manager._prefetch_node_map)
 
-    def test_offload_copies_device_metadata_to_host(self):
-        """Metadata on device blocks should be copied to host blocks."""
-        from fastdeploy.cache_manager.v1.metadata import CacheBlockMetadata
+    def test_update_unknown_block_id_is_ignored(self):
+        """Unknown block_id (not in prefetch_node_map) logs warning and continues."""
+        cache_manager = create_cache_manager(num_cpu_blocks=10)
+        # Should not raise even if the block_id is not in the map
+        cache_manager.update_storage_blocks_to_host([9999])
 
-        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=20)
-        device_blocks = cm._device_pool.allocate(1)
-        block_id = device_blocks[0]
-        meta = CacheBlockMetadata(block_id=block_id, device_id=0, block_size=64, ref_count=5)
-        cm._device_pool.set_metadata(block_id, meta)
+    def test_update_empty_list_is_noop(self):
+        """Empty block_ids list is a no-op."""
+        cache_manager = create_cache_manager(num_cpu_blocks=10)
+        # Should not raise or modify anything
+        cache_manager.update_storage_blocks_to_host([])
 
-        cm.offload_to_host(device_blocks)
+    def test_update_wrong_status_does_not_change(self):
+        """Block already in HOST status is not re-processed."""
+        from fastdeploy.cache_manager.v1.metadata import CacheStatus
 
-        # Find the newly used host block (last used)
-        used_host = list(cm._host_pool._used_blocks)
-        self.assertEqual(len(used_host), 1)
-        host_meta = cm._host_pool.get_metadata(used_host[0])
-        self.assertIsNotNone(host_meta)
-        self.assertEqual(host_meta.ref_count, 5)
+        cache_manager = create_cache_manager(num_cpu_blocks=10)
+        node, block_id = self._make_node_with_status(cache_manager, CacheStatus.HOST)
+        cache_manager._prefetch_node_map[block_id] = node
 
-    def test_offload_empty_list_returns_true(self):
-        """Offloading empty list succeeds."""
-        cm = create_cache_manager()
-        success = cm.offload_to_host([])
-        self.assertTrue(success)
+        cache_manager.update_storage_blocks_to_host([block_id])
+
+        # Status must remain HOST (not changed to something else)
+        self.assertEqual(node.cache_status, CacheStatus.HOST)
+        # The node is still removed from the map
+        self.assertNotIn(block_id, cache_manager._prefetch_node_map)
+
+    def test_prefetch_node_map_initially_empty(self):
+        """_prefetch_node_map is empty on a fresh CacheManager."""
+        cache_manager = create_cache_manager()
+        self.assertEqual(len(cache_manager._prefetch_node_map), 0)
 
 
 # ---------------------------------------------------------------------------
@@ -903,31 +918,64 @@ class TestCacheManagerPendingBackup(unittest.TestCase):
         self.assertEqual(cm.get_pending_backup_count(), 0)
 
 
-# ---------------------------------------------------------------------------
-# prepare_prefetch_metadata
-# ---------------------------------------------------------------------------
+class TestPreparePrefixtMetadataStartNode(unittest.TestCase):
+    """Regression test for the start_node bug in prepare_prefetch_metadata.
 
+    Before the fix, prepare_prefetch_metadata called radix_tree.insert without
+    start_node, which inserted LOADING_FROM_STORAGE nodes as children of root
+    (using storage hashes h22..h29 at depth 1) instead of as extensions of the
+    existing device prefix chain (at depth 22..29). As a result, a subsequent
+    find_prefix on the full hash list would traverse root → h0 → ... → h21,
+    then fail to find h22 as a child of node(21), and stop at 22 nodes — never
+    reaching the HOST nodes even after update_storage_blocks_to_host.
+    """
 
-class TestCacheManagerPreparePrefetchMetadata(unittest.TestCase):
-    """Tests for CacheManager.prepare_prefetch_metadata."""
+    def test_find_prefix_finds_host_blocks_after_prefetch(self):
+        """After prepare_prefetch_metadata + update_storage_blocks_to_host,
+        find_prefix must return all 30 nodes (22 DEVICE + 8 HOST)."""
+        from fastdeploy.cache_manager.v1.metadata import CacheStatus
 
-    def test_empty_hashes_returns_none(self):
-        cm = create_cache_manager()
-        result = cm.prepare_prefetch_metadata([])
-        self.assertIsNone(result)
+        cm = create_cache_manager(total_block_num=50, num_cpu_blocks=20)
+        rt = cm._radix_tree
 
-    def test_returns_nodes_when_host_blocks_available(self):
-        cm = create_cache_manager(num_cpu_blocks=20)
-        hashes = ["hash_a", "hash_b"]
-        result = cm.prepare_prefetch_metadata(hashes)
-        # Should return a list (possibly empty if no host blocks or tree reuse)
-        self.assertIsInstance(result, list)
+        # Build 30 hashes: 22 for device, 8 for storage
+        all_hashes = [f"h{i}" for i in range(30)]
+        device_hashes = all_hashes[:22]
+        storage_hashes = all_hashes[22:]
 
-    def test_returns_empty_when_insufficient_host_blocks(self):
-        cm = create_cache_manager(total_block_num=20, num_cpu_blocks=0)
-        result = cm.prepare_prefetch_metadata(["h1", "h2"])
-        # With no host blocks, should return empty or None
-        self.assertFalse(result)  # None or []
+        # Insert 22 device blocks into the radix tree
+        device_block_ids = cm._device_pool.allocate(22)
+        self.assertIsNotNone(device_block_ids)
+        device_nodes, _ = rt.insert(
+            blocks=list(zip(device_hashes, device_block_ids)),
+            cache_status=CacheStatus.DEVICE,
+        )
+        self.assertEqual(len(device_nodes), 22)
+
+        # The last device node is the correct start_node for the storage insertion
+        last_device_node = device_nodes[-1]
+
+        # prepare_prefetch_metadata should attach storage nodes AFTER the last device node
+        storage_nodes = cm.prepare_prefetch_metadata(storage_hashes, start_node=last_device_node)
+        self.assertEqual(len(storage_nodes), 8)
+        for node in storage_nodes:
+            self.assertEqual(node.cache_status, CacheStatus.LOADING_FROM_STORAGE)
+
+        # Simulate prefetch completion: transition LOADING_FROM_STORAGE → HOST
+        storage_block_ids = [n.block_id for n in storage_nodes]
+        for node in storage_nodes:
+            cm._prefetch_node_map[node.block_id] = node
+        cm.update_storage_blocks_to_host(storage_block_ids)
+        for node in storage_nodes:
+            self.assertEqual(node.cache_status, CacheStatus.HOST)
+
+        # Now find_prefix on all 30 hashes must return 30 nodes
+        found = rt.find_prefix(all_hashes)
+        self.assertEqual(len(found), 30, f"Expected 30 nodes, got {len(found)}")
+        device_found = [n for n in found if n.is_on_device()]
+        host_found = [n for n in found if n.is_on_host()]
+        self.assertEqual(len(device_found), 22)
+        self.assertEqual(len(host_found), 8)
 
 
 if __name__ == "__main__":

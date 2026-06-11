@@ -572,29 +572,18 @@ class TestStoragePlaceholders(unittest.TestCase):
 
     def test_prefetch_from_storage_returns_error_handler(self):
         """Test prefetch_from_storage returns error handler (not implemented)."""
-        from fastdeploy.cache_manager.v1.metadata import StorageMetadata
-
-        mock_metadata = MagicMock(spec=StorageMetadata)
+        mock_metadata = MagicMock()
+        mock_metadata.hash_values = []
+        mock_metadata.block_ids = []
         handler = self.controller.prefetch_from_storage(mock_metadata)
 
         self.assertIsNotNone(handler)
         self.assertIsNotNone(handler.error)
 
-    def test_backup_device_to_storage_returns_error_handler(self):
-        """Test backup_device_to_storage returns error handler (not implemented)."""
-        from fastdeploy.cache_manager.v1.metadata import StorageMetadata
-
-        mock_metadata = MagicMock(spec=StorageMetadata)
-        handler = self.controller.backup_device_to_storage([0, 1], mock_metadata)
-
-        self.assertIsNotNone(handler)
-        self.assertIsNotNone(handler.error)
-
     def test_backup_host_to_storage_returns_error_handler(self):
-        """Test backup_host_to_storage returns error handler (not implemented)."""
-        from fastdeploy.cache_manager.v1.metadata import StorageMetadata
-
-        mock_metadata = MagicMock(spec=StorageMetadata)
+        """Test backup_host_to_storage returns error handler."""
+        mock_metadata = MagicMock()
+        mock_metadata.hash_values = []
         handler = self.controller.backup_host_to_storage([0, 1], mock_metadata)
 
         self.assertIsNotNone(handler)

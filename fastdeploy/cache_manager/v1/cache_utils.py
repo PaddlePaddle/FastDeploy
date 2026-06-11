@@ -15,12 +15,42 @@
 """
 
 import hashlib
+import importlib
 import pickle
+import subprocess
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence, Set
 
 from paddleformers.utils.log import logger
+
+
+def get_rdma_nics() -> str:
+    from fastdeploy.platforms import current_platform
+
+    res = importlib.resources.files("fastdeploy.cache_manager.transfer_factory") / "get_rdma_nics.sh"
+    with importlib.resources.as_file(res) as path:
+        file_path = str(path)
+
+    nic_type = current_platform.device_name
+    command = ["bash", file_path, nic_type]
+    result = subprocess.run(
+        command,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    logger.info(f"get_rdma_nics command: {command}")
+    logger.info(f"get_rdma_nics output: {result.stdout}")
+    if result.returncode != 0:
+        raise RuntimeError(f"Failed to execute script `get_rdma_nics.sh`: {result.stderr.strip()}")
+
+    env_name, env_value = result.stdout.strip().split("=")
+    if env_name != "KVCACHE_RDMA_NICS":
+        raise ValueError(f"Unexpected variable name: {env_name}, expected 'KVCACHE_RDMA_NICS'")
+
+    return env_value
 
 
 class LayerDoneCounter:
@@ -420,6 +450,30 @@ class LayerSwapTimeoutError(Exception):
     """Exception raised when layer swap operation times out."""
 
     pass
+
+
+# ============ Storage Key Computation ============
+
+
+def storage_key_for_block(hash_value: str, local_rank: int, kind: str, layer_idx: int | None = None) -> str:
+    """Build a storage key for a single block / kind, optionally per-layer.
+
+    Key format (per-block): ``{hash_value}_{local_rank}_{kind}``
+    Key format (per-layer): ``{hash_value}_{local_rank}_{kind}_{layer_idx}``
+
+    Args:
+        hash_value: Block hash value (from Scheduler).
+        local_rank: Local rank index of the current process.
+        kind:       One of "key", "value", "key_scale", "value_scale".
+        layer_idx:  Optional layer index for per-layer keys.
+
+    Returns:
+        Storage key string.
+    """
+    base = f"{hash_value}_{local_rank}_{kind}"
+    if layer_idx is not None:
+        return f"{base}_{layer_idx}"
+    return base
 
 
 # ============ Block Hash Computation ============
