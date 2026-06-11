@@ -384,7 +384,7 @@ class AppendAttentionBackend(AttentionBackend):
         )
 
         if self.external_norm_rope:
-            if q_norm_weight and k_norm_weight:
+            if q_norm_weight is not None and k_norm_weight is not None:
                 qk_rmsnorm_fused(
                     qkv,
                     q_norm_weight,
