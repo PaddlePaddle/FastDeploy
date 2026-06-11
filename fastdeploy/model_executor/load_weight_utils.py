@@ -127,7 +127,6 @@ def get_weight_iterator(model_path: str, fd_config: Optional[FDConfig] = None):
     if use_safetensors:
         load_config = fd_config.load_config if fd_config else None
         extra_config = load_config.model_loader_extra_config if load_config else None
-        parallel_config = fd_config.parallel_config if fd_config else None
         if extra_config is not None and extra_config.get("enable_multithread_load", False):
             weights_iterator = multi_thread_safetensors_weights_iterator(
                 files_list,
