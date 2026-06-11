@@ -87,7 +87,10 @@ def init_flash_attn_version():
         sm_version = get_sm_version()
         if sm_version >= 100:
             try:
-                paddle.compat.enable_torch_proxy(scope={"cutlass"})
+                try:
+                    paddle.enable_compat(scope={"cutlass"})
+                except Exception:
+                    paddle.compat.enable_torch_proxy(scope={"cutlass"})
                 from flash_mask.cute.interface import flashmask_attention as fa4
 
                 global flashmask_attention_v4

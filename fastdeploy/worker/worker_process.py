@@ -862,6 +862,12 @@ def parse_args():
         help="enable chunked moe",
     )
     parser.add_argument(
+        "--enable_mega_moe",
+        action="store_true",
+        dest="enable_mega_moe",
+        help="enable MegaMoE wfp4afp8 for MoE and block_wise_fp8 for dense Linear",
+    )
+    parser.add_argument(
         "--chunked_moe_size",
         type=int,
         default=256,
@@ -1281,7 +1287,7 @@ def run_worker_proc() -> None:
 
     # Enable batch-invariant mode for deterministic inference.
     # This must happen AFTER worker creation but BEFORE model loading,
-    # because enable_batch_invariant_mode() calls paddle.compat.enable_torch_proxy()
+    # because enable_batch_invariant_mode() calls paddle.enable_compat()
     # which makes torch appear available via proxy. If called before worker creation,
     # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
     # transformers) will fail when transformers tries to query torch metadata.

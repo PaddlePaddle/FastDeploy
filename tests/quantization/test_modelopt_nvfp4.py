@@ -163,6 +163,7 @@ class TestModelOptNvFp4ModuleInit(unittest.TestCase):
                 return_value=True,
             ),
             mock.patch.dict(sys.modules, {"flashinfer": mock_flashinfer, "flashinfer.fused_moe": mock_fused_moe}),
+            mock.patch("paddle.enable_compat"),
             mock.patch("paddle.compat.enable_torch_proxy"),
         ):
             importlib.reload(nvfp4_module)
