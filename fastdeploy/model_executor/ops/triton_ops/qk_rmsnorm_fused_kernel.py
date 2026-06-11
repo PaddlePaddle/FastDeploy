@@ -31,7 +31,7 @@ def qk_rmsnorm_fused_kernel(
     k_weight_ptr,
     M,
     q_size,
-    kv_size,
+    k_size,
     eps,
     num_q_heads: tl.constexpr,
     num_kv_heads: tl.constexpr,
@@ -59,7 +59,7 @@ def qk_rmsnorm_fused_kernel(
     q_mask = head_ids < num_q_heads
     kv_mask = head_ids < num_kv_heads
 
-    row_base = token_id * (q_size + kv_size + head_dim_v * num_kv_heads)
+    row_base = token_id * (q_size + k_size + head_dim_v * num_kv_heads)
 
     # -------------------
     # Q RMSNorm
@@ -104,7 +104,7 @@ def qk_rmsnorm_fused(
     k_norm_weight,
     eps,
     q_size,
-    kv_size,
+    k_size,
     head_dim,
     head_dim_v=None,
 ):
@@ -115,9 +115,9 @@ def qk_rmsnorm_fused(
         head_dim_v = head_dim
 
     num_q_heads = q_size // head_dim
-    num_kv_heads = kv_size // head_dim
+    num_kv_heads = k_size // head_dim
 
-    assert qkv_out.shape[-1] == q_size + kv_size + head_dim_v * num_kv_heads
+    assert qkv_out.shape[-1] == q_size + k_size + head_dim_v * num_kv_heads
 
     BLOCK_HEADS = 4 if num_q_heads <= 32 else 8
 
@@ -129,7 +129,7 @@ def qk_rmsnorm_fused(
         k_weight_ptr=k_norm_weight,
         M=M,
         q_size=q_size,
-        kv_size=kv_size,
+        k_size=k_size,
         eps=eps,
         num_q_heads=num_q_heads,
         num_kv_heads=num_kv_heads,
