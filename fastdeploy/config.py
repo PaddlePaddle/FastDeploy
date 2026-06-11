@@ -651,6 +651,7 @@ class ParallelConfig:
         self.enable_expert_parallel = False
         self.enable_chunked_moe = False
         self.chunked_moe_size = 256
+        self.enable_mega_moe = False
 
         self.local_data_parallel_id = 0
         # Engine worker queue port

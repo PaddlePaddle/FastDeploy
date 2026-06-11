@@ -429,6 +429,8 @@ async def async_request_eb_openai_chat_completions(
     last_chunk_timestamp = st
     token_timestamps = []
     tool_call_buffer = {}
+    # 用于 buffer burst 修正：累计上一次"真增量 chunk"结束时服务端已输出的 token 数。
+    last_output_len = 0
     try:
         async with session.post(url=api_url, json=payload, headers=headers, read_bufsize=10 * 1024 * 1024) as response:
             data = {}
@@ -522,9 +524,38 @@ async def async_request_eb_openai_chat_completions(
                                     else:
                                         output.prompt_len = 0
 
+                                    # 首 token 也要更新 last_output_len，用于后续 burst 摊分
+                                    cur_completion_tokens = (data.get("usage") or {}).get("completion_tokens")
+                                    if cur_completion_tokens is None and completion_token_ids:
+                                        # 没有 usage 时退化为按 token_ids 长度推断
+                                        cur_completion_tokens = len(output.output_ids) + len(completion_token_ids)
+                                    if cur_completion_tokens is not None:
+                                        last_output_len = cur_completion_tokens
+                                    else:
+                                        last_output_len = 1
+
                                 # Decoding phase
                                 else:
-                                    output.itl.append(timestamp - most_recent_timestamp)
+                                    # buffer burst 修正：如果服务端把多个 token 合并到同一个流式 chunk 里，
+                                    # 直接把整段间隔记成单个 ITL 会高估解码间隔。这里参考 sglang 官方
+                                    # bench_serving 的做法：用真实 token 增量摊分该 chunk 的等待时间。
+                                    cur_completion_tokens = (data.get("usage") or {}).get("completion_tokens")
+                                    if cur_completion_tokens is None and completion_token_ids:
+                                        cur_completion_tokens = len(output.output_ids) + len(completion_token_ids)
+
+                                    chunk_gap = timestamp - most_recent_timestamp
+                                    if cur_completion_tokens is not None:
+                                        num_new_tokens = cur_completion_tokens - last_output_len
+                                        if num_new_tokens <= 0:
+                                            # 没有真实新 token（罕见的 usage/状态包），跳过 ITL 记录
+                                            most_recent_timestamp = timestamp
+                                            continue
+                                        adjust_itl = chunk_gap / num_new_tokens
+                                        output.itl.extend([adjust_itl] * num_new_tokens)
+                                        last_output_len = cur_completion_tokens
+                                    else:
+                                        # 拿不到 completion_tokens 时退化为旧逻辑
+                                        output.itl.append(chunk_gap)
 
                                 most_recent_timestamp = timestamp
                                 token_timestamps.append(wall_timestamp)
@@ -532,7 +563,7 @@ async def async_request_eb_openai_chat_completions(
                             # response首token
                             if res_ttft == 0.0:
                                 if content:
-                                    res_ttft = choices[0].get("arrival_time", timestamp)
+                                    res_ttft = choices[0].get("arrival_time", timestamp - st)
                                     output.res_ttft = res_ttft
                                     usage = data.get("usage") or {}
                                     output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)

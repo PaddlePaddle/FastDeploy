@@ -36,6 +36,7 @@ def _make_cfg(**ov):
     pc = ns(tensor_parallel_size=1, tensor_parallel_rank=0, device_ids="0", data_parallel_size=1)
     pc.expert_parallel_size, pc.chunked_moe_size, pc.engine_worker_queue_port = 1, 0, [6778]
     pc.enable_expert_parallel = pc.enable_chunked_moe = pc.disable_custom_all_reduce = False
+    pc.enable_mega_moe = False
     pc.use_internode_ll_two_stage = pc.disable_sequence_parallel_moe = False
     pc.shutdown_comm_group_if_worker_idle = False
     pc.ep_prefill_use_worst_num_tokens = False
