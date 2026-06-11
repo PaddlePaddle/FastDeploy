@@ -62,7 +62,10 @@ class TestInputPreprocessorBranching(unittest.TestCase):
 
         mock_dp = MagicMock()
         with (
-            patch.dict("sys.modules", {"fastdeploy.plugins": None, "fastdeploy.plugins.input_processor": None}),
+            patch(
+                "fastdeploy.plugins.input_processor.load_input_processor_plugins",
+                side_effect=ImportError("mock plugin unavailable"),
+            ),
             patch("fastdeploy.input.text_processor.TextProcessor", return_value=mock_dp),
         ):
             pp.create_processor()
@@ -76,7 +79,10 @@ class TestInputPreprocessorBranching(unittest.TestCase):
         config = _make_model_config("UnknownMMArch", enable_mm=True)
         pp = InputPreprocessor(model_config=config)
 
-        with patch.dict("sys.modules", {"fastdeploy.plugins": None, "fastdeploy.plugins.input_processor": None}):
+        with patch(
+            "fastdeploy.plugins.input_processor.load_input_processor_plugins",
+            side_effect=ImportError("mock plugin unavailable"),
+        ):
             with self.assertRaises(ValueError):
                 pp.create_processor()
 

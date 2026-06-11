@@ -17,6 +17,7 @@
 from .input_processor import load_input_processor_plugins
 from .model_register import load_model_register_plugins
 from .model_runner import load_model_runner_plugins
+from .output_fallback import load_output_fallback_plugins
 from .reasoning_parser import load_reasoning_parser_plugins
 from .token_processor import load_token_processor_plugins
 from .tool_parser import load_tool_parser_plugins
@@ -25,6 +26,7 @@ __all__ = [
     "load_model_register_plugins",
     "load_model_runner_plugins",
     "load_input_processor_plugins",
+    "load_output_fallback_plugins",
     "load_reasoning_parser_plugins",
     "load_token_processor_plugins",
     "load_tool_parser_plugins",
