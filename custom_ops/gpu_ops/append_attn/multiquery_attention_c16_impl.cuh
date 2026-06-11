@@ -279,7 +279,6 @@ __global__ void multi_query_append_attention_kernel(
     compute_sfm_v<num_frags_x, num_frags_y, num_frags_z, T>(
         &v_smem, &v_smem_offset_r, s_frag, o_frag, d_frag);
 
-    __syncthreads();
     cache_v_now = cache_v + block_id * v_n_stride + const_offset_v;
 
     kv_smem_offset_w =
