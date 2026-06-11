@@ -312,46 +312,6 @@ class AppendAttentionBackend(AttentionBackend):
         forward_mixed
         """
 
-        cache_k = forward_meta.caches[2 * layer.layer_id]
-        cache_v = forward_meta.caches[2 * layer.layer_id + 1]
-        from fastdeploy.model_executor.ops.triton_ops import (
-            do_rope,
-            qk_rmsnorm_fused,
-            write_cache,
-        )
-
-        if self.external_norm_rope:
-            qk_rmsnorm_fused(
-                qkv,
-                getattr(layer, "q_norm_weight", None),
-                getattr(layer, "k_norm_weight", None),
-                getattr(layer, "rms_norm_eps", 1e-6),
-                layer.num_heads * layer.head_dim,
-                layer.kv_num_heads * layer.head_dim,
-                cache_k.shape[-1],
-                cache_v.shape[-1],
-            )
-            do_rope(
-                qkv,
-                forward_meta.rotary_embs[0],
-                forward_meta.rotary_embs[1],
-                forward_meta.cu_seqlens_q,
-                forward_meta.seq_lens_decoder,
-                forward_meta.batch_id_per_token,
-                cache_k,
-                cache_v,
-            )
-
-            write_cache(
-                qkv,
-                cache_k,
-                cache_v,
-                forward_meta.cu_seqlens_q,
-                forward_meta.seq_lens_decoder,
-                forward_meta.batch_id_per_token,
-                forward_meta.block_tables,
-            )
-
         metadata = self.attention_metadata
 
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
@@ -393,7 +353,8 @@ class AppendAttentionBackend(AttentionBackend):
             cache_k_scales = getattr(layer, "cache_k_scale", None)
             cache_v_scales = getattr(layer, "cache_v_scale", None)
 
-        if layer.layer_id == 0:
+        self.num_key_value_heads_list = getattr(self.fd_config.model_config, "num_key_value_heads_list", None)
+        if layer.layer_id == 0 or self.num_key_value_heads_list is not None:
             get_block_shape_and_split_kv_block(
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
@@ -414,6 +375,45 @@ class AppendAttentionBackend(AttentionBackend):
                 self.decoder_block_shape_q,
                 self.group_size,
                 self.block_size,
+            )
+
+        from fastdeploy.model_executor.ops.triton_ops import (
+            do_rope,
+            qk_rmsnorm_fused,
+            write_cache,
+        )
+
+        if self.external_norm_rope:
+            if q_norm_weight and k_norm_weight:
+                qk_rmsnorm_fused(
+                    qkv,
+                    q_norm_weight,
+                    k_norm_weight,
+                    getattr(layer, "rms_norm_eps", 1e-6),
+                    layer.num_heads * layer.head_dim,
+                    layer.kv_num_heads * layer.head_dim,
+                    cache_k.shape[-1],
+                    cache_v.shape[-1],
+                )
+            do_rope(
+                qkv,
+                forward_meta.rotary_embs[0],
+                forward_meta.rotary_embs[1],
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_decoder,
+                forward_meta.batch_id_per_token,
+                cache_k,
+                cache_v,
+            )
+
+            write_cache(
+                qkv,
+                cache_k,
+                cache_v,
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_decoder,
+                forward_meta.batch_id_per_token,
+                forward_meta.block_tables,
             )
 
         if self.use_output:
@@ -586,7 +586,7 @@ class AppendAttentionBackend(AttentionBackend):
         cache_k = forward_meta.caches[2 * layer.layer_id]
         cache_v = forward_meta.caches[2 * layer.layer_id + 1]
 
-        head_dim_q = 192
+        head_dim_q = 128
         head_dim_v = 128
 
         forward_meta.caches[2 * layer.layer_id] = paddle.randn(cache_k.shape[:3] + [head_dim_q])

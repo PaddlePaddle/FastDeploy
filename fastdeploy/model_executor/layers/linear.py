@@ -670,9 +670,9 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.local_rank = fd_config.parallel_config.tensor_parallel_rank
         self.num_heads_per_rank = divide(self.num_heads, self.tp_size)
-        if self.kv_num_heads < self.tp_size and self.tp_size % self.kv_num_heads == 0:
+        if self.kv_num_heads < self.tp_size:
             self.kv_num_heads_per_rank = 1
-            self.num_kv_head_replicas = divide(self.tp_size, self.kv_num_heads)
+            self.num_kv_head_replicas = self.tp_size // self.kv_num_heads
             output_size = (self.num_heads + self.tp_size) * self.head_dim + self.tp_size * self.v_head_dim
         else:
             self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.tp_size)
@@ -690,12 +690,18 @@ class QKVParallelLinear(ColumnParallelLinear):
         )
 
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
+        v_head_dim = getattr(self, "v_head_dim", head_dim)
         shard_size_mapping = {
             "q": self.num_heads_per_rank * head_dim,
             "k": self.kv_num_heads_per_rank * head_dim,
-            "v": self.kv_num_heads_per_rank * self.v_head_dim,
+            "v": self.kv_num_heads_per_rank * v_head_dim,
         }
         return shard_size_mapping.get(loaded_shard_id)
+
+    def _get_kv_shard_id(self):
+        if self.kv_num_heads < self.tp_size:
+            return self.local_rank * self.kv_num_heads // self.tp_size
+        return self.local_rank // self.num_kv_head_replicas
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
@@ -728,7 +734,7 @@ class QKVParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if self.tp_size > 1 and not self.fd_config.load_config.is_pre_sharded:
                 block_size = self._get_shard_size_mapping(loaded_shard_id, self.head_dim)
-                shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
+                shard_id = self.local_rank if loaded_shard_id == "q" else self._get_kv_shard_id()
                 shard_offset = shard_id * block_size
                 shard_size = block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size)
@@ -1258,7 +1264,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             # Tensor parallelism splits the weight along the output_dim
             if self.tp_size > 1 and output_dim is not None:
                 block_size = self._get_shard_size_mapping(loaded_shard_id, self.head_dim)
-                shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
+                shard_id = self.local_rank if loaded_shard_id == "q" else self._get_kv_shard_id()
                 shard_offset = shard_id * block_size
                 shard_size = block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size)
@@ -1294,7 +1300,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
 
         # Tensor parallelism splits the weight along the output_dim
         if self.tp_size > 1 and output_dim is not None:
-            block_size = self.num_heads_per_rank * self.head_dim
+            block_size = self.num_heads_per_rank * self.v_head_dim
             shard_offset = self.local_rank * block_size
             shard_size = block_size
             loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size)

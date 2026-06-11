@@ -3027,7 +3027,8 @@ class GPUModelRunner(ModelRunnerBase):
             byte_of_dtype = 2
 
         kv_num_heads_per_layer = self._get_kv_num_heads_per_layer()
-        kv_hidden_dim = self.model_config.head_dim * sum(kv_num_heads_per_layer)
+        v_head_dim = getattr(self.model_config, "v_head_dim", self.model_config.head_dim)
+        kv_hidden_dim = (self.model_config.head_dim + v_head_dim) * sum(kv_num_heads_per_layer)
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
         num_layers = (
             self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
@@ -3061,11 +3062,11 @@ class GPUModelRunner(ModelRunnerBase):
         else:
             if self.spec_method == SpecMethod.MTP:
                 kv_hidden_dim += (
-                    self.model_config.head_dim
+                    (self.model_config.head_dim + v_head_dim)
                     * self.model_config.kv_num_heads
                     * self.speculative_config.num_gpu_block_expand_ratio
                 )
-            required_memory = byte_of_dtype * 2 * self.cache_config.block_size * kv_hidden_dim  # k + v
+            required_memory = byte_of_dtype * self.cache_config.block_size * kv_hidden_dim  # k + v
         return required_memory
 
     def clear_cache(self, profile=False):
