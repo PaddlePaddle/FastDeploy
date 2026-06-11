@@ -1587,6 +1587,13 @@ class ResourceManagerV1(ResourceManager):
         ) // self.config.cache_config.block_size + self.config.cache_config.enc_dec_block_num
 
         with self.lock:
+            if request.request_id in self.requests:
+                llm_logger.warning(
+                    f"PD reschedule: request {request.request_id} already exists in D, "
+                    f"rejecting to avoid KV cache conflict"
+                )
+                request.error_msg = "Duplicate request id in decode"
+                return False
             if len(self.waiting) > 0:
                 return False
             if self.available_batch() == 0:
