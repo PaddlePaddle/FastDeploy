@@ -37,7 +37,7 @@ from .quant_base import QuantConfigBase, QuantMethodBase
 
 try:
     paddle.enable_compat(scope={"flashinfer"})
-except Exception as e:
+except Exception:
     paddle.compat.enable_torch_proxy(scope={"flashinfer"})
 
 logger = get_logger("config", "config.log")

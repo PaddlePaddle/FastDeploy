@@ -70,7 +70,7 @@ def load_deep_gemm():
             # SM100 should use PFCC DeepGemm
             try:
                 paddle.enable_compat(scope={"deep_gemm"})
-            except Exception as e:
+            except Exception:
                 paddle.compat.enable_torch_proxy(scope={"deep_gemm"})
             try:
                 import logging

@@ -108,7 +108,7 @@ from fastdeploy.utils import console_logger, current_package_version, get_versio
 if not _is_package_installed("torch"):
     try:
         paddle.enable_compat(scope={"triton"})
-    except Exception as e:
+    except Exception:
         paddle.compat.enable_torch_proxy(scope={"triton"})
 
 if envs.FD_DEBUG != 1:

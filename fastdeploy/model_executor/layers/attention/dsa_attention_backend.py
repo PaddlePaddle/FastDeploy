@@ -28,7 +28,7 @@ from fastdeploy.platforms import current_platform
 if current_platform.is_cuda():
     try:
         paddle.enable_compat(scope={"flash_mla"})
-    except Exception as e:
+    except Exception:
         paddle.compat.enable_torch_proxy(scope={"flash_mla"})
 
 from fastdeploy.model_executor.layers.attention.ops import (

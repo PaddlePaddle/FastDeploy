@@ -20,7 +20,7 @@ import paddle
 
 try:
     paddle.enable_compat(scope={"flash_mla"})
-except Exception as e:
+except Exception:
     paddle.compat.enable_torch_proxy(scope={"flash_mla"})
 import math
 import os

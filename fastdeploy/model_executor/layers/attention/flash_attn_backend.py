@@ -89,7 +89,7 @@ def init_flash_attn_version():
             try:
                 try:
                     paddle.enable_compat(scope={"cutlass"})
-                except Exception as e:
+                except Exception:
                     paddle.compat.enable_torch_proxy(scope={"cutlass"})
                 from flash_mask.cute.interface import flashmask_attention as fa4
 

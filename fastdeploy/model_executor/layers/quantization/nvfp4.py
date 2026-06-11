@@ -40,7 +40,7 @@ from .quant_base import QuantConfigBase, QuantMethodBase, is_nvfp4_supported
 if is_nvfp4_supported():
     try:
         paddle.enable_compat(scope={"flashinfer"})
-    except Exception as e:
+    except Exception:
         paddle.compat.enable_torch_proxy(scope={"flashinfer"})
     from flashinfer import fp4_quantize, mm_fp4
     from flashinfer.fused_moe import cutlass_fused_moe as flashinfer_cutlass_fused_moe
