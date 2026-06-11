@@ -135,7 +135,7 @@ def get_weight_iterator(model_path: str, fd_config: Optional[FDConfig] = None):
                 disable_mmap=extra_config.get("disable_mmap", False),
             )
         else:
-            if is_layers_are_grouped or (parallel_config is not None and parallel_config.tensor_parallel_size == 1):
+            if is_layers_are_grouped:
                 weights_iterator = safetensors_weights_iterator(files_list)
             else:
                 weights_iterator = safetensors_weights_iterator_ordered(ordered_weight_map)

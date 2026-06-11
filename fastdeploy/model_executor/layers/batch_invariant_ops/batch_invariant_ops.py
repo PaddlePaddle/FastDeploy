@@ -806,7 +806,7 @@ def enable_batch_invariant_mode():
         return
 
     if hasattr(paddle, "compat") and hasattr(paddle.compat, "enable_torch_proxy"):
-        paddle.compat.enable_torch_proxy()
+        paddle.enable_compat()
         # TODO(liujundong): Enabling torch proxy here has a global effect.
         # Do NOT call this function from module import time,
         # otherwise it may affect other test cases during pytest collection.

@@ -23,8 +23,10 @@ from paddle import nn
 from paddleformers.utils.log import logger
 
 import fastdeploy
-from fastdeploy.model_executor.layers.moe.ep import deep_ep
+from fastdeploy.model_executor.layers.moe.ep import EPRunner, FakeEPRunner, deep_ep
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
+    _interleave_weights,
+    _transpose_sf_for_utccp,
     deep_gemm,
     paddlefleet_ops,
 )
@@ -32,10 +34,18 @@ from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.ops.gpu import (
     count_tokens_per_expert_func,
     depermute_prefill_combine,
+    mega_moe_pre_dispatch,
     prefill_permute_to_masked_gemm,
 )
+from fastdeploy.model_executor.utils import (
+    TensorTracker,
+    free_tensor,
+    get_sm_version,
+    set_weight_attrs,
+    weight_fully_copied,
+)
 from fastdeploy.platforms import current_platform
-from fastdeploy.utils import register_custom_python_op
+from fastdeploy.utils import ceil_div, register_custom_python_op, singleton
 from fastdeploy.worker.tbo import let_another_thread_run
 
 from .fused_moe_backend_base import MoEMethodBase
@@ -868,3 +878,448 @@ class DeepGemmFusedMoeMethod(MoEMethodBase):
                 1.0,
             )
         return tmp_ffn_out
+
+
+@singleton
+class MegaMoEBuffer:
+    """
+    A wrapper class for DeepEP engine.
+    Manages buffer lifecycle based on role and phase.
+    """
+
+    def __init__(
+        self,
+        ep_group,
+        num_experts: int,
+        num_max_tokens_per_rank: int,
+        top_k: int,
+        hidden_size: int,
+        moe_intermediate_size: int,
+    ):
+        self.buffer = deep_gemm.get_symm_buffer_for_mega_moe(
+            ep_group,
+            num_experts,
+            num_max_tokens_per_rank,
+            top_k,
+            hidden_size,
+            moe_intermediate_size,
+        )
+
+
+class DeepGemmMegaMoEMethod(DeepGemmFusedMoeMethod):
+    def __init__(self, quant_config):
+        if not get_sm_version() >= 100:
+            raise ValueError("MegaMoE now only support sm100+ devices.")
+        super().__init__(quant_config)
+        self.added_scale_attrs = ["up_gate_proj_weight_scale", "down_proj_weight_scale"]
+        self.quant_config.deepgemm_scale_ue8m0 = True
+        self.gran_k = 32
+
+    def create_weights(self, layer: nn.Layer, **extra_weight_attrs):
+        """
+        Triton MoE create weight process.
+        """
+        logger.info("MegaMoE create_weights...")
+        self.model_format = extra_weight_attrs.get("model_format")
+        self.up_gate_proj_quant_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            layer.hidden_size,
+        ]
+        self.down_proj_quant_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size,
+        ]
+        self.up_gate_proj_pretranspose_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size * 2,
+        ]
+        self.down_proj_pretranspose_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size,
+            layer.hidden_size,
+        ]
+        if self.model_format != "torch":
+            self.up_gate_proj_bf16_weight_shape = self.up_gate_proj_pretranspose_weight_shape
+            self.down_proj_bf16_weight_shape = self.down_proj_pretranspose_weight_shape
+        else:
+            self.up_gate_proj_bf16_weight_shape = self.up_gate_proj_quant_weight_shape
+            self.down_proj_bf16_weight_shape = self.down_proj_quant_weight_shape
+        self.up_gate_proj_packed_weight_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            layer.hidden_size // 2,  # 4-bit packing
+        ]
+        self.down_proj_packed_weight_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            layer.moe_intermediate_size // 2,  # 4-bit packing
+        ]
+        up_num_scales = ceil_div(layer.hidden_size, self.gran_k)
+        down_num_scales = ceil_div(layer.moe_intermediate_size, self.gran_k)
+        self.up_gate_proj_scale_shape = [
+            layer.num_local_experts,
+            layer.moe_intermediate_size * 2,
+            (up_num_scales + 3) // 4,
+        ]
+        self.down_proj_scale_shape = [
+            layer.num_local_experts,
+            layer.hidden_size,
+            (down_num_scales + 3) // 4,
+        ]
+        self.up_gate_proj_weight_shape = self.up_gate_proj_quant_weight_shape
+        self.down_proj_weight_shape = self.down_proj_quant_weight_shape
+
+        if self.quant_config.is_checkpoint_bf16 and layer.fd_config.load_config.load_choices == "default_v1":
+            if self.model_format != "torch":
+                up_gate_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=self.up_gate_proj_bf16_weight_shape, output_dim=True),
+                    "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1},
+                }
+                down_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=self.down_proj_bf16_weight_shape, output_dim=False),
+                    "SHARD_ID_TO_SHARDED_DIM": {"gate": 1, "down": 0, "up": 1},
+                }
+            else:
+                up_gate_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=self.up_gate_proj_bf16_weight_shape, output_dim=False),
+                    "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
+                }
+                down_proj_attrs = {
+                    **extra_weight_attrs,
+                    "tensor_track": TensorTracker(shape=self.down_proj_bf16_weight_shape, output_dim=True),
+                    "SHARD_ID_TO_SHARDED_DIM": {"gate": 0, "down": 1, "up": 0},
+                }
+            layer.up_gate_proj_weight = layer.create_parameter(
+                shape=self.up_gate_proj_bf16_weight_shape,
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            layer.down_proj_weight = layer.create_parameter(
+                shape=self.down_proj_bf16_weight_shape,
+                dtype=layer.weight_dtype,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            set_weight_attrs(
+                layer.up_gate_proj_weight,
+                up_gate_proj_attrs,
+            )
+            set_weight_attrs(
+                layer.down_proj_weight,
+                down_proj_attrs,
+            )
+        else:
+            # offline quant
+            self.up_gate_proj_weight_shape = self.up_gate_proj_packed_weight_shape
+            self.down_proj_weight_shape = self.down_proj_packed_weight_shape
+            up_gate_proj_attrs = {}
+            down_proj_attrs = {}
+
+            self.weight_dtype = paddle.int8
+            up_gate_proj_weight_name = self.added_weight_attrs[0]
+            down_proj_weight_name = self.added_weight_attrs[1]
+            up_gate_proj_scale_name = self.added_scale_attrs[0]
+            down_proj_scale_name = self.added_scale_attrs[1]
+
+            setattr(
+                layer,
+                up_gate_proj_weight_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_packed_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_weight_name,
+                layer.create_parameter(
+                    shape=self.down_proj_packed_weight_shape,
+                    dtype=self.weight_dtype,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            # weight_scale
+            setattr(
+                layer,
+                up_gate_proj_scale_name,
+                layer.create_parameter(
+                    shape=self.up_gate_proj_scale_shape,
+                    dtype="int32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                down_proj_scale_name,
+                layer.create_parameter(
+                    shape=self.down_proj_scale_shape,
+                    dtype="int32",
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_weight_name),
+                up_gate_proj_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, up_gate_proj_scale_name),
+                up_gate_proj_attrs,
+            )
+
+            set_weight_attrs(
+                getattr(layer, down_proj_weight_name),
+                down_proj_attrs,
+            )
+            set_weight_attrs(
+                getattr(layer, down_proj_scale_name),
+                down_proj_attrs,
+            )
+
+    def init_ep(self, layer: nn.Layer) -> None:
+        logger.info("Use MegaMoE backend")
+        if layer.ep_size <= 1:
+            raise ValueError(
+                "Ep size must be greater than 1 when use MegaMoE backend. Please set --enable-expert-parallel"
+            )
+
+        config = layer.fd_config
+        splitwise_role = config.scheduler_config.splitwise_role
+
+        if splitwise_role == "mixed" or splitwise_role == "prefill":
+            self.num_max_tokens_per_rank = config.scheduler_config.max_num_batched_tokens
+        elif splitwise_role == "decode":
+            num_spec_tokens = config.speculative_config.num_speculative_tokens
+            self.num_max_tokens_per_rank = config.scheduler_config.max_num_seqs * (num_spec_tokens + 1)
+        else:
+            raise ValueError(f"Unsupported splitwise role: {splitwise_role}")
+
+        self.mega_moe_buffer = MegaMoEBuffer(
+            layer.fd_config.parallel_config.ep_group,
+            layer.num_experts,
+            self.num_max_tokens_per_rank,
+            layer.top_k,
+            layer.hidden_size,
+            layer.moe_intermediate_size,
+        ).buffer
+        self.num_max_tokens_per_rank = self.mega_moe_buffer.num_max_tokens_per_rank
+        self.cumulative_local_expert_recv_stats = paddle.zeros((layer.num_local_experts,), dtype=paddle.int32)
+
+        self.ep_prefill_runner = FakeEPRunner()
+        self.ep_decoder_runner = FakeEPRunner()
+
+    def process_weights_after_loading(self, layer):
+        def cast_grouped_weights_to_fp4(bf16_weights: paddle.Tensor):
+            num_groups, n, k = bf16_weights.shape
+            w = paddle.empty((num_groups, n, k // 2), dtype=paddle.int8)
+            w_sf = paddle.empty((num_groups, n, k // self.gran_k), dtype=paddle.float32)
+            for i in range(num_groups):
+                w[i], w_sf[i] = deep_gemm.per_token_cast_to_fp4(bf16_weights[i], use_ue8m0=True, gran_k=self.gran_k)
+            w = w.contiguous()
+            w_sf = w_sf.contiguous()
+
+            # pack four scales into one and transform to specific stride.
+            # for example:
+            # shape: [48, 6144, 224] -> [48, 6144, 56]
+            # stride: [1376256, 224, 1] -> [344064, 1, 6144]
+            w_sf = deep_gemm.transform_sf_into_required_layout(w_sf, n, k, (1, self.gran_k), num_groups)
+            return w, w_sf
+
+        def _process_quantize_mega_moe(weight_type):
+            weight_idx = 0 if weight_type == "gate_up" else 1
+            weight_name = self.added_weight_attrs[weight_idx]
+            scale_name = self.added_scale_attrs[weight_idx]
+            weight = getattr(layer, weight_name)
+            if not hasattr(weight, "tensor_track") or weight.tensor_track is None:
+                return
+
+            if self.model_format != "torch":
+                weight = weight.transpose([0, 2, 1]).contiguous()
+
+            expected_weight_shape = (
+                self.up_gate_proj_quant_weight_shape if weight_type == "gate_up" else self.down_proj_quant_weight_shape
+            )
+            expected_packed_shape = (
+                self.up_gate_proj_packed_weight_shape
+                if weight_type == "gate_up"
+                else self.down_proj_packed_weight_shape
+            )
+            expected_scale_shape = (
+                self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
+            )
+
+            if list(weight.shape) != list(expected_weight_shape):
+                raise ValueError(
+                    f"MegaMoE {weight_type} BF16 weight shape mismatch for {weight_name}: "
+                    f"got {list(weight.shape)}, expected {list(expected_weight_shape)}"
+                )
+            if weight.dtype != paddle.bfloat16:
+                weight = weight.astype(paddle.bfloat16)
+            weight = weight.contiguous()
+
+            weight_quantized, scale = cast_grouped_weights_to_fp4(weight)
+            if weight_type == "gate_up":
+                weight_quantized, scale = _interleave_weights((weight_quantized, scale))
+            scale = _transpose_sf_for_utccp(scale)
+
+            if list(weight_quantized.shape) != list(expected_packed_shape):
+                raise ValueError(
+                    f"MegaMoE {weight_type} packed weight shape mismatch: "
+                    f"got {list(weight_quantized.shape)}, expected {list(expected_packed_shape)}"
+                )
+            if list(scale.shape) != list(expected_scale_shape):
+                raise ValueError(
+                    f"MegaMoE {weight_type} scale shape mismatch: "
+                    f"got {list(scale.shape)}, expected {list(expected_scale_shape)}"
+                )
+            if weight_quantized.dtype != paddle.int8:
+                raise ValueError(f"MegaMoE {weight_type} packed weight dtype mismatch: got {weight_quantized.dtype}")
+            if scale.dtype != paddle.int32:
+                raise ValueError(f"MegaMoE {weight_type} scale dtype mismatch: got {scale.dtype}")
+
+            free_tensor(getattr(layer, weight_name))
+            setattr(
+                layer,
+                weight_name,
+                layer.create_parameter(
+                    shape=weight_quantized.shape,
+                    dtype=paddle.int8,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ),
+            )
+            setattr(
+                layer,
+                scale_name,
+                layer.create_parameter(
+                    shape=scale.shape,
+                    dtype=paddle.int32,
+                    default_initializer=paddle.nn.initializer.Constant(0),
+                ).as_strided(scale.shape, scale.stride()),
+            )
+            getattr(layer, weight_name).copy_(weight_quantized, False)
+            getattr(layer, scale_name).copy_(scale, False)
+
+        if not self.quant_config.is_checkpoint_bf16:
+            return
+        if hasattr(layer, "up_gate_proj_weight") and weight_fully_copied(layer.up_gate_proj_weight):
+            _process_quantize_mega_moe("gate_up")
+        if hasattr(layer, "down_proj_weight") and weight_fully_copied(layer.down_proj_weight):
+            _process_quantize_mega_moe("down")
+
+    def process_prequanted_weights(self, layer: nn.Layer, state_dict, is_rearrange: bool = False):
+        """
+        Paddle cutlass process prequanted weights.
+        """
+        up_gate_proj_expert_weight_key = layer.weight_key_map.get("up_gate_proj_expert_weight_key", None)
+        down_proj_expert_weight_key = layer.weight_key_map.get("down_proj_expert_weight_key", None)
+        up_gate_proj_expert_weight_scale_key = layer.weight_key_map.get("up_gate_proj_expert_weight_scale_key", None)
+        down_proj_expert_weight_scale_key = layer.weight_key_map.get("down_proj_expert_weight_scale_key", None)
+
+        up_gate_proj_weights, down_proj_weights, logical_expert_ids, _ = layer.load_experts_weight(
+            state_dict, up_gate_proj_expert_weight_key, down_proj_expert_weight_key, is_rearrange
+        )
+        # self.check(layer, up_gate_proj_weights, down_proj_weights)
+        up_gate_proj_weight_scale = []
+        down_proj_weight_scale = []
+
+        if isinstance(state_dict, list):
+            state_dict = dict(state_dict)
+
+        for expert_idx in logical_expert_ids:
+            up_gate_proj_expert_weight_scale_key_name = up_gate_proj_expert_weight_scale_key.format(expert_idx)
+            down_proj_expert_weight_scale_key_name = down_proj_expert_weight_scale_key.format(expert_idx)
+
+            up_gate_weight_scale = get_tensor(
+                (
+                    state_dict.pop(up_gate_proj_expert_weight_scale_key_name)
+                    if up_gate_proj_expert_weight_scale_key_name in state_dict
+                    else up_gate_proj_expert_weight_scale_key_name
+                ),
+                layer.fd_config.model_config.model,
+            )
+            down_weight_scale = get_tensor(
+                (
+                    state_dict.pop(down_proj_expert_weight_scale_key_name)
+                    if down_proj_expert_weight_scale_key_name in state_dict
+                    else down_proj_expert_weight_scale_key_name
+                ),
+                layer.fd_config.model_config.model,
+            )
+
+            up_gate_proj_weight_scale.append(up_gate_weight_scale)
+            down_proj_weight_scale.append(down_weight_scale)
+
+        up_gate_proj_weight = paddle.stack(up_gate_proj_weights, axis=0)
+        down_proj_weight = paddle.stack(down_proj_weights, axis=0)
+        up_gate_proj_weight_scale = paddle.stack(up_gate_proj_weight_scale, axis=0).transpose([0, 2, 1])
+        down_proj_weight_scale = paddle.stack(down_proj_weight_scale, axis=0).transpose([0, 2, 1])
+
+        name_tensor_map = {
+            self.added_weight_attrs[0]: up_gate_proj_weight,
+            self.added_weight_attrs[1]: down_proj_weight,
+            self.added_scale_attrs[0]: up_gate_proj_weight_scale,
+            self.added_scale_attrs[1]: down_proj_weight_scale,
+        }
+        for name, tensor in name_tensor_map.items():
+            getattr(layer, name).data = tensor
+
+    def apply_ep_prefill(self, layer, x, gate, topk_ids_hookfunc, shared_experts):
+        return self.apply_mega_moe(layer, x, gate, topk_ids_hookfunc, shared_experts)
+
+    def apply_ep_decode(self, layer, x, gate, topk_ids_hookfunc, shared_experts):
+        return self.apply_mega_moe(layer, x, gate, topk_ids_hookfunc, shared_experts)
+
+    def apply_mega_moe(self, layer, x, gate, topk_ids_hookfunc, shared_experts):
+        hidden_size = layer.hidden_size
+        num_tokens = x.shape[0]
+
+        gate_out = gate(x).cast("float32")
+
+        # 1. Select topk experts and weights.
+        topk_idx, topk_weights = EPRunner.moe_select(None, layer, gate_out)
+
+        buffer_capacity = self.mega_moe_buffer.x.shape[0]
+        if num_tokens > buffer_capacity:
+            raise ValueError(f"MegaMoE buffer capacity exceeded: num_tokens={num_tokens}, capacity={buffer_capacity}")
+
+        # copy x, topk_idx, topk_weights to mega_moe_buffer and quantization.
+        mega_moe_pre_dispatch(
+            x,
+            topk_idx,
+            topk_weights,
+            self.mega_moe_buffer.x,
+            self.mega_moe_buffer.x_sf,
+            self.mega_moe_buffer.topk_idx,
+            self.mega_moe_buffer.topk_weights,
+            self.num_max_tokens_per_rank,
+            self.gran_k,  # group_size
+        )
+
+        l1_weight = getattr(layer, self.added_weight_attrs[0])
+        l1_scale = getattr(layer, self.added_scale_attrs[0])
+        l2_weight = getattr(layer, self.added_weight_attrs[1])
+        l2_scale = getattr(layer, self.added_scale_attrs[1])
+        y = paddle.empty((num_tokens, hidden_size), dtype=paddle.bfloat16)
+
+        swiglu_limit = getattr(layer.fd_config.model_config, "swiglu_limit", 10)
+        deep_gemm.fp8_fp4_mega_moe(
+            y,
+            (l1_weight, l1_scale),
+            (l2_weight, l2_scale),
+            self.mega_moe_buffer,
+            cumulative_local_expert_recv_stats=self.cumulative_local_expert_recv_stats,
+            recipe=(1, 1, self.gran_k),
+            activation="swiglu",
+            activation_clamp=swiglu_limit,
+            fast_math=True,
+        )
+
+        return y
