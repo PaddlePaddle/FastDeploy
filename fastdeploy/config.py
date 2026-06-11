@@ -319,7 +319,7 @@ class ModelConfig:
         if self.runner_type == "generate" and not is_generative_model:
             if is_multimodal_model:
                 pass
-            elif self.model_impl in ("auto", "paddleformers"):
+            elif self.model_impl in ("auto", "paddleformers", "paddlefleet"):
                 # Skip check for auto/paddleformers - may fallback to paddleformers which supports any model
                 pass
             else:
