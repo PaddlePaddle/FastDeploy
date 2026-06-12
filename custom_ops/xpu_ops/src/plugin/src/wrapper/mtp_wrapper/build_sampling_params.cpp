@@ -53,7 +53,7 @@ static int cpu_wrapper(api::Context* ctx,
     int repeat = is_decoder ? seq_lens_this_time[bi] : 1;
     int64_t bi_seed = infer_seed[bi];
     for (int local_pos = 0; local_pos < repeat; local_pos++) {
-      int64_t offset = is_decoder ? static_cast<int64_t>(local_pos) * 4 : 0LL;
+      int64_t offset = is_decoder ? static_cast<int64_t>(local_pos) * 32 : 0LL;
       top_p_padding[pad_idx] = top_p[bi];
       top_k_padding[pad_idx] = top_k[bi];
       topp_seed[pad_idx] = (bi_seed + offset) % BUILD_SAMPLING_MAX_INFER_SEED;

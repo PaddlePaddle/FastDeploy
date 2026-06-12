@@ -104,7 +104,7 @@ __global__ void build_sampling_params_kernel(
       float lm_top_p_out = bi_top_p;
       int64_t lm_top_k_out = bi_top_k;
       // Decoder tokens: offset seed by position; encoder token: no offset.
-      int64_t offset = static_cast<int64_t>(local_pos) * 4;
+      int64_t offset = static_cast<int64_t>(local_pos) * 32;
       int64_t lm_seed_out = (bi_seed + offset) % BUILD_SAMPLING_MAX_INFER_SEED;
 
       LM2GM_ASYNC(&lm_top_p_out, top_p_padding + pad_idx, sizeof(float));

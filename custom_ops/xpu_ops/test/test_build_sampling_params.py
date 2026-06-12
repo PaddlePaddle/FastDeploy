@@ -55,7 +55,7 @@ def ref_build_sampling_params(top_p, top_k, infer_seed, seq_lens_this_time, seq_
         repeat = int(seq_lens_this_time[bi]) if is_decoder else 1
         bi_seed = int(infer_seed[bi])
         for local_pos in range(repeat):
-            offset = local_pos * 4 if is_decoder else 0
+            offset = local_pos * 32 if is_decoder else 0
             top_p_out.append([top_p[bi]])
             top_k_out.append([top_k[bi]])
             seed_out.append([(bi_seed + offset) % MAX_INFER_SEED])
@@ -154,7 +154,7 @@ class TestBuildSamplingParams(unittest.TestCase):
         infer_seed = np.array([100, 200, 300], dtype=np.int64)
         seq_lens_this_time = np.array([4, 3, 2], dtype=np.int32)
         seq_lens_encoder = np.array([0, 0, 0], dtype=np.int32)
-        increment_value = 16  # token_num * 4 = (4+3+2)*4 is typical
+        increment_value = 16  # token_num * 32 = (4+3+2)*32 is typical
 
         self._run_and_compare(
             top_p,
