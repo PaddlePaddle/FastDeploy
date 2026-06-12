@@ -1305,6 +1305,9 @@ class QKVGateParallelLinear(ColumnParallelLinear):
                 # loaded_shard_id == "v"
                 param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
                 param_shard_size = self.kv_num_heads_per_rank * self.v_head_dim
+            if is_scale:
+                param_shard_offset //= scale_block_size
+                param_shard_size = (param_shard_size + scale_block_size - 1) // scale_block_size
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
