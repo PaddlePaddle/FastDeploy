@@ -316,6 +316,10 @@ class DeepseekV3MLAAttention(nn.Layer):
                 ]
                 if key in self.rope_scaling
             }
+
+            # used for dsa attention.
+            self.rope_scaling_kwargs = rope_scaling_kwargs
+
             self.rope_scaling_factor = self.rope_scaling["factor"]
             self.rope_scaling_original_max_position_embeddings = self.rope_scaling["original_max_position_embeddings"]
             self.rotary_emb = DeepseekScalingRotaryEmbedding(
@@ -823,7 +827,7 @@ class Indexer(nn.Layer):
         return indexer_top_k
 
 
-class DeepseekV32DSAAttention(nn.Layer):
+class DeepseekV32DSAAttention(DeepseekV3MLAAttention):
     """
     DeepseekV32DSAAttention
     """
@@ -831,135 +835,26 @@ class DeepseekV32DSAAttention(nn.Layer):
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
         super().__init__()
 
-        self.tp_size = fd_config.parallel_config.tensor_parallel_size
-        self.hidden_size = fd_config.model_config.hidden_size
-        self.num_attention_heads = fd_config.model_config.num_attention_heads
-        self.num_attention_heads_tp = self.num_attention_heads // self.tp_size
-
-        # MLA
-        self.qk_nope_head_dim = fd_config.model_config.qk_nope_head_dim
-        self.qk_rope_head_dim = fd_config.model_config.qk_rope_head_dim
-        self.qk_head_dim = self.qk_nope_head_dim + self.qk_rope_head_dim
-        self.v_head_dim = fd_config.model_config.v_head_dim
-        self.q_lora_rank = fd_config.model_config.q_lora_rank
-        self.kv_lora_rank = fd_config.model_config.kv_lora_rank
-
         # Indexer
         self.index_head_dim = fd_config.model_config.index_head_dim
         self.index_n_heads = fd_config.model_config.index_n_heads
         self.index_topk = fd_config.model_config.index_topk
 
-        self.attn_softmax_scale = self.qk_head_dim**-0.5
-        self.rope_theta = fd_config.model_config.rope_theta
         if fd_config.model_config.model_type == "glm_moe_dsa":
             self.rope_theta = fd_config.model_config.rope_parameters["rope_theta"]
 
-        self.rms_norm_eps = fd_config.model_config.rms_norm_eps
-
-        assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
-
-        self.qkv_a_proj_with_mqa = MergedReplicatedLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.qkv_a_proj_with_mqa",
-            input_size=self.hidden_size,
-            output_sizes=[self.q_lora_rank, self.kv_lora_rank + self.qk_rope_head_dim],
-            with_bias=False,
-        )
-
-        self.q_a_layernorm = RMSNorm(
-            fd_config,
-            hidden_size=self.q_lora_rank,
-            eps=self.rms_norm_eps,
-            prefix=f"{prefix}.q_a_layernorm",
-        )
-
-        self.q_b_proj = ColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.q_b_proj",
-            input_size=self.q_lora_rank,
-            output_size=self.num_attention_heads * self.qk_head_dim,
-            with_bias=False,
-        )
-
-        self.kv_a_layernorm = RMSNorm(
-            fd_config,
-            hidden_size=self.kv_lora_rank,
-            eps=self.rms_norm_eps,
-            prefix=f"{prefix}.kv_a_layernorm",
-        )
-
-        self.kv_b_proj = ColumnParallelLinear(
-            fd_config=fd_config,
-            prefix=f"{prefix}.kv_b_proj",
-            input_size=self.kv_lora_rank,
-            output_size=self.num_attention_heads * (self.qk_nope_head_dim + self.v_head_dim),
-            with_bias=False,
-        )
-
-        self.o_proj = RowParallelLinear(
-            fd_config,
-            prefix=f"{prefix}.o_proj",
-            input_size=self.num_attention_heads * self.v_head_dim,
-            output_size=self.hidden_size,
-            with_bias=False,
-            layer_id=layer_id,
-        )
-
-        self.kv_b_proj_bmm = KVBatchLinear(
-            fd_config=fd_config,
-            kv_b_proj=self.kv_b_proj,
-            prefix=f"{prefix}.kv_b_proj",
-            kv_lora_rank=self.kv_lora_rank,
-            num_attention_heads=self.num_attention_heads,
-            qk_nope_head_dim=self.qk_nope_head_dim,
-            v_head_dim=self.v_head_dim,
-        )
-        self.rope_scaling = getattr(fd_config.model_config, "rope_scaling", None)
         if self.rope_scaling and "factor" in self.rope_scaling:
-            mscale_all_dim = self.rope_scaling.get("mscale_all_dim", False)
-            scaling_factor = self.rope_scaling["factor"]
-            mscale = self.yarn_get_mscale(scaling_factor, float(mscale_all_dim))
-            self.attn_softmax_scale = self.attn_softmax_scale * mscale * mscale
-
-            rope_scaling_kwargs = {
-                key: self.rope_scaling[key]
-                for key in [
-                    "beta_fast",
-                    "beta_slow",
-                    "mscale",
-                    "mscale_all_dim",
-                ]
-                if key in self.rope_scaling
-            }
-            self.rope_scaling_factor = self.rope_scaling["factor"]
-            self.rope_scaling_original_max_position_embeddings = self.rope_scaling["original_max_position_embeddings"]
-            self.rotary_emb = DeepseekScalingRotaryEmbedding(
-                self.qk_rope_head_dim,
-                max_position_embeddings=self.rope_scaling_original_max_position_embeddings,
-                base=self.rope_theta,
-                scaling_factor=self.rope_scaling_factor,
-                **rope_scaling_kwargs,
-            )
             self.indexer_rotary_emb = DeepseekScalingRotaryEmbedding(
                 self.qk_rope_head_dim,
                 max_position_embeddings=self.rope_scaling_original_max_position_embeddings,
                 base=self.rope_theta,
                 scaling_factor=self.rope_scaling_factor,
-                **rope_scaling_kwargs,
+                **self.rope_scaling_kwargs,
             )
         else:
-            # Default rope without scaling
-            # The current `max_model_len` can cover the maximum context length.
-            max_position_embeddings = getattr(fd_config.model_config, "max_model_len", 8192)
-            self.rotary_emb = DeepseekScalingRotaryEmbedding(
-                self.qk_rope_head_dim,
-                max_position_embeddings=max_position_embeddings,
-                base=self.rope_theta,
-                scaling_factor=1.0,
-            )
             self.indexer_rotary_emb = DeepseekScalingRotaryEmbedding(
                 self.qk_rope_head_dim,
-                max_position_embeddings=max_position_embeddings,
+                max_position_embeddings=getattr(fd_config.model_config, "max_model_len", 8192),
                 base=self.rope_theta,
                 scaling_factor=1.0,
             )
@@ -975,15 +870,6 @@ class DeepseekV32DSAAttention(nn.Layer):
             prefix=prefix,
             use_neox_rotary_style=False,
         )
-
-        self.prefix = prefix
-
-    @staticmethod
-    def yarn_get_mscale(scale=1, mscale=1):
-        """ """
-        if scale <= 1:
-            return 1.0
-        return 0.1 * mscale * math.log(scale) + 1.0
 
     def forward(
         self,
