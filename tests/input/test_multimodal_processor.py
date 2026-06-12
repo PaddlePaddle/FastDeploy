@@ -59,6 +59,8 @@ def _make_processor(model_type, **overrides):
     proc.model_status_dict = {}
     proc.decode_status = {}
     proc.tool_parser_dict = {}
+    proc.fallback_decode_status = {}
+    proc.output_fallback_manager = None
     proc.input_max_tokens = None
     proc.max_completion_tokens = None
     proc.reasoning_max_tokens = None

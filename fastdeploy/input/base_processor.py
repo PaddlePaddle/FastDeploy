@@ -52,6 +52,7 @@ from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 from fastdeploy import envs
 from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.logger.request_logger import RequestLogLevel, log_request
+from fastdeploy.output.fallback.base import OutputFallbackContext
 from fastdeploy.utils import data_processor_logger, make_choice_id, parse_choice_id
 
 _SAMPLING_EPS = 1e-5
@@ -74,6 +75,15 @@ class BaseTextProcessor(ABC):
         self.decode_status: Dict[str, list] = {}
         self.model_status_dict: Dict[str, dict] = {}
         self.tool_parser_dict: Dict = {}
+        # Per-request "fallback-corrected" stream history. Maintained
+        # separately from decode_status so that reasoning/tool parsers can
+        # be fed a coherent text stream after on_delta rewrites/holds it.
+        self.fallback_decode_status: Dict[str, dict] = {}
+        # Output fallback manager. Set externally (e.g. by api_server) once
+        # the processor instance is wired up. When set, fallback strategies
+        # are applied to the raw decoded stream BEFORE reasoning/tool
+        # parsing inside ``process_response_dict_*``. ``None`` disables.
+        self.output_fallback_manager = None
         # Token-encode cache shared by all subclasses.
         self._tokenize_cache: OrderedDict = OrderedDict()
         self._tokenize_cache_capacity: int = 128
@@ -363,6 +373,7 @@ class BaseTextProcessor(ABC):
         req_id = response_dict["request_id"]
         request = kwargs.get("request", None)
         direct_decode = kwargs.get("direct_decode", False)
+        output_fallback_manager = self.output_fallback_manager if not kwargs.get("disable_output_fallback") else None
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
@@ -376,6 +387,20 @@ class BaseTextProcessor(ABC):
 
         if is_end:
             full_text = previous_texts + delta_text
+
+            # Apply output fallback to the full raw text BEFORE reasoning /
+            # tool parsing so all sub-streams (content, reasoning, tools)
+            # benefit from the rewrite.
+            if output_fallback_manager is not None and full_text:
+                context = OutputFallbackContext(
+                    request=request,
+                    request_id=req_id,
+                    stream=False,
+                    output=response_dict["outputs"],
+                    full_text=full_text,
+                )
+                full_text = output_fallback_manager.apply(full_text, context)
+
             response_dict["outputs"]["completion_tokens"] = full_text
             response_dict["outputs"]["text"] = full_text
 
@@ -411,6 +436,10 @@ class BaseTextProcessor(ABC):
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
         request = kwargs.get("request", None)
+        # Caller may opt out via ``disable_output_fallback`` (e.g. the
+        # response-processor's multimodal streaming branch where the raw text
+        # is later wrapped into a ``multipart`` payload).
+        output_fallback_manager = self.output_fallback_manager if not kwargs.get("disable_output_fallback") else None
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
@@ -418,11 +447,55 @@ class BaseTextProcessor(ABC):
 
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
 
+        # ------------------------------------------------------------------
+        # Output fallback (applied BEFORE reasoning/tool parsing so that the
+        # whole raw stream — content + thinking + tool-call text — gets a
+        # chance to be repaired/rewritten).
+        # ------------------------------------------------------------------
+        fallback_held = False
+        if output_fallback_manager is not None:
+            state = self.fallback_decode_status.setdefault(req_id, {"previous_corrected": ""})
+            context = OutputFallbackContext(
+                request=request,
+                request_id=req_id,
+                stream=True,
+                output=response_dict["outputs"],
+                delta_text=delta_text,
+            )
+            decision = output_fallback_manager.on_delta(req_id, delta_text, context)
+            if decision.action == "truncate":
+                delta_text = decision.text
+                response_dict["finished"] = True
+                response_dict["outputs"]["fallback_truncated"] = True
+                is_end = True
+            elif decision.action == "hold":
+                fallback_held = True
+                delta_text = ""
+            else:  # send
+                delta_text = decision.text
+
+            if is_end and decision.action != "truncate":
+                finish_decision = output_fallback_manager.on_finish(req_id, context)
+                if finish_decision.text:
+                    delta_text = (delta_text or "") + finish_decision.text
+
+            # Override the parser-visible history with the corrected stream
+            # (held deltas contribute nothing; sent/flushed text is appended
+            # in arrival order). token_ids remain raw — parsers tolerate the
+            # minor text/token drift introduced by text-rewriting strategies.
+            corrected_previous = state["previous_corrected"]
+            state["previous_corrected"] = corrected_previous + (delta_text or "")
+            previous_texts = corrected_previous
+
         response_dict["outputs"]["text"] = delta_text
         response_dict["outputs"]["completion_tokens"] = delta_text
         response_dict["outputs"]["skipped"] = False
         response_dict["outputs"]["tool_calls"] = None
         response_dict["outputs"]["reasoning_content"] = ""
+
+        if fallback_held and not is_end:
+            response_dict["outputs"]["skipped"] = True
+            return response_dict
 
         if self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
@@ -497,6 +570,10 @@ class BaseTextProcessor(ABC):
                 del self.tool_parser_dict[req_id]
             if req_id in self.model_status_dict:
                 del self.model_status_dict[req_id]
+            if req_id in self.fallback_decode_status:
+                del self.fallback_decode_status[req_id]
+            if output_fallback_manager is not None:
+                output_fallback_manager.cleanup(req_id)
 
         return response_dict
 

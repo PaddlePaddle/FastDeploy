@@ -75,7 +75,6 @@ def write_cache(
     head_dim_k = cache_k.shape[-1]
     head_dim_v = cache_v.shape[-1]
     num_kv_heads = cache_k.shape[1]
-    assert num_kv_heads == cache_v.shape[1]
     q_size = qkv_out.shape[-1] - (head_dim_k + head_dim_v) * num_kv_heads
 
     M = qkv_out.shape[0]

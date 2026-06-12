@@ -246,6 +246,7 @@ class OpenAIServingChat:
         num_cached_tokens = 0
         num_image_tokens = [0] * num_choices
         tool_called = [False] * num_choices
+        fallback_truncated_choices = set()
         inference_start_time = [0] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
@@ -403,6 +404,8 @@ class OpenAIServingChat:
                         first_iteration = False
 
                     output = res["outputs"]
+                    if idx in fallback_truncated_choices:
+                        continue
                     output_top_logprobs = output["top_logprobs"]
                     output_draft_top_logprobs = output["draft_top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
@@ -439,6 +442,11 @@ class OpenAIServingChat:
                     if output["skipped"] and not request.return_token_ids:
                         continue
 
+                    delta_text = "" if output["skipped"] else (output["text"] or "")
+                    fallback_truncated = bool(output.get("fallback_truncated"))
+                    if fallback_truncated:
+                        res["finished"] = True
+
                     delta_message = DeltaMessage(
                         reasoning_content=output["reasoning_content"],
                         tool_calls=output["tool_calls"],
@@ -452,7 +460,7 @@ class OpenAIServingChat:
                             [{"type": "text", "text": ""}] if output["skipped"] else output["multipart"]
                         )
                     else:
-                        delta_message.content = "" if output["skipped"] else (output["text"] or "")
+                        delta_message.content = delta_text
 
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
@@ -495,6 +503,11 @@ class OpenAIServingChat:
 
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choice.finish_reason = "abort"
+
+                        if fallback_truncated:
+                            choice.finish_reason = "length"
+                            fallback_truncated_choices.add(idx)
+                            await self.engine_client.abort(make_choice_id(request_id, idx), 1)
 
                         inference_start_time[idx] = 0
 

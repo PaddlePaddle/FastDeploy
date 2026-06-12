@@ -79,6 +79,7 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import get_filtered_metrics
+from fastdeploy.output.fallback import OutputFallbackManager
 from fastdeploy.utils import (
     ExceptionHandler,
     FlexibleArgumentParser,
@@ -102,6 +103,18 @@ args.model = retrive_model_from_server(args.model, args.revision)
 chat_template = load_chat_template(args.chat_template, args.model)
 if args.tool_parser_plugin:
     ToolParserManager.import_tool_parser(args.tool_parser_plugin)
+if args.output_fallback_plugin:
+    for output_fallback_plugin in args.output_fallback_plugin:
+        OutputFallbackManager.import_fallback_plugin(output_fallback_plugin)
+
+output_fallback_manager = None
+if args.output_fallback:
+    output_fallback_names = [name.strip() for name in args.output_fallback.split(",") if name.strip()]
+    output_fallback_manager = OutputFallbackManager(
+        strategies=output_fallback_names,
+        config=args.output_fallback_config,
+    )
+
 llm_engine = None
 
 MAX_CONCURRENT_CONNECTIONS = (args.max_concurrency + args.workers - 1) // args.workers
@@ -224,6 +237,12 @@ async def lifespan(app: FastAPI):
         max_logprobs=args.max_logprobs,
     )
     await engine_client.connection_manager.initialize()
+    # The data_processor owns output-fallback application: strategies run on
+    # the raw decoded stream BEFORE reasoning/tool parsing, so all sub-streams
+    # (content / reasoning / tool calls) benefit. Serving handlers no longer
+    # invoke the manager themselves.
+    if output_fallback_manager is not None and getattr(engine_client, "data_processor", None) is not None:
+        engine_client.data_processor.output_fallback_manager = output_fallback_manager
     app.state.dynamic_load_weight = args.dynamic_load_weight
     model_handler = OpenAIServingModels(
         model_paths,
@@ -827,6 +846,9 @@ def config_info() -> Response:
         "enable_mm_output": args.enable_mm_output,
         "tool_call_parser": args.tool_call_parser,
         "tool_parser_plugin": args.tool_parser_plugin,
+        "output_fallback": args.output_fallback,
+        "output_fallback_plugin": args.output_fallback_plugin,
+        "output_fallback_config": args.output_fallback_config,
     }
 
     # GPU info

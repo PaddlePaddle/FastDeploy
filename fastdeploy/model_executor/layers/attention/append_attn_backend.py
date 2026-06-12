@@ -312,7 +312,6 @@ class AppendAttentionBackend(AttentionBackend):
         """
         forward_mixed
         """
-
         metadata = self.attention_metadata
 
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
@@ -387,17 +386,18 @@ class AppendAttentionBackend(AttentionBackend):
         )
 
         if self.external_norm_rope:
-            if q_norm_weight is not None and k_norm_weight is not None:
+            if getattr(layer, "q_norm_weight", None):
                 qk_rmsnorm_fused(
                     qkv,
-                    q_norm_weight,
-                    k_norm_weight,
+                    getattr(layer, "q_norm_weight", None),
+                    getattr(layer, "k_norm_weight", None),
                     getattr(layer, "rms_norm_eps", 1e-6),
-                    layer.num_heads * layer.head_dim,
-                    layer.kv_num_heads * layer.head_dim,
-                    cache_k.shape[-1],
-                    cache_v.shape[-1],
+                    self.num_heads * cache_k.shape[3],
+                    cache_k.shape[1] * cache_k.shape[3],
+                    cache_v.shape[3],
                 )
+
+            assert forward_meta.rotary_embs.shape[0] == 2
             do_rope(
                 qkv,
                 forward_meta.rotary_embs[0],

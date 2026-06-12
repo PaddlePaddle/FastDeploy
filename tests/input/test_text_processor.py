@@ -155,6 +155,24 @@ def _create_dummy_modules():
             return int(compound_id.rsplit(CHOICE_SEPARATOR, 1)[1])
         raise ValueError(f"No choice index in request_id: {compound_id}")
 
+    def is_list_of(value, typ, *, check="first"):
+        if not isinstance(value, list):
+            return False
+        if check == "first":
+            return len(value) == 0 or isinstance(value[0], typ)
+        if check == "all":
+            return all(isinstance(v, typ) for v in value)
+        raise AssertionError(check)
+
+    def import_from_path(module_name, file_path):
+        spec = importlib.util.spec_from_file_location(module_name, file_path)
+        if spec is None:
+            raise ModuleNotFoundError(f"No module named '{module_name}'")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
+
     utils_module = types.ModuleType("fastdeploy.utils")
     utils_module.data_processor_logger = dummy_logger
     utils_module.CHOICE_SEPARATOR = CHOICE_SEPARATOR
@@ -162,6 +180,8 @@ def _create_dummy_modules():
     utils_module.parse_choice_id = parse_choice_id
     utils_module.get_base_request_id = get_base_request_id
     utils_module.get_choice_index = get_choice_index
+    utils_module.is_list_of = is_list_of
+    utils_module.import_from_path = import_from_path
 
     envs_module = types.ModuleType("fastdeploy.envs")
     envs_module.FD_USE_HF_TOKENIZER = False
@@ -795,6 +815,45 @@ class TextProcessorTestCase(unittest.TestCase):
         result = processor.process_response_dict_streaming(response, enable_thinking=False)
         self.assertEqual(result["outputs"]["text"], "7")
         self.assertNotIn(req_id, processor.decode_status)
+
+    def test_process_response_streaming_uses_compound_request_id_for_fallback_state(self):
+        processor = self.processor
+        manager = mock.Mock()
+        manager.on_delta.return_value = SimpleNamespace(action="send", text="7")
+        manager.on_finish.return_value = SimpleNamespace(text="")
+        processor.output_fallback_manager = manager
+
+        req_id = "stream::n::1"
+        processor.decode_status[req_id] = [0, 0, [], ""]
+        response = {"finished": True, "request_id": req_id, "outputs": {"token_ids": [7]}}
+
+        result = processor.process_response_dict_streaming(response, enable_thinking=False)
+        self.assertEqual(result["outputs"]["text"], "7")
+        manager.on_delta.assert_called_once()
+        self.assertEqual(manager.on_delta.call_args.args[0:2], (req_id, "7"))
+        self.assertEqual(manager.on_delta.call_args.args[2].request_id, req_id)
+        manager.on_finish.assert_called_once()
+        self.assertEqual(manager.on_finish.call_args.args[0], req_id)
+        manager.cleanup.assert_called_once_with(req_id)
+        self.assertNotIn(req_id, processor.fallback_decode_status)
+
+    def test_process_response_streaming_final_hold_finishes_without_flush_text(self):
+        processor = self.processor
+        manager = mock.Mock()
+        manager.on_delta.return_value = SimpleNamespace(action="hold", text="")
+        manager.on_finish.return_value = SimpleNamespace(text="")
+        processor.output_fallback_manager = manager
+
+        req_id = "stream::n::1"
+        processor.decode_status[req_id] = [0, 0, [], ""]
+        response = {"finished": True, "request_id": req_id, "outputs": {"token_ids": [7]}}
+
+        result = processor.process_response_dict_streaming(response, enable_thinking=False)
+        self.assertFalse(result["outputs"]["skipped"])
+        self.assertEqual(result["outputs"]["text"], "")
+        manager.on_finish.assert_called_once()
+        manager.cleanup.assert_called_once_with(req_id)
+        self.assertNotIn(req_id, processor.fallback_decode_status)
 
     def test_process_response_streaming_with_reasoning_and_tools(self):
         processor = self.processor

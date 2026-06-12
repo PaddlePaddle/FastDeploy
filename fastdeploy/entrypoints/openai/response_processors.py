@@ -209,8 +209,8 @@ class ChatResponseProcessor:
                                 )
                             else:
                                 self.data_processor.process_response_dict(
-                                    response_dict=request_output,
-                                    stream=stream,
+                                    response_dict=part["request_output"],
+                                    stream=False,
                                     include_stop_str_in_output=include_stop_str_in_output,
                                     request=request,
                                     prompt_tokens=prompt_tokens,

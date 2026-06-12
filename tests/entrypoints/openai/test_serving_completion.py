@@ -15,6 +15,7 @@
 """
 
 import asyncio
+import json
 import unittest
 from typing import List
 from unittest.mock import AsyncMock, Mock, patch
@@ -858,6 +859,114 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(found_logprobs, "logprobs field should be present")
         self.assertTrue(prompt_logprobs_null, "prompt_logprobs should be null when not requested")
         self.assertTrue(logprobs_null, "logprobs should be null when not requested")
+
+    async def test_completion_stream_generator_with_fallback_truncate(self):
+        """Processor-level fallback truncate sets finish_reason and aborts generation."""
+        mock_engine_client = Mock()
+        mock_engine_client.semaphore = Mock()
+        mock_engine_client.semaphore.acquire = AsyncMock()
+        mock_engine_client.semaphore.release = Mock()
+        mock_engine_client.connection_manager = AsyncMock()
+        mock_engine_client.data_processor = Mock()
+        mock_engine_client.ori_vocab_size = 1000
+        mock_engine_client.check_model_weight_status.return_value = False
+        mock_engine_client.check_health.return_value = (True, "Healthy")
+        mock_engine_client.abort = AsyncMock()
+        mock_engine_client.data_processor.process_response_dict = Mock()
+
+        request_id = "test_request_fallback_truncate"
+
+        def make_response(choice_index, text, finished, fallback_truncated=False, skipped=False):
+            return {
+                "request_id": f"{request_id}::n::{choice_index}",
+                "error_code": 200,
+                "metrics": {
+                    "arrival_time": 1234567890,
+                    "inference_start_time": 1234567880,
+                    "first_token_time": 1234567890,
+                },
+                "prompt_logprobs": None,
+                "outputs": {
+                    "text": text,
+                    "token_ids": [100],
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "send_idx": 0,
+                    "completion_tokens": "1",
+                    "num_cache_tokens": 0,
+                    "num_image_tokens": 0,
+                    "reasoning_token_num": 0,
+                    "tool_calls": None,
+                    "reasoning_content": "",
+                    "skipped": skipped,
+                    "fallback_truncated": fallback_truncated,
+                },
+                "finished": finished,
+            }
+
+        # Processor signals truncate on choice 0 (text already corrected upstream).
+        truncated_response = make_response(0, "corrected", True, fallback_truncated=True)
+        normal_response = make_response(1, "normal", True)
+
+        mock_dealer = Mock()
+        mock_dealer.write = Mock()
+        mock_response_queue = AsyncMock()
+        mock_response_queue.get.side_effect = [
+            [truncated_response],
+            [normal_response],
+        ]
+        mock_engine_client.connection_manager.get_connection.return_value = (mock_dealer, mock_response_queue)
+        mock_engine_client.connection_manager.cleanup_request = AsyncMock()
+
+        serving_completion = OpenAIServingCompletion(
+            mock_engine_client,
+            None,
+            "pid",
+            None,
+            360,
+        )
+
+        mock_request = Mock()
+        mock_request.prompt_logprobs = None
+        mock_request.logprobs = None
+        mock_request.include_draft_logprobs = False
+        mock_request.return_token_ids = False
+        mock_request.include_stop_str_in_output = False
+        mock_request.max_streaming_response_tokens = 1
+        mock_request.max_tokens = None
+        mock_request.stream_options = Mock()
+        mock_request.stream_options.include_usage = False
+        mock_request.n = 2
+        mock_request.echo = False
+        mock_request.collect_metrics = False
+        mock_request.suffix = None
+
+        result_generator = serving_completion.completion_stream_generator(
+            request=mock_request,
+            num_choices=2,
+            request_id=request_id,
+            created_time=1234567890,
+            model_name="test_model",
+            prompt_batched_token_ids=[[1, 2, 3]],
+            prompt_tokens_list=["hello"],
+            max_tokens_list=[100],
+        )
+
+        results = []
+        async for result in result_generator:
+            results.append(result)
+
+        choices = []
+        for result in results:
+            if result.strip() == "data: [DONE]":
+                continue
+            chunk_data = json.loads(result.replace("data: ", "").strip())
+            choices.extend(chunk_data.get("choices", []))
+
+        truncated_choices = [choice for choice in choices if choice.get("finish_reason") == "length"]
+        self.assertEqual(len(truncated_choices), 1)
+        self.assertEqual(truncated_choices[0]["index"], 0)
+        mock_engine_client.abort.assert_awaited_once()
 
     async def test_completion_full_generator_with_prompt_logprobs(self):
         """Test completion_full_generator with prompt_logprobs enabled"""

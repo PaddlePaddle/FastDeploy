@@ -913,6 +913,8 @@ class CompletionOutput:
     delta_message: Optional[DeltaMessage] = None
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
+    fallback_truncated: Optional[bool] = False
+    skipped: Optional[bool] = False
 
     def to_dict(self):
         """
@@ -931,6 +933,14 @@ class CompletionOutput:
             "text": self.text,
             "reasoning_content": self.reasoning_content,
             "reasoning_token_num": self.reasoning_token_num,
+            "tool_calls": self.tool_calls,
+            "speculate_metrics": self.speculate_metrics,
+            "completion_tokens": self.completion_tokens,
+            "delta_message": self.delta_message,
+            "multipart": self.multipart,
+            "num_image_tokens": self.num_image_tokens,
+            "fallback_truncated": self.fallback_truncated,
+            "skipped": self.skipped,
         }
 
     @classmethod

@@ -64,8 +64,6 @@ class TestDSAAttentionMetadata(unittest.TestCase):
         self.assertIsNone(metadata.rotary_embs)
         self.assertIsNone(metadata.attn_mask)
         self.assertEqual(metadata._fuse_kernel_compute_dtype, "bf16")
-        self.assertIsNone(metadata.kv_signal_metadata)
-        self.assertEqual(metadata.kv_signal_data_list, [])
         self.assertIsNone(metadata.max_enc_len_this_time)
         self.assertIsNone(metadata.max_dec_len_this_time)
         self.assertIsNone(metadata.max_kv_len_this_time)
@@ -254,43 +252,6 @@ class TestDSAAttentionBackendInitAttentionMetadata(unittest.TestCase):
 
         self.assertEqual(backend.attention_metadata._fuse_kernel_compute_dtype, "fp16")
 
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.init_kv_signal_per_query")
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.get_block_shape_and_split_kv_block")
-    @patch("paddle.get_default_dtype", return_value="bfloat16")
-    def test_pd_disaggregation_per_chunk(self, mock_dtype, mock_block_shape, mock_init_signal):
-        """init_attention_metadata calls init_kv_signal_per_query for per_chunk mode."""
-        backend = self._make_backend()
-        backend.pd_disaggregation_mode = "per_chunk"
-        backend.keep_pd_step_flag = False
-        backend.num_layers_draft_model = 0
-
-        forward_meta = MagicMock()
-        forward_meta.max_len_tensor_cpu = [0, 0, 0, 0, 0, 0]
-        forward_meta.is_dummy_or_profile_run = False
-
-        backend.init_attention_metadata(forward_meta)
-
-        mock_init_signal.assert_called_once()
-
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.open_shm_and_get_meta_signal")
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.get_block_shape_and_split_kv_block")
-    @patch("paddle.get_default_dtype", return_value="bfloat16")
-    def test_pd_disaggregation_per_query(self, mock_dtype, mock_block_shape, mock_open_shm):
-        """init_attention_metadata calls open_shm_and_get_meta_signal for per_query mode."""
-        backend = self._make_backend()
-        backend.pd_disaggregation_mode = "per_query"
-        backend.keep_pd_step_flag = False
-        mock_open_shm.return_value = "signal_metadata"
-
-        forward_meta = MagicMock()
-        forward_meta.max_len_tensor_cpu = [0, 0, 0, 0, 0, 0]
-        forward_meta.is_dummy_or_profile_run = False
-
-        backend.init_attention_metadata(forward_meta)
-
-        mock_open_shm.assert_called_once()
-        self.assertEqual(backend.attention_metadata.kv_signal_metadata, "signal_metadata")
-
 
 class TestDSAAttentionBackendGetAttentionMeta(unittest.TestCase):
     """Test DSAAttentionBackend.get_attention_meta."""
@@ -382,106 +343,6 @@ class TestDSAAttentionBackendGetKvCacheShape(unittest.TestCase):
         self.assertEqual(value_shape, [])
         # fp8_indexer_dim = 256 + 256//128*4 = 256 + 8 = 264
         self.assertEqual(indexer_shape, [100, 64, 264])
-
-
-class TestDSAAttentionBackendForwardMixed(unittest.TestCase):
-    """Test DSAAttentionBackend.forward_mixed."""
-
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.current_platform")
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.init_signal_layerwise")
-    @patch(
-        "fastdeploy.model_executor.layers.attention.dsa_attention_backend.init_rank_and_device_id", return_value=(0, 0)
-    )
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.paddle.randn")
-    def test_forward_mixed_per_query_calls_init_signal(
-        self, mock_randn, mock_init_rank, mock_init_signal, mock_platform
-    ):
-        """forward_mixed calls init_signal_layerwise for per_query mode."""
-        mock_randn.return_value = MagicMock()
-        mock_randn.return_value.cast.return_value = "useless"
-        mock_platform.is_cuda.return_value = False
-
-        fd_config = MagicMock()
-        fd_config.cache_config.block_size = 64
-        fd_config.model_config.max_model_len = 4096
-        fd_config.model_config.rope_theta = 10000.0
-        fd_config.enable_rope_3d_runtime = False
-        fd_config.model_config.causal = True
-        fd_config.speculative_config.method = None
-        fd_config.speculative_config.num_speculative_tokens = 0
-        fd_config.speculative_config.model_type = ""
-        fd_config.model_config.head_dim = 128
-        fd_config.model_config.num_hidden_layers = 32
-        fd_config.model_config.index_head_dim = 256
-        fd_config.model_config.index_n_heads = 4
-        fd_config.model_config.index_topk = 8
-        fd_config.model_config.kv_lora_rank = 512
-        fd_config.model_config.qk_rope_head_dim = 64
-        fd_config.model_config.qk_nope_head_dim = 128
-        fd_config.model_config.rope_scaling = None
-        fd_config.model_config.start_layer_index = 3
-        fd_config.parallel_config.pd_disaggregation_mode = "per_query"
-        fd_config.parallel_config.tensor_parallel_rank = 0
-        fd_config.parallel_config.local_data_parallel_id = 0
-        fd_config.parallel_config.tensor_parallel_size = 1
-
-        backend = DSAAttentionBackend(fd_config, kv_num_heads=1, num_heads=16, head_dim=128)
-
-        # Set attention_metadata
-        metadata = DSAAttentionMetadata()
-        metadata.kv_signal_metadata = "signal_meta"
-        metadata.kv_signal_data_list = [None] * 32
-        backend.attention_metadata = metadata
-
-        # Mock layer
-        layer = MagicMock()
-        layer.layer_id = 5
-
-        # Mock forward_meta
-        forward_meta = MagicMock()
-        forward_meta.caches = ["cache"] * 64
-        forward_meta.max_len_tensor_cpu = [0, 0, 0, 0, 0, 0]  # no enc/dec
-        forward_meta.slot_mapping = MagicMock()
-
-        # Mock compressed_kv and k_pe
-        compressed_kv = MagicMock()
-        compressed_kv.__abs__ = MagicMock(return_value=MagicMock())
-        mock_abs_result = MagicMock()
-        mock_abs_result.max.return_value = MagicMock()
-        mock_abs_result.max.return_value.__truediv__ = MagicMock(return_value=MagicMock())
-        compressed_kv.__abs__ = lambda self: mock_abs_result
-
-        mock_init_signal.return_value = "signal_data"
-
-        with patch("paddle.abs", return_value=MagicMock()) as mock_paddle_abs:
-            scale_mock = MagicMock()
-            scale_mock.cast.return_value = scale_mock
-            mock_paddle_abs.return_value.max.return_value.__truediv__ = lambda self, other: scale_mock
-            mock_paddle_abs.return_value.max.return_value = scale_mock
-
-            with patch(
-                "fastdeploy.model_executor.layers.attention.dsa_attention_backend.current_platform"
-            ) as mock_plat:
-                mock_plat.is_cuda.return_value = False
-                # Since is_cuda is False, the GPU imports won't happen and forward_mixed
-                # will fail at dsk_attn_write_cache. Let's just verify the signal init part.
-                # We'll test the signal initialization separately.
-                pass
-
-        # Directly test signal init logic
-        mock_init_signal.return_value = "signal_layer_5"
-        backend.pd_disaggregation_mode = "per_query"
-        backend.start_layer_index = 3
-
-        # Manually call the per_query signal init part
-        if backend.pd_disaggregation_mode == "per_query":
-            from fastdeploy.model_executor.layers.attention.dsa_attention_backend import (
-                init_signal_layerwise,
-            )
-
-            init_signal_layerwise(metadata.kv_signal_metadata, layer.layer_id + backend.start_layer_index)
-
-        mock_init_signal.assert_called_with("signal_meta", 8)  # layer_id=5 + start=3
 
 
 class TestDSAAttentionBackendCastScaleInv(unittest.TestCase):
@@ -707,107 +568,6 @@ class TestDSAAttentionBackendQuantizeKCache(unittest.TestCase):
 class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
     """Test DSAAttentionBackend.forward_mixed with full GPU path."""
 
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.init_signal_layerwise")
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.current_platform")
-    @patch(
-        "fastdeploy.model_executor.layers.attention.dsa_attention_backend.init_rank_and_device_id", return_value=(0, 0)
-    )
-    @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.paddle.randn")
-    @patch("paddle.abs")
-    def test_forward_mixed_prefill_only(self, mock_abs, mock_randn, mock_init_rank, mock_platform, mock_init_signal):
-        """forward_mixed returns prefill output when only enc_len > 0 with per_query signal init."""
-        mock_randn.return_value = MagicMock()
-        mock_randn.return_value.cast.return_value = "useless"
-        mock_platform.is_cuda.return_value = True
-        mock_init_signal.return_value = "signal_data_layer"
-
-        fd_config = MagicMock()
-        fd_config.cache_config.block_size = 64
-        fd_config.model_config.max_model_len = 4096
-        fd_config.model_config.rope_theta = 10000.0
-        fd_config.enable_rope_3d_runtime = False
-        fd_config.model_config.causal = True
-        fd_config.speculative_config.method = None
-        fd_config.speculative_config.num_speculative_tokens = 0
-        fd_config.speculative_config.model_type = ""
-        fd_config.model_config.head_dim = 128
-        fd_config.model_config.num_hidden_layers = 32
-        fd_config.model_config.index_head_dim = 256
-        fd_config.model_config.index_n_heads = 4
-        fd_config.model_config.index_topk = 8
-        fd_config.model_config.kv_lora_rank = 512
-        fd_config.model_config.qk_rope_head_dim = 64
-        fd_config.model_config.qk_nope_head_dim = 128
-        fd_config.model_config.rope_scaling = None
-        fd_config.model_config.start_layer_index = 0
-        fd_config.parallel_config.pd_disaggregation_mode = None
-        fd_config.parallel_config.tensor_parallel_rank = 0
-        fd_config.parallel_config.local_data_parallel_id = 0
-        fd_config.parallel_config.tensor_parallel_size = 1
-
-        backend = DSAAttentionBackend(fd_config, kv_num_heads=1, num_heads=16, head_dim=128)
-
-        metadata = DSAAttentionMetadata()
-        metadata.kv_signal_data_list = [None] * 32
-        backend.attention_metadata = metadata
-
-        layer = MagicMock()
-        layer.layer_id = 2
-
-        forward_meta = MagicMock()
-        forward_meta.caches = ["cache"] * 64
-        forward_meta.max_len_tensor_cpu = [0, 100, 0, 0, 0, 0]  # enc > 0, dec = 0
-        forward_meta.slot_mapping = MagicMock()
-
-        # Mock paddle.abs chain
-        scale_mock = MagicMock()
-        scale_mock.cast.return_value = scale_mock
-        mock_abs.return_value = MagicMock()
-        mock_abs.return_value.max.return_value = scale_mock
-        scale_mock.__truediv__ = MagicMock(return_value=scale_mock)
-
-        # Mock flash_mla and dsk_attn_write_cache
-        mock_flash_mla = MagicMock()
-        mock_flash_mla.flash_mla_sparse_fwd.return_value = ("prefill_output", None, None)
-
-        mock_dsk_write = MagicMock()
-
-        import sys
-
-        sys.modules["flash_mla"] = mock_flash_mla
-        with patch.dict(sys.modules, {"flash_mla": mock_flash_mla}):
-            with patch(
-                "fastdeploy.model_executor.layers.attention.dsa_attention_backend.current_platform", mock_platform
-            ):
-                # Patch the import inside forward_mixed
-                with patch.dict(
-                    sys.modules, {"fastdeploy.model_executor.ops.gpu": MagicMock(dsk_attn_write_cache=mock_dsk_write)}
-                ):
-                    # Need to actually make the import work inside forward_mixed
-
-                    gpu_module = MagicMock()
-                    gpu_module.dsk_attn_write_cache = mock_dsk_write
-                    with patch.dict(
-                        sys.modules,
-                        {
-                            "flash_mla": mock_flash_mla,
-                            "fastdeploy.model_executor.ops.gpu": gpu_module,
-                            "fastdeploy.model_executor.ops": MagicMock(gpu=gpu_module),
-                        },
-                    ):
-                        result = backend.forward_mixed(
-                            q=MagicMock(),
-                            k=MagicMock(),
-                            v=MagicMock(),
-                            qkv=None,
-                            compressed_kv=MagicMock(),
-                            k_pe=MagicMock(),
-                            layer=layer,
-                            forward_meta=forward_meta,
-                        )
-
-        self.assertEqual(result, "prefill_output")
-
     @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.current_platform")
     @patch(
         "fastdeploy.model_executor.layers.attention.dsa_attention_backend.init_rank_and_device_id", return_value=(0, 0)
@@ -847,7 +607,6 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
         backend = DSAAttentionBackend(fd_config, kv_num_heads=1, num_heads=16, head_dim=128)
 
         metadata = DSAAttentionMetadata()
-        metadata.kv_signal_data_list = [None] * 32
         backend.attention_metadata = metadata
 
         layer = MagicMock()
@@ -940,7 +699,6 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
         backend = DSAAttentionBackend(fd_config, kv_num_heads=1, num_heads=16, head_dim=128)
 
         metadata = DSAAttentionMetadata()
-        metadata.kv_signal_data_list = [None] * 32
         backend.attention_metadata = metadata
 
         layer = MagicMock()
@@ -1036,7 +794,6 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
         backend = DSAAttentionBackend(fd_config, kv_num_heads=1, num_heads=16, head_dim=128)
 
         metadata = DSAAttentionMetadata()
-        metadata.kv_signal_data_list = [None] * 32
         backend.attention_metadata = metadata
 
         layer = MagicMock()
