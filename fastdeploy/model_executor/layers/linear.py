@@ -1250,6 +1250,10 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         output_dim = getattr(param, "output_dim", None)
         assert output_dim is not None
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        is_scale = getattr(param, "is_scale", False)
+        if is_scale:
+            weight_block_size = getattr(self.fd_config.quant_config, "weight_block_size", [128, 128])
+            scale_block_size = weight_block_size[0]
         if loaded_shard_id is None:
             if weight_need_transpose:
                 loaded_weight = get_tensor(loaded_weight)
@@ -1283,6 +1287,9 @@ class QKVGateParallelLinear(ColumnParallelLinear):
                 shard_id = self.local_rank if loaded_shard_id == "q" else self._get_kv_shard_id()
                 shard_offset = shard_id * block_size
                 shard_size = block_size
+                if is_scale:
+                    shard_offset //= scale_block_size
+                    shard_size = (shard_size + scale_block_size - 1) // scale_block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size)
 
             if not param._is_initialized():
