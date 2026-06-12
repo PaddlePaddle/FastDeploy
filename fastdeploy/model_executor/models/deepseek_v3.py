@@ -833,7 +833,7 @@ class DeepseekV32DSAAttention(DeepseekV3MLAAttention):
     """
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
-        super().__init__()
+        super().__init__(fd_config, layer_id, prefix)
 
         # Indexer
         self.index_head_dim = fd_config.model_config.index_head_dim
