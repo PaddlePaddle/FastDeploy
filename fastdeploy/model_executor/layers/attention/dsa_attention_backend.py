@@ -32,7 +32,6 @@ if current_platform.is_cuda():
 from fastdeploy.model_executor.layers.attention.ops import (
     get_block_shape_and_split_kv_block,
     init_kv_signal_per_query,
-    init_signal_layerwise,
     open_shm_and_get_meta_signal,
 )
 
@@ -336,15 +335,6 @@ class DSAAttentionBackend(AttentionBackend):
         """
         Mixed模式的前向传播
         """
-        metadata = self.attention_metadata
-        # speculate_decoder = self.speculative_method is not None
-        # speculate_max_tokens = self.speculate_max_draft_token_num
-
-        if self.pd_disaggregation_mode == "per_query":
-            metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
-                metadata.kv_signal_metadata,
-                layer.layer_id + self.start_layer_index,
-            )
 
         latent_cache = forward_meta.caches[2 * layer.layer_id] if hasattr(forward_meta, "caches") else None
 
@@ -353,14 +343,12 @@ class DSAAttentionBackend(AttentionBackend):
 
             from fastdeploy.model_executor.ops.gpu import dsk_attn_write_cache
 
-        scale = paddle.abs(compressed_kv).max() / 200.0
-
         dsk_attn_write_cache(
             compressed_kv,
             k_pe,
             latent_cache,
             forward_meta.slot_mapping,
-            scale.cast(paddle.float32),
+            None,
             "fp8_ds_mla",
         )
 
