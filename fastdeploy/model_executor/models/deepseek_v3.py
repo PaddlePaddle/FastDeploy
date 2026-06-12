@@ -227,7 +227,12 @@ class DeepseekV3MLAAttention(nn.Layer):
         self.kv_lora_rank = fd_config.model_config.kv_lora_rank
 
         self.attn_softmax_scale = self.qk_head_dim**-0.5
-        self.rope_theta = fd_config.model_config.rope_theta
+
+        if fd_config.model_config.model_type == "glm_moe_dsa":
+            self.rope_theta = fd_config.model_config.rope_parameters["rope_theta"]
+        else:
+            self.rope_theta = fd_config.model_config.rope_theta
+
         self.rms_norm_eps = fd_config.model_config.rms_norm_eps
 
         assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
@@ -833,9 +838,6 @@ class DeepseekV32DSAAttention(DeepseekV3MLAAttention):
         self.index_head_dim = fd_config.model_config.index_head_dim
         self.index_n_heads = fd_config.model_config.index_n_heads
         self.index_topk = fd_config.model_config.index_topk
-
-        if fd_config.model_config.model_type == "glm_moe_dsa":
-            self.rope_theta = fd_config.model_config.rope_parameters["rope_theta"]
 
         if self.rope_scaling and "factor" in self.rope_scaling:
             self.indexer_rotary_emb = DeepseekScalingRotaryEmbedding(
