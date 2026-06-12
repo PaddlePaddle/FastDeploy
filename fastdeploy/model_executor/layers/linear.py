@@ -707,6 +707,10 @@ class QKVParallelLinear(ColumnParallelLinear):
         output_dim = getattr(param, "output_dim", None)
         assert output_dim is not None
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        is_scale = getattr(param, "is_scale", False)
+        if is_scale:
+            weight_block_size = getattr(self.fd_config.quant_config, "weight_block_size", [128, 128])
+            scale_block_size = weight_block_size[0]
         if loaded_shard_id is None:
             if weight_need_transpose:
                 loaded_weight = get_tensor(loaded_weight)
@@ -721,6 +725,9 @@ class QKVParallelLinear(ColumnParallelLinear):
                 ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.v_head_dim),
             ]
             for shard_id, shard_offset, shard_size in shard_offsets:
+                if is_scale:
+                    shard_offset //= scale_block_size
+                    shard_size = (shard_size + scale_block_size - 1) // scale_block_size
                 loaded_weight_shard = slice_fn(
                     loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size
                 )
@@ -737,6 +744,9 @@ class QKVParallelLinear(ColumnParallelLinear):
                 shard_id = self.local_rank if loaded_shard_id == "q" else self._get_kv_shard_id()
                 shard_offset = shard_id * block_size
                 shard_size = block_size
+                if is_scale:
+                    shard_offset //= scale_block_size
+                    shard_size = (shard_size + scale_block_size - 1) // scale_block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size)
 
             if not param._is_initialized():
@@ -752,6 +762,9 @@ class QKVParallelLinear(ColumnParallelLinear):
                 # loaded_shard_id == "v"
                 param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
                 param_shard_size = self.kv_num_heads_per_rank * self.v_head_dim
+            if is_scale:
+                param_shard_offset //= scale_block_size
+                param_shard_size = (param_shard_size + scale_block_size - 1) // scale_block_size
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
@@ -1251,6 +1264,9 @@ class QKVGateParallelLinear(ColumnParallelLinear):
                 ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.v_head_dim),
             ]
             for shard_id, shard_offset, shard_size in shard_offsets:
+                if is_scale:
+                    shard_offset //= scale_block_size
+                    shard_size = (shard_size + scale_block_size - 1) // scale_block_size
                 loaded_weight_shard = slice_fn(
                     loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size
                 )
