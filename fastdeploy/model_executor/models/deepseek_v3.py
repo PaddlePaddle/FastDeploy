@@ -201,9 +201,6 @@ class DeepSeekV3MoE(nn.Layer):
 
 
 class DeepseekV3MLAAttention(nn.Layer):
-    """
-    DeepseekV3MLAAttention
-    """
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
         super().__init__()
@@ -828,9 +825,6 @@ class Indexer(nn.Layer):
 
 
 class DeepseekV32DSAAttention(DeepseekV3MLAAttention):
-    """
-    DeepseekV32DSAAttention
-    """
 
     def __init__(self, fd_config: FDConfig, layer_id: int, prefix: str = "") -> None:
         super().__init__(fd_config, layer_id, prefix)
@@ -927,9 +921,6 @@ class DeepseekV32DSAAttention(DeepseekV3MLAAttention):
 
 
 class DeepSeekV3DecoderLayer(nn.Layer):
-    """
-    DeepSeekV3DecoderLayer
-    """
 
     def __init__(
         self,
@@ -1007,9 +998,6 @@ class DeepSeekV3DecoderLayer(nn.Layer):
 
 @support_graph_optimization
 class DeepSeekV3Model(nn.Layer):
-    """
-    DeepSeekV3Model
-    """
 
     def __init__(
         self,
@@ -1077,9 +1065,6 @@ class DeepSeekV3Model(nn.Layer):
     primary_use=ModelCategory.TEXT_GENERATION,
 )
 class DeepseekV3ForCausalLM(ModelForCasualLM):
-    """
-    DeepseekV3ForCausalLM
-    """
 
     def __init__(self, fd_config: FDConfig):
         """
@@ -1228,9 +1213,6 @@ class DeepseekV3ForCausalLM(ModelForCasualLM):
 
 
 class DeepSeekV3PretrainedModel(PretrainedModel):
-    """
-    DeepSeekV3PretrainedModel
-    """
 
     config_class = FDConfig
 
