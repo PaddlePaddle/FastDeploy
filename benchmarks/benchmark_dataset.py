@@ -300,19 +300,31 @@ class EBChatDataset(BenchmarkDataset):
             if len(samples) >= num_requests:
                 break
             json_data = entry
-            prompt = entry["messages"][-1].get("content", "")
-            history_QA = entry.get("messages", [])
             response_format = entry.get("response_format")
-            new_output_len = int(entry.get("max_tokens", output_len if output_len else 12288))
+            new_output_len = entry.get("max_tokens", output_len)
+            new_output_len = int(new_output_len) if new_output_len is not None else None
 
-            if enable_multimodal_chat:
-                prompt = self.apply_multimodal_chat_transformation(prompt, None)
+            # If the sample already carries pre-tokenized input_ids, send them
+            # directly via prompt_token_ids and skip the server-side
+            # chat_template + tokenizer step.
+            input_ids = entry.get("input_ids")
+            if input_ids is not None:
+                prompt = [int(x) for x in input_ids]
+                history_QA = []
+                prompt_len = len(prompt)
+            else:
+                prompt = ""
+                history_QA = entry.get("messages", [])
+                prompt_len = 0
+                if enable_multimodal_chat:
+                    prompt = self.apply_multimodal_chat_transformation(prompt, None)
+
             samples.append(
                 SampleRequest(
                     no=cnt,
                     json_data=json_data,
                     prompt=prompt,
-                    prompt_len=0,
+                    prompt_len=prompt_len,
                     history_QA=history_QA,
                     expected_output_len=new_output_len,
                     response_format=response_format,

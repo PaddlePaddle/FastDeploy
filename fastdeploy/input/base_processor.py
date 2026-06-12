@@ -52,6 +52,7 @@ from paddleformers.transformers import Llama3Tokenizer, LlamaTokenizer
 from fastdeploy import envs
 from fastdeploy.input.utils import process_stop_token_ids
 from fastdeploy.logger.request_logger import RequestLogLevel, log_request
+from fastdeploy.output.fallback.base import OutputFallbackContext
 from fastdeploy.utils import data_processor_logger, make_choice_id, parse_choice_id
 
 _SAMPLING_EPS = 1e-5
@@ -74,6 +75,15 @@ class BaseTextProcessor(ABC):
         self.decode_status: Dict[str, list] = {}
         self.model_status_dict: Dict[str, dict] = {}
         self.tool_parser_dict: Dict = {}
+        # Per-request "fallback-corrected" stream history. Maintained
+        # separately from decode_status so that reasoning/tool parsers can
+        # be fed a coherent text stream after on_delta rewrites/holds it.
+        self.fallback_decode_status: Dict[str, dict] = {}
+        # Output fallback manager. Set externally (e.g. by api_server) once
+        # the processor instance is wired up. When set, fallback strategies
+        # are applied to the raw decoded stream BEFORE reasoning/tool
+        # parsing inside ``process_response_dict_*``. ``None`` disables.
+        self.output_fallback_manager = None
         # Token-encode cache shared by all subclasses.
         self._tokenize_cache: OrderedDict = OrderedDict()
         self._tokenize_cache_capacity: int = 128
@@ -110,6 +120,27 @@ class BaseTextProcessor(ABC):
         self.tokenizer.pad_token_id = self.pad_token_id
         self._init_parsers(reasoning_parser_obj, tool_parser_obj)
 
+        # Server-level defaults (set via set_server_defaults after construction)
+        self.max_completion_tokens = None
+        self.reasoning_max_tokens = None
+        self.response_max_tokens = None
+        self.min_completion_tokens = None
+        self.input_max_tokens = None
+
+    def set_server_defaults(self, serving_limits_config):
+        """Set server-level default values from serving limits config.
+
+        These defaults are applied in process_request_dict when per-request
+        values are not specified.
+        """
+        if serving_limits_config is None:
+            return
+        self.max_completion_tokens = serving_limits_config.max_completion_tokens
+        self.reasoning_max_tokens = serving_limits_config.reasoning_max_tokens
+        self.response_max_tokens = serving_limits_config.response_max_tokens
+        self.min_completion_tokens = serving_limits_config.min_completion_tokens
+        self.input_max_tokens = serving_limits_config.input_max_tokens
+
     # ------------------------------------------------------------------
     # Abstract interface
     # ------------------------------------------------------------------
@@ -138,6 +169,28 @@ class BaseTextProcessor(ABC):
             )
         return tokens["input_ids"][0]
 
+    def _text_to_token_ids(self, text: str) -> list:
+        """Encode ``text`` to a ``list[int]``, shared by :meth:`messages2ids`
+        and :meth:`_prepare_tool_prefix`.
+
+        ``ernie4_5`` tokenizer hangs on long inputs via ``.encode()``, so it
+        goes through ``tokenize`` + ``convert_tokens_to_ids``. Other tokenizers
+        use ``.encode()`` and the result is normalized to a plain list.
+        """
+        if self.tokenizer_type == "ernie4_5":
+            # NOTE: ernie4_5 tokenizer will hang when meet long input when use .encode()
+            return self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(text))
+        token_ids = self.tokenizer.encode(text, add_special_tokens=False)
+        if hasattr(token_ids, "input_ids") or (isinstance(token_ids, dict) and "input_ids" in token_ids):
+            token_ids = token_ids["input_ids"]
+            if hasattr(token_ids, "ndim") and token_ids.ndim > 1:
+                token_ids = token_ids[0]
+        if hasattr(token_ids, "tolist"):
+            token_ids = token_ids.tolist()
+        if not isinstance(token_ids, list):
+            token_ids = list(token_ids)
+        return token_ids
+
     def messages2ids(self, request, **kwargs):
         """Convert a chat-template request into a token-ID list.
 
@@ -159,19 +212,7 @@ class BaseTextProcessor(ABC):
         )
         request["prompt_tokens"] = spliced_message
         req_id = request.get("request_id", None) if isinstance(request, dict) else None
-        if self.tokenizer_type == "ernie4_5":
-            # NOTE: ernie4_5 tokenizer will hang when meet long input when use .encode()
-            token_ids = self.tokenizer.convert_tokens_to_ids(self.tokenizer.tokenize(spliced_message))
-        else:
-            token_ids = self.tokenizer.encode(spliced_message, add_special_tokens=False)
-            if hasattr(token_ids, "input_ids") or (isinstance(token_ids, dict) and "input_ids" in token_ids):
-                token_ids = token_ids["input_ids"]
-                if hasattr(token_ids, "ndim") and token_ids.ndim > 1:
-                    token_ids = token_ids[0]
-            if hasattr(token_ids, "tolist"):
-                token_ids = token_ids.tolist()
-            if not isinstance(token_ids, list):
-                token_ids = list(token_ids)
+        token_ids = self._text_to_token_ids(spliced_message)
         log_request(
             level=1,
             message="req_id:{req_id}, token_ids: {token_ids}",
@@ -204,9 +245,16 @@ class BaseTextProcessor(ABC):
         Returns:
             (delta_text, previous_token_ids, previous_texts)
 
-        Both the HF and the PaddleFormers/ERNIE tokeniser paths return the
-        same tuple shape.  The HF path sets ``previous_token_ids`` to ``[]``
-        since it does not expose per-token ids during batch-decode.
+        ``previous_token_ids`` and ``previous_texts`` are **snapshots of the
+        accumulated state BEFORE this call's tokens were appended** —
+        symmetric pre-delta views of what the caller had decoded so far.
+        Both are owned by the caller (no aliasing of internal state).
+
+        Callers that need the post-extend cumulative list should reconstruct
+        it locally via ``previous_token_ids + token_id``.
+
+        The HF path returns ``[]`` for ``previous_token_ids`` since it does
+        not expose per-token ids during batch-decode.
         """
         if envs.FD_USE_HF_TOKENIZER:
             if task_id not in self.decode_status:
@@ -225,7 +273,9 @@ class BaseTextProcessor(ABC):
                 status[2] = decode_str[0]
             else:
                 new_str = ""
-            # Return consistent three-tuple; previous_token_ids not available.
+            # NOTE: HF path historically returns the post-delta full string
+            # here, inconsistent with the non-HF branch (which returns the
+            # pre-delta snapshot). Preserved as-is to avoid behavior change.
             return new_str, [], status[2]
         else:
             if task_id not in self.decode_status:
@@ -233,12 +283,15 @@ class BaseTextProcessor(ABC):
                 self.decode_status[task_id] = [0, 0, [], ""]
             status = self.decode_status[task_id]
             previous_texts = status[3]
+            # Snapshot BEFORE extend so the returned list is owned by the
+            # caller and symmetric with ``previous_texts``.
+            previous_token_ids = list(status[2])
             status[2].extend(token_id)
             decode_str, prefix_offset, read_offset = self.tokenizer.decode_token(status[2], status[0], status[1])
             status[0] = prefix_offset
             status[1] = read_offset
             status[3] += decode_str
-            return decode_str, status[2], previous_texts
+            return decode_str, previous_token_ids, previous_texts
 
     # ------------------------------------------------------------------
     # Response processing
@@ -266,6 +319,53 @@ class BaseTextProcessor(ABC):
         else:
             return self.process_response_dict_normal(response_dict, **kwargs)
 
+    @staticmethod
+    def _is_forced_tool_choice(request):
+        """Return True if tool_choice mode requires forced prefix injection."""
+        if not request:
+            return False
+        chat_kwargs = getattr(request, "chat_template_kwargs", None) or {}
+        options = chat_kwargs.get("options") or {}
+        tool_choice = options.get("tool_choice") or {}
+        mode = tool_choice.get("mode", "") if isinstance(tool_choice, dict) else ""
+        return mode in ("required", "force")
+
+    def _prepare_tool_prefix(self, tool_parser, prompt_tokens, request=None):
+        """Detect and cache on ``tool_parser`` the tool-call prefix that the
+        chat template injected at the tail of ``prompt_tokens`` (the rendered
+        prompt string from the serving layer). Computed once per parser
+        instance via the parser's :meth:`ToolParser.detect_tool_prefix`.
+
+        Only performs detection when ``tool_choice`` mode indicates a forced
+        tool call (e.g. ``"required"`` or ``"force"``).
+        """
+        if tool_parser._tool_prefix_computed:
+            return
+        tool_parser._tool_prefix_computed = True
+        tool_parser._tool_prefix = ""
+        tool_parser._tool_prefix_token_ids = []
+        if not prompt_tokens or not isinstance(prompt_tokens, str):
+            return
+        if not self._is_forced_tool_choice(request):
+            return
+        try:
+            prefix = tool_parser.detect_tool_prefix(prompt_tokens) or ""
+        except Exception:
+            data_processor_logger.exception("detect_tool_prefix failed; falling back to empty prefix")
+            return
+        tool_parser._tool_prefix = prefix
+        if not prefix:
+            return
+        # Encode the prefix into token ids so the streaming path can also
+        # splice ``previous/current/delta_token_ids`` — some parsers gate on
+        # ``tool_call_start_token_id in current_token_ids`` rather than on
+        # text (e.g. ``Ernie45VLThinkingToolParser``).
+        try:
+            tool_parser._tool_prefix_token_ids = self._text_to_token_ids(prefix)
+        except Exception:
+            data_processor_logger.exception("encode tool prefix to token ids failed; token-id splice disabled")
+            tool_parser._tool_prefix_token_ids = []
+
     def process_response_dict_normal(self, response_dict, **kwargs):
         """Accumulate tokens and build the full completion text (non-streaming)."""
         token_ids = response_dict["outputs"]["token_ids"]
@@ -273,6 +373,7 @@ class BaseTextProcessor(ABC):
         req_id = response_dict["request_id"]
         request = kwargs.get("request", None)
         direct_decode = kwargs.get("direct_decode", False)
+        output_fallback_manager = self.output_fallback_manager if not kwargs.get("disable_output_fallback") else None
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
@@ -286,6 +387,20 @@ class BaseTextProcessor(ABC):
 
         if is_end:
             full_text = previous_texts + delta_text
+
+            # Apply output fallback to the full raw text BEFORE reasoning /
+            # tool parsing so all sub-streams (content, reasoning, tools)
+            # benefit from the rewrite.
+            if output_fallback_manager is not None and full_text:
+                context = OutputFallbackContext(
+                    request=request,
+                    request_id=req_id,
+                    stream=False,
+                    output=response_dict["outputs"],
+                    full_text=full_text,
+                )
+                full_text = output_fallback_manager.apply(full_text, context)
+
             response_dict["outputs"]["completion_tokens"] = full_text
             response_dict["outputs"]["text"] = full_text
 
@@ -300,7 +415,11 @@ class BaseTextProcessor(ABC):
 
             if self.tool_parser_obj:
                 tool_parser = self.tool_parser_obj(self.tokenizer)
-                tool_call_info = tool_parser.extract_tool_calls(full_text, request)
+                parser_input = full_text
+                self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"), request)
+                if tool_parser._tool_prefix:
+                    parser_input = tool_parser._tool_prefix + full_text
+                tool_call_info = tool_parser.extract_tool_calls(parser_input, request)
                 if tool_call_info.tools_called:
                     response_dict["outputs"]["tool_calls"] = tool_call_info.tool_calls
 
@@ -317,6 +436,10 @@ class BaseTextProcessor(ABC):
         req_id = response_dict["request_id"]
         token_ids = response_dict["outputs"]["token_ids"]
         request = kwargs.get("request", None)
+        # Caller may opt out via ``disable_output_fallback`` (e.g. the
+        # response-processor's multimodal streaming branch where the raw text
+        # is later wrapped into a ``multipart`` payload).
+        output_fallback_manager = self.output_fallback_manager if not kwargs.get("disable_output_fallback") else None
 
         if is_end and len(token_ids) > 0 and not kwargs.get("include_stop_str_in_output"):
             if token_ids[-1] in self.eos_token_ids:
@@ -324,11 +447,55 @@ class BaseTextProcessor(ABC):
 
         delta_text, previous_token_ids, previous_texts = self.ids2tokens(token_ids, req_id)
 
+        # ------------------------------------------------------------------
+        # Output fallback (applied BEFORE reasoning/tool parsing so that the
+        # whole raw stream — content + thinking + tool-call text — gets a
+        # chance to be repaired/rewritten).
+        # ------------------------------------------------------------------
+        fallback_held = False
+        if output_fallback_manager is not None:
+            state = self.fallback_decode_status.setdefault(req_id, {"previous_corrected": ""})
+            context = OutputFallbackContext(
+                request=request,
+                request_id=req_id,
+                stream=True,
+                output=response_dict["outputs"],
+                delta_text=delta_text,
+            )
+            decision = output_fallback_manager.on_delta(req_id, delta_text, context)
+            if decision.action == "truncate":
+                delta_text = decision.text
+                response_dict["finished"] = True
+                response_dict["outputs"]["fallback_truncated"] = True
+                is_end = True
+            elif decision.action == "hold":
+                fallback_held = True
+                delta_text = ""
+            else:  # send
+                delta_text = decision.text
+
+            if is_end and decision.action != "truncate":
+                finish_decision = output_fallback_manager.on_finish(req_id, context)
+                if finish_decision.text:
+                    delta_text = (delta_text or "") + finish_decision.text
+
+            # Override the parser-visible history with the corrected stream
+            # (held deltas contribute nothing; sent/flushed text is appended
+            # in arrival order). token_ids remain raw — parsers tolerate the
+            # minor text/token drift introduced by text-rewriting strategies.
+            corrected_previous = state["previous_corrected"]
+            state["previous_corrected"] = corrected_previous + (delta_text or "")
+            previous_texts = corrected_previous
+
         response_dict["outputs"]["text"] = delta_text
         response_dict["outputs"]["completion_tokens"] = delta_text
         response_dict["outputs"]["skipped"] = False
         response_dict["outputs"]["tool_calls"] = None
         response_dict["outputs"]["reasoning_content"] = ""
+
+        if fallback_held and not is_end:
+            response_dict["outputs"]["skipped"] = True
+            return response_dict
 
         if self.reasoning_parser:
             reasoning_delta_message = self.reasoning_parser.extract_reasoning_content_streaming(
@@ -354,13 +521,38 @@ class BaseTextProcessor(ABC):
             if req_id not in self.tool_parser_dict:
                 self.tool_parser_dict[req_id] = self.tool_parser_obj(self.tokenizer)
             tool_parser = self.tool_parser_dict[req_id]
+            stream_previous = previous_texts
+            stream_current = previous_texts + delta_text
+            stream_delta = delta_text
+            stream_previous_token_ids = previous_token_ids
+            stream_current_token_ids = previous_token_ids + token_ids
+            stream_delta_token_ids = token_ids
+            self._prepare_tool_prefix(tool_parser, kwargs.get("prompt_tokens"), request)
+            prefix = tool_parser._tool_prefix
+            prefix_ids = tool_parser._tool_prefix_token_ids
+            # Splice the injected prefix back into both text and token-id
+            # streaming args so parsers that gate on either form (e.g.
+            # ``Ernie45VLThinkingToolParser`` checks
+            # ``tool_call_start_token_id in current_token_ids``) work
+            # unchanged. ``delta_*`` only spliced on the first call.
+            if prefix:
+                stream_previous = prefix + stream_previous
+                stream_current = prefix + stream_current
+                if prefix_ids:
+                    stream_previous_token_ids = prefix_ids + stream_previous_token_ids
+                    stream_current_token_ids = prefix_ids + stream_current_token_ids
+                if not tool_parser._tool_prefix_injected_to_delta:
+                    stream_delta = prefix + stream_delta
+                    if prefix_ids:
+                        stream_delta_token_ids = prefix_ids + stream_delta_token_ids
+                    tool_parser._tool_prefix_injected_to_delta = True
             tool_call_delta_message = tool_parser.extract_tool_calls_streaming(
-                previous_texts,
-                previous_texts + delta_text,
-                delta_text,
-                previous_token_ids,
-                previous_token_ids + token_ids,
-                token_ids,
+                stream_previous,
+                stream_current,
+                stream_delta,
+                stream_previous_token_ids,
+                stream_current_token_ids,
+                stream_delta_token_ids,
                 request,
             )
             if tool_call_delta_message:
@@ -378,6 +570,10 @@ class BaseTextProcessor(ABC):
                 del self.tool_parser_dict[req_id]
             if req_id in self.model_status_dict:
                 del self.model_status_dict[req_id]
+            if req_id in self.fallback_decode_status:
+                del self.fallback_decode_status[req_id]
+            if output_fallback_manager is not None:
+                output_fallback_manager.cleanup(req_id)
 
         return response_dict
 
@@ -438,20 +634,63 @@ class BaseTextProcessor(ABC):
         if request.get("completion_token_ids"):
             request["prompt_token_ids"].extend(request["completion_token_ids"])
 
-        # truncate prompts that exceed the length limit
+        # Reject requests exceeding input_max_tokens
+        if self.input_max_tokens is not None and len(request["prompt_token_ids"]) > self.input_max_tokens:
+            raise ValueError(
+                f"Input token length {len(request['prompt_token_ids'])} exceeds the configured input_max_tokens limit {self.input_max_tokens}"
+            )
+
         if max_model_len is not None and len(request["prompt_token_ids"]) > max_model_len:
-            request["prompt_token_ids"] = request["prompt_token_ids"][: max_model_len - 1]
+            raise ValueError(
+                f"Input token length {len(request['prompt_token_ids'])} exceeds "
+                f"the configured max_model_len {max_model_len}"
+            )
 
         logits_processors_args = self._update_thinking_prompt_state(
             request["prompt_token_ids"], request.get("logits_processors_args") or {}
         )
         request["logits_processors_args"] = logits_processors_args
 
-        max_tokens = max_model_len - len(request["prompt_token_ids"])
+        # Compute effective length limits
+        def _min_non_none(*values):
+            return min(v for v in values if v is not None)
+
+        context_remaining = max(1, max_model_len - len(request["prompt_token_ids"]))
+
         if request.get("max_tokens") is None:
-            request["max_tokens"] = max(1, max_tokens)
+            # User didn't specify: default to min(context_remaining, server_default)
+            if self.max_completion_tokens is not None:
+                request["max_tokens"] = max(1, min(context_remaining, self.max_completion_tokens))
+            else:
+                request["max_tokens"] = context_remaining
         else:
-            request["max_tokens"] = min(max_tokens, request["max_tokens"])
+            # User specified: clamp to min(context_remaining, max_completion_tokens)
+            request["max_tokens"] = _min_non_none(context_remaining, self.max_completion_tokens, request["max_tokens"])
+
+        max_tokens = request["max_tokens"]
+        if self.reasoning_max_tokens is not None or request.get("reasoning_max_tokens") is not None:
+            request["reasoning_max_tokens"] = _min_non_none(
+                max_tokens, self.reasoning_max_tokens, request.get("reasoning_max_tokens")
+            )
+        if self.response_max_tokens is not None or request.get("response_max_tokens") is not None:
+            request["response_max_tokens"] = _min_non_none(
+                max_tokens, self.response_max_tokens, request.get("response_max_tokens")
+            )
+
+        # min_tokens: take the larger of server-level and user value, reject if > max_tokens
+        server_min = self.min_completion_tokens
+        user_min = request.get("min_tokens")
+        if server_min is None:
+            effective_min = user_min
+        elif user_min is None:
+            effective_min = server_min
+        else:
+            effective_min = max(server_min, user_min)
+        if effective_min is not None:
+            if effective_min > max_tokens:
+                raise ValueError(f"min_tokens ({effective_min}) must not exceed max_tokens ({max_tokens})")
+            request["min_tokens"] = effective_min
+
         if request.get("temperature") < _SAMPLING_EPS:
             # zero temperature means greedy decoding: set top_k=1 to force argmax
             request["temperature"] = 1

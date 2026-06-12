@@ -36,6 +36,7 @@ def _make_cfg(**ov):
     pc = ns(tensor_parallel_size=1, tensor_parallel_rank=0, device_ids="0", data_parallel_size=1)
     pc.expert_parallel_size, pc.chunked_moe_size, pc.engine_worker_queue_port = 1, 0, [6778]
     pc.enable_expert_parallel = pc.enable_chunked_moe = pc.disable_custom_all_reduce = False
+    pc.enable_mega_moe = False
     pc.use_internode_ll_two_stage = pc.disable_sequence_parallel_moe = False
     pc.shutdown_comm_group_if_worker_idle = False
     pc.ep_prefill_use_worst_num_tokens = False
@@ -56,7 +57,17 @@ def _make_cfg(**ov):
     )
     soc = ns(guided_decoding_backend=None, logits_processors=None, reasoning_parser="none")
     soc.disable_any_whitespace = False
-    cfg = ns(model_config=mc, parallel_config=pc, scheduler_config=sc, cache_config=cc, load_config=lc)
+    slc = ns(
+        max_completion_tokens=None, reasoning_max_tokens=None, response_max_tokens=None, min_completion_tokens=None
+    )
+    cfg = ns(
+        model_config=mc,
+        parallel_config=pc,
+        scheduler_config=sc,
+        cache_config=cc,
+        load_config=lc,
+        serving_limits_config=slc,
+    )
     cfg.speculative_config = ns(model_type="main", to_json_string=_j)
     cfg.graph_opt_config = cfg.early_stop_config = cfg.eplb_config = ns(to_json_string=_j)
     cfg.routing_replay_config = cfg.plas_attention_config = ns(to_json_string=_j)

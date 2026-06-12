@@ -952,6 +952,97 @@ class TestOpenAIServingCompletion(unittest.IsolatedAsyncioTestCase):
                     # logprobs should be None when not requested
                     self.assertIsNone(choice.get("logprobs"))
 
+    async def test_chat_completion_stream_generator_with_fallback_truncate(self):
+        """Processor-level fallback truncate sets finish_reason and aborts generation."""
+        request = ChatCompletionRequest(
+            messages=[{"role": "user", "content": "Hello"}],
+            stream=True,
+            n=2,
+        )
+        request_id = "test_request_fallback_truncate"
+        model_name = "test_model"
+        prompt_token_ids = [1, 2, 3]
+        prompt_tokens = "Hello world"
+
+        def make_response(choice_index, text, finished, fallback_truncated=False, skipped=False):
+            return {
+                "request_id": f"{request_id}::n::{choice_index}",
+                "error_code": 200,
+                "metrics": {
+                    "first_token_time": 1234567890,
+                    "inference_start_time": 1234567880,
+                    "arrival_time": 1234567890,
+                    "request_start_time": 1234567870,
+                },
+                "prompt_logprobs": None,
+                "outputs": {
+                    "send_idx": 0,
+                    "index": choice_index,
+                    "token_ids": [5],
+                    "text": text,
+                    "top_logprobs": None,
+                    "draft_top_logprobs": None,
+                    "tool_calls": None,
+                    "reasoning_content": "",
+                    "multipart": [{"type": "text", "text": text}],
+                    "skipped": skipped,
+                    "fallback_truncated": fallback_truncated,
+                },
+                "finished": finished,
+                "num_cached_tokens": 0,
+                "num_input_image_tokens": 0,
+                "num_input_video_tokens": 0,
+            }
+
+        # Processor signals truncate on choice 0 (text already corrected upstream).
+        truncated_response = make_response(0, "corrected", True, fallback_truncated=True)
+        normal_response = make_response(1, "normal", True)
+
+        mock_dealer = MagicMock()
+        mock_response_queue = AsyncMock()
+        mock_response_queue.get.side_effect = [truncated_response, normal_response]
+        self.chat_completion_handler.engine_client.connection_manager.get_connection = AsyncMock(
+            return_value=(mock_dealer, mock_response_queue)
+        )
+        self.chat_completion_handler.engine_client.connection_manager.cleanup_request = AsyncMock()
+        self.chat_completion_handler.engine_client.semaphore = MagicMock()
+        self.chat_completion_handler.engine_client.semaphore.acquire = AsyncMock(return_value=True)
+        self.chat_completion_handler.engine_client.semaphore.release = MagicMock()
+        self.chat_completion_handler.engine_client.check_model_weight_status = Mock(return_value=False)
+        self.chat_completion_handler.engine_client.abort = AsyncMock()
+
+        mock_response_processor = MagicMock()
+        mock_response_processor.enable_multimodal_content.return_value = False
+
+        def process_response_chat(response, **kwargs):
+            async def mock_async_generator():
+                yield response
+
+            return mock_async_generator()
+
+        mock_response_processor.process_response_chat.side_effect = process_response_chat
+
+        with patch(
+            "fastdeploy.entrypoints.openai.serving_chat.ChatResponseProcessor", return_value=mock_response_processor
+        ):
+            results = []
+            async for chunk in self.chat_completion_handler.chat_completion_stream_generator(
+                request, request_id, model_name, prompt_token_ids, prompt_tokens, max_tokens=100
+            ):
+                results.append(chunk)
+
+        choices = []
+        for result in results:
+            if result.strip() == "data: [DONE]":
+                continue
+            chunk_data = json.loads(result.replace("data: ", "").strip())
+            choices.extend(chunk_data.get("choices", []))
+
+        truncated_choices = [choice for choice in choices if choice.get("finish_reason") == "length"]
+        self.assertEqual(len(truncated_choices), 1)
+        self.assertEqual(truncated_choices[0]["index"], 0)
+        self.chat_completion_handler.engine_client.abort.assert_awaited_once()
+
     async def test_chat_completion_full_generator_with_prompt_logprobs(self):
         """Test chat_completion_full_generator with prompt_logprobs enabled"""
         # Create mock request with prompt_logprobs enabled

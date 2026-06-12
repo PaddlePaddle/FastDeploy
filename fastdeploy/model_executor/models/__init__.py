@@ -19,7 +19,7 @@ import inspect
 import os
 from pathlib import Path
 
-from paddleformers.transformers import PretrainedModel
+from paddleformers.transformers.model_utils import PretrainedModel
 
 from fastdeploy.plugins.model_register import load_model_register_plugins
 

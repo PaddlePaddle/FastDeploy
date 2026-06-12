@@ -31,11 +31,13 @@ def qk_rmsnorm_fused_kernel(
     k_weight_ptr,
     M,
     q_size,
-    kv_size,
+    k_size,
     eps,
     num_q_heads: tl.constexpr,
     num_kv_heads: tl.constexpr,
     head_dim: tl.constexpr,
+    head_dim_v: tl.constexpr,
+    head_dim_next_power_of_2: tl.constexpr,
     BLOCK_HEADS: tl.constexpr,
 ):
     pid = tl.program_id(0)
@@ -48,21 +50,23 @@ def qk_rmsnorm_fused_kernel(
         return
 
     offs_h = tl.arange(0, BLOCK_HEADS)
-    offs_d = tl.arange(0, head_dim)
+    offs_d = tl.arange(0, head_dim_next_power_of_2)
+
+    mask_d = offs_d[None, :] < head_dim
 
     head_ids = head_block * BLOCK_HEADS + offs_h
 
     q_mask = head_ids < num_q_heads
     kv_mask = head_ids < num_kv_heads
 
-    row_base = token_id * (q_size + 2 * kv_size)
+    row_base = token_id * (q_size + k_size + head_dim_v * num_kv_heads)
 
     # -------------------
     # Q RMSNorm
     # -------------------
     q_ptrs = x_ptr + row_base + head_ids[:, None] * head_dim + offs_d[None, :]
 
-    q = tl.load(q_ptrs, mask=q_mask[:, None], other=0.0).to(tl.float32)
+    q = tl.load(q_ptrs, mask=q_mask[:, None] & mask_d, other=0.0).to(tl.float32)
     q_var = tl.sum(q * q, axis=1) / head_dim
     q_hat = q * tl.rsqrt(q_var[:, None] + eps)
 
@@ -72,7 +76,7 @@ def qk_rmsnorm_fused_kernel(
     tl.store(
         q_ptrs,
         q_out,
-        mask=q_mask[:, None],
+        mask=q_mask[:, None] & mask_d,
     )
 
     # -------------------
@@ -80,7 +84,7 @@ def qk_rmsnorm_fused_kernel(
     # -------------------
     k_ptrs = x_ptr + row_base + q_size + head_ids[:, None] * head_dim + offs_d[None, :]
 
-    k = tl.load(k_ptrs, mask=kv_mask[:, None], other=0.0).to(tl.float32)
+    k = tl.load(k_ptrs, mask=kv_mask[:, None] & mask_d, other=0.0).to(tl.float32)
     k_var = tl.sum(k * k, axis=1) / head_dim
     k_hat = k * tl.rsqrt(k_var[:, None] + eps)
 
@@ -90,7 +94,7 @@ def qk_rmsnorm_fused_kernel(
     tl.store(
         k_ptrs,
         k_out,
-        mask=kv_mask[:, None],
+        mask=kv_mask[:, None] & mask_d,
     )
 
 
@@ -100,14 +104,20 @@ def qk_rmsnorm_fused(
     k_norm_weight,
     eps,
     q_size,
-    kv_size,
+    k_size,
     head_dim,
+    head_dim_v=None,
 ):
     assert qkv_out.ndim == 2
     M, _ = qkv_out.shape
 
+    if head_dim_v is None:
+        head_dim_v = head_dim
+
     num_q_heads = q_size // head_dim
-    num_kv_heads = kv_size // head_dim
+    num_kv_heads = k_size // head_dim
+
+    assert qkv_out.shape[-1] == q_size + k_size + head_dim_v * num_kv_heads
 
     BLOCK_HEADS = 4 if num_q_heads <= 32 else 8
 
@@ -119,12 +129,13 @@ def qk_rmsnorm_fused(
         k_weight_ptr=k_norm_weight,
         M=M,
         q_size=q_size,
-        kv_size=kv_size,
+        k_size=k_size,
         eps=eps,
         num_q_heads=num_q_heads,
         num_kv_heads=num_kv_heads,
         head_dim=head_dim,
+        head_dim_v=head_dim_v,
+        head_dim_next_power_of_2=triton.next_power_of_2(head_dim),
         BLOCK_HEADS=BLOCK_HEADS,
         num_warps=2,
     )
-    return qkv_out

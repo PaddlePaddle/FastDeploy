@@ -123,6 +123,37 @@ class TestChatResponseProcessor(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(results, [])
         self.assertEqual(self.processor_mm._mm_buffer, [[[33, 44]]])
 
+    async def test_streaming_text_mm_output_keeps_output_fallback_enabled(self):
+        request_outputs = [{"request_id": "req4", "outputs": {"decode_type": 0, "token_ids": [1], "text": "raw"}}]
+
+        results = [
+            r
+            async for r in self.processor_mm.process_response_chat(
+                request_outputs, stream=True, include_stop_str_in_output=False, request=None
+            )
+        ]
+
+        self.assertEqual(results[0]["outputs"]["multipart"][0]["text"], "raw")
+        call_kwargs = self.mock_data_processor.process_response_dict.call_args.kwargs
+        self.assertNotIn("disable_output_fallback", call_kwargs)
+
+    async def test_non_streaming_text_mm_output_keeps_output_fallback_enabled(self):
+        request_outputs = [
+            {"request_id": "req5", "outputs": {"decode_type": 0, "token_ids": [10], "text": "raw"}},
+            {"request_id": "req5", "outputs": {"decode_type": 0, "token_ids": [2], "text": "done"}},
+        ]
+
+        results = [
+            r
+            async for r in self.processor_mm.process_response_chat(
+                request_outputs, stream=False, include_stop_str_in_output=False, request=None
+            )
+        ]
+
+        self.assertEqual(results[0]["outputs"]["multipart"][0]["text"], "done")
+        call_kwargs = self.mock_data_processor.process_response_dict.call_args.kwargs
+        self.assertNotIn("disable_output_fallback", call_kwargs)
+
     async def test_non_streaming_accumulate_and_emit(self):
         """非流式模式：等 eos_token_id 才输出 multipart（text+image）"""
         request_outputs = [

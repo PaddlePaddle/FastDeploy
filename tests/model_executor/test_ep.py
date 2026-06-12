@@ -494,6 +494,7 @@ def test_eprunner_moe_select_topk_without_redundant(monkeypatch):
         redundant_table_manger=None,
         topk_method="aux",
         gate_correction_bias=None,
+        top_k=2,
     )
     gate_out = paddle.randn([1, 4], dtype="float32")
 

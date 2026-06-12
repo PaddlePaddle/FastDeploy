@@ -403,6 +403,31 @@ class TestRequestOutputFromDict(unittest.TestCase):
         self.assertIsNone(request_output.outputs)
         self.assertIsNone(request_output.metrics)
 
+    def test_completion_output_to_dict_preserves_serving_fields(self):
+        output = CompletionOutput(
+            index=0,
+            send_idx=1,
+            token_ids=[100, 200],
+            text="delta",
+            completion_tokens="delta",
+            multipart=[{"type": "text", "text": "delta"}],
+            num_image_tokens=3,
+            fallback_truncated=True,
+            skipped=True,
+        )
+
+        output_dict = output.to_dict()
+        restored = CompletionOutput.from_dict(output_dict)
+
+        self.assertIn("tool_calls", output_dict)
+        self.assertEqual(output_dict["completion_tokens"], "delta")
+        self.assertEqual(output_dict["multipart"], [{"type": "text", "text": "delta"}])
+        self.assertEqual(output_dict["num_image_tokens"], 3)
+        self.assertTrue(output_dict["fallback_truncated"])
+        self.assertTrue(output_dict["skipped"])
+        self.assertTrue(restored.fallback_truncated)
+        self.assertTrue(restored.skipped)
+
 
 if __name__ == "__main__":
     unittest.main()

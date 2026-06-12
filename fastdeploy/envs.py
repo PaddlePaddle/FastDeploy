@@ -190,6 +190,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # "Enable FP8 calibration on HPU"
     "FD_HPU_MEASUREMENT_MODE": lambda: os.getenv("FD_HPU_MEASUREMENT_MODE", "0"),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    # Timeout (seconds) for D to reclaim preallocated blocks if P never follows through. 0 to disable.
+    "FD_DECODE_PREALLOC_BLOCK_TIMEOUT": lambda: int(os.getenv("FD_DECODE_PREALLOC_BLOCK_TIMEOUT", "1200")),
+    "FD_MAX_INFLIGHT_PREFILL": lambda: int(os.getenv("FD_MAX_INFLIGHT_PREFILL", "20")),
     "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
         os.getenv("FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE", "1")
     ),
@@ -263,6 +266,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST": lambda: bool(
         int(os.getenv("FD_SAVE_OUTPUT_CACHE_FOR_PREEMPTED_REQUEST", "1"))
     ),
+    # Whether to use GDR CheckpointTransfer for dynamic weight updates.
+    "FD_USE_GDR_CHECKPOINT_TRANSFER": lambda: bool(int(os.getenv("FD_USE_GDR_CHECKPOINT_TRANSFER", "0"))),
     # Whether to enable block-wise CUDA Graph capture/replay.
     # When enabled, individual layer forward methods decorated with @block_wise_cuda_graph_wrap
     # will be captured and replayed as CUDA Graphs for improved performance.
@@ -302,6 +307,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # When set to a valid JSON dict, metric labels are automatically enabled.
     # Example: '{"model_id":"my_model"}' adds model_id label to all metrics.
     "FD_DEFAULT_METRIC_LABEL_VALUES": lambda: os.getenv("FD_DEFAULT_METRIC_LABEL_VALUES", "{}"),
+    # Timeout for request output queue get operation in seconds
+    "FD_REQUEST_WAIT_TIMEOUT": lambda: int(os.getenv("FD_REQUEST_WAIT_TIMEOUT", "60")),
 }
 
 

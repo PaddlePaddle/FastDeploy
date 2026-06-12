@@ -14,19 +14,21 @@
 # limitations under the License.
 """
 
+import asyncio
 import gc
 import glob
 import os
 import re
 import time
 from multiprocessing.shared_memory import SharedMemory
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import numpy as np
 import paddle
 import yaml
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
 
@@ -52,10 +54,15 @@ class DynamicWeightManager:
             self.model_list = models
         self._capture_model_state()
         self.rdma_handle = None
-        if self.load_config.load_strategy == "rsync":
-            self.update_weights_by_rdma()
+        self.use_gdr_checkpoint_transfer = envs.FD_USE_GDR_CHECKPOINT_TRANSFER
+
+        if self.use_gdr_checkpoint_transfer:
+            self.update_weights_by_gdr()
         else:
-            self.update_parameters()
+            if self.load_config.load_strategy == "rsync":
+                self.update_weights_by_rdma()
+            else:
+                self.update_parameters()
         self.finalize_update()
 
         logger.info(
@@ -64,14 +71,20 @@ class DynamicWeightManager:
         )
 
     @paddle.no_grad()
-    def _capture_model_state(self):
+    def _capture_model_state(self, log_params: bool = True):
         """Capture and store initial model parameters state."""
+        self.state_dict = {}
         for model in self.model_list:
             for name, param in model.state_dict().items():
-                logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}, place={param.place}")
+                if log_params:
+                    logger.info(f"Model param: {name}, shape={param.shape}, dtype={param.dtype}, place={param.place}")
                 self.state_dict[name] = param
 
-    def update_weights_by_rdma(self, version: str = None, verify_checksum: bool = False):
+    def update_weights_by_rdma(
+        self,
+        version: str = None,
+        verify_checksum: bool = False,
+    ):
         def valid_parameters(old_state_dict, new_state_dict):
             is_valid = True
             for key in new_state_dict:
@@ -92,14 +105,7 @@ class DynamicWeightManager:
                     )
             return is_valid
 
-        bootstrap_load = version is None or version == ""
-        if bootstrap_load:
-            version = self.read_model_version_from_file()
-        if version is None or version == "":
-            raise Exception(
-                "rsync model version not set, please set it in 1) {model_version}/version.yaml "
-                "or 2) interface arguments 'version'"
-            )
+        version, bootstrap_load = self._resolve_weight_update_version(version)
 
         logger.info(
             f"START rank:{self.local_rank}/{self.nranks} update_weights_by_rdma, "
@@ -150,6 +156,164 @@ class DynamicWeightManager:
             "version": version,
             "rank": self.local_rank,
         }
+
+    def update_weights_by_gdr(
+        self, version: str = None, verify_checksum: bool = False, restore_cleared_params: bool = False
+    ):
+        """Unified weight update via CheckpointTransfer (supports GDR and IPC backends)."""
+        config = dict(self.fd_config.load_config.rsync_config or {})
+        is_ipc = self.load_config.load_strategy != "rsync"
+
+        if is_ipc:
+            step_id = version or "0"
+        else:
+            version, _ = self._resolve_weight_update_version(version)
+            step_id = version
+
+        logger.info(
+            f"START rank:{self.local_rank}/{self.nranks} update_weights_by_gdr, "
+            f"load_strategy:{self.load_config.load_strategy}, step_id:{step_id}"
+        )
+
+        from checkpoint_transfer.transfer import CheckpointTransfer
+
+        transfer_config = self._build_ct_transfer_config(config)
+        logger.info(f"CheckpointTransfer config:{transfer_config}")
+        ct_handle = CheckpointTransfer(transfer_config)
+
+        total_start = time.perf_counter()
+        asyncio.run(ct_handle.initialize())
+        try:
+            weights_iterator = ct_handle.receive_weights_sync(step_id=step_id, output_framework="paddle")
+
+            if restore_cleared_params:
+                for name, target_param in self.state_dict.items():
+                    if not target_param._is_initialized():
+                        paddle.empty(target_param.shape, dtype=target_param.dtype)._share_buffer_to(target_param)
+                        logger.debug(f"Restored cleared parameter storage before GDR checkpoint transfer load: {name}")
+            update_count, mtp_cache_count = self._load_models_from_weight_iterator(weights_iterator)
+        finally:
+            asyncio.run(ct_handle.cleanup())
+        self._capture_model_state(log_params=False)
+        total_cost = time.perf_counter() - total_start
+        logger.info(
+            f"END update_weights_by_gdr, cost {total_cost:.2f} seconds, "
+            f"weights:{update_count}, mtp_cached_weights:{mtp_cache_count}, "
+            f"step_id:{step_id}, local_rank:{self.local_rank}"
+        )
+        return {
+            "update_cost": total_cost,
+            "total_cost": total_cost,
+            "version": step_id,
+            "rank": self.local_rank,
+            "update_count": update_count,
+            "mtp_cache_count": mtp_cache_count,
+        }
+
+    def _build_ct_transfer_config(self, config: dict):
+        from dataclasses import fields
+
+        from checkpoint_transfer.config import Phase1Backend, Role, TransferConfig
+
+        transfer_config = dict(config)
+        if "device_name" in transfer_config and "device" not in transfer_config:
+            transfer_config["device"] = transfer_config.pop("device_name")
+        else:
+            transfer_config.pop("device_name", None)
+
+        transfer_config["role"] = Role.INFERENCE
+
+        if self.load_config.load_strategy == "rsync":
+            node_index = int(transfer_config.pop("index", 0))
+            transfer_config["global_rank"] = node_index * self.nranks + self.local_rank
+            transfer_config["phase1_backend"] = Phase1Backend.GPU_DIRECT
+            transfer_config["group_size"] = int(transfer_config.get("group_size", self.nranks))
+        else:
+            transfer_config.pop("index", None)
+            gpu_id = int(os.getenv("FLAGS_selected_gpus", "0"))
+            transfer_config["global_rank"] = gpu_id
+            transfer_config["phase1_backend"] = Phase1Backend.IPC
+            transfer_config["group_size"] = int(transfer_config.get("group_size", self.nranks))
+            transfer_config["qsize"] = int(transfer_config.get("qsize", 2))
+
+        transfer_config_keys = {field.name for field in fields(TransferConfig)}
+        transfer_config = {key: value for key, value in transfer_config.items() if key in transfer_config_keys}
+        return TransferConfig(**transfer_config)
+
+    def _resolve_weight_update_version(self, version: Optional[str]) -> Tuple[str, bool]:
+        bootstrap_load = version is None or version == ""
+        if bootstrap_load:
+            version = self.read_model_version_from_file()
+        if version is None or version == "":
+            raise Exception(
+                "rsync model version not set, please set it in 1) {model_version}/version.yaml "
+                "or 2) interface arguments 'version'"
+            )
+        return version, bootstrap_load
+
+    def _load_models_from_weight_iterator(
+        self,
+        weights_iterator: Iterable[Tuple[str, Any]],
+    ) -> Tuple[int, int]:
+        update_count = 0
+
+        if len(self.model_list) == 1:
+
+            def count_weights():
+                nonlocal update_count
+                for item in weights_iterator:
+                    update_count += 1
+                    yield item
+
+            self.model_list[0].load_weights(count_weights())
+            return update_count, 0
+
+        mtp_models = self.model_list[1:]
+        config = self.fd_config.load_config.rsync_config or {}
+        mtp_chunk_size = max(1, int(config.get("gdr_mtp_chunk_size", 16)))
+        mtp_chunk: List[Tuple[str, Any]] = []
+        mtp_cache_count = 0
+        mtp_weight_tokens = ["mtp_", "mtp_block"]
+        for model in mtp_models:
+            model_config = getattr(getattr(model, "fd_config", None), "model_config", None)
+            start_layer = getattr(model, "mtp_start_layer_idx", None)
+            num_layers = getattr(model, "num_mtp_layers", None)
+            start_layer = start_layer if start_layer is not None else getattr(model_config, "start_layer_index", None)
+            num_layers = (
+                num_layers if num_layers is not None else getattr(model_config, "num_nextn_predict_layers", None)
+            )
+            if start_layer is None or num_layers is None:
+                continue
+            for layer_id in range(int(start_layer), int(start_layer) + int(num_layers)):
+                mtp_weight_tokens.append(f"layers.{layer_id}.")
+                mtp_weight_tokens.append(f".layers.{layer_id}.")
+
+        def flush_mtp_chunk():
+            nonlocal mtp_chunk
+            if not mtp_chunk:
+                return
+            for model in mtp_models:
+                model.load_weights(iter(mtp_chunk))
+            mtp_chunk = []
+
+        def cache_mtp_weights():
+            nonlocal update_count, mtp_cache_count
+            for item in weights_iterator:
+                name, _ = item
+                update_count += 1
+                if any(token in name for token in mtp_weight_tokens):
+                    mtp_chunk.append(item)
+                    mtp_cache_count += 1
+                yield item
+                if len(mtp_chunk) >= mtp_chunk_size:
+                    flush_mtp_chunk()
+
+        self.model_list[0].load_weights(cache_mtp_weights())
+        flush_mtp_chunk()
+        if mtp_cache_count == 0:
+            raise ValueError("No MTP weights were cached from the GDR stream for auxiliary model loading.")
+
+        return update_count, mtp_cache_count
 
     def update_parameters(self, pid: int = 0, restart_process_group=False) -> None:
         """Core method to update model parameters based on strategy."""
@@ -414,7 +578,7 @@ class DynamicWeightManager:
         if src.shape != dst.shape:
             raise ValueError(f"Shape mismatch for {name}: {src.shape} vs {dst.shape}")
 
-    def finalize_update(self, pid: int = 0):
+    def finalize_update(self, pid: Optional[int] = None):
         """Finalize update process with verification."""
         self._verify_parameters("update")
 
@@ -479,8 +643,10 @@ class DynamicWeightManager:
             f"current_reserved: {curr_reserved:.2f}GB"
         )
 
-    def _update_shared_status(self, pid: int, status: int) -> None:
+    def _update_shared_status(self, pid: Optional[int], status: int) -> None:
         """Update shared memory status flag for inter-process communication."""
+        if pid is None:
+            pid = self.parallel_config.local_engine_worker_queue_port
         array = np.zeros([1], dtype=np.int32)
         shm = SharedMemory(create=False, size=array.nbytes, name=f"model_weights_status.{pid}")
         value = np.ndarray(array.shape, dtype=array.dtype, buffer=shm.buf)

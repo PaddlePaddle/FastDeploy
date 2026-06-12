@@ -131,6 +131,35 @@ def slice_fn(weight_or_parameter, output_dim, start, end, step=1):
     return weight_or_parameter
 
 
+def _is_gdr_checkpoint_transfer_dynamic_load_config(fd_config: FDConfig) -> bool:
+    load_config = fd_config.load_config
+    if not load_config.dynamic_load_weight:
+        return False
+    return envs.FD_USE_GDR_CHECKPOINT_TRANSFER
+
+
+def _copy_gdr_checkpoint_transfer_transposed_weight_attrs(src, dst):
+    attr_names = (
+        "weight_loader",
+        "output_dim",
+        "weight_need_transpose",
+        "is_distributed",
+        "split_axis",
+        "tp_row_bias",
+    )
+    for name in attr_names:
+        if hasattr(src, name):
+            setattr(dst, name, getattr(src, name))
+    if hasattr(src, "output_dim") and src.output_dim is not None:
+        dst.output_dim = not src.output_dim
+    dst.weight_need_transpose = not getattr(src, "weight_need_transpose", False)
+    if hasattr(src, "split_axis"):
+        if len(src.shape) == 2 and src.split_axis in (0, 1):
+            dst.split_axis = 1 - src.split_axis
+        elif len(src.shape) == 3 and src.split_axis in (1, 2):
+            dst.split_axis = 3 - src.split_axis
+
+
 def process_weight_transpose(layer, weight_name):
     weight = getattr(layer, weight_name)
     if len(weight.shape) == 2:
@@ -143,6 +172,8 @@ def process_weight_transpose(layer, weight_name):
         default_initializer=paddle.nn.initializer.Constant(0),
         is_bias=False,
     )
+    if _is_gdr_checkpoint_transfer_dynamic_load_config(layer.fd_config):
+        _copy_gdr_checkpoint_transfer_transposed_weight_attrs(weight, weight_tmp)
     if layer.fd_config.load_config.dynamic_load_weight or getattr(layer.fd_config.model_config, "enable_cache", False):
         free_tensor(weight)
         setattr(layer, weight_name, weight_tmp)
@@ -361,6 +392,8 @@ def default_weight_loader(fd_config: FDConfig = None) -> None:
             f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
         )
         loaded_weight = get_tensor(loaded_weight)
+        if not param._is_initialized():
+            param.initialize()
         param.copy_(loaded_weight, False)
 
     return fn
@@ -594,6 +627,10 @@ def try_import(modules, name=None, fail_msg=None):
 
 def has_flashinfer():
     return importlib.util.find_spec("flashinfer") is not None
+
+
+def is_paddlefleet_available():
+    return importlib.util.find_spec("paddlefleet") is not None
 
 
 @cache

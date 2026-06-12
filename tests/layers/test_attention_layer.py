@@ -22,7 +22,6 @@ import unittest
 
 import numpy as np
 import paddle
-import paddle.device.cuda.graphs as graphs
 
 from fastdeploy.config import (
     CacheConfig,
@@ -286,17 +285,19 @@ class TestAttentionPerformance(unittest.TestCase):
 
     def test_append_attn_backend_decode_performance_with_prefill(self):
         # Test parameters
-        test_steps = 100
+        test_steps = 1
 
-        prefill_batch_size = 1
-        prefill_seq_len = 4096 * 2
+        prefill_batch_size = 2
+        prefill_seq_len = 6400
+
+        paddle.seed(66)
 
         model_dir = self.model_dir
         tp_size = paddle.distributed.get_world_size()
         quantization = {
             "dense_quant_type": "block_wise_fp8",
             "moe_quant_type": "block_wise_fp8",
-            "kv_cache_quant_type": "float8_e4m3fn",
+            # "kv_cache_quant_type": "float8_e4m3fn",
         }
         fd_config = self.create_fd_config_from_model_path(
             model_dir, tensor_parallel_size=tp_size, quantization=quantization
@@ -314,6 +315,8 @@ class TestAttentionPerformance(unittest.TestCase):
             encoder_block_shape_q=64,
             decoder_block_shape_q=16,
         )
+        # this is a trick to support invoke forward_unitest!!
+        attn_backend.forward = attn_backend.forward_unitest
 
         num_layers = fd_config.model_config.num_hidden_layers
         attention_layer = [None] * num_layers
@@ -321,6 +324,8 @@ class TestAttentionPerformance(unittest.TestCase):
             attention_layer[i] = Ernie4_5_Attention(fd_config, layer_id=i, prefix="test_layer")
             state_dict = self.create_random_attention_state_dict(fd_config, prefix="test_layer")
             attention_layer[i].load_state_dict(state_dict)
+
+            attention_layer[i].attn.only_do_attn = True
 
         cache_quant_type_str = getattr(attention_layer[0].attn, "cache_quant_type_str", "none")
 
@@ -363,7 +368,7 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.stop()
 
         # return
-
+        # import paddle.profiler as profiler
         # p = profiler.Profiler(
         #     targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU],
         #     on_trace_ready=profiler.export_chrome_tracing("./profile_log"),
@@ -372,10 +377,10 @@ class TestAttentionPerformance(unittest.TestCase):
         # p.start()
         # p.step()
 
-        for decode_batch_size in [1, 2, 3, 4, 5, 10, 20, 40, 60, 80, 100, 128, 160, 192, 256]:
+        for decode_batch_size in [10]:
             forward_meta, hidden_states = self.create_forward_meta(
                 batch_size=decode_batch_size,
-                seq_len=10 * 1024,
+                seq_len=10230,
                 mode=ForwardMode.DECODE,
                 fd_config=fd_config,
                 attn_backend=attn_backend,
@@ -389,25 +394,32 @@ class TestAttentionPerformance(unittest.TestCase):
             # 必须要先预热一次！因为预处理被放到了第一层再做了！
             self.attn_forward(attention_layer, forward_meta, hidden_states)
 
-            attn_cuda_graphs = graphs.CUDAGraph()
-            attn_cuda_graphs.capture_begin()
+            # attn_cuda_graphs = graphs.CUDAGraph()
+            # attn_cuda_graphs.capture_begin()
 
-            self.attn_forward(attention_layer, forward_meta, hidden_states)
+            # self.attn_forward(attention_layer, forward_meta, hidden_states)
 
-            attn_cuda_graphs.capture_end()
+            # attn_cuda_graphs.capture_end()
 
             start_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
             end_events = [paddle.device.cuda.Event(enable_timing=True) for _ in range(test_steps)]
             for i in range(test_steps):
+                for _ in range(10):
+                    a = paddle.randn([1014, 1024, 1024])
+                    a = a + 1
                 start_events[i].record()
 
-                attn_cuda_graphs.replay()
+                # attn_cuda_graphs.replay()
+                self.attn_forward(attention_layer, forward_meta, hidden_states)
 
                 end_events[i].record()
+
+                paddle.device.synchronize()
+
             paddle.device.synchronize()
 
             times = np.array([round(s.elapsed_time(e), 1) for s, e in zip(start_events, end_events)])[1:]
-            print(times[-5:])
+            # print(decode_batch_size, times[-5:])
 
             del forward_meta
 
