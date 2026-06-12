@@ -181,11 +181,12 @@ class AppendAttentionBackend(AttentionBackend):
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         # head wise sliding window attention
-        self.window_size: int = getattr(fd_config.model_config, "window_size", 0)
+        self.sliding_window: int = getattr(fd_config.model_config, "sliding_window", 0)
         self.sink_size: int = getattr(fd_config.model_config, "sink_size", 0)
-        self.window_attn_skip_freq: int = getattr(fd_config.model_config, "window_attn_skip_freq", 0)
+        self.window_attn_skip_freq: list = getattr(fd_config.model_config, "window_attn_skip_freq", [0])
         self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
 
+        self.head_wise_full_hidden = 0
         if self.head_wise_swa_ratio > 0.0:
             self.head_wise_full_hidden = int((1 - self.head_wise_swa_ratio) * self.num_heads * self.head_dim)
 
@@ -319,7 +320,9 @@ class AppendAttentionBackend(AttentionBackend):
         if rope_already_applied and forward_meta.rotary_embs is not None:
             forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
 
-        sliding_window = self.window_size if self.window_size > 0 else layer.sliding_window
+        sliding_window = 0
+        if len(self.window_attn_skip_freq) > 1 and self.window_attn_skip_freq[layer.layer_id] == 1:
+            sliding_window = self.sliding_window if self.sliding_window > 0 else layer.sliding_window
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
