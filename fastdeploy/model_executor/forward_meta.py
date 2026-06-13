@@ -79,6 +79,7 @@ class ForwardMeta:
 
     # Attention backend object
     attn_backend: AttentionBackend = None
+    attn_backends: Optional[list[AttentionBackend]] = None
     # Forward mode used during attention
     forward_mode: ForwardMode = ForwardMode.MIXED
     # Attention mask

@@ -513,6 +513,7 @@ class PaddleFormersModelBase(nn.Layer):
             "rope_theta",
             "rope_scaling",
             "head_dim",
+            "v_head_dim",
             "rms_norm_eps",
             "rope_local_base_freq",  # Gemma3 specific
             "query_pre_attn_scalar",  # Gemma3 specific

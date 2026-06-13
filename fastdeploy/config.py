@@ -259,6 +259,8 @@ class ModelConfig:
 
         if not hasattr(self, "head_dim"):
             self.head_dim = self.hidden_size // self.num_attention_heads
+        if not hasattr(self, "v_head_dim"):
+            self.v_head_dim = self.head_dim
 
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)

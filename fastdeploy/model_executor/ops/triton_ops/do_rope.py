@@ -75,7 +75,7 @@ def do_rope(
     num_kv_heads = cache_k.shape[1]
     head_dim_v = cache_v.shape[-1]
     qkv_size = qkv_out.shape[-1]
-    num_q_heads = (qkv_size - head_dim_v * num_kv_heads) // head_dim_k - num_kv_heads
+    num_q_heads = (qkv_size - (head_dim_k + head_dim_v) * num_kv_heads) // head_dim_k
 
     M = qkv_out.shape[0]
     grid = (M,)
