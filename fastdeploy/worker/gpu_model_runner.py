@@ -1749,7 +1749,8 @@ class GPUModelRunner(ModelRunnerBase):
             decoder_block_shape_q=decoder_block_shape_q,
             decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
             num_heads=num_heads,
-            kv_num_heads=max(kv_num_heads_per_layer),
+            # This requires the largest possible group size, corresponding to the smallest kv-num-heads.
+            kv_num_heads=min(kv_num_heads_per_layer),
             block_size=self.fd_config.cache_config.block_size,
             head_dim=head_dim,
             dtype=self.model_config.dtype,
