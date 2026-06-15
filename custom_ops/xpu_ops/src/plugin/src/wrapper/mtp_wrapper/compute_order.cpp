@@ -22,6 +22,7 @@ __attribute__((global)) void ComputeOrderKernel(
     const int* base_model_seq_lens_this_time,
     const int* base_model_seq_lens_encoder,
     const int* accept_nums,
+    const bool* stop_flags,
     int* position_map,
     int* output_token_num,
     const int bsz,
@@ -38,6 +39,7 @@ static int cpu_wrapper(api::Context* ctx,
                        const int* base_model_seq_lens_this_time,
                        const int* base_model_seq_lens_encoder,
                        const int* accept_nums,
+                       const bool* stop_flags,
                        int* position_map,
                        int* output_token_num,
                        const int bsz,
@@ -48,6 +50,9 @@ static int cpu_wrapper(api::Context* ctx,
 
   // for support mix, encoder need set first
   for (int i = 0; i < bsz; ++i) {
+    if (stop_flags[i]) {
+      continue;
+    }
     int cur_seq_lens_encoder = seq_lens_encoder[i];
     if (cur_seq_lens_encoder > 0) {
       for (int j = 0; j < cur_seq_lens_encoder; j++) {
@@ -57,6 +62,9 @@ static int cpu_wrapper(api::Context* ctx,
   }
 
   for (int i = 0; i < bsz; ++i) {
+    if (stop_flags[i]) {
+      continue;
+    }
     int cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i];
     int cur_base_model_seq_lens_encoder = base_model_seq_lens_encoder[i];
     int cur_seq_lens_this_time = seq_lens_this_time[i];
@@ -99,6 +107,7 @@ static int xpu3_wrapper(api::Context* ctx,
                         const int* base_model_seq_lens_this_time,
                         const int* base_model_seq_lens_encoder,
                         const int* accept_nums,
+                        const bool* stop_flags,
                         int* position_map,
                         int* output_token_num,
                         const int bsz,
@@ -110,6 +119,7 @@ static int xpu3_wrapper(api::Context* ctx,
       base_model_seq_lens_this_time,
       base_model_seq_lens_encoder,
       accept_nums,
+      stop_flags,
       position_map,
       output_token_num,
       bsz,
@@ -125,6 +135,7 @@ int compute_order(api::Context* ctx,
                   const int* base_model_seq_lens_this_time,
                   const int* base_model_seq_lens_encoder,
                   const int* accept_nums,
+                  const bool* stop_flags,
                   int* position_map,
                   int* output_token_num,
                   const int bsz,
@@ -151,6 +162,7 @@ int compute_order(api::Context* ctx,
   WRAPPER_CHECK_PTR(ctx, int, bsz, base_model_seq_lens_this_time);
   WRAPPER_CHECK_PTR(ctx, int, bsz, base_model_seq_lens_encoder);
   WRAPPER_CHECK_PTR(ctx, int, bsz, accept_nums);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, stop_flags);
   WRAPPER_CHECK_PTR(ctx, int, input_token_num, position_map);
   WRAPPER_CHECK_PTR(ctx, int, 1, output_token_num);
 
@@ -161,6 +173,7 @@ int compute_order(api::Context* ctx,
                        base_model_seq_lens_this_time,
                        base_model_seq_lens_encoder,
                        accept_nums,
+                       stop_flags,
                        position_map,
                        output_token_num,
                        bsz,
@@ -173,6 +186,7 @@ int compute_order(api::Context* ctx,
                         base_model_seq_lens_this_time,
                         base_model_seq_lens_encoder,
                         accept_nums,
+                        stop_flags,
                         position_map,
                         output_token_num,
                         bsz,

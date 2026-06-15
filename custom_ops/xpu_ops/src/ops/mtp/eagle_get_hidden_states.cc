@@ -54,6 +54,7 @@ std::vector<paddle::Tensor> EagleGetHiddenStates(
       base_model_seq_lens_this_time.data<int>(),
       base_model_seq_lens_encoder.data<int>(),
       accept_nums.data<int>(),
+      stop_flags.data<bool>(),
       position_map.data<int>(),
       output_token_num.data<int>(),
       bsz,

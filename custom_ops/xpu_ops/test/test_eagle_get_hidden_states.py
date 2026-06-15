@@ -26,6 +26,7 @@ def ComputeOrderKernel(
     base_model_seq_lens_this_time,
     base_model_seq_lens_encoder,
     accept_nums,
+    stop_flags,
     position_map,
     output_token_num,
     bsz,
@@ -36,6 +37,8 @@ def ComputeOrderKernel(
     out_offset = 0
     # set encoder position map first
     for i in range(bsz):
+        if stop_flags[i]:
+            continue
         cur_seq_lens_encoder = seq_lens_encoder[i]
         cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i]
         if cur_seq_lens_encoder > 0:
@@ -45,6 +48,8 @@ def ComputeOrderKernel(
                 out_offset += 1
 
     for i in range(bsz):
+        if stop_flags[i]:
+            continue
         cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i]
         # cur_base_model_seq_lens_encoder = base_model_seq_lens_encoder[i]
         cur_seq_lens_this_time = seq_lens_this_time[i]
@@ -99,6 +104,7 @@ def eagle_get_hidden_states_ref(
         base_model_seq_lens_this_time,
         base_model_seq_lens_encoder,
         accept_nums,
+        stop_flags,
         position_map,
         output_token_num,
         bsz,
@@ -118,7 +124,7 @@ class TestEagleGetHiddenStates(unittest.TestCase):
         np.random.seed(2023)
         paddle.seed(2023)
         bs = 2
-        input_token_num = 10
+        input_token_num = 256
         dim_embed = 512
         actual_draft_token_num = np.random.randint(2, 6, dtype=np.int32)
 
@@ -129,7 +135,7 @@ class TestEagleGetHiddenStates(unittest.TestCase):
         base_model_seq_lens_encoder = np.random.randint(0, 2, bs, dtype=np.int32)
 
         seq_lens_decoder = np.random.randint(0, input_token_num // bs + 1, bs, dtype=np.int32)
-        stop_flags = np.random.randint(0, 2, bs, dtype=np.int32)
+        stop_flags = np.random.randint(0, 2, bs, dtype=np.int32).astype(bool)
 
         seq_lens_this_time_tensor = paddle.to_tensor(seq_lens_this_time, dtype=paddle.int32)
         seq_lens_encoder_tensor = paddle.to_tensor(seq_lens_encoder, dtype=paddle.int32)
@@ -138,7 +144,7 @@ class TestEagleGetHiddenStates(unittest.TestCase):
         base_model_seq_lens_encoder_tensor = paddle.to_tensor(base_model_seq_lens_encoder, dtype=paddle.int32)
 
         seq_lens_decoder_tensor = paddle.to_tensor(seq_lens_decoder, dtype=paddle.int32)
-        stop_flags_tensor = paddle.to_tensor(stop_flags, dtype=paddle.int32)
+        stop_flags_tensor = paddle.to_tensor(stop_flags, dtype=paddle.bool)
 
         input = np.random.randint(0, 10, (input_token_num, dim_embed), dtype=np.int32)
         input_tensor = paddle.to_tensor(input, dtype=paddle.float16)
