@@ -19,7 +19,7 @@
 
 template <paddle::DataType T>
 std::vector<paddle::Tensor> PrefillMLAWriteCache(
-    const AppendAttnMetaData& meta_data,
+    // const AppendAttnMetaData& meta_data,
     const paddle::Tensor& kv_nope,
     const paddle::Tensor& kv_pe,
     const paddle::Tensor& seq_lens,
@@ -36,13 +36,16 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
   typedef typename traits_::DataType DataType_;
   typedef typename traits_::data_t data_t;
 
-  auto max_blocks_per_seq = meta_data.max_blocks_per_seq;
-  auto num_tokens = meta_data.token_nums;
-  auto block_size = meta_data.block_size;
-  auto nope_size = meta_data.head_dims_v;
-  auto all_size = meta_data.head_dims;
-  int pe_size = all_size - nope_size;
-  auto kv_num_heads = meta_data.kv_num_heads;
+  const auto& kv_nope_dims = kv_nope.dims();
+  const auto& kv_cache_dims = (*kv_cache).dims();
+  auto max_blocks_per_seq = block_tables.dims()[1];
+  auto num_tokens = kv_nope_dims[0];
+  auto block_size = kv_cache_dims[2];
+  auto kv_num_heads = kv_cache_dims[1];
+  auto nope_size = 
+    kv_nope_dims[kv_nope_dims.size() - 1] / kv_num_heads;
+  auto all_size = kv_cache_dims[3];
+  int pe_size = all_size - nope_size;  
   const uint32_t elem_nums = num_tokens * kv_num_heads * all_size;
 
   constexpr int PackSize = 16 / sizeof(DataType_);
@@ -156,7 +159,6 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
   switch (kv_pe.dtype()) {
     case paddle::DataType::BFLOAT16: {
       return PrefillMLAWriteCache<paddle::DataType::BFLOAT16>(
-          meta_data,
           kv_nope,
           kv_pe,
           seq_lens,
@@ -172,7 +174,6 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     }
     case paddle::DataType::FLOAT16: {
       return PrefillMLAWriteCache<paddle::DataType::FLOAT16>(
-          meta_data,
           kv_nope,
           kv_pe,
           seq_lens,
