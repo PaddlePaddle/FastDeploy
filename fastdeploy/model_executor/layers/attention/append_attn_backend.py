@@ -176,14 +176,17 @@ class AppendAttentionBackend(AttentionBackend):
         self.num_heads: int = num_heads
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
+        self.v_head_dim: int = getattr(fd_config.model_config, "v_head_dim", self.head_dim)
+        self.external_norm_rope: bool = True if self.v_head_dim != self.head_dim else False
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         # head wise sliding window attention
-        self.window_size: int = getattr(fd_config.model_config, "window_size", 0)
+        self.sliding_window: int = getattr(fd_config.model_config, "sliding_window", 0)
         self.sink_size: int = getattr(fd_config.model_config, "sink_size", 0)
-        self.window_attn_skip_freq: int = getattr(fd_config.model_config, "window_attn_skip_freq", 0)
+        self.window_attn_skip_freq: list = getattr(fd_config.model_config, "window_attn_skip_freq", [0])
         self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
 
+        self.head_wise_full_hidden = 0
         if self.head_wise_swa_ratio > 0.0:
             self.head_wise_full_hidden = int((1 - self.head_wise_swa_ratio) * self.num_heads * self.head_dim)
 
@@ -290,7 +293,9 @@ class AppendAttentionBackend(AttentionBackend):
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             key_cache_shape[-1] = self.head_dim // 2
-        value_cache_shape = key_cache_shape
+        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.v_head_dim]
+        if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
+            value_cache_shape[-1] = self.v_head_dim // 2
         return key_cache_shape, value_cache_shape
 
     def forward_mixed(
@@ -307,50 +312,6 @@ class AppendAttentionBackend(AttentionBackend):
         """
         forward_mixed
         """
-
-        cache_k = forward_meta.caches[2 * layer.layer_id]
-        cache_v = forward_meta.caches[2 * layer.layer_id + 1]
-
-        from fastdeploy.model_executor.ops.triton_ops import (
-            do_rope,
-            qk_rmsnorm_fused,
-            write_cache,
-        )
-
-        if getattr(layer, "only_do_attn", False):
-            if getattr(layer, "q_norm_weight", None):
-                qk_rmsnorm_fused(
-                    qkv,
-                    getattr(layer, "q_norm_weight", None),
-                    getattr(layer, "k_norm_weight", None),
-                    getattr(layer, "rms_norm_eps", 1e-6),
-                    self.num_heads * cache_k.shape[3],
-                    cache_k.shape[1] * cache_k.shape[3],
-                    cache_v.shape[3],
-                )
-
-            assert forward_meta.rotary_embs.shape[0] == 2
-            do_rope(
-                qkv,
-                forward_meta.rotary_embs[0],
-                forward_meta.rotary_embs[1],
-                forward_meta.cu_seqlens_q,
-                forward_meta.seq_lens_decoder,
-                forward_meta.batch_id_per_token,
-                cache_k,
-                cache_v,
-            )
-
-            write_cache(
-                qkv,
-                cache_k,
-                cache_v,
-                forward_meta.cu_seqlens_q,
-                forward_meta.seq_lens_decoder,
-                forward_meta.batch_id_per_token,
-                forward_meta.block_tables,
-            )
-
         metadata = self.attention_metadata
 
         # - PaddleFormers fallback: rope_already_applied=True -> use identity RoPE (cos=1, sin=0)
@@ -358,7 +319,9 @@ class AppendAttentionBackend(AttentionBackend):
         if rope_already_applied and forward_meta.rotary_embs is not None:
             forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
 
-        sliding_window = self.window_size if self.window_size > 0 else layer.sliding_window
+        sliding_window = 0
+        if len(self.window_attn_skip_freq) > 1 and self.window_attn_skip_freq[layer.layer_id] == 1:
+            sliding_window = self.sliding_window if self.sliding_window > 0 else layer.sliding_window
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
@@ -392,7 +355,8 @@ class AppendAttentionBackend(AttentionBackend):
             cache_k_scales = getattr(layer, "cache_k_scale", None)
             cache_v_scales = getattr(layer, "cache_v_scale", None)
 
-        if layer.layer_id == 0:
+        self.num_key_value_heads_list = getattr(self.fd_config.model_config, "num_key_value_heads_list", None)
+        if layer.layer_id == 0 or self.num_key_value_heads_list is not None:
             get_block_shape_and_split_kv_block(
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
@@ -413,6 +377,47 @@ class AppendAttentionBackend(AttentionBackend):
                 self.decoder_block_shape_q,
                 self.group_size,
                 self.block_size,
+            )
+
+        from fastdeploy.model_executor.ops.triton_ops import (
+            do_rope,
+            qk_rmsnorm_fused,
+            write_cache,
+        )
+
+        if self.external_norm_rope:
+            if q_norm_weight is not None and k_norm_weight is not None:
+                qk_rmsnorm_fused(
+                    qkv,
+                    q_norm_weight,
+                    k_norm_weight,
+                    getattr(layer, "rms_norm_eps", 1e-6),
+                    self.num_heads * cache_k.shape[3],
+                    cache_k.shape[1] * cache_k.shape[3],
+                    cache_k.shape[3],
+                    cache_v.shape[3],
+                )
+
+            assert forward_meta.rotary_embs.shape[0] == 2
+            do_rope(
+                qkv,
+                forward_meta.rotary_embs[0],
+                forward_meta.rotary_embs[1],
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_decoder,
+                forward_meta.batch_id_per_token,
+                cache_k,
+                cache_v,
+            )
+
+            write_cache(
+                qkv,
+                cache_k,
+                cache_v,
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_decoder,
+                forward_meta.batch_id_per_token,
+                forward_meta.block_tables,
             )
 
         if self.use_output:
@@ -563,7 +568,7 @@ class AppendAttentionBackend(AttentionBackend):
                 sliding_window,
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
-                getattr(layer, "only_do_attn", False),
+                self.external_norm_rope,  # if True is means only_do_attn
             )
         return res
 
@@ -585,7 +590,7 @@ class AppendAttentionBackend(AttentionBackend):
         cache_k = forward_meta.caches[2 * layer.layer_id]
         cache_v = forward_meta.caches[2 * layer.layer_id + 1]
 
-        head_dim_q = 192
+        head_dim_q = 128
         head_dim_v = 128
 
         forward_meta.caches[2 * layer.layer_id] = paddle.randn(cache_k.shape[:3] + [head_dim_q])

@@ -242,10 +242,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # Initialize attention Backend
-        # NOTE(gonshaotian): Currently, all attention layers share one attention backend instance.
-        # In the future, we will expand it as a list.
         self.attn_backends: list[AttentionBackend] = []
-        # self.attn_metadatas: list[AttentionMetadata] = []
         self._initialize_attn_backend()
 
         # Forward meta store the global meta information of the forward
@@ -1468,6 +1465,7 @@ class GPUModelRunner(ModelRunnerBase):
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
             attn_backend=self.attn_backends[0],
+            attn_backends=self.attn_backends,
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
             decoder_num_blocks_cpu=self.share_inputs["decoder_num_blocks_cpu"],
@@ -1560,7 +1558,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if self.enable_cache_manager_v1:
             self.share_inputs["caches"] = self.cache_controller.initialize_kv_cache(
-                attn_backend=self.attn_backends[0],
+                attn_backend=self.attn_backends,
                 num_gpu_blocks=self.num_gpu_blocks,
             )
             self.cache_kvs_map = self.cache_controller.get_kv_caches()
@@ -1597,17 +1595,18 @@ class GPUModelRunner(ModelRunnerBase):
             kv_cache_quant_type = "uint8"
             cache_type = "uint8"
 
-            # NOTE(changwenbin) Get dsa cache shape.
-            key_cache_shape, value_cache_shape, indexer_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+        key_cache_shapes = []
+        value_cache_shapes = []
+        indexer_cache_shapes = []
+        for attn_backend in self.attn_backends:
+            kv_cache_shape = attn_backend.get_kv_cache_shape(
                 max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
             )
-        else:
-            key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
-                max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
-            )
-            indexer_cache_shape = []
+            key_cache_shapes.append(kv_cache_shape[0])
+            value_cache_shapes.append(kv_cache_shape[1])
+            indexer_cache_shapes.append(kv_cache_shape[2] if self.dsa_cache else [])
         if kv_cache_quant_type == "block_wise_fp8":
-            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
+            kv_cache_scale_shapes = [[shape[0], shape[1], shape[2]] for shape in key_cache_shapes]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         # Check if gpu runner needs to create kv cache
@@ -1632,6 +1631,11 @@ class GPUModelRunner(ModelRunnerBase):
         cache_kvs_list = []
 
         for i in range(self.model_config.num_hidden_layers):
+            key_cache_shape = key_cache_shapes[i]
+            value_cache_shape = value_cache_shapes[i]
+            indexer_cache_shape = indexer_cache_shapes[i]
+            kv_cache_scale_shape = kv_cache_scale_shapes[i] if kv_cache_quant_type == "block_wise_fp8" else None
+
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
             key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
@@ -1727,10 +1731,8 @@ class GPUModelRunner(ModelRunnerBase):
         ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
-        self.model_config.kv_num_heads = max(
-            1,
-            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
-        )
+        kv_num_heads_per_layer = self._get_kv_num_heads_per_layer()
+        self.model_config.kv_num_heads = kv_num_heads_per_layer[0]
         head_dim = self.model_config.head_dim
 
         encoder_block_shape_q = 64
@@ -1747,7 +1749,8 @@ class GPUModelRunner(ModelRunnerBase):
             decoder_block_shape_q=decoder_block_shape_q,
             decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
             num_heads=num_heads,
-            kv_num_heads=self.model_config.kv_num_heads,
+            # This requires the largest possible group size, corresponding to the smallest kv-num-heads.
+            kv_num_heads=min(kv_num_heads_per_layer),
             block_size=self.fd_config.cache_config.block_size,
             head_dim=head_dim,
             dtype=self.model_config.dtype,
@@ -1766,16 +1769,37 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Get the attention backend
         attn_cls = get_attention_backend()
-        attn_backend = attn_cls(
-            self.fd_config,
-            kv_num_heads=self.model_config.kv_num_heads,
-            num_heads=num_heads,
-            head_dim=head_dim,
-            encoder_block_shape_q=encoder_block_shape_q,
-            decoder_block_shape_q=decoder_block_shape_q,
-        )
+        for kv_num_heads in kv_num_heads_per_layer:
+            attn_backend = attn_cls(
+                self.fd_config,
+                kv_num_heads=kv_num_heads,
+                num_heads=num_heads,
+                head_dim=head_dim,
+                encoder_block_shape_q=encoder_block_shape_q,
+                decoder_block_shape_q=decoder_block_shape_q,
+            )
+            self.attn_backends.append(attn_backend)
 
-        self.attn_backends.append(attn_backend)
+    def _get_kv_num_heads_per_layer(self) -> list[int]:
+        num_hidden_layers = self.model_config.num_hidden_layers
+        num_key_value_heads = getattr(self.model_config, "num_key_value_heads_list", None)
+        if num_key_value_heads is None:
+            kv_num_heads = max(
+                1,
+                int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
+            )
+            return [kv_num_heads] * num_hidden_layers
+
+        if len(num_key_value_heads) != num_hidden_layers:
+            raise ValueError(
+                f"num_key_value_heads_list length {len(num_key_value_heads)} "
+                f"does not match num_hidden_layers {num_hidden_layers}"
+            )
+
+        return [
+            max(1, int(layer_num_key_value_heads) // self.parallel_config.tensor_parallel_size)
+            for layer_num_key_value_heads in num_key_value_heads
+        ]
 
     def _dummy_pooler_run_task(
         self,
@@ -3003,7 +3027,9 @@ class GPUModelRunner(ModelRunnerBase):
         else:  # default
             byte_of_dtype = 2
 
-        hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
+        kv_num_heads_per_layer = self._get_kv_num_heads_per_layer()
+        v_head_dim = getattr(self.model_config, "v_head_dim", self.model_config.head_dim)
+        kv_hidden_dim = (self.model_config.head_dim + v_head_dim) * sum(kv_num_heads_per_layer)
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
         num_layers = (
             self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
@@ -3035,7 +3061,13 @@ class GPUModelRunner(ModelRunnerBase):
                 * num_layers
             )
         else:
-            required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
+            if self.spec_method == SpecMethod.MTP:
+                kv_hidden_dim += (
+                    (self.model_config.head_dim + v_head_dim)
+                    * self.model_config.kv_num_heads
+                    * self.speculative_config.num_gpu_block_expand_ratio
+                )
+            required_memory = byte_of_dtype * self.cache_config.block_size * kv_hidden_dim  # k + v
         return required_memory
 
     def clear_cache(self, profile=False):

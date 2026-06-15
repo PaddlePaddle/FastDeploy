@@ -92,7 +92,7 @@ def append_attention(
     """
     if current_platform.is_cuda():
 
-        if sliding_window > 0 and head_wise_full_hidden > 0:
+        if sliding_window > 0:
             out_swa = append_attention_gpu(
                 qkv.clone(),
                 key_cache,
@@ -150,8 +150,11 @@ def append_attention(
                 sink_size,
                 only_do_attn,
             )
-            sliding_window = 0
-            sink_size = 0
+            if head_wise_full_hidden > 0:
+                sliding_window = 0
+                sink_size = 0
+            else:
+                return out_swa
 
         out = append_attention_gpu(
             qkv,
@@ -213,7 +216,6 @@ def append_attention(
         if head_wise_full_hidden > 0:
             out_swa[:, :head_wise_full_hidden] = out[:, :head_wise_full_hidden]
             return out_swa
-
         return out
     else:
         raise NotImplementedError

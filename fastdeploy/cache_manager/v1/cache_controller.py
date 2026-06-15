@@ -18,6 +18,7 @@ import ctypes
 import os
 import threading
 import time
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -104,6 +105,7 @@ class CacheController(KVCacheBase):
 
         # Attention backend
         self.attn_backend = None
+        self.attn_backends = None
 
     @property
     def write_policy(self) -> Optional[str]:
@@ -285,7 +287,9 @@ class CacheController(KVCacheBase):
         Returns:
             cache_kvs_list: Flat list of allocated tensors in layer/role order.
         """
-        self.attn_backend = attn_backend
+        attn_backends = self._normalize_attn_backends(attn_backend)
+        self.attn_backend = attn_backends[0]
+        self.attn_backends = attn_backends
 
         kv_cache_quant_type = self._get_kv_cache_quant_type()
         cache_dtype = "uint8" if kv_cache_quant_type is not None else self.model_config.dtype
@@ -295,18 +299,19 @@ class CacheController(KVCacheBase):
             f"backend={type(self.attn_backend).__name__}, kv_cache_quant_type={kv_cache_quant_type}"
         )
 
-        caches = self.attn_backend.create_kv_cache(
-            num_layers=self._num_layers,
-            num_blocks=num_gpu_blocks,
-            cache_dtype=cache_dtype,
-            kv_cache_quant_type=kv_cache_quant_type,
-        )
-
         cache_kvs_list: List[Any] = []
-        for (role, layer_idx), tensor in caches.items():
-            name = self._format_cache_name(role, layer_idx)
-            self.cache_kvs_map[name] = tensor
-            cache_kvs_list.append(tensor)
+        for layer_idx, layer_attn_backend in enumerate(attn_backends):
+            caches = layer_attn_backend.create_kv_cache(
+                num_layers=1,
+                num_blocks=num_gpu_blocks,
+                cache_dtype=cache_dtype,
+                kv_cache_quant_type=kv_cache_quant_type,
+                layer_offset=layer_idx,
+            )
+            for (role, cache_layer_idx), tensor in caches.items():
+                name = self._format_cache_name(role, cache_layer_idx)
+                self.cache_kvs_map[name] = tensor
+                cache_kvs_list.append(tensor)
 
         paddle.device.cuda.empty_cache()
         logger.info("kv cache is initialized!")
@@ -315,7 +320,7 @@ class CacheController(KVCacheBase):
         self._transfer_manager.set_cache_kvs_map(self.cache_kvs_map)
 
         # Initialize host cache
-        self.initialize_host_cache(self.attn_backend)
+        self.initialize_host_cache(self.attn_backends)
 
         return cache_kvs_list
 
@@ -498,6 +503,15 @@ class CacheController(KVCacheBase):
             logger.warning(f"[CacheController] NUMA binding failed: {e}")
             return False
 
+    def _normalize_attn_backends(self, attn_backend: Any) -> Sequence[Any]:
+        if isinstance(attn_backend, Sequence) and not isinstance(attn_backend, (str, bytes)):
+            if len(attn_backend) != self._num_layers:
+                raise ValueError(
+                    f"attn_backend length {len(attn_backend)} does not match num_layers {self._num_layers}"
+                )
+            return attn_backend
+        return [attn_backend] * self._num_layers
+
     def initialize_host_cache(
         self,
         attn_backend: Any,
@@ -533,35 +547,39 @@ class CacheController(KVCacheBase):
         cache_dtype = self.cache_config.cache_dtype
         cache_item_bytes = self.cache_config.get_cache_bytes(cache_dtype)
         num_layers = self._num_layers + self.config.speculative_config.num_extra_cache_layer
+        attn_backends = self._normalize_attn_backends(attn_backend)
 
         logger.info(
             f"[CacheController] Initializing swap space (Host cache) for {num_layers} layers "
-            f"(num_host_blocks={num_host_blocks}, backend={type(attn_backend).__name__}, "
+            f"(num_host_blocks={num_host_blocks}, backend={type(attn_backends[0]).__name__}, "
             f"kv_cache_quant_type={kv_cache_quant_type})."
         )
 
-        try:
-            host_caches = attn_backend.create_host_kv_cache(
-                num_layers=num_layers,
-                num_blocks=num_host_blocks,
-                cache_item_bytes=cache_item_bytes,
-                kv_cache_quant_type=kv_cache_quant_type,
-            )
-        except NotImplementedError as e:
-            logger.warning(
-                f"[CacheController] Host kv cache offload not supported by "
-                f"{type(attn_backend).__name__}: {e}. Skipping swap space setup."
-            )
-            return
+        for layer_idx in range(num_layers):
+            layer_attn_backend = attn_backends[layer_idx] if layer_idx < len(attn_backends) else attn_backends[-1]
+            try:
+                host_caches = layer_attn_backend.create_host_kv_cache(
+                    num_layers=1,
+                    num_blocks=num_host_blocks,
+                    cache_item_bytes=cache_item_bytes,
+                    kv_cache_quant_type=kv_cache_quant_type,
+                    layer_offset=layer_idx,
+                )
+            except NotImplementedError as e:
+                logger.warning(
+                    f"[CacheController] Host kv cache offload not supported by "
+                    f"{type(layer_attn_backend).__name__}: {e}. Skipping swap space setup."
+                )
+                return
 
-        for (role, layer_idx), ptr in host_caches.items():
-            name = self._format_cache_name(role, layer_idx)
-            self.host_cache_kvs_map[name] = ptr
+            for (role, cache_layer_idx), ptr in host_caches.items():
+                name = self._format_cache_name(role, cache_layer_idx)
+                self.host_cache_kvs_map[name] = ptr
 
         logger.info(f"[CacheController] Swap space (Host cache) is ready for {num_layers} layers!")
 
         # Preserve the shape/num_blocks bookkeeping that downstream code may read.
-        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
+        key_cache_shape, value_cache_shape = attn_backends[0].get_kv_cache_shape(
             max_num_blocks=num_host_blocks, kv_cache_quant_type=kv_cache_quant_type
         )
         self._host_key_cache_shape = [num_host_blocks] + list(key_cache_shape[1:])
