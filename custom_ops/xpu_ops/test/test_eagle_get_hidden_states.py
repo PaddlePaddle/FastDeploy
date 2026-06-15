@@ -48,8 +48,9 @@ def ComputeOrderKernel(
                 out_offset += 1
 
     for i in range(bsz):
-        if stop_flags[i]:
-            continue
+        # Do NOT skip stopped slots here: see comment in compute_order.xpu loop 2.
+        # The branches below already handle stopped slots correctly via the
+        # base_model_seq_lens_this_time check.
         cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i]
         # cur_base_model_seq_lens_encoder = base_model_seq_lens_encoder[i]
         cur_seq_lens_this_time = seq_lens_this_time[i]

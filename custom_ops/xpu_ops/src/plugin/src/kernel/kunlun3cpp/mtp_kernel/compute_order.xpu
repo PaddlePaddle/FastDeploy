@@ -84,9 +84,7 @@ __global__ void ComputeOrderKernel(const int* seq_lens_this_time,
     GM2LM_ASYNC(
         seq_lens_this_time + i, lm_seq_lens_this_time, read_size * sizeof(int));
     GM2LM_ASYNC(accept_nums + i, lm_accept_nums, read_size * sizeof(int));
-    GM2LM_ASYNC(
-        seq_lens_encoder + i, lm_seq_lens_encoder, read_size * sizeof(int));
-    GM2LM(stop_flags + i, lm_stop_flags, read_size * sizeof(bool));
+    GM2LM(seq_lens_encoder + i, lm_seq_lens_encoder, read_size * sizeof(int));
     for (int j = 0; j < read_size; j++) {
       int cur_base_model_seq_lens_this_time =
           lm_base_model_seq_lens_this_time[j];

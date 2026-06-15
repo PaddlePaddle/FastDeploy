@@ -62,11 +62,10 @@ static int cpu_wrapper(api::Context* ctx,
   }
 
   for (int i = 0; i < bsz; ++i) {
-    if (stop_flags[i]) {
-      continue;
-    }
+    // Do NOT skip stopped slots here: see comment in compute_order.xpu loop 2.
+    // Stopped slots may still have base_model_seq_lens_this_time > 0, and the
+    // branches below correctly advance in_offset without writing position_map.
     int cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i];
-    int cur_base_model_seq_lens_encoder = base_model_seq_lens_encoder[i];
     int cur_seq_lens_this_time = seq_lens_this_time[i];
     int accept_num = accept_nums[i];
     int cur_seq_lens_encoder = seq_lens_encoder[i];
@@ -74,27 +73,19 @@ static int cpu_wrapper(api::Context* ctx,
     // 1. eagle encoder. Base step=1
     if (cur_seq_lens_encoder > 0) {
       continue;
-      // 2. base model encoder. Base step=0
-    } else if (cur_base_model_seq_lens_encoder != 0) {
-      // nothing happens
-      // 3. New end
+      // 2. Base model stop at last verify-step.
     } else if (cur_base_model_seq_lens_this_time != 0 &&
                cur_seq_lens_this_time == 0) {
       in_offset += cur_base_model_seq_lens_this_time;
-      // 4. stopped
+      // 3. stopped
     } else if (cur_base_model_seq_lens_this_time == 0 &&
                cur_seq_lens_this_time == 0) /* end */ {
       // nothing happens
     } else {
-      if (accept_num <=
-          actual_draft_token_num) /*Accept partial draft tokens*/ {
-        position_map[in_offset + accept_num - 1] = out_offset++;
-        in_offset += cur_base_model_seq_lens_this_time;
-      } else /*Accept all draft tokens*/ {
-        position_map[in_offset + accept_num - 2] = out_offset++;
-        position_map[in_offset + accept_num - 1] = out_offset++;
-        in_offset += cur_base_model_seq_lens_this_time;
+      for (int j = 0; j < accept_num; j++) {
+        position_map[in_offset + j] = out_offset++;
       }
+      in_offset += cur_base_model_seq_lens_this_time;
     }
   }
   output_token_num[0] = out_offset;
