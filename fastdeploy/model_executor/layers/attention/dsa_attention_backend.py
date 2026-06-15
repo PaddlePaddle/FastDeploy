@@ -354,6 +354,8 @@ class DSAAttentionBackend(AttentionBackend):
         assert len(q.shape) == 3
         assert len(compressed_kv.shape) == 2
         assert len(k_pe.shape) == 3
+        assert k_pe.shape[1] == 1
+        assert compressed_kv.shape[0] == k_pe.shape[0]
         assert len(latent_cache.shape) == 4
 
         if current_platform.is_cuda():
@@ -370,7 +372,6 @@ class DSAAttentionBackend(AttentionBackend):
             "fp8_ds_mla",
         )
 
-        assert len(q.shape) == 3
         q_num_heads = q.shape[1]
         ceil64_num_heads = (q_num_heads + 63) // 64 * 64
 
@@ -382,11 +383,12 @@ class DSAAttentionBackend(AttentionBackend):
             else:
                 new_q = q
 
+            # concat for involing flash_mla_sparse_fwd!
             kv = paddle.concat([compressed_kv.unsqueeze(1), k_pe], axis=-1)
             fmha_out_prefill, _, __ = flash_mla.flash_mla_sparse_fwd(
-                new_q,  # q_input.contiguous(),
-                kv,  # kv.unsqueeze(1),
-                indexer_topk,  # indexer_top_k.unsqueeze(1),
+                new_q,
+                kv,
+                indexer_topk,
                 sm_scale=attn_softmax_scale,
             )
 
