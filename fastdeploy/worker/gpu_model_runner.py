@@ -1656,8 +1656,17 @@ class GPUModelRunner(ModelRunnerBase):
                     cache_type = "uint8"
                     kv_cache_quant_type = "uint8"
                 else:
+                    # Get kv cache dtype
                     cache_type = self.model_config.dtype
                     kv_cache_quant_type = None
+
+                    if (
+                        self.quant_config
+                        and hasattr(self.quant_config, "kv_cache_quant_type")
+                        and self.quant_config.kv_cache_quant_type is not None
+                    ):
+                        cache_type = "uint8"
+                        kv_cache_quant_type = self.quant_config.kv_cache_quant_type
 
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_cache_name)
