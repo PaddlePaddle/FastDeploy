@@ -645,6 +645,7 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "iluvatar_ops/paged_attn.cu",
                 "iluvatar_ops/prefill_fused_attn.cu",
                 "iluvatar_ops/mixed_fused_attn.cu",
+                "iluvatar_ops/mixed_reorder_hidden_states.cu",
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/w8a16_group_gemv.cu",
                 "iluvatar_ops/wi4a16_group_gemm.cu",

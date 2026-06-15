@@ -476,9 +476,9 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
         --model /data1/fastdeploy/PaddleOCR-VL \
         --port 8180 \
         --metrics-port 8471 \
-        --max-model-len 16384 \
-        --max-num-batched-tokens 16384 \
-        --max-num-seqs 240 \
+        --max-model-len 4096 \
+        --max-num-batched-tokens 4096 \
+        --max-num-seqs 256 \
         --block-size 16 \
         --workers 2 \
         --gpu-memory-utilization 0.7 \
@@ -549,9 +549,9 @@ python3 -m fastdeploy.entrypoints.openai.api_server \
         --model /data1/fastdeploy/PaddleOCR-VL-1.6 \
         --port 8180 \
         --metrics-port 8471 \
-        --max-model-len 16384 \
-        --max-num-batched-tokens 16384 \
-        --max-num-seqs 240 \
+        --max-model-len 4096 \
+        --max-num-batched-tokens 4096 \
+        --max-num-seqs 256 \
         --block-size 16 \
         --workers 2 \
         --gpu-memory-utilization 0.7 \
