@@ -966,10 +966,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
         #    Note: even when CPU cache (num_cpu_blocks > 0) is enabled, GPU runner still
         #    creates GPU cache tensors; cache transfer manager handles CPU<->GPU swap.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
-        )
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
             while cache_ready_signal.value[local_rank] != 1:

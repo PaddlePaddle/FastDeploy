@@ -14,9 +14,13 @@
 # limitations under the License.
 """
 
+import time
+
+import numpy as np
 import paddle
 
 from fastdeploy import envs
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.ops.gpu import (
@@ -436,13 +440,28 @@ class MTPProposerCUDA(MTPProposer):
         """
         Clear allocated cacheKV
         """
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
         )
-        if not create_cache_tensor:
-            for name, tensor in self.cache_kvs_map.items():
-                unset_data_ipc(tensor, name, True, False)
+
+        if not profile:
+            if create_cache_tensor:
+                if (
+                    self.fd_config.cache_config.num_cpu_blocks > 0
+                    or self.fd_config.cache_config.kvcache_storage_backend
+                ):
+                    while cache_ready_signal.value[local_rank] != 0:
+                        time.sleep(0.1)
+            else:
+                for name, tensor in self.cache_kvs_map.items():
+                    unset_data_ipc(tensor, name, True, False)
         self.cache_kvs_map.clear()
         del self.model_inputs["caches"]
         if self.forward_meta is not None:
