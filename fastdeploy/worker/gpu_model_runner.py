@@ -2925,7 +2925,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         if not profile:
             if create_cache_tensor:
-                if self.fd_config.cache_config.num_cpu_blocks > 0:
+                if (
+                    self.fd_config.cache_config.num_cpu_blocks > 0
+                    or self.fd_config.cache_config.kvcache_storage_backend
+                ):
                     logger.info("Waiting for cache transfer manager to unlink cuda ipc")
                     while self.cache_ready_signal.value[local_rank] != 0:
                         time.sleep(0.1)

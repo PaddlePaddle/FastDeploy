@@ -636,8 +636,8 @@ class EngineArgs:
             self.enable_prefix_caching = False
 
         if self.kvcache_storage_backend is not None:
-            if not self.enable_prefix_caching:
-                raise NotImplementedError("kvcache_storage_backend is only supported when enable_prefix_caching=True")
+            self.enable_prefix_caching = True
+            console_logger.info("kvcache_storage_backend is set, enable_prefix_caching=True automatically.")
             if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
                 raise NotImplementedError(
                     "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
