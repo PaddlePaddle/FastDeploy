@@ -894,12 +894,11 @@ class DeepseekV32DSAAttention(DeepseekV3MLAAttention):
         q_input = paddle.concat([q_nope_out.transpose([1, 0, 2]).contiguous(), query_pe], axis=-1)
 
         compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
-        kv = paddle.concat([compressed_kv, key_pe.squeeze(1)], axis=-1)
 
         # dsa attention
         fmha_out = self.dsa_attn(
             q=q_input.contiguous(),
-            k=kv.unsqueeze(1).contiguous(),
+            k=None,
             v=indexer_top_k.unsqueeze(1).contiguous(),
             qkv=None,
             compressed_kv=compressed_kv,
