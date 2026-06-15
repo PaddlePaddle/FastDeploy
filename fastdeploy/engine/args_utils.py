@@ -593,6 +593,8 @@ class EngineArgs:
             and not current_platform.is_maca()
         ):
             self.enable_prefix_caching = False
+        if self.splitwise_role == "decode":
+            self.enable_prefix_caching = False
         if not current_platform.is_cuda() or self.splitwise_role == "prefill":
             self.enable_overlap_schedule = False
         if self.enable_logprob:
