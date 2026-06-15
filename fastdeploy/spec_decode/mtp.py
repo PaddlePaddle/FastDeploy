@@ -439,6 +439,15 @@ class MTPProposer(Proposer):
         create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
+        )
+
         if not profile:
             if create_cache_tensor:
                 if (
@@ -446,7 +455,7 @@ class MTPProposer(Proposer):
                     or self.fd_config.cache_config.kvcache_storage_backend
                 ):
                     logger.info("Waiting for cache transfer manager to unlink cuda ipc")
-                    while self.cache_ready_signal.value[local_rank] != 0:
+                    while cache_ready_signal.value[local_rank] != 0:
                         time.sleep(0.1)
                     logger.info("Stop waiting! cache transfer manager has unlinked cuda ipc")
             else:
