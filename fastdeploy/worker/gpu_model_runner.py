@@ -308,6 +308,8 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_overlap_schedule:
             logger.info("Using overlap schedule")
         self.current_launch_token_num = 0
+        # swa config
+        self.window_attn_skip_freq = getattr(self.fd_config.model_config, "window_attn_skip_freq", None)
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
@@ -1598,7 +1600,8 @@ class GPUModelRunner(ModelRunnerBase):
         key_cache_shapes = []
         value_cache_shapes = []
         indexer_cache_shapes = []
-        for attn_backend in self.attn_backends:
+        for layer_id, attn_backend in enumerate(self.attn_backends):
+            attn_backend.layer_id = layer_id
             kv_cache_shape = attn_backend.get_kv_cache_shape(
                 max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
             )
@@ -1648,6 +1651,14 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(
                     f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"
                 )
+                # swa mla cache type
+                if self.mla_cache and self.window_attn_skip_freq is not None and self.window_attn_skip_freq[i] == 1:
+                    cache_type = "uint8"
+                    kv_cache_quant_type = "uint8"
+                else:
+                    cache_type = self.model_config.dtype
+                    kv_cache_quant_type = None
+
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_cache_name)
                 self.cache_kvs_map[key_cache_name] = key_cache
