@@ -335,6 +335,9 @@ class DSAAttentionBackend(AttentionBackend):
         """
         Mixed模式的前向传播
         """
+        if not forward_meta.max_len_tensor_cpu[1] and not forward_meta.max_len_tensor_cpu[2]:
+            return None
+
         res = DSAAttentionBackend.forward_static(
             q, v, compressed_kv, k_pe, forward_meta.caches[2 * layer.layer_id], forward_meta, self.attn_softmax_scale
         )

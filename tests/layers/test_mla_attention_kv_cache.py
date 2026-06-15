@@ -29,6 +29,8 @@ def _make_mla_backend(block_size=64, kv_lora_rank=512, qk_rope_head_dim=64):
     backend.block_size = block_size
     backend.kv_lora_rank = kv_lora_rank
     backend.qk_rope_head_dim = qk_rope_head_dim
+    backend.layer_id = 0
+    backend.window_attn_skip_freq = None
     return backend
 
 
