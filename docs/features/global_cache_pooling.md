@@ -48,6 +48,7 @@ Ready-to-use example scripts are available in [examples/cache_storage/](../../..
 |--------|----------|-------------|
 | `run.sh` | Multi-Instance | Two standalone instances sharing cache |
 | `run_03b_pd_storage.sh` | PD Disaggregation | P+D instances with global cache pooling |
+| `run_ha.sh` | High Availability | etcd + multi-master leader election, verifies failover after killing the leader |
 
 ## Prerequisites
 
@@ -232,7 +233,7 @@ mooncake_master \
 **Step 2: Start Router**
 
 ```bash
-python -m fastdeploy.golang_router.launch \
+python -m fastdeploy.router.launch \
     --port 52700 \
     --splitwise
 ```
@@ -283,6 +284,134 @@ curl -X POST "http://0.0.0.0:52700/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 50}'
 ```
+
+### Scenario 3: High-Availability (HA) Deployment
+
+A single master is a single point of failure; if it crashes, cluster operations pause. For production, use the **etcd + multi-master** mode: multiple `mooncake_master` instances perform leader election through etcd. When the leader fails, a standby is automatically re-elected, transparently to clients.
+
+**Architecture:**
+
+```
+            ┌──────────────────────────────────────┐
+            │           etcd cluster (3 nodes)      │
+            │     leader election / metadata store  │
+            └───────────────────┬──────────────────┘
+                                │ election (master_view)
+          ┌─────────────────────┼─────────────────────┐
+          ▼                     ▼                     ▼
+   ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+   │  master1    │       │  master2    │       │  master3    │
+   │ rpc:8081    │       │ rpc:8082    │       │ rpc:8083    │
+   │ (leader)    │       │ (standby)   │       │ (standby)   │
+   └──────┬──────┘       └─────────────┘       └─────────────┘
+          │  FastDeploy clients discover the current leader via etcd
+   ┌──────┴───────┐
+   ▼              ▼
+server_0      server_1
+```
+
+#### Prerequisites
+
+**1. Install etcd**
+
+Download and extract etcd (v3.5.30 in this example), then add `etcd` / `etcdctl` to `PATH`:
+
+```bash
+ETCD_VER=v3.5.30
+curl -L https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz \
+  -o etcd-${ETCD_VER}-linux-amd64.tar.gz
+tar -xzf etcd-${ETCD_VER}-linux-amd64.tar.gz
+export PATH=$PWD/etcd-${ETCD_VER}-linux-amd64:$PATH
+etcd --version
+```
+
+**2. Build Mooncake from source (with etcd support)**
+
+HA mode requires Mooncake built with etcd support (`-DSTORE_USE_ETCD=ON -DUSE_ETCD=ON`). Install dependencies first, then build:
+
+```bash
+# Download the source
+git clone https://github.com/kvcache-ai/Mooncake.git
+cd Mooncake
+
+# Install system & third-party dependencies
+bash dependencies.sh
+
+# Build C++ components (including mooncake_master, with etcd enabled)
+mkdir -p build && cd build
+cmake .. -DSTORE_USE_ETCD=ON -DUSE_ETCD=ON
+make -j
+sudo make install
+cd ..
+
+# Build and install the Python wheel
+./scripts/build_wheel.sh
+pip install mooncake-wheel/dist/*.whl
+```
+
+For the CUDA 13 build, use the following instead:
+
+```bash
+cd Mooncake
+export CU13_BUILD=1
+./scripts/build_wheel.sh
+pip install mooncake-wheel/dist/mooncake_transfer_engine_cuda13-*.whl
+```
+
+#### HA Client Configuration
+
+In HA mode, both `metadata_server` and `master_server_addr` use the `etcd://` prefix pointing to the etcd cluster; clients discover the current leader through etcd (`ha_mooncake_config.json`):
+
+```json
+{
+  "metadata_server": "etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379",
+  "global_segment_size": 1000000000,
+  "local_buffer_size": 134217728,
+  "protocol": "rdma",
+  "rdma_devices": "",
+  "master_server_addr": "etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379"
+}
+```
+
+#### One-Command Launch & Failover Verification
+
+A single self-contained script `examples/cache_storage/run_ha.sh` handles the whole flow — it starts the etcd cluster and the HA master cluster inline (each via a 3-iteration loop), so no separate `start_*.sh` is needed.
+
+Run directly:
+
+```bash
+cd examples/cache_storage
+bash run_ha.sh
+```
+
+What `run_ha.sh` does:
+
+1. **Start the etcd cluster**: a loop launches 3 etcd nodes (client ports 12379/22379/32379) forming a raft cluster, after a port check.
+2. **Start 3 HA masters**: a loop launches 3 `mooncake_master` (rpc 8081/8082/8083, metrics 9091/9092/9093), each with `--enable_ha --etcd_endpoints ... --rpc_port ...`, electing one leader via etcd. The leader address is written to the etcd key `mooncake-store/mooncake_cluster/master_view`.
+3. **Start 2 FastDeploy instances**, both joining the same cache pool with `--kvcache-storage-backend mooncake`.
+4. **Verify pooling (before failover)**: warm up prompt **A** on `server_0`, then send the same prompt to `server_1`, which should hit the global cache.
+5. **Kill the leader**: the script reads the current leader's `rpc_port` from etcd, `kill -9`s that process, triggering re-election.
+6. **Verify pooling (after failover)**: once etcd's `master_view` is updated to the new leader, warm up a **brand-new** prompt **B** (never sent before) on `server_0`, then reuse it on `server_1`. Using a fresh prompt ensures the hit on `server_1` can only come from the new leader's global pool, rather than stale local cache from step 4.
+
+> Check the election state manually:
+>
+> ```bash
+> # Current leader (rpc_address:rpc_port)
+> etcdctl --endpoints=http://127.0.0.1:12379,http://127.0.0.1:22379,http://127.0.0.1:32379 \
+>   get "mooncake-store/mooncake_cluster/master_view" --print-value-only
+> ```
+>
+> Per-master roles can be seen in `log_master_1` / `log_master_2` / `log_master_3` (`role=leader` / `role=standby`), and etcd logs in `log_etcd_1` / `log_etcd_2` / `log_etcd_3`.
+
+#### Key HA Master Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `--enable_ha` | Enable HA mode |
+| `--etcd_endpoints` | etcd endpoints, semicolon separated (when `ha_backend_type=etcd`) |
+| `--rpc_address` / `--rpc_port` | This master's reachable RPC address and port (must be unique per instance) |
+| `--cluster_id` | Cluster identifier; masters in the same cluster must match |
+| `--root_fs_dir` | Storage root directory in HA mode (unique per instance) |
 
 ## FastDeploy Parameters for Mooncake
 
