@@ -19,9 +19,8 @@ import threading
 import paddle
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.layers.attention.flash_mask_attn_backend import FlashMaskAttentionBackend
-from fastdeploy.platforms import current_platform
 from fastdeploy.model_executor.utils import get_sm_version
+from fastdeploy.platforms import current_platform
 
 if current_platform.is_cuda() and get_sm_version() >= 100:
     try:
