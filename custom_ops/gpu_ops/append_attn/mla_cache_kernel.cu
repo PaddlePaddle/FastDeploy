@@ -18,8 +18,7 @@
 #include "remote_cache_kv_ipc.h"
 
 template <paddle::DataType T>
-std::vector<paddle::Tensor> PrefillMLAWriteCache(
-    // const AppendAttnMetaData& meta_data,
+std::vector<paddle::Tensor> MLAWriteCache(
     const paddle::Tensor& kv_nope,
     const paddle::Tensor& kv_pe,
     const paddle::Tensor& seq_lens,
@@ -47,7 +46,6 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
   auto all_size = kv_cache_dims[3];
   int pe_size = all_size - nope_size;  
   const uint32_t elem_nums = num_tokens * kv_num_heads * all_size;
-
   constexpr int PackSize = 16 / sizeof(DataType_);
   const int pack_num = elem_nums / PackSize;
   const int blocksize = 128;
@@ -129,7 +127,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCache(
   return {};
 }
 
-std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
+std::vector<paddle::Tensor> MLAWriteCacheKernel(
     const paddle::Tensor& kv_nope,
     const paddle::Tensor& kv_pe,
     const paddle::Tensor& kv_cache,
@@ -142,23 +140,9 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
     const paddle::optional<paddle::Tensor>& kv_signal_data,
     const std::string& cache_quant_type_str) {
   cudaStream_t stream = kv_pe.stream();
-  AppendAttnMetaData meta_data;
-  const auto& kv_nope_dims = kv_nope.dims();
-  const auto& kv_pe_dims = kv_pe.dims();
-  const auto& kv_cache_dims = kv_cache.dims();
-  meta_data.kv_num_heads = kv_cache_dims[1];
-  const auto nope_size =
-      kv_nope_dims[kv_nope_dims.size() - 1] / meta_data.kv_num_heads;
-  meta_data.token_nums = kv_nope_dims[0];
-  meta_data.head_dims = kv_cache_dims[3];
-  meta_data.head_dims_v = nope_size;
-
-  meta_data.max_blocks_per_seq = block_tables.dims()[1];
-  meta_data.block_size = kv_cache_dims[2];
-  meta_data.batch_size = seq_lens_decoder.dims()[0];
   switch (kv_pe.dtype()) {
     case paddle::DataType::BFLOAT16: {
-      return PrefillMLAWriteCache<paddle::DataType::BFLOAT16>(
+      return MLAWriteCache<paddle::DataType::BFLOAT16>(
           kv_nope,
           kv_pe,
           seq_lens,
@@ -173,7 +157,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
           const_cast<paddle::Tensor*>(&kv_cache));
     }
     case paddle::DataType::FLOAT16: {
-      return PrefillMLAWriteCache<paddle::DataType::FLOAT16>(
+      return MLAWriteCache<paddle::DataType::FLOAT16>(
           kv_nope,
           kv_pe,
           seq_lens,
@@ -191,142 +175,7 @@ std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
   return {};
 }
 
-template <paddle::DataType T>
-std::vector<paddle::Tensor> DecodeMLAWriteCache(
-    const AppendAttnMetaData& meta_data,
-    const paddle::Tensor& kv_nope,
-    const paddle::Tensor& kv_pe,
-    const paddle::Tensor& seq_lens,
-    const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& batch_id_per_token,
-    const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& block_tables,
-    const bool speculate_decoder,
-    cudaStream_t& stream,
-    paddle::Tensor* kv_cache) {
-  typedef PDTraits<T> traits_;
-  typedef typename traits_::DataType DataType_;
-  typedef typename traits_::data_t data_t;
-
-  auto max_blocks_per_seq = meta_data.max_blocks_per_seq;
-  auto bsz = meta_data.batch_size;
-  auto token_num = meta_data.token_nums;
-  auto block_size = meta_data.block_size;
-  auto nope_size = meta_data.head_dims_v;
-  auto all_size = meta_data.head_dims;
-  int pe_size = all_size - nope_size;
-  auto kv_num_heads = meta_data.kv_num_heads;
-  constexpr int PackSize = 16 / sizeof(DataType_);
-  const int blocksize = 128;
-  int grid_size = 1;
-
-  if (speculate_decoder) {
-    const uint32_t elem_nums = token_num * kv_num_heads * all_size;
-    const int pack_num = elem_nums / PackSize;
-    GetNumBlocks<128>(pack_num, &grid_size);
-    speculate_decode_absorb_cache_kernel<DataType_, PackSize>
-        <<<grid_size, blocksize, 0, stream>>>(
-            reinterpret_cast<DataType_*>(
-                const_cast<data_t*>(kv_nope.data<data_t>())),
-            reinterpret_cast<DataType_*>(
-                const_cast<data_t*>(kv_pe.data<data_t>())),
-            reinterpret_cast<DataType_*>(kv_cache->data<data_t>()),
-            block_tables.data<int>(),
-            batch_id_per_token.data<int>(),
-            cu_seqlens_q.data<int>(),
-            seq_lens.data<int>(),
-            seq_lens_encoder.data<int>(),
-            max_blocks_per_seq,
-            kv_num_heads,
-            nope_size,
-            pe_size,
-            block_size,
-            elem_nums);
-  } else {
-    const uint32_t elem_nums = bsz * kv_num_heads * all_size;
-    const int pack_num = elem_nums / PackSize;
-    GetNumBlocks<128>(pack_num, &grid_size);
-    decode_absorb_cache_kernel<DataType_, PackSize>
-        <<<grid_size, blocksize, 0, stream>>>(
-            reinterpret_cast<DataType_*>(
-                const_cast<data_t*>(kv_nope.data<data_t>())),
-            reinterpret_cast<DataType_*>(
-                const_cast<data_t*>(kv_pe.data<data_t>())),
-            reinterpret_cast<DataType_*>(kv_cache->data<data_t>()),
-            block_tables.data<int>(),
-            cu_seqlens_q.data<int>(),
-            seq_lens.data<int>(),
-            seq_lens_encoder.data<int>(),
-            max_blocks_per_seq,
-            kv_num_heads,
-            nope_size,
-            pe_size,
-            block_size,
-            elem_nums);
-  }
-  return {};
-}
-
-std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
-    const paddle::Tensor& kv_nope,
-    const paddle::Tensor& kv_pe,
-    const paddle::Tensor& kv_cache,
-    const paddle::Tensor& seq_lens,
-    const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& batch_id_per_token,
-    const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& block_tables,
-    const std::string& cache_quant_type_str,
-    const bool speculate_decoder) {
-  cudaStream_t stream = kv_pe.stream();
-  AppendAttnMetaData meta_data;
-  const auto& kv_nope_dims = kv_nope.dims();
-  const auto& kv_pe_dims = kv_pe.dims();
-  const auto& kv_cache_dims = kv_cache.dims();
-  meta_data.kv_num_heads = kv_cache_dims[1];
-  const auto nope_size =
-      kv_nope_dims[kv_nope_dims.size() - 1] / meta_data.kv_num_heads;
-  meta_data.token_nums = kv_nope_dims[0];
-  meta_data.head_dims = kv_cache_dims[3];
-  meta_data.head_dims_v = nope_size;
-
-  meta_data.max_blocks_per_seq = block_tables.dims()[1];
-  meta_data.block_size = kv_cache_dims[2];
-  meta_data.batch_size = seq_lens_encoder.dims()[0];
-  switch (kv_pe.dtype()) {
-    case paddle::DataType::BFLOAT16: {
-      return DecodeMLAWriteCache<paddle::DataType::BFLOAT16>(
-          meta_data,
-          kv_nope,
-          kv_pe,
-          seq_lens,
-          seq_lens_encoder,
-          batch_id_per_token,
-          cu_seqlens_q,
-          block_tables,
-          speculate_decoder,
-          stream,
-          const_cast<paddle::Tensor*>(&kv_cache));
-    }
-    case paddle::DataType::FLOAT16: {
-      return DecodeMLAWriteCache<paddle::DataType::FLOAT16>(
-          meta_data,
-          kv_nope,
-          kv_pe,
-          seq_lens,
-          seq_lens_encoder,
-          batch_id_per_token,
-          cu_seqlens_q,
-          block_tables,
-          speculate_decoder,
-          stream,
-          const_cast<paddle::Tensor*>(&kv_cache));
-    }
-  }
-  return {};
-}
-
-PD_BUILD_STATIC_OP(prefill_mla_write_cache)
+PD_BUILD_STATIC_OP(mla_write_cache)
     .Inputs({"kv_nope",
              "kv_pe",
              "kv_cache",
@@ -340,18 +189,4 @@ PD_BUILD_STATIC_OP(prefill_mla_write_cache)
     .Outputs({"kv_cache_out"})
     .SetInplaceMap({{"kv_cache", "kv_cache_out"}})
     .Attrs({"cache_quant_type_str: std::string"})
-    .SetKernelFn(PD_KERNEL(PrefillMLAWriteCacheKernel));
-
-PD_BUILD_STATIC_OP(decode_mla_write_cache)
-    .Inputs({"kv_nope",
-             "kv_pe",
-             "kv_cache",
-             "seq_lens",
-             "seq_lens_encoder",
-             "batch_id_per_token",
-             "cu_seqlens_q",
-             "block_tables"})
-    .Outputs({"kv_cache_out"})
-    .SetInplaceMap({{"kv_cache", "kv_cache_out"}})
-    .Attrs({"cache_quant_type_str: std::string", "speculate_decoder: bool"})
-    .SetKernelFn(PD_KERNEL(DecodeMLAWriteCacheKernel));
+    .SetKernelFn(PD_KERNEL(MLAWriteCacheKernel));
