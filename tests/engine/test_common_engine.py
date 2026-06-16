@@ -1269,6 +1269,21 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self):
                 self.requests_number = Mock(inc=Mock())
                 self.num_requests_waiting = Mock(inc=Mock())
+                self.prompt_tokens_total = Mock(inc=Mock())
+                self.request_prompt_tokens = Mock(observe=Mock())
+                self.request_params_max_tokens = Mock(observe=Mock())
+
+            def inc_value(self, name, value=1, labelvalues=None):
+                getattr(self, name).inc(value)
+
+            def dec_value(self, name, value=1, labelvalues=None):
+                getattr(self, name).dec(value)
+
+            def set_value(self, name, value, labelvalues=None):
+                getattr(self, name).set(value)
+
+            def obs_value(self, name, value, labelvalues=None):
+                getattr(self, name).observe(value)
 
         class DummyRecv:
             def __init__(self):
@@ -2667,6 +2682,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 with patch("fastdeploy.engine.common_engine.Request") as MockRequest:
                     mock_request = Mock()
                     mock_request.metrics.scheduler_recv_req_time = 0
+                    mock_request.prompt_token_ids_len = 2
+                    mock_request.sampling_params = Mock(max_tokens=16)
                     MockRequest.from_dict.return_value = mock_request
 
                     with (
@@ -2696,6 +2713,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 with patch("fastdeploy.engine.common_engine.Request") as MockRequest:
                     mock_request = Mock()
                     mock_request.metrics.scheduler_recv_req_time = 0
+                    mock_request.prompt_token_ids_len = 2
+                    mock_request.sampling_params = Mock(max_tokens=16)
                     MockRequest.from_dict.return_value = mock_request
 
                     with (
@@ -3299,6 +3318,21 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self):
                 self.requests_number = Mock(inc=Mock())
                 self.num_requests_waiting = Mock(inc=Mock())
+                self.prompt_tokens_total = Mock(inc=Mock())
+                self.request_prompt_tokens = Mock(observe=Mock())
+                self.request_params_max_tokens = Mock(observe=Mock())
+
+            def inc_value(self, name, value=1, labelvalues=None):
+                getattr(self, name).inc(value)
+
+            def dec_value(self, name, value=1, labelvalues=None):
+                getattr(self, name).dec(value)
+
+            def set_value(self, name, value, labelvalues=None):
+                getattr(self, name).set(value)
+
+            def obs_value(self, name, value, labelvalues=None):
+                getattr(self, name).observe(value)
 
         with (
             patch("fastdeploy.engine.common_engine.envs.ZMQ_SEND_BATCH_DATA", True),

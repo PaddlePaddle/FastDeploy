@@ -546,10 +546,16 @@ class MTPProposer(Proposer):
                 )
                 if self.use_attn_mask_offset:
                     inputs = request.multimodal_inputs
-                    self.model_inputs["attn_mask_offsets_full"][idx][0 : prefill_end_index - prefill_start_index] = (
-                        paddle.to_tensor(
-                            inputs["attention_mask_offset"][prefill_start_index:prefill_end_index], dtype="int32"
+                    attn_offset_len = prefill_end_index - prefill_start_index
+                    if inputs.get("attention_mask_offset", None) is None:
+                        attention_mask_offset_slice = np.arange(prefill_start_index, prefill_end_index, dtype=np.int32)
+                    else:
+                        attention_mask_offset_slice = np.asarray(
+                            inputs["attention_mask_offset"][prefill_start_index:prefill_end_index],
+                            dtype=np.int32,
                         )
+                    self.model_inputs["attn_mask_offsets_full"][idx][0:attn_offset_len] = paddle.to_tensor(
+                        attention_mask_offset_slice, dtype="int32"
                     )
                     # GPU don't need it anymore
                     # NOTE: XPU backend needs decoder attention mask offset; GPU backend does not use it

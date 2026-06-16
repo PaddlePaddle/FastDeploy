@@ -453,8 +453,8 @@ class OpenAIServingChat:
                             if "trace_carrier" in res:
                                 del res["trace_carrier"]
                         num_choices -= 1
-                        main_process_metrics.e2e_request_latency.observe(
-                            time.time() - res["metrics"]["request_start_time"]
+                        main_process_metrics.obs_value(
+                            "e2e_request_latency", time.time() - res["metrics"]["request_start_time"]
                         )
                         if previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
@@ -757,8 +757,8 @@ class OpenAIServingChat:
         output = data["outputs"]
 
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
-            main_process_metrics.e2e_request_latency.observe(
-                time.time() - data.get("metrics").get("request_start_time")
+            main_process_metrics.obs_value(
+                "e2e_request_latency", time.time() - data.get("metrics").get("request_start_time")
             )
         message = ChatMessage(
             role="assistant",

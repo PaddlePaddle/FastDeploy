@@ -174,6 +174,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "ENCODE_FEATURE_BOS_SK": lambda: os.getenv("ENCODE_FEATURE_BOS_SK"),
     # The ENDPOINT of bos storing the features while multi_modal infer
     "ENCODE_FEATURE_ENDPOINT": lambda: os.getenv("ENCODE_FEATURE_ENDPOINT"),
+    # Max parallel workers for intra-request BOS feature download (per request).
+    # Set to 1 to fall back to sequential download.
+    "FD_BOS_DOWNLOAD_PARALLEL": lambda: int(os.getenv("FD_BOS_DOWNLOAD_PARALLEL", "8")),
     # Whether the Prefill instance continuously requests Decode resources in PD disaggregation
     "PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES": lambda: int(
         os.getenv("PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", "1")
@@ -268,9 +271,12 @@ environment_variables: dict[str, Callable[[], Any]] = {
     ),
     # Whether to align RoPE and moe gate precision with training
     "FD_ENABLE_RL": lambda: int(os.getenv("FD_ENABLE_RL", "0")),
-
     # Whether to use unified attention for decodeing in mix
     "USE_DECODE_UNIFIED_ATTENTION": lambda: bool(int(os.getenv("USE_DECODE_UNIFIED_ATTENTION", "0"))),
+    # Default label values for Prometheus metrics, specified as a JSON dict string.
+    # When set to a valid JSON dict, metric labels are automatically enabled.
+    # Example: '{"model_id":"my_model"}' adds model_id label to all metrics.
+    "FD_DEFAULT_METRIC_LABEL_VALUES": lambda: os.getenv("FD_DEFAULT_METRIC_LABEL_VALUES", "{}"),
 }
 
 

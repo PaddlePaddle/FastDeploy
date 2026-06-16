@@ -87,7 +87,10 @@ def init_flash_attn_version():
         sm_version = get_sm_version()
         if sm_version >= 100:
             try:
-                paddle.compat.enable_torch_proxy(scope={"cutlass"})
+                try:
+                    paddle.enable_compat(scope={"cutlass"})
+                except Exception:
+                    paddle.compat.enable_torch_proxy(scope={"cutlass"})
                 from flash_mask.cute.interface import flashmask_attention as fa4
 
                 global flashmask_attention_v4
@@ -598,6 +601,7 @@ class FlashAttentionBackend(AttentionBackend):
                 layer.linear_smooth,
                 forward_meta.attn_mask_offsets,
                 metadata.kv_signal_data_list[layer.layer_id],
+                forward_meta.rope_3d_delta,
                 q_norm_weight,
                 k_norm_weight,
                 getattr(layer, "sinks", None),

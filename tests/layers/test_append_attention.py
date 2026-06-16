@@ -703,6 +703,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 None,  # linear_smooth
                 self.mask_offset,  # mask_offset
                 None,  # kv_signal_data
+                None,  # rope_3d_delta
                 q_norm_weight,  # q_norm_weight
                 k_norm_weight,  # k_norm_weight
                 sinks,  # sinks
@@ -768,6 +769,7 @@ class TestAppendGroupQueryAttnWithRope(unittest.TestCase):
                 None,  # linear_smooth
                 self.mask_offset,  # mask_offset
                 None,  # kv_signal_data
+                None,  # rope_3d_delta
                 q_norm_weight,  # q_norm_weight
                 k_norm_weight,  # k_norm_weight
                 sinks,  # sinks
