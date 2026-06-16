@@ -19,6 +19,14 @@ import threading
 import paddle
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.utils import get_sm_version
+from fastdeploy.platforms import current_platform
+
+if current_platform.is_cuda() and get_sm_version() >= 100:
+    try:
+        import blackwell_ops
+    except ImportError:
+        blackwell_ops = None
 
 event0 = threading.Event()
 event1 = threading.Event()
@@ -140,10 +148,21 @@ def split_batch_decoder_layers(forward_meta: ForwardMeta, fd_config):
         res[i].seq_lens_decoder = forward_meta.seq_lens_decoder[start_bs:end_bs] + 0
         res[i].seq_lens_decoder[0] += start_bs_s_token_by_left_chunk
 
+        if forward_meta.seq_lens_kv is not None or forward_meta.cu_seqlens_k is not None:
+            seq_lens_k = res[i].seq_lens_encoder + res[i].seq_lens_decoder
+            if forward_meta.seq_lens_kv is not None:
+                res[i].seq_lens_kv = seq_lens_k.reshape(res[i].seq_lens_encoder.shape)
+            if forward_meta.cu_seqlens_k is not None:
+                cu_seqlens_k = [0] + paddle.cumsum(seq_lens_k).numpy().tolist()
+                res[i].cu_seqlens_k = paddle.to_tensor(cu_seqlens_k).cast("int32")
+
         cu_seqlens_q = [0] + paddle.cumsum(res[i].seq_lens_this_time).numpy().tolist()
         res[i].cu_seqlens_q = paddle.to_tensor(cu_seqlens_q).cast("int32")
 
         # res[i].cu_seqlens_k = res[i].cu_seqlens_q
+
+        if forward_meta.attn_backend.__class__.__name__ == "FlashMaskAttentionBackend" and blackwell_ops is not None:
+            forward_meta.attn_backend.init_blackwell_attention_metadata(res[i])
 
         for key in GLOBAL_ATTN_BUFFERS[i]:
             setattr(res[i], key, GLOBAL_ATTN_BUFFERS[i][key])
