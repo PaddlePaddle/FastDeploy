@@ -41,10 +41,9 @@ std::vector<paddle::Tensor> MLAWriteCache(
   auto num_tokens = kv_nope_dims[0];
   auto block_size = kv_cache_dims[2];
   auto kv_num_heads = kv_cache_dims[1];
-  auto nope_size = 
-    kv_nope_dims[kv_nope_dims.size() - 1] / kv_num_heads;
+  auto nope_size = kv_nope_dims[kv_nope_dims.size() - 1] / kv_num_heads;
   auto all_size = kv_cache_dims[3];
-  int pe_size = all_size - nope_size;  
+  int pe_size = all_size - nope_size;
   const uint32_t elem_nums = num_tokens * kv_num_heads * all_size;
   constexpr int PackSize = 16 / sizeof(DataType_);
   const int pack_num = elem_nums / PackSize;
