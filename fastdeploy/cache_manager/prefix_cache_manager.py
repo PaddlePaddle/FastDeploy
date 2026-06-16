@@ -297,8 +297,6 @@ class PrefixCacheManager:
             val_cache_arg_str = f" --value_cache_shape {val_shape_str}"
         if cache_config.kvcache_storage_backend:
             storage_arg_str = f" --kvcache_storage_backend {cache_config.kvcache_storage_backend}"
-            if not self.enable_splitwise:
-                storage_arg_str += " --create_cache_tensor"
         else:
             storage_arg_str = " "
 
