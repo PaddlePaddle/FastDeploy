@@ -50,6 +50,7 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.prometheus_multiprocess_setup import setup_dp_prometheus_dir, get_original_prom_dir
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
@@ -860,6 +861,7 @@ class LLMEngine:
                 self.launched_expert_service_signal.value[0] = 1
                 self.dp_processed = []
                 self.dp_engine_worker_queue_server = []
+                base_prom_dir = get_original_prom_dir()
                 for i in range(
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
@@ -897,7 +899,12 @@ class LLMEngine:
                         f"Engine is initialized successfully with {self.cfg.parallel_config.tensor_parallel_size}"
                         + f" data parallel id {i}"
                     )
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                        setup_dp_prometheus_dir(i, base_prom_dir)
                     self.dp_processed[-1].start()
+
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    setup_dp_prometheus_dir(0, base_prom_dir)
 
                 for i in range(
                     1,

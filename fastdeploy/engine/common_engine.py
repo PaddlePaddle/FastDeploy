@@ -65,6 +65,7 @@ from fastdeploy.inter_communicator import (
 )
 from fastdeploy.inter_communicator.fmq import FMQ
 from fastdeploy.metrics.metrics import main_process_metrics
+from fastdeploy.metrics.prometheus_multiprocess_setup import setup_dp_prometheus_dir, get_original_prom_dir
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.spec_decode import SpecMethod
@@ -2720,6 +2721,7 @@ class EngineService:
                 self.launched_expert_service_signal.value[0] = 1
                 self.dp_processed = []
                 self.dp_engine_worker_queue_server = []
+                base_prom_dir = get_original_prom_dir()
                 for i in range(
                     1,
                     self.cfg.parallel_config.data_parallel_size // self.cfg.nnode,
@@ -2758,9 +2760,14 @@ class EngineService:
                         f"Engine is initialized successfully with {self.cfg.parallel_config.tensor_parallel_size}"
                         + f" data parallel id {i}"
                     )
+                    if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                        setup_dp_prometheus_dir(i, base_prom_dir)
                     self.dp_processed[-1].start()
                     while self.launched_expert_service_signal.value[i] == 0:
                         time.sleep(1)
+
+                if envs.FD_ENABLE_INTERNAL_ADAPTER:
+                    setup_dp_prometheus_dir(0, base_prom_dir)
 
     def check_worker_initialize_status(self):
         """
