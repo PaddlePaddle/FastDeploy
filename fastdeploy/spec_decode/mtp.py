@@ -233,6 +233,11 @@ class MTPProposer(Proposer):
         )
         if kv_cache_quant_type == "block_wise_fp8":
             kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
+            kv_cache_scale_dtype = paddle.get_default_dtype()
+            if hasattr(self.attn_backends[0], "get_kv_cache_scale_shape"):
+                kv_cache_scale_shape, kv_cache_scale_dtype = self.attn_backends[0].get_kv_cache_scale_shape(
+                    max_num_blocks=self.num_gpu_blocks
+                )
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
@@ -284,13 +289,13 @@ class MTPProposer(Proposer):
                 if kv_cache_quant_type == "block_wise_fp8":
                     scale_key_cache_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
                     scale_val_cache_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
-                    key_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    key_scale_cache = paddle.empty(shape=[], dtype=kv_cache_scale_dtype)
                     key_scale_cache = self._share_external_data(
                         key_scale_cache, scale_key_cache_name, kv_cache_scale_shape
                     )
                     self.cache_kvs_map[scale_key_cache_name] = key_scale_cache
                     cache_kvs_list.append(key_scale_cache)
-                    value_scale_cache = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    value_scale_cache = paddle.empty(shape=[], dtype=kv_cache_scale_dtype)
                     value_scale_cache = self._share_external_data(
                         value_scale_cache, scale_val_cache_name, kv_cache_scale_shape
                     )
@@ -329,7 +334,7 @@ class MTPProposer(Proposer):
                     key_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
-                        dtype=paddle.get_default_dtype(),
+                        dtype=kv_cache_scale_dtype,
                     )
                     key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
                     set_data_ipc(key_cache_scales, key_cache_scales_name)
@@ -339,7 +344,7 @@ class MTPProposer(Proposer):
                     val_cache_scales = paddle.full(
                         shape=kv_cache_scale_shape,
                         fill_value=0,
-                        dtype=paddle.get_default_dtype(),
+                        dtype=kv_cache_scale_dtype,
                     )
                     val_cache_scales_name = f"value_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
                     set_data_ipc(val_cache_scales, val_cache_scales_name)
@@ -708,6 +713,7 @@ class MTPProposer(Proposer):
             kv_tile_ids_per_batch=self.model_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.model_inputs["kv_num_blocks_x_cpu"],
             attn_mask_offsets=self.model_inputs["attn_mask_offsets"] if self.use_attn_mask_offset else None,
+            seq_lens_kv=self.model_inputs["seq_lens_kv"],
         )
         if "decode_block_indices" in self.model_inputs:
             self.forward_meta.decode_block_indices = self.model_inputs["decode_block_indices"]

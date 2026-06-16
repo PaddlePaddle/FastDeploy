@@ -175,10 +175,16 @@ class CacheTransferManager:
         # compute cache bytes
         self.cache_dtype = args.cache_dtype
         self.cache_item_bytes = CacheConfig.get_cache_bytes(self.cache_dtype)
-        self.scale_item_bytes = CacheConfig.get_cache_bytes(paddle.get_default_dtype())
         self.has_cache_scale = self.cache_dtype == "block_wise_fp8"
         if self.has_cache_scale:
-            self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, self.block_size]
+            if envs.FD_ATTENTION_BACKEND == "FLASH_MASK_ATTN_BLACKWELL":
+                self.scale_item_bytes = CacheConfig.get_cache_bytes("float32")
+                self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, 4]
+            else:
+                self.scale_item_bytes = CacheConfig.get_cache_bytes(paddle.get_default_dtype())
+                self.cache_scale_shape = [self.num_gpu_blocks, self.head_num, self.block_size]
+        else:
+            self.scale_item_bytes = CacheConfig.get_cache_bytes(paddle.get_default_dtype())
 
         # kv cache storage
         self.storage_backend_type = args.kvcache_storage_backend
@@ -416,7 +422,9 @@ class CacheTransferManager:
         self.storage_backend.register_buffer(write_buffer, cache_buffer_total_bytes)
 
         if self.has_cache_scale:
-            self.scale_buffer_stride_bytes = layer_num * self.head_num * self.block_size * self.scale_item_bytes
+            self.scale_buffer_stride_bytes = (
+                layer_num * self.head_num * self.cache_scale_shape[-1] * self.scale_item_bytes
+            )
             scale_buffer_total_bytes = block_num * self.scale_buffer_stride_bytes * 2
             logger.info(
                 f"Creating scale cpu buffer cache for all layers: {scale_buffer_total_bytes / 1024 ** 3:.2f}GB"
@@ -474,10 +482,16 @@ class CacheTransferManager:
                 set_data_ipc(key_cache, key_name)
 
                 if self.cache_dtype == "block_wise_fp8":
+                    _scale_dtype = (
+                        "float32"
+                        if envs.FD_ATTENTION_BACKEND == "FLASH_MASK_ATTN_BLACKWELL"
+                        else paddle.get_default_dtype()
+                    )
+                    _scale_last_dim = self.cache_scale_shape[-1]
                     key_cache_scales = paddle.full(
-                        shape=[num_gpu_blocks, self.key_cache_shape[1], self.key_cache_shape[2]],
+                        shape=[num_gpu_blocks, self.key_cache_shape[1], _scale_last_dim],
                         fill_value=0,
-                        dtype=paddle.get_default_dtype(),
+                        dtype=_scale_dtype,
                     )
                     set_data_ipc(key_cache_scales, key_cache_scales_name)
                 if self.value_cache_shape:
@@ -486,9 +500,9 @@ class CacheTransferManager:
 
                     if self.cache_dtype == "block_wise_fp8":
                         value_cache_scales = paddle.full(
-                            shape=[num_gpu_blocks, self.value_cache_shape[1], self.value_cache_shape[2]],
+                            shape=[num_gpu_blocks, self.value_cache_shape[1], _scale_last_dim],
                             fill_value=0,
-                            dtype=paddle.get_default_dtype(),
+                            dtype=_scale_dtype,
                         )
                         set_data_ipc(value_cache_scales, value_cache_scales_name)
             else:
@@ -497,21 +511,27 @@ class CacheTransferManager:
                 val_cache = paddle.empty(shape=[], dtype=cache_type)
                 key_cache = share_external_data_(key_cache, key_name, key_cache_shape, True)
                 if self.cache_dtype == "block_wise_fp8":
-                    key_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                    _scale_dtype = (
+                        "float32"
+                        if envs.FD_ATTENTION_BACKEND == "FLASH_MASK_ATTN_BLACKWELL"
+                        else paddle.get_default_dtype()
+                    )
+                    _scale_last_dim = self.cache_scale_shape[-1]
+                    key_cache_scales = paddle.empty(shape=[], dtype=_scale_dtype)
                     key_cache_scales = share_external_data_(
                         key_cache_scales,
                         key_cache_scales_name,
-                        [num_gpu_blocks, self.key_cache_shape[1], self.key_cache_shape[2]],
+                        [num_gpu_blocks, self.key_cache_shape[1], _scale_last_dim],
                         True,
                     )
                 if self.value_cache_shape:
                     val_cache = share_external_data_(val_cache, val_name, value_cache_shape, True)
                     if self.cache_dtype == "block_wise_fp8":
-                        value_cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
+                        value_cache_scales = paddle.empty(shape=[], dtype=_scale_dtype)
                         value_cache_scales = share_external_data_(
                             value_cache_scales,
                             value_cache_scales_name,
-                            [num_gpu_blocks, self.value_cache_shape[1], self.value_cache_shape[2]],
+                            [num_gpu_blocks, self.value_cache_shape[1], _scale_last_dim],
                             True,
                         )
 
@@ -572,10 +592,13 @@ class CacheTransferManager:
         value_need_to_allocate_bytes = self.num_cpu_blocks * cache_item_bytes * value_cache_size
         logger.info("Initializing swap space (cpu cache) for all layers.")
         if self.cache_dtype == "block_wise_fp8":
-            cache_scales = paddle.empty(shape=[], dtype=paddle.get_default_dtype())
-            cache_scales_size = self.key_cache_shape[1] * self.key_cache_shape[2]
-            scales_key_need_to_allocate_bytes = self.num_cpu_blocks * cache_scales.element_size() * cache_scales_size
-            scales_value_need_to_allocate_bytes = self.num_cpu_blocks * cache_scales.element_size() * cache_scales_size
+            _scale_dtype = (
+                "float32" if envs.FD_ATTENTION_BACKEND == "FLASH_MASK_ATTN_BLACKWELL" else paddle.get_default_dtype()
+            )
+            _scale_item_bytes = CacheConfig.get_cache_bytes(_scale_dtype)
+            cache_scales_size = self.key_cache_shape[1] * self.cache_scale_shape[-1]
+            scales_key_need_to_allocate_bytes = self.num_cpu_blocks * _scale_item_bytes * cache_scales_size
+            scales_value_need_to_allocate_bytes = self.num_cpu_blocks * _scale_item_bytes * cache_scales_size
         self.k_dst_ptrs = []
         self.v_dst_ptrs = []
         self.k_scales_ptrs = []
