@@ -335,8 +335,6 @@ class DSAAttentionBackend(AttentionBackend):
         """
         Mixed模式的前向传播
         """
-        if not forward_meta.max_len_tensor_cpu[1] and not forward_meta.max_len_tensor_cpu[2]:
-            return None
 
         res = DSAAttentionBackend.forward_static(
             q, v, compressed_kv, k_pe, forward_meta.caches[2 * layer.layer_id], forward_meta, self.attn_softmax_scale
@@ -399,16 +397,34 @@ class DSAAttentionBackend(AttentionBackend):
         # Decode
         if forward_meta.max_len_tensor_cpu[2]:
 
+            from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
+                insert_decoder_result_back,
+            )
+
+            need_insert_decoder_result = False
+            q_total_token_num = q.shape[0]
+            # When q contains mixed prefill+decode tokens, compact to decode-only tokens
+            # before passing to flash_mla_with_kvcache which expects [bsz, 1, heads, dim]
+            if q.shape[0] > forward_meta.seq_lens_decoder.shape[0]:
+                active_idx = paddle.where(forward_meta.seq_lens_decoder > 0)[0]  # [active_bsz]
+                token_idx = forward_meta.cu_seqlens_q[active_idx] + forward_meta.seq_lens_encoder[active_idx]
+                q_decode = q[token_idx]  # [active_bsz, heads, dim]
+                indexer_topk_decode = indexer_topk[token_idx]  # [active_bsz, 1, topk]
+                need_insert_decoder_result = True
+            else:
+                q_decode = q
+                indexer_topk_decode = indexer_topk
+
             tile_scheduler_metadata, _ = flash_mla.get_mla_metadata()
             new_cache_shape = latent_cache.shape
             assert new_cache_shape[1] == 1
             new_cache_shape[1], new_cache_shape[2] = new_cache_shape[2], new_cache_shape[1]
 
             if ceil64_num_heads != q_num_heads:
-                new_q = paddle.empty([q.shape[0], ceil64_num_heads, q.shape[2]], dtype=q.dtype)
-                new_q[:, :q_num_heads, :] = q
+                new_q = paddle.empty([q_decode.shape[0], ceil64_num_heads, q_decode.shape[2]], dtype=q_decode.dtype)
+                new_q[:, :q_num_heads, :] = q_decode
             else:
-                new_q = q
+                new_q = q_decode
 
             fmha_out_decode, _ = flash_mla.flash_mla_with_kvcache(
                 new_q.unsqueeze(1).contiguous(),
@@ -421,7 +437,7 @@ class DSAAttentionBackend(AttentionBackend):
                 attn_softmax_scale,
                 False,  # casual
                 True,  # is_fp8_kvcache
-                indexer_topk,  # indices,
+                indexer_topk_decode,  # indices,
                 None,  # t.attn_sink,
                 None,  # extra_k_cache,
                 None,  # extra_indices_in_kvcache: Optional[torch.Tensor] = None,
@@ -430,6 +446,29 @@ class DSAAttentionBackend(AttentionBackend):
             )
 
             fmha_out_decode = fmha_out_decode[:, :, :q_num_heads, :].contiguous()
+
+            if need_insert_decoder_result:
+                # insert_decoder_result_back reads row[batch_id] from decoder_result
+                # (indexed over full max_bsz), so we must scatter active results back
+                # into a full-bsz tensor first.
+                max_bsz = forward_meta.seq_lens_decoder.shape[0]
+                full_decode_out = paddle.zeros(
+                    [max_bsz, 1, q_num_heads, fmha_out_decode.shape[-1]],
+                    dtype=fmha_out_decode.dtype,
+                )
+                full_decode_out[active_idx] = fmha_out_decode
+                fmha_out_decode = insert_decoder_result_back(
+                    full_decode_out,
+                    forward_meta.cu_seqlens_q,
+                    forward_meta.seq_lens_encoder,
+                    forward_meta.seq_lens_decoder,
+                    q_total_token_num,
+                )
+            else:
+                # Reshape to [total_tokens, heads*head_dim] for merge/return
+                fmha_out_decode = fmha_out_decode.reshape(
+                    [fmha_out_decode.shape[0], q_num_heads * fmha_out_decode.shape[-1]]
+                )
 
             if fmha_out_prefill is not None:
 

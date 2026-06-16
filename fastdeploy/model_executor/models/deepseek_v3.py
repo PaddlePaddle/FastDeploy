@@ -457,8 +457,7 @@ class DeepseekV3MLAAttention(nn.Layer):
             ]
         )
 
-        self.index_topk = self.sliding_window
-        indexer_top_k = paddle.full([q_input.shape[0], 1, self.index_topk], -1, dtype="int32")
+        indexer_top_k = paddle.full([q_input.shape[0], 1, self.sliding_window], -1, dtype="int32")
 
         get_swa_indexer_top_k(
             indexer_top_k,
@@ -528,7 +527,7 @@ class DeepseekV3MLAAttention(nn.Layer):
 
         window_attn_skip_freq = getattr(self.fd_config.model_config, "window_attn_skip_freq", None)
 
-        if self.sliding_window > 0 and window_attn_skip_freq is not None and window_attn_skip_freq[self.layer_id] == 1:
+        if window_attn_skip_freq is not None and window_attn_skip_freq[self.layer_id] == 1:
             attn_out = self.forward_swa_static(
                 forward_meta=forward_meta,
                 query_nope=query_nope,

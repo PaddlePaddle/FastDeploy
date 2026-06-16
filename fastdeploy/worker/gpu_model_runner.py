@@ -3066,6 +3066,27 @@ class GPUModelRunner(ModelRunnerBase):
                 * (self.cache_config.block_size)
                 * num_layers
             )  # compress_kv + k_pe
+            if self.window_attn_skip_freq is not None:
+                required_memory = (
+                    # mla
+                    (
+                        byte_of_dtype
+                        * (self.fd_config.model_config.kv_lora_rank + self.fd_config.model_config.qk_rope_head_dim)
+                        * (self.cache_config.block_size)
+                        * (num_layers - sum(self.window_attn_skip_freq[:num_layers]))
+                    )
+                    # dsa
+                    + (
+                        (
+                            self.fd_config.model_config.kv_lora_rank
+                            + self.fd_config.model_config.kv_lora_rank // 128 * 4
+                            + 2 * self.fd_config.model_config.qk_rope_head_dim
+                        )
+                        * (self.cache_config.block_size)
+                        * sum(self.window_attn_skip_freq[:num_layers])
+                    )
+                )
+
         elif self.dsa_cache:
             required_memory = (
                 1
