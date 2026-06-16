@@ -628,19 +628,7 @@ void GetPositionIdsAndMaskEncoderBatch(const paddle::Tensor& seq_lens_encoder,
                                        const paddle::Tensor& seq_lens_this_time,
                                        const paddle::Tensor& position_ids);
 
-std::vector<paddle::Tensor> DecodeMLAWriteCacheKernel(
-    const paddle::Tensor& kv_nope,
-    const paddle::Tensor& kv_pe,
-    const paddle::Tensor& kv_cache,
-    const paddle::Tensor& seq_lens,
-    const paddle::Tensor& seq_lens_encoder,
-    const paddle::Tensor& batch_id_per_token,
-    const paddle::Tensor& cu_seqlens_q,
-    const paddle::Tensor& block_tables,
-    const std::string& cache_quant_type_str,
-    const bool speculate_decoder);
-
-std::vector<paddle::Tensor> PrefillMLAWriteCacheKernel(
+std::vector<paddle::Tensor> MLAWriteCacheKernel(
     const paddle::Tensor& kv_nope,
     const paddle::Tensor& kv_pe,
     const paddle::Tensor& kv_cache,
@@ -1777,13 +1765,9 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         py::arg("scales"),
         py::arg("scale_ub"));
 #ifdef ENABLE_SM80_EXT_OPS
-  m.def("decode_mla_write_cache",
-        &DecodeMLAWriteCacheKernel,
-        "decode_mla_write_cache function");
-
-  m.def("prefill_mla_write_cache",
-        &PrefillMLAWriteCacheKernel,
-        "prefill_mla_write_cache function");
+  m.def("mla_write_cache",
+        &MLAWriteCacheKernel,
+        "mla_write_cache function");
 #endif
 
   m.def("fused_rotary_position_encoding",
