@@ -213,6 +213,22 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_XPU_MOE_FFN_QUANT_TYPE_MAP": lambda: os.getenv("FD_XPU_MOE_FFN_QUANT_TYPE_MAP", ""),
     # Whether to enable low latency in mixed scenario
     "FD_XPU_ENABLE_MIXED_EP_MODE": lambda: bool(int(os.getenv("FD_XPU_ENABLE_MIXED_EP_MODE", "0"))),
+    # Whether to enable prefill-only profiling on XPU
+    "FD_XPU_PROFILE_PREFILL": lambda: bool(int(os.getenv("FD_XPU_PROFILE_PREFILL", "0"))),
+    # Whether to enable decode-only profiling on XPU
+    "FD_XPU_PROFILE_DECODE": lambda: bool(int(os.getenv("FD_XPU_PROFILE_DECODE", "0"))),
+    # Number of iterations for profiling
+    "FD_XPU_PROFILE_ITERS": lambda: int(os.getenv("FD_XPU_PROFILE_ITERS", "10")),
+    # Batch size for profiling
+    "FD_XPU_PROFILE_BATCH_SIZE": lambda: int(os.getenv("FD_XPU_PROFILE_BATCH_SIZE", "1")),
+    # Prefill length (current input_ids length) for profiling
+    "FD_XPU_PROFILE_PREFILL_LEN": lambda: int(os.getenv("FD_XPU_PROFILE_PREFILL_LEN", "8192")),
+    # Prefix length (already-decoded context length) for profiling
+    "FD_XPU_PROFILE_PREFIX_LEN": lambda: int(os.getenv("FD_XPU_PROFILE_PREFIX_LEN", "0")),
+    # Whether to enable XPU profiler tracing (cuda_profiler_start/stop)
+    "FD_XPU_PROFILER_TRACING": lambda: bool(int(os.getenv("FD_XPU_PROFILER_TRACING", "0"))),
+    # Whether to balance expert routing with random gate output in profile mode
+    "FD_XPU_PROFILE_EXPERT_BALANCE": lambda: bool(int(os.getenv("FD_XPU_PROFILE_EXPERT_BALANCE", "0"))),
     # Reserve output blocks for decoding requests when schedule new prefill requests
     "FD_INIT_NEW_TOKEN_RATIO": lambda: float(os.getenv("FD_INIT_NEW_TOKEN_RATIO", "0.7")),
     "FD_MIN_NEW_TOKEN_RATIO": lambda: float(os.getenv("FD_MIN_NEW_TOKEN_RATIO", "0.1")),
