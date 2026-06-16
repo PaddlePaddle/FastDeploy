@@ -20,6 +20,7 @@ import subprocess
 import sys
 import time
 
+from fastdeploy.metrics.prometheus_multiprocess_setup import setup_dp_prometheus_dir
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import find_free_ports, get_logger, is_port_available
 
@@ -108,13 +109,7 @@ def start_servers(
         env["FD_ENABLE_MULTI_API_SERVER"] = "1"
         env["FD_LOG_DIR"] = env.get("FD_LOG_DIR", "log") + f"/log_{i}"
         if "PROMETHEUS_MULTIPROC_DIR" in env:
-            prom_dir = env.get("PROMETHEUS_MULTIPROC_DIR")
-            prom_dir_i = os.path.join(os.path.dirname(prom_dir), os.path.basename(prom_dir) + f"_dp{i}")
-            # Create the directory if it doesn't exist
-            if not os.path.exists(prom_dir_i):
-                os.makedirs(prom_dir_i, exist_ok=True)
-            env["PROMETHEUS_MULTIPROC_DIR"] = prom_dir_i
-            logger.info(f"Set PROMETHEUS_MULTIPROC_DIR for DP {i}: {prom_dir_i}")
+            setup_dp_prometheus_dir(i, env["PROMETHEUS_MULTIPROC_DIR"], env)
 
         cmd = [
             sys.executable,
