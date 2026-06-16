@@ -397,6 +397,15 @@ async def benchmark(
     response_format = input_requests[0].response_format
     random_flag = input_requests[0].random_flag
 
+    # 多轮模式下 warm up 仅跑首条请求：将 history 截断到第一个 user 消息为止，
+    if args.multi_turn and test_history_QA:
+        truncated_history = []
+        for msg in test_history_QA:
+            truncated_history.append(msg)
+            if isinstance(msg, dict) and msg.get("role") == "user":
+                break
+        test_history_QA = truncated_history
+
     if len(ip_list) >= 1:
         api_url = f"http://{ip_list[0]}{args.endpoint}"
 
@@ -423,7 +432,7 @@ async def benchmark(
         stream=args.stream,
     )
 
-    if not debug:
+    if args.warmup:
         print("test_input:", test_input)
 
         test_output = await request_func(request_func_input=test_input)
@@ -439,6 +448,8 @@ async def benchmark(
             )
         else:
             print("Initial test run completed. Starting main benchmark run...")
+    else:
+        print("Warm up disabled (--no-warmup). Skipping initial test run.")
 
     if lora_modules:
         # For each input request, choose a LoRA module at random.
@@ -1481,6 +1492,13 @@ if __name__ == "__main__":
         action="store_true",
         help="按多轮对话方式请求",
     )
+    parser.add_argument(
+        "--no-warmup",
+        action="store_false",
+        dest="warmup",
+        help="关闭压测开始前的 warm up（initial single prompt test run）",
+    )
+    parser.set_defaults(warmup=True)
     parser.add_argument(
         "--no-stream",
         action="store_false",
