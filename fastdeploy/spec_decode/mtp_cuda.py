@@ -441,15 +441,6 @@ class MTPProposerCUDA(MTPProposer):
         Clear allocated cacheKV
         """
         create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
-        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
-        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
-        cache_ready_signal = IPCSignal(
-            name="cache_ready_signal",
-            array=cache_ready_signal_data,
-            dtype=np.int32,
-            suffix=self.parallel_config.local_engine_worker_queue_port,
-            create=False,
-        )
 
         if not profile:
             if create_cache_tensor:
@@ -457,6 +448,17 @@ class MTPProposerCUDA(MTPProposer):
                     self.fd_config.cache_config.num_cpu_blocks > 0
                     or self.fd_config.cache_config.kvcache_storage_backend
                 ):
+                    local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+                    cache_ready_signal_data = np.zeros(
+                        shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32
+                    )
+                    cache_ready_signal = IPCSignal(
+                        name="cache_ready_signal",
+                        array=cache_ready_signal_data,
+                        dtype=np.int32,
+                        suffix=self.parallel_config.local_engine_worker_queue_port,
+                        create=False,
+                    )
                     while cache_ready_signal.value[local_rank] != 0:
                         time.sleep(0.1)
             else:
