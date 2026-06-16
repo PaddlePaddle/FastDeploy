@@ -414,12 +414,24 @@ else:
                 f"ep={parallel_config.expert_parallel_size}, "
                 f"sp={parallel_config.sequence_parallel})"
             )
-
+            import paddle.distributed as dist
             from paddlefleet import parallel_state
 
-            if parallel_state._TENSOR_MODEL_PARALLEL_GROUP is None:
-                hcg = fleet.get_hybrid_communicate_group()
-                parallel_state.initialize_model_parallel(hcg)
+            tp_group = parallel_state._TENSOR_MODEL_PARALLEL_GROUP
+            current_tp_size = None
+            if tp_group is not None:
+                current_tp_size = getattr(tp_group, "nranks", None)
+                if current_tp_size is None:
+                    current_tp_size = getattr(tp_group, "world_size", None)
+
+            expected_tp_size = parallel_config.tensor_parallel_size
+            need_init = tp_group is None or current_tp_size != expected_tp_size
+            if need_init:
+                if expected_tp_size == 1:
+                    parallel_state._TENSOR_MODEL_PARALLEL_GROUP = dist.new_group(ranks=[dist.get_rank()])
+                else:
+                    hcg = fleet.get_hybrid_communicate_group()
+                    parallel_state.initialize_model_parallel(hcg)
 
             from paddlefleet.tensor_parallel.random import (
                 model_parallel_cuda_manual_seed,
