@@ -15,6 +15,9 @@ bash run.sh
 
 # PD disaggregation scenario
 bash run_03b_pd_storage.sh
+
+# High-availability (etcd + multi-master + failover) scenario
+bash run_ha.sh
 ```
 
 ## Scripts
@@ -23,9 +26,11 @@ bash run_03b_pd_storage.sh
 |--------|----------|-------------|
 | `run.sh` | Multi-Instance | Two standalone instances sharing cache |
 | `run_03b_pd_storage.sh` | PD Disaggregation | P+D instances with global cache pooling |
+| `run_ha.sh` | High Availability | Self-contained: starts etcd + 3 masters with leader election, then kills the leader and re-verifies pooling with a fresh prompt after re-election |
 
 ## Files
 
-- `mooncake_config.json` - Mooncake configuration file
+- `mooncake_config.json` - Mooncake configuration file (single master)
+- `ha_mooncake_config.json` - Mooncake HA client config (etcd-based master discovery)
 - `utils.sh` - Utility functions for scripts
 - `stop.sh` - Stop all running services
