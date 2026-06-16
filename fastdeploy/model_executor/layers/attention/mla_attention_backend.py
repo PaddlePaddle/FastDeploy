@@ -875,6 +875,7 @@ class MLAAttentionBackend(AttentionBackend):
                     forward_meta.cu_seqlens_q,
                     forward_meta.cu_seqlens_k,
                     causal=self.causal,
+                    window_size=-1,
                     **self.flash_attn_kwargs,
                 )
                 return fmha_out
@@ -1155,7 +1156,7 @@ class MLAAttentionBackend(AttentionBackend):
         return res_baseline
 
     @staticmethod
-    def mha_baseline(q, k, v, cu_seqlens_q, cu_seqlens_k, causal, softmax_scale):
+    def mha_baseline(q, k, v, cu_seqlens_q, cu_seqlens_k, causal, window_size, softmax_scale):
 
         assert causal, "Only support causal attention for now"
         bsz = cu_seqlens_q.shape[0] - 1
@@ -1191,7 +1192,12 @@ class MLAAttentionBackend(AttentionBackend):
 
             tmp_zeros = np.zeros((q_len, kv_len)) - 1
             for i in range(q_len):
-                tmp_zeros[i][: i + 1] = 0
+                if kv_len - q_len + i + 1 > window_size and window_size > 0:
+                    ss = kv_len - q_len + i + 1 - window_size
+                    tmp_zeros[i][ss : kv_len - q_len + i + 1] = 0
+                else:
+                    # attention all before this `i` th q.
+                    tmp_zeros[i][: kv_len - q_len + i + 1] = 0
             mask = tmp_zeros * 1000
             mask = paddle.to_tensor(mask, dtype=q.dtype)
             p = p + mask[None, :]
