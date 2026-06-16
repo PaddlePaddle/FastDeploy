@@ -1218,6 +1218,11 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             weight_dtype=weight_dtype,
         )
 
+    def _get_kv_shard_id(self):
+        if self.kv_num_heads < self.tp_size:
+            return self.local_rank * self.kv_num_heads // self.tp_size
+        return self.local_rank // self.num_kv_head_replicas
+
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
         shard_size_mapping = {
             "q": self.num_heads_per_rank * head_dim,
