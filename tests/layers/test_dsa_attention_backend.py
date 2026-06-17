@@ -631,7 +631,7 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
 
         mock_flash_mla = MagicMock()
         mock_flash_mla.get_mla_metadata.return_value = ("tile_meta", None)
-        mock_flash_mla.flash_mla_with_kvcache.return_value = ("decode_output", None)
+        mock_flash_mla.flash_mla_with_kvcache.return_value = (paddle.zeros([2, 1, 16, 512], dtype="float32"), None)
 
         mock_dsk_write = MagicMock()
         gpu_module = MagicMock()
@@ -648,17 +648,17 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
             },
         ):
             result = backend.forward_mixed(
-                q=MagicMock(),
+                q=paddle.zeros([2, 16, 192], dtype="float32"),
                 k=None,
-                v=MagicMock(),
+                v=paddle.zeros([2, 1, 8], dtype="int32"),
                 qkv=None,
-                compressed_kv=MagicMock(),
-                k_pe=MagicMock(),
+                compressed_kv=paddle.zeros([2, 512], dtype="float32"),
+                k_pe=paddle.zeros([2, 1, 64], dtype="float32"),
                 layer=layer,
                 forward_meta=forward_meta,
             )
 
-        self.assertEqual(result, "decode_output")
+        self.assertEqual(result.shape, [2, 1, 16, 512])
 
     @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.current_platform")
     @patch(
@@ -720,9 +720,9 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
         mock_abs.return_value.max.return_value = scale_mock
 
         mock_flash_mla = MagicMock()
-        mock_flash_mla.flash_mla_sparse_fwd.return_value = ("prefill_out", None, None)
+        mock_flash_mla.flash_mla_sparse_fwd.return_value = (paddle.zeros([2, 64, 512], dtype="float32"), None, None)
         mock_flash_mla.get_mla_metadata.return_value = ("tile_meta", None)
-        mock_flash_mla.flash_mla_with_kvcache.return_value = ("decode_out", None)
+        mock_flash_mla.flash_mla_with_kvcache.return_value = (paddle.zeros([2, 1, 16, 512], dtype="float32"), None)
 
         mock_dsk_write = MagicMock()
         mock_merge = MagicMock()
@@ -741,18 +741,18 @@ class TestDSAAttentionBackendForwardMixedFull(unittest.TestCase):
             },
         ):
             result = backend.forward_mixed(
-                q=MagicMock(),
+                q=paddle.zeros([2, 16, 192], dtype="float32"),
                 k=MagicMock(),
-                v=MagicMock(),
+                v=paddle.zeros([2, 1, 8], dtype="int32"),
                 qkv=None,
-                compressed_kv=MagicMock(),
-                k_pe=MagicMock(),
+                compressed_kv=paddle.zeros([2, 512], dtype="float32"),
+                k_pe=paddle.zeros([2, 1, 64], dtype="float32"),
                 layer=layer,
                 forward_meta=forward_meta,
             )
 
         # When both prefill and decode, returns fmha_out_prefill after merge
-        self.assertEqual(result, "prefill_out")
+        self.assertEqual(result.shape, [2, 16, 512])
         mock_merge.assert_called_once()
 
     @patch("fastdeploy.model_executor.layers.attention.dsa_attention_backend.current_platform")
