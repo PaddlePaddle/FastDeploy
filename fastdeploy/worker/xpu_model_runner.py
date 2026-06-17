@@ -671,26 +671,13 @@ class XPUModelRunner(ModelRunnerBase):
                     ):
                         prefill_tokens.extend(request.output_token_ids)
 
-                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                    # Enable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-                else:
-                    # Disable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-
                 if (
                     hasattr(request, "sampling_params")
                     and request.sampling_params is not None
                     and request.sampling_params.prompt_logprobs is not None
                 ):
                     self.prompt_logprobs_reqs[request.request_id] = request
-
-                if len(request.output_token_ids) == 0:
-                    input_ids = request.prompt_token_ids
-                else:
-                    input_ids = request.prompt_token_ids + request.output_token_ids
+                input_ids = request.prompt_token_ids + request.output_token_ids
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx} prefill_start_index {prefill_start_index} prefill_end_index {prefill_end_index} need_prefilled_token_num {len(input_ids)}"
                 )
@@ -710,6 +697,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
+                self.share_inputs["is_chunk_step"][idx : idx + 1] = prefill_end_index < len(input_ids)
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
@@ -738,7 +726,10 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
-                logger.debug(f"Handle preempted request {request} at idx {idx}")
+                if request.task_type.value == RequestType.PREEMPTED.value:
+                    logger.info(f"Handle preempted request {request} at idx {idx}")
+                elif request.task_type.value == RequestType.ABORT.value:
+                    logger.info(f"Handle abort request {request} at idx {idx}")
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
@@ -804,7 +795,6 @@ class XPUModelRunner(ModelRunnerBase):
         self._process_mm_features(req_dicts)
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
-
         if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
