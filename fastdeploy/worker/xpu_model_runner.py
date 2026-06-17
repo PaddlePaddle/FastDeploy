@@ -1497,6 +1497,126 @@ class XPUModelRunner(ModelRunnerBase):
             batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
 
+    def prefill_only_profile_run(self) -> None:
+        """
+        Execute prefill-only profiling: profile prefill iterations without decode.
+        Triggered by FD_XPU_PROFILE_PREFILL=1.
+        """
+        num_iters = envs.FD_XPU_PROFILE_ITERS
+        batch_size = min(envs.FD_XPU_PROFILE_BATCH_SIZE, self.scheduler_config.max_num_seqs)
+        prefill_len = envs.FD_XPU_PROFILE_PREFILL_LEN
+        prefix_len = envs.FD_XPU_PROFILE_PREFIX_LEN
+        assert (
+            batch_size * prefill_len <= 8192
+        ), f"batch_size * prefill_len must be <= 8192, got {batch_size} * {prefill_len} = {batch_size * prefill_len}"
+
+        # Calculate block_num based on prefill_len + prefix_len
+        total_len = prefill_len + prefix_len
+        block_num = (
+            total_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        assert (
+            batch_size * block_num <= self.num_gpu_blocks
+        ), f"Required blocks {batch_size * block_num} exceeds available {self.num_gpu_blocks}"
+
+        logger.info(
+            f"[XPU Profile] Starting {num_iters} prefill iterations, batch_size={batch_size}, prefill_len={prefill_len}, prefix_len={prefix_len}"
+        )
+        enable_profiler_tracing = envs.FD_XPU_PROFILER_TRACING
+        if enable_profiler_tracing and paddle.distributed.get_rank() == 0:
+            import pybind_xprofiler
+
+            pybind_xprofiler.cuda_profiler_start()
+        for _ in range(num_iters):
+            # Set up prefill state before each iteration
+            for i in range(batch_size):
+                self.share_inputs["input_ids"][i : i + 1, :prefill_len] = np.random.randint(
+                    0, self.ori_vocab_size, size=(prefill_len,)
+                )
+                self.share_inputs["seq_lens_this_time"][i : i + 1] = prefill_len
+                self.share_inputs["seq_lens_encoder"][i : i + 1] = prefill_len
+                self.share_inputs["step_seq_lens_encoder"][i : i + 1] = prefill_len
+                self.share_inputs["seq_lens_decoder"][i : i + 1] = prefix_len
+                self.share_inputs["step_idx"][i : i + 1] = 0
+                self.share_inputs["max_dec_len"][i : i + 1] = 1
+                self.share_inputs["stop_flags"][i : i + 1] = False
+                self.share_inputs["encoder_block_lens"][i : i + 1] = block_num
+                self.share_inputs["block_tables"][i : i + 1, :block_num] = np.arange(
+                    i * block_num, (i + 1) * block_num, 1
+                )
+            self.execute_model(is_dummy_run=True)
+        if enable_profiler_tracing and paddle.distributed.get_rank() == 0:
+            import pybind_xprofiler
+
+            pybind_xprofiler.cuda_profiler_stop()
+        logger.info("[XPU Profile] Done.")
+
+    def decode_only_profile_run(self) -> None:
+        """
+        Execute decode-only profiling: skip prefill, directly set up decode state and profile decode iterations.
+        Triggered by FD_XPU_PROFILE_DECODE=1.
+        """
+        num_iters = envs.FD_XPU_PROFILE_ITERS
+        batch_size = min(envs.FD_XPU_PROFILE_BATCH_SIZE, self.scheduler_config.max_num_seqs)
+
+        prefix_len = envs.FD_XPU_PROFILE_PREFIX_LEN
+        tokens_per_iter = (self.speculative_config.num_speculative_tokens + 1) if self.speculative_decoding else 1
+        expected_decode_len = num_iters * tokens_per_iter + 1
+
+        # Calculate block_num based on prefix_len (already-decoded length)
+        block_num = (
+            prefix_len + expected_decode_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        encoder_block_num = (
+            prefix_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        assert (
+            batch_size * block_num <= self.num_gpu_blocks
+        ), f"Required blocks {batch_size * block_num} exceeds available {self.num_gpu_blocks}"
+
+        # Directly set up decode state: pretend prefill already happened
+        for i in range(batch_size):
+            self.share_inputs["input_ids"][i : i + 1, :tokens_per_iter] = np.random.randint(
+                0, self.ori_vocab_size, size=(tokens_per_iter,)
+            )
+            self.share_inputs["seq_lens_this_time"][i : i + 1] = tokens_per_iter
+            self.share_inputs["seq_lens_encoder"][i : i + 1] = 0
+            self.share_inputs["step_seq_lens_encoder"][i : i + 1] = 0
+            self.share_inputs["seq_lens_decoder"][i : i + 1] = prefix_len
+            self.share_inputs["step_idx"][i : i + 1] = 0
+            self.share_inputs["max_dec_len"][i : i + 1] = expected_decode_len + 1
+            self.share_inputs["stop_flags"][i : i + 1] = False
+            self.share_inputs["encoder_block_lens"][i : i + 1] = encoder_block_num
+            self.share_inputs["block_tables"][i : i + 1, :block_num] = np.arange(i * block_num, (i + 1) * block_num, 1)
+
+        # NOTE: The proposer's _prepare_inputs() syncs seq_lens/step_idx/stop_flags from
+        # target_model_inputs via draft_model_preprocess, but block_tables and encoder_block_lens
+        # are NOT synced — they belong to the proposer's own KV cache. Must pre-fill them here.
+        if self.spec_method == SpecMethod.MTP:
+            for i in range(batch_size):
+                self.proposer.model_inputs["encoder_block_lens"][i : i + 1] = encoder_block_num
+                self.proposer.model_inputs["block_tables"][i : i + 1, :block_num] = np.arange(
+                    i * block_num, (i + 1) * block_num, 1
+                )
+                self.proposer.model_inputs["max_dec_len"][i : i + 1] = expected_decode_len + 1
+                self.proposer.model_inputs["stop_flags"][i : i + 1] = False
+
+        logger.info(
+            f"[XPU Profile] Starting {num_iters} decode iterations, batch_size={batch_size}, prefix_len={prefix_len}"
+        )
+        enable_profiler_tracing = envs.FD_XPU_PROFILER_TRACING
+        if enable_profiler_tracing and paddle.distributed.get_rank() == 0:
+            import pybind_xprofiler
+
+            pybind_xprofiler.cuda_profiler_start()
+        for _ in range(num_iters):
+            self.execute_model(is_dummy_run=True)
+        if enable_profiler_tracing and paddle.distributed.get_rank() == 0:
+            import pybind_xprofiler
+
+            pybind_xprofiler.cuda_profiler_stop()
+        logger.info("[XPU Profile] Done.")
+
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """
         Set a globally unified block number and update the model's shared input.
