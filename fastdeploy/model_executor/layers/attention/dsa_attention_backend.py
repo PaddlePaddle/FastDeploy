@@ -38,6 +38,9 @@ from fastdeploy.model_executor.layers.attention.ops import (
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
 
+import triton
+import triton.language as tl
+
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.layers.attention.attention import Attention
 from fastdeploy.model_executor.layers.attention.base_attention_backend import (
@@ -45,6 +48,58 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
     AttentionMetadata,
 )
 from fastdeploy.model_executor.layers.attention.utils import init_rank_and_device_id
+from fastdeploy.model_executor.ops.triton_ops.triton_utils import (
+    enable_compat_on_triton_kernel,
+)
+
+
+@enable_compat_on_triton_kernel
+@triton.jit()
+def insert_kernel_with_active_idx(
+    decoder_res,
+    active_idx,
+    cu_seqlens_q,
+    output,
+    HIDDEN_DIM: tl.constexpr,
+    BLOCK_SIZE: tl.constexpr,
+):
+    compact_id = tl.program_id(axis=0)
+    batch_id = tl.load(active_idx + compact_id)
+    cu_len_this_batch = tl.load(cu_seqlens_q + batch_id)
+
+    read_offsets = tl.arange(0, BLOCK_SIZE)
+    decoder_res += compact_id * HIDDEN_DIM
+    row_data = tl.load(decoder_res + read_offsets, mask=read_offsets < HIDDEN_DIM)
+
+    output += cu_len_this_batch * HIDDEN_DIM
+    tl.store(output + read_offsets, row_data, mask=read_offsets < HIDDEN_DIM)
+
+
+def insert_decoder_result_back_with_active_idx(
+    decoder_result: paddle.Tensor,
+    active_idx: paddle.Tensor,
+    cu_seqlens_q: paddle.Tensor,
+    mixed_token_num,
+):
+    assert len(decoder_result.shape) == 4
+    assert len(active_idx.shape) == 1
+    assert len(cu_seqlens_q.shape) == 1
+
+    hidden_dim = decoder_result.shape[-2] * decoder_result.shape[-1]
+    out = paddle.empty([mixed_token_num, hidden_dim], dtype=decoder_result.dtype)
+
+    BLOCK_SIZE = triton.next_power_of_2(hidden_dim)
+
+    insert_kernel_with_active_idx[(active_idx.shape[0],)](
+        decoder_result,
+        active_idx,
+        cu_seqlens_q,
+        out,
+        hidden_dim,
+        BLOCK_SIZE,
+    )
+
+    return out
 
 
 def yarn_get_mscale(scale=1, mscale=1):
@@ -397,19 +452,16 @@ class DSAAttentionBackend(AttentionBackend):
         # Decode
         if forward_meta.max_len_tensor_cpu[2]:
 
-            from fastdeploy.model_executor.layers.attention.mla_attention_backend import (
-                insert_decoder_result_back,
-            )
-
             need_insert_decoder_result = False
             q_total_token_num = q.shape[0]
-            # When q contains mixed prefill+decode tokens, compact to decode-only tokens
-            # before passing to flash_mla_with_kvcache which expects [bsz, 1, heads, dim]
-            if q.shape[0] > forward_meta.seq_lens_decoder.shape[0]:
-                active_idx = paddle.where(forward_meta.seq_lens_decoder > 0)[0]  # [active_bsz]
-                token_idx = forward_meta.cu_seqlens_q[active_idx] + forward_meta.seq_lens_encoder[active_idx]
-                q_decode = q[token_idx]  # [active_bsz, heads, dim]
-                indexer_topk_decode = indexer_topk[token_idx]  # [active_bsz, 1, topk]
+            if forward_meta.max_len_tensor_cpu[1]:
+                # indexer_topk is generated in full-token space. Select only
+                # real decode token rows before calling flash_mla_with_kvcache.
+                # This is feasible because the current DSA does not support chunk-related functions.
+                active_idx = paddle.where(forward_meta.seq_lens_decoder > 0)[0]
+                token_idx = forward_meta.cu_seqlens_q[active_idx]
+                q_decode = q[token_idx]
+                indexer_topk_decode = indexer_topk[token_idx]
                 need_insert_decoder_result = True
             else:
                 q_decode = q
@@ -448,24 +500,13 @@ class DSAAttentionBackend(AttentionBackend):
             fmha_out_decode = fmha_out_decode[:, :, :q_num_heads, :].contiguous()
 
             if need_insert_decoder_result:
-                # insert_decoder_result_back reads row[batch_id] from decoder_result
-                # (indexed over full max_bsz), so we must scatter active results back
-                # into a full-bsz tensor first.
-                max_bsz = forward_meta.seq_lens_decoder.shape[0]
-                full_decode_out = paddle.zeros(
-                    [max_bsz, 1, q_num_heads, fmha_out_decode.shape[-1]],
-                    dtype=fmha_out_decode.dtype,
-                )
-                full_decode_out[active_idx] = fmha_out_decode
-                fmha_out_decode = insert_decoder_result_back(
-                    full_decode_out,
+                fmha_out_decode = insert_decoder_result_back_with_active_idx(
+                    fmha_out_decode,
+                    active_idx,
                     forward_meta.cu_seqlens_q,
-                    forward_meta.seq_lens_encoder,
-                    forward_meta.seq_lens_decoder,
                     q_total_token_num,
                 )
             else:
-                # Reshape to [total_tokens, heads*head_dim] for merge/return
                 fmha_out_decode = fmha_out_decode.reshape(
                     [fmha_out_decode.shape[0], q_num_heads * fmha_out_decode.shape[-1]]
                 )
