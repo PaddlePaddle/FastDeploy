@@ -20,6 +20,7 @@ import os
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, List, Optional
 
+import numpy as np
 import paddle
 
 from fastdeploy.model_executor.layers.attention.ops import (
@@ -33,8 +34,6 @@ from fastdeploy.model_executor.layers.attention.ops import (
 
 if TYPE_CHECKING:
     from fastdeploy.model_executor.forward_meta import ForwardMeta
-
-import numpy as np
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
@@ -177,14 +176,17 @@ class AppendAttentionBackend(AttentionBackend):
         self.num_heads: int = num_heads
         self.group_size: int = self.num_heads // self.kv_num_heads
         self.head_dim: int = fd_config.model_config.head_dim
+        self.v_head_dim: int = getattr(fd_config.model_config, "v_head_dim", self.head_dim)
+        self.external_norm_rope: bool = True if self.v_head_dim != self.head_dim else False
         self.num_layers: int = fd_config.model_config.num_hidden_layers
 
         # head wise sliding window attention
-        self.window_size: int = getattr(fd_config.model_config, "window_size", 0)
+        self.sliding_window: int = getattr(fd_config.model_config, "sliding_window", 0)
         self.sink_size: int = getattr(fd_config.model_config, "sink_size", 0)
-        self.window_attn_skip_freq: int = getattr(fd_config.model_config, "window_attn_skip_freq", 0)
+        self.window_attn_skip_freq: list = getattr(fd_config.model_config, "window_attn_skip_freq", [0])
         self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
 
+        self.head_wise_full_hidden = 0
         if self.head_wise_swa_ratio > 0.0:
             self.head_wise_full_hidden = int((1 - self.head_wise_swa_ratio) * self.num_heads * self.head_dim)
 
@@ -291,7 +293,9 @@ class AppendAttentionBackend(AttentionBackend):
         key_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.head_dim]
         if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
             key_cache_shape[-1] = self.head_dim // 2
-        value_cache_shape = key_cache_shape
+        value_cache_shape = [max_num_blocks, self.kv_num_heads, self.block_size, self.v_head_dim]
+        if kv_cache_quant_type is not None and kv_cache_quant_type == "int4_zp":
+            value_cache_shape[-1] = self.v_head_dim // 2
         return key_cache_shape, value_cache_shape
 
     def forward_mixed(
@@ -315,7 +319,9 @@ class AppendAttentionBackend(AttentionBackend):
         if rope_already_applied and forward_meta.rotary_embs is not None:
             forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
 
-        sliding_window = self.window_size if self.window_size > 0 else layer.sliding_window
+        sliding_window = 0
+        if len(self.window_attn_skip_freq) > 1 and self.window_attn_skip_freq[layer.layer_id] == 1:
+            sliding_window = self.sliding_window if self.sliding_window > 0 else layer.sliding_window
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
@@ -349,7 +355,8 @@ class AppendAttentionBackend(AttentionBackend):
             cache_k_scales = getattr(layer, "cache_k_scale", None)
             cache_v_scales = getattr(layer, "cache_v_scale", None)
 
-        if layer.layer_id == 0:
+        self.num_key_value_heads_list = getattr(self.fd_config.model_config, "num_key_value_heads_list", None)
+        if layer.layer_id == 0 or self.num_key_value_heads_list is not None:
             get_block_shape_and_split_kv_block(
                 forward_meta.seq_lens_encoder,
                 forward_meta.seq_lens_decoder,
@@ -370,6 +377,47 @@ class AppendAttentionBackend(AttentionBackend):
                 self.decoder_block_shape_q,
                 self.group_size,
                 self.block_size,
+            )
+
+        from fastdeploy.model_executor.ops.triton_ops import (
+            do_rope,
+            qk_rmsnorm_fused,
+            write_cache,
+        )
+
+        if self.external_norm_rope:
+            if q_norm_weight is not None and k_norm_weight is not None:
+                qk_rmsnorm_fused(
+                    qkv,
+                    q_norm_weight,
+                    k_norm_weight,
+                    getattr(layer, "rms_norm_eps", 1e-6),
+                    self.num_heads * cache_k.shape[3],
+                    cache_k.shape[1] * cache_k.shape[3],
+                    cache_k.shape[3],
+                    cache_v.shape[3],
+                )
+
+            assert forward_meta.rotary_embs.shape[0] == 2
+            do_rope(
+                qkv,
+                forward_meta.rotary_embs[0],
+                forward_meta.rotary_embs[1],
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_decoder,
+                forward_meta.batch_id_per_token,
+                cache_k,
+                cache_v,
+            )
+
+            write_cache(
+                qkv,
+                cache_k,
+                cache_v,
+                forward_meta.cu_seqlens_q,
+                forward_meta.seq_lens_decoder,
+                forward_meta.batch_id_per_token,
+                forward_meta.block_tables,
             )
 
         if self.use_output:
@@ -520,5 +568,97 @@ class AppendAttentionBackend(AttentionBackend):
                 sliding_window,
                 self.sink_size,
                 self.head_wise_full_hidden if self.head_wise_swa_ratio > 0 else 0,
+                self.external_norm_rope,  # if True is means only_do_attn
             )
+        return res
+
+    def forward_unitest(
+        self,
+        q: paddle.Tensor,
+        k: paddle.Tensor,
+        v: paddle.Tensor,
+        qkv: paddle.Tensor,
+        compressed_kv: paddle.Tensor,
+        k_pe: paddle.Tensor,
+        layer: Attention,
+        forward_meta: ForwardMeta,
+    ) -> paddle.Tensor:
+        """
+        This is a utility function invoked in unitest only.
+        """
+
+        cache_k = forward_meta.caches[2 * layer.layer_id]
+        cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+
+        head_dim_q = 128
+        head_dim_v = 128
+
+        forward_meta.caches[2 * layer.layer_id] = paddle.randn(cache_k.shape[:3] + [head_dim_q])
+        forward_meta.caches[2 * layer.layer_id + 1] = paddle.randn(cache_v.shape[:3] + [head_dim_v])
+
+        cache_k = forward_meta.caches[2 * layer.layer_id]
+        cache_v = forward_meta.caches[2 * layer.layer_id + 1]
+
+        qkv = paddle.randn([qkv.shape[0], 56 * head_dim_q + 4 * head_dim_q + 4 * head_dim_v])
+
+        bsz = forward_meta.cu_seqlens_q.shape[0] - 1
+
+        q_token_num = qkv.shape[0]
+        head_dim_q = cache_k.shape[3]
+        kv_heads = cache_k.shape[1]
+        head_dim_v = cache_v.shape[-1]
+
+        q_num_heads = (qkv.shape[-1] - kv_heads * (head_dim_q + head_dim_v)) // head_dim_q
+
+        q = qkv[:, : q_num_heads * head_dim_q].contiguous().reshape([0, q_num_heads, head_dim_q])
+
+        res_baseline = paddle.zeros([q_token_num, q_num_heads, head_dim_v], dtype=q.dtype)
+
+        page_size = 64
+
+        for batch_id in range(bsz):
+            kv_len = forward_meta.seq_lens_decoder[batch_id].item() + forward_meta.seq_lens_this_time[batch_id].item()
+            extract_k = paddle.zeros([kv_heads, kv_len, head_dim_q], dtype=q.dtype)
+            extract_v = paddle.zeros([kv_heads, kv_len, head_dim_v], dtype=q.dtype)
+
+            for local_seq_id in range(0, kv_len, page_size):
+                start = local_seq_id
+                end = min(local_seq_id + page_size, kv_len)
+                physical_id = forward_meta.block_tables[batch_id, local_seq_id // page_size].item()
+
+                page_end = page_size if end % page_size == 0 else end % page_size
+                extract_k[:, start:end, :] = cache_k[physical_id, :, :page_end, :]
+                extract_v[:, start:end, :] = cache_v[physical_id, :, :page_end, :]
+            extract_k = extract_k.reshape([kv_heads, 1, kv_len, head_dim_q]).tile([1, q_num_heads // kv_heads, 1, 1])
+            extract_v = extract_v.reshape([kv_heads, 1, kv_len, head_dim_v]).tile([1, q_num_heads // kv_heads, 1, 1])
+            extract_k.reshape_([q_num_heads, kv_len, head_dim_q])
+            extract_v.reshape_([q_num_heads, kv_len, head_dim_v])
+
+            start = forward_meta.cu_seqlens_q[batch_id].item()
+            end = forward_meta.cu_seqlens_q[batch_id + 1].item()
+            q_len = end - start
+            this_batch_q = q[start:end, :, :].contiguous().transpose([1, 0, 2]).contiguous()
+
+            p = paddle.matmul(this_batch_q, extract_k.transpose([0, 2, 1]).contiguous())
+            p = p * (head_dim_q**-0.5)
+
+            tmp_zeros = np.zeros((q_len, kv_len)) - 1
+            for i in range(q_len):
+                tmp_zeros[i][: kv_len - q_len + i + 1] = 0
+            mask = tmp_zeros * 1000
+            mask = paddle.to_tensor(mask, dtype=q.dtype)
+            p = p + mask[None, :]
+
+            p = paddle.nn.functional.softmax(p, -1)
+            out = paddle.matmul(p, extract_v).contiguous()
+            res_baseline[start:end, :, :] = out.transpose([1, 0, 2]).contiguous()
+        res_baseline.reshape_([q_token_num, q_num_heads * head_dim_v])
+
+        res = self.forward_mixed(q, k, v, qkv, compressed_kv, k_pe, layer, forward_meta)
+
+        # print((res - res_baseline).abs().max())
+        # assert (res - res_baseline).abs().max() <= 0.1
+
+        return paddle.empty([res.shape[0], 7168])
+
         return res

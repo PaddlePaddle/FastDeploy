@@ -1493,6 +1493,8 @@ __global__ void append_write_cache_kv_c8_qkv_dynamic(
     const int max_blocks_per_seq,
     const int num_heads,
     const int kv_num_heads) {
+  if constexpr (HEAD_DIM == 192) return;
+
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   constexpr uint32_t pad_len = BLOCK_SIZE;
   const uint32_t btid = blockIdx.x, kv_head_idx = blockIdx.z;
@@ -1919,6 +1921,8 @@ __global__ void append_write_cache_kv_c4_qkv(
     const int max_blocks_per_seq,
     const int num_heads,
     const int kv_num_heads) {
+  if constexpr (HEAD_DIM == 192) return;
+
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
   constexpr uint32_t pad_len = BLOCK_SIZE;
   const uint32_t btid = blockIdx.x, kv_head_idx = blockIdx.z;

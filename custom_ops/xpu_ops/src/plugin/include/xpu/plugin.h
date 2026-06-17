@@ -545,6 +545,7 @@ DLL_EXPORT int compute_order(api::Context* ctx,
                              const int* base_model_seq_lens_this_time,
                              const int* base_model_seq_lens_encoder,
                              const int* accept_nums,
+                             const bool* stop_flags,
                              int* position_map,
                              int* output_token_num,
                              const int bsz,
@@ -833,6 +834,19 @@ DLL_EXPORT int reasoning_phase_token_constraint(
     int vocab_size,
     int max_seq_len,
     int allowed_tokens_len);
+
+DLL_EXPORT int build_sampling_params(api::Context* ctx,
+                                     float* top_p_padding,
+                                     int64_t* top_k_padding,
+                                     int64_t* topp_seed,
+                                     const float* top_p,
+                                     const int64_t* top_k,
+                                     int64_t* infer_seed,
+                                     const int* seq_lens_this_time,
+                                     const int* seq_lens_encoder,
+                                     int bs,
+                                     int64_t token_num,
+                                     int64_t increment_value);
 
 /*--------------------------------------- MTP end
  * --------------------------------------------*/

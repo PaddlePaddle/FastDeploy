@@ -365,6 +365,7 @@ class EngineService:
             enable_mm_runtime=self.cfg.enable_mm_runtime,
         )
         self.data_processor = self.input_processor.create_processor()
+        self.data_processor.set_server_defaults(self.cfg.serving_limits_config)
         self.mm_max_tokens_per_item = self.data_processor.get_mm_max_tokens_per_item(
             self.cfg.model_config.max_model_len
         )
@@ -912,10 +913,23 @@ class EngineService:
                 with self._pause_cond:
                     self._pause_cond.wait_for(lambda: not self.is_paused)
                 nonlocal is_fetching
-                num_prefill_batch = min(
-                    int(self.resource_manager.available_batch()),
-                    self.cfg.max_prefill_batch,
-                )
+                if self.cfg.scheduler_config.splitwise_role == "prefill":
+                    max_inflight_prefill = envs.FD_MAX_INFLIGHT_PREFILL
+                    inflight_prefill = len(self.resource_manager.running)
+                    if inflight_prefill >= max_inflight_prefill:
+                        is_fetching = False
+                        return
+                    available_for_new = max_inflight_prefill - inflight_prefill
+                    num_prefill_batch = min(
+                        int(self.resource_manager.available_batch()),
+                        self.cfg.max_prefill_batch,
+                        available_for_new,
+                    )
+                else:
+                    num_prefill_batch = min(
+                        int(self.resource_manager.available_batch()),
+                        self.cfg.max_prefill_batch,
+                    )
 
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     max_num_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
@@ -1338,6 +1352,14 @@ class EngineService:
 
                         request.metrics.scheduler_recv_req_time = time.time()
                         main_process_metrics.inc_value("requests_number")
+                        main_process_metrics.inc_value("prompt_tokens_total", request.prompt_token_ids_len)
+                        main_process_metrics.obs_value("request_prompt_tokens", request.prompt_token_ids_len)
+                        if getattr(request, "sampling_params", None) and getattr(
+                            request.sampling_params, "max_tokens", None
+                        ):
+                            main_process_metrics.obs_value(
+                                "request_params_max_tokens", request.sampling_params.max_tokens
+                            )
                         trace_carrier = data.get("trace_carrier")
                         if trace_carrier:
                             request_id = get_base_request_id(data["request_id"])
@@ -1921,7 +1943,11 @@ class EngineService:
     def _decode_token(self, token_ids, req_id, is_end):
         delta_text = ""
         if envs.FD_ENABLE_RETURN_TEXT:
-            delta_text, cum_tokens, _ = self.data_processor.ids2tokens(token_ids, req_id)
+            delta_text, previous_token_ids, _ = self.data_processor.ids2tokens(token_ids, req_id)
+            # Reconstruct the post-extend cumulative list from the pre-delta
+            # snapshot + this call's input — ``ids2tokens`` only returns the
+            # snapshot to keep its return values aliasing-free.
+            cum_tokens = previous_token_ids + list(token_ids)
             if delta_text != "":
                 prefix_offset = self.data_processor.decode_status[req_id][0]
                 read_offset = self.data_processor.decode_status[req_id][1]
@@ -2096,6 +2122,7 @@ class EngineService:
                         self.llm_logger.debug(f"D has successfully sent cache infos for task {task.request_id}")
                         processed_indices.append(idx)
                         is_success = True
+                        task.is_preallocated = True
                         main_process_metrics.inc_value("decode_preallocated_req_num")
                 else:
                     if self.resource_manager.is_resource_sufficient(task.prompt_token_ids_len):
@@ -2198,6 +2225,9 @@ class EngineService:
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:  # first token sent by D instance
                         self.scheduler.put_results([req_output])
                     self.resource_manager.add_prefilled_request(req_output)
+                    req = self.resource_manager.requests.get(request_id)
+                    if req:
+                        req.is_preallocated = False
                     self.llm_logger.info(f"D has successfully added prefilled request, {request_id}")
 
         def decode_loop():
@@ -2214,6 +2244,43 @@ class EngineService:
                     time.sleep(0.01)
 
         threading.Thread(target=decode_loop, daemon=True).start()
+        threading.Thread(target=self._prealloc_timeout_monitor, daemon=True).start()
+
+    def _prealloc_timeout_monitor(self):
+        """Reclaim preallocated blocks that P never followed through on."""
+        timeout = envs.FD_DECODE_PREALLOC_BLOCK_TIMEOUT
+        if timeout <= 0:
+            return
+        check_interval = max(10, min(timeout / 10, 60))
+        while self.running:
+            time.sleep(check_interval)
+            try:
+                now = time.time()
+                with self.resource_manager.lock:
+                    timed_out = [
+                        rid
+                        for rid, req in self.resource_manager.requests.items()
+                        if getattr(req, "is_preallocated", False)
+                        and (now - req.metrics.decode_preallocate_req_time) > timeout
+                    ]
+                for req_id in timed_out:
+                    self.llm_logger.warning(f"Reclaiming preallocated blocks for {req_id}: timeout {timeout}s")
+                    self.resource_manager.pre_recycle_resource(req_id)
+                    main_process_metrics.dec_value("decode_preallocated_req_num")
+                    self.scheduler.put_results(
+                        [
+                            RequestOutput(
+                                request_id=req_id,
+                                finished=True,
+                                error_code=408,
+                                error_msg=f"Preallocated blocks reclaimed: no prefill within {timeout}s",
+                            )
+                        ]
+                    )
+                    if req_id in self.token_processor.tokens_counter:
+                        del self.token_processor.tokens_counter[req_id]
+            except Exception as e:
+                self.llm_logger.error(f"Prealloc timeout monitor error: {e}")
 
     def start_cache_service(self, device_ids, ipc_signal_suffix):
         if envs.ENABLE_V1_KVCACHE_MANAGER:

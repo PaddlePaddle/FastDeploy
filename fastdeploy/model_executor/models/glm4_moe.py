@@ -64,6 +64,13 @@ class Glm4MoeMLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
+        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
+        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
+        self.use_tp = self.tensor_parallel_size > 1
+        self.use_ep = self.expert_parallel_size > 1
+        self.enable_all_reduce_fusion = fd_config.parallel_config.enable_flashinfer_allreduce_fusion and (
+            self.use_tp and not self.use_ep
+        )
         # shared experts not split when use_sequence_parallel_moe in ep + tp
         if (
             fd_config.parallel_config.use_sequence_parallel_moe
@@ -101,7 +108,7 @@ class Glm4MoeMLP(nn.Layer):
                 output_size=fd_config.model_config.hidden_size,
                 with_bias=False,
                 reduce_results=reduce_results,
-                enable_all_reduce_fusion=fd_config.parallel_config.enable_flashinfer_allreduce_fusion,
+                enable_all_reduce_fusion=self.enable_all_reduce_fusion,
             )
 
         self.act_fn = SiluAndMul(
@@ -494,6 +501,11 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
+
+            # special case!
+            if "correction_bias" in loaded_weight_name:
+                loaded_weight.reshape_([1, loaded_weight.numel().item()])
+
             logger.debug(f"Loading weight: {loaded_weight_name}")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:

@@ -63,6 +63,12 @@ class BenchmarkMetrics:
     request_goodput: float
     output_throughput: float
     total_token_throughput: float
+    # 全局聚合解码速度(过滤 burst 与 preemption 后)
+    s_decode_clean: float  # tok/s
+    n_itls_total: int  # 全部 itl 样本数
+    n_itls_burst: int  # itl < 1ms 的数量
+    n_itls_preempt: int  # itl > 500ms 的数量
+    n_itls_clean: int  # 1ms <= itl <= 500ms 的数量
     mean_s_decode: float
     median_s_decode: float
     std_s_decode: float
@@ -217,24 +223,48 @@ def calculate_metrics(
             ttfts.append(outputs[i].ttft)
             res_ttfts.append(outputs[i].res_ttft)
             e2els.append(outputs[i].latency)
-            # 推理侧指标，仅stream模式有效
-            if len(outputs[i].arrival_time) > 1:
+
+            # arrival_time相关指标
+            if getattr(outputs[i], "has_arrival_time", False) and len(outputs[i].arrival_time) > 1:
                 # 推理侧ITL
                 s_a = outputs[i].arrival_time[1:]
-
-                for j in range(len(s_a) - 2):
+                for j in range(len(s_a) - 1):
                     s_itls.append(s_a[j + 1] - s_a[j])
+
                 # 推理侧TTFT
                 s_ttfts.append(outputs[i].arrival_time[1])
+
                 # 推理侧整句时延
                 s_e2els.append(outputs[i].arrival_time[-1])
-                # 解码速度去掉首token
+
+            else:
+                # sglang等不返回arrival_time
+                s_ttfts.append(0)
+                s_e2els.append(0)
+
+            # 解码速度（兼容无arrival_time场景）
+            if getattr(outputs[i], "has_arrival_time", False):
+                # FD有arrival_time场景
                 if len(outputs[i].arrival_time) > 2:
-                    s_decodes.append(
-                        (outputs[i].output_tokens - 1) / (outputs[i].arrival_time[-1] - outputs[i].arrival_time[1])
-                    )
+                    decode_time = outputs[i].arrival_time[-1] - outputs[i].arrival_time[1]
+
+                    if decode_time > 0:
+                        s_decodes.append((outputs[i].output_tokens - 1) / decode_time)
+                    else:
+                        s_decodes.append(0)
                 else:
-                    print("len(outputs[i].arrival_time) <= 2")
+                    s_decodes.append(0)
+            else:
+                # sglang等无arrival_time场景fallback
+                if outputs[i].output_tokens > 1:
+                    decode_time = outputs[i].latency - outputs[i].ttft
+
+                    if decode_time > 0:
+                        s_decodes.append((outputs[i].output_tokens - 1) / decode_time)
+                    else:
+                        s_decodes.append(0)
+                else:
+                    s_decodes.append(0)
             completed += 1
         else:
             actual_output_lens.append(0)
@@ -265,6 +295,22 @@ def calculate_metrics(
             "All requests failed. This is likely due to a misconfiguration " "on the benchmark arguments.",
             stacklevel=2,
         )
+
+    # === Cleaned ITL aggregation ===
+    BURST_THRESHOLD_S = 0.001  # 1 ms
+    PREEMPT_THRESHOLD_S = 0.5  # 500 ms
+    all_itls_flat: list[float] = []
+    for o in outputs:
+        if o.success:
+            all_itls_flat.extend(o.itl)
+    _arr = np.asarray(all_itls_flat, dtype=float) if all_itls_flat else np.empty(0)
+    n_itls_total = int(_arr.size)
+    n_itls_burst = int((_arr < BURST_THRESHOLD_S).sum())
+    n_itls_preempt = int((_arr > PREEMPT_THRESHOLD_S).sum())
+    _clean = _arr[(_arr >= BURST_THRESHOLD_S) & (_arr <= PREEMPT_THRESHOLD_S)]
+    n_itls_clean = int(_clean.size)
+    s_decode_clean = float(_clean.size / _clean.sum()) if _clean.sum() > 0 else 0.0
+
     metrics = BenchmarkMetrics(
         completed=completed,
         total_input=total_input,
@@ -325,6 +371,11 @@ def calculate_metrics(
         std_res_ttft_ms=np.std(res_ttfts or 0) * 1000,
         median_res_ttft_ms=np.median(res_ttfts or 0) * 1000,
         percentiles_res_ttft_ms=[(p, np.percentile(res_ttfts or 0, p) * 1000) for p in selected_percentiles],
+        s_decode_clean=s_decode_clean,
+        n_itls_total=n_itls_total,
+        n_itls_burst=n_itls_burst,
+        n_itls_preempt=n_itls_preempt,
+        n_itls_clean=n_itls_clean,
     )
 
     return metrics, actual_output_lens
@@ -373,6 +424,15 @@ async def benchmark(
     response_format = input_requests[0].response_format
     random_flag = input_requests[0].random_flag
 
+    # 多轮模式下 warm up 仅跑首条请求：将 history 截断到第一个 user 消息为止，
+    if args.multi_turn and test_history_QA:
+        truncated_history = []
+        for msg in test_history_QA:
+            truncated_history.append(msg)
+            if isinstance(msg, dict) and msg.get("role") == "user":
+                break
+        test_history_QA = truncated_history
+
     if len(ip_list) >= 1:
         api_url = f"http://{ip_list[0]}{args.endpoint}"
 
@@ -399,7 +459,7 @@ async def benchmark(
         stream=args.stream,
     )
 
-    if not debug:
+    if args.warmup:
         print("test_input:", test_input)
 
         test_output = await request_func(request_func_input=test_input)
@@ -408,13 +468,15 @@ async def benchmark(
             out_list, metrics = test_output
             test_output = out_list[0]
 
+        print("test_output:", test_output, flush=True)
         if not test_output.success:
-            print("test_output:", test_output, flush=True)
             raise ValueError(
                 f"Initial test run failed - Please make sure that 1. benchmark arguments are correctly specified and 2. the http_proxy and https_proxy are turned off. Error: {test_output.error}"
             )
         else:
             print("Initial test run completed. Starting main benchmark run...")
+    else:
+        print("Warm up disabled (--no-warmup). Skipping initial test run.")
 
     if lora_modules:
         # For each input request, choose a LoRA module at random.
@@ -715,6 +777,11 @@ async def benchmark(
         "reasoning_contents": [output.reasoning_content for output in outputs],
         "errors": [output.error for output in outputs],
         "metrics": [output.metrics for output in outputs],
+        "s_decode_clean": metrics.s_decode_clean,
+        "n_itls_total": metrics.n_itls_total,
+        "n_itls_burst": metrics.n_itls_burst,
+        "n_itls_preempt": metrics.n_itls_preempt,
+        "n_itls_clean": metrics.n_itls_clean,
     }
 
     def process_one_metric(
@@ -863,6 +930,25 @@ async def benchmark(
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name}:", value))
             result[f"p{p_word}_{metric_attribute_name}"] = value
 
+    print("{s:{c}^{n}}".format(s="解码速度 (ITL全局聚合)", n=50, c="-"))
+    _tot = max(metrics.n_itls_total, 1)
+    print("{:<40} {:<10d}".format("Total ITLs:", metrics.n_itls_total))
+    print(
+        "{:<40} {:<10d} ({:.2f}%)".format(
+            "ITL < 1ms (burst):", metrics.n_itls_burst, 100 * metrics.n_itls_burst / _tot
+        )
+    )
+    print(
+        "{:<40} {:<10d} ({:.2f}%)".format(
+            "ITL > 500ms (preempt):", metrics.n_itls_preempt, 100 * metrics.n_itls_preempt / _tot
+        )
+    )
+    print(
+        "{:<40} {:<10d} ({:.2f}%)".format(
+            "ITL clean [1ms,500ms]:", metrics.n_itls_clean, 100 * metrics.n_itls_clean / _tot
+        )
+    )
+    print("{:<40} {:<10.2f}".format("Decode speed (clean, tok/s):", metrics.s_decode_clean))
     process_one_length("s_decode", "Decode", "解码速度(tok/s)")
     process_one_metric("ttft", "TTFT", "Time to First Token")
     process_one_metric("s_ttft", "S_TTFT", "Infer Time to First Token")
@@ -1457,6 +1543,13 @@ if __name__ == "__main__":
         action="store_true",
         help="按多轮对话方式请求",
     )
+    parser.add_argument(
+        "--no-warmup",
+        action="store_false",
+        dest="warmup",
+        help="关闭压测开始前的 warm up（initial single prompt test run）",
+    )
+    parser.set_defaults(warmup=True)
     parser.add_argument(
         "--no-stream",
         action="store_false",

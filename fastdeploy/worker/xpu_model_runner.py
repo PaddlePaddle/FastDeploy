@@ -27,6 +27,7 @@ import numpy as np
 import paddle
 import zmq
 from paddle import nn
+from paddleformers.utils.log import logger
 
 from fastdeploy import envs
 from fastdeploy.config import FDConfig
@@ -63,12 +64,9 @@ from fastdeploy.model_executor.xpu_pre_and_post_process import (
     xpu_process_output,
 )
 from fastdeploy.spec_decode import SpecMethod
-from fastdeploy.utils import get_logger
 from fastdeploy.worker.input_batch import InputBatch
 from fastdeploy.worker.model_runner_base import ModelRunnerBase
 from fastdeploy.worker.output import LogprobsTensors, ModelOutputData, ModelRunnerOutput
-
-logger = get_logger("xpu_model_runner", "xpu_model_runner.log")
 
 
 @contextmanager
@@ -673,26 +671,13 @@ class XPUModelRunner(ModelRunnerBase):
                     ):
                         prefill_tokens.extend(request.output_token_ids)
 
-                if request.get("enable_thinking", False) and request.get("reasoning_max_tokens", None) is not None:
-                    # Enable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = request.get("reasoning_max_tokens")
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-                else:
-                    # Disable thinking
-                    self.share_inputs["max_think_lens"][idx : idx + 1, :] = -1
-                    self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
-
                 if (
                     hasattr(request, "sampling_params")
                     and request.sampling_params is not None
                     and request.sampling_params.prompt_logprobs is not None
                 ):
                     self.prompt_logprobs_reqs[request.request_id] = request
-
-                if len(request.output_token_ids) == 0:
-                    input_ids = request.prompt_token_ids
-                else:
-                    input_ids = request.prompt_token_ids + request.output_token_ids
+                input_ids = request.prompt_token_ids + request.output_token_ids
                 logger.debug(
                     f"Handle prefill request {request} at idx {idx} prefill_start_index {prefill_start_index} prefill_end_index {prefill_end_index} need_prefilled_token_num {len(input_ids)}"
                 )
@@ -712,6 +697,7 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["step_seq_lens_decoder"][idx : idx + 1] = 0
                 self.share_inputs["prompt_lens"][idx : idx + 1] = len(input_ids)
                 self.share_inputs["is_block_step"][idx : idx + 1] = False
+                self.share_inputs["is_chunk_step"][idx : idx + 1] = prefill_end_index < len(input_ids)
                 self.share_inputs["step_idx"][idx : idx + 1] = (
                     len(request.output_token_ids) if prefill_end_index >= len(input_ids) else 0
                 )
@@ -740,7 +726,10 @@ class XPUModelRunner(ModelRunnerBase):
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 0
                 continue
             else:  # preempted task
-                logger.debug(f"Handle preempted request {request} at idx {idx}")
+                if request.task_type.value == RequestType.PREEMPTED.value:
+                    logger.info(f"Handle preempted request {request} at idx {idx}")
+                elif request.task_type.value == RequestType.ABORT.value:
+                    logger.info(f"Handle abort request {request} at idx {idx}")
                 self.share_inputs["preempted_idx"][idx : idx + 1, :] = 1
                 self.share_inputs["block_tables"][idx : idx + 1, :] = -1
                 self.share_inputs["stop_flags"][idx : idx + 1] = True
@@ -806,7 +795,6 @@ class XPUModelRunner(ModelRunnerBase):
         self._process_mm_features(req_dicts)
         if has_prefill_task or has_decode_task:
             self.share_inputs["not_need_stop"][0] = True
-
         if self.spec_method == SpecMethod.MTP:
             self.proposer.insert_tasks_v1(req_dicts, num_running_requests)
 
@@ -968,10 +956,7 @@ class XPUModelRunner(ModelRunnerBase):
         # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
         #    Note: even when CPU cache (num_cpu_blocks > 0) is enabled, GPU runner still
         #    creates GPU cache tensors; cache transfer manager handles CPU<->GPU swap.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
-        )
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
             while cache_ready_signal.value[local_rank] != 1:
@@ -1311,8 +1296,6 @@ class XPUModelRunner(ModelRunnerBase):
                 self._execute_empty_input(self.forward_meta)
                 return None
 
-            # 2. Padding inputs for cuda graph
-
             model_inputs = {}
             model_inputs["ids_remove_padding"] = self.share_inputs["ids_remove_padding"]
             if self.enable_mm:
@@ -1503,6 +1486,126 @@ class XPUModelRunner(ModelRunnerBase):
             ),
             batch_size=min(self.scheduler_config.max_num_seqs, 1),
         )
+
+    def prefill_only_profile_run(self) -> None:
+        """
+        Execute prefill-only profiling: profile prefill iterations without decode.
+        Triggered by FD_XPU_PROFILE_PREFILL=1.
+        """
+        num_iters = envs.FD_XPU_PROFILE_ITERS
+        batch_size = min(envs.FD_XPU_PROFILE_BATCH_SIZE, self.scheduler_config.max_num_seqs)
+        prefill_len = envs.FD_XPU_PROFILE_PREFILL_LEN
+        prefix_len = envs.FD_XPU_PROFILE_PREFIX_LEN
+        assert (
+            batch_size * prefill_len <= 8192
+        ), f"batch_size * prefill_len must be <= 8192, got {batch_size} * {prefill_len} = {batch_size * prefill_len}"
+
+        # Calculate block_num based on prefill_len + prefix_len
+        total_len = prefill_len + prefix_len
+        block_num = (
+            total_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        assert (
+            batch_size * block_num <= self.num_gpu_blocks
+        ), f"Required blocks {batch_size * block_num} exceeds available {self.num_gpu_blocks}"
+
+        logger.info(
+            f"[XPU Profile] Starting {num_iters} prefill iterations, batch_size={batch_size}, prefill_len={prefill_len}, prefix_len={prefix_len}"
+        )
+        enable_profiler_tracing = envs.FD_XPU_PROFILER_TRACING
+        if enable_profiler_tracing and paddle.distributed.get_rank() == 0:
+            import pybind_xprofiler
+
+            pybind_xprofiler.cuda_profiler_start()
+        for _ in range(num_iters):
+            # Set up prefill state before each iteration
+            for i in range(batch_size):
+                self.share_inputs["input_ids"][i : i + 1, :prefill_len] = np.random.randint(
+                    0, self.ori_vocab_size, size=(prefill_len,)
+                )
+                self.share_inputs["seq_lens_this_time"][i : i + 1] = prefill_len
+                self.share_inputs["seq_lens_encoder"][i : i + 1] = prefill_len
+                self.share_inputs["step_seq_lens_encoder"][i : i + 1] = prefill_len
+                self.share_inputs["seq_lens_decoder"][i : i + 1] = prefix_len
+                self.share_inputs["step_idx"][i : i + 1] = 0
+                self.share_inputs["max_dec_len"][i : i + 1] = 1
+                self.share_inputs["stop_flags"][i : i + 1] = False
+                self.share_inputs["encoder_block_lens"][i : i + 1] = block_num
+                self.share_inputs["block_tables"][i : i + 1, :block_num] = np.arange(
+                    i * block_num, (i + 1) * block_num, 1
+                )
+            self.execute_model(is_dummy_run=True)
+        if enable_profiler_tracing and paddle.distributed.get_rank() == 0:
+            import pybind_xprofiler
+
+            pybind_xprofiler.cuda_profiler_stop()
+        logger.info("[XPU Profile] Done.")
+
+    def decode_only_profile_run(self) -> None:
+        """
+        Execute decode-only profiling: skip prefill, directly set up decode state and profile decode iterations.
+        Triggered by FD_XPU_PROFILE_DECODE=1.
+        """
+        num_iters = envs.FD_XPU_PROFILE_ITERS
+        batch_size = min(envs.FD_XPU_PROFILE_BATCH_SIZE, self.scheduler_config.max_num_seqs)
+
+        prefix_len = envs.FD_XPU_PROFILE_PREFIX_LEN
+        tokens_per_iter = (self.speculative_config.num_speculative_tokens + 1) if self.speculative_decoding else 1
+        expected_decode_len = num_iters * tokens_per_iter + 1
+
+        # Calculate block_num based on prefix_len (already-decoded length)
+        block_num = (
+            prefix_len + expected_decode_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        encoder_block_num = (
+            prefix_len + self.cache_config.block_size - 1
+        ) // self.cache_config.block_size + self.cache_config.enc_dec_block_num
+        assert (
+            batch_size * block_num <= self.num_gpu_blocks
+        ), f"Required blocks {batch_size * block_num} exceeds available {self.num_gpu_blocks}"
+
+        # Directly set up decode state: pretend prefill already happened
+        for i in range(batch_size):
+            self.share_inputs["input_ids"][i : i + 1, :tokens_per_iter] = np.random.randint(
+                0, self.ori_vocab_size, size=(tokens_per_iter,)
+            )
+            self.share_inputs["seq_lens_this_time"][i : i + 1] = tokens_per_iter
+            self.share_inputs["seq_lens_encoder"][i : i + 1] = 0
+            self.share_inputs["step_seq_lens_encoder"][i : i + 1] = 0
+            self.share_inputs["seq_lens_decoder"][i : i + 1] = prefix_len
+            self.share_inputs["step_idx"][i : i + 1] = 0
+            self.share_inputs["max_dec_len"][i : i + 1] = expected_decode_len + 1
+            self.share_inputs["stop_flags"][i : i + 1] = False
+            self.share_inputs["encoder_block_lens"][i : i + 1] = encoder_block_num
+            self.share_inputs["block_tables"][i : i + 1, :block_num] = np.arange(i * block_num, (i + 1) * block_num, 1)
+
+        # NOTE: The proposer's _prepare_inputs() syncs seq_lens/step_idx/stop_flags from
+        # target_model_inputs via draft_model_preprocess, but block_tables and encoder_block_lens
+        # are NOT synced — they belong to the proposer's own KV cache. Must pre-fill them here.
+        if self.spec_method == SpecMethod.MTP:
+            for i in range(batch_size):
+                self.proposer.model_inputs["encoder_block_lens"][i : i + 1] = encoder_block_num
+                self.proposer.model_inputs["block_tables"][i : i + 1, :block_num] = np.arange(
+                    i * block_num, (i + 1) * block_num, 1
+                )
+                self.proposer.model_inputs["max_dec_len"][i : i + 1] = expected_decode_len + 1
+                self.proposer.model_inputs["stop_flags"][i : i + 1] = False
+
+        logger.info(
+            f"[XPU Profile] Starting {num_iters} decode iterations, batch_size={batch_size}, prefix_len={prefix_len}"
+        )
+        enable_profiler_tracing = envs.FD_XPU_PROFILER_TRACING
+        if enable_profiler_tracing and paddle.distributed.get_rank() == 0:
+            import pybind_xprofiler
+
+            pybind_xprofiler.cuda_profiler_start()
+        for _ in range(num_iters):
+            self.execute_model(is_dummy_run=True)
+        if enable_profiler_tracing and paddle.distributed.get_rank() == 0:
+            import pybind_xprofiler
+
+            pybind_xprofiler.cuda_profiler_stop()
+        logger.info("[XPU Profile] Done.")
 
     def update_share_input_block_num(self, num_gpu_blocks: int) -> None:
         """

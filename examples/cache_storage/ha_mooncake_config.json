@@ -1,0 +1,8 @@
+{
+  "metadata_server": "etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379",
+  "global_segment_size": 1000000000,
+  "local_buffer_size": 134217728,
+  "protocol": "rdma",
+  "rdma_devices": "",
+  "master_server_addr": "etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379"
+}

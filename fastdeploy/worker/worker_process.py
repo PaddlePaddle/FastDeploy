@@ -264,6 +264,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
+        self.worker.model_runner.kv_cache_status = self.kv_cache_status
 
         # init exist_task_signal
         workers_exist_task = np.zeros([1], dtype=np.int32)
@@ -866,6 +867,12 @@ def parse_args():
         help="enable chunked moe",
     )
     parser.add_argument(
+        "--enable_mega_moe",
+        action="store_true",
+        dest="enable_mega_moe",
+        help="enable MegaMoE wfp4afp8 for MoE and block_wise_fp8 for dense Linear",
+    )
+    parser.add_argument(
         "--chunked_moe_size",
         type=int,
         default=256,
@@ -1010,9 +1017,9 @@ def parse_args():
     parser.add_argument(
         "--model-impl",
         type=str,
-        choices=["auto", "fastdeploy", "paddleformers"],
+        choices=["auto", "fastdeploy", "paddleformers", "paddlefleet"],
         default="auto",
-        help="Model implementation backend (auto, fastdeploy, paddleformers)",
+        help="Model implementation backend (auto, fastdeploy, paddleformers, paddlefleet)",
     )
 
     parser.add_argument(

@@ -99,7 +99,7 @@ from fastdeploy import envs
 from fastdeploy.cache_manager.v1 import CacheController
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.image_processors.adaptive_processor import AdaptiveImageProcessor
-from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
+from fastdeploy.inter_communicator import IPCSignal, KVCacheStatus, ZmqIpcClient
 from fastdeploy.logger.deterministic_logger import DeterministicLogger
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.pool.metadata import PoolingMetadata
@@ -242,10 +242,7 @@ class GPUModelRunner(ModelRunnerBase):
         )
 
         # Initialize attention Backend
-        # NOTE(gonshaotian): Currently, all attention layers share one attention backend instance.
-        # In the future, we will expand it as a list.
         self.attn_backends: list[AttentionBackend] = []
-        # self.attn_metadatas: list[AttentionMetadata] = []
         self._initialize_attn_backend()
 
         # Forward meta store the global meta information of the forward
@@ -311,6 +308,8 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_overlap_schedule:
             logger.info("Using overlap schedule")
         self.current_launch_token_num = 0
+        # swa config
+        self.window_attn_skip_freq = getattr(self.fd_config.model_config, "window_attn_skip_freq", None)
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
@@ -1383,6 +1382,7 @@ class GPUModelRunner(ModelRunnerBase):
             top_p_normalized_logprobs=self.share_inputs["top_p_normalized_logprobs"],
             logits_processors=self.share_inputs["logits_processors"],
             share_inputs=self.share_inputs,
+            is_dummy_or_profile_run=is_dummy_or_profile_run,
         )
         return token_num, token_num_event
 
@@ -1467,6 +1467,7 @@ class GPUModelRunner(ModelRunnerBase):
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
             attn_backend=self.attn_backends[0],
+            attn_backends=self.attn_backends,
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
             decoder_tile_ids_per_batch=self.share_inputs["decoder_tile_ids_per_batch"],
             decoder_num_blocks_cpu=self.share_inputs["decoder_num_blocks_cpu"],
@@ -1559,7 +1560,7 @@ class GPUModelRunner(ModelRunnerBase):
         """
         if self.enable_cache_manager_v1:
             self.share_inputs["caches"] = self.cache_controller.initialize_kv_cache(
-                attn_backend=self.attn_backends[0],
+                attn_backend=self.attn_backends,
                 num_gpu_blocks=self.num_gpu_blocks,
             )
             self.cache_kvs_map = self.cache_controller.get_kv_caches()
@@ -1596,29 +1597,27 @@ class GPUModelRunner(ModelRunnerBase):
             kv_cache_quant_type = "uint8"
             cache_type = "uint8"
 
-            # NOTE(changwenbin) Get dsa cache shape.
-            key_cache_shape, value_cache_shape, indexer_cache_shape = self.attn_backends[0].get_kv_cache_shape(
+        key_cache_shapes = []
+        value_cache_shapes = []
+        indexer_cache_shapes = []
+        for layer_id, attn_backend in enumerate(self.attn_backends):
+            attn_backend.layer_id = layer_id
+            kv_cache_shape = attn_backend.get_kv_cache_shape(
                 max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
             )
-        else:
-            key_cache_shape, value_cache_shape = self.attn_backends[0].get_kv_cache_shape(
-                max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
-            )
-            indexer_cache_shape = []
+            key_cache_shapes.append(kv_cache_shape[0])
+            value_cache_shapes.append(kv_cache_shape[1])
+            indexer_cache_shapes.append(kv_cache_shape[2] if self.dsa_cache else [])
         if kv_cache_quant_type == "block_wise_fp8":
-            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
+            kv_cache_scale_shapes = [[shape[0], shape[1], shape[2]] for shape in key_cache_shapes]
         local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
-        # 2. If no need to profile, create kv cache unless kvcache_storage_backend or
-        #    p/d disaggregation is enabled. Note: CPU cache (num_cpu_blocks > 0) does NOT
-        #    prevent GPU runner from creating GPU cache tensors; cache transfer manager
-        #    handles CPU<->GPU swap on top of the GPU tensors created here.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
-        )
+        # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
+        #    Note: even when CPU cache (num_cpu_blocks > 0) is enabled, GPU runner still
+        #    creates GPU cache tensors; cache transfer manager handles CPU<->GPU swap.
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
 
         cache_ready_signal = self.cache_ready_signal
         if not create_cache_tensor:
@@ -1631,6 +1630,11 @@ class GPUModelRunner(ModelRunnerBase):
         cache_kvs_list = []
 
         for i in range(self.model_config.num_hidden_layers):
+            key_cache_shape = key_cache_shapes[i]
+            value_cache_shape = value_cache_shapes[i]
+            indexer_cache_shape = indexer_cache_shapes[i]
+            kv_cache_scale_shape = kv_cache_scale_shapes[i] if kv_cache_quant_type == "block_wise_fp8" else None
+
             # init key cache
             key_cache_name = f"key_caches_{i}_rank{local_rank}.device{self.device_id}"
             key_cache_scales_name = f"key_cache_scales_{i}_rank{local_rank}.device{self.device_id}"
@@ -1643,6 +1647,23 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(
                     f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"
                 )
+                # swa mla cache type
+                if self.mla_cache and self.window_attn_skip_freq is not None and self.window_attn_skip_freq[i] == 1:
+                    cache_type = "uint8"
+                    kv_cache_quant_type = "uint8"
+                else:
+                    # Get kv cache dtype
+                    cache_type = self.model_config.dtype
+                    kv_cache_quant_type = None
+
+                    if (
+                        self.quant_config
+                        and hasattr(self.quant_config, "kv_cache_quant_type")
+                        and self.quant_config.kv_cache_quant_type is not None
+                    ):
+                        cache_type = "uint8"
+                        kv_cache_quant_type = self.quant_config.kv_cache_quant_type
+
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_cache_name)
                 self.cache_kvs_map[key_cache_name] = key_cache
@@ -1726,10 +1747,8 @@ class GPUModelRunner(ModelRunnerBase):
         ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
-        self.model_config.kv_num_heads = max(
-            1,
-            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
-        )
+        kv_num_heads_per_layer = self._get_kv_num_heads_per_layer()
+        self.model_config.kv_num_heads = kv_num_heads_per_layer[0]
         head_dim = self.model_config.head_dim
 
         encoder_block_shape_q = 64
@@ -1746,7 +1765,8 @@ class GPUModelRunner(ModelRunnerBase):
             decoder_block_shape_q=decoder_block_shape_q,
             decoder_step_token_num=self.speculative_config.num_speculative_tokens + 1,
             num_heads=num_heads,
-            kv_num_heads=self.model_config.kv_num_heads,
+            # This requires the largest possible group size, corresponding to the smallest kv-num-heads.
+            kv_num_heads=min(kv_num_heads_per_layer),
             block_size=self.fd_config.cache_config.block_size,
             head_dim=head_dim,
             dtype=self.model_config.dtype,
@@ -1765,16 +1785,37 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Get the attention backend
         attn_cls = get_attention_backend()
-        attn_backend = attn_cls(
-            self.fd_config,
-            kv_num_heads=self.model_config.kv_num_heads,
-            num_heads=num_heads,
-            head_dim=head_dim,
-            encoder_block_shape_q=encoder_block_shape_q,
-            decoder_block_shape_q=decoder_block_shape_q,
-        )
+        for kv_num_heads in kv_num_heads_per_layer:
+            attn_backend = attn_cls(
+                self.fd_config,
+                kv_num_heads=kv_num_heads,
+                num_heads=num_heads,
+                head_dim=head_dim,
+                encoder_block_shape_q=encoder_block_shape_q,
+                decoder_block_shape_q=decoder_block_shape_q,
+            )
+            self.attn_backends.append(attn_backend)
 
-        self.attn_backends.append(attn_backend)
+    def _get_kv_num_heads_per_layer(self) -> list[int]:
+        num_hidden_layers = self.model_config.num_hidden_layers
+        num_key_value_heads = getattr(self.model_config, "num_key_value_heads_list", None)
+        if num_key_value_heads is None:
+            kv_num_heads = max(
+                1,
+                int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
+            )
+            return [kv_num_heads] * num_hidden_layers
+
+        if len(num_key_value_heads) != num_hidden_layers:
+            raise ValueError(
+                f"num_key_value_heads_list length {len(num_key_value_heads)} "
+                f"does not match num_hidden_layers {num_hidden_layers}"
+            )
+
+        return [
+            max(1, int(layer_num_key_value_heads) // self.parallel_config.tensor_parallel_size)
+            for layer_num_key_value_heads in num_key_value_heads
+        ]
 
     def _dummy_pooler_run_task(
         self,
@@ -3002,7 +3043,9 @@ class GPUModelRunner(ModelRunnerBase):
         else:  # default
             byte_of_dtype = 2
 
-        hidden_dim = self.model_config.head_dim * self.model_config.kv_num_heads
+        kv_num_heads_per_layer = self._get_kv_num_heads_per_layer()
+        v_head_dim = getattr(self.model_config, "v_head_dim", self.model_config.head_dim)
+        kv_hidden_dim = (self.model_config.head_dim + v_head_dim) * sum(kv_num_heads_per_layer)
         # NOTE(liuzichang): Implement multi-layer MTP architecture in the future
         num_layers = (
             self.model_config.num_hidden_layers + self.speculative_config.num_gpu_block_expand_ratio
@@ -3019,6 +3062,27 @@ class GPUModelRunner(ModelRunnerBase):
                 * (self.cache_config.block_size)
                 * num_layers
             )  # compress_kv + k_pe
+            if self.window_attn_skip_freq is not None:
+                required_memory = (
+                    # mla
+                    (
+                        byte_of_dtype
+                        * (self.fd_config.model_config.kv_lora_rank + self.fd_config.model_config.qk_rope_head_dim)
+                        * (self.cache_config.block_size)
+                        * (num_layers - sum(self.window_attn_skip_freq[:num_layers]))
+                    )
+                    # dsa
+                    + (
+                        (
+                            self.fd_config.model_config.kv_lora_rank
+                            + self.fd_config.model_config.kv_lora_rank // 128 * 4
+                            + 2 * self.fd_config.model_config.qk_rope_head_dim
+                        )
+                        * (self.cache_config.block_size)
+                        * sum(self.window_attn_skip_freq[:num_layers])
+                    )
+                )
+
         elif self.dsa_cache:
             required_memory = (
                 1
@@ -3034,7 +3098,13 @@ class GPUModelRunner(ModelRunnerBase):
                 * num_layers
             )
         else:
-            required_memory = byte_of_dtype * 2 * (self.cache_config.block_size * hidden_dim) * num_layers  # k + v
+            if self.spec_method == SpecMethod.MTP:
+                kv_hidden_dim += (
+                    (self.model_config.head_dim + v_head_dim)
+                    * self.model_config.kv_num_heads
+                    * self.speculative_config.num_gpu_block_expand_ratio
+                )
+            required_memory = byte_of_dtype * self.cache_config.block_size * kv_hidden_dim  # k + v
         return required_memory
 
     def clear_cache(self, profile=False):
@@ -3042,15 +3112,15 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_cache_manager_v1:
             self.cache_controller.free_gpu_cache()
         else:
-            create_cache_tensor = profile or not (
-                self.fd_config.cache_config.kvcache_storage_backend
-                or self.fd_config.scheduler_config.splitwise_role != "mixed"
-            )
+            create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
             local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
             if not profile:
                 if create_cache_tensor:
-                    if self.fd_config.cache_config.num_cpu_blocks > 0:
+                    if (
+                        self.fd_config.cache_config.num_cpu_blocks > 0
+                        or self.fd_config.cache_config.kvcache_storage_backend
+                    ):
                         logger.info("Waiting for cache transfer manager to unlink cuda ipc")
                         while self.cache_ready_signal.value[local_rank] != 0:
                             time.sleep(0.1)
@@ -3119,9 +3189,16 @@ class GPUModelRunner(ModelRunnerBase):
     def update_parameters(self, pid):
         """Dynamic model loader use to update parameters use for RL"""
         # Update parameters
-        self.dynamic_weight_manager.update_parameters(
-            pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
-        )
+        if self.dynamic_weight_manager.use_gdr_checkpoint_transfer:
+            if self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle:
+                self.dynamic_weight_manager.restart_communication_group()
+            if self.dynamic_weight_manager.parallel_config.enable_expert_parallel:
+                self.dynamic_weight_manager.recreate_deepep_buffer()
+            self.dynamic_weight_manager.update_weights_by_gdr(restore_cleared_params=True)
+        else:
+            self.dynamic_weight_manager.update_parameters(
+                pid, self.fd_config.parallel_config.shutdown_comm_group_if_worker_idle
+            )
 
         # Reset share_inputs
         self.share_inputs.reset_share_inputs()
@@ -3143,7 +3220,89 @@ class GPUModelRunner(ModelRunnerBase):
         self.dynamic_weight_manager._log_memory("dynamic weight manager update all memory")
 
     def update_weights(self, version: str = None, verify_checksum: bool = False):
-        return self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum)
+        if self.dynamic_weight_manager.use_gdr_checkpoint_transfer:
+            release_cache = bool((self.fd_config.load_config.rsync_config or {}).get("gdr_release_cache", False))
+
+            cache_clear_cost = 0.0
+            cache_rebuild_cost = 0.0
+            if release_cache:
+                clear_start = time.perf_counter()
+                self._clear_cache_for_gdr_weight_update()
+                cache_clear_cost = time.perf_counter() - clear_start
+
+            result = self.dynamic_weight_manager.update_weights_by_gdr(version, verify_checksum)
+
+            if release_cache:
+                rebuild_start = time.perf_counter()
+                self._rebuild_cache_after_gdr_weight_update()
+                cache_rebuild_cost = time.perf_counter() - rebuild_start
+
+            result["release_cache"] = release_cache
+            result["cache_clear_cost"] = cache_clear_cost
+            result["cache_rebuild_cost"] = cache_rebuild_cost
+            self.dynamic_weight_manager.finalize_update()
+            return result
+        else:
+            result = self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum)
+            self.dynamic_weight_manager.finalize_update()
+            return result
+
+    def _clear_cache_for_gdr_weight_update(self):
+        cache_flag = (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend is not None
+        )
+        kv_cache_status = self.kv_cache_status if cache_flag else None
+        if kv_cache_status:
+            kv_cache_status.value[0] = KVCacheStatus.CLEARING
+        if self.use_cudagraph:
+            self.model.clear_graph_opt_backend()
+            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
+                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+                    clear_all_block_wise_graphs,
+                )
+
+                clear_all_block_wise_graphs()
+            if (
+                self.speculative_decoding
+                and self.spec_method == SpecMethod.MTP
+                and self.graph_opt_config.draft_model_use_cudagraph
+            ):
+                self.proposer.model.clear_graph_opt_backend()
+        if self.speculative_decoding and self.spec_method == SpecMethod.MTP:
+            self.proposer.clear_mtp_cache()
+        self.clear_cache()
+        if kv_cache_status:
+            while kv_cache_status.value[0] != KVCacheStatus.CLEARED:
+                time.sleep(0.01)
+        paddle.device.cuda.empty_cache()
+        self._cached_model_output_data = None
+        self._cached_sampler_output = None
+        self._cached_post_process_event = None
+        self._cached_launch_token_num = -1
+        self._cached_real_bsz = -1
+
+    def _rebuild_cache_after_gdr_weight_update(self):
+        cache_flag = (
+            self.fd_config.cache_config.num_cpu_blocks > 0
+            or self.fd_config.cache_config.kvcache_storage_backend is not None
+        )
+        kv_cache_status = self.kv_cache_status if cache_flag else None
+        if kv_cache_status:
+            kv_cache_status.value[0] = KVCacheStatus.UPDATING
+        self.share_inputs.reset_share_inputs()
+        if self.spec_method == SpecMethod.MTP:
+            self.proposer.model_inputs.reset_model_inputs()
+            if not self.enable_cache_manager_v1:
+                self.proposer.initialize_kv_cache(main_model_num_blocks=self.num_gpu_blocks)
+        self.initialize_kv_cache()
+        if self.use_cudagraph:
+            self.capture_model()
+        if self.fd_config.routing_replay_config.enable_routing_replay:
+            self.routing_replay_manager.update_suspend_routing_replay()
+        if kv_cache_status:
+            while kv_cache_status.value[0] != KVCacheStatus.NORMAL:
+                time.sleep(0.01)
 
     def sleep(self, tags):
 

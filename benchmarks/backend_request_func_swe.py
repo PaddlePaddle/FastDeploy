@@ -72,6 +72,7 @@ class RequestFuncOutput:
     generated_text: str = ""
     reasoning_content: str = ""
     success: bool = False
+    has_arrival_time: bool = False
     latency: float = 0.0
     end_timestamp: float = 0.0  # 模型完全返回的时间戳（秒, perf_counter基准）
     output_tokens: int = 0
@@ -334,9 +335,11 @@ async def async_request_eb_openai_chat_completions(
         "model": request_func_input.model,
         "messages": request_func_input.history_QA,
         "stream": request_func_input.stream,
-        "max_tokens": request_func_input.output_len,
         "collect_metrics": request_func_input.pd_metrics,
     }
+
+    if request_func_input.output_len is not None:
+        payload["max_tokens"] = request_func_input.output_len
 
     # 流式模式返回usage
     if request_func_input.stream:
@@ -421,108 +424,176 @@ async def async_request_eb_openai_chat_completions(
     res_ttft = 0.0
     st = time.perf_counter()
     most_recent_timestamp = st
+    last_chunk_timestamp = st
     token_timestamps = []
     tool_call_buffer = {}
+    # 用于 buffer burst 修正：累计上一次"真增量 chunk"结束时服务端已输出的 token 数。
+    last_output_len = 0
     try:
         async with session.post(url=api_url, json=payload, headers=headers, read_bufsize=10 * 1024 * 1024) as response:
             data = {}
             if response.status == 200:
                 # 默认流式模式
                 if request_func_input.stream:
+                    # Reader loop 保持极简：只记录收包时间和原始 chunk，避免解析/拼接影响 ITL。
+                    stream_chunks = []
                     async for chunk_bytes in response.content:
+                        timestamp = time.perf_counter()
+                        wall_timestamp = time.time()
                         chunk_bytes = chunk_bytes.strip()
                         if not chunk_bytes:
                             continue
+                        if chunk_bytes in (b"data: [DONE]", b"[DONE]"):
+                            break
+                        stream_chunks.append((chunk_bytes, timestamp, wall_timestamp))
 
+                    generated_text_parts = []
+                    reasoning_content_parts = []
+                    for chunk_bytes, timestamp, wall_timestamp in stream_chunks:
                         chunk = chunk_bytes.decode("utf-8").removeprefix("data: ")
-                        if chunk != "[DONE]":
-                            # print("####chunk:", chunk, type(chunk))
-                            timestamp = time.perf_counter()
-                            data = json.loads(chunk)
-                            # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
+                        if chunk == "[DONE]":
+                            continue
+                        # print("####chunk:", chunk, type(chunk))
+                        data = json.loads(chunk)
 
-                            if "metrics" in data:
-                                metrics_list.append(data["metrics"])
+                        # 新增：捕获服务端流式 error
+                        if "error" in data:
+                            err = data["error"]
 
-                            if request_id == "None" and "id" in data:
-                                request_id = data["id"]
+                            output.success = False
+                            output.error = err.get("message", str(err))
 
-                            if choices := data.get("choices"):
-                                content = choices[0]["delta"].get("content")
-                                reason_content = choices[0]["delta"].get("reasoning_content")
-                                tool_calls = choices[0]["delta"].get("tool_calls")
-                                completion_token_ids = choices[0]["delta"].get("completion_token_ids", [])
-                                if tool_calls:
-                                    for tc in tool_calls:
-                                        idx = tc.get("index", 0)
+                            # 可选：保存更多信息
+                            output.error_type = err.get("type")
+                            output.error_code = err.get("code")
 
-                                        if idx not in tool_call_buffer:
-                                            tool_call_buffer[idx] = {
-                                                "id": tc.get("id"),
-                                                "name": "",
-                                                "arguments": "",
-                                            }
+                            print("####server error:", json.dumps(err, ensure_ascii=False))
 
-                                        func = tc.get("function", {})
+                            break
+                        # print("####data:", json.dumps(data, indent=2, ensure_ascii=False))
 
-                                        if "name" in func:
-                                            tool_call_buffer[idx]["name"] = func["name"]
+                        if "metrics" in data:
+                            metrics_list.append(data["metrics"])
 
-                                        if "arguments" in func:
-                                            tool_call_buffer[idx]["arguments"] += func["arguments"]
+                        if request_id == "None" and "id" in data:
+                            request_id = data["id"]
 
+                        if choices := data.get("choices"):
+                            content = choices[0]["delta"].get("content")
+                            reason_content = choices[0]["delta"].get("reasoning_content")
+                            tool_calls = choices[0]["delta"].get("tool_calls")
+                            completion_token_ids = choices[0]["delta"].get("completion_token_ids", [])
+                            has_token_chunk = bool(content or reason_content or tool_calls or completion_token_ids)
+                            if tool_calls:
+                                for tc in tool_calls:
+                                    idx = tc.get("index", 0)
+
+                                    if idx not in tool_call_buffer:
+                                        tool_call_buffer[idx] = {
+                                            "id": tc.get("id"),
+                                            "name": "",
+                                            "arguments": "",
+                                        }
+
+                                    func = tc.get("function", {})
+
+                                    if "name" in func:
+                                        tool_call_buffer[idx]["name"] = func["name"]
+
+                                    if "arguments" in func:
+                                        tool_call_buffer[idx]["arguments"] += func["arguments"]
+
+                            # 过滤 role / finish / usage 等空包，只用真正 token 包统计 TTFT/ITL。
+                            if has_token_chunk:
                                 # First token
                                 if ttft == 0.0:
                                     ttft = timestamp - st
                                     output.ttft = ttft
                                     # cached_tokens
-                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                                        output.prompt_len = (
-                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                                    usage = data.get("usage") or {}
+
+                                    if usage.get("prompt_tokens_details"):
+                                        output.prompt_len = usage.get("prompt_tokens_details", {}).get(
+                                            "cached_tokens", 0
                                         )
                                     else:
                                         output.prompt_len = 0
 
+                                    # 首 token 也要更新 last_output_len，用于后续 burst 摊分
+                                    cur_completion_tokens = (data.get("usage") or {}).get("completion_tokens")
+                                    if cur_completion_tokens is None and completion_token_ids:
+                                        # 没有 usage 时退化为按 token_ids 长度推断
+                                        cur_completion_tokens = len(output.output_ids) + len(completion_token_ids)
+                                    if cur_completion_tokens is not None:
+                                        last_output_len = cur_completion_tokens
+                                    else:
+                                        last_output_len = 1
+
                                 # Decoding phase
                                 else:
-                                    output.itl.append(timestamp - most_recent_timestamp)
+                                    # 1个chunk包含多个token 修正：MTP服务端把多个 token 合并到同一个流式 chunk 里，
+                                    # 直接把整段间隔记成单个 ITL 会高估解码间隔。这里参考 sglang 官方
+                                    # bench_serving 的做法：用真实 token 增量摊分该 chunk 的等待时间。
+                                    cur_completion_tokens = (data.get("usage") or {}).get("completion_tokens")
+                                    if cur_completion_tokens is None and completion_token_ids:
+                                        cur_completion_tokens = len(output.output_ids) + len(completion_token_ids)
 
-                                # response首token
-                                if res_ttft == 0.0:
-                                    if content:
-                                        res_ttft = choices[0].get("arrival_time", timestamp)
-                                        output.res_ttft = res_ttft
-                                        usage = data.get("usage") or {}
-                                        output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
+                                    chunk_gap = timestamp - most_recent_timestamp
+                                    if cur_completion_tokens is not None:
+                                        num_new_tokens = cur_completion_tokens - last_output_len
+                                        if num_new_tokens <= 0:
+                                            # 没有真实新 token（罕见的 usage/状态包），跳过 ITL 记录
+                                            most_recent_timestamp = timestamp
+                                            continue
+                                        adjust_itl = chunk_gap / num_new_tokens
+                                        output.itl.extend([adjust_itl] * num_new_tokens)
+                                        last_output_len = cur_completion_tokens
+                                    else:
+                                        # 拿不到 completion_tokens 时退化为旧逻辑
+                                        output.itl.append(chunk_gap)
 
-                                output.generated_text += content or ""
-                                output.reasoning_content += reason_content or ""
-                                if completion_token_ids:
-                                    output.output_ids.extend(completion_token_ids)
-                                # print(f"####content:{data}")
-                                output.arrival_time.append(choices[0].get("arrival_time", timestamp))
-                            elif usage := data.get("usage", {}):
-                                output.output_tokens = usage.get("completion_tokens", 0)
-                                output.prompt_tokens = usage.get("prompt_tokens", 0)
-                                if output.prompt_len == 0:
-                                    if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                                        output.prompt_len = (
-                                            data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
-                                        )
+                                most_recent_timestamp = timestamp
+                                token_timestamps.append(wall_timestamp)
 
-                            most_recent_timestamp = timestamp
-                            token_timestamps.append(time.time())
+                            # response首token
+                            if res_ttft == 0.0:
+                                if content:
+                                    res_ttft = choices[0].get("arrival_time", timestamp - st)
+                                    output.res_ttft = res_ttft
+                                    usage = data.get("usage") or {}
+                                    output.reasoning_tokens = max(usage.get("completion_tokens", 0) - 1, 0)
 
-                    # output.generated_text = generated_text
-                    # 在流式结束时，记录最后一个 chunk 收到的时间戳
-                    output.end_timestamp = most_recent_timestamp
+                            if content:
+                                generated_text_parts.append(content)
+                            if reason_content:
+                                reasoning_content_parts.append(reason_content)
+                            if completion_token_ids:
+                                output.output_ids.extend(completion_token_ids)
+                            # print(f"####content:{data}")
+                            arrival = choices[0].get("arrival_time")
+                            if arrival is not None and has_token_chunk:
+                                output.has_arrival_time = True
+                                output.arrival_time.append(arrival)
+                        elif usage := data.get("usage", {}):
+                            output.output_tokens = usage.get("completion_tokens", 0)
+                            output.prompt_tokens = usage.get("prompt_tokens", 0)
+                            prompt_tokens_details = usage.get("prompt_tokens_details") or {}
+                            if output.prompt_len == 0:
+                                output.prompt_len = prompt_tokens_details.get("cached_tokens", 0)
+
+                        last_chunk_timestamp = timestamp
+
+                    output.generated_text = "".join(generated_text_parts)
+                    output.reasoning_content = "".join(reasoning_content_parts)
+                    # 在流式结束时，记录最后一个非 DONE chunk 收到的时间戳
+                    output.end_timestamp = last_chunk_timestamp
                     # 截断case
                     usage = data.get("usage", {})
                     output.output_tokens = usage.get("completion_tokens", 0)
                     output.prompt_tokens = usage.get("prompt_tokens", 0)
                     if output.prompt_len == 0:
-                        if data["usage"] and data["usage"].get("prompt_tokens_details", {}):
-                            output.prompt_len = data["usage"].get("prompt_tokens_details", {}).get("cached_tokens", 0)
+                        prompt_details = usage.get("prompt_tokens_details") or {}
+                        output.prompt_len = prompt_details.get("cached_tokens", 0)
 
                     if tool_call_buffer:
                         for _, tc in tool_call_buffer.items():
@@ -533,14 +604,20 @@ async def async_request_eb_openai_chat_completions(
 
                             output.tool_calls.append({"id": tc["id"], "name": tc["name"], "arguments": args})
 
+                    # 如果没有thinking内容，则response首token等于ttft
+                    if not output.reasoning_content:
+                        output.res_ttft = output.ttft
                     # 新增metrics统计，计算首token过滤空包
                     output.metrics = metrics_summary(metrics_list, token_timestamps[1:])
 
                     has_text = output.generated_text.strip() or output.reasoning_content.strip()
                     has_tool = getattr(output, "tool_calls", None)
 
+                    # 如果前面已经有服务端错误，保留原错误
+                    if output.error:
+                        output.success = False
                     # 兼容思考内容超长截断的情况，此时回复内容为空
-                    if not has_text and not has_tool:
+                    elif not has_text and not has_tool:
                         output.success = False
                         output.reasoning_tokens = output.output_tokens
                         output.error = "No generated text found!"

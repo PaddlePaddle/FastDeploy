@@ -542,6 +542,8 @@ class MLAAttentionBackend(AttentionBackend):
                 logger.info(
                     "The current platform does not support Flash Attention V3, so Flash Attention V2 will be used instead."
                 )
+        # swa config
+        self.window_attn_skip_freq = getattr(fd_config.model_config, "window_attn_skip_freq", None)
 
     def init_attention_metadata(self, forward_meta: ForwardMeta):
         """Initialize attention metadata hence all layers in the forward pass can reuse it."""
@@ -618,8 +620,13 @@ class MLAAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape for MLA
         """
-        key_cache_shape = [max_num_blocks, 1, self.block_size, self.kv_lora_rank + self.qk_rope_head_dim]
+        layer_id = self.layer_id
         value_cache_shape = []
+        if self.window_attn_skip_freq is not None and self.window_attn_skip_freq[layer_id] == 1:
+            fp8_key_cahe_dim = self.kv_lora_rank + 4 * (self.kv_lora_rank // 128) + 2 * self.qk_rope_head_dim
+            key_cache_shape = [max_num_blocks, 1, self.block_size, fp8_key_cahe_dim]
+        else:
+            key_cache_shape = [max_num_blocks, 1, self.block_size, self.kv_lora_rank + self.qk_rope_head_dim]
         return key_cache_shape, value_cache_shape
 
     def create_kv_cache(

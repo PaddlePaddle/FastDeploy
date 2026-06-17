@@ -14,9 +14,13 @@
 # limitations under the License.
 """
 
+import time
+
+import numpy as np
 import paddle
 
 from fastdeploy import envs
+from fastdeploy.inter_communicator import IPCSignal
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.layers.sample.meta_data import SamplingMetadata
 from fastdeploy.model_executor.ops.gpu import (
@@ -399,10 +403,13 @@ class MTPProposerCUDA(MTPProposer):
             )
 
     def _extend_draft_token_with_ngram_match(self):
-        # TODO: replace with gpu tensor
+        # pad_to_max forces hybrid kernel to write a fixed seq_lens_this_time
+        # = num_speculative_tokens + 1, padding unfilled ngram slots with a placeholder draft token.
+        # Required when target cudagraph is enabled (capture-time seq_lens_this_time
+        # must match replay-time seq_lens_this_time).
         hybrid_mtp_ngram(
-            self.model_inputs["input_ids_cpu"].cuda(),
-            self.model_inputs["input_ids_len"].cuda(),
+            self.model_inputs["token_ids_all"],
+            self.model_inputs["prompt_lens"],
             self.model_inputs["pre_ids"],
             self.model_inputs["step_idx"],
             self.target_model_inputs["actual_draft_token_num"],
@@ -413,6 +420,7 @@ class MTPProposerCUDA(MTPProposer):
             self.max_ngram_size,
             self.min_ngram_size,
             self.max_draft_token_num,
+            self.graph_opt_config.use_cudagraph,
         )
 
     def padding_cudagraph_inputs(self) -> None:
@@ -432,13 +440,30 @@ class MTPProposerCUDA(MTPProposer):
         """
         Clear allocated cacheKV
         """
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
-        )
-        if not create_cache_tensor:
-            for name, tensor in self.cache_kvs_map.items():
-                unset_data_ipc(tensor, name, True, False)
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
+
+        if not profile:
+            if create_cache_tensor:
+                if (
+                    self.fd_config.cache_config.num_cpu_blocks > 0
+                    or self.fd_config.cache_config.kvcache_storage_backend
+                ):
+                    local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+                    cache_ready_signal_data = np.zeros(
+                        shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32
+                    )
+                    cache_ready_signal = IPCSignal(
+                        name="cache_ready_signal",
+                        array=cache_ready_signal_data,
+                        dtype=np.int32,
+                        suffix=self.parallel_config.local_engine_worker_queue_port,
+                        create=False,
+                    )
+                    while cache_ready_signal.value[local_rank] != 0:
+                        time.sleep(0.1)
+            else:
+                for name, tensor in self.cache_kvs_map.items():
+                    unset_data_ipc(tensor, name, True, False)
         self.cache_kvs_map.clear()
         del self.model_inputs["caches"]
         if self.forward_meta is not None:

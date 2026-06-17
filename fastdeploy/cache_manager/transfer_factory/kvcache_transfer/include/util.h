@@ -20,7 +20,7 @@
 
 #define PATH_MAX 4096 /* # chars in a path name including nul */
 #define RDMA_WR_LIST_MAX_SIZE 32
-#define RDMA_SQ_MAX_SIZE 1024
+#define RDMA_SQ_MAX_SIZE 128
 
 #define RDMA_DEFAULT_PORT 20001
 #define RDMA_TCP_CONNECT_SIZE 1024

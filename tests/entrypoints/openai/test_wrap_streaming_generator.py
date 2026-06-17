@@ -32,6 +32,9 @@ with (
         revision=None,
         chat_template=None,
         tool_parser_plugin=None,
+        output_fallback=None,
+        output_fallback_plugin=None,
+        output_fallback_config=None,
         max_concurrency=100,  # Add required attribute
         max_num_seqs=100,
         tensor_parallel_size=1,

@@ -122,7 +122,6 @@ __device__ __forceinline__ void init_states(float (*o_frag)[num_frags_y][8],
 
 template <uint32_t group_size,
           uint32_t num_frags_x,
-          uint32_t num_frags_y,
           uint32_t HEAD_DIM,
           typename T>
 __device__ __forceinline__ void load_q_global_smem_multi_warps(
@@ -134,23 +133,22 @@ __device__ __forceinline__ void load_q_global_smem_multi_warps(
     const uint32_t qo_h_stride) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
 
+  static_assert(HEAD_DIM % 64 == 0, "");
+
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
   uint32_t q_smem_offset_w =  // [NUM_WARP_Q, num_frags_x, 16, head_dim]
       smem_t::get_permuted_offset<num_vecs_per_head>(ty * 4 + tx / 8,
                                                      tx % 8);  // 4 * 64
-
-  const uint32_t tx_offset = tx / 8;
+  // 4 warps will load (fx * 16) * (HEAD_DIM) data!
 #pragma unroll
   for (uint32_t fx = 0; fx < num_frags_x; ++fx) {
-    const uint32_t base_offset = q_idx_base + fx * 16 + tx_offset;
 #pragma unroll
-    const int j = ty;
-    const uint32_t offset_now = base_offset + j * 4;
+    const uint32_t offset_now = q_idx_base + fx * 16 + ty * 4 + tx / 8;
     const uint32_t n_offset = offset_now / group_size;
     const uint32_t h_offset = offset_now % group_size;
     T* q_ptr = q_ptr_base + n_offset * qo_n_stride + h_offset * qo_h_stride;
 #pragma unroll
-    for (uint32_t fyo = 0; fyo < num_frags_y / 4; ++fyo) {
+    for (uint32_t fyo = 0; fyo < HEAD_DIM / 64; ++fyo) {
       q_smem->load_128b_async<SharedMemFillMode::kNoFill>(
           q_smem_offset_w, q_ptr, n_offset < qo_upper_bound);
       q_smem_offset_w =
@@ -159,13 +157,12 @@ __device__ __forceinline__ void load_q_global_smem_multi_warps(
     }
     q_smem_offset_w =
         q_smem->advance_offset_by_row<16, num_vecs_per_head>(q_smem_offset_w) -
-        2 * num_frags_y;
+        HEAD_DIM / 8;
   }
 }
 
 template <uint32_t group_size,
           uint32_t num_frags_x,
-          uint32_t num_frags_y,
           uint32_t HEAD_DIM,
           typename T>
 __device__ __forceinline__ void load_q_global_smem(
@@ -177,6 +174,7 @@ __device__ __forceinline__ void load_q_global_smem(
     const uint32_t qo_h_stride) {
   constexpr uint32_t num_vecs_per_head = HEAD_DIM / num_elems_per_128b<T>();
 
+  static_assert(HEAD_DIM % 64 == 0, "");
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
 
   uint32_t q_smem_offset_w =  // [NUM_WARP_Q, num_frags_x, 16, head_dim]
@@ -195,7 +193,7 @@ __device__ __forceinline__ void load_q_global_smem(
       const T* q_ptr =
           q_ptr_base + n_offset * qo_n_stride + h_offset * qo_h_stride;
 #pragma unroll
-      for (uint32_t fyo = 0; fyo < num_frags_y / 4; ++fyo) {
+      for (uint32_t fyo = 0; fyo < HEAD_DIM / 64; ++fyo) {
         q_smem->load_128b_async<SharedMemFillMode::kNoFill>(
             q_smem_offset_w, q_ptr, n_offset < qo_upper_bound);
         q_smem_offset_w =
@@ -204,21 +202,19 @@ __device__ __forceinline__ void load_q_global_smem(
       }
       q_smem_offset_w =
           q_smem->advance_offset_by_row<4, num_vecs_per_head>(q_smem_offset_w) -
-          2 * num_frags_y;  // num_frags_y / 4 * 8
+          HEAD_DIM / 8;
     }
   }
 }
 
-template <uint32_t num_frags_x, uint32_t num_frags_y, typename T>
+template <uint32_t num_frags_x, uint32_t head_dim, typename T>
 __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale_multi_warps(
-    smem_t* q_smem,  // [num_frags_x * 16, num_frags_y * 16]
+    smem_t* q_smem,  // [num_frags_x * 16, head_dim]
     const float sm_scale) {
   constexpr int vec_size = 16 / sizeof(T);
   using LoadT = AlignedVector<T, vec_size>;
   LoadT tmp_vec;
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
-  constexpr uint32_t head_dim = num_frags_y * 16;
-  constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
 
 #pragma unroll
   for (uint32_t i = 0; i < num_frags_x * 16 * head_dim / 1024; ++i) {
@@ -232,7 +228,7 @@ __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale_multi_warps(
   }
 }
 
-template <uint32_t num_frags_x, uint32_t num_frags_y, typename T>
+template <uint32_t num_frags_x, uint32_t head_dim, typename T>
 __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale(
     smem_t* q_smem,  // [num_frags_x * 16, num_frags_y * 16]
     const float sm_scale) {
@@ -240,7 +236,6 @@ __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale(
   using LoadT = AlignedVector<T, vec_size>;
   LoadT tmp_vec;
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
-  constexpr uint32_t head_dim = num_frags_y * 16;
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
 
 #pragma unroll
@@ -266,29 +261,26 @@ __device__ __forceinline__ void q_smem_inplace_multiply_sm_scale(
 template <SharedMemFillMode fill_mode,
           uint32_t num_warps,
           uint32_t block_size,
-          uint32_t num_frags_y,
-          uint32_t num_frags_z,
+          uint32_t head_dim,
           uint32_t NUM_WARP_Q,
           typename T>
-__device__ __forceinline__ void produce_kv_blockwise(
+__device__ __forceinline__ void produce_kv_blockwise_c16(
     smem_t smem,
     uint32_t* smem_offset,
     T** gptr,  // [max_block_num, num_heads, block_size, head_dim]
-    const uint32_t kv_head_idx,
-    const uint32_t kv_n_stride,
-    const uint32_t kv_h_stride,
     const uint32_t kv_b_stride,
     const uint32_t kv_idx_base,
     const uint32_t kv_len) {
-  constexpr uint32_t head_dim = num_frags_y * 16;
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
-  constexpr uint32_t NUM_WARP_KV = num_warps / NUM_WARP_Q;
   const uint32_t tx = threadIdx.x, ty = threadIdx.y;
   uint32_t kv_idx = kv_idx_base + ty * 4 + tx / 8;  // kv_idx used to check
+  static_assert(block_size % (4 * num_warps) == 0, "");
+  static_assert(head_dim % 64 == 0, "");
+
 #pragma unroll
-  for (uint32_t i = 0; i < NUM_WARP_KV * num_frags_z * 4 / num_warps; ++i) {
+  for (uint32_t i = 0; i < block_size / (num_warps * 4); ++i) {
 #pragma unroll
-    for (uint32_t j = 0; j < num_frags_y / 4; ++j) {
+    for (uint32_t j = 0; j < head_dim / 64; ++j) {
       smem.load_128b_async<fill_mode>(*smem_offset, *gptr, kv_idx < kv_len);
       *smem_offset = smem.advance_offset_by_column<8>(*smem_offset, j);
       *gptr += 8 * num_elems_per_128b<T>();
@@ -296,12 +288,11 @@ __device__ __forceinline__ void produce_kv_blockwise(
     kv_idx += num_warps * 4;
     *smem_offset = smem.advance_offset_by_row<num_warps * 4, num_vecs_per_head>(
                        *smem_offset) -
-                   2 * num_frags_y;  // num_frags_y / 4 * 8
-    *gptr +=
-        num_warps * 4 * kv_b_stride - 2 * num_frags_y * num_elems_per_128b<T>();
+                   head_dim / 8;
+    *gptr += num_warps * 4 * kv_b_stride - head_dim;
   }
-  *gptr -= NUM_WARP_KV * num_frags_z * 16 * kv_b_stride;
-  *smem_offset -= NUM_WARP_KV * num_frags_z * 16 * num_vecs_per_head;
+  *gptr -= block_size * kv_b_stride;
+  *smem_offset -= block_size * num_vecs_per_head;
 }
 
 template <SharedMemFillMode fill_mode,
@@ -782,7 +773,7 @@ __device__ __forceinline__ void produce_kv(smem_t smem,
 }
 
 template <uint32_t num_frags_x,
-          uint32_t num_frags_y,
+          uint32_t head_dim,
           uint32_t num_frags_z,
           typename T>
 __device__ __forceinline__ void compute_qk(smem_t* q_smem,
@@ -790,12 +781,12 @@ __device__ __forceinline__ void compute_qk(smem_t* q_smem,
                                            smem_t* k_smem,
                                            uint32_t* k_smem_offset_r,
                                            float (*s_frag)[num_frags_z][8]) {
-  constexpr uint32_t head_dim = num_frags_y * 16;
+  static_assert(head_dim % 16 == 0, "");
   constexpr uint32_t num_vecs_per_head = head_dim / num_elems_per_128b<T>();
   uint32_t a_frag[num_frags_x][4], b_frag[4];
   // compute q*k^T
 #pragma unroll
-  for (uint32_t fy = 0; fy < num_frags_y; ++fy) {  // k
+  for (uint32_t fy = 0; fy < head_dim / 16; ++fy) {  // k
 #pragma unroll
     for (uint32_t fx = 0; fx < num_frags_x; ++fx) {  // m
       q_smem->ldmatrix_m8n8x4(*q_smem_offset_r, a_frag[fx]);
@@ -827,8 +818,8 @@ __device__ __forceinline__ void compute_qk(smem_t* q_smem,
         k_smem->advance_offset_by_column<2>(*k_smem_offset_r, fy) -
         num_frags_z * 16 * num_vecs_per_head;
   }
-  *q_smem_offset_r -= num_frags_y * 2;
-  *k_smem_offset_r -= num_frags_y * 2;
+  *q_smem_offset_r -= head_dim / 8;
+  *k_smem_offset_r -= head_dim / 8;
 }
 
 template <uint32_t num_frags_x,
@@ -1001,14 +992,11 @@ __device__ __forceinline__ void compute_qk_c8(smem_t* q_smem,
 }
 
 template <typename T,
-          bool partition_kv,
           bool causal,
           uint32_t group_size,
           uint32_t num_warps,
           uint32_t num_frags_x,
-          uint32_t num_frags_y,
-          uint32_t num_frags_z,
-          bool IS_SYSTEM = false>
+          uint32_t num_frags_z>
 __device__ __forceinline__ void mask_s(const bool* attn_mask,
                                        const uint32_t qo_idx_base,
                                        const uint32_t kv_idx_base,
@@ -1027,73 +1015,54 @@ __device__ __forceinline__ void mask_s(const bool* attn_mask,
     for (uint32_t fz = 0; fz < num_frags_z; ++fz) {
 #pragma unroll
       for (uint32_t reg_id = 0; reg_id < 8; ++reg_id) {
-        if constexpr (!IS_SYSTEM) {
-          const uint32_t q_idx = (qo_idx_base + fx * 16 + tx / 4 +
-                                  8 * ((reg_id % 4) / 2)) /
-                                 group_size,
-                         kv_idx = kv_idx_base + fz * 16 + 2 * (tx % 4) +
-                                  8 * (reg_id / 4) + reg_id % 2;
-          bool out_of_boundary;
-          if (mask_offset) {
-            if (sliding_window > 0) {
-              int swa_part = mask_offset[q_idx * 2 + 1] - sliding_window;
-              if (swa_part < 0) swa_part = 0;
-              int sink_part =
-                  mask_offset[q_idx * 2] + sink_size;  // sink_size = 128
-              out_of_boundary =
-                  q_idx < qo_len ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
-                                    kv_idx < mask_offset[q_idx * 2] ||
-                                    (kv_idx >= sink_part && kv_idx < swa_part))
-                                 : true;
-            } else {
-              out_of_boundary = q_idx < qo_len
-                                    ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
-                                       kv_idx < mask_offset[q_idx * 2])
-                                    : true;
-            }
-          } else if (sliding_window > 0) {
-            bool out_of_window = int(kv_idx) <= (int)kv_len + (int)q_idx -
-                                                    (int)qo_len -
-                                                    sliding_window;
-            out_of_boundary = (causal ? (kv_idx > kv_len + q_idx - qo_len ||
-                                         out_of_window || (kv_idx >= chunk_end))
-                                      : kv_idx >= chunk_end);
+        const uint32_t q_idx = (qo_idx_base + fx * 16 + tx / 4 +
+                                8 * ((reg_id % 4) / 2)) /
+                               group_size,
+                       kv_idx = kv_idx_base + fz * 16 + 2 * (tx % 4) +
+                                8 * (reg_id / 4) + reg_id % 2;
+        bool out_of_boundary;
+        if (mask_offset) {
+          if (sliding_window > 0) {
+            int swa_part = mask_offset[q_idx * 2 + 1] - sliding_window;
+            if (swa_part < 0) swa_part = 0;
+            int sink_part =
+                mask_offset[q_idx * 2] + sink_size;  // sink_size = 128
+            out_of_boundary = q_idx < qo_len
+                                  ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
+                                     kv_idx < mask_offset[q_idx * 2] ||
+                                     (kv_idx >= sink_part && kv_idx < swa_part))
+                                  : true;
           } else {
-            out_of_boundary = (causal ? (kv_idx > kv_len + q_idx - qo_len ||
-                                         (kv_idx >= chunk_end))
-                                      : kv_idx >= chunk_end);
-            if (attn_mask != nullptr && kv_idx > kv_len - qo_len &&
-                kv_idx < chunk_end && q_idx < attn_mask_len) {
-              const int32_t mask_idx =
-                  q_idx * attn_mask_len + kv_idx - kv_len + qo_len;
-              bool mask = attn_mask[mask_idx];
-              out_of_boundary |= mask;
-            }
+            out_of_boundary = q_idx < qo_len
+                                  ? (kv_idx >= mask_offset[q_idx * 2 + 1] ||
+                                     kv_idx < mask_offset[q_idx * 2])
+                                  : true;
           }
-
-          if constexpr (std::is_same<T, half>::value) {
-            s_frag[fx][fz][reg_id] =
-                out_of_boundary ? -5e4f : s_frag[fx][fz][reg_id];
-          } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
-            s_frag[fx][fz][reg_id] =
-                out_of_boundary ? -3.0e+30f : s_frag[fx][fz][reg_id];
-          }
-
+        } else if (sliding_window > 0) {
+          bool out_of_window = int(kv_idx) <= (int)kv_len + (int)q_idx -
+                                                  (int)qo_len - sliding_window;
+          out_of_boundary = (causal ? (kv_idx > kv_len + q_idx - qo_len ||
+                                       out_of_window || (kv_idx >= chunk_end))
+                                    : kv_idx >= chunk_end);
         } else {
-          const uint32_t q_idx = qo_idx_base,
-                         kv_idx = kv_idx_base + fz * 16 + 2 * (tx % 4) +
-                                  8 * (reg_id / 4) + reg_id % 2;
-          const bool out_of_boundary =
-              (causal
-                   ? (kv_idx > kv_len + q_idx - qo_len || (kv_idx >= chunk_end))
-                   : kv_idx >= chunk_end);
-          if constexpr (std::is_same<T, half>::value) {
-            s_frag[fx][fz][reg_id] =
-                out_of_boundary ? -5e4f : s_frag[fx][fz][reg_id];
-          } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
-            s_frag[fx][fz][reg_id] =
-                out_of_boundary ? -3.0e+30f : s_frag[fx][fz][reg_id];
+          out_of_boundary = (causal ? (kv_idx > kv_len + q_idx - qo_len ||
+                                       (kv_idx >= chunk_end))
+                                    : kv_idx >= chunk_end);
+          if (attn_mask != nullptr && kv_idx > kv_len - qo_len &&
+              kv_idx < chunk_end && q_idx < attn_mask_len) {
+            const int32_t mask_idx =
+                q_idx * attn_mask_len + kv_idx - kv_len + qo_len;
+            bool mask = attn_mask[mask_idx];
+            out_of_boundary |= mask;
           }
+        }
+
+        if constexpr (std::is_same<T, half>::value) {
+          s_frag[fx][fz][reg_id] =
+              out_of_boundary ? -5e4f : s_frag[fx][fz][reg_id];
+        } else if constexpr (std::is_same<T, __nv_bfloat16>::value) {
+          s_frag[fx][fz][reg_id] =
+              out_of_boundary ? -3.0e+30f : s_frag[fx][fz][reg_id];
         }
       }
     }
@@ -2301,11 +2270,9 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
-    const int max_seq_len,
     const int num_chunks,
     const int num_heads,
-    const int chunk_size,
-    const int head_dim) {
+    const int chunk_size) {
   const int vid = threadIdx.x, ty = threadIdx.y;
   const int bid = blockIdx.x, hid = blockIdx.y;
   __shared__ T smem[bdy * HEAD_DIM];
@@ -2361,7 +2328,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     const float m_now = multi_m[offset];
     const float d_now = multi_d[offset];
     m = max(m_prev, m_now);
-    offset = offset * head_dim + vid * vec_size;
+    offset = offset * HEAD_DIM + vid * vec_size;
     Load<T, vec_size>(&multi_out[offset], &load_vec);
     const float scale1 = __expf(m_prev - m), scale2 = __expf(m_now - m);
     const T scale1_T = static_cast<T>(scale1),
@@ -2373,7 +2340,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     }
   }
   // store ty res
-  Store<T, vec_size>(res_vec, &smem[ty * head_dim + vid * vec_size]);
+  Store<T, vec_size>(res_vec, &smem[ty * HEAD_DIM + vid * vec_size]);
   md_smem[2 * ty] = m;
   md_smem[2 * ty + 1] = d;
   __syncthreads();
@@ -2383,7 +2350,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     st.init();
 #pragma unroll
     for (int i = 0; i < bdy; i++) {
-      Load<T, vec_size>(&smem[i * head_dim + vid * vec_size], &load_vec);
+      Load<T, vec_size>(&smem[i * HEAD_DIM + vid * vec_size], &load_vec);
       const float m_tmp = md_smem[2 * i], d_tmp = md_smem[2 * i + 1];
       st.merge(load_vec, m_tmp, d_tmp);
     }
@@ -2394,7 +2361,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
       st.normalize();
     }
 
-    const uint32_t shift_smooth_offset = hid * head_dim + vid * vec_size;
+    const uint32_t shift_smooth_offset = hid * HEAD_DIM + vid * vec_size;
     AlignedVector<T, vec_size> shift_bias_vec;
     AlignedVector<T, vec_size> smooth_weight_vec;
     AlignedVector<OutT, vec_size> out_vec;
@@ -2416,7 +2383,7 @@ __global__ void merge_multi_chunks_decoder_kernel(
     }
     Store<OutT, vec_size>(
         out_vec,
-        &out[(start_token_idx * num_heads + hid) * head_dim + vid * vec_size]);
+        &out[(start_token_idx * num_heads + hid) * HEAD_DIM + vid * vec_size]);
   }
 #if (defined(__CUDA_ARCH__) && (__CUDA_ARCH__ >= 900))
   cudaTriggerProgrammaticLaunchCompletion();
@@ -2447,7 +2414,6 @@ __global__ void merge_multi_chunks_v2_kernel(
     const float quant_max_bound,
     const float quant_min_bound,
     const float in_scale,
-    const int max_seq_len,
     const int num_chunks,
     const int num_heads,
     const int chunk_size,

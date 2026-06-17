@@ -27,19 +27,17 @@ inline __device__ void apply_token_rotary_embedding_kernel(
   if (IS_NEOX) {
     x_index = rot_offset;
     y_index = embed_dim + rot_offset;
-    cos = cos_ptr[x_index];
-    sin = sin_ptr[x_index];
   } else {
     x_index = 2 * rot_offset;
     y_index = 2 * rot_offset + 1;
-    cos = cos_ptr[x_index / 2];
-    sin = sin_ptr[x_index / 2];
   }
+  cos = cos_ptr[rot_offset];
+  sin = sin_ptr[rot_offset];
 
   const T x = arr[x_index];
   const T y = arr[y_index];
   arr[x_index] = x * cos - y * sin;
-  arr[y_index] = y * cos + x * sin;
+  arr[y_index] = x * sin + y * cos;
 }
 
 template <typename T, bool IS_NEOX>

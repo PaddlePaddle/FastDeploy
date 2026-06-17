@@ -240,14 +240,10 @@ class MTPProposer(Proposer):
 
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
-        # 2. If no need to profile, create kv cache unless kvcache_storage_backend or
-        #    p/d disaggregation is enabled. Note: CPU cache (num_cpu_blocks > 0) does NOT
-        #    prevent GPU runner from creating GPU cache tensors; cache transfer manager
-        #    handles CPU<->GPU swap on top of the GPU tensors created here.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
-        )
+        # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
+        #    Note: even when CPU cache (num_cpu_blocks > 0) is enabled, GPU runner still
+        #    creates GPU cache tensors; cache transfer manager handles CPU<->GPU swap.
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
 
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
@@ -497,16 +493,10 @@ class MTPProposer(Proposer):
 
                 input_ids = request.prompt_token_ids + request.output_token_ids
 
-                self.model_inputs["input_ids_len"][idx] = length - 1
                 async_set_value(self.model_inputs["pre_ids"][idx : idx + 1], -1)
                 self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs["input_ids"][
                     idx : idx + 1, 1:length
                 ]
-                # TODO: use token_all_ids replace with input_ids_cpu
-                if getattr(self, "hybrid_mode", False) and "input_ids_cpu" in self.model_inputs:
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = self.target_model_inputs[
-                        "input_ids"
-                    ][idx : idx + 1, 1:length].cpu()
                 encoder_block_num = len(request.block_tables)
                 async_set_value(self.model_inputs["encoder_block_lens"][idx : idx + 1], encoder_block_num)
                 async_set_value(self.model_inputs["block_tables"][idx : idx + 1, :], -1)
@@ -594,7 +584,6 @@ class MTPProposer(Proposer):
             request = req_dicts[i]
             idx = request.idx
             length = len(request.prompt_token_ids)
-            self.model_inputs.input_ids_len[idx] = length - 1
 
             if req_dicts[i].disaggregate_info is not None and req_dicts[i].disaggregate_info["role"] == "decode":
                 length = len(request.prompt_token_ids)
@@ -602,9 +591,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs[
                         "input_ids"
                     ][idx : idx + 1, 1:length]
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = np.array(
-                        request.prompt_token_ids
-                    )[1:]
                 self.model_inputs["pre_ids"][idx : idx + 1] = request.prompt_token_ids[-1]
                 prefill_token_num = self.max_draft_token_num + 1
                 self.model_inputs["draft_tokens"][idx : idx + 1, 0:1] = paddle.to_tensor(
@@ -633,9 +619,6 @@ class MTPProposer(Proposer):
                     self.model_inputs["input_ids"][idx : idx + 1, : length - 1] = self.target_model_inputs[
                         "input_ids"
                     ][idx : idx + 1, 1:length]
-                    self.model_inputs["input_ids_cpu"][idx : idx + 1, : length - 1] = np.array(
-                        request.prompt_token_ids
-                    )[1:]
                 self.model_inputs["pre_ids"][idx : idx + 1] = -1
                 self.model_inputs["step_idx"][idx : idx + 1] = 0
                 if self.cache_config.enable_chunked_prefill:

@@ -60,7 +60,7 @@ ConvertType = Literal["none", "embed"]
 _ResolvedTask = Literal["generate", "encode", "embed"]
 
 # Model implementation backend options
-ModelImpl = Literal["auto", "fastdeploy", "paddleformers"]
+ModelImpl = Literal["auto", "fastdeploy", "paddleformers", "paddlefleet"]
 
 _RUNNER_CONVERTS: dict[RunnerType, list[ConvertType]] = {
     "generate": [],
@@ -259,6 +259,8 @@ class ModelConfig:
 
         if not hasattr(self, "head_dim"):
             self.head_dim = self.hidden_size // self.num_attention_heads
+        if not hasattr(self, "v_head_dim"):
+            self.v_head_dim = self.head_dim
 
         if hasattr(self, "vision_config"):
             self.vision_config = PretrainedConfig.from_dict(self.vision_config)
@@ -651,6 +653,7 @@ class ParallelConfig:
         self.enable_expert_parallel = False
         self.enable_chunked_moe = False
         self.chunked_moe_size = 256
+        self.enable_mega_moe = False
 
         self.local_data_parallel_id = 0
         # Engine worker queue port
@@ -1456,6 +1459,8 @@ class LoadConfig:
         self.model_loader_extra_config: Optional[Dict[str, Any]] = None
         for key, value in args.items():
             if hasattr(self, key):
+                if key == "rsync_config" and isinstance(value, str):
+                    value = json.loads(value)
                 setattr(self, key, value)
 
     def __str__(self) -> str:
@@ -1886,6 +1891,59 @@ class RoutingReplayConfig:
         return self.to_json_string()
 
 
+class ServingLimitsConfig:
+    """Server-level request length limits and policies."""
+
+    def __init__(self, args):
+        self.max_completion_tokens = None
+        self.reasoning_max_tokens = None
+        self.response_max_tokens = None
+        self.min_completion_tokens = None
+        self.input_max_tokens = None
+
+        for key, value in args.items():
+            if hasattr(self, key) and value != "None":
+                setattr(self, key, value)
+
+    def validate(self, max_model_len):
+        """Validate serving limits against max_model_len at startup."""
+        for name in ("max_completion_tokens", "input_max_tokens", "response_max_tokens"):
+            value = getattr(self, name)
+            if value is not None and value <= 0:
+                flag = name.replace("_", "-")
+                raise ValueError(f"--{flag} ({value}) must be greater than 0.")
+
+        for name in ("reasoning_max_tokens", "min_completion_tokens"):
+            value = getattr(self, name)
+            if value is not None and value < 0:
+                flag = name.replace("_", "-")
+                raise ValueError(f"--{flag} ({value}) must be greater than or equal to 0.")
+
+        if self.min_completion_tokens is not None:
+            if self.min_completion_tokens >= max_model_len:
+                raise ValueError(
+                    f"--min-completion-tokens ({self.min_completion_tokens}) must be less than "
+                    f"--max-model-len ({max_model_len}). All requests would be rejected."
+                )
+            if self.max_completion_tokens is not None and self.min_completion_tokens > self.max_completion_tokens:
+                raise ValueError(
+                    f"--min-completion-tokens ({self.min_completion_tokens}) must not exceed "
+                    f"--max-completion-tokens ({self.max_completion_tokens})."
+                )
+
+        if self.max_completion_tokens is not None and self.max_completion_tokens > max_model_len:
+            logger.warning(
+                f"--max-completion-tokens ({self.max_completion_tokens}) > "
+                f"--max-model-len ({max_model_len}), it will have no effect."
+            )
+
+        if self.input_max_tokens is not None and self.input_max_tokens > max_model_len:
+            logger.warning(
+                f"--input-max-tokens ({self.input_max_tokens}) > "
+                f"--max-model-len ({max_model_len}), it will have no effect."
+            )
+
+
 class BenchmarkMetricsConfig:
     """Configuration for in-process benchmark metrics logger.
 
@@ -1981,6 +2039,7 @@ class FDConfig:
         routing_replay_config: Optional[RoutingReplayConfig] = None,
         benchmark_metrics_config=None,
         deploy_modality: DeployModality = DeployModality.MIXED,
+        serving_limits_config: ServingLimitsConfig = None,  # resolved below
     ):
         self.model_config: ModelConfig = model_config  # type: ignore
         self.cache_config: CacheConfig = cache_config  # type: ignore
@@ -1999,6 +2058,7 @@ class FDConfig:
         self.routing_replay_config = routing_replay_config
         self.benchmark_metrics_config = benchmark_metrics_config
         self.deploy_modality: DeployModality = deploy_modality
+        self.serving_limits_config: ServingLimitsConfig = serving_limits_config or ServingLimitsConfig({})
         # Initialize cuda graph capture list
         max_capture_shape = self.scheduler_config.max_num_seqs
         if self.graph_opt_config.cudagraph_only_prefill:

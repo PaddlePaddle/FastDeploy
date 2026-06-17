@@ -333,17 +333,18 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         return DummyRM()
 
     @staticmethod
-    def _make_v1_prefill_continuous_rm(eng, waiting_async_result=False):
+    def _make_v1_prefill_continuous_rm(eng, waiting_async_result=False, available_batch=1):
         class DummyRM:
             def __init__(self):
                 self.abort_req_ids_set = set()
                 self.waiting = []
+                self.running = []
                 self.real_bsz = 1
                 self.add_request_in_p = Mock()
                 self.pre_recycle_resource = Mock()
 
             def available_batch(self):
-                return 1
+                return available_batch
 
             def apply_async_preprocess(self, _task):
                 return None
@@ -752,7 +753,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.decode_status = {"rid": (0, 2)}
 
             def ids2tokens(self, token_ids, req_id):
-                return "hi", [101, 102], None
+                # previous_token_ids snapshot is empty (first call); engine
+                # reconstructs cum = previous + input = [101, 102].
+                return "hi", [], None
 
         eng.data_processor = DummyProcessor()
 
@@ -782,7 +785,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.decode_status = {"rid": (0, 1)}
 
             def ids2tokens(self, token_ids, req_id):
-                return "", [7], None
+                # previous snapshot is empty; cum becomes [7].
+                return "", [], None
 
         eng.data_processor = DummyProcessor()
 
@@ -1311,6 +1315,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self):
                 self.requests_number = Mock(inc=Mock())
                 self.num_requests_waiting = Mock(inc=Mock())
+                self.prompt_tokens_total = Mock(inc=Mock())
+                self.request_prompt_tokens = Mock(observe=Mock())
+                self.request_params_max_tokens = Mock(observe=Mock())
 
             def inc_value(self, name, value=1, labelvalues=None):
                 getattr(self, name).inc(value)
@@ -1495,6 +1502,133 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         eng.scheduler.put_results.assert_called_once()
         eng.resource_manager.add_request_in_p.assert_not_called()
+        self._detach_finalizer(eng)
+
+    def test_schedule_request_to_worker_v1_prefill_max_inflight_skip_fetch(self):
+        """When len(running) >= FD_MAX_INFLIGHT_PREFILL, fetch should be skipped."""
+        cfg = self._make_cfg(
+            splitwise_role="prefill",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+            kv_cache_ratio=1,
+        )
+        eng = self._make_engine(cfg)
+        self._setup_v1_engine(eng)
+
+        eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False),
+            get_finished_add_cache_task_req=Mock(return_value=[]),
+        )
+
+        rm = self._make_v1_prefill_continuous_rm(eng, waiting_async_result=False)
+        rm.running = [Mock() for _ in range(20)]  # running == FD_MAX_INFLIGHT_PREFILL default
+        eng.resource_manager = rm
+        eng.split_connector = Mock(
+            send_splitwise_tasks=Mock(),
+            check_decode_allocated=Mock(return_value=(True, "")),
+            send_cache_info_to_messager=Mock(),
+        )
+
+        try:
+            with (
+                patch("fastdeploy.engine.common_engine.envs.FD_MAX_INFLIGHT_PREFILL", 20),
+                patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", False),
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+                patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+            ):
+                eng._schedule_request_to_worker_v1()
+        finally:
+            eng.running = False
+
+        # get_requests should NOT be called because fetch was skipped
+        eng.scheduler.get_requests.assert_not_called()
+        self._detach_finalizer(eng)
+
+    def test_schedule_request_to_worker_v1_prefill_inflight_constrains_batch(self):
+        """When 0 < len(running) < FD_MAX_INFLIGHT_PREFILL, num_prefill_batch is constrained by available_for_new."""
+        cfg = self._make_cfg(
+            splitwise_role="prefill",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+            kv_cache_ratio=1,
+        )
+        eng = self._make_engine(cfg)
+        self._setup_v1_engine(eng)
+
+        eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False),
+            get_finished_add_cache_task_req=Mock(return_value=[]),
+        )
+
+        rm = self._make_v1_prefill_continuous_rm(eng, waiting_async_result=False, available_batch=10)
+        rm.running = [Mock() for _ in range(18)]  # 18 in-flight, max=20, so available_for_new=2
+        eng.resource_manager = rm
+        eng.split_connector = Mock(
+            send_splitwise_tasks=Mock(),
+            check_decode_allocated=Mock(return_value=(True, "")),
+            send_cache_info_to_messager=Mock(),
+        )
+
+        try:
+            with (
+                patch("fastdeploy.engine.common_engine.envs.FD_MAX_INFLIGHT_PREFILL", 20),
+                patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", False),
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+                patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+            ):
+                eng._schedule_request_to_worker_v1()
+        finally:
+            eng.running = False
+
+        # get_requests should be called with batch=2 (available_for_new=20-18)
+        eng.scheduler.get_requests.assert_called_once()
+        call_kwargs = eng.scheduler.get_requests.call_args
+        self.assertEqual(call_kwargs.kwargs.get("batch", call_kwargs[1].get("batch")), 2)
+        self._detach_finalizer(eng)
+
+    def test_schedule_request_to_worker_v1_prefill_inflight_boundary_last_slot(self):
+        """When len(running) == max_inflight_prefill - 1, only 1 slot remains (boundary)."""
+        cfg = self._make_cfg(
+            splitwise_role="prefill",
+            num_gpu_blocks_override=4,
+            router="0.0.0.0:30000",
+            kv_cache_ratio=1,
+        )
+        eng = self._make_engine(cfg)
+        self._setup_v1_engine(eng)
+
+        eng.scheduler = Mock(get_requests=Mock(return_value=[]), put_results=Mock())
+        eng.engine_worker_queue = Mock(
+            exist_tasks=Mock(return_value=False),
+            get_finished_add_cache_task_req=Mock(return_value=[]),
+        )
+
+        rm = self._make_v1_prefill_continuous_rm(eng, waiting_async_result=False, available_batch=10)
+        rm.running = [Mock() for _ in range(19)]  # 19 in-flight, max=20, so available_for_new=1
+        eng.resource_manager = rm
+        eng.split_connector = Mock(
+            send_splitwise_tasks=Mock(),
+            check_decode_allocated=Mock(return_value=(True, "")),
+            send_cache_info_to_messager=Mock(),
+        )
+
+        try:
+            with (
+                patch("fastdeploy.engine.common_engine.envs.FD_MAX_INFLIGHT_PREFILL", 20),
+                patch("fastdeploy.engine.common_engine.envs.PREFILL_CONTINUOUS_REQUEST_DECODE_RESOURCES", False),
+                patch("fastdeploy.engine.common_engine.ThreadPoolExecutor", self._make_dummy_executor(eng)),
+                patch("fastdeploy.engine.common_engine.time.sleep", lambda *_: None),
+            ):
+                eng._schedule_request_to_worker_v1()
+        finally:
+            eng.running = False
+
+        # get_requests should be called with batch=1 (available_for_new=20-19)
+        eng.scheduler.get_requests.assert_called_once()
+        call_kwargs = eng.scheduler.get_requests.call_args
+        self.assertEqual(call_kwargs.kwargs.get("batch", call_kwargs[1].get("batch")), 1)
         self._detach_finalizer(eng)
 
     def test_schedule_request_to_worker_v1_decode_preempted_and_errors(self):
@@ -1987,7 +2121,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.decode_status = {"rid": (0, 2)}
 
             def ids2tokens(self, token_ids, req_id):
-                return "hi", [1, 2], None
+                # previous snapshot empty; cum = [] + [1, 2] = [1, 2].
+                return "hi", [], None
 
         eng.data_processor = DummyProcessor()
 
@@ -2727,6 +2862,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 with patch("fastdeploy.engine.common_engine.Request") as MockRequest:
                     mock_request = Mock()
                     mock_request.metrics.scheduler_recv_req_time = 0
+                    mock_request.prompt_token_ids_len = 2
+                    mock_request.sampling_params = Mock(max_tokens=16)
                     MockRequest.from_dict.return_value = mock_request
 
                     with (
@@ -2756,6 +2893,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 with patch("fastdeploy.engine.common_engine.Request") as MockRequest:
                     mock_request = Mock()
                     mock_request.metrics.scheduler_recv_req_time = 0
+                    mock_request.prompt_token_ids_len = 2
+                    mock_request.sampling_params = Mock(max_tokens=16)
                     MockRequest.from_dict.return_value = mock_request
 
                     with (
@@ -3359,6 +3498,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
             def __init__(self):
                 self.requests_number = Mock(inc=Mock())
                 self.num_requests_waiting = Mock(inc=Mock())
+                self.prompt_tokens_total = Mock(inc=Mock())
+                self.request_prompt_tokens = Mock(observe=Mock())
+                self.request_params_max_tokens = Mock(observe=Mock())
 
             def inc_value(self, name, value=1, labelvalues=None):
                 getattr(self, name).inc(value)
@@ -3477,7 +3619,8 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
                 self.decode_status = {"tok-req": (1, 3)}
 
             def ids2tokens(self, token_ids, req_id):
-                return "hello", [10, 20, 30], None
+                # previous snapshot empty; cum = [] + [10, 20, 30].
+                return "hello", [], None
 
         eng.data_processor = DummyProcessor()
 

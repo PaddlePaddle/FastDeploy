@@ -17,6 +17,7 @@
 import os
 from typing import Callable
 
+import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
@@ -68,7 +69,7 @@ class XPUMoEMethod(MoEMethodBase):
 
     def _set_xpu_moe_quant_type(self):
         """
-        XPU_MOE_FFN_QUANT_TYPE_MAP options:
+        FD_XPU_MOE_FFN_QUANT_TYPE_MAP options:
         - defalut:
           - w16a16 -> w_bfloat16_a_bfloat16
           - weight_only_int8 -> w_channelwise_int8_a_tokenwise_float16
@@ -86,22 +87,28 @@ class XPUMoEMethod(MoEMethodBase):
         - TODO:
           - w_groupwise_int4_a_expertwise_int8
           - w_groupwise_int4_a_tokenwise_int8
-        for example: XPU_MOE_FFN_QUANT_TYPE_MAP="w_channelwise_int8_a_tokenwise_float16:3->5,7->9;w_channelwise_int8_a_tokenwise_int8:6,10->20"
+        A quant_type_map entry without ":" sets a global default for all layers
+        and should be placed first; subsequent entries with ranges may override it.
+        - example1: FD_XPU_MOE_FFN_QUANT_TYPE_MAP="w_channelwise_int8_a_tokenwise_int8"
+        - example2: FD_XPU_MOE_FFN_QUANT_TYPE_MAP="w_channelwise_int8_a_tokenwise_float16:3->5,7->9;w_channelwise_int8_a_tokenwise_int8:6,10->20"
         """
         if self.layer_idx < 0:
             return
         xpu_moe_ffn_quant_type_map = envs.FD_XPU_MOE_FFN_QUANT_TYPE_MAP
         self.xpu_moe_quant_type = "default"
         for quant_type_map in xpu_moe_ffn_quant_type_map.split(";"):
-            quant_type_info = quant_type_map.split(":")
-            if len(quant_type_info) != 2:
+            if not quant_type_map:
                 continue
-            for ids_info in quant_type_info[1].split(","):
-                ids = ids_info.split("->")
-                id_min = int(ids[0])
-                id_max = int(ids[-1])
-                if id_min <= self.layer_idx <= id_max:
-                    self.xpu_moe_quant_type = quant_type_info[0]
+            quant_type_info = quant_type_map.split(":")
+            if len(quant_type_info) == 1:
+                self.xpu_moe_quant_type = quant_type_info[0]
+            else:
+                for ids_info in quant_type_info[1].split(","):
+                    ids = ids_info.split("->")
+                    id_min = int(ids[0])
+                    id_max = int(ids[-1])
+                    if id_min <= self.layer_idx <= id_max:
+                        self.xpu_moe_quant_type = quant_type_info[0]
 
         if self.xpu_moe_quant_type == "default":
             default_quant_type_map = {
@@ -301,6 +308,16 @@ class XPUMoEMethod(MoEMethodBase):
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
+    def compute_gate(self, x: paddle.Tensor, gate: nn.Layer) -> paddle.Tensor:
+        """Compute gate output, use random fill in profile mode."""
+        gate_input = x.cast("float32") if gate.weight.dtype == paddle.float32 else x
+        gate_out = gate(gate_input)
+        if gate_out.dtype != paddle.float32:
+            gate_out = gate_out.cast("float32")
+        if envs.FD_XPU_PROFILE_EXPERT_BALANCE:
+            gate_out = paddle.to_tensor(np.random.rand(x.shape[0], gate.weight.shape[1]).astype("float32"))
+        return gate_out
+
     def apply_tp(
         self,
         layer: nn.Layer,
@@ -311,7 +328,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply TP Scatter Op.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = self.compute_gate(x, gate)
         if layer.topk_method == "noaux_tc":
             _, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
@@ -415,7 +432,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = self.compute_gate(x, gate)
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
@@ -509,7 +526,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply the EP decoder method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = self.compute_gate(x, gate)
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)

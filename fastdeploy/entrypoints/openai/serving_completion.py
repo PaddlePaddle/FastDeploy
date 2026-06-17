@@ -478,6 +478,7 @@ class OpenAIServingCompletion:
             reasoning_tokens = [0] * num_choices
             first_iteration = [True] * num_choices
             tool_called = [False] * num_choices
+            fallback_truncated_choices = set()
             max_streaming_response_tokens = (
                 request.max_streaming_response_tokens
                 if request.max_streaming_response_tokens is not None
@@ -516,6 +517,8 @@ class OpenAIServingCompletion:
 
                 for res in response:
                     idx = get_choice_index(res["request_id"])
+                    if idx in fallback_truncated_choices:
+                        continue
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
                     prompt_logprobs_res: Optional[PromptLogprobs] = None
@@ -597,9 +600,14 @@ class OpenAIServingCompletion:
                     if output["skipped"] and not request.return_token_ids:
                         continue
 
+                    delta_text = "" if output["skipped"] else (output["text"] or "")
+                    fallback_truncated = bool(output.get("fallback_truncated"))
+                    if fallback_truncated:
+                        res["finished"] = True
+
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
-                        text="" if output["skipped"] else (output["text"] or ""),
+                        text=delta_text,
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=output["tool_calls"],
@@ -625,6 +633,10 @@ class OpenAIServingCompletion:
                         )
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choices[-1].finish_reason = "abort"
+                        if fallback_truncated:
+                            choices[-1].finish_reason = "length"
+                            fallback_truncated_choices.add(idx)
+                            await self.engine_client.abort(make_choice_id(request_id, idx), 1)
                         inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
@@ -767,13 +779,14 @@ class OpenAIServingCompletion:
                 prompt_logprobs_res = self._build_prompt_logprobs(
                     prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
                 )
+            generated_text = output["text"]
             if request.echo:
                 prompt_text = self._echo_back_prompt(request, idx // (1 if request.n is None else request.n))
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
-                output_text = prompt_text + output["text"]
+                output_text = prompt_text + generated_text
             else:
                 token_ids = output["token_ids"]
-                output_text = output["text"]
+                output_text = generated_text
             finish_reason = self.calc_finish_reason(
                 max_tokens_list[idx // (1 if request.n is None else request.n)],
                 final_res["output_token_ids"],

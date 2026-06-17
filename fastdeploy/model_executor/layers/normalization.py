@@ -127,7 +127,8 @@ class RMSNorm(nn.Layer):
         self.tp_group = self.fd_config.parallel_config.tp_group
         is_input_norm = prefix.endswith(".input_layernorm")
         self.enable_all_reduce_fusion = fd_config.parallel_config.enable_flashinfer_allreduce_fusion and (
-            ("post_attention_layernorm" in prefix) or (("input_layernorm" in prefix and layer_id != 0))
+            ("post_attention_layernorm" in prefix)
+            or (("input_layernorm" in prefix and layer_id != 0) and not fd_config.parallel_config.use_ep)
         )
 
         self.is_last_norm = prefix.endswith(".norm")
@@ -374,7 +375,7 @@ class QKRMSNorm(nn.Layer):
         proxy_rmsnorm=None,
     ) -> paddle.Tensor:
         if proxy_rmsnorm is None and self.qk_norm_fused:
-            qkv_out = qk_rmsnorm_fused(
+            qk_rmsnorm_fused(
                 qkv_out,
                 self.q_norm.weight,
                 self.k_norm.weight,

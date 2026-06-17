@@ -22,6 +22,7 @@ __attribute__((global)) void ComputeOrderKernel(
     const int* base_model_seq_lens_this_time,
     const int* base_model_seq_lens_encoder,
     const int* accept_nums,
+    const bool* stop_flags,
     int* position_map,
     int* output_token_num,
     const int bsz,
@@ -38,6 +39,7 @@ static int cpu_wrapper(api::Context* ctx,
                        const int* base_model_seq_lens_this_time,
                        const int* base_model_seq_lens_encoder,
                        const int* accept_nums,
+                       const bool* stop_flags,
                        int* position_map,
                        int* output_token_num,
                        const int bsz,
@@ -48,6 +50,9 @@ static int cpu_wrapper(api::Context* ctx,
 
   // for support mix, encoder need set first
   for (int i = 0; i < bsz; ++i) {
+    if (stop_flags[i]) {
+      continue;
+    }
     int cur_seq_lens_encoder = seq_lens_encoder[i];
     if (cur_seq_lens_encoder > 0) {
       for (int j = 0; j < cur_seq_lens_encoder; j++) {
@@ -57,8 +62,10 @@ static int cpu_wrapper(api::Context* ctx,
   }
 
   for (int i = 0; i < bsz; ++i) {
+    // Do NOT skip stopped slots here: see comment in compute_order.xpu loop 2.
+    // Stopped slots may still have base_model_seq_lens_this_time > 0, and the
+    // branches below correctly advance in_offset without writing position_map.
     int cur_base_model_seq_lens_this_time = base_model_seq_lens_this_time[i];
-    int cur_base_model_seq_lens_encoder = base_model_seq_lens_encoder[i];
     int cur_seq_lens_this_time = seq_lens_this_time[i];
     int accept_num = accept_nums[i];
     int cur_seq_lens_encoder = seq_lens_encoder[i];
@@ -66,27 +73,19 @@ static int cpu_wrapper(api::Context* ctx,
     // 1. eagle encoder. Base step=1
     if (cur_seq_lens_encoder > 0) {
       continue;
-      // 2. base model encoder. Base step=0
-    } else if (cur_base_model_seq_lens_encoder != 0) {
-      // nothing happens
-      // 3. New end
+      // 2. Base model stop at last verify-step.
     } else if (cur_base_model_seq_lens_this_time != 0 &&
                cur_seq_lens_this_time == 0) {
       in_offset += cur_base_model_seq_lens_this_time;
-      // 4. stopped
+      // 3. stopped
     } else if (cur_base_model_seq_lens_this_time == 0 &&
                cur_seq_lens_this_time == 0) /* end */ {
       // nothing happens
     } else {
-      if (accept_num <=
-          actual_draft_token_num) /*Accept partial draft tokens*/ {
-        position_map[in_offset + accept_num - 1] = out_offset++;
-        in_offset += cur_base_model_seq_lens_this_time;
-      } else /*Accept all draft tokens*/ {
-        position_map[in_offset + accept_num - 2] = out_offset++;
-        position_map[in_offset + accept_num - 1] = out_offset++;
-        in_offset += cur_base_model_seq_lens_this_time;
+      for (int j = 0; j < accept_num; j++) {
+        position_map[in_offset + j] = out_offset++;
       }
+      in_offset += cur_base_model_seq_lens_this_time;
     }
   }
   output_token_num[0] = out_offset;
@@ -99,6 +98,7 @@ static int xpu3_wrapper(api::Context* ctx,
                         const int* base_model_seq_lens_this_time,
                         const int* base_model_seq_lens_encoder,
                         const int* accept_nums,
+                        const bool* stop_flags,
                         int* position_map,
                         int* output_token_num,
                         const int bsz,
@@ -110,6 +110,7 @@ static int xpu3_wrapper(api::Context* ctx,
       base_model_seq_lens_this_time,
       base_model_seq_lens_encoder,
       accept_nums,
+      stop_flags,
       position_map,
       output_token_num,
       bsz,
@@ -125,6 +126,7 @@ int compute_order(api::Context* ctx,
                   const int* base_model_seq_lens_this_time,
                   const int* base_model_seq_lens_encoder,
                   const int* accept_nums,
+                  const bool* stop_flags,
                   int* position_map,
                   int* output_token_num,
                   const int bsz,
@@ -151,6 +153,7 @@ int compute_order(api::Context* ctx,
   WRAPPER_CHECK_PTR(ctx, int, bsz, base_model_seq_lens_this_time);
   WRAPPER_CHECK_PTR(ctx, int, bsz, base_model_seq_lens_encoder);
   WRAPPER_CHECK_PTR(ctx, int, bsz, accept_nums);
+  WRAPPER_CHECK_PTR(ctx, bool, bsz, stop_flags);
   WRAPPER_CHECK_PTR(ctx, int, input_token_num, position_map);
   WRAPPER_CHECK_PTR(ctx, int, 1, output_token_num);
 
@@ -161,6 +164,7 @@ int compute_order(api::Context* ctx,
                        base_model_seq_lens_this_time,
                        base_model_seq_lens_encoder,
                        accept_nums,
+                       stop_flags,
                        position_map,
                        output_token_num,
                        bsz,
@@ -173,6 +177,7 @@ int compute_order(api::Context* ctx,
                         base_model_seq_lens_this_time,
                         base_model_seq_lens_encoder,
                         accept_nums,
+                        stop_flags,
                         position_map,
                         output_token_num,
                         bsz,

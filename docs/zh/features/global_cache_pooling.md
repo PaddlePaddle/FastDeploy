@@ -48,6 +48,8 @@
 |------|------|------|
 | `run.sh` | 多实例缓存共享 | 两个独立实例共享缓存 |
 | `run_03b_pd_storage.sh` | PD 分离 | P+D 实例配合全局缓存池 |
+| `run_ha.sh` | 高可用（etcd） | etcd + 多 Master 选主，杀掉 leader 后验证 failover |
+| `run_ha_redis.sh` | 高可用（redis） | 单 redis + 多 Master 选主，杀掉 leader 后验证 failover |
 
 ## 环境要求
 
@@ -231,7 +233,7 @@ mooncake_master \
 **步骤 2：启动 Router**
 
 ```bash
-python -m fastdeploy.golang_router.launch \
+python -m fastdeploy.router.launch \
     --port 52700 \
     --splitwise
 ```
@@ -282,6 +284,169 @@ curl -X POST "http://0.0.0.0:52700/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 50}'
 ```
+
+### 场景三：高可用（HA）部署
+
+单 Master 是单点，崩溃后集群操作会暂停。生产环境建议运行多个 `mooncake_master`，通过协调后端进行 leader 选举；leader 故障后由备节点自动重新选主，客户端无感切换。
+
+支持两种协调后端：
+
+- **etcd**（`run_ha.sh`）：3 节点 etcd 集群负责选主与元数据存储。
+- **redis**（`run_ha_redis.sh`）：单个 redis 实例做基于租约（lease）的选主。用它可以避免额外引入 etcd 组件。
+
+**架构图：**
+
+```
+            ┌──────────────────────────────────────┐
+            │     协调后端 (etcd / redis)           │
+            │       leader 选举 (master_view)       │
+            └───────────────────┬──────────────────┘
+                                │ 选主 (master_view)
+          ┌─────────────────────┼─────────────────────┐
+          ▼                     ▼                     ▼
+   ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+   │  master1    │       │  master2    │       │  master3    │
+   │ rpc:8081    │       │ rpc:8082    │       │ rpc:8083    │
+   │ (leader)    │       │ (standby)   │       │ (standby)   │
+   └──────┬──────┘       └─────────────┘       └─────────────┘
+          │  FastDeploy 客户端通过协调后端发现当前 leader
+   ┌──────┴───────┐
+   ▼              ▼
+server_0      server_1
+```
+
+#### 源码编译 Mooncake
+
+HA 模式需要 Mooncake 在编译时开启对应后端：
+
+- etcd：`-DSTORE_USE_ETCD=ON -DUSE_ETCD=ON`
+- redis：`-DSTORE_USE_REDIS=ON -DUSE_REDIS=ON`（编译依赖：`libhiredis-dev`）
+
+```bash
+git clone https://github.com/kvcache-ai/Mooncake.git
+cd Mooncake
+bash dependencies.sh
+
+mkdir -p build && cd build
+cmake .. -DSTORE_USE_ETCD=ON -DUSE_ETCD=ON   # redis 后端追加 -DSTORE_USE_REDIS=ON -DUSE_REDIS=ON
+make -j
+sudo make install
+cd ..
+
+./scripts/build_wheel.sh
+pip install mooncake-wheel/dist/*.whl
+```
+
+若需要 CUDA 13 版本，使用如下方式编译安装：
+
+```bash
+cd Mooncake
+export CU13_BUILD=1
+./scripts/build_wheel.sh
+pip install mooncake-wheel/dist/mooncake_transfer_engine_cuda13-*.whl
+```
+
+#### 方式 A：etcd 后端（`run_ha.sh`）
+
+**1. 安装 etcd**
+
+下载并解压 etcd（示例为 v3.5.30），将 `etcd` / `etcdctl` 加入 `PATH`：
+
+```bash
+ETCD_VER=v3.5.30
+curl -L https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz \
+  -o etcd-${ETCD_VER}-linux-amd64.tar.gz
+tar -xzf etcd-${ETCD_VER}-linux-amd64.tar.gz
+export PATH=$PWD/etcd-${ETCD_VER}-linux-amd64:$PATH
+etcd --version
+```
+
+**2. 客户端配置**（`ha_mooncake_config.json`）
+
+`metadata_server` 与 `master_server_addr` 都使用 `etcd://` 前缀，由客户端通过 etcd 发现当前 leader：
+
+```json
+{
+  "metadata_server": "etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379",
+  "global_segment_size": 1000000000,
+  "local_buffer_size": 134217728,
+  "protocol": "rdma",
+  "rdma_devices": "",
+  "master_server_addr": "etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379"
+}
+```
+
+**3. 运行**
+
+```bash
+cd examples/cache_storage
+bash run_ha.sh
+```
+
+脚本会启动 3 节点 etcd 集群（client 端口 12379/22379/32379）、3 个 HA Master（rpc 8081/8082/8083）和 2 个 FastDeploy 实例；leader 地址写入 etcd 的 `mooncake-store/mooncake_cluster/master_view`。
+
+手动查看当前 leader：
+
+```bash
+etcdctl --endpoints=http://127.0.0.1:12379,http://127.0.0.1:22379,http://127.0.0.1:32379 \
+  get "mooncake-store/mooncake_cluster/master_view" --print-value-only
+```
+
+#### 方式 B：redis 后端（`run_ha_redis.sh`）
+
+**1. 客户端配置**（`ha_redis_mooncake_config.json`）
+
+`metadata_server` 与 `master_server_addr` 都使用 `redis://` 前缀指向单个 redis 实例：
+
+```json
+{
+  "metadata_server": "redis://127.0.0.1:6399",
+  "global_segment_size": 1000000000,
+  "local_buffer_size": 134217728,
+  "protocol": "rdma",
+  "rdma_devices": "",
+  "master_server_addr": "redis://127.0.0.1:6399"
+}
+```
+
+**2. 运行**
+
+```bash
+cd examples/cache_storage
+bash run_ha_redis.sh
+```
+
+脚本会启动单个 redis 实例（端口 6399）、3 个用 `--ha_backend_type redis --ha_backend_connstring redis://127.0.0.1:6399` 拉起的 HA Master（rpc 8081/8082/8083）和 2 个 FastDeploy 实例。master_view 是 redis 中的一个 HASH，key 为 `mooncake-store/{mooncake_cluster}/master_view`。
+
+手动查看当前 leader：
+
+```bash
+redis-cli -p 6399 hget "mooncake-store/{mooncake_cluster}/master_view" leader_address
+```
+
+#### HA 脚本验证的内容
+
+两个脚本流程相同，均验证 failover：
+
+1. 启动协调后端（etcd 集群 / 单 redis）。
+2. 启动 3 个 HA Master，选出一个 leader 并写入 `master_view`。
+3. 启动 2 个 FastDeploy 实例，均以 `--kvcache-storage-backend mooncake` 接入同一缓存池。
+4. **failover 前**：用 prompt **A** 在 `server_0` 预热，再向 `server_1` 发送相同 prompt，应命中全局缓存。
+5. **杀掉 leader**：从后端读取当前 leader 的 `rpc_port`，`kill -9` 触发重新选主。
+6. **failover 后**：等待 `master_view` 更新为新 leader 后，用一条**全新的** prompt **B** 在 `server_0` 预热，再在 `server_1` 复用。使用新 prompt 可确保命中只能来自新 leader 的全局池，而非步骤 4 残留的本地缓存。
+
+各 Master 角色可在 `log_master_1` / `log_master_2` / `log_master_3` 中查看（`role=leader` / `role=standby`）。
+
+#### HA Master 关键参数
+
+| 参数 | 说明 |
+|------|------|
+| `--enable_ha` | 开启 HA 模式 |
+| `--ha_backend_type` | 协调后端：`etcd`（默认）或 `redis` |
+| `--etcd_endpoints` | etcd 端点，分号分隔（`ha_backend_type=etcd` 时） |
+| `--ha_backend_connstring` | 后端连接串，如 `redis://127.0.0.1:6399`（`ha_backend_type=redis` 时） |
+| `--rpc_address` / `--rpc_port` | 该 Master 对外可达的 RPC 地址与端口（每个实例需唯一） |
+| `--cluster_id` | 集群标识，同一集群的 Master 需一致 |
 
 ## FastDeploy Mooncake 相关参数
 
