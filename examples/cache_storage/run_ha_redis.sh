@@ -1,26 +1,24 @@
 #!/bin/bash
 set -e
 # =============================================================================
-# HA Global Cache Pooling test script (etcd + multi-master + failover)
-# Aligned with the run.sh style. Self-contained: starts the etcd cluster and
-# the HA mooncake_master cluster inline (no external start_*.sh needed).
+# HA Global Cache Pooling test script — REDIS backend (single redis + multi-master + failover)
+# Mirror of run_ha.sh, but replaces the 3-node etcd cluster with a SINGLE redis
+# instance. The 3 mooncake_master use redis (lease-based leader election) instead
+# of etcd raft. Motivation: redis avoids introducing etcd as an extra component.
 #
-# Flow:
-#   1. start a 3-node etcd cluster
-#   2. start 3 HA masters (one is elected leader through etcd)
+# Flow (identical to run_ha.sh):
+#   1. start a single redis instance
+#   2. start 3 HA masters (one is elected leader via a redis lease)
 #   3. start 2 FastDeploy instances sharing the global cache pool
 #   4. verify pooling (before failover): warmup on server_0, reuse on server_1
 #   5. kill the leader master, wait for a standby to be re-elected
-#   6. verify pooling (after failover) with a BRAND-NEW prompt, so the hit on
-#      server_1 can only come from the (new leader's) global pool
+#   6. verify pooling (after failover) with a BRAND-NEW prompt
 # =============================================================================
 
 export PYTHONPATH="/workspace/mooncake-test/FastDeploy:$PYTHONPATH"
 export MODEL_NAME="/workspace/models/Ernie-0.3B"
-# export MODEL_NAME="/work/models/PaddlePaddle/ERNIE-4.5-0.3B-Paddle"
-export MOONCAKE_CONFIG_PATH=./ha_mooncake_config.json
+export MOONCAKE_CONFIG_PATH=./ha_redis_mooncake_config.json
 export FD_DEBUG=1
-export ETCDCTL_API=3
 
 unset http_proxy && unset https_proxy
 
@@ -28,26 +26,32 @@ echo "begin"
 source ./utils.sh
 
 # ---- topology ---------------------------------------------------------------
-# etcd node i (i=1,2,3): client port = ${i}2379, peer port = ${i}2380
-# master node i:         rpc port = 808${i},     metrics port = 909${i}
-ETCD_TOKEN="mooncake-test"
+# redis:        client port = 6399 (single instance)
+# master node i: rpc port = 808${i}, metrics port = 909${i}
+REDIS_PORT=6399
+REDIS_SERVER_BIN="$(command -v redis-server || echo /usr/local/redis/bin/redis-server)"
+REDIS_CLI_BIN="$(command -v redis-cli || echo /usr/local/redis/bin/redis-cli)"
+REDIS_CONN="redis://127.0.0.1:${REDIS_PORT}"          # for mooncake_master + client config
+
 CLUSTER_ID="mooncake_cluster"
-ETCD_INITIAL_CLUSTER="etcd1=http://127.0.0.1:12380,etcd2=http://127.0.0.1:22380,etcd3=http://127.0.0.1:32380"
-ETCD_ENDPOINTS_CTL="http://127.0.0.1:12379,http://127.0.0.1:22379,http://127.0.0.1:32379"   # comma-separated, for etcdctl
-ETCD_ENDPOINTS_HA="http://127.0.0.1:12379;http://127.0.0.1:22379;http://127.0.0.1:32379"    # semicolon-separated, for mooncake_master
-MASTER_VIEW_KEY="mooncake-store/${CLUSTER_ID}/master_view"
+# redis master_view key uses a hash-tag {cluster_id} so all related keys land in
+# the same Redis Cluster slot; it is a HASH with fields leader_address/view_version/owner_token.
+MASTER_VIEW_KEY="mooncake-store/{${CLUSTER_ID}}/master_view"
 
 S0_PORT=52700
 S1_PORT=52800
 
 # ---- helpers ----------------------------------------------------------------
 
-# Query etcd for the current leader's "rpc_address:rpc_port".
+# Query redis for the current leader's "rpc_address:rpc_port".
+# The master_view is a redis HASH; the leader endpoint lives in field leader_address.
+# redis-cli prints raw (unquoted) output when piped, so no extra unquoting needed.
 get_leader_addr() {
-    etcdctl --endpoints="${ETCD_ENDPOINTS_CTL}" get "${MASTER_VIEW_KEY}" --print-value-only 2>/dev/null | tr -d '[:space:]'
+    "${REDIS_CLI_BIN}" -p "${REDIS_PORT}" hget "${MASTER_VIEW_KEY}" leader_address 2>/dev/null \
+        | tr -d '[:space:]'
 }
 
-# Wait until a leader is elected and published into etcd.
+# Wait until a leader is elected and published into redis.
 wait_for_leader() {
     local timeout=${1:-60}
     local start_time=$(date +%s)
@@ -82,6 +86,7 @@ kill_master_by_rpc_port() {
     done
     echo "kill leader master pids=$(echo ${all_pids} | tr '\n' ' ')(rpc_port=${rpc_port})"
     kill -9 ${all_pids} 2>/dev/null || true
+
 }
 
 # Send a chat request to a FastDeploy server.
@@ -101,36 +106,25 @@ send_request() {
     echo
 }
 
-# ---- 1. start a 3-node etcd cluster -----------------------------------------
-echo "=== [1/6] start etcd cluster ==="
-pkill -9 -f "etcd --name etcd" || true
+# ---- 1. start a single redis instance ---------------------------------------
+echo "=== [1/6] start redis ==="
+pkill -9 -f "redis-server .*:${REDIS_PORT}" || true
 sleep 1
 
-etcd_ports=(12379 12380 22379 22380 32379 32380)
-check_ports "${etcd_ports[@]}" || {
-    echo "❌ Some etcd ports are in use. Please release them."
+check_ports "${REDIS_PORT}" || {
+    echo "❌ redis port ${REDIS_PORT} is in use. Please release it."
     exit 1
 }
 
-for i in 1 2 3; do
-    rm -rf /tmp/etcd${i}.data
-    etcd --name etcd${i} \
-        --listen-client-urls "http://127.0.0.1:${i}2379" \
-        --advertise-client-urls "http://127.0.0.1:${i}2379" \
-        --listen-peer-urls "http://127.0.0.1:${i}2380" \
-        --initial-advertise-peer-urls "http://127.0.0.1:${i}2380" \
-        --initial-cluster "${ETCD_INITIAL_CLUSTER}" \
-        --initial-cluster-state new \
-        --initial-cluster-token "${ETCD_TOKEN}" \
-        --data-dir /tmp/etcd${i}.data > log_etcd_${i} 2>&1 &
-done
+# disable persistence; this is a throwaway coordination store.
+"${REDIS_SERVER_BIN}" --port "${REDIS_PORT}" --save "" --appendonly no \
+    --daemonize no > log_redis 2>&1 &
+sleep 2
+echo "=== redis health check ==="
+"${REDIS_CLI_BIN}" -p "${REDIS_PORT}" ping
 
-sleep 3
-echo "=== etcd cluster health check ==="
-etcdctl --endpoints="${ETCD_ENDPOINTS_CTL}" endpoint health
-
-# ---- 2. start 3 HA masters --------------------------------------------------
-echo "=== [2/6] start 3 HA mooncake_master ==="
+# ---- 2. start 3 HA masters (redis backend) ----------------------------------
+echo "=== [2/6] start 3 HA mooncake_master (redis backend) ==="
 pkill -9 -f mooncake_master || true
 sleep 1
 
@@ -141,9 +135,11 @@ check_ports "${master_ports[@]}" || {
 }
 
 for i in 1 2 3; do
+    # --ha_backend_type redis + --ha_backend_connstring redis://...
     mooncake_master \
         --enable_ha \
-        --etcd_endpoints "${ETCD_ENDPOINTS_HA}" \
+        --ha_backend_type redis \
+        --ha_backend_connstring "${REDIS_CONN}" \
         --cluster_id "${CLUSTER_ID}" \
         --rpc_address "127.0.0.1" \
         --rpc_port 808${i} \
@@ -204,7 +200,6 @@ nohup python -m fastdeploy.entrypoints.openai.api_server \
 
 wait_for_health ${S0_PORT}
 wait_for_health ${S1_PORT}
-
 # ---- 4. verify pooling before failover (warmup on s0, reuse on s1) ----------
 # msg_a: warmed on server_0, then reused on server_1.
 msg_a="深圳是中国经济实力最强的城市之一。近年来，深圳GDP持续稳步增长，2023年突破3.4万亿元人民币，2024年接近3.7万亿元。长期位居全国城市前列。深圳经济以第二产业和第三产业为主，高端制造业、电子信息产业和现代服务业发达，形成了以科技创新为核心的产业结构。依托华为、腾讯、大疆等龙头企业，深圳在数字经济、人工智能、新能源等领域具有显著优势。同时，深圳进出口总额常年位居全国城市第一，是中国对外开放和高质量发展的重要引擎。深圳持续推进创新驱动发展战略，不断加大研发投入，全社会研发投入占GDP比重长期保持较高水平。深圳拥有完善的创业生态体系，吸引了大量科技企业和创新人才。近年来，深圳积极布局半导体、生物医药、低空经济和智能网联汽车等战略性新兴产业，进一步增强经济增长动能。请总结深圳经济发展的核心优势。"
@@ -258,7 +253,8 @@ echo ">>> reuse msg_b on server_1 (${S1_PORT}), expect cache hit via new leader"
 send_request ${S1_PORT} "${msg_b}"
 
 echo
-echo "=== HA test completed ==="
+echo "=== HA (redis) test completed ==="
 echo "Check cache hit:  grep -E 'storage_cache_token_num' log_*/cache_storage.log* "
 echo "Master logs:      log_master_1 / log_master_2 / log_master_3"
-echo "etcd logs:        log_etcd_1 / log_etcd_2 / log_etcd_3"
+echo "Redis log:        log_redis"
+echo "Current leader:   ${REDIS_CLI_BIN} -p ${REDIS_PORT} hget '${MASTER_VIEW_KEY}' leader_address"
