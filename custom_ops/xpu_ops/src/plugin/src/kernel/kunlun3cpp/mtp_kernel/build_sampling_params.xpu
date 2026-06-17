@@ -1,0 +1,127 @@
+// Copyright (c) 2026 PaddlePaddle Authors. All Rights Reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+
+namespace fd_xpu3 {
+
+constexpr int64_t BUILD_SAMPLING_MAX_INFER_SEED = 2147483646LL;
+
+// Each cluster handles one batch item (bi = cluster_id).
+// Within the cluster, core 0 reads the per-batch scalars and broadcasts via
+// shared memory; all cores then fill their assigned token slots in parallel.
+__global__ void build_sampling_params_kernel(
+    __global_ptr__ float* top_p_padding,
+    __global_ptr__ int64_t* top_k_padding,
+    __global_ptr__ int64_t* topp_seed,
+    __global_ptr__ const float* top_p,
+    __global_ptr__ const int64_t* top_k,
+    __global_ptr__ int64_t* infer_seed,
+    __global_ptr__ const int* seq_lens_this_time,
+    __global_ptr__ const int* seq_lens_encoder,
+    int bs,
+    int64_t token_num,
+    int64_t increment_value) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  int nclusters = cluster_num();
+
+  // Shared scalars broadcast from core 0 to all cores in the cluster.
+  __shared__ float sm_top_p;
+  __shared__ int64_t sm_top_k;
+  __shared__ int64_t sm_seed;
+  __shared__ int sm_repeat;     // number of tokens this batch produces
+  __shared__ int sm_pad_start;  // starting index in the output buffer
+
+  // Shared prefix-sum buffer: each cluster computes its own pad_start via
+  // a two-pass scan over seq_lens_this_time / seq_lens_encoder.
+  // We use a simple approach: core 0 of cluster 0 writes per-batch start
+  // offsets into a global scratch area is not available here, so instead we
+  // compute pad_start with a sequential scan in core 0 of each cluster.
+  // Because clusters run concurrently we cannot share a global accumulator;
+  // instead each cluster independently sums the first `bi` entries.
+  // This is O(bs) per cluster but bs is typically small (<=512).
+
+  for (int bi = clusterid; bi < bs; bi += nclusters) {
+    if (cid == 0) {
+      // Read per-batch parameters from global memory.
+      float lm_top_p;
+      int64_t lm_top_k;
+      int64_t lm_seed;
+      int lm_slt;  // seq_lens_this_time[bi]
+      int lm_sle;  // seq_lens_encoder[bi]
+
+      GM2LM_ASYNC(top_p + bi, &lm_top_p, sizeof(float));
+      GM2LM_ASYNC(top_k + bi, &lm_top_k, sizeof(int64_t));
+      GM2LM_ASYNC(infer_seed + bi, &lm_seed, sizeof(int64_t));
+      GM2LM_ASYNC(seq_lens_this_time + bi, &lm_slt, sizeof(int));
+      GM2LM(seq_lens_encoder + bi, &lm_sle, sizeof(int));  // sync barrier
+
+      bool is_decoder = (lm_sle == 0);
+      int repeat = is_decoder ? lm_slt : 1;
+
+      // Compute pad_start = sum of token counts for batches [0, bi).
+      int pad_start = 0;
+      for (int k = 0; k < bi; k++) {
+        int slt_k, sle_k;
+        GM2LM_ASYNC(seq_lens_this_time + k, &slt_k, sizeof(int));
+        GM2LM(seq_lens_encoder + k, &sle_k, sizeof(int));
+        pad_start += (sle_k == 0) ? slt_k : 1;
+      }
+
+      sm_top_p = lm_top_p;
+      sm_top_k = lm_top_k;
+      sm_seed = lm_seed;
+      sm_repeat = repeat;
+      sm_pad_start = pad_start;
+    }
+    mfence();
+    sync_all();
+
+    // All cores fill token slots [sm_pad_start, sm_pad_start + sm_repeat).
+    float bi_top_p = sm_top_p;
+    int64_t bi_top_k = sm_top_k;
+    int64_t bi_seed = sm_seed;
+    int repeat = sm_repeat;
+    int pad_start = sm_pad_start;
+
+    for (int local_pos = cid; local_pos < repeat; local_pos += ncores) {
+      int pad_idx = pad_start + local_pos;
+      float lm_top_p_out = bi_top_p;
+      int64_t lm_top_k_out = bi_top_k;
+      // Decoder tokens: offset seed by position; encoder token: no offset.
+      int64_t offset = static_cast<int64_t>(local_pos) * 4;
+      int64_t lm_seed_out = (bi_seed + offset) % BUILD_SAMPLING_MAX_INFER_SEED;
+
+      LM2GM_ASYNC(&lm_top_p_out, top_p_padding + pad_idx, sizeof(float));
+      LM2GM_ASYNC(&lm_top_k_out, top_k_padding + pad_idx, sizeof(int64_t));
+      LM2GM(&lm_seed_out, topp_seed + pad_idx, sizeof(int64_t));
+    }
+
+    // Core 0 updates infer_seed in-place.
+    if (cid == 0) {
+      int64_t new_seed =
+          (bi_seed + increment_value) % BUILD_SAMPLING_MAX_INFER_SEED;
+      LM2GM(&new_seed, infer_seed + bi, sizeof(int64_t));
+    }
+
+    mfence();
+    sync_all();
+  }
+}
+
+}  // namespace fd_xpu3
