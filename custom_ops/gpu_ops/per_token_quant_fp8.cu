@@ -26,9 +26,9 @@ __host__ __device__ __forceinline__ int align(int x, int y) {
 
 template <typename T, typename ScaleT, bool UseUE8M0>
 __global__ void quant_per_token_per_block(
-    const T *input,
-    phi::dtype::float8_e4m3fn *quanted_res,
-    ScaleT *quanted_scale,
+    const T* input,
+    phi::dtype::float8_e4m3fn* quanted_res,
+    ScaleT* quanted_scale,
     const int token_num,
     const int hidden_size,
     const int hidden_size_scale,
@@ -46,11 +46,11 @@ __global__ void quant_per_token_per_block(
   AlignedVector<float, NUM_PER_THREADS> load_vec_float;
   AlignedVector<phi::dtype::float8_e4m3fn, NUM_PER_THREADS> res_vec;
   for (int token_idx = bid; token_idx < token_num; token_idx += gridDim.x) {
-    const T *input_now = input + static_cast<int64_t>(token_idx) * hidden_size;
-    phi::dtype::float8_e4m3fn *quanted_res_now =
+    const T* input_now = input + static_cast<int64_t>(token_idx) * hidden_size;
+    phi::dtype::float8_e4m3fn* quanted_res_now =
         quanted_res + static_cast<int64_t>(token_idx) * hidden_size;
-    float *quanted_scale_now = reinterpret_cast<float *>(quanted_scale) +
-                               token_idx * hidden_size_scale;
+    float* quanted_scale_now =
+        reinterpret_cast<float*>(quanted_scale) + token_idx * hidden_size_scale;
     // deal a block per warp
     for (int iter = warp_id; iter < end_iter; iter += num_warp) {
       const int start_offset = iter * 128;
@@ -91,22 +91,24 @@ __global__ void quant_per_token_per_block(
         max_value_thread *= 7.0f;
       }
 
-      float scale_to_store = max_value_thread / MAX_VALUE;
+      float scale_to_store = max_value_thread * __frcp_rn(MAX_VALUE);
 
       // quant
       if constexpr (UseUE8M0) {
         scale_to_store =
             exp2f(ceilf(log2f(fmaxf(scale_to_store, epsilon) + 5e-7f)));
+        const float rcp_scale = __frcp_rn(scale_to_store);
 #pragma unroll
         for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
           res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
-              load_vec_float[vid] / scale_to_store);
+              load_vec_float[vid] * rcp_scale);
         }
       } else {
+        const float rcp_max = __frcp_rn(max_value_thread);
 #pragma unroll
         for (int vid = 0; vid < NUM_PER_THREADS; vid++) {
           res_vec[vid] = static_cast<phi::dtype::float8_e4m3fn>(
-              load_vec_float[vid] * MAX_VALUE / max_value_thread);
+              load_vec_float[vid] * MAX_VALUE * rcp_max);
         }
       }
       // store
@@ -116,13 +118,13 @@ __global__ void quant_per_token_per_block(
             quanted_res_now + start_offset + lane_id * NUM_PER_THREADS);
       if (lane_id == 0) {
         if constexpr (UseUE8M0) {
-          int exp = (reinterpret_cast<int &>(scale_to_store) >> 23) & 0xFF;
+          int exp = (reinterpret_cast<int&>(scale_to_store) >> 23) & 0xFF;
           const int pack_idx = iter >> 2;
           const int byte_idx = iter & 3;
           const int pack_num = ceil_div(hidden_size_scale, 4);
-          int32_t *scale_now = quanted_scale;
+          int32_t* scale_now = quanted_scale;
           const int base_idx = token_idx * pack_num + pack_idx;
-          reinterpret_cast<uint8_t *>(&scale_now[base_idx])[byte_idx] =
+          reinterpret_cast<uint8_t*>(&scale_now[base_idx])[byte_idx] =
               static_cast<uint8_t>(exp);
         } else {
           quanted_scale_now[iter] = scale_to_store;
@@ -132,7 +134,7 @@ __global__ void quant_per_token_per_block(
   }
 }
 
-std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor &input,
+std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor& input,
                                           const int block_size,
                                           const bool use_ue8m0) {
   auto input_dim = input.dims();
@@ -149,7 +151,7 @@ std::vector<paddle::Tensor> PerTokenQuant(paddle::Tensor &input,
   const int blockx = min(1024, hidden_size / 128 * 32);
 
   bool use_finegrained_range = false;
-  char *env_var = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE");
+  char* env_var = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE");
   if (env_var) {
     use_finegrained_range = static_cast<bool>(std::stoi(env_var));
   }
@@ -242,9 +244,9 @@ std::vector<paddle::DataType> PerTokenQuantInferDtype(
 
 template <typename T, typename ScaleT, bool UseUE8M0>
 __global__ void quant_per_token_per_block_padding(
-    const T *input,
-    phi::dtype::float8_e4m3fn *quanted_res,
-    ScaleT *quanted_scale,
+    const T* input,
+    phi::dtype::float8_e4m3fn* quanted_res,
+    ScaleT* quanted_scale,
     const int token_num,
     const int padded_token_num,
     const int hidden_size,
@@ -262,8 +264,8 @@ __global__ void quant_per_token_per_block_padding(
   AlignedVector<float, NUM_PER_THREADS> load_vec_float;
   AlignedVector<phi::dtype::float8_e4m3fn, NUM_PER_THREADS> res_vec;
   for (int token_idx = bid; token_idx < token_num; token_idx += gridDim.x) {
-    const T *input_now = input + static_cast<int64_t>(token_idx) * hidden_size;
-    phi::dtype::float8_e4m3fn *quanted_res_now =
+    const T* input_now = input + static_cast<int64_t>(token_idx) * hidden_size;
+    phi::dtype::float8_e4m3fn* quanted_res_now =
         quanted_res + static_cast<int64_t>(token_idx) * hidden_size;
     // deal a block per warp
     for (int iter = warp_id; iter < end_iter; iter += num_warp) {
@@ -320,7 +322,7 @@ __global__ void quant_per_token_per_block_padding(
       if (lane_id == 0) {
         if constexpr (UseUE8M0) {
           // exp
-          int exp = (reinterpret_cast<int &>(scale_to_store) >> 23) & 0xFF;
+          int exp = (reinterpret_cast<int&>(scale_to_store) >> 23) & 0xFF;
 
           const int pack_idx = iter >> 2;
           const int byte_idx = iter & 3;
@@ -329,14 +331,14 @@ __global__ void quant_per_token_per_block_padding(
           const int pack_num = align(hidden_size_scale, 4) >> 2;
 
           // column-major base index
-          int32_t *scale_now = quanted_scale;
+          int32_t* scale_now = quanted_scale;
           const int base_idx = token_idx + pack_idx * padded_token_num;
 
           // ---------------- store exp ----------------
-          reinterpret_cast<uint8_t *>(&scale_now[base_idx])[byte_idx] =
+          reinterpret_cast<uint8_t*>(&scale_now[base_idx])[byte_idx] =
               static_cast<uint8_t>(exp);
         } else {
-          float *scale_now =
+          float* scale_now =
               quanted_scale + iter * padded_token_num + token_idx;
           *scale_now = scale_to_store;
         }
@@ -345,7 +347,7 @@ __global__ void quant_per_token_per_block_padding(
   }
 }
 
-std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
+std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor& input,
                                                  const int block_size,
                                                  const bool use_ue8m0) {
   using ScaleDtype = float;
@@ -372,7 +374,7 @@ std::vector<paddle::Tensor> PerTokenQuantPadding(paddle::Tensor &input,
   const int blockx = min(1024, hidden_size / 128 * 32);
 
   bool use_finegrained_range = false;
-  char *env_var = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE");
+  char* env_var = getenv("PER_TOKEN_QUANT_FP8_USE_FINEGRAINED_RANGE");
   if (env_var) {
     use_finegrained_range = static_cast<bool>(std::stoi(env_var));
   }

@@ -325,6 +325,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DEFAULT_METRIC_LABEL_VALUES": lambda: os.getenv("FD_DEFAULT_METRIC_LABEL_VALUES", "{}"),
     # Timeout for request output queue get operation in seconds
     "FD_REQUEST_WAIT_TIMEOUT": lambda: int(os.getenv("FD_REQUEST_WAIT_TIMEOUT", "60")),
+    # When set to 1, skip certain layers in unit tests to ensure Prefill/Decode output consistency during PD consistency checks.
+    "FD_SKIP_IN_DETERMINISTIC": lambda: int(os.getenv("FD_SKIP_IN_DETERMINISTIC", "0")),
 }
 
 
