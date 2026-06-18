@@ -1,0 +1,10 @@
+max_num_seqs: 128
+max_model_len: 32768
+enable_prefix_caching: True
+disable_custom_all_reduce: True
+graph_optimization_config: '{"use_cudagraph":true,"use_unique_memory_pool":true,"draft_model_use_cudagraph": true}'
+speculative_config: '{"method": "mtp", "num_speculative_tokens": 3, "num_model_steps": 3, "model": "/root/paddlejob/tmpspace/glm_mtp_multi_step", "verify_strategy": "target_match"}'
+tensor_parallel_size: 4
+enable_logprob: True
+moe_gate_fp32: True
+swap_space: 300

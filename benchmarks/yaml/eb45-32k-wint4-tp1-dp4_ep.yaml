@@ -5,3 +5,4 @@ data_parallel_size: 4
 tensor_parallel_size: 1
 enable_expert_parallel: True
 quantization: wint4
+max_num_batched_tokens: 4096
