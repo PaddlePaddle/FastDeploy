@@ -674,7 +674,7 @@ def bmm_batch_invariant(x, y):
     return bmm_persistent(x, y)
 
 
-def mm_batch_invariant(a, b, bias=None, transpose_x=False, transpose_y=False, out=None):
+def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False, bias=None, out=None):
     if transpose_x:
         a = a.T
     if transpose_y:
