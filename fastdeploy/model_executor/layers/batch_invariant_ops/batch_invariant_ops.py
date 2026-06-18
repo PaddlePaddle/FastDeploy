@@ -89,7 +89,11 @@ def matmul_kernel_persistent(
     num_pid_in_group = GROUP_SIZE_M * num_pid_n
 
     for tile_id in tl.range(start_pid, num_tiles, NUM_SMS, flatten=True):
-        pid_m, pid_n = _compute_pid(tile_id, num_pid_in_group, num_pid_m, GROUP_SIZE_M, NUM_SMS)
+        group_id = tile_id // num_pid_in_group
+        first_pid_m = group_id * GROUP_SIZE_M
+        group_size_m = min(num_pid_m - first_pid_m, GROUP_SIZE_M)
+        pid_m = first_pid_m + (tile_id % group_size_m)
+        pid_n = (tile_id % num_pid_in_group) // group_size_m
         start_m = pid_m * BLOCK_SIZE_M
         start_n = pid_n * BLOCK_SIZE_N
         offs_am = start_m + tl.arange(0, BLOCK_SIZE_M)
@@ -117,7 +121,11 @@ def matmul_kernel_persistent(
             accumulator = tl.dot(a, b, accumulator)
 
         tile_id_c += NUM_SMS
-        pid_m, pid_n = _compute_pid(tile_id_c, num_pid_in_group, num_pid_m, GROUP_SIZE_M, NUM_SMS)
+        group_id = tile_id_c // num_pid_in_group
+        first_pid_m = group_id * GROUP_SIZE_M
+        group_size_m = min(num_pid_m - first_pid_m, GROUP_SIZE_M)
+        pid_m = first_pid_m + (tile_id_c % group_size_m)
+        pid_n = (tile_id_c % num_pid_in_group) // group_size_m
         offs_cm = pid_m * BLOCK_SIZE_M + tl.arange(0, BLOCK_SIZE_M)
         offs_cn = pid_n * BLOCK_SIZE_N + tl.arange(0, BLOCK_SIZE_N)
         if C_LARGE:
@@ -531,7 +539,11 @@ def bmm_kernel_persistent(
         batch_idx = tile_id // num_tiles_per_batch
         tile_in_batch = tile_id % num_tiles_per_batch
 
-        pid_m, pid_n = _compute_pid(tile_in_batch, num_pid_in_group, num_pid_m, GROUP_SIZE_M, NUM_SMS)
+        group_id = tile_in_batch // num_pid_in_group
+        first_pid_m = group_id * GROUP_SIZE_M
+        group_size_m = min(num_pid_m - first_pid_m, GROUP_SIZE_M)
+        pid_m = first_pid_m + (tile_in_batch % group_size_m)
+        pid_n = (tile_in_batch % num_pid_in_group) // group_size_m
         start_m = pid_m * BLOCK_SIZE_M
         start_n = pid_n * BLOCK_SIZE_N
         offs_am = start_m + tl.arange(0, BLOCK_SIZE_M)
@@ -662,16 +674,43 @@ def bmm_batch_invariant(x, y):
     return bmm_persistent(x, y)
 
 
-def mm_batch_invariant(a, b, transpose_x=False, transpose_y=False, out=None):
+def mm_batch_invariant(a, b, bias=None, transpose_x=False, transpose_y=False, out=None):
     if transpose_x:
         a = a.T
     if transpose_y:
         b = b.T
-    result = matmul_persistent(a, b)
+    result = matmul_persistent(a, b, bias)
     if out is not None:
         out.copy_(result, False)
         return out
     return result
+
+
+def linear_batch_invariant(x, weight, bias=None, *args, **kwargs):
+    """Drop-in replacement for paddle._C_ops.linear.
+
+    _C_ops.linear computes: out = x @ weight + bias
+    Weight shape is [K, N] (no transpose).
+    """
+    return matmul_persistent(x, weight, bias)
+
+
+def linear_v2_batch_invariant(x, weight, bias=None, weight_transposed=False):
+    """Drop-in replacement for paddle._C_ops.linear_v2.
+
+    linear_v2 computes: out = x @ weight + bias, where weight should be [K, N].
+    The weight_transposed flag semantics varies depending on FLAGS_use_accuracy_compatible_kernel:
+      - True  mode: weight_transposed=True  → weight is [K, N] (transposed from [N, K] by caller)
+      - False mode: weight_transposed=False → weight is [K, N] (caller didn't transpose)
+    In both cases the weight passed in is [K, N], so we determine by actual dimensions.
+    """
+    K = x.shape[1]
+    if weight.shape[0] == K:
+        # weight is already [K, N], use directly
+        return matmul_persistent(x, weight, bias)
+    else:
+        # weight is [N, K], need transpose to [K, N]
+        return matmul_persistent(x, weight.T, bias)
 
 
 def addmm_batch_invariant(
@@ -791,7 +830,15 @@ def rms_norm_batch_invariant(x: paddle.Tensor, weight: paddle.Tensor, eps: float
     return out.reshape(orig_shape)
 
 
-_original_ops = {"mm": None, "addmm": None, "_log_softmax": None, "mean_dim": None, "bmm": None}
+_original_ops = {
+    "mm": None,
+    "addmm": None,
+    "_log_softmax": None,
+    "mean_dim": None,
+    "bmm": None,
+    "linear": None,
+    "linear_v2": None,
+}
 
 _batch_invariant_MODE = False
 
@@ -822,7 +869,10 @@ def enable_batch_invariant_mode():
     _original_ops["log_softmax"] = paddle._C_ops.log_softmax
     _original_ops["mean"] = paddle._C_ops.mean
     _original_ops["bmm"] = paddle._C_ops.bmm
-
+    _original_ops["linear"] = paddle._C_ops.linear
+    _original_ops["linear_v2"] = paddle._C_ops.linear_v2
+    paddle._C_ops.linear = linear_batch_invariant
+    paddle._C_ops.linear_v2 = linear_v2_batch_invariant
     paddle._C_ops.matmul = mm_batch_invariant
     paddle._C_ops.addmm = addmm_batch_invariant
     paddle._C_ops.log_softmax = _log_softmax_batch_invariant
@@ -856,6 +906,10 @@ def disable_batch_invariant_mode():
         paddle._C_ops.mean = _original_ops["mean"]
     if _original_ops["bmm"]:
         paddle._C_ops.bmm = _original_ops["bmm"]
+    if _original_ops["linear"]:
+        paddle._C_ops.linear = _original_ops["linear"]
+    if _original_ops["linear_v2"]:
+        paddle._C_ops.linear_v2 = _original_ops["linear_v2"]
 
     _batch_invariant_MODE = False
 

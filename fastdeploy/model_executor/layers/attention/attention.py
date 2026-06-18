@@ -62,6 +62,7 @@ class Attention(nn.Layer):
         qk_norm_before_rope: bool = False,
         rms_norm_eps: float = 1e-6,
         with_sinks: bool = False,
+        skip_attn: bool = False,
     ) -> None:
         """
         Initializes `LMLayer` with the given parameters.
@@ -114,6 +115,7 @@ class Attention(nn.Layer):
         self.use_neox_rotary_style: bool = use_neox_rotary_style
 
         self.with_sinks: bool = with_sinks
+        self.skip_attn: bool = skip_attn
 
         if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
             self.quant_method: QuantMethodBase = fd_config.quant_config.get_quant_method(self)
@@ -277,6 +279,8 @@ class Attention(nn.Layer):
             compressed_kv: optional compressed key-value cache (for MLA)
             k_pe: optional key positional encoding (for MLA)
         """
+        if self.skip_attn:
+            return qkv[..., : self.head_dim * self.num_heads]
         # ============ V1 KVCACHE Manager: Layer-by-layer swap wait ============
         # Wait for swap-in of current layer before using cache
         if forward_meta.layer_done_counter is not None:

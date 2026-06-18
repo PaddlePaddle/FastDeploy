@@ -379,6 +379,7 @@ class TokenProcessor:
                     finished=False,
                     metrics=metrics,
                     ic_req_data=task.ic_req_data,
+                    prompt_token_ids_len=task.prompt_token_ids_len,
                 )
                 if self.use_logprobs:
                     if getattr(stream_data, "logprobs", None) is not None:
