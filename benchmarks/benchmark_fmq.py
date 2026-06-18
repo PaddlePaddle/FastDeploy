@@ -231,3 +231,4 @@ def run_benchmark(
 # Entry
 if __name__ == "__main__":
     run_benchmark()
+    # debug()
