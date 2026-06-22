@@ -51,15 +51,11 @@ class TestSetupMultiprocessPrometheus:
         test_dir = "/tmp/existing_dir"
         os.environ["PROMETHEUS_MULTIPROC_DIR"] = test_dir
 
-        with patch("fastdeploy.utils.llm_logger.warning") as mock_logger:
+        with patch("fastdeploy.utils.llm_logger.info") as mock_logger:
             result = setup_multiprocess_prometheus()
 
             assert result == test_dir
-            mock_logger.assert_called_once_with(
-                "Found PROMETHEUS_MULTIPROC_DIR:/tmp/existing_dir was set by user. "
-                "you will find inaccurate metrics. Unset the variable "
-                "will properly handle cleanup."
-            )
+            mock_logger.assert_called_once_with(f"PROMETHEUS_MULTIPROC_DIR is set to {test_dir}")
 
     def test_cleanup_failure_handling(self):
         """测试清理目录失败时的处理"""
