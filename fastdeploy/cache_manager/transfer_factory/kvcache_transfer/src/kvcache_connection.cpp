@@ -20,6 +20,8 @@
 #include "kvcache_connection.h"
 #include "log.h"  // For logging system
 
+#include <algorithm>
+
 // Global variables
 pthread_mutex_t g_ib_lock = PTHREAD_MUTEX_INITIALIZER;
 std::vector<IbDeviceInfo> g_ib_all_devs;
@@ -312,10 +314,13 @@ QpStatus modify_qp_to_rts(struct RdmaContext *ctx,
     return QpStatus::kPortQueryFailed;
   }
 
-  if (dest->mtu > port_attr.active_mtu) {
-    ERR("Specified MTU (%d) is greater than active port MTU (%d)",
-        dest->mtu,
-        port_attr.active_mtu);
+  enum ibv_mtu path_mtu = static_cast<enum ibv_mtu>(std::min(
+      static_cast<int>(dest->mtu), static_cast<int>(port_attr.active_mtu)));
+  if (path_mtu < IBV_MTU_256 || path_mtu > IBV_MTU_4096) {
+    ERR("Invalid negotiated MTU: %d (local=%d, remote=%d)",
+        path_mtu,
+        port_attr.active_mtu,
+        dest->mtu);
     return QpStatus::kMtuMismatch;
   }
 
@@ -323,7 +328,7 @@ QpStatus modify_qp_to_rts(struct RdmaContext *ctx,
   memset(&attr, 0, sizeof(struct ibv_qp_attr));
 
   attr.qp_state = IBV_QPS_RTR;
-  attr.path_mtu = dest->mtu;
+  attr.path_mtu = path_mtu;
   attr.dest_qp_num = dest->qpn;
   attr.rq_psn = 0;
   attr.max_dest_rd_atomic = 1;
@@ -419,12 +424,14 @@ static std::shared_ptr<QpInfo> client_exch_dest(struct RdmaContext *ctx,
 
   if (write(sockfd, buffer, QpInfo::size) != QpInfo::size) {
     WARN("Failed to send local QP info to %s", dst_ip.c_str());
+    ctx->sock_fd = 0;
     close(sockfd);
     return nullptr;
   }
 
   if (read(sockfd, buffer, QpInfo::size) != QpInfo::size) {
     WARN("Failed to receive remote QP info from %s", dst_ip.c_str());
+    ctx->sock_fd = 0;
     close(sockfd);
     return nullptr;
   }
@@ -496,6 +503,7 @@ bool clear_qp_info(struct RdmaContext *ctx) {
       ERR("Failed to destroy QP.");
       success = false;
     }
+    ctx->qp = nullptr;
   }
 
   if (ctx->cq) {
@@ -503,6 +511,7 @@ bool clear_qp_info(struct RdmaContext *ctx) {
       ERR("Failed to deallocate cq Domain.");
       success = false;
     }
+    ctx->cq = nullptr;
   }
 
   if (ctx->channel) {
@@ -510,6 +519,7 @@ bool clear_qp_info(struct RdmaContext *ctx) {
       ERR("Failed to destroy Completion Channel.");
       success = false;
     }
+    ctx->channel = nullptr;
   }
 
   return success;
@@ -523,13 +533,15 @@ struct RdmaContext *create_qp(struct IbDeviceInfo *ib_dev,
   struct ibv_qp_init_attr qpInitAttr = {};
   ctx->context = ib_dev->context;
 
+  bool pd_newly_allocated = false;
   if (*g_pd == NULL) {
     *g_pd = ibv_alloc_pd(ctx->context);
     if (*g_pd == NULL) {
       ERR("failed to allocate protection domain");
-      free(ctx->context);
+      delete ctx;
       return NULL;
     }
+    pd_newly_allocated = true;
   }
   ctx->pd = *g_pd;
 
@@ -537,6 +549,10 @@ struct RdmaContext *create_qp(struct IbDeviceInfo *ib_dev,
   ctx->channel = ibv_create_comp_channel(ctx->context);
   if (!ctx->channel) {
     ERR("Failed to create completion channel: %s", strerror(errno));
+    if (pd_newly_allocated) {
+      ibv_dealloc_pd(*g_pd);
+      *g_pd = nullptr;
+    }
     delete ctx;
     return NULL;
   }
@@ -546,6 +562,10 @@ struct RdmaContext *create_qp(struct IbDeviceInfo *ib_dev,
   if (!ctx->cq) {
     ERR("Failed to create completion queue: %s", strerror(errno));
     ibv_destroy_comp_channel(ctx->channel);
+    if (pd_newly_allocated) {
+      ibv_dealloc_pd(*g_pd);
+      *g_pd = nullptr;
+    }
     delete ctx;
     return NULL;
   }
@@ -555,6 +575,10 @@ struct RdmaContext *create_qp(struct IbDeviceInfo *ib_dev,
     ERR("Failed to request CQ notifications: %s", strerror(errno));
     ibv_destroy_cq(ctx->cq);
     ibv_destroy_comp_channel(ctx->channel);
+    if (pd_newly_allocated) {
+      ibv_dealloc_pd(*g_pd);
+      *g_pd = nullptr;
+    }
     delete ctx;
     return NULL;
   }
@@ -575,6 +599,10 @@ struct RdmaContext *create_qp(struct IbDeviceInfo *ib_dev,
     ERR("Failed to create queue pair: %s", strerror(errno));
     ibv_destroy_cq(ctx->cq);
     ibv_destroy_comp_channel(ctx->channel);
+    if (pd_newly_allocated) {
+      ibv_dealloc_pd(*g_pd);
+      *g_pd = nullptr;
+    }
     delete ctx;
     return NULL;
   }
@@ -593,6 +621,10 @@ struct RdmaContext *create_qp(struct IbDeviceInfo *ib_dev,
     ibv_destroy_qp(ctx->qp);
     ibv_destroy_cq(ctx->cq);
     ibv_destroy_comp_channel(ctx->channel);
+    if (pd_newly_allocated) {
+      ibv_dealloc_pd(*g_pd);
+      *g_pd = nullptr;
+    }
     delete ctx;
     return NULL;
   }
@@ -972,6 +1004,7 @@ bool server_send_memory_region(struct RdmaContext *ctx,
   ctx->conn.wc_target_count = 0;
 
   if (!poll_cq_with_timeout(ctx, RDMA_POLL_CQE_TIMEOUT, 1)) {
+    ibv_dereg_mr(ctx->conn.send_mr);
     return false;
   }
 
@@ -1025,6 +1058,7 @@ bool client_receive_memory_region(struct RdmaContext *ctx,
   ctx->conn.wc_count = 0;
   ctx->conn.wc_target_count = 0;
   if (!poll_cq_with_timeout(ctx, RDMA_POLL_CQE_TIMEOUT, 1)) {
+    ibv_dereg_mr(ctx->conn.recv_mr);
     return false;
   }
 
@@ -1138,7 +1172,8 @@ int setup_listening_socket(int port) {
 int configure_epoll(int sockfd) {
   int epollfd = epoll_create1(0);
   if (epollfd == -1) {
-    ERR("epoll_create1");
+    ERR("epoll_create1 failed: %s", strerror(errno));
+    return -1;
   }
 
   // Initialize epoll for the listening socket
@@ -1147,6 +1182,7 @@ int configure_epoll(int sockfd) {
   ev.data.fd = sockfd;
   if (epoll_ctl(epollfd, EPOLL_CTL_ADD, sockfd, &ev) == -1) {
     ERR("Failed to add listening socket to epoll");
+    close(epollfd);
     close(sockfd);
     return -1;
   }
@@ -1216,8 +1252,13 @@ std::vector<std::string> get_net_ifname() {
 }
 
 Connection::~Connection() {
+  // Note: write_cache_*_server_mr_list are shallow copies of the class-level
+  // lists in RDMACommunicator. They must NOT be deregistered here - the
+  // class-level lists own the MRs and handle deregistration.
   write_cache_key_server_mr_list.clear();
   write_cache_value_server_mr_list.clear();
+  write_cache_key_scale_server_mr_list.clear();
+  write_cache_value_scale_server_mr_list.clear();
   write_cache_key_remote_ptr_list.clear();
   write_cache_key_remote_rkey_list.clear();
   write_cache_value_remote_ptr_list.clear();

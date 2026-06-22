@@ -67,16 +67,6 @@ class IluvatarModelRunner(GPUModelRunner):
                 not self.cache_config.enable_chunked_prefill
             ), "Iluvatar does not support chunked prefill for VL model"
 
-        if self.model_config.model_type == "ernie4_5_moe_vl" and self.parallel_config.tensor_parallel_size > 1:
-            # ernie-vl does not support cuda graph for tp > 1
-            logger.warning("disable cudagraph since ernie-vl does not support cuda graph for tp > 1")
-            self.use_cudagraph = False
-
-        if hasattr(self.quant_config, "moe_quant_type") and self.quant_config.moe_quant_type == "wint4":
-            # Iluvatar does not support cuda graph for weight_only_int4 yet
-            logger.warning("disable cudagraph since iluvatar does not support cuda graph for weight_only_int4")
-            self.use_cudagraph = False
-
         logger.info(f"self.use_cudagraph={self.use_cudagraph}")
         # VL neox style = True
         emb_shape = self.share_inputs["rope_emb"].shape
@@ -97,18 +87,30 @@ class IluvatarModelRunner(GPUModelRunner):
         ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
-        self.model_config.kv_num_heads = max(
-            1,
-            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
-        )
+        kv_num_heads_per_layer = self._get_kv_num_heads_per_layer()
+        self.model_config.kv_num_heads = kv_num_heads_per_layer[0]
+        head_dim = self.model_config.head_dim
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
             self.fd_config,
             kv_num_heads=self.model_config.kv_num_heads,
             num_heads=num_heads,
-            head_dim=self.model_config.head_dim,
+            head_dim=head_dim,
         )
-        self.attn_backends.append(attn_backend)
+        record_backends = {self.model_config.kv_num_heads: attn_backend}
+        for kv_num_heads in kv_num_heads_per_layer:
+            # NOTE: If an attn_backend were created for each duplicate kv_num_heads,
+            # the gpu memory usage would surge when enable cuda_graph,
+            # therefore the duplicate kv_num_heads would be reused.
+            if kv_num_heads not in record_backends:
+                new_attn_backend = attn_cls(
+                    self.fd_config,
+                    kv_num_heads=kv_num_heads,
+                    num_heads=num_heads,
+                    head_dim=head_dim,
+                )
+                record_backends[kv_num_heads] = new_attn_backend
+            self.attn_backends.append(record_backends[kv_num_heads])
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
         super(IluvatarModelRunner, self).initialize_kv_cache(profile)

@@ -178,6 +178,10 @@ class PaddleDisWorkerProc:
         self.max_chips_per_node = 16 if current_platform.is_iluvatar() else 8
         self.enable_overlap_schedule = self.scheduler_config.enable_overlap_schedule
         self.cached_control_reqs = []
+        if self.ranks > 1:
+            self.gloo_group = dist.new_group(list(range(self.ranks)), backend="gloo")
+        else:
+            self.gloo_group = None
 
     def init_control(self):
         engine_worker_queue_port = self.parallel_config.local_engine_worker_queue_port
@@ -260,6 +264,7 @@ class PaddleDisWorkerProc:
             suffix=self.parallel_config.local_engine_worker_queue_port,
             create=False,
         )
+        self.worker.model_runner.kv_cache_status = self.kv_cache_status
 
         # init exist_task_signal
         workers_exist_task = np.zeros([1], dtype=np.int32)
@@ -291,20 +296,6 @@ class PaddleDisWorkerProc:
             create=False,
         )
 
-        # init engine forward signal
-        # If engine is being forward, engine_forward_signal_data should be 1.
-        # If engine is out of forward, engine_forward_signal_data should be 0.
-        # In pd disaggregation + EP parallel, only when engine is out of forward, scheduler send next batch to worker.
-        # When engine is out of forward, engine_forward_signal_data must be 0, otherwise scheduler will not schedule next batch.
-        engine_forward_signal_data = np.zeros([1], dtype=np.int32)
-        self.engine_forward_signal = IPCSignal(
-            name="engine_forward_signal",
-            array=engine_forward_signal_data,
-            dtype=np.int32,
-            suffix=self.parallel_config.local_engine_worker_queue_port,
-            create=False,
-        )
-
     def update_weights_from_tensor(self, mmap_infos):
         """
         update_weights_from_tensor
@@ -326,10 +317,24 @@ class PaddleDisWorkerProc:
         self.experts_manager.tensor_infos = None
 
     def _broadcast_model_weights_signal(self, src: int, group) -> int:
-        model_weights_signal_tensor = paddle.full(shape=[1], fill_value=self.model_weights_signal[0], dtype="int32")
+        model_weights_signal_tensor = paddle.full(
+            shape=[1], fill_value=self.model_weights_signal[0], dtype="int32", device="cpu"
+        )
         paddle.distributed.broadcast(model_weights_signal_tensor, src=src, group=group)
         value = model_weights_signal_tensor.numpy()[0]
         return int(value)
+
+    def _get_exist_task_flag(self) -> bool:
+        if self.nnode > 1:
+            return self.task_queue.read_finish_flag.get() == 1
+        else:
+            return self.exist_task_signal.value[0] == ExistTaskStatus.EXIST
+
+    def _update_exist_task_flag(self, flag: bool) -> None:
+        if self.nnode > 1:
+            self.task_queue.read_finish_flag.set(1 if flag else 0)
+        else:
+            self.exist_task_signal.value[0] = ExistTaskStatus.EXIST if flag else ExistTaskStatus.EMPTY
 
     def _tp_barrier_wait(self):
         if current_platform.is_xpu() or self.enable_overlap_schedule:
@@ -455,20 +460,25 @@ class PaddleDisWorkerProc:
         self._init_eplb_signal()
         tp_size = self.parallel_config.tensor_parallel_size
         # Currently, only support single node
-        self.nnode = (tp_size + self.max_chips_per_node) // self.max_chips_per_node
+        self.nnode = (tp_size + self.max_chips_per_node - 1) // self.max_chips_per_node
         max_occupied_batch_index = 0
         tp_rank = self.local_rank % tp_size
 
         # TODO: Unify status variables model_weights_status (shared memory) and model_weights_signal (numpy array) to one
         self.model_weights_signal = np.zeros([1], dtype=np.int32)
         while True:
+            # run eplb
+            self._run_eplb(tp_rank)
+
             if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
                 self.model_weights_signal[0] = int(self.model_weights_status.value[0])
                 if self.ranks > 1:
-                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=None)
+                    self.model_weights_signal[0] = self._broadcast_model_weights_signal(src=0, group=self.gloo_group)
 
             req_dicts = None
             self.worker_healthy_live_signal.value[tp_rank % self.max_chips_per_node] = int(time.time())
+
+            self._tp_barrier_wait() if tp_size > 1 else None
 
             # The first worker detects whether there are tasks in the task queue
             if tp_rank == 0:
@@ -476,18 +486,17 @@ class PaddleDisWorkerProc:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER or not (
                         self.fd_config.enable_mm_runtime and self.worker.exist_prefill()
                     ):
-                        if self.nnode > 1:
-                            self.task_queue.read_finish_flag.set(1)
-                        else:
-                            self.exist_task_signal.value[0] = ExistTaskStatus.EXIST
+                        self._update_exist_task_flag(True)
+                else:
+                    self._update_exist_task_flag(False)
 
             # Synchronize the signal set by tp_rank0 visiable to other workers
             self._tp_barrier_wait() if tp_size > 1 else None
 
             if self.fd_config.load_config.dynamic_load_weight and not envs.FD_ENABLE_V1_UPDATE_WEIGHTS:
-                if self.ranks > 1:
-                    paddle.distributed.barrier()
                 if self.model_weights_signal[0] != ModelWeightsStatus.NORMAL:
+                    if self.ranks > 1:
+                        paddle.distributed.barrier()
                     logger.info(
                         f"Rank: {self.local_rank} to update or clear parameters, signal is {self.model_weights_signal[0]}, [-1:clear, 1:update]"
                     )
@@ -529,7 +538,7 @@ class PaddleDisWorkerProc:
                                 self.model_weights_signal[0] = self.model_weights_status.value[0]
                                 if self.ranks > 1:
                                     self.model_weights_signal[0] = self._broadcast_model_weights_signal(
-                                        src=0, group=None
+                                        src=0, group=self.gloo_group
                                     )
                                 time.sleep(1)
                             self.model_weights_status.value[0] = (
@@ -537,26 +546,13 @@ class PaddleDisWorkerProc:
                             )  # 所有 Rank 已同步唤醒，启动权重更新流程
                     continue
 
-            if self.exist_task_signal.value[0] == ExistTaskStatus.EXIST or self.task_queue.read_finish_flag.get() == 1:
+            if self._get_exist_task_flag():
                 logger.debug(f"Rank: {self.local_rank} Detected new requests.")
-                self.engine_forward_signal.value[0] = 1
                 tasks, read_finish = self.task_queue.get_tasks()
                 # Only one of all tp_size client will get read_finish == True.
                 if read_finish:
-                    # Reset the two signal.
-                    if self.nnode > 1:
-                        self.task_queue.read_finish_flag.set(0)
-                    else:
-                        self.exist_task_signal.value[0] = ExistTaskStatus.EMPTY
-                # In EP parallel(corresponing to dp attention), we need to barrier for prefill to prevent data imbalance due to inconsistent data arrival.
-                # Only EP + DP prefill should barrier for data arrival.
-                # In mixed mode and decoder in D, we should not barrier to influence decoding.
-                if self.parallel_config.use_ep and self.scheduler_config.splitwise_role == "prefill":
-                    paddle.distributed.barrier(self.parallel_config.ep_group)
-
-                assert (
-                    len(tasks) > 0
-                ), f"task_queue.get_tasks() should contain at least one tuple, [([req1, ...] ,real_bsz)], but got len(tasks)={len(tasks)}"
+                    self._update_exist_task_flag(False)
+                self._tp_barrier_wait() if tp_size > 1 else None
 
                 batch_request, control_reqs, max_occupied_batch_index = BatchRequest.from_tasks(tasks)
 
@@ -584,12 +580,6 @@ class PaddleDisWorkerProc:
 
                     # Process prefill inputs
                     self.worker.preprocess_new_task(batch_request, max_occupied_batch_index)
-            else:
-                if self.scheduler_config.splitwise_role == "prefill":
-                    if tp_size > 1:
-                        # Synchronize the signal for other workers
-                        self._tp_barrier_wait()
-                    continue
 
             # Let the ep group run control method synchronically
             if envs.FD_ENABLE_V1_UPDATE_WEIGHTS and self.parallel_config.use_ep:
@@ -604,7 +594,6 @@ class PaddleDisWorkerProc:
                 and not self.worker.model_runner.not_need_stop()
             ):
                 self._tp_barrier_wait() if tp_size > 1 else None
-                self.engine_forward_signal.value[0] = 0
                 time.sleep(0.001)
                 continue
 
@@ -627,9 +616,6 @@ class PaddleDisWorkerProc:
             if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.exist_prefill_task_signal.value[0] = self.worker.exist_prefill()
             logger.debug(f"execute model cost: {time.time()-start_execute_time:.5f} s")
-            # run eplb
-            self._run_eplb(tp_rank)
-            self.engine_forward_signal.value[0] = 0
 
             if (
                 not self.parallel_config.use_ep
@@ -881,10 +867,21 @@ def parse_args():
         help="enable chunked moe",
     )
     parser.add_argument(
+        "--enable_mega_moe",
+        action="store_true",
+        dest="enable_mega_moe",
+        help="enable MegaMoE wfp4afp8 for MoE and block_wise_fp8 for dense Linear",
+    )
+    parser.add_argument(
         "--chunked_moe_size",
         type=int,
         default=256,
         help="chunk size of moe input",
+    )
+    parser.add_argument(
+        "--enable_moe_scores_elementwise_fuse",
+        action="store_true",
+        help="enable fused elementwise in get_moe_scores",
     )
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_start_id", type=int, default=-1)
@@ -1020,9 +1017,9 @@ def parse_args():
     parser.add_argument(
         "--model-impl",
         type=str,
-        choices=["auto", "fastdeploy", "paddleformers"],
+        choices=["auto", "fastdeploy", "paddleformers", "paddlefleet"],
         default="auto",
-        help="Model implementation backend (auto, fastdeploy, paddleformers)",
+        help="Model implementation backend (auto, fastdeploy, paddleformers, paddlefleet)",
     )
 
     parser.add_argument(
@@ -1298,7 +1295,7 @@ def run_worker_proc() -> None:
     # This must happen AFTER worker creation but BEFORE model loading,
     # because enable_batch_invariant_mode() calls paddle.enable_compat()
     # which makes torch appear available via proxy. If called before worker creation,
-    # the gpu_model_runner import chain (ernie4_5_vl_processor → paddleformers →
+    # the gpu_model_runner import chain (image_processors → paddleformers →
     # transformers) will fail when transformers tries to query torch metadata.
     if envs.FD_DETERMINISTIC_MODE:
         from fastdeploy.model_executor.layers.batch_invariant_ops import (
@@ -1317,6 +1314,16 @@ def run_worker_proc() -> None:
 
     # Trigger CUDAGraph capture
     worker_proc.graph_optimize_and_warm_up_model()
+
+    # Note(ZKK):
+    # In some scenarios, we need to evaluate the performance of various model based on a fixed batch size and input length.
+    # Instead of doing end to end tests which is very unstable, we can profile the following line of code to pick the best model.
+    # so we add an environment variable RUN_DUMMY_FOR_PROFILE to control whether to run dummy run for profile.
+    # Any Question refer to ChangWenBin.
+    if int(os.getenv("RUN_DUMMY_FOR_PROFILE", "0")) == 1:
+        worker_proc.worker.model_runner._dummy_run(
+            num_tokens=100, batch_size=1, expected_decode_len=10, step_use_cudagraph=True
+        )
 
     # Initialize health status
     worker_proc.init_health_status()

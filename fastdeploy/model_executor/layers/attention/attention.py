@@ -62,6 +62,7 @@ class Attention(nn.Layer):
         qk_norm_before_rope: bool = False,
         rms_norm_eps: float = 1e-6,
         with_sinks: bool = False,
+        skip_attn: bool = False,
     ) -> None:
         """
         Initializes `LMLayer` with the given parameters.
@@ -89,11 +90,16 @@ class Attention(nn.Layer):
             fd_config.model_config.num_attention_heads // fd_config.parallel_config.tensor_parallel_size
         )
         self.head_dim: int = fd_config.model_config.head_dim
+        self.layer_id: int = layer_id
+        num_key_value_heads = getattr(fd_config.model_config, "num_key_value_heads_list", None)
+        if num_key_value_heads is None:
+            num_key_value_heads = fd_config.model_config.num_key_value_heads
+        else:
+            num_key_value_heads = num_key_value_heads[self.layer_id]
         self.kv_num_heads: int = max(
             1,
-            fd_config.model_config.num_key_value_heads // fd_config.parallel_config.tensor_parallel_size,
+            int(num_key_value_heads) // fd_config.parallel_config.tensor_parallel_size,
         )
-        self.layer_id: int = layer_id
         self.v_head_dim: int = v_head_dim if v_head_dim > 0 else self.head_dim
         self.rope_type: str = rope_type
         self.qk_head_dim: int = self.head_dim
@@ -109,6 +115,7 @@ class Attention(nn.Layer):
         self.use_neox_rotary_style: bool = use_neox_rotary_style
 
         self.with_sinks: bool = with_sinks
+        self.skip_attn: bool = skip_attn
 
         if fd_config.quant_config and hasattr(fd_config.quant_config, "kv_cache_quant_type"):
             self.quant_method: QuantMethodBase = fd_config.quant_config.get_quant_method(self)
@@ -272,12 +279,18 @@ class Attention(nn.Layer):
             compressed_kv: optional compressed key-value cache (for MLA)
             k_pe: optional key positional encoding (for MLA)
         """
+        if self.skip_attn:
+            return qkv[..., : self.head_dim * self.num_heads]
         # ============ V1 KVCACHE Manager: Layer-by-layer swap wait ============
         # Wait for swap-in of current layer before using cache
         if forward_meta.layer_done_counter is not None:
             forward_meta.layer_done_counter.wait_for_layer(self.layer_id)
 
-        return forward_meta.attn_backend.forward(
+        attn_backend = forward_meta.attn_backend
+        if forward_meta.attn_backends is not None:
+            attn_backend = forward_meta.attn_backends[self.layer_id]
+
+        return attn_backend.forward(
             q,
             k,
             v,

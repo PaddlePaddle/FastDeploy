@@ -48,6 +48,8 @@ Ready-to-use example scripts are available in [examples/cache_storage/](../../..
 |--------|----------|-------------|
 | `run.sh` | Multi-Instance | Two standalone instances sharing cache |
 | `run_03b_pd_storage.sh` | PD Disaggregation | P+D instances with global cache pooling |
+| `run_ha.sh` | High Availability (etcd) | etcd + multi-master leader election, verifies failover after killing the leader |
+| `run_ha_redis.sh` | High Availability (redis) | single redis + multi-master leader election, verifies failover after killing the leader |
 
 ## Prerequisites
 
@@ -283,6 +285,169 @@ curl -X POST "http://0.0.0.0:52700/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello!"}], "max_tokens": 50}'
 ```
+
+### Scenario 3: High-Availability (HA) Deployment
+
+A single master is a single point of failure; if it crashes, cluster operations pause. For production, run multiple `mooncake_master` instances that perform leader election through a coordination backend. When the leader fails, a standby is automatically re-elected, transparently to clients.
+
+Two coordination backends are supported:
+
+- **etcd** (`run_ha.sh`): a 3-node etcd cluster does election and metadata storage.
+- **redis** (`run_ha_redis.sh`): a single redis instance does lease-based election. Use this to avoid introducing etcd as an extra component.
+
+**Architecture:**
+
+```
+            ┌──────────────────────────────────────┐
+            │   coordination backend (etcd / redis) │
+            │     leader election (master_view)     │
+            └───────────────────┬──────────────────┘
+                                │ election (master_view)
+          ┌─────────────────────┼─────────────────────┐
+          ▼                     ▼                     ▼
+   ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+   │  master1    │       │  master2    │       │  master3    │
+   │ rpc:8081    │       │ rpc:8082    │       │ rpc:8083    │
+   │ (leader)    │       │ (standby)   │       │ (standby)   │
+   └──────┬──────┘       └─────────────┘       └─────────────┘
+          │  FastDeploy clients discover the current leader via the backend
+   ┌──────┴───────┐
+   ▼              ▼
+server_0      server_1
+```
+
+#### Build Mooncake from source
+
+HA mode requires Mooncake built with the matching backend enabled:
+
+- etcd: `-DSTORE_USE_ETCD=ON -DUSE_ETCD=ON`
+- redis: `-DSTORE_USE_REDIS=ON -DUSE_REDIS=ON` (build dependency: `libhiredis-dev`)
+
+```bash
+git clone https://github.com/kvcache-ai/Mooncake.git
+cd Mooncake
+bash dependencies.sh
+
+mkdir -p build && cd build
+cmake .. -DSTORE_USE_ETCD=ON -DUSE_ETCD=ON   # add -DSTORE_USE_REDIS=ON -DUSE_REDIS=ON for redis
+make -j
+sudo make install
+cd ..
+
+./scripts/build_wheel.sh
+pip install mooncake-wheel/dist/*.whl
+```
+
+For the CUDA 13 build, use the following instead:
+
+```bash
+cd Mooncake
+export CU13_BUILD=1
+./scripts/build_wheel.sh
+pip install mooncake-wheel/dist/mooncake_transfer_engine_cuda13-*.whl
+```
+
+#### Option A: etcd backend (`run_ha.sh`)
+
+**1. Install etcd**
+
+Download and extract etcd (v3.5.30 in this example), then add `etcd` / `etcdctl` to `PATH`:
+
+```bash
+ETCD_VER=v3.5.30
+curl -L https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz \
+  -o etcd-${ETCD_VER}-linux-amd64.tar.gz
+tar -xzf etcd-${ETCD_VER}-linux-amd64.tar.gz
+export PATH=$PWD/etcd-${ETCD_VER}-linux-amd64:$PATH
+etcd --version
+```
+
+**2. Client configuration** (`ha_mooncake_config.json`)
+
+Both `metadata_server` and `master_server_addr` use the `etcd://` prefix; clients discover the current leader through etcd:
+
+```json
+{
+  "metadata_server": "etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379",
+  "global_segment_size": 1000000000,
+  "local_buffer_size": 134217728,
+  "protocol": "rdma",
+  "rdma_devices": "",
+  "master_server_addr": "etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379"
+}
+```
+
+**3. Run**
+
+```bash
+cd examples/cache_storage
+bash run_ha.sh
+```
+
+The script starts a 3-node etcd cluster (client ports 12379/22379/32379), 3 HA masters (rpc 8081/8082/8083), and 2 FastDeploy instances; the leader address is written to the etcd key `mooncake-store/mooncake_cluster/master_view`.
+
+Inspect the current leader manually:
+
+```bash
+etcdctl --endpoints=http://127.0.0.1:12379,http://127.0.0.1:22379,http://127.0.0.1:32379 \
+  get "mooncake-store/mooncake_cluster/master_view" --print-value-only
+```
+
+#### Option B: redis backend (`run_ha_redis.sh`)
+
+**1. Client configuration** (`ha_redis_mooncake_config.json`)
+
+Both `metadata_server` and `master_server_addr` use the `redis://` prefix pointing to the single redis instance:
+
+```json
+{
+  "metadata_server": "redis://127.0.0.1:6399",
+  "global_segment_size": 1000000000,
+  "local_buffer_size": 134217728,
+  "protocol": "rdma",
+  "rdma_devices": "",
+  "master_server_addr": "redis://127.0.0.1:6399"
+}
+```
+
+**2. Run**
+
+```bash
+cd examples/cache_storage
+bash run_ha_redis.sh
+```
+
+The script starts a single redis instance (port 6399), 3 HA masters (rpc 8081/8082/8083) launched with `--ha_backend_type redis --ha_backend_connstring redis://127.0.0.1:6399`, and 2 FastDeploy instances. The master_view is a redis HASH at `mooncake-store/{mooncake_cluster}/master_view`.
+
+Inspect the current leader manually:
+
+```bash
+redis-cli -p 6399 hget "mooncake-store/{mooncake_cluster}/master_view" leader_address
+```
+
+#### What the HA scripts verify
+
+Both scripts run the same flow and verify failover:
+
+1. Start the coordination backend (etcd cluster / single redis).
+2. Start 3 HA masters; one is elected leader and published to `master_view`.
+3. Start 2 FastDeploy instances, both joining the same cache pool with `--kvcache-storage-backend mooncake`.
+4. **Before failover**: warm up prompt **A** on `server_0`, then send the same prompt to `server_1`, which should hit the global cache.
+5. **Kill the leader**: read the current leader's `rpc_port` from the backend and `kill -9` it, triggering re-election.
+6. **After failover**: once `master_view` updates to the new leader, warm up a **brand-new** prompt **B** on `server_0`, then reuse it on `server_1`. Using a fresh prompt ensures the hit can only come from the new leader's global pool, not stale local cache from step 4.
+
+Per-master roles can be seen in `log_master_1` / `log_master_2` / `log_master_3` (`role=leader` / `role=standby`).
+
+#### Key HA Master Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `--enable_ha` | Enable HA mode |
+| `--ha_backend_type` | Coordination backend: `etcd` (default) or `redis` |
+| `--etcd_endpoints` | etcd endpoints, semicolon separated (when `ha_backend_type=etcd`) |
+| `--ha_backend_connstring` | Backend connection string, e.g. `redis://127.0.0.1:6399` (when `ha_backend_type=redis`) |
+| `--rpc_address` / `--rpc_port` | This master's reachable RPC address and port (must be unique per instance) |
+| `--cluster_id` | Cluster identifier; masters in the same cluster must match |
 
 ## FastDeploy Parameters for Mooncake
 

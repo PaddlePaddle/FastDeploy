@@ -37,6 +37,9 @@ def _build_mock_args():
         revision=None,
         chat_template=None,
         tool_parser_plugin=None,
+        output_fallback=None,
+        output_fallback_plugin=None,
+        output_fallback_config=None,
         # server/network
         host="0.0.0.0",
         port=8000,

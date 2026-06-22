@@ -12,7 +12,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
+import sys
+
 import paddle
+
+tests_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+sys.path.insert(0, tests_dir)
+
+from e2e.utils.serving_utils import clean_ports
 
 try:
     from fastdeploy.model_executor.ops.gpu import (
@@ -93,7 +101,9 @@ class TestPlasAttention(unittest.TestCase):
             [self.tokens + self.attn_block_m, self.num_kv_heads, self.head_dim],
             dtype="bfloat16",
         )
-        self.rotary_embs = paddle.ones([2, self.seq_len, self.head_dim // 2], dtype="float32")
+        rotary_cos = paddle.ones([1, self.plas_max_seq_length, self.head_dim // 2], dtype="float32")
+        rotary_sin = paddle.zeros([1, self.plas_max_seq_length, self.head_dim // 2], dtype="float32")
+        self.rotary_embs = paddle.concat([rotary_cos, rotary_sin], axis=0)
 
         self.attn_gate_weight = paddle.randn(
             [self.num_kv_heads, self.plas_block_size, self.head_dim], dtype="bfloat16"
@@ -338,6 +348,9 @@ class TestPlasAttention(unittest.TestCase):
         self.compare_attn(attn_out, qk_gate_topk_idx)
 
     def test_server(self):
+        # Clean ports before starting the test
+        clean_ports()
+
         if get_cur_cu_seq_len_k is None:
             return
         os.environ["FD_ATTENTION_BACKEND"] = "PLAS_ATTN"

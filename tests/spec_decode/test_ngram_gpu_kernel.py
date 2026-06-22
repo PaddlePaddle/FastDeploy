@@ -90,7 +90,7 @@ def _cpu_ngram_match(
         for ngram_size in range(max_ngram_size, 0, -1):
             if cur_step < ngram_size:
                 continue
-            ngram = cur_pre_ids[cur_step + 1 - ngram_size : cur_step + 1]
+            ngram = cur_pre_ids[cur_step - ngram_size : cur_step]
 
             # Search in input_ids
             match_input = False
@@ -126,8 +126,8 @@ def _cpu_ngram_match(
 
 
 def _cpu_hybrid_mtp_ngram(
-    input_ids,
-    input_ids_len,
+    token_ids_all,
+    prompt_lens,
     pre_ids,
     step_idx,
     draft_token_num,
@@ -145,7 +145,7 @@ def _cpu_hybrid_mtp_ngram(
     max_dec_len = max_dec_len.ravel()
     step_idx = step_idx.ravel()
     draft_token_num = draft_token_num.ravel()
-    input_ids_len = input_ids_len.ravel()
+    prompt_lens = prompt_lens.ravel()
     max_batch_size = seq_lens_this_time.shape[0]
 
     unprocessed = sum(1 for b in range(max_batch_size) if seq_lens_decoder[b] > 0)
@@ -158,11 +158,11 @@ def _cpu_hybrid_mtp_ngram(
         if ori_slt == 0 or max_q <= 0:
             continue
 
-        cur_input_ids = input_ids[batch_idx]
+        cur_input_ids = token_ids_all[batch_idx]
         cur_draft = draft_tokens[batch_idx]
         cur_pre = pre_ids[batch_idx]
         cur_step = int(step_idx[batch_idx])
-        cur_ids_len = int(input_ids_len[batch_idx])
+        cur_ids_len = int(prompt_lens[batch_idx])
         unprocessed -= 1
 
         sum_tok = sum(int(seq_lens_this_time[i]) for i in range(batch_idx + 1))
@@ -241,8 +241,8 @@ def _make_ngram_test_data(batch_size=4, input_len=64, max_model_len=256, max_dra
         gen_len = 20
         src = rng.randint(0, max(1, input_len - gen_len))
         token_ids_all[b, input_len : input_len + gen_len] = input_ids[b, src : src + gen_len]
-        # step_idx = last valid position (0-based index)
-        step_idx[b] = gen_len - 1
+        # step_idx = count of generated tokens (positions 0..step_idx-1 are valid)
+        step_idx[b] = gen_len
 
     return {
         "input_ids": input_ids,
@@ -263,9 +263,14 @@ def _make_mixed_test_data(batch_size=4, input_len=64, pre_ids_len=256, max_draft
     """Create realistic test tensors for hybrid_mtp_ngram op."""
     rng = np.random.RandomState(seed)
     vocab_size = 1000
+    # token_ids_all must be at least as large as the per-request budget;
+    # use pre_ids_len as a stand-in for max_model_len in tests.
+    max_model_len = max(pre_ids_len, input_len + 64)
 
-    input_ids = rng.randint(0, vocab_size, (batch_size, input_len)).astype(np.int64)
-    input_ids_len = np.full((batch_size, 1), input_len, dtype=np.int64)
+    prompt_tokens = rng.randint(0, vocab_size, (batch_size, input_len)).astype(np.int64)
+    token_ids_all = np.full((batch_size, max_model_len), -1, dtype=np.int64)
+    token_ids_all[:, :input_len] = prompt_tokens
+    prompt_lens = np.full((batch_size, 1), input_len, dtype=np.int64)
 
     pre_ids = np.zeros((batch_size, pre_ids_len), dtype=np.int64)
     step_idx = np.zeros((batch_size, 1), dtype=np.int64)
@@ -280,13 +285,13 @@ def _make_mixed_test_data(batch_size=4, input_len=64, pre_ids_len=256, max_draft
         # Copy contiguous blocks from prompt to guarantee ngram matches
         gen_len = 20
         src = rng.randint(0, max(1, input_len - gen_len))
-        pre_ids[b, :gen_len] = input_ids[b, src : src + gen_len]
+        pre_ids[b, :gen_len] = prompt_tokens[b, src : src + gen_len]
         # step_idx = last valid position (0-based index)
         step_idx[b] = gen_len - 1
 
     return {
-        "input_ids": input_ids,
-        "input_ids_len": input_ids_len,
+        "token_ids_all": token_ids_all,
+        "prompt_lens": prompt_lens,
         "pre_ids": pre_ids,
         "step_idx": step_idx,
         "draft_token_num": draft_token_num,
@@ -349,8 +354,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         # GPU kernel
         gpu_data = _to_gpu(data)
         self.ngram_match(
-            gpu_data["input_ids"],
-            gpu_data["input_ids_len"],
             gpu_data["token_ids_all"],
             gpu_data["prompt_lens"],
             gpu_data["step_idx"],
@@ -362,6 +365,7 @@ class TestNgramMatchKernel(unittest.TestCase):
             gpu_data["max_dec_len"],
             max_ngram_size,
             max_draft_tokens,
+            False,
         )
         paddle.device.synchronize()
 
@@ -395,8 +399,6 @@ class TestNgramMatchKernel(unittest.TestCase):
                 )
                 gpu_data = _to_gpu(data)
                 self.ngram_match(
-                    gpu_data["input_ids"],
-                    gpu_data["input_ids_len"],
                     gpu_data["token_ids_all"],
                     gpu_data["prompt_lens"],
                     gpu_data["step_idx"],
@@ -408,6 +410,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                     gpu_data["max_dec_len"],
                     3,
                     10,
+                    False,
                 )
                 paddle.device.synchronize()
                 np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
@@ -444,8 +447,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = str(high_threshold)
         try:
             self.ngram_match(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
                 gpu_data["token_ids_all"],
                 gpu_data["prompt_lens"],
                 gpu_data["step_idx"],
@@ -457,6 +458,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                 gpu_data["max_dec_len"],
                 3,
                 10,
+                False,
             )
             paddle.device.synchronize()
         finally:
@@ -489,8 +491,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         )
         gpu_data = _to_gpu(data)
         self.ngram_match(
-            gpu_data["input_ids"],
-            gpu_data["input_ids_len"],
             gpu_data["token_ids_all"],
             gpu_data["prompt_lens"],
             gpu_data["step_idx"],
@@ -502,6 +502,7 @@ class TestNgramMatchKernel(unittest.TestCase):
             gpu_data["max_dec_len"],
             3,
             10,
+            False,
         )
         paddle.device.synchronize()
         np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
@@ -534,8 +535,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         os.environ["INFER_WITH_REFERENCE_TOKENUM_THRESHOLD"] = str(high_threshold)
         try:
             self.ngram_match(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
                 gpu_data["token_ids_all"],
                 gpu_data["prompt_lens"],
                 gpu_data["step_idx"],
@@ -547,6 +546,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                 gpu_data["max_dec_len"],
                 3,
                 10,
+                False,
             )
             paddle.device.synchronize()
         finally:
@@ -563,8 +563,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         for _ in range(1):
             d = _to_gpu(_make_ngram_test_data(batch_size=32, input_len=512, seed=42))
             self.ngram_match(
-                d["input_ids"],
-                d["input_ids_len"],
                 d["token_ids_all"],
                 d["prompt_lens"],
                 d["step_idx"],
@@ -576,6 +574,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                 d["max_dec_len"],
                 3,
                 10,
+                False,
             )
         paddle.device.synchronize()
 
@@ -587,8 +586,6 @@ class TestNgramMatchKernel(unittest.TestCase):
         t0 = time.perf_counter()
         for _ in range(n_runs):
             self.ngram_match(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
                 gpu_data["token_ids_all"],
                 gpu_data["prompt_lens"],
                 gpu_data["step_idx"],
@@ -600,6 +597,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                 gpu_data["max_dec_len"],
                 3,
                 10,
+                False,
             )
             paddle.device.synchronize()
         t1 = time.perf_counter()
@@ -639,8 +637,6 @@ class TestNgramMatchKernel(unittest.TestCase):
             # Warmup
             for _ in range(1):
                 self.ngram_match(
-                    gpu_data["input_ids"],
-                    gpu_data["input_ids_len"],
                     gpu_data["token_ids_all"],
                     gpu_data["prompt_lens"],
                     gpu_data["step_idx"],
@@ -652,6 +648,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                     gpu_data["max_dec_len"],
                     3,
                     10,
+                    False,
                 )
             paddle.device.synchronize()
 
@@ -660,8 +657,6 @@ class TestNgramMatchKernel(unittest.TestCase):
             t0 = time.perf_counter()
             for _ in range(n_runs):
                 self.ngram_match(
-                    gpu_data["input_ids"],
-                    gpu_data["input_ids_len"],
                     gpu_data["token_ids_all"],
                     gpu_data["prompt_lens"],
                     gpu_data["step_idx"],
@@ -673,6 +668,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                     gpu_data["max_dec_len"],
                     3,
                     10,
+                    False,
                 )
                 paddle.device.synchronize()
             gpu_ms = (time.perf_counter() - t0) / n_runs * 1000
@@ -744,8 +740,6 @@ class TestNgramMatchKernel(unittest.TestCase):
                 # Warmup
                 for _ in range(1):
                     self.ngram_match(
-                        gpu_data["input_ids"],
-                        gpu_data["input_ids_len"],
                         gpu_data["token_ids_all"],
                         gpu_data["prompt_lens"],
                         gpu_data["step_idx"],
@@ -757,6 +751,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                         gpu_data["max_dec_len"],
                         3,
                         10,
+                        False,
                     )
                 paddle.device.synchronize()
 
@@ -765,8 +760,6 @@ class TestNgramMatchKernel(unittest.TestCase):
                 t0 = time.perf_counter()
                 for _ in range(n_runs):
                     self.ngram_match(
-                        gpu_data["input_ids"],
-                        gpu_data["input_ids_len"],
                         gpu_data["token_ids_all"],
                         gpu_data["prompt_lens"],
                         gpu_data["step_idx"],
@@ -778,6 +771,7 @@ class TestNgramMatchKernel(unittest.TestCase):
                         gpu_data["max_dec_len"],
                         3,
                         10,
+                        False,
                     )
                     paddle.device.synchronize()
                 t1 = time.perf_counter()
@@ -835,8 +829,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         cpu_draft = data["draft_tokens"].copy()
         cpu_slt = data["seq_lens_this_time"].copy()
         _cpu_hybrid_mtp_ngram(
-            data["input_ids"],
-            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
             data["pre_ids"],
             data["step_idx"],
             data["draft_token_num"],
@@ -851,8 +845,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
 
         gpu_data = _to_gpu(data)
         self.hybrid_mtp_ngram(
-            gpu_data["input_ids"],
-            gpu_data["input_ids_len"],
+            gpu_data["token_ids_all"],
+            gpu_data["prompt_lens"],
             gpu_data["pre_ids"],
             gpu_data["step_idx"],
             gpu_data["draft_token_num"],
@@ -863,6 +857,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
             max_ngram_size,
             min_ngram_size,
             max_draft_tokens,
+            False,
         )
         paddle.device.synchronize()
 
@@ -879,8 +874,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 cpu_draft = data["draft_tokens"].copy()
                 cpu_slt = data["seq_lens_this_time"].copy()
                 _cpu_hybrid_mtp_ngram(
-                    data["input_ids"],
-                    data["input_ids_len"],
+                    data["token_ids_all"],
+                    data["prompt_lens"],
                     data["pre_ids"],
                     data["step_idx"],
                     data["draft_token_num"],
@@ -894,8 +889,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 )
                 gpu_data = _to_gpu(data)
                 self.hybrid_mtp_ngram(
-                    gpu_data["input_ids"],
-                    gpu_data["input_ids_len"],
+                    gpu_data["token_ids_all"],
+                    gpu_data["prompt_lens"],
                     gpu_data["pre_ids"],
                     gpu_data["step_idx"],
                     gpu_data["draft_token_num"],
@@ -906,6 +901,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                     3,
                     1,
                     10,
+                    False,
                 )
                 paddle.device.synchronize()
                 np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
@@ -922,8 +918,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         cpu_draft = data["draft_tokens"].copy()
         cpu_slt = data["seq_lens_this_time"].copy()
         _cpu_hybrid_mtp_ngram(
-            data["input_ids"],
-            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
             data["pre_ids"],
             data["step_idx"],
             data["draft_token_num"],
@@ -941,8 +937,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         os.environ["SPEC_TOKENUM_THRESHOLD"] = str(high_threshold)
         try:
             self.hybrid_mtp_ngram(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
+                gpu_data["token_ids_all"],
+                gpu_data["prompt_lens"],
                 gpu_data["pre_ids"],
                 gpu_data["step_idx"],
                 gpu_data["draft_token_num"],
@@ -953,6 +949,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 3,
                 1,
                 10,
+                False,
             )
             paddle.device.synchronize()
         finally:
@@ -969,8 +966,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         cpu_draft = data["draft_tokens"].copy()
         cpu_slt = data["seq_lens_this_time"].copy()
         _cpu_hybrid_mtp_ngram(
-            data["input_ids"],
-            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
             data["pre_ids"],
             data["step_idx"],
             data["draft_token_num"],
@@ -984,8 +981,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         )
         gpu_data = _to_gpu(data)
         self.hybrid_mtp_ngram(
-            gpu_data["input_ids"],
-            gpu_data["input_ids_len"],
+            gpu_data["token_ids_all"],
+            gpu_data["prompt_lens"],
             gpu_data["pre_ids"],
             gpu_data["step_idx"],
             gpu_data["draft_token_num"],
@@ -996,6 +993,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
             3,
             1,
             10,
+            False,
         )
         paddle.device.synchronize()
         np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
@@ -1008,8 +1006,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         cpu_draft = data["draft_tokens"].copy()
         cpu_slt = data["seq_lens_this_time"].copy()
         _cpu_hybrid_mtp_ngram(
-            data["input_ids"],
-            data["input_ids_len"],
+            data["token_ids_all"],
+            data["prompt_lens"],
             data["pre_ids"],
             data["step_idx"],
             data["draft_token_num"],
@@ -1027,8 +1025,8 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
         os.environ["SPEC_TOKENUM_THRESHOLD"] = str(high_threshold)
         try:
             self.hybrid_mtp_ngram(
-                gpu_data["input_ids"],
-                gpu_data["input_ids_len"],
+                gpu_data["token_ids_all"],
+                gpu_data["prompt_lens"],
                 gpu_data["pre_ids"],
                 gpu_data["step_idx"],
                 gpu_data["draft_token_num"],
@@ -1039,6 +1037,7 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 3,
                 1,
                 10,
+                False,
             )
             paddle.device.synchronize()
         finally:
@@ -1048,6 +1047,60 @@ class TestHybridMtpNgramKernel(unittest.TestCase):
                 os.environ["SPEC_TOKENUM_THRESHOLD"] = old_env
         np.testing.assert_array_equal(gpu_data["seq_lens_this_time"].numpy(), cpu_slt)
         np.testing.assert_array_equal(gpu_data["draft_tokens"].numpy(), cpu_draft)
+
+    def test_pad_to_max(self):
+        """pad_to_max=True forces seq_lens_this_time to K+1 and fills unused
+        draft slots with a placeholder (= last valid draft token).
+
+        Exercises the cudagraph-stability path: even when ngram has 0 hits,
+        slt must end up at max_draft_tokens + 1 so capture-time and replay-
+        time launch params match.
+        """
+        # 8 batches with step_idx=0 → search short-circuits, no ngram match.
+        # ori_seq_len_this_time = 1 (the verified token only). Without pad,
+        # slt stays at 1; with pad_to_max=True it must be K+1.
+        data = _make_mixed_test_data(batch_size=8, seed=123)
+        data["step_idx"][:] = 0  # force no-match path
+        # Seed the verified token at position 0 of every draft_tokens row
+        # so we can identify the placeholder unambiguously.
+        data["draft_tokens"][:, 0] = 999
+        data["seq_lens_this_time"][:] = 1
+
+        gpu_data = _to_gpu(data)
+        max_draft_tokens = 10
+        self.hybrid_mtp_ngram(
+            gpu_data["token_ids_all"],
+            gpu_data["prompt_lens"],
+            gpu_data["pre_ids"],
+            gpu_data["step_idx"],
+            gpu_data["draft_token_num"],
+            gpu_data["draft_tokens"],
+            gpu_data["seq_lens_this_time"],
+            gpu_data["seq_lens_decoder"],
+            gpu_data["max_dec_len"],
+            3,
+            1,
+            max_draft_tokens,
+            True,  # pad_to_max
+        )
+        paddle.device.synchronize()
+
+        target_slt = max_draft_tokens + 1
+        slt = gpu_data["seq_lens_this_time"].numpy()
+        np.testing.assert_array_equal(
+            slt,
+            np.full_like(slt, target_slt),
+            err_msg=f"expected all slt == {target_slt} after pad, got {slt.tolist()}",
+        )
+
+        # ori was 1 so positions [1..K+1) should all hold the placeholder =
+        # draft_tokens[0] = 999.
+        drafts = gpu_data["draft_tokens"].numpy()
+        np.testing.assert_array_equal(
+            drafts[:, 1:target_slt],
+            np.full((drafts.shape[0], target_slt - 1), 999, dtype=drafts.dtype),
+            err_msg="padded slots should be filled with the placeholder (last valid draft token)",
+        )
 
 
 if __name__ == "__main__":

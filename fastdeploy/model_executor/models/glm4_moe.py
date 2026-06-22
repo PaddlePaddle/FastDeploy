@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from functools import partial
 from typing import Dict
@@ -64,6 +65,13 @@ class Glm4MoeMLP(nn.Layer):
         reduce_results: bool = True,
     ) -> None:
         super().__init__()
+        self.expert_parallel_size = fd_config.parallel_config.expert_parallel_size
+        self.tensor_parallel_size = fd_config.parallel_config.tensor_parallel_size
+        self.use_tp = self.tensor_parallel_size > 1
+        self.use_ep = self.expert_parallel_size > 1
+        self.enable_all_reduce_fusion = fd_config.parallel_config.enable_flashinfer_allreduce_fusion and (
+            self.use_tp and not self.use_ep
+        )
         # shared experts not split when use_sequence_parallel_moe in ep + tp
         if (
             fd_config.parallel_config.use_sequence_parallel_moe
@@ -101,6 +109,7 @@ class Glm4MoeMLP(nn.Layer):
                 output_size=fd_config.model_config.hidden_size,
                 with_bias=False,
                 reduce_results=reduce_results,
+                enable_all_reduce_fusion=self.enable_all_reduce_fusion,
             )
 
         self.act_fn = SiluAndMul(
@@ -132,6 +141,10 @@ class Glm4Moe(nn.Layer):
         self.tp_group = fd_config.parallel_config.tp_group
         self.use_ep = self.expert_parallel_size > 1
         self.use_tp = self.tensor_parallel_size > 1
+        self.last_layer_id = fd_config.model_config.num_hidden_layers - 1
+        self.enable_all_reduce_fusion = (
+            fd_config.parallel_config.enable_flashinfer_allreduce_fusion and layer_id != self.last_layer_id
+        )
 
         self.n_routed_experts: int = fd_config.model_config.n_routed_experts
         self.n_shared_experts: int = fd_config.model_config.n_shared_experts
@@ -198,9 +211,12 @@ class Glm4Moe(nn.Layer):
         out = self.experts(x, self.gate, forward_meta)
         if self.n_shared_experts > 0:
             out = out + self.shared_experts(x)
+
         if self.merge_ffn_tp:
-            # Both branches produced partial sums; combine first, then single all-reduce.
-            out = tensor_model_parallel_all_reduce(out, self.tp_group)
+            need_tp_all_reduce_fusion = self.enable_all_reduce_fusion and out.shape[0] <= 2048
+            if not need_tp_all_reduce_fusion:
+                # Both branches produced partial sums; combine first, then single all-reduce.
+                out = tensor_model_parallel_all_reduce(out, self.tp_group)
         return out
 
 
@@ -237,6 +253,7 @@ class Glm4MoeAttention(nn.Layer):
             prefix=prefix,
             use_neox_rotary_style=True,
             rms_norm_eps=fd_config.model_config.rms_norm_eps,
+            skip_attn=bool(int(os.getenv("FD_SKIP_IN_DETERMINISTIC", "0"))),
         )
         if self.use_qk_norm:
             self.qk_norm = QKRMSNorm(
@@ -486,6 +503,11 @@ class Glm4MoeForCausalLM(ModelForCasualLM):
         params_dict = dict(self.named_parameters())
         process_weights_after_loading_fn = process_weights_after_loading(dict(self.named_sublayers()), self.fd_config)
         for loaded_weight_name, loaded_weight in weights_iterator:
+
+            # special case!
+            if "correction_bias" in loaded_weight_name:
+                loaded_weight.reshape_([1, loaded_weight.numel().item()])
+
             logger.debug(f"Loading weight: {loaded_weight_name}")
             for param_name, weight_name, shard_id in stacked_params_mapping:
                 if weight_name not in loaded_weight_name:

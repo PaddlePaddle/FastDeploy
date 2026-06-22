@@ -11,6 +11,8 @@ os.environ["FD_METAX_KVCACHE_MEM"] = "8"
 os.environ["ENABLE_V1_KVCACHE_SCHEDULER"] = "1"
 os.environ["FD_ENC_DEC_BLOCK_NUM"] = "2"
 os.environ["FD_SAMPLING_CLASS"] = "rejection"
+os.environ["FD_ENABLE_E2W_TENSOR_CONVERT"] = "0"
+os.environ["FD_ENGINE_TASK_QUEUE_WITH_SHM"] = "0"
 
 
 MODEL_PATH = "/data/models/PaddlePaddle/ERNIE-4.5-21B-A3B-Thinking"

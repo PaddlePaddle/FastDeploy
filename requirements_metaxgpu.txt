@@ -23,7 +23,7 @@ xlwt
 visualdl
 setuptools-scm>=8
 prometheus-client
-decord
+paddlecodec
 moviepy
 triton
 use-triton-in-paddle

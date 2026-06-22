@@ -119,9 +119,11 @@ void MTPSaveFirstTokenWithTopK(const paddle::Tensor& sampled_token_ids,
   msg_sed.mtype = 1;
   msg_sed.meta[0] = not_need_stop.data<bool>()[0] ? inference_msg_id_from_env
                                                   : -inference_msg_id_from_env;
-  msg_sed.meta[1] = message_flag;
-  msg_sed.meta[2] = bsz;
+  // Pack message_flag (low 8 bits) and max_num_logprobs (high 24 bits) into
+  // meta[1]. Receiver unpacks both to avoid reading unused topk slots.
   int max_num_logprobs = logprob_token_ids.shape()[1];
+  msg_sed.meta[1] = message_flag | (max_num_logprobs << 8);
+  msg_sed.meta[2] = bsz;
   for (int i = 0; i < bsz; i++) {
     int cur_token_num;
     if (seq_lens_decoder_data[i] < prompt_lens_data[i] ||
@@ -139,29 +141,24 @@ void MTPSaveFirstTokenWithTopK(const paddle::Tensor& sampled_token_ids,
     auto* cur_batch_msg_sed = &msg_sed.mtext[i];
     int token_offset = cu_batch_token_offset_data[i];
     for (int j = 0; j < cur_token_num; j++) {
+      // Use SPEC_LOGPROB_K+1 as stride (fixed struct layout), but only write
+      // max_num_logprobs columns to avoid filling unused topk slots.
       auto* cur_tokens = &cur_batch_msg_sed->tokens[j * (SPEC_LOGPROB_K + 1)];
       auto* cur_scores = &cur_batch_msg_sed->scores[j * (SPEC_LOGPROB_K + 1)];
       if (j == 0) {
         // first token has full logprobs
-        for (int k = 0; k < SPEC_LOGPROB_K + 1; k++) {
+        for (int k = 0; k < max_num_logprobs; k++) {
           if (k == 0) {
             cur_tokens[k] =
                 (int)sampled_token_ids_data[i * max_draft_tokens + j];
             cur_scores[k] =
-                logprob_scores_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
-                                    k];
-          } else if (k < max_num_logprobs) {
-            // only for first token
-            cur_tokens[k] =
-                (int)logprob_token_ids_data[(token_offset + j) *
-                                                (SPEC_LOGPROB_K + 1) +
-                                            k];
-            cur_scores[k] =
-                logprob_scores_data[(token_offset + j) * (SPEC_LOGPROB_K + 1) +
-                                    k];
+                logprob_scores_data[(token_offset + j) * max_num_logprobs + k];
           } else {
-            cur_tokens[k] = -1;
-            cur_scores[k] = 0.0;
+            cur_tokens[k] = (int)
+                logprob_token_ids_data[(token_offset + j) * max_num_logprobs +
+                                       k];
+            cur_scores[k] =
+                logprob_scores_data[(token_offset + j) * max_num_logprobs + k];
           }
         }
         cur_batch_msg_sed->ranks[j] = (int)logprob_ranks_data[token_offset + j];
@@ -174,7 +171,8 @@ void MTPSaveFirstTokenWithTopK(const paddle::Tensor& sampled_token_ids,
 #ifdef SPECULATE_SAVE_WITH_OUTPUT_DEBUG
   std::cout << "msg data: " << std::endl;
   std::cout << "stop_flag: " << msg_sed.meta[0]
-            << ", message_flag: " << msg_sed.meta[1]
+            << ", message_flag: " << (msg_sed.meta[1] & 0xFF)
+            << ", max_num_logprobs: " << (msg_sed.meta[1] >> 8)
             << ", bsz: " << msg_sed.meta[2] << std::endl;
   for (int i = 0; i < bsz; i++) {
     int cur_token_num = msg_sed.meta[3 + i];

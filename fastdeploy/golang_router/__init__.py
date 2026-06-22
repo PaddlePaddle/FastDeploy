@@ -1,0 +1,1 @@
+"""FastDeploy Golang Router launcher."""

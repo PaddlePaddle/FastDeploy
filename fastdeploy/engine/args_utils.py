@@ -38,6 +38,7 @@ from fastdeploy.config import (
     RouterConfig,
     RoutingReplayConfig,
     RunnerOption,
+    ServingLimitsConfig,
     SpeculativeConfig,
     StructuredOutputsConfig,
     TaskOption,
@@ -111,6 +112,33 @@ class EngineArgs:
     """
     Maximum context length supported by the model.
     """
+    max_completion_tokens: Optional[int] = None
+    """
+    Server-level maximum allowed completion token length (hard cap).
+    Per-request max_tokens will be clamped to this value. None means no server-level cap
+    (bounded by max_model_len - input_len).
+    """
+    reasoning_max_tokens: Optional[int] = None
+    """
+    Server-level maximum allowed reasoning/thinking token length (hard cap).
+    Per-request reasoning_max_tokens will be clamped to this value. None means no server-level cap.
+    """
+    response_max_tokens: Optional[int] = None
+    """
+    Server-level maximum allowed response token length (hard cap).
+    Per-request response_max_tokens will be clamped to this value. None means no server-level cap.
+    """
+    min_completion_tokens: Optional[int] = None
+    """
+    Server-level minimum generation length floor.
+    Effective min_tokens = max(server_value, per-request value). Requests cannot set min_tokens
+    below this floor. None means no server-level floor.
+    """
+    input_max_tokens: Optional[int] = None
+    """
+    Server-level maximum input token length.
+    Requests with prompt longer than this will be rejected. None means no limit (bounded by max_model_len).
+    """
     tensor_parallel_size: int = 1
     """
     Degree of tensor parallelism.
@@ -139,6 +167,7 @@ class EngineArgs:
     'auto': Use native FastDeploy implementation when available, fallback to PaddleFormers.
     'fastdeploy': Use only native FastDeploy implementations.
     'paddleformers': Use PaddleFormers backend with FastDeploy optimizations.
+    'paddlefleet': Use PaddleFleet backend with FastDeploy optimizations.
     """
     override_pooler_config: Optional[Union[dict, PoolerConfig]] = None
     """
@@ -180,6 +209,18 @@ class EngineArgs:
     """
     tool parser plugin used to register user defined tool parsers
     """
+    output_fallback: Optional[str] = None
+    """
+    output fallback strategies to apply, separated by commas
+    """
+    output_fallback_plugin: Optional[list[str]] = None
+    """
+    output fallback plugin used to register user defined fallback strategies
+    """
+    output_fallback_config: Optional[Dict[str, Any]] = None
+    """
+    output fallback config keyed by strategy name
+    """
     enable_mm: bool = False
     """
     Flags to enable multi-modal model
@@ -187,6 +228,10 @@ class EngineArgs:
     speculative_config: Optional[Dict[str, Any]] = None
     """
     Configuration for speculative execution.
+    """
+    benchmark_metrics_config: Optional[Dict[str, Any]] = None
+    """
+    Configuration for in-process benchmark metrics logger.
     """
     dynamic_load_weight: bool = False
     """
@@ -336,9 +381,19 @@ class EngineArgs:
     Whether use chunked moe.
     """
 
+    enable_mega_moe: bool = False
+    """
+    Whether use MegaMoE wfp4afp8 for MoE and block_wise_fp8 for dense Linear.
+    """
+
     chunked_moe_size: int = 256
     """
     Chunk size of moe input.
+    """
+
+    enable_moe_scores_elementwise_fuse: bool = False
+    """
+    Flag to enable fused elementwise in get_moe_scores. Default is False (disabled).
     """
 
     cache_transfer_protocol: str = "ipc,rdma"
@@ -588,6 +643,8 @@ class EngineArgs:
             and not current_platform.is_maca()
         ):
             self.enable_prefix_caching = False
+        if self.splitwise_role == "decode":
+            self.enable_prefix_caching = False
         if not current_platform.is_cuda() or self.splitwise_role == "prefill":
             self.enable_overlap_schedule = False
         if self.enable_logprob:
@@ -614,6 +671,11 @@ class EngineArgs:
                     f"Running {self.splitwise_role} role with {self.scheduler_name} "
                     f"scheduler without --router. Router registration and request routing will be disabled."
                 )
+            if self.speculative_config is not None and self.speculative_config.get("method") == "suffix":
+                raise ValueError(
+                    "SpecMethod.SUFFIX does not support PD (Prefill/Decode) separation. "
+                    "Suffix speculative decoding can only be used in mixed mode (splitwise_role='mixed')."
+                )
 
         if not (
             current_platform.is_cuda()
@@ -629,14 +691,14 @@ class EngineArgs:
             self.enable_prefix_caching = False
 
         if self.kvcache_storage_backend is not None:
-            if not self.enable_prefix_caching:
-                raise NotImplementedError("kvcache_storage_backend is only supported when enable_prefix_caching=True")
+            self.enable_prefix_caching = True
+            console_logger.info("kvcache_storage_backend is set, enable_prefix_caching=True automatically.")
             if envs.ENABLE_V1_KVCACHE_SCHEDULER == 0:
                 raise NotImplementedError(
                     "kvcache_storage_backend is only supported when ENABLE_V1_KVCACHE_SCHEDULER=1"
                 )
 
-        valid_model_impls = ["auto", "fastdeploy", "paddleformers"]
+        valid_model_impls = ["auto", "fastdeploy", "paddleformers", "paddlefleet"]
         if self.model_impl not in valid_model_impls:
             raise NotImplementedError(
                 f"not support model_impl: '{self.model_impl}'. " f"Must be one of: {', '.join(valid_model_impls)}"
@@ -755,6 +817,43 @@ class EngineArgs:
             help="Maximum context length supported by the model.",
         )
         model_group.add_argument(
+            "--max-completion-tokens",
+            type=int,
+            default=EngineArgs.max_completion_tokens,
+            help="Server-level maximum allowed completion token length (hard cap). "
+            "Per-request max_tokens will be clamped to this value. "
+            "Default: None (bounded by max_model_len - input_len).",
+        )
+        model_group.add_argument(
+            "--reasoning-max-tokens",
+            type=int,
+            default=EngineArgs.reasoning_max_tokens,
+            help="Server-level maximum allowed reasoning/thinking token length (hard cap). "
+            "Per-request reasoning_max_tokens will be clamped to this value. Default: None (no cap).",
+        )
+        model_group.add_argument(
+            "--response-max-tokens",
+            type=int,
+            default=EngineArgs.response_max_tokens,
+            help="Server-level maximum allowed response token length (hard cap). "
+            "Per-request response_max_tokens will be clamped to this value. Default: None (no cap).",
+        )
+        model_group.add_argument(
+            "--min-completion-tokens",
+            type=int,
+            default=EngineArgs.min_completion_tokens,
+            help="Server-level minimum generation length floor. "
+            "Effective min_tokens = max(server_value, per-request value). Default: None (no floor).",
+        )
+        model_group.add_argument(
+            "--input-max-tokens",
+            type=int,
+            default=EngineArgs.input_max_tokens,
+            help="Server-level maximum input token length. "
+            "Requests with prompt longer than this will be rejected. "
+            "Default: None (no limit, bounded by max_model_len).",
+        )
+        model_group.add_argument(
             "--block-size",
             type=int,
             default=EngineArgs.block_size,
@@ -843,10 +942,39 @@ class EngineArgs:
             help="tool parser plugin used to register user defined tool parsers",
         )
         model_group.add_argument(
+            "--output-fallback",
+            type=str,
+            default=EngineArgs.output_fallback,
+            help="Output fallback strategies to apply, separated by commas.",
+        )
+        model_group.add_argument(
+            "--output-fallback-plugin",
+            type=str,
+            action="append",
+            default=EngineArgs.output_fallback_plugin,
+            help="Output fallback plugin used to register user defined fallback strategies.",
+        )
+        model_group.add_argument(
+            "--output-fallback-config",
+            type=json.loads,
+            default=EngineArgs.output_fallback_config,
+            help="Output fallback config keyed by strategy name.",
+        )
+        model_group.add_argument(
             "--speculative-config",
             type=json.loads,
             default=EngineArgs.speculative_config,
             help="Configuration for speculative execution.",
+        )
+        model_group.add_argument(
+            "--benchmark-metrics-config",
+            type=json.loads,
+            default=EngineArgs.benchmark_metrics_config,
+            help="Configuration for in-process benchmark metrics logger. "
+            "Pass '{}' for defaults or a JSON with keys: "
+            "window_size (int, 0=all requests), "
+            "percentiles (str, e.g. '50,90,95,99'), "
+            "metrics (str, 'all' or comma-separated subset).",
         )
         model_group.add_argument(
             "--dynamic-load-weight",
@@ -974,13 +1102,14 @@ class EngineArgs:
         model_group.add_argument(
             "--model-impl",
             type=str,
-            choices=["auto", "fastdeploy", "paddleformers"],
+            choices=["auto", "fastdeploy", "paddleformers", "paddlefleet"],
             default=EngineArgs.model_impl,
             help=(
                 "Model implementation backend. "
                 "'auto': Use native FastDeploy when available, fallback to PaddleFormers. "
                 "'fastdeploy': Use only native FastDeploy implementations. "
                 "'paddleformers': Use PaddleFormers backend with FastDeploy optimizations."
+                "'paddlefleet': Use PaddleFleet backend with FastDeploy optimizations."
             ),
         )
 
@@ -1084,6 +1213,12 @@ class EngineArgs:
             action="store_true",
             default=EngineArgs.enable_chunked_moe,
             help="Use chunked moe.",
+        )
+        parallel_group.add_argument(
+            "--enable-mega-moe",
+            action="store_true",
+            default=EngineArgs.enable_mega_moe,
+            help="Use MegaMoE wfp4afp8 for MoE and block_wise_fp8 for dense Linear.",
         )
         parallel_group.add_argument(
             "--chunked-moe-size",
@@ -1399,7 +1534,12 @@ class EngineArgs:
             default=EngineArgs.enable_overlap_schedule,
             help="Enable overlapping schedule.",
         )
-
+        scheduler_group.add_argument(
+            "--enable-moe-scores-elementwise-fuse",
+            action="store_true",
+            default=EngineArgs.enable_moe_scores_elementwise_fuse,
+            help="Enable fused elementwise in get_moe_scores for MoE routing.",
+        )
         model_group.add_argument(
             "--deploy-modality",
             type=str,
@@ -1429,6 +1569,14 @@ class EngineArgs:
                 speculative_args[k] = v
 
         return SpeculativeConfig(speculative_args)
+
+    def create_benchmark_metrics_config(self):
+        """Create BenchmarkMetricsConfig if --benchmark-metrics-config is provided."""
+        if self.benchmark_metrics_config is None:
+            return None
+        from fastdeploy.config import BenchmarkMetricsConfig
+
+        return BenchmarkMetricsConfig(self.benchmark_metrics_config)
 
     def create_scheduler_config(self) -> SchedulerConfig:
         """
@@ -1509,6 +1657,7 @@ class EngineArgs:
             self.tensor_parallel_size = model_cfg.tensor_parallel_size
 
         speculative_cfg = self.create_speculative_config()
+        benchmark_metrics_cfg = self.create_benchmark_metrics_config()
         if not self.enable_chunked_prefill:
             if (current_platform.is_cuda() or current_platform.is_maca()) and self.splitwise_role == "mixed":
                 # default enable chunked prefill
@@ -1539,6 +1688,8 @@ class EngineArgs:
         cache_cfg = CacheConfig(all_dict)
         load_cfg = LoadConfig(all_dict)
         parallel_cfg = ParallelConfig(all_dict)
+        serving_limits_cfg = ServingLimitsConfig(all_dict)
+        serving_limits_cfg.validate(model_cfg.max_model_len)
         scheduler_cfg = self.create_scheduler_config()
         graph_opt_cfg = self.create_graph_optimization_config()
         plas_attention_config = self.create_plas_attention_config()
@@ -1573,5 +1724,7 @@ class EngineArgs:
             plas_attention_config=plas_attention_config,
             early_stop_config=early_stop_cfg,
             routing_replay_config=routing_replay_config,
+            benchmark_metrics_config=benchmark_metrics_cfg,
             deploy_modality=DeployModality.from_str(self.deploy_modality),
+            serving_limits_config=serving_limits_cfg,
         )

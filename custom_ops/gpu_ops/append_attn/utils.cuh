@@ -31,7 +31,7 @@ struct AppendAttnMetaData {
 };
 
 __forceinline__ __host__ __device__ int div_up(int a, int b) {
-  return (a + b - 1) / b;
+  return a / b + (a % b != 0);
 }
 
 enum PosEncMode { kNonePos, kRoPE, kAliBi };
@@ -312,6 +312,11 @@ __forceinline__ __host__ __device__ void vec_cast<nv_bfloat16, float>(
     }                                              \
     case 128: {                                    \
       constexpr size_t HEAD_DIM = 128;             \
+      __VA_ARGS__                                  \
+      break;                                       \
+    }                                              \
+    case 192: {                                    \
+      constexpr size_t HEAD_DIM = 192;             \
       __VA_ARGS__                                  \
       break;                                       \
     }                                              \

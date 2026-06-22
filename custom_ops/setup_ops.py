@@ -174,6 +174,12 @@ def get_gencode_flags(archs):
                 "-gencode",
                 f"arch=compute_{arch_code},code=sm_{arch_code}",
             ]
+        elif cc_val == 103:
+            arch_code = "103a"
+            flags += [
+                "-gencode",
+                f"arch=compute_{arch_code},code=sm_{arch_code}",
+            ]
         else:
             flags += ["-gencode", f"arch=compute_{cc_val},code=sm_{cc_val}"]
     return flags
@@ -237,6 +243,7 @@ if paddle.is_compiled_with_rocm():
         "gpu_ops/set_data_ipc.cu",
         "gpu_ops/unset_data_ipc.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
+        "gpu_ops/moe/moe_align_kernel.cu",
         "gpu_ops/step_system_cache.cu",
         "gpu_ops/get_output_ep.cc",
         "gpu_ops/speculate_decoding/speculate_get_padding_offset.cu",
@@ -331,6 +338,8 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/noaux_tc_redundant.cu",
+        "gpu_ops/grouped_topk_kernels.cu",
+        "gpu_ops/fused_cast_sigmoid_bias.cu",
         "gpu_ops/custom_all_reduce/all_reduce.cu",
         "gpu_ops/merge_prefill_decode_output.cu",
         "gpu_ops/limit_thinking_content_length.cu",
@@ -339,6 +348,7 @@ elif paddle.is_compiled_with_cuda():
         "gpu_ops/gelu_tanh.cu",
         "gpu_ops/reasoning_phase_token_constraint.cu",
         "gpu_ops/get_attn_mask_q.cu",
+        "gpu_ops/mega_moe_pre_dispatch.cu",
     ]
     sm_versions = get_sm_version(archs)
     # Some kernels in this file require SM75+ instructions. Exclude them when building SM70 (V100).
@@ -471,58 +481,60 @@ elif paddle.is_compiled_with_cuda():
         # This script seems general enough for different SM versions, specific templates are chosen by CUTLASS.
         os.system("python utils/auto_gen_visitor_fp8_gemm_fused_kernels.py")
 
-        if cc >= 90:  # Hopper and newer
-            # SM90 (Hopper) specific auto-generation and flags
-            if cc == 90:  # Only for SM90
-                nvcc_compile_args += [
-                    # The gencode for 90a is added in get_gencode_flags now
-                    # "-gencode",
-                    # "arch=compute_90a,code=compute_90a",
-                    "-O3",
-                    "-DNDEBUG",  # NDEBUG is common, consider moving if not specific to 90a
-                ]
-                print("SM90: Running SM90-specific FP8 kernel auto-generation.")
-                os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm90.py")
-                os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm90.py")
-                os.system("python utils/auto_gen_fp8_fp8_block_gemm_fused_kernels_sm90.py")
+        # Use non-exclusive checks against sm_versions so that building for
+        # multiple architectures (e.g. [80,90,100]) compiles kernels for ALL
+        # of them instead of only the highest one.
+        has_sm90 = 90 in sm_versions
+        has_sm100 = 100 in sm_versions and nvcc_version >= 12.9
+        has_sm103 = 103 in sm_versions and nvcc_version >= 13.0
+        has_generic_fp8 = not has_sm90 and not has_sm100 and not has_sm103  # SM89 or other
 
-                nvcc_compile_args += [
-                    "-DENABLE_SCALED_MM_SM90=1",
-                ]
-                sources += [
-                    "gpu_ops/fp8_gemm_with_cutlass/fp8_fp8_half_block_gemm.cu",
-                    "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c3x_sm90.cu",
-                    "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_fp8.cu",
-                    "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_int8.cu",
-                    "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
-                ]
-            elif cc == 100 and nvcc_version >= 12.9:  # Blackwell SM100 specifics
-                print("SM100 (Blackwell): Applying SM100 configurations.")
-                nvcc_compile_args += [
-                    # The gencode for 100a is added in get_gencode_flags
-                    # "-gencode",
-                    # "arch=compute_100a,code=compute_100a",
-                    "-O3",  # Common optimization flag
-                    "-DNDEBUG",  # Common debug flag
-                    # Potentially add -DENABLE_SM100_FEATURES if specific macros are identified
-                ]
-                # Placeholder for SM100-specific kernel auto-generation scripts
-                # These might be needed if Blackwell has new FP8 hardware features
-                # not covered by existing generic CUTLASS templates or SM90 scripts.
-                # print("SM100: Running SM100-specific FP8 kernel auto-generation (if any).")
-                # os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm100.py") # Example
-                # os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm100.py") # Example
+        if has_sm90 or has_sm100 or has_sm103:
+            nvcc_compile_args += [
+                "-O3",
+                "-DNDEBUG",
+            ]
 
-                # Add SM100 specific sources if any, e.g., for new hardware intrinsics
-                # sources += ["gpu_ops/cutlass_kernels/w8a8/c4x_sm100.cu"] # Example
-                pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
-            else:  # For cc >= 89 but not 90 or 100 (e.g. SM89)
-                print(f"SM{cc}: Running generic FP8 kernel auto-generation.")
-                os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")
-                os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
+        if has_sm90:
+            print("SM90: Running SM90-specific FP8 kernel auto-generation.")
+            os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm90.py")
+            os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm90.py")
+            os.system("python utils/auto_gen_fp8_fp8_block_gemm_fused_kernels_sm90.py")
 
-        else:  # For cc == 89 (Ada)
-            print("SM89: Running generic FP8 kernel auto-generation.")
+            nvcc_compile_args += [
+                "-DENABLE_SCALED_MM_SM90=1",
+            ]
+            sources += [
+                "gpu_ops/fp8_gemm_with_cutlass/fp8_fp8_half_block_gemm.cu",
+                "gpu_ops/cutlass_kernels/w8a8/scaled_mm_c3x_sm90.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_fp8.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_sm90_int8.cu",
+                "gpu_ops/cutlass_kernels/w8a8/c3x/scaled_mm_azp_sm90_int8.cu",
+            ]
+
+        if has_sm100 or has_sm103:
+            print("SM100 / 103 (Blackwell): Applying SM100 / SM103 configurations.")
+            # Placeholder for SM100-specific kernel auto-generation scripts
+            # These might be needed if Blackwell has new FP8 hardware features
+            # not covered by existing generic CUTLASS templates or SM90 scripts.
+            # print("SM100: Running SM100-specific FP8 kernel auto-generation (if any).")
+            # os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels_sm100.py") # Example
+            # os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels_sm100.py") # Example
+
+            # Add SM100 specific sources if any, e.g., for new hardware intrinsics
+            # sources += ["gpu_ops/cutlass_kernels/w8a8/c4x_sm100.cu"] # Example
+            pass  # No SM100 specific sources identified yet beyond what CUTLASS handles
+
+        if has_generic_fp8:
+            # For SM89 (Ada) or other architectures without dedicated paths
+            print(f"SM{cc}: Running generic FP8 kernel auto-generation.")
+            os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")
+            os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
+
+        if not has_sm90 and cc >= 90:
+            # When cc >= 90 but SM90 is not in the target list (e.g. only [80,100]),
+            # still run generic FP8 auto-generation for non-SM90 paths.
+            print(f"SM{cc}: Running generic FP8 kernel auto-generation (no SM90 target).")
             os.system("python utils/auto_gen_fp8_fp8_gemm_fused_kernels.py")
             os.system("python utils/auto_gen_fp8_fp8_dual_gemm_fused_kernels.py")
 
@@ -543,6 +555,15 @@ elif paddle.is_compiled_with_cuda():
         sources += find_end_files(fp8_auto_gen_directory, ".cu")
 
     if cc >= 90 and nvcc_version >= 12.0:
+        cc_compile_args += ["-DENABLE_DECODE_UNIFIED_ATTENTION"]
+        nvcc_compile_args += ["-DENABLE_DECODE_UNIFIED_ATTENTION"]
+        # decode unified attention
+        os.system(
+            "python utils/auto_gen_template_attention.py --config gpu_ops/decode_unified_attention/template_config.json --output gpu_ops/decode_unified_attention/template_instantiation/autogen"
+        )
+        sources += ["gpu_ops/decode_unified_attention.cu"]
+        sources += ["gpu_ops/decoder_write_cache_with_rope.cu"]
+        sources += find_end_files("gpu_ops/decode_unified_attention", ".cu")
         # Hopper optimized mla
         sources += find_end_files("gpu_ops/mla_attn", ".cu")
         sources += ["gpu_ops/flash_mask_attn/flash_mask_attn.cu"]
@@ -585,7 +606,7 @@ elif paddle.is_compiled_with_cuda():
 elif paddle.is_compiled_with_xpu():
     assert False, "For XPU, please use setup_ops.py in the xpu_ops directory to compile custom ops."
 elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
-    _iluvatar_clang_cuda_flags = ["-Wno-non-pod-varargs", "-DPADDLE_DEV", "-DPADDLE_WITH_CUSTOM_DEVICE"]
+    _iluvatar_clang_cuda_flags = ["-Wno-non-pod-varargs", "-DPADDLE_DEV", "-DPADDLE_WITH_CUSTOM_DEVICE", "-std=c++17"]
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
@@ -627,6 +648,7 @@ elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
                 "iluvatar_ops/w8a16_group_gemm.cu",
                 "iluvatar_ops/w8a16_group_gemv.cu",
                 "iluvatar_ops/wi4a16_group_gemm.cu",
+                "iluvatar_ops/wi4a16_group_gemv.cu",
                 "iluvatar_ops/wi4a16_weight_quantize.cu",
                 "iluvatar_ops/restore_tokens_per_expert.cu",
                 "iluvatar_ops/runtime/iluvatar_context.cc",
@@ -685,6 +707,8 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/recover_decode_task.cu",
         "gpu_ops/noaux_tc.cu",
         "gpu_ops/noaux_tc_redundant.cu",
+        "gpu_ops/grouped_topk_kernels.cu",
+        "gpu_ops/fused_cast_sigmoid_bias.cu",
         "gpu_ops/fused_rotary_position_encoding.cu",
         "gpu_ops/text_image_gather_scatter.cu",
         "gpu_ops/text_image_index_out.cu",
@@ -694,6 +718,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/append_attn/mla_cache_kernel.cu",
         "gpu_ops/append_attn/get_block_shape_and_split_kv_block.cu",
         "gpu_ops/moe/tritonmoe_preprocess.cu",
+        "gpu_ops/moe/moe_align_kernel.cu",
         "gpu_ops/moe/moe_topk_select.cu",
         "gpu_ops/get_img_boundaries.cc",
         "gpu_ops/remote_cache_kv_ipc.cc",

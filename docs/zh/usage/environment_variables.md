@@ -27,11 +27,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # 请求日志详细级别 (0-3)。级别越高输出越详细。
     "FD_LOG_REQUESTS_LEVEL": lambda: int(os.getenv("FD_LOG_REQUESTS_LEVEL", "2")),
 
-    # 请求日志字段截断最大长度。
-    "FD_LOG_MAX_LEN": lambda: int(os.getenv("FD_LOG_MAX_LEN", "2048")),
-
-    # 统一的 trace 开关：off, local, otel, all。
-    "FD_TRACE": lambda: os.getenv("FD_TRACE", "off"),
+    # 是否开启 Trace（off/local/otel/all）
+    "FD_TRACE": lambda: os.getenv("FD_TRACE", "off").lower(),
 
     # FastDeploy 日志保留天数
     "FD_LOG_BACKUP_COUNT": lambda: os.getenv("FD_LOG_BACKUP_COUNT", "7"),
@@ -86,9 +83,6 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # 是否使用聚合发送
     "FD_USE_AGGREGATE_SEND": lambda: bool(int(os.getenv("FD_USE_AGGREGATE_SEND", "0"))),
-
-    # 是否开启 Trace
-    "TRACES_ENABLE": lambda: os.getenv("TRACES_ENABLE", "false"),
 
     # 设置 trace 服务名称
     "FD_SERVICE_NAME": lambda: os.getenv("FD_SERVICE_NAME", "FastDeploy"),
@@ -161,6 +155,9 @@ environment_variables: dict[str, Callable[[], Any]] = {
 
     # 是否启用 decode 缓存请求以预分配资源
     "FD_ENABLE_CACHE_TASK": lambda: os.getenv("FD_ENABLE_CACHE_TASK", "0"),
+
+    # EP 中批处理 token 的超时时间
+    "FD_EP_BATCHED_TOKEN_TIMEOUT": lambda: float(os.getenv("FD_EP_BATCHED_TOKEN_TIMEOUT", "0.1")),
 
     # PD 中最大预取请求数量
     "FD_EP_MAX_PREFETCH_TASK_NUM": lambda: int(os.getenv("FD_EP_MAX_PREFETCH_TASK_NUM", "8")),

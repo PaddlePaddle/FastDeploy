@@ -18,6 +18,7 @@ import ctypes
 import os
 import threading
 import time
+from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
@@ -28,8 +29,6 @@ if TYPE_CHECKING:
     from fastdeploy.config import FDConfig
 
 # Import ops for CPU cache allocation
-from fastdeploy.cache_manager.ops import cuda_host_alloc, cuda_host_free
-
 from .base import KVCacheBase
 from .cache_utils import LayerDoneCounter
 from .metadata import (
@@ -103,6 +102,10 @@ class CacheController(KVCacheBase):
 
         # NUMA binding flag
         self._numa_bound = False
+
+        # Attention backend
+        self.attn_backend = None
+        self.attn_backends = None
 
     @property
     def write_policy(self) -> Optional[str]:
@@ -226,6 +229,7 @@ class CacheController(KVCacheBase):
                 "value": "value_caches_{layer}_rank{rank}.device{device}",
                 "key_scale": "key_cache_scales_{layer}_rank{rank}.device{device}",
                 "value_scale": "value_cache_scales_{layer}_rank{rank}.device{device}",
+                "indexer": "indexer_caches_{layer}_rank{rank}.device{device}",
             }
         """
         local_rank = self._local_rank % self.parallel_config.tensor_parallel_size
@@ -235,7 +239,20 @@ class CacheController(KVCacheBase):
             "value": f"value_caches_{layer_idx}_rank{local_rank}.device{self._device_id}",
             "key_scale": f"key_cache_scales_{layer_idx}_rank{local_rank}.device{self._device_id}",
             "value_scale": f"value_cache_scales_{layer_idx}_rank{local_rank}.device{self._device_id}",
+            "indexer": f"indexer_caches_{layer_idx}_rank{local_rank}.device{self._device_id}",
         }
+
+    def _format_cache_name(self, role: str, layer_idx: int) -> str:
+        """
+        Format storage name for a given role (key/value/indexer/key_scale/value_scale).
+
+        Centralizes the name templates so that `create_kv_cache`'s role keys
+        stay decoupled from storage naming.
+        """
+        names = self._get_cache_names(layer_idx)
+        if role not in names:
+            raise ValueError(f"Unknown cache role: {role}")
+        return names[role]
 
     # ============ KV Cache Management ============
 
@@ -257,56 +274,44 @@ class CacheController(KVCacheBase):
         """
         Initialize KV Cache tensors.
 
-        Create KV Cache tensors on GPU for storing attention Key and Value.
+        Delegates per-layer tensor allocation to ``attn_backend.create_kv_cache``
+        so that variant-specific layout and loop (GQA / MLA / DSA) are owned by
+        the attention backend. The controller only maps the returned
+        ``(role, layer_idx)`` keys into storage names and registers the tensors
+        into ``cache_kvs_map``.
 
         Args:
-            attn_backend: Attention backend instance for getting kv cache shape.
+            attn_backend: Attention backend instance for allocating the cache.
             num_gpu_blocks: Maximum number of blocks on GPU.
 
         Returns:
-            cache_kvs_list: KV Cache tensor list in [key_cache_layer0, value_cache_layer0, ...] order.
+            cache_kvs_list: Flat list of allocated tensors in layer/role order.
         """
-        # Get kv cache quantization type
-        kv_cache_quant_type = self._get_kv_cache_quant_type()
+        attn_backends = self._normalize_attn_backends(attn_backend)
+        self.attn_backend = attn_backends[0]
+        self.attn_backends = attn_backends
 
-        # Get kv cache shape
-        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
-            max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
+        kv_cache_quant_type = self._get_kv_cache_quant_type()
+        cache_dtype = "uint8" if kv_cache_quant_type is not None else self.model_config.dtype
+
+        logger.info(
+            f"[CacheController] Initializing kv cache: num_layers={self._num_layers}, "
+            f"backend={type(self.attn_backend).__name__}, kv_cache_quant_type={kv_cache_quant_type}"
         )
 
-        # Get scale shape for block_wise_fp8 quantization
-        kv_cache_scale_shape = None
-        if self._is_fp8_quantization(kv_cache_quant_type):
-            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
-
-        logger.info(f"Initializing kv cache for all layers. num_layers={self._num_layers}")
-        cache_kvs_list = []
-
-        for i in range(self._num_layers):
-            # Generate cache names
-            cache_names = self._get_cache_names(i)
-
-            logger.info(f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}")
-
-            # Create key cache and value cache
-            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=self.model_config.dtype)
-            self.cache_kvs_map[cache_names["key"]] = key_cache
-
-            val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
-            self.cache_kvs_map[cache_names["value"]] = val_cache
-            cache_kvs_list.extend([key_cache, val_cache])
-
-            # Create scale caches for block_wise_fp8 quantization
-            if self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
-                key_cache_scales = paddle.full(
-                    shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
-                )
-                val_cache_scales = paddle.full(
-                    shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
-                )
-                self.cache_kvs_map[cache_names["key_scale"]] = key_cache_scales
-                self.cache_kvs_map[cache_names["value_scale"]] = val_cache_scales
-                cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+        cache_kvs_list: List[Any] = []
+        for layer_idx, layer_attn_backend in enumerate(attn_backends):
+            caches = layer_attn_backend.create_kv_cache(
+                num_layers=1,
+                num_blocks=num_gpu_blocks,
+                cache_dtype=cache_dtype,
+                kv_cache_quant_type=kv_cache_quant_type,
+                layer_offset=layer_idx,
+            )
+            for (role, cache_layer_idx), tensor in caches.items():
+                name = self._format_cache_name(role, cache_layer_idx)
+                self.cache_kvs_map[name] = tensor
+                cache_kvs_list.append(tensor)
 
         paddle.device.cuda.empty_cache()
         logger.info("kv cache is initialized!")
@@ -315,7 +320,7 @@ class CacheController(KVCacheBase):
         self._transfer_manager.set_cache_kvs_map(self.cache_kvs_map)
 
         # Initialize host cache
-        self.initialize_host_cache(attn_backend)
+        self.initialize_host_cache(self.attn_backends)
 
         return cache_kvs_list
 
@@ -335,6 +340,9 @@ class CacheController(KVCacheBase):
         via CacheController automatically cover MTP layers as well because they
         live in the same cache_kvs_map.
 
+        Uses the same ``create_kv_cache`` entry point as the main model; callers
+        control block count and layer range.
+
         Args:
             attn_backend: MTP attention backend instance (proposer.attn_backends[0]).
             num_gpu_blocks: Number of GPU blocks for MTP (already expanded by ratio).
@@ -342,44 +350,30 @@ class CacheController(KVCacheBase):
             layer_offset: Starting layer index, equals main model num_hidden_layers.
 
         Returns:
-            cache_kvs_list: KV Cache tensor list in [key_layer0, val_layer0, ...] order.
+            cache_kvs_list: Flat list of allocated tensors in layer/role order.
         """
         kv_cache_quant_type = self._get_kv_cache_quant_type()
-
-        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
-            max_num_blocks=num_gpu_blocks, kv_cache_quant_type=kv_cache_quant_type
-        )
-
-        kv_cache_scale_shape = None
-        if self._is_fp8_quantization(kv_cache_quant_type):
-            kv_cache_scale_shape = [key_cache_shape[0], key_cache_shape[1], key_cache_shape[2]]
+        cache_dtype = "uint8" if kv_cache_quant_type is not None else self.model_config.dtype
 
         logger.info(
             f"[CacheController] Initializing MTP kv cache for {num_mtp_layers} layers "
-            f"(layer_offset={layer_offset}, num_gpu_blocks={num_gpu_blocks})."
+            f"(layer_offset={layer_offset}, num_gpu_blocks={num_gpu_blocks}, "
+            f"backend={type(attn_backend).__name__})."
         )
-        cache_kvs_list = []
 
-        for i in range(layer_offset, layer_offset + num_mtp_layers):
-            cache_names = self._get_cache_names(i)
+        caches = attn_backend.create_kv_cache(
+            num_layers=num_mtp_layers,
+            num_blocks=num_gpu_blocks,
+            cache_dtype=cache_dtype,
+            kv_cache_quant_type=kv_cache_quant_type,
+            layer_offset=layer_offset,
+        )
 
-            key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=self.model_config.dtype)
-            self.cache_kvs_map[cache_names["key"]] = key_cache
-
-            val_cache = paddle.full(shape=value_cache_shape, fill_value=0, dtype=self.model_config.dtype)
-            self.cache_kvs_map[cache_names["value"]] = val_cache
-            cache_kvs_list.extend([key_cache, val_cache])
-
-            if self._is_fp8_quantization(kv_cache_quant_type) and kv_cache_scale_shape:
-                key_cache_scales = paddle.full(
-                    shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
-                )
-                val_cache_scales = paddle.full(
-                    shape=kv_cache_scale_shape, fill_value=0, dtype=paddle.get_default_dtype()
-                )
-                self.cache_kvs_map[cache_names["key_scale"]] = key_cache_scales
-                self.cache_kvs_map[cache_names["value_scale"]] = val_cache_scales
-                cache_kvs_list.extend([key_cache_scales, val_cache_scales])
+        cache_kvs_list: List[Any] = []
+        for (role, layer_idx), tensor in caches.items():
+            name = self._format_cache_name(role, layer_idx)
+            self.cache_kvs_map[name] = tensor
+            cache_kvs_list.append(tensor)
 
         paddle.device.cuda.empty_cache()
         logger.info("[CacheController] MTP kv cache initialized!")
@@ -509,6 +503,15 @@ class CacheController(KVCacheBase):
             logger.warning(f"[CacheController] NUMA binding failed: {e}")
             return False
 
+    def _normalize_attn_backends(self, attn_backend: Any) -> Sequence[Any]:
+        if isinstance(attn_backend, Sequence) and not isinstance(attn_backend, (str, bytes)):
+            if len(attn_backend) != self._num_layers:
+                raise ValueError(
+                    f"attn_backend length {len(attn_backend)} does not match num_layers {self._num_layers}"
+                )
+            return attn_backend
+        return [attn_backend] * self._num_layers
+
     def initialize_host_cache(
         self,
         attn_backend: Any,
@@ -516,11 +519,13 @@ class CacheController(KVCacheBase):
         """
         Initialize Host (Pinned Memory) KV Cache.
 
-        Use cuda_host_alloc to allocate pinned memory for fast Host-Device data transfer.
-        Called during initialization to create Host-side swap space.
+        Delegates pinned-memory allocation to ``attn_backend.create_host_kv_cache``
+        so that the per-layer loop and variant-specific buffer layout live in the
+        attention backend. Controller still owns NUMA binding, storage naming,
+        and transfer-manager wiring.
 
         Args:
-            attn_backend: Attention backend instance for getting kv cache shape.
+            attn_backend: Attention backend instance used to create host buffers.
 
         Returns:
             host_cache_kvs_map: Host KV Cache pointer dictionary, indexed by name.
@@ -538,85 +543,52 @@ class CacheController(KVCacheBase):
         if not self._numa_bound:
             self._bind_to_closest_numa_node()
 
-        # Get kv cache quantization type
         kv_cache_quant_type = self._get_kv_cache_quant_type()
-
-        # Get kv cache shape (pass num_host_blocks as max_num_blocks for host cache)
-        key_cache_shape, value_cache_shape = attn_backend.get_kv_cache_shape(
-            max_num_blocks=num_host_blocks, kv_cache_quant_type=kv_cache_quant_type
-        )
-
-        # Calculate cache sizes (elements per block per layer)
-        key_cache_size = key_cache_shape[1] * key_cache_shape[2] * key_cache_shape[3]
-        if value_cache_shape:
-            value_cache_size = value_cache_shape[1] * value_cache_shape[2] * value_cache_shape[3]
-        else:
-            value_cache_size = 0
-
-        # Get cache dtype and bytes per element
         cache_dtype = self.cache_config.cache_dtype
         cache_item_bytes = self.cache_config.get_cache_bytes(cache_dtype)
-
-        # Calculate total bytes to allocate
-        key_need_to_allocate_bytes = num_host_blocks * cache_item_bytes * key_cache_size
-        value_need_to_allocate_bytes = num_host_blocks * cache_item_bytes * value_cache_size
-
-        # Calculate scale sizes for block_wise_fp8 quantization
-        scales_key_need_to_allocate_bytes = 0
-        scales_value_need_to_allocate_bytes = 0
-        cache_scale_shape = None
-        if self._is_fp8_quantization(kv_cache_quant_type):
-            cache_scales_size = key_cache_shape[1] * key_cache_shape[2]
-            # Scale tensor uses default dtype (float32)
-            scale_bytes = 4  # float32
-            scales_key_need_to_allocate_bytes = num_host_blocks * scale_bytes * cache_scales_size
-            scales_value_need_to_allocate_bytes = num_host_blocks * scale_bytes * cache_scales_size
-            cache_scale_shape = [num_host_blocks, key_cache_shape[1], key_cache_shape[2]]
-
         num_layers = self._num_layers + self.config.speculative_config.num_extra_cache_layer
+        attn_backends = self._normalize_attn_backends(attn_backend)
 
-        per_layer_size_gb = (key_need_to_allocate_bytes + value_need_to_allocate_bytes) / (1024**3)
-        actual_alloc_gb = per_layer_size_gb * num_layers
         logger.info(
-            f"[CacheController] Host swap space allocated: {actual_alloc_gb:.2f}GB "
-            f"({per_layer_size_gb:.2f}GB per layer x {num_layers} layers), "
-            f"num_host_blocks: {num_host_blocks}"
+            f"[CacheController] Initializing swap space (Host cache) for {num_layers} layers "
+            f"(num_host_blocks={num_host_blocks}, backend={type(attn_backends[0]).__name__}, "
+            f"kv_cache_quant_type={kv_cache_quant_type})."
         )
 
-        logger.info(f"[CacheController] Initializing swap space (Host cache) for {num_layers} layers.")
+        for layer_idx in range(num_layers):
+            layer_attn_backend = attn_backends[layer_idx] if layer_idx < len(attn_backends) else attn_backends[-1]
+            try:
+                host_caches = layer_attn_backend.create_host_kv_cache(
+                    num_layers=1,
+                    num_blocks=num_host_blocks,
+                    cache_item_bytes=cache_item_bytes,
+                    kv_cache_quant_type=kv_cache_quant_type,
+                    layer_offset=layer_idx,
+                )
+            except NotImplementedError as e:
+                logger.warning(
+                    f"[CacheController] Host kv cache offload not supported by "
+                    f"{type(layer_attn_backend).__name__}: {e}. Skipping swap space setup."
+                )
+                return
 
-        # Allocate Host cache for each layer
-        for i in range(num_layers):
-            # Generate cache names
-            cache_names = self._get_cache_names(i)
-
-            logger.info(
-                f"[CacheController] Creating Host cache for layer {i}: "
-                f"key={(key_need_to_allocate_bytes / 1024 ** 3):.2f}GB, "
-                f"value={(value_need_to_allocate_bytes / 1024 ** 3):.2f}GB"
-            )
-
-            # Allocate key cache using cuda_host_alloc (pinned memory)
-            self.host_cache_kvs_map[cache_names["key"]] = cuda_host_alloc(key_need_to_allocate_bytes)
-
-            # Allocate scale cache for block_wise_fp8 quantization
-            if self._is_fp8_quantization(kv_cache_quant_type):
-                self.host_cache_kvs_map[cache_names["key_scale"]] = cuda_host_alloc(scales_key_need_to_allocate_bytes)
-
-            # Allocate value cache if needed
-            if value_need_to_allocate_bytes > 0:
-                self.host_cache_kvs_map[cache_names["value"]] = cuda_host_alloc(value_need_to_allocate_bytes)
-                if self._is_fp8_quantization(kv_cache_quant_type):
-                    self.host_cache_kvs_map[cache_names["value_scale"]] = cuda_host_alloc(
-                        scales_value_need_to_allocate_bytes
-                    )
+            for (role, cache_layer_idx), ptr in host_caches.items():
+                name = self._format_cache_name(role, cache_layer_idx)
+                self.host_cache_kvs_map[name] = ptr
 
         logger.info(f"[CacheController] Swap space (Host cache) is ready for {num_layers} layers!")
 
-        # Store shapes for later use
+        # Preserve the shape/num_blocks bookkeeping that downstream code may read.
+        key_cache_shape, value_cache_shape = attn_backends[0].get_kv_cache_shape(
+            max_num_blocks=num_host_blocks, kv_cache_quant_type=kv_cache_quant_type
+        )
         self._host_key_cache_shape = [num_host_blocks] + list(key_cache_shape[1:])
         self._host_value_cache_shape = [num_host_blocks] + list(value_cache_shape[1:]) if value_cache_shape else None
-        self._host_cache_scale_shape = cache_scale_shape
+        self._host_cache_scale_shape = (
+            [num_host_blocks, key_cache_shape[1], key_cache_shape[2]]
+            if self._is_fp8_quantization(kv_cache_quant_type)
+            else None
+        )
         self._num_host_blocks = num_host_blocks
 
         # Share host_cache_kvs_map with transfer manager
@@ -1071,19 +1043,21 @@ class CacheController(KVCacheBase):
             pass
 
     def _free_host_cache(self) -> None:
-        """Free pinned host memory allocated for swap space."""
-        if not hasattr(self, "host_cache_kvs_map"):
+        """Free pinned host memory allocated for swap space.
+
+        Delegates the actual deallocation to
+        ``self.attn_backend.free_host_kv_cache`` so that backend-specific
+        buffer ownership lives with the backend. Controller only owns the
+        name->ptr bookkeeping; the backend reference is captured at
+        ``initialize_host_cache`` time.
+        """
+        if not getattr(self, "host_cache_kvs_map", None):
             return
 
-        if not self.host_cache_kvs_map:
+        if self.attn_backend is None:
+            logger.warning("[CacheController] No attention backend recorded for host cache; " "leaking pinned memory.")
+            self.host_cache_kvs_map.clear()
             return
 
-        logger.info(f"[CacheController] Freeing host cache memory, {len(self.host_cache_kvs_map)} tensors.")
-        for name, ptr in list(self.host_cache_kvs_map.items()):
-            if ptr != 0:
-                try:
-                    cuda_host_free(ptr)
-                except Exception as e:
-                    logger.warning(f"[CacheController] Failed to free host cache {name}: {e}")
-        self.host_cache_kvs_map.clear()
+        self.attn_backend.free_host_kv_cache(self.host_cache_kvs_map)
         logger.info("[CacheController] Host cache memory released.")

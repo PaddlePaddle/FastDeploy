@@ -58,7 +58,9 @@ from fastdeploy.utils import (
     ParameterError,
     api_server_logger,
     clamp_prompt_logprobs,
+    get_choice_index,
     get_host_ip,
+    make_choice_id,
 )
 from fastdeploy.worker.output import (
     Logprob,
@@ -160,7 +162,7 @@ class OpenAIServingChat:
             prompt_tokens = None
             max_tokens = None
             try:
-                current_req_dict = request.to_dict_for_infer(f"{request_id}_0")
+                current_req_dict = request.to_dict_for_infer(make_choice_id(request_id, 0))
                 if "chat_template" not in current_req_dict:
                     current_req_dict["chat_template"] = self.chat_template
                 current_req_dict["metrics"]["arrival_time"] = time.time()
@@ -201,8 +203,8 @@ class OpenAIServingChat:
                     log_request_error(message=error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
         except asyncio.CancelledError as e:
-            await self.engine_client.abort(f"{request_id}_0", 1 if request.n is None else request.n)
-            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            await self.engine_client.abort(make_choice_id(request_id, 0), 1 if request.n is None else request.n)
+            error_msg = f"request[{make_choice_id(request_id, 0)}] client disconnected: {str(e)}, {str(traceback.format_exc())}"
             log_request_error(message=error_msg)
             return ErrorResponse(
                 error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
@@ -244,6 +246,7 @@ class OpenAIServingChat:
         num_cached_tokens = 0
         num_image_tokens = [0] * num_choices
         tool_called = [False] * num_choices
+        fallback_truncated_choices = set()
         inference_start_time = [0] * num_choices
         max_streaming_response_tokens = (
             request.max_streaming_response_tokens
@@ -269,16 +272,13 @@ class OpenAIServingChat:
             choices=[],
             model=model_name,
         )
-        log_request(
-            RequestLogLevel.LIFECYCLE, message="create chat completion request: {request_id}", request_id=request_id
-        )
 
         try:
             dealer, response_queue = await self.engine_client.connection_manager.get_connection(
                 request_id, num_choices
             )
             if not envs.ZMQ_SEND_BATCH_DATA:
-                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                request_ids = [make_choice_id(request_id, i) for i in range(num_choices)]
                 for rid in request_ids:
                     dealer.write([b"", rid.encode("utf-8")])
             choices = []
@@ -318,10 +318,11 @@ class OpenAIServingChat:
                     stream=True,
                     include_stop_str_in_output=include_stop_str_in_output,
                     request=request,
+                    prompt_tokens=prompt_tokens,
                 )
 
                 async for res in generator:
-                    idx = int(res["request_id"].split("_")[-1])
+                    idx = get_choice_index(res["request_id"])
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
 
@@ -403,6 +404,8 @@ class OpenAIServingChat:
                         first_iteration = False
 
                     output = res["outputs"]
+                    if idx in fallback_truncated_choices:
+                        continue
                     output_top_logprobs = output["top_logprobs"]
                     output_draft_top_logprobs = output["draft_top_logprobs"]
                     previous_num_tokens[idx] += len(output["token_ids"])
@@ -439,6 +442,11 @@ class OpenAIServingChat:
                     if output["skipped"] and not request.return_token_ids:
                         continue
 
+                    delta_text = "" if output["skipped"] else (output["text"] or "")
+                    fallback_truncated = bool(output.get("fallback_truncated"))
+                    if fallback_truncated:
+                        res["finished"] = True
+
                     delta_message = DeltaMessage(
                         reasoning_content=output["reasoning_content"],
                         tool_calls=output["tool_calls"],
@@ -452,7 +460,7 @@ class OpenAIServingChat:
                             [{"type": "text", "text": ""}] if output["skipped"] else output["multipart"]
                         )
                     else:
-                        delta_message.content = "" if output["skipped"] else (output["text"] or "")
+                        delta_message.content = delta_text
 
                     if output.get("audio_content", None) is not None:
                         delta_message.audio_content = output["audio_content"]
@@ -480,8 +488,8 @@ class OpenAIServingChat:
                             if "trace_carrier" in res:
                                 del res["trace_carrier"]
                         num_choices -= 1
-                        main_process_metrics.e2e_request_latency.observe(
-                            time.time() - res["metrics"]["request_start_time"]
+                        main_process_metrics.obs_value(
+                            "e2e_request_latency", time.time() - res["metrics"]["request_start_time"]
                         )
                         if previous_num_tokens[idx] != max_tokens:
                             choice.finish_reason = "stop"
@@ -495,6 +503,11 @@ class OpenAIServingChat:
 
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choice.finish_reason = "abort"
+
+                        if fallback_truncated:
+                            choice.finish_reason = "length"
+                            fallback_truncated_choices.add(idx)
+                            await self.engine_client.abort(make_choice_id(request_id, idx), 1)
 
                         inference_start_time[idx] = 0
 
@@ -557,8 +570,8 @@ class OpenAIServingChat:
                 yield f"data: {chunk.model_dump_json(exclude_unset=True)}\n\n"
 
         except asyncio.CancelledError as e:
-            await self.engine_client.abort(f"{request_id}_0", 1 if request.n is None else request.n)
-            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            await self.engine_client.abort(make_choice_id(request_id, 0), 1 if request.n is None else request.n)
+            error_msg = f"request[{make_choice_id(request_id, 0)}] client disconnected: {str(e)}, {str(traceback.format_exc())}"
             log_request_error(message=error_msg)
         except Exception as e:
             error_data = self._create_streaming_error_response(
@@ -599,7 +612,7 @@ class OpenAIServingChat:
                 request_id, num_choices
             )
             if not envs.ZMQ_SEND_BATCH_DATA:
-                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                request_ids = [make_choice_id(request_id, i) for i in range(num_choices)]
                 for rid in request_ids:
                     dealer.write([b"", rid.encode("utf-8")])
             previous_num_tokens = [0] * num_choices
@@ -651,12 +664,25 @@ class OpenAIServingChat:
                     stream=False,
                     include_stop_str_in_output=include_stop_str_in_output,
                     request=request,
+                    prompt_tokens=prompt_tokens,
                 )
                 async for data in generator:
+                    idx = get_choice_index(data["request_id"])
                     if data.get("error_code", 200) != 200:
-                        raise ValueError("{}".format(data["error_msg"]))
-                    idx = int(data["request_id"].split("_")[-1])
-                    # api_server_logger.debug(f"Client {request_id} received: {data}")
+                        # Error response - include already-generated tokens in the response
+                        data["outputs"] = {
+                            "text": "",
+                            "completion_tokens": "",
+                            "reasoning_content": "",
+                            "tool_calls": None,
+                            "reasoning_token_num": 0,
+                            "num_image_tokens": 0,
+                            "token_ids": [],
+                            "top_logprobs": None,
+                            "draft_top_logprobs": None,
+                        }
+                        data["metrics"] = data.get("metrics") or {}
+                        data["finished"] = True
                     previous_num_tokens[idx] += len(data["outputs"]["token_ids"])
                     completion_token_ids[idx].extend(data["outputs"]["token_ids"])
                     # The logprob for handling the response
@@ -794,19 +820,39 @@ class OpenAIServingChat:
         max_tokens: int,
         speculate_metrics: SpeculateMetrics | None,
     ) -> ChatCompletionResponseChoice:
-        idx = int(data["request_id"].split("_")[-1])
+        idx = get_choice_index(data["request_id"])
         output = data["outputs"]
 
+        finish_reason = "stop"
+        if previous_num_tokens != max_tokens:
+            finish_reason = "stop"
+            if output.get("tool_calls"):
+                finish_reason = "tool_calls"
+        else:
+            finish_reason = "length"
+        if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
+            finish_reason = "recover_stop"
+
+        if data.get("error_msg", None) is not None and "Aborted" in data["error_msg"]:
+            finish_reason = "abort"
+
+        if data.get("error_msg", None) is not None and "PD Error" in data["error_msg"]:
+            finish_reason = "pd_reschedule"
+
+        return_completion_token_ids = False
+        if request.return_token_ids or finish_reason == "pd_reschedule":
+            return_completion_token_ids = True
+
         if output is not None and output.get("metrics") and output["metrics"].get("request_start_time"):
-            main_process_metrics.e2e_request_latency.observe(
-                time.time() - data.get("metrics").get("request_start_time")
+            main_process_metrics.obs_value(
+                "e2e_request_latency", time.time() - data.get("metrics").get("request_start_time")
             )
         message = ChatMessage(
             role="assistant",
             reasoning_content=output.get("reasoning_content"),
             tool_calls=output.get("tool_calls"),
             prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-            completion_token_ids=completion_token_ids if request.return_token_ids else None,
+            completion_token_ids=completion_token_ids if return_completion_token_ids else None,
             prompt_tokens=prompt_tokens if request.return_token_ids else None,
             completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
         )
@@ -833,18 +879,6 @@ class OpenAIServingChat:
         num_input_video_tokens[idx] = data.get("num_input_video_tokens", 0)
         num_image_tokens[idx] = output.get("num_image_tokens", 0) or 0
 
-        finish_reason = "stop"
-        if previous_num_tokens != max_tokens:
-            finish_reason = "stop"
-            if output.get("tool_calls"):
-                finish_reason = "tool_calls"
-        else:
-            finish_reason = "length"
-        if data.get("error_msg", None) is not None and "Recover" in data["error_msg"]:
-            finish_reason = "recover_stop"
-
-        if data.get("error_msg", None) is not None and "Aborted" in data["error_msg"]:
-            finish_reason = "abort"
         return ChatCompletionResponseChoice(
             index=idx,
             message=message,

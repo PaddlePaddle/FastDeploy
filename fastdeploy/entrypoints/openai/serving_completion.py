@@ -54,7 +54,9 @@ from fastdeploy.utils import (
     ParameterError,
     api_server_logger,
     clamp_prompt_logprobs,
+    get_choice_index,
     get_host_ip,
+    make_choice_id,
 )
 from fastdeploy.worker.output import (
     Logprob,
@@ -193,7 +195,7 @@ class OpenAIServingCompletion:
         try:
             try:
                 for idx, prompt in enumerate(request_prompts):
-                    request_id_idx = f"{request_id}_{idx}"
+                    request_id_idx = make_choice_id(request_id, idx)
                     current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
                     current_req_dict["metrics"]["arrival_time"] = time.time()
                     prompt_token_ids = await self.engine_client.format_and_add_data(current_req_dict)  # tokenize
@@ -252,8 +254,8 @@ class OpenAIServingCompletion:
                     log_request_error(message=error_msg)
                     return ErrorResponse(error=ErrorInfo(message=error_msg, type=ErrorType.INTERNAL_ERROR))
         except asyncio.CancelledError as e:
-            await self.engine_client.abort(f"{request_id}_0", num_choices)
-            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            await self.engine_client.abort(make_choice_id(request_id, 0), num_choices)
+            error_msg = f"request[{make_choice_id(request_id, 0)}] client disconnected: {str(e)}, {str(traceback.format_exc())}"
             log_request_error(message=error_msg)
             return ErrorResponse(
                 error=ErrorInfo(message=error_msg, type=ErrorType.INVALID_REQUEST_ERROR, code=ErrorCode.CLIENT_ABORTED)
@@ -282,7 +284,7 @@ class OpenAIServingCompletion:
                 request_id, num_choices
             )
             if not envs.ZMQ_SEND_BATCH_DATA:
-                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                request_ids = [make_choice_id(request_id, i) for i in range(num_choices)]
                 for rid in request_ids:
                     dealer.write([b"", rid.encode("utf-8")])
 
@@ -324,9 +326,17 @@ class OpenAIServingCompletion:
                     continue
 
                 for data in response:
-                    rid = int(data["request_id"].split("_")[-1])
+                    rid = get_choice_index(data["request_id"])
                     if data.get("error_code", 200) != 200:
-                        raise ValueError("{}".format(data["error_msg"]))
+                        data["outputs"] = {
+                            "text": "",
+                            "completion_tokens": "",
+                            "token_ids": [],
+                            "top_logprobs": None,
+                            "draft_top_logprobs": None,
+                        }
+                        data["metrics"] = data.get("metrics") or {}
+                        data["finished"] = True
 
                     output = data["outputs"]
                     output_top_logprobs = output.get("top_logprobs") or None
@@ -457,7 +467,7 @@ class OpenAIServingCompletion:
                 request_id, num_choices
             )
             if not envs.ZMQ_SEND_BATCH_DATA:
-                request_ids = [f"{request_id}_{i}" for i in range(num_choices)]
+                request_ids = [make_choice_id(request_id, i) for i in range(num_choices)]
                 for rid in request_ids:
                     dealer.write([b"", rid.encode("utf-8")])
 
@@ -468,6 +478,7 @@ class OpenAIServingCompletion:
             reasoning_tokens = [0] * num_choices
             first_iteration = [True] * num_choices
             tool_called = [False] * num_choices
+            fallback_truncated_choices = set()
             max_streaming_response_tokens = (
                 request.max_streaming_response_tokens
                 if request.max_streaming_response_tokens is not None
@@ -505,7 +516,9 @@ class OpenAIServingCompletion:
                     continue
 
                 for res in response:
-                    idx = int(res["request_id"].split("_")[-1])
+                    idx = get_choice_index(res["request_id"])
+                    if idx in fallback_truncated_choices:
+                        continue
                     if res.get("error_code", 200) != 200:
                         raise ValueError("{}".format(res["error_msg"]))
                     prompt_logprobs_res: Optional[PromptLogprobs] = None
@@ -587,9 +600,14 @@ class OpenAIServingCompletion:
                     if output["skipped"] and not request.return_token_ids:
                         continue
 
+                    delta_text = "" if output["skipped"] else (output["text"] or "")
+                    fallback_truncated = bool(output.get("fallback_truncated"))
+                    if fallback_truncated:
+                        res["finished"] = True
+
                     delta_message = CompletionResponseStreamChoice(
                         index=idx,
-                        text="" if output["skipped"] else (output["text"] or ""),
+                        text=delta_text,
                         prompt_token_ids=None,
                         completion_token_ids=output.get("token_ids") if request.return_token_ids else None,
                         tool_calls=output["tool_calls"],
@@ -615,6 +633,10 @@ class OpenAIServingCompletion:
                         )
                         if res.get("error_msg") is not None and "Aborted" in res["error_msg"]:
                             choices[-1].finish_reason = "abort"
+                        if fallback_truncated:
+                            choices[-1].finish_reason = "length"
+                            fallback_truncated_choices.add(idx)
+                            await self.engine_client.abort(make_choice_id(request_id, idx), 1)
                         inference_start_time[idx] = 0
 
                     send_idx = output.get("send_idx")
@@ -689,8 +711,8 @@ class OpenAIServingCompletion:
                         )
 
         except asyncio.CancelledError as e:
-            await self.engine_client.abort(f"{request_id}_0", num_choices)
-            error_msg = f"request[{request_id}_0] client disconnected: {str(e)}, {str(traceback.format_exc())}"
+            await self.engine_client.abort(make_choice_id(request_id, 0), num_choices)
+            error_msg = f"request[{make_choice_id(request_id, 0)}] client disconnected: {str(e)}, {str(traceback.format_exc())}"
             log_request_error(message=error_msg)
         except Exception as e:
             log_request_error(
@@ -757,13 +779,14 @@ class OpenAIServingCompletion:
                 prompt_logprobs_res = self._build_prompt_logprobs(
                     prompt_logprobs_tensors, num_prompt_logprobs, request.include_logprobs_decode_token
                 )
+            generated_text = output["text"]
             if request.echo:
                 prompt_text = self._echo_back_prompt(request, idx // (1 if request.n is None else request.n))
                 token_ids = [*prompt_token_ids, *output["token_ids"]]
-                output_text = prompt_text + output["text"]
+                output_text = prompt_text + generated_text
             else:
                 token_ids = output["token_ids"]
-                output_text = output["text"]
+                output_text = generated_text
             finish_reason = self.calc_finish_reason(
                 max_tokens_list[idx // (1 if request.n is None else request.n)],
                 final_res["output_token_ids"],
@@ -772,13 +795,19 @@ class OpenAIServingCompletion:
             )
             if final_res.get("error_msg", None) is not None and "Aborted" in final_res["error_msg"]:
                 finish_reason = "abort"
+            if final_res.get("error_msg", None) is not None and "PD Error" in final_res["error_msg"]:
+                finish_reason = "pd_reschedule"
+
+            return_completion_token_ids = False
+            if request.return_token_ids or finish_reason == "pd_reschedule":
+                return_completion_token_ids = True
 
             choice_data = CompletionResponseChoice(
                 token_ids=token_ids,
                 index=len(choices),
                 text=output_text,
                 prompt_token_ids=prompt_token_ids if request.return_token_ids else None,
-                completion_token_ids=completion_token_ids if request.return_token_ids else None,
+                completion_token_ids=completion_token_ids if return_completion_token_ids else None,
                 completion_tokens=output.get("completion_tokens") if request.return_token_ids else None,
                 prompt_tokens=(
                     prompt_tokens_list[idx // (1 if request.n is None else request.n)]

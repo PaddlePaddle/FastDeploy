@@ -58,10 +58,11 @@ from fastdeploy.worker.output import (
 
 class RequestStatus(Enum):
     WAITING = 0
-    RUNNING = 1
-    PREEMPTED = 2
-    FINISHED = 3
-    ABORT = 4
+    RUNNING_PREFILL = 1
+    RUNNING_DECODE = 2
+    PREEMPTED = 3
+    FINISHED = 4
+    ABORT = 5
 
 
 class RequestType(Enum):
@@ -222,6 +223,7 @@ class Request:
             self.metrics = RequestMetrics()
         else:
             self.metrics = metrics
+        self.metrics.prompt_token_ids_len = self.prompt_token_ids_len
         # from ChatCompletionRequest or CompletionRequest
         self.user = user
         self.metadata = metadata
@@ -911,6 +913,8 @@ class CompletionOutput:
     delta_message: Optional[DeltaMessage] = None
     multipart: Optional[list[Any]] = None
     num_image_tokens: Optional[int] = None
+    fallback_truncated: Optional[bool] = False
+    skipped: Optional[bool] = False
 
     def to_dict(self):
         """
@@ -929,6 +933,14 @@ class CompletionOutput:
             "text": self.text,
             "reasoning_content": self.reasoning_content,
             "reasoning_token_num": self.reasoning_token_num,
+            "tool_calls": self.tool_calls,
+            "speculate_metrics": self.speculate_metrics,
+            "completion_tokens": self.completion_tokens,
+            "delta_message": self.delta_message,
+            "multipart": self.multipart,
+            "num_image_tokens": self.num_image_tokens,
+            "fallback_truncated": self.fallback_truncated,
+            "skipped": self.skipped,
         }
 
     @classmethod
@@ -1056,6 +1068,7 @@ class RequestMetrics:
     speculate_metrics: Optional[SpeculateMetrics] = None
 
     # cache related
+    prompt_token_ids_len: Optional[int] = None
     gpu_cache_token_num: Optional[int] = 0
     cpu_cache_token_num: Optional[int] = 0
     storage_cache_token_num: Optional[int] = 0

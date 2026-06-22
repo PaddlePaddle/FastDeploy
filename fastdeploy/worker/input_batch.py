@@ -14,6 +14,8 @@
 # limitations under the License.
 """
 
+import traceback
+
 import paddle
 from paddleformers.utils.log import logger
 
@@ -121,6 +123,7 @@ class InputBatch:
         )
         self.eos_token_id = paddle.full([self.model_config.eos_tokens_lens, 1], 0, dtype="int64")
         self.top_p = paddle.full([max_num_seqs, 1], self.model_config.top_p, dtype="float32")
+        self.top_p_list = [self.model_config.top_p] * max_num_seqs
         self.top_k = paddle.full([max_num_seqs, 1], 0, dtype="int64")
         self.top_k_list = [0] * max_num_seqs
         self.min_p = paddle.full([max_num_seqs, 1], 0.0, dtype="float32")
@@ -189,9 +192,8 @@ class InputBatch:
         self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
 
         # Initialize addressing buffers
-        _max_batched_tokens = self.scheduler_config.max_num_batched_tokens
-        self.position_ids_buffer = paddle.zeros([_max_batched_tokens], dtype=paddle.int32)
-        self.slot_mapping_buffer = paddle.zeros([_max_batched_tokens], dtype=paddle.int64)
+        self.position_ids_buffer = paddle.zeros([self.max_chunk_tokens], dtype=paddle.int32)
+        self.slot_mapping_buffer = paddle.zeros([self.max_chunk_tokens], dtype=paddle.int64)
 
         # Declare AttentionBackend buffers
         self.decoder_batch_ids = None
@@ -206,6 +208,13 @@ class InputBatch:
         self.kv_batch_ids = None
         self.kv_tile_ids_per_batch = None
         self.kv_num_blocks_x_cpu = None  # CPU
+        # Decode unified attention split ops buffers (initialized by _initialize_attn_backend)
+        self.decode_block_indices = None
+        self.decode_num_blocks = None
+        self.decode_chunk_size = None
+        self.decode_tmp_workspace = None
+        self.decode_tmp_m = None
+        self.decode_tmp_d = None
 
         # Initialize thinking related buffers
         self.enable_thinking = paddle.full(shape=[max_num_seqs, 1], fill_value=True, dtype="bool")
@@ -227,8 +236,10 @@ class InputBatch:
 
         # Initialize rotary position embedding
         if not self.enable_mm:
+            rotary_percent = getattr(self.model_config, "rotary_percent", 1.0)
+            self.rotary_dim = int(self.model_config.head_dim * rotary_percent)
             self.rope_emb = get_rope(
-                rotary_dim=self.model_config.head_dim,
+                rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
                 position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
@@ -415,6 +426,7 @@ class InputBatch:
         # swap_data(self.recompute_token_num, i1, i2)
 
         # # Swap list-based arrays (lists don't need clone)
+        self.top_p_list[i1], self.top_p_list[i2] = self.top_p_list[i2], self.top_p_list[i1]
         self.top_k_list[i1], self.top_k_list[i2] = self.top_k_list[i2], self.top_k_list[i1]
         self.min_p_list[i1], self.min_p_list[i2] = self.min_p_list[i2], self.min_p_list[i1]
 
@@ -569,6 +581,7 @@ class InputBatch:
             fill_paddle_tensor(self, "top_p_normalized_logprobs", False)
 
             # Reset list variables (not paddle tensors)
+            self.top_p_list = [self.model_config.top_p] * max_num_seqs
             self.top_k_list = [0] * max_num_seqs
             self.min_p_list = [0.0] * max_num_seqs
 
@@ -586,7 +599,6 @@ class InputBatch:
             fill_paddle_tensor(self, "step_idx", 0)
             # fill_paddle_tensor(self, "not_need_stop", False)
             fill_paddle_tensor(self, "not_need_stop_device", False)
-            fill_paddle_tensor(self, "sampled_token_ids", -1)
             fill_paddle_tensor(self, "stop_flags", True)
 
             fill_paddle_tensor(self, "bad_tokens", -1)
@@ -706,8 +718,10 @@ class InputBatch:
                 fill_paddle_tensor(self, "attn_mask_offsets_full", -1)
             else:
                 # Reset non-multimodal rope_emb
+                rotary_percent = getattr(self.model_config, "rotary_percent", 1.0)
+                self.rotary_dim = int(self.model_config.head_dim * rotary_percent)
                 self.rope_emb = get_rope(
-                    rotary_dim=self.model_config.head_dim,
+                    rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
                     position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
                     base=self.model_config.rope_theta,
                     model_config=self.model_config,
@@ -724,10 +738,18 @@ class InputBatch:
             # Reset other miscellaneous tensors
             fill_paddle_tensor(self, "mask_rollback", 0)
             fill_paddle_tensor(self, "preempted_idx", 0)
+            fill_paddle_tensor(self, "last_preempted_idx", 0)
+
+            # Reset tensors for overlap
+            self.sampled_token_ids = paddle.full([max_num_seqs, 1], -1, dtype="int64").pin_memory()
+            self.seq_lens_this_time_cpu = paddle.full([max_num_seqs, 1], 0, dtype="int32").pin_memory()
+            self.is_block_step_cpu = paddle.full([max_num_seqs], False, dtype="bool").pin_memory()
 
             logger.info("share_inputs reset completed")
         except Exception as e:
-            logger.error(f"Resetting share inputs failed, skipping reset, error message is {e}")
+            logger.error(
+                f"Resetting share inputs failed, skipping reset, error message is {e}, {traceback.format_exc()}"
+            )
 
 
 class ProposerInputBatch(InputBatch):
@@ -749,12 +771,6 @@ class ProposerInputBatch(InputBatch):
 
         self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
         self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
-        self.input_ids_cpu = paddle.full(
-            shape=[self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
-            fill_value=-1,
-            dtype="int64",
-            device="cpu",
-        )
         self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
 
         self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
@@ -763,11 +779,11 @@ class ProposerInputBatch(InputBatch):
         self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
         self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
         self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
-        if current_platform.is_cuda():
+        if current_platform.is_cuda() or current_platform.is_xpu():
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             if "token_ids_all" in self.target_model_input_batch:
-                self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                self.token_ids_all = self.target_model_input_batch["token_ids_all"]
                 # TODO: delete pre_ids in mtp
                 self.pre_ids = paddle.full(
                     [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
@@ -787,6 +803,7 @@ class ProposerInputBatch(InputBatch):
             self.cu_seqlens_q_output = paddle.clone(self.target_model_input_batch["cu_seqlens_q_output"])
             self.batch_id_per_token_output = paddle.clone(self.target_model_input_batch["batch_id_per_token_output"])
             self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
+
         self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
         self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
         self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
@@ -803,8 +820,10 @@ class ProposerInputBatch(InputBatch):
 
         tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
 
+        rotary_percent = getattr(self.model_config, "rotary_percent", 1.0)
+        self.rotary_dim = int(self.model_config.head_dim * rotary_percent)
         self.rope_emb = get_rope(
-            rotary_dim=self.model_config.head_dim,
+            rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
             position_ids=tmp_position_ids,
             base=self.model_config.rope_theta,
             model_config=self.model_config,
@@ -847,6 +866,13 @@ class ProposerInputBatch(InputBatch):
         self.kv_batch_ids = None
         self.kv_tile_ids_per_batch = None
         self.kv_num_blocks_x_cpu = None  # CPU
+        # Decode attention split ops buffers
+        self.decode_block_indices = None
+        self.decode_num_blocks = None
+        self.decode_chunk_size = None
+        self.decode_tmp_workspace = None
+        self.decode_tmp_m = None
+        self.decode_tmp_d = None
 
         # Input tokens
         self.draft_tokens = paddle.full(
@@ -876,7 +902,6 @@ class ProposerInputBatch(InputBatch):
             self.last_seq_lens_this_time = paddle.full_like(
                 self.target_model_input_batch["seq_lens_this_time"], fill_value=-1, dtype="int32"
             )
-        self.input_ids_len = paddle.zeros(shape=[self.scheduler_config.max_num_seqs, 1], dtype="int64", device="cpu")
         self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
         self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
         self.accept_num = self.target_model_input_batch["accept_num"]
@@ -926,14 +951,12 @@ class ProposerInputBatch(InputBatch):
         self.index_to_batch_id[i1], self.index_to_batch_id[i2] = self.index_to_batch_id[i2], self.index_to_batch_id[i1]
         swap_data(self.block_tables, i1, i2)
         swap_data(self.input_ids, i1, i2)
-        swap_data(self.input_ids_cpu, i1, i2)
         swap_data(self.seq_lens_this_time_buffer, i1, i2)
         swap_data(self.seq_lens_encoder, i1, i2)
         swap_data(self.seq_lens_decoder, i1, i2)
         swap_data(self.step_idx, i1, i2)
         swap_data(self.pre_ids, i1, i2)
         swap_data(self.encoder_block_lens, i1, i2)
-        swap_data(self.input_ids_len, i1, i2)
         swap_data(self.mask_rollback, i1, i2)
         swap_data(self.recompute_token_num, i1, i2)
         if self.enable_mm:
@@ -956,9 +979,12 @@ class ProposerInputBatch(InputBatch):
             # Clone the target model inputs to restore initial values
             self.block_tables = paddle.clone(self.target_model_input_batch["block_tables"])
             self.input_ids = paddle.clone(self.target_model_input_batch["input_ids"])
-            fill_paddle_tensor(self, "input_ids_cpu", -1)
-            # acceptance rate decline when reset seq_lens_this_time
-            # self.seq_lens_this_time_buffer = paddle.clone(self.target_model_input_batch["seq_lens_this_time"])
+            # NOTE(fix): Must reset seq_lens_this_time_buffer to avoid stale values from previous
+            # RL round causing illegal memory access during CUDAGraph recapture (error 700).
+            # When draft_model_use_cudagraph=true, padding_cudagraph_inputs() uses the full
+            # seq_lens_this_time_buffer tensor; residual non-zero values in high-index slots
+            # (from previous round) will make attention kernel access invalid block_table entries.
+            fill_paddle_tensor(self, "seq_lens_this_time_buffer", 0)
 
             self.seq_lens_encoder = paddle.clone(self.target_model_input_batch["seq_lens_encoder"])
             self.seq_lens_decoder = paddle.clone(self.target_model_input_batch["seq_lens_decoder"])
@@ -967,10 +993,21 @@ class ProposerInputBatch(InputBatch):
             self.step_idx = paddle.clone(self.target_model_input_batch["step_idx"])
             self.stop_flags = paddle.clone(self.target_model_input_batch["stop_flags"])
             self.not_need_stop = paddle.to_tensor([False], dtype="bool", place="cpu")
+            self.not_need_stop_device = paddle.to_tensor([False], dtype="bool")
             self.index_to_batch_id = {}
             if current_platform.is_cuda():
+                # NOTE(fix): These tensors get reshaped during runtime inference, so we must
+                # recreate them at full initial size instead of cloning the (possibly resized)
+                # target_model_input_batch tensors. Otherwise CUDAGraph replay will write
+                # beyond tensor boundaries causing CUDA error(700).
+                max_num_seqs = self.scheduler_config.max_num_seqs
+                max_draft_token_num = self.speculative_config.num_speculative_tokens
+                self.cu_seqlens_q_output = paddle.full(shape=[max_num_seqs + 1, 1], fill_value=0, dtype="int32")
+                self.batch_id_per_token_output = paddle.full(
+                    shape=[max_num_seqs * (max_draft_token_num + 1)], fill_value=0, dtype="int32"
+                )
                 if "token_ids_all" in self.target_model_input_batch:
-                    self.token_ids_all = paddle.clone(self.target_model_input_batch["token_ids_all"])
+                    self.token_ids_all = self.target_model_input_batch["token_ids_all"]
                     # TODO: delete pre_ids in mtp
                     self.pre_ids = paddle.full(
                         [self.scheduler_config.max_num_seqs, self.model_config.max_model_len],
@@ -988,18 +1025,35 @@ class ProposerInputBatch(InputBatch):
                     self.token_ids_all = None
             else:
                 self.pre_ids = paddle.clone(self.target_model_input_batch["pre_ids"])
-            self.ids_remove_padding = paddle.clone(self.target_model_input_batch["ids_remove_padding"])
-            self.batch_id_per_token = paddle.clone(self.target_model_input_batch["batch_id_per_token"])
-            self.cu_seqlens_q = paddle.clone(self.target_model_input_batch["cu_seqlens_q"])
-            self.cu_seqlens_k = paddle.clone(self.target_model_input_batch["cu_seqlens_k"])
 
-            # Reset target hidden states
-            fill_paddle_tensor(self, "target_hidden_states", 0)
+            # NOTE(fix): These tensors are dynamically resized during runtime inference.
+            # Must recreate at full initial size to avoid CUDAGraph replay OOB access.
+            max_num_seqs = self.scheduler_config.max_num_seqs
+            if self.enable_mm and self.model_config.mm_max_tokens_per_item is None:
+                self.max_chunk_tokens = self.model_config.max_model_len
+            else:
+                self.max_chunk_tokens = self.fd_config.get_max_chunk_tokens(self.model_config.mm_max_tokens_per_item)
+            self.ids_remove_padding = paddle.full([max_num_seqs * self.max_chunk_tokens], 0, dtype="int64")
+            self.batch_id_per_token = paddle.full([max_num_seqs * self.max_chunk_tokens, 1], 0, dtype="int32")
+            self.cu_seqlens_q = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+            self.cu_seqlens_k = paddle.full([max_num_seqs + 1], 0, dtype="int32")
+
+            # Reset target hidden states - must recreate at full size
+            self.target_hidden_states = paddle.full(
+                [
+                    self.scheduler_config.max_num_batched_tokens + self.scheduler_config.max_extra_num_batched_tokens,
+                    self.model_config.hidden_size,
+                ],
+                0,
+                dtype="bfloat16",
+            )
 
             # Reset rope embedding by recreating with default position_ids
             tmp_position_ids = paddle.arange(self.model_config.max_model_len).reshape((1, -1))
+            rotary_percent = getattr(self.model_config, "rotary_percent", 1.0)
+            self.rotary_dim = int(self.model_config.head_dim * rotary_percent)
             self.rope_emb = get_rope(
-                rotary_dim=self.model_config.head_dim,
+                rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
                 position_ids=tmp_position_ids,
                 base=self.model_config.rope_theta,
                 model_config=self.model_config,
@@ -1052,9 +1106,6 @@ class ProposerInputBatch(InputBatch):
             if self.num_model_steps > 1:
                 fill_paddle_tensor(self, "last_seq_lens_this_time", -1)
 
-            # Reset input IDs length
-            fill_paddle_tensor(self, "input_ids_len", 0)
-
             # Reset various scores and flags
             self.temp_scaled_logprobs = self.target_model_input_batch["temp_scaled_logprobs"]
             self.top_p_normalized_logprobs = self.target_model_input_batch["top_p_normalized_logprobs"]
@@ -1078,7 +1129,9 @@ class ProposerInputBatch(InputBatch):
 
             logger.info("model_inputs reset completed")
         except Exception as e:
-            logger.error(f"Resetting model inputs failed, skipping reset, error message is {e}")
+            logger.error(
+                f"Resetting model inputs failed, skipping reset, error message is {e}, {traceback.format_exc()}"
+            )
 
 
 def reorder_split_prefill_and_decode_form_index_to_batch_id(input_batch: InputBatch, target_model_input_batch: dict):
@@ -1242,3 +1295,13 @@ def recover_batch_index_for_sampler_output(sampler_output, index_to_batch_id, en
         logits = sampler_output.logits
         real_logits = _recover_tensor(logits, src_order)
         sampler_output.logits = real_logits
+
+    if sampler_output.sampling_mask is not None:
+        sampling_mask = sampler_output.sampling_mask
+        sort_len = len(src_order)
+        real_sampling_mask = [None] * len(sampling_mask)
+        for i in range(sort_len):
+            real_sampling_mask[i] = sampling_mask[src_order[i]]
+        for i in range(sort_len, len(sampling_mask)):
+            real_sampling_mask[i] = sampling_mask[i]
+        sampler_output.sampling_mask = real_sampling_mask

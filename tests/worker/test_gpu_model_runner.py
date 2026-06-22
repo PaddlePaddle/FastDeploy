@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, Mock, patch
 import numpy as np
 import paddle
 
+from fastdeploy.config import PREEMPTED_TOKEN_ID
 from fastdeploy.engine.request import ImagePosition
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.worker.gpu_model_runner import GPUModelRunner
@@ -615,13 +616,54 @@ def _sync_async_set_value(tgt, src):
 
 
 class TestInsertTasksV1SplitwiseSuffix(unittest.TestCase):
-    """Tests for insert_tasks_v1 splitwise_role=\'decode\' + SpecMethod.SUFFIX branch."""
+    """Tests that SpecMethod.SUFFIX + PD separation is rejected at config level."""
+
+    def test_suffix_pd_decode_rejected_at_config_level(self):
+        """suffix + splitwise_role='decode' raises ValueError in EngineArgs."""
+        from fastdeploy.engine.args_utils import EngineArgs
+
+        with self.assertRaises(ValueError) as ctx:
+            EngineArgs(
+                model="/tmp/fake",
+                splitwise_role="decode",
+                speculative_config={"method": "suffix", "num_speculative_tokens": 3},
+            )
+        self.assertIn("SUFFIX does not support PD", str(ctx.exception))
+
+    def test_suffix_pd_prefill_rejected_at_config_level(self):
+        """suffix + splitwise_role='prefill' also raises ValueError."""
+        from fastdeploy.engine.args_utils import EngineArgs
+
+        with self.assertRaises(ValueError) as ctx:
+            EngineArgs(
+                model="/tmp/fake",
+                splitwise_role="prefill",
+                speculative_config={"method": "suffix", "num_speculative_tokens": 3},
+            )
+        self.assertIn("SUFFIX does not support PD", str(ctx.exception))
+
+    def test_suffix_mixed_mode_allowed(self):
+        """suffix + splitwise_role='mixed' does NOT raise."""
+        from fastdeploy.engine.args_utils import EngineArgs
+
+        try:
+            EngineArgs(
+                model="/tmp/fake",
+                splitwise_role="mixed",
+                speculative_config={"method": "suffix", "num_speculative_tokens": 3},
+            )
+        except ValueError as e:
+            if "SUFFIX" in str(e):
+                self.fail(f"suffix+mixed should be allowed, but got: {e}")
+
+
+class TestInsertTasksV1SplitwiseNaive(unittest.TestCase):
+    """Tests for insert_tasks_v1 splitwise_role='decode' + SpecMethod.NAIVE branch."""
 
     def _make_share_inputs(self, bsz=4, max_draft=6):
         """Mock-backed share_inputs; only keys we assert on hold real numpy arrays."""
         import numpy as np
 
-        # Keys whose values we want to inspect after the call
         tracked = {
             "seq_lens_encoder": np.zeros((bsz, 1), dtype=np.int32),
             "draft_tokens": np.zeros((bsz, max_draft), dtype=np.int64),
@@ -637,7 +679,6 @@ class TestInsertTasksV1SplitwiseSuffix(unittest.TestCase):
                 return batch_id
 
             def __getitem__(self, key):
-                # Return real array for tracked keys; Mock for everything else
                 if key in tracked:
                     return tracked[key]
                 return MagicMock()
@@ -657,7 +698,7 @@ class TestInsertTasksV1SplitwiseSuffix(unittest.TestCase):
         runner.enable_mm = False
         runner.is_pooling_model = False
         runner.speculative_decoding = True
-        runner.spec_method = SpecMethod.SUFFIX
+        runner.spec_method = SpecMethod.NAIVE
         runner.speculative_config = Mock(num_speculative_tokens=num_spec_tokens)
         runner.deterministic_logger = None
         runner.routing_replay_manager = Mock()
@@ -706,29 +747,28 @@ class TestInsertTasksV1SplitwiseSuffix(unittest.TestCase):
         return req
 
     @patch("fastdeploy.worker.gpu_model_runner.async_set_value", side_effect=_sync_async_set_value)
-    def test_draft_tokens_and_seq_lens_written(self, _mock_asv):
-        """draft_tokens[0:2] and seq_lens_this_time_buffer=2 are written."""
+    def test_draft_token_single_token_written(self, _mock_asv):
+        """NAIVE: draft_tokens[0] gets first draft token, seq_lens_this_time_buffer=1."""
         runner = self._make_runner(num_spec_tokens=3)
         req = self._make_prefill_request(idx=0, draft_token_ids=[101, 202, 303])
         runner.insert_tasks_v1([req], num_running_requests=1)
 
         self.assertEqual(runner.share_inputs["draft_tokens"][0, 0], 101)
-        self.assertEqual(runner.share_inputs["draft_tokens"][0, 1], 202)
-        self.assertEqual(runner.share_inputs["seq_lens_this_time_buffer"][0, 0], 2)
+        self.assertEqual(runner.share_inputs["seq_lens_this_time_buffer"][0, 0], 1)
 
     @patch("fastdeploy.worker.gpu_model_runner.async_set_value", side_effect=_sync_async_set_value)
     def test_exist_prefill_flag_cleared(self, _mock_asv):
         runner = self._make_runner()
-        req = self._make_prefill_request(idx=0, draft_token_ids=[1, 2])
+        req = self._make_prefill_request(idx=0, draft_token_ids=[1, 2, 3])
         runner.insert_tasks_v1([req], num_running_requests=1)
         self.assertFalse(runner.exist_prefill_flag)
 
     @patch("fastdeploy.worker.gpu_model_runner.async_set_value", side_effect=_sync_async_set_value)
-    def test_cached_launch_token_num_incremented(self, _mock_asv):
+    def test_cached_launch_token_num_incremented_with_num_spec_tokens(self, _mock_asv):
         runner = self._make_runner(num_spec_tokens=3)
         runner._cached_launch_token_num = 10
         runner._cached_real_bsz = 2
-        req = self._make_prefill_request(idx=0, draft_token_ids=[1, 2])
+        req = self._make_prefill_request(idx=0, draft_token_ids=[1, 2, 3])
         runner.insert_tasks_v1([req], num_running_requests=1)
         # token_num_one_step = num_speculative_tokens + 1 = 4
         self.assertEqual(runner._cached_launch_token_num, 14)
@@ -738,16 +778,300 @@ class TestInsertTasksV1SplitwiseSuffix(unittest.TestCase):
     def test_cached_launch_token_num_skipped_when_negative_one(self, _mock_asv):
         runner = self._make_runner(num_spec_tokens=3)
         runner._cached_launch_token_num = -1
-        req = self._make_prefill_request(idx=0, draft_token_ids=[1, 2])
+        req = self._make_prefill_request(idx=0, draft_token_ids=[1, 2, 3])
         runner.insert_tasks_v1([req], num_running_requests=1)
         self.assertEqual(runner._cached_launch_token_num, -1)
 
+
+class TestInsertTasksV1SplitwiseMTP(unittest.TestCase):
+    """Tests for insert_tasks_v1 splitwise_role='decode' + SpecMethod.MTP branch."""
+
+    def _make_share_inputs(self, bsz=4, max_draft=6):
+        import numpy as np
+
+        tracked = {
+            "seq_lens_encoder": np.zeros((bsz, 1), dtype=np.int32),
+            "draft_tokens": np.zeros((bsz, max_draft), dtype=np.int64),
+            "seq_lens_this_time_buffer": np.zeros((bsz, 1), dtype=np.int32),
+            "req_ids": [""] * bsz,
+            "preempted_idx": np.zeros((bsz, 1), dtype=np.int32),
+            "num_running_requests": 0,
+            "running_requests_ids": [],
+        }
+
+        class _SI:
+            index_to_batch_id = {i: i for i in range(bsz)}
+
+            def get_index_by_batch_id(self, batch_id):
+                return batch_id
+
+            def __getitem__(self, key):
+                if key in tracked:
+                    return tracked[key]
+                return MagicMock()
+
+            def __setitem__(self, key, value):
+                tracked[key] = value
+
+        return _SI()
+
+    def _make_runner(self, bsz=4, num_spec_tokens=3):
+        from unittest.mock import Mock
+
+        from fastdeploy.spec_decode import SpecMethod
+        from fastdeploy.worker.gpu_model_runner import GPUModelRunner
+
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.enable_mm = False
+        runner.is_pooling_model = False
+        runner.speculative_decoding = True
+        runner.spec_method = SpecMethod.MTP
+        runner.speculative_config = Mock(num_speculative_tokens=num_spec_tokens)
+        runner.deterministic_logger = None
+        runner.routing_replay_manager = Mock()
+        runner.prompt_logprobs_reqs = {}
+        runner.in_progress_prompt_logprobs = {}
+        runner.forward_batch_reqs_list = [None] * bsz
+        runner._cached_launch_token_num = -1
+        runner._cached_real_bsz = 0
+        runner.exist_prefill_flag = True
+        runner.proposer = Mock()
+        runner.sampler = Mock()
+        runner.model_config = Mock(eos_tokens_lens=1)
+        runner.share_inputs = self._make_share_inputs(bsz=bsz, max_draft=num_spec_tokens + 2)
+
+        fd_config = Mock()
+        fd_config.scheduler_config.splitwise_role = "decode"
+        fd_config.routing_replay_config.enable_routing_replay = False
+        runner.fd_config = fd_config
+        runner.scheduler_config = fd_config.scheduler_config
+        runner.enable_cache_manager_v1 = False
+        return runner
+
+    def _make_prefill_request(self, idx, draft_token_ids):
+        from unittest.mock import Mock
+
+        from fastdeploy.engine.request import RequestType
+
+        req = Mock()
+        req.task_type = Mock(value=RequestType.PREFILL.value)
+        req.idx = idx
+        req.request_id = f"req_{idx}"
+        req.prompt_token_ids = [10, 20, 30]
+        req.output_token_ids = [99]
+        req.draft_token_ids = draft_token_ids
+        req.pooling_params = None
+        req.guided_json = None
+        req.guided_regex = None
+        req.structural_tag = None
+        req.guided_grammar = None
+        req.prefill_start_index = 0
+        req.prefill_end_index = 3
+        req.multimodal_inputs = None
+        req.get = Mock(return_value=None)
+        req.eos_token_ids = [2]
+        req.block_tables = []
+        return req
+
     @patch("fastdeploy.worker.gpu_model_runner.async_set_value", side_effect=_sync_async_set_value)
-    def test_raises_when_fewer_than_two_draft_tokens(self, _mock_asv):
-        runner = self._make_runner()
-        req = self._make_prefill_request(idx=0, draft_token_ids=[42])
-        with self.assertRaises(ValueError):
+    def test_mtp_draft_tokens_written(self, _mock_asv):
+        """MTP: draft_tokens[0:2] gets first two draft tokens, seq_lens_this_time_buffer=2."""
+        runner = self._make_runner(num_spec_tokens=3)
+        req = self._make_prefill_request(idx=0, draft_token_ids=[101, 202, 303])
+        runner.insert_tasks_v1([req], num_running_requests=1)
+
+        self.assertEqual(runner.share_inputs["draft_tokens"][0, 0], 101)
+        self.assertEqual(runner.share_inputs["draft_tokens"][0, 1], 202)
+        self.assertEqual(runner.share_inputs["seq_lens_this_time_buffer"][0, 0], 2)
+
+    @patch("fastdeploy.worker.gpu_model_runner.async_set_value", side_effect=_sync_async_set_value)
+    def test_mtp_raises_on_insufficient_draft_tokens(self, _mock_asv):
+        """MTP: raises ValueError when less than 2 draft tokens provided."""
+        runner = self._make_runner(num_spec_tokens=3)
+        req = self._make_prefill_request(idx=0, draft_token_ids=[101])
+        with self.assertRaises(ValueError) as ctx:
             runner.insert_tasks_v1([req], num_running_requests=1)
+        self.assertIn("Expected at least 2 draft tokens", str(ctx.exception))
+
+
+class TestMakePreemptedBatchOutput(unittest.TestCase):
+    def _make_runner(self, speculative_decoding=False, enable_logprob=False):
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.speculative_decoding = speculative_decoding
+        runner.enable_logprob = enable_logprob
+        runner.parallel_config = Mock(msg_queue_id=0, tensor_parallel_rank=0, use_ep=False)
+
+        class _ShareInputs(dict):
+            enable_pd_reorder = False
+
+        share_inputs = _ShareInputs()
+        share_inputs["preempted_idx"] = paddle.to_tensor(
+            [[0], [0], [0], [1], [0], [0], [1], [0], [0], [0]], dtype="int32"
+        )
+        share_inputs["sampled_token_ids"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["index_to_batch_id"] = {i: i for i in range(10)}
+        share_inputs["next_tokens"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_flags"] = paddle.zeros([10, 1], dtype="bool")
+        share_inputs["step_idx"] = 0
+        share_inputs["max_dec_len"] = 16
+        share_inputs["seq_lens_this_time"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["eos_token_id"] = paddle.zeros([1], dtype="int64")
+        share_inputs["not_need_stop"] = False
+        share_inputs["not_need_stop_device"] = paddle.zeros([1], dtype="bool")
+        share_inputs["input_ids"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["seq_lens_encoder"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["seq_lens_decoder"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["is_block_step"] = paddle.zeros([10, 1], dtype="bool")
+        share_inputs["token_ids_all"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_seqs"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["stop_seqs_len"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["min_dec_len"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["prompt_lens"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["mask_rollback"] = paddle.zeros([10, 1], dtype="bool")
+        share_inputs["accept_tokens_cpu"] = paddle.full([10, 1], fill_value=-1, dtype="int64")
+        share_inputs["accept_num_cpu"] = paddle.full([10, 1], fill_value=-1, dtype="int32")
+        share_inputs["seq_lens_decoder_cpu"] = paddle.full([10, 1], fill_value=-1, dtype="int32")
+        share_inputs["prompt_lens_cpu"] = paddle.full([10, 1], fill_value=-1, dtype="int32")
+        share_inputs["draft_tokens"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["actual_draft_token_num"] = paddle.zeros([10, 1], dtype="int32")
+        share_inputs["accept_tokens"] = paddle.zeros([10, 1], dtype="int64")
+        share_inputs["accept_num"] = paddle.zeros([10, 1], dtype="int32")
+        runner.share_inputs = share_inputs
+        return runner
+
+    def test_make_preempted_batch_output_emits_sparse_preempt_mask(self):
+        runner = self._make_runner()
+
+        model_output_data, sampler_output = runner._make_preempted_batch_output()
+
+        expected = [-1, -1, -1, PREEMPTED_TOKEN_ID, -1, -1, PREEMPTED_TOKEN_ID]
+        self.assertEqual(sampler_output.sampled_token_ids.shape, [7, 1])
+        self.assertEqual(sampler_output.sampled_token_ids.numpy().reshape([-1]).tolist(), expected)
+        self.assertEqual(runner.share_inputs["sampled_token_ids"][:7].numpy().reshape([-1]).tolist(), expected)
+        self.assertEqual(model_output_data.index_to_batch_id, {i: i for i in range(7)})
+
+    def test_make_preempted_batch_output_speculative_logprob(self):
+        runner = self._make_runner(speculative_decoding=True, enable_logprob=True)
+        runner.share_inputs["seq_lens_decoder"][:7] = paddle.arange(7, dtype="int32").reshape([7, 1])
+        runner.share_inputs["prompt_lens"][:7] = paddle.arange(10, 17, dtype="int32").reshape([7, 1])
+
+        model_output_data, sampler_output = runner._make_preempted_batch_output()
+
+        self.assertEqual(sampler_output.sampled_token_ids.shape, [7, 1])
+        self.assertIsNotNone(sampler_output.logprobs_tensors)
+        self.assertEqual(sampler_output.logprobs_tensors.logprob_token_ids.shape, [7, 1])
+        self.assertEqual(sampler_output.token_num_per_batch.shape, [7, 1])
+        self.assertEqual(sampler_output.cu_batch_token_offset.shape, [8])
+        self.assertEqual(runner.share_inputs["accept_tokens_cpu"][:7].numpy().reshape([-1]).tolist(), [0] * 7)
+        self.assertEqual(runner.share_inputs["accept_num_cpu"][:7].numpy().reshape([-1]).tolist(), [0] * 7)
+        self.assertEqual(
+            runner.share_inputs["seq_lens_decoder_cpu"][:7].numpy().reshape([-1]).tolist(),
+            list(range(7)),
+        )
+        self.assertEqual(
+            runner.share_inputs["prompt_lens_cpu"][:7].numpy().reshape([-1]).tolist(),
+            list(range(10, 17)),
+        )
+        self.assertIsNotNone(model_output_data.accept_tokens)
+        self.assertIsNotNone(model_output_data.accept_num)
+
+
+class TestExecuteModel(unittest.TestCase):
+    def _make_runner(self):
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.speculative_decoding = False
+        runner.parallel_config = Mock(use_ep=False)
+        runner.fd_config = Mock()
+        runner.fd_config.speculative_config = Mock(method=None)
+        runner.proposer = Mock(model=Mock())
+        runner.forward_meta = Mock()
+        runner._save_model_output = Mock()
+        runner._make_preempted_batch_output = Mock(return_value=("model_output", "sampler_output"))
+        runner._postprocess = Mock()
+        runner._execute_empty_mtp_input = Mock()
+        runner._cached_launch_token_num = 0
+        runner._cached_real_bsz = 0
+
+        class _ShareInputs(dict):
+            pass
+
+        share_inputs = _ShareInputs()
+        share_inputs["seq_lens_this_time_cpu"] = paddle.zeros([2, 1], dtype="int32")
+        share_inputs["preempted_idx"] = paddle.to_tensor([[1], [0]], dtype="int32")
+        share_inputs["last_preempted_idx"] = paddle.zeros([2, 1], dtype="int32")
+        runner.share_inputs = share_inputs
+        return runner
+
+    def test_execute_model_dispatches_to_normal_path(self):
+        runner = self._make_runner()
+        runner.enable_overlap_schedule = False
+        runner.execute_model_normal = Mock()
+        runner.execute_model_overlap = Mock()
+
+        runner.execute_model(model_forward_batch=["req"], num_running_requests=1)
+
+        runner.execute_model_normal.assert_called_once_with(["req"], 1)
+        runner.execute_model_overlap.assert_not_called()
+
+    def test_execute_model_dispatches_to_overlap_path(self):
+        runner = self._make_runner()
+        runner.enable_overlap_schedule = True
+        runner.execute_model_normal = Mock()
+        runner.execute_model_overlap = Mock()
+
+        runner.execute_model(model_forward_batch=["req"], num_running_requests=1)
+
+        runner.execute_model_overlap.assert_called_once_with(["req"], 1)
+        runner.execute_model_normal.assert_not_called()
+
+    def test_execute_model_normal_zero_output_flushes_preempted_batch(self):
+        runner = self._make_runner()
+        runner._preprocess = Mock(return_value=("model_inputs", "done_idxs", None))
+        runner._execute = Mock(return_value=None)
+
+        runner.execute_model_normal()
+
+        runner._make_preempted_batch_output.assert_called_once_with()
+        np.testing.assert_array_equal(runner.share_inputs["last_preempted_idx"].numpy(), np.array([[1], [0]]))
+        np.testing.assert_array_equal(runner.share_inputs["preempted_idx"].numpy(), np.array([[0], [0]]))
+        runner._save_model_output.assert_called_once_with("model_output", "sampler_output")
+
+    def test_execute_model_normal_postprocess_saves_output_after_sync(self):
+        runner = self._make_runner()
+        runner.share_inputs["seq_lens_this_time_cpu"] = paddle.to_tensor([[1], [0]], dtype="int32")
+        runner._preprocess = Mock(return_value=("model_inputs", "done_idxs", None))
+        runner._execute = Mock(return_value="model_output")
+        post_process_event = Mock()
+        runner._postprocess.return_value = ("model_output_data", "sampler_output", post_process_event)
+
+        runner.execute_model_normal(model_forward_batch=["req"], num_running_requests=1)
+
+        runner._make_preempted_batch_output.assert_not_called()
+        post_process_event.synchronize.assert_called_once_with()
+        runner._save_model_output.assert_called_once_with("model_output_data", "sampler_output")
+
+    def test_execute_model_overlap_zero_output_flushes_preempted_batch(self):
+        runner = self._make_runner()
+        token_num_event = Mock()
+        runner._preprocess = Mock(return_value=("model_inputs", "done_idxs", token_num_event))
+        runner._execute = Mock(return_value=None)
+        runner._predict_next_launch_token_num = Mock(return_value=(11, 22))
+        runner._cached_model_output_data = None
+        runner._cached_sampler_output = "cached_sampler"
+        runner._cached_post_process_event = "cached_event"
+
+        runner.execute_model_overlap()
+
+        token_num_event.synchronize.assert_called_once_with()
+        runner._make_preempted_batch_output.assert_called_once_with()
+        np.testing.assert_array_equal(runner.share_inputs["last_preempted_idx"].numpy(), np.array([[1], [0]]))
+        np.testing.assert_array_equal(runner.share_inputs["preempted_idx"].numpy(), np.array([[0], [0]]))
+        runner._save_model_output.assert_called_once_with("model_output", "sampler_output")
+        self.assertIsNone(runner._cached_model_output_data)
+        self.assertIsNone(runner._cached_sampler_output)
+        self.assertIsNone(runner._cached_post_process_event)
+        self.assertEqual(runner._cached_launch_token_num, 11)
+        self.assertEqual(runner._cached_real_bsz, 22)
 
 
 if __name__ == "__main__":

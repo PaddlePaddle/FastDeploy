@@ -79,6 +79,26 @@ class _DummyMainMetrics:
             self.metrics[name] = _DummyMetric()
         return self.metrics[name]
 
+    def set_value(self, name, value, labelvalues=None):
+        if name not in self.metrics:
+            self.metrics[name] = _DummyMetric()
+        self.metrics[name].set(value)
+
+    def inc_value(self, name, value=1, labelvalues=None):
+        if name not in self.metrics:
+            self.metrics[name] = _DummyMetric()
+        self.metrics[name].inc(value)
+
+    def dec_value(self, name, value=1, labelvalues=None):
+        if name not in self.metrics:
+            self.metrics[name] = _DummyMetric()
+        self.metrics[name].dec(value)
+
+    def obs_value(self, name, value, labelvalues=None):
+        if name not in self.metrics:
+            self.metrics[name] = _DummyMetric()
+        self.metrics[name].observe(value)
+
 
 # IPC signal stub that mirrors the real object's surface area.
 class _DummyIPCSignal:
@@ -190,6 +210,7 @@ def _create_manager(
         total_block_num=num_gpu_blocks,
         prefill_kvcache_block_num=num_gpu_blocks,
         num_cpu_blocks=num_cpu_blocks,
+        block_size=64,
         bytes_per_layer_per_block=1,
         enable_prefix_caching=enable_prefix_caching,
         enable_hierarchical_cache=False,
@@ -1543,6 +1564,61 @@ class TestPrefixCacheManagerCoverage(unittest.TestCase):
         manager.gpu_free_task_future = None
         manager.reset()
         self.assertEqual(manager.cpu_free_block_list, [])
+
+    @patch("fastdeploy.cache_manager.prefix_cache_manager.envs")
+    def test_free_gpu_block_ids_flushes_cache_gone_with_as_only_flush(self, mock_envs):
+        """Verify GPU-only eviction sends flush(flush_cache_exists=False) with correct start_write_block_idx."""
+        mock_envs.FD_AS_ONLY_FLUSH = True
+        manager = _create_manager(num_gpu_blocks=4, num_cpu_blocks=0)
+        manager.kvcache_storage_backend = "attention_store"
+
+        gpu_hash = get_hash_str([9, 10])
+        node = BlockNode(
+            91,
+            [9, 10],
+            gpu_hash,
+            3,
+            0,
+            2,
+            gpu_hash,
+            0,
+            parent=manager.radix_tree_root,
+            cache_status=CacheStatus.GPU,
+        )
+        node.shared_count = 0
+        node.block_id = 12
+        manager.radix_tree_root.children[gpu_hash] = node
+        manager.node_map[node.node_id] = node
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.gpu_lru_leaf_set.add(node)
+
+        captured_tasks = []
+        manager.issue_write_back_storage_task = lambda task, is_sync=True: captured_tasks.append(task)
+
+        manager.free_block_ids_async(1)
+
+        self.assertEqual(len(captured_tasks), 1)
+        flush_task = captured_tasks[0]
+        self.assertFalse(flush_task.flush_cache_exists)
+        self.assertEqual(flush_task.keys, [gpu_hash])
+        self.assertEqual(flush_task.token_ids, [9, 10])
+        self.assertEqual(flush_task.gpu_block_ids, [])
+        self.assertEqual(flush_task.start_write_block_idx, 2)
+
+    def test_free_nodes_directly_logs_error_and_raises_when_tree_normal(self):
+        """Test free_nodes_directly logs error with traceback when exception occurs and tree is NORMAL."""
+        manager = _create_manager(num_gpu_blocks=6)
+        manager.prefix_tree_status_signal = SimpleNamespace(value=np.array([PrefixTreeStatus.NORMAL]))
+
+        node = _make_block_node(manager, 42, [1, 2], block_size=2, cache_status=CacheStatus.GPU)
+        node.shared_count = 0
+        manager.gpu_lru_leaf_heap.append(node)
+        manager.gpu_lru_leaf_set.add(node)
+
+        # Make _handle_free_gpu_node_without_cpu raise an exception
+        with patch.object(manager, "_handle_free_gpu_node_without_cpu", side_effect=RuntimeError("test error")):
+            with self.assertRaises(RuntimeError):
+                manager.free_nodes_directly(node)
 
 
 if __name__ == "__main__":

@@ -37,6 +37,7 @@ from fastdeploy.engine.request import (
     Request,
     RequestMetrics,
     RequestOutput,
+    RequestStatus,
     SpeculateMetrics,
 )
 from fastdeploy.inter_communicator import ZmqIpcServer
@@ -50,7 +51,7 @@ from fastdeploy.platforms import current_platform
 from fastdeploy.spec_decode import SpecMethod
 from fastdeploy.trace.constants import LoggingEventName
 from fastdeploy.trace.trace_logger import print as trace_print
-from fastdeploy.utils import llm_logger, spec_logger
+from fastdeploy.utils import get_base_request_id, llm_logger, spec_logger
 from fastdeploy.worker.output import LogprobsLists
 
 RECOVERY_STOP_SIGNAL = -3
@@ -73,6 +74,7 @@ class TokenProcessor:
         self.cached_generated_tokens = cached_generated_tokens
         self.resource_manager = None
         self.scheduler_metrics_logger = None
+        self._benchmark_logger = None
         self.engine_worker_queue = engine_worker_queue
         self.tokens_counter = Counter()
         self.split_connector = split_connector
@@ -172,6 +174,9 @@ class TokenProcessor:
 
     def set_scheduler_metrics_logger(self, scheduler_metrics_logger):
         self.scheduler_metrics_logger = scheduler_metrics_logger
+
+    def set_benchmark_logger(self, benchmark_logger):
+        self._benchmark_logger = benchmark_logger
 
     def _is_decode_stage(self, task):
         if task is None:
@@ -282,12 +287,11 @@ class TokenProcessor:
                     preempted_count=getattr(task.metrics, "preempted_count", 0),
                 )
 
-                main_process_metrics.request_token_ratio.observe(token_ratio)
+                main_process_metrics.obs_value("request_token_ratio", token_ratio)
                 llm_logger.info(self.resource_manager.info())
                 if self.cfg.speculative_config.method:
                     self._compute_speculative_status()
-                if not is_prefill:
-                    self._record_completion_metrics(task, current_time)
+                self._record_completion_metrics(task, current_time)
                 self._recycle_resources(task_id, batch_id, task, result, is_prefill)
                 break
         return result
@@ -317,6 +321,7 @@ class TokenProcessor:
                             request_id=task_id,
                         )
                         self.resource_manager.recycle_abort_task(task_id)
+                        self._put_abort_results(task)
                     if (
                         task_id in self.resource_manager.to_be_rescheduled_request_id_set
                         and token_ids[-1] == PREEMPTED_TOKEN_ID
@@ -434,7 +439,10 @@ class TokenProcessor:
                     self.postprocess(batch_result)
             except Exception as e:
                 log_request_error(
-                    message="Receive message:{receive_datas}, error:{error}", receive_datas=receive_datas, error=e
+                    message="Receive message:{receive_datas}, error:{error}, {traceback}",
+                    receive_datas=receive_datas,
+                    error=e,
+                    traceback=traceback.format_exc(),
                 )
                 continue
 
@@ -565,6 +573,8 @@ class TokenProcessor:
         if is_prefill:
             start_time = time.time()
             result.metrics.wait_for_sending_cache_time = time.time()
+            trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_START, task_id, getattr(task, "user", ""))
+
             while True:
                 finished_task_ids = self.engine_worker_queue.get_finished_req()
                 if len(finished_task_ids) > 0:
@@ -577,14 +587,19 @@ class TokenProcessor:
                         self.prefill_result_status[finished_task_id[0]] = finished_task_id[1]
                 if task_id in self.prefill_result_status:
                     if self.prefill_result_status[task_id] != "finished":
-                        result.error_code = 400
-                        result.error_message = f"{task_id} failed to {self.prefill_result_status[task_id]}"
+                        result.error_code = 501
+                        result.error_msg = (
+                            f"PD Error: prefill failed to send cache to decode, "
+                            f"{task_id}, {self.prefill_result_status[task_id]}"
+                        )
+                    self.prefill_result_status.pop(task_id)
                     log_request(
                         RequestLogLevel.STAGES,
                         message="wait for sending cache, request_id: {request_id}, cost seconds: {cost_seconds}",
                         request_id=task_id,
                         cost_seconds=f"{time.time()-start_time:.5f}",
                     )
+                    trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_END, task_id, getattr(task, "user", ""))
                     result.metrics.send_request_output_to_decode_time = time.time()
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
@@ -615,13 +630,13 @@ class TokenProcessor:
         num_blocks_used_by_tasks = sum(
             [len(task.block_tables) if task else 0 for task in self.resource_manager.tasks_list]
         )
-        main_process_metrics.available_gpu_block_num.set(
-            self.resource_manager.total_block_number() - num_blocks_used_by_tasks
+        main_process_metrics.set_value(
+            "available_gpu_block_num", self.resource_manager.total_block_number() - num_blocks_used_by_tasks
         )
-        main_process_metrics.batch_size.set(
-            self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
+        main_process_metrics.set_value(
+            "batch_size", self.resource_manager.max_num_seqs - self.resource_manager.available_batch()
         )
-        main_process_metrics.available_batch_size.set(self.resource_manager.available_batch())
+        main_process_metrics.set_value("available_batch_size", self.resource_manager.available_batch())
 
         if task_id in self.tokens_counter:
             del self.tokens_counter[task_id]
@@ -724,12 +739,15 @@ class TokenProcessor:
                 metrics=None,
             )
 
-            token_ids = tokens[i][:, 0].tolist()[: accept_num[i]]
+            tokens_i = tokens[i].tolist()
+            scores_i = scores[i].tolist()
+            ranks_i = ranks[i].tolist()
+            token_ids = [row[0] for row in tokens_i[: accept_num[i]]]
             for batch_token_index in range(len(token_ids)):
-                result.outputs.logprob = float(scores[i, batch_token_index, 0])
-                topk_token_ids = tokens[i, batch_token_index, :].tolist()
-                topk_logprobs = scores[i, batch_token_index, :].tolist()
-                sampled_rank = ranks[i, batch_token_index].item()
+                result.outputs.logprob = scores_i[batch_token_index][0]
+                topk_token_ids = tokens_i[batch_token_index]
+                topk_logprobs = scores_i[batch_token_index]
+                sampled_rank = ranks_i[batch_token_index]
 
                 if result.outputs.draft_top_logprobs is None:
                     result.outputs.draft_top_logprobs = LogprobsLists(
@@ -756,16 +774,19 @@ class TokenProcessor:
         mtype = 3
         if self.cfg.speculative_config.method:
             if self.use_logprobs:
-                mtype = int(self.output_tokens[1, 0].item())
+                # meta[1] packs message_flag (low 8 bits) and actual_topk (high 24 bits).
+                packed_meta1 = int(self.output_tokens[1, 0].item())
+                mtype = packed_meta1 & 0xFF
+                actual_topk = packed_meta1 >> 8
                 batch = self.output_tokens[2, 0]
                 accept_num = [int(num[0]) for num in self.output_tokens[3 : batch + 3]]
                 tokens = tokens[3 + MAX_BSZ : 3 + MAX_BSZ + batch * MAX_DRAFT_TOKENS * (K + 1)].reshape(
                     [batch, MAX_DRAFT_TOKENS, K + 1]
-                )
+                )[:, :, :actual_topk]
                 scores = (
                     self.output_scores[: batch * MAX_DRAFT_TOKENS * (K + 1)]
                     .numpy()
-                    .reshape([batch, MAX_DRAFT_TOKENS, K + 1])
+                    .reshape([batch, MAX_DRAFT_TOKENS, K + 1])[:, :, :actual_topk]
                 )
                 ranks = self.output_ranks[: batch * MAX_DRAFT_TOKENS].numpy().reshape([batch, MAX_DRAFT_TOKENS])
 
@@ -774,14 +795,30 @@ class TokenProcessor:
                     batch_result = self._process_batch_draft_tokens(mtype, batch, accept_num, tokens, scores, ranks)
                     self.postprocess(batch_result, mtype)
                     return
+                # Pre-convert full arrays to Python lists once for MTP target token path.
+                tokens_lists = tokens.tolist()
+                scores_lists = scores.tolist()
+                ranks_list = ranks.tolist()
             else:
                 batch = self.output_tokens[1]
                 accept_num = tokens[2 : batch + 2]
         elif self.use_logprobs:
-            batch = self.output_tokens[1, 0]
-            tokens = tokens[2 : batch * (K + 1) + 2].reshape([batch, K + 1])[:, : (K + 1)]
-            scores = self.output_scores[: batch * (K + 1)].numpy().reshape([batch, K + 1])[:, : (K + 1)]
+            # mtext[1] packs bsz (low 16 bits) and actual_topk (high 16 bits).
+            # actual_topk = max_num_logprobs written by save_output_topk, which
+            # equals the actual number of logprob columns in this step's message
+            # (top_logprobs+1 across the batch). Using actual_topk as stride
+            # avoids processing the K+1=21 fixed-size slots when fewer are needed.
+            packed = int(self.output_tokens[1, 0])
+            batch = packed & 0xFFFF
+            actual_topk = (packed >> 16) & 0xFFFF
+            tokens = tokens[2 : batch * actual_topk + 2].reshape([batch, actual_topk])
+            scores = self.output_scores[: batch * actual_topk].numpy().reshape([batch, actual_topk])
             ranks = self.output_ranks[:batch].numpy()
+            # Pre-convert the full [batch, actual_topk] arrays to Python lists once,
+            # avoiding per-row .tolist() calls inside the loop below.
+            tokens_lists = tokens.tolist()
+            scores_lists = scores.tolist()
+            ranks_list = ranks.tolist()
         else:
             batch = self.output_tokens[1, 0]
             tokens = tokens[2 : batch + 2]
@@ -789,7 +826,7 @@ class TokenProcessor:
         batch_result = list()
         # reschedule
         for i in range(batch):
-            if self.resource_manager.stop_flags[i]:
+            if self.resource_manager.stop_flags[i] or self.resource_manager.tasks_list[i] is None:
                 continue
 
             recovery_stop = False
@@ -798,7 +835,7 @@ class TokenProcessor:
             is_prefill = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "prefill"
             is_decode = task.disaggregate_info is not None and self.cfg.scheduler_config.splitwise_role == "decode"
 
-            rid = task_id.split("_")[0]
+            rid = get_base_request_id(task_id)
             trace_carrier = task.trace_carrier
             metrics = task.metrics
             t = metrics.inference_start_time
@@ -815,6 +852,7 @@ class TokenProcessor:
                     if envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         if task_id in self.resource_manager.to_be_aborted_req_id_set:
                             self.resource_manager.recycle_abort_task(task_id)
+                            self._put_abort_results(task)
                         if task_id in self.resource_manager.to_be_rescheduled_request_id_set:
                             self.resource_manager.reschedule_preempt_task(task_id)
                     continue
@@ -828,7 +866,7 @@ class TokenProcessor:
                         )
                     token_ids = [RECOVERY_STOP_SIGNAL]
                 elif self.use_logprobs:
-                    token_ids = tokens[i][:, 0].tolist()[: accept_num[i]]
+                    token_ids = [row[0] for row in tokens_lists[i][: accept_num[i]]]
                 else:
                     token_ids = tokens[
                         2
@@ -857,6 +895,7 @@ class TokenProcessor:
                             and token_id == PREEMPTED_TOKEN_ID
                         ):
                             self.resource_manager.recycle_abort_task(task_id)
+                            self._put_abort_results(task)
                             log_request(
                                 RequestLogLevel.STAGES,
                                 message="sync abortion for request_id {request_id} done.",
@@ -892,6 +931,8 @@ class TokenProcessor:
                     continue
 
             self.total_step += 1
+            if task.status == RequestStatus.RUNNING_PREFILL:
+                task.status = RequestStatus.RUNNING_DECODE
             current_time = time.time()
             trace_carrier = None
             if self.tokens_counter[task_id] == 0:
@@ -944,7 +985,9 @@ class TokenProcessor:
                 result.num_input_image_tokens = task.multimodal_inputs.get("num_input_image_tokens", 0)
                 result.num_input_video_tokens = task.multimodal_inputs.get("num_input_video_tokens", 0)
 
-            if is_prefill and len(token_ids) > 1:
+            if is_prefill and (len(token_ids) > 1 or self.cfg.speculative_config.method == SpecMethod.NAIVE):
+                # NAIVE only generates 1 token in prefill, but decode node
+                # needs it as draft_token_ids to initialize the first decode step
                 result.outputs.draft_token_ids = copy.deepcopy(token_ids)
 
             for batch_token_index in range(len(token_ids)):
@@ -957,15 +1000,16 @@ class TokenProcessor:
                     task.output_token_ids.append(token_id)
                     if self.use_logprobs:
                         if self.cfg.speculative_config.method:
-                            result.outputs.logprob = float(scores[i, batch_token_index, 0])
-                            topk_token_ids = tokens[i, batch_token_index, :].tolist()
-                            topk_logprobs = scores[i, batch_token_index, :].tolist()
-                            sampled_rank = ranks[i, batch_token_index].item()
+                            result.outputs.logprob = scores_lists[i][batch_token_index][0]
+                            topk_token_ids = tokens_lists[i][batch_token_index]
+                            topk_logprobs = scores_lists[i][batch_token_index]
+                            sampled_rank = ranks_list[i][batch_token_index]
                         else:
-                            result.outputs.logprob = float(scores[i, 0])
-                            topk_token_ids = tokens[i, :].tolist()
-                            topk_logprobs = scores[i, :].tolist()
-                            sampled_rank = ranks[i].item()
+                            # Use pre-converted lists (batch .tolist() done before the loop).
+                            result.outputs.logprob = scores_lists[i][0]
+                            topk_token_ids = tokens_lists[i]
+                            topk_logprobs = scores_lists[i]
+                            sampled_rank = ranks_list[i]
 
                         if result.outputs.top_logprobs is None:
                             result.outputs.top_logprobs = LogprobsLists(
@@ -1030,11 +1074,10 @@ class TokenProcessor:
                         preempted_count=getattr(task.metrics, "preempted_count", 0),
                     )
 
-                    main_process_metrics.request_token_ratio.observe(token_ratio)
+                    main_process_metrics.obs_value("request_token_ratio", token_ratio)
                     if self.cfg.speculative_config.method:
                         self._compute_speculative_status(result)
-                    if not is_prefill:
-                        self._record_completion_metrics(task, current_time)
+                    self._record_completion_metrics(task, current_time)
                     log_request(
                         RequestLogLevel.STAGES,
                         message="task {request_id} received eos token. Recycling.",
@@ -1069,33 +1112,66 @@ class TokenProcessor:
         """Record all metrics for a task"""
         if hasattr(task, "last_token_time") and task.last_token_time is not None:
             token_gen_time = current_time - task.last_token_time
-            main_process_metrics.time_per_output_token.observe(token_gen_time)
+            main_process_metrics.obs_value("time_per_output_token", token_gen_time)
+            if self._benchmark_logger:
+                if not hasattr(task, "_itl_samples"):
+                    task._itl_samples = []
+                task._itl_samples.append(token_gen_time)
         task.last_token_time = current_time
 
         # Record generation metrics
-        main_process_metrics.generation_tokens_total.inc(len(token_ids))
+        main_process_metrics.inc_value("generation_tokens_total", len(token_ids))
 
     def _record_first_token_metrics(self, task, current_time):
         """Record metrics for first token"""
         metrics = task.metrics
         trace_print(LoggingEventName.FIRST_TOKEN_GENERATED, task.request_id, getattr(task, "user", ""))
         trace_print(LoggingEventName.DECODE_START, task.request_id, getattr(task, "user", ""))
-        main_process_metrics.time_to_first_token.observe(current_time - metrics.arrival_time)
-        main_process_metrics.request_queue_time.observe(metrics.inference_start_time - metrics.preprocess_end_time)
-        main_process_metrics.request_prefill_time.observe(current_time - metrics.inference_start_time)
+        main_process_metrics.obs_value("time_to_first_token", current_time - metrics.arrival_time)
+        main_process_metrics.obs_value(
+            "request_queue_time", metrics.inference_start_time - metrics.preprocess_end_time
+        )
+        main_process_metrics.obs_value("request_prefill_time", current_time - metrics.inference_start_time)
 
     def _record_completion_metrics(self, task, current_time):
         """Record metrics when request completes"""
+        role = self.cfg.scheduler_config.splitwise_role
         metrics = task.metrics
-        if metrics.engine_recv_first_token_time:
-            decode_time = current_time - metrics.engine_recv_first_token_time
-            main_process_metrics.request_decode_time.observe(decode_time)
-        trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
+
+        if role in ("mixed", "decode"):
+            if metrics.engine_recv_first_token_time:
+                decode_time = current_time - metrics.engine_recv_first_token_time
+                main_process_metrics.obs_value("request_decode_time", decode_time)
+            trace_print(LoggingEventName.INFERENCE_END, task.request_id, getattr(task, "user", ""))
+
+        if role == "prefill":
+            trace_print(LoggingEventName.PREFILL_INFERENCE_END, task.request_id, getattr(task, "user", ""))
+        elif role == "decode":
+            trace_print(LoggingEventName.DECODE_INFERENCE_END, task.request_id, getattr(task, "user", ""))
+
         trace_print(LoggingEventName.POSTPROCESSING_START, task.request_id, getattr(task, "user", ""))
-        main_process_metrics.num_requests_running.dec(1)
-        main_process_metrics.request_success_total.inc()
-        main_process_metrics.request_inference_time.observe(current_time - metrics.inference_start_time)
-        main_process_metrics.request_generation_tokens.observe(self.tokens_counter[task.request_id])
+        main_process_metrics.inc_value("request_success_total")
+        main_process_metrics.obs_value("request_inference_time", current_time - metrics.inference_start_time)
+        main_process_metrics.obs_value("request_generation_tokens", self.tokens_counter[task.request_id])
+
+        if self._benchmark_logger:
+            from fastdeploy.metrics.benchmark_metrics_logger import (
+                CompletedRequestRecord,
+            )
+
+            record = CompletedRequestRecord(
+                request_id=task.request_id,
+                completion_time=current_time,
+                arrival_time=metrics.arrival_time or 0.0,
+                inference_start_time=metrics.inference_start_time or 0.0,
+                first_token_time=metrics.engine_recv_first_token_time or 0.0,
+                last_token_time=metrics.engine_recv_latest_token_time or current_time,
+                input_len=getattr(task, "prompt_token_ids_len", 0) or 0,
+                output_len=self.tokens_counter[task.request_id],
+                num_cached_tokens=getattr(task, "num_cached_tokens", 0) or 0,
+                itl_samples=getattr(task, "_itl_samples", []),
+            )
+            self._benchmark_logger.on_request_completed(record)
 
     def _record_speculative_decoding_metrics(self, accept_num):
         """Record metrics of speculative decoding"""
@@ -1111,12 +1187,12 @@ class TokenProcessor:
         if self.num_emitted_tokens == 0:
             return
 
-        main_process_metrics.spec_decode_num_accepted_tokens_total.set(self.num_accepted_tokens)
-        main_process_metrics.spec_decode_num_emitted_tokens_total.set(self.num_emitted_tokens)
+        main_process_metrics.set_value("spec_decode_num_accepted_tokens_total", self.num_accepted_tokens)
+        main_process_metrics.set_value("spec_decode_num_emitted_tokens_total", self.num_emitted_tokens)
 
         if self.cfg.speculative_config.method == SpecMethod.NGRAM:
-            main_process_metrics.spec_decode_draft_acceptance_rate.set(
-                self.num_accepted_tokens / self.num_emitted_tokens
+            main_process_metrics.set_value(
+                "spec_decode_draft_acceptance_rate", self.num_accepted_tokens / self.num_emitted_tokens
             )
 
         if self.cfg.speculative_config.method == SpecMethod.MTP:
@@ -1127,19 +1203,23 @@ class TokenProcessor:
                 self.cfg.speculative_config.num_speculative_tokens + 1
             )
 
-            main_process_metrics.spec_decode_draft_acceptance_rate.set(
-                self.num_accepted_tokens / self.num_draft_tokens
+            main_process_metrics.set_value(
+                "spec_decode_draft_acceptance_rate", self.num_accepted_tokens / self.num_draft_tokens
             )
-            main_process_metrics.spec_decode_efficiency.set(self.num_emitted_tokens / self.max_num_emitted_tokens)
-            main_process_metrics.spec_decode_num_draft_tokens_total.inc(num_draft_tokens)
+            main_process_metrics.set_value(
+                "spec_decode_efficiency", self.num_emitted_tokens / self.max_num_emitted_tokens
+            )
+            main_process_metrics.inc_value("spec_decode_num_draft_tokens_total", num_draft_tokens)
 
             for i in range(1, self.cfg.speculative_config.num_speculative_tokens + 1):
                 if self.accept_token_num_per_head[i - 1] != 0:
                     single_head_acceptance_rate = (
                         self.accept_token_num_per_head[i] / self.accept_token_num_per_head[i - 1]
                     )
-                main_process_metrics.spec_decode_draft_single_head_acceptance_rate[i - 1].set(
-                    single_head_acceptance_rate
+                main_process_metrics.set_value(
+                    "spec_decode_draft_single_head_acceptance_rate",
+                    single_head_acceptance_rate,
+                    labelvalues={"head": str(i - 1)},
                 )
 
     def _record_speculative_decoding_accept_num_per_request(self, req_id, accept_num):
@@ -1152,6 +1232,33 @@ class TokenProcessor:
         for i in range(accept_num):
             self.accept_token_num_per_head_per_request[req_id][i] += 1
             self.accept_token_num_per_head[i] += 1
+
+    def _put_abort_results(self, task):
+        now = time.time()
+        eos_token_ids = getattr(task, "eos_token_ids", [0])
+        abort_metrics = copy.copy(task.metrics)
+        for field in (
+            "arrival_time",
+            "inference_start_time",
+            "engine_recv_latest_token_time",
+            "engine_recv_first_token_time",
+            "request_start_time",
+        ):
+            if not getattr(abort_metrics, field):
+                setattr(abort_metrics, field, now)
+        result = RequestOutput(
+            request_id=task.request_id,
+            finished=True,
+            outputs=CompletionOutput(
+                index=0,
+                send_idx=self.tokens_counter.get(task.request_id),
+                token_ids=[eos_token_ids[0]],
+            ),
+            metrics=abort_metrics,
+            error_code=200,
+            error_msg="Aborted",
+        )
+        self.cached_generated_tokens.put_results([result])
 
     def clear_data(self):
         if envs.ENABLE_V1_KVCACHE_SCHEDULER:

@@ -33,9 +33,7 @@
 
 namespace api = baidu::xpu::api;
 
-// Persistent seed/offset — mirrors GPU curand state lifecycle.
 static std::atomic<uint64_t> g_seed{0};
-static std::atomic<uint64_t> g_offset{0};
 
 // ============================================================
 // Host function
@@ -87,30 +85,31 @@ void VerifyDraftTokens(
   int max_candidate_len = candidate_ids ? candidate_ids->shape()[1] : 1;
 
   // curand state: only needed for TOPP(0) strategy (stochastic sampling)
-  // Use persistent seed/offset (mirrors GPU curand lifecycle) so that
-  // each call and each batch element produce distinct random numbers.
-  uint64_t cur_seed = g_seed++;
-  uint64_t cur_offset = g_offset++;
-  std::uniform_real_distribution<float> dist(0.0, 1.0);
-  std::vector<float> dev_curand_states_cpu;
-  for (int i = 0; i < bsz; i++) {
-    std::mt19937_64 engine(cur_seed + i);
-    engine.discard(cur_offset);
-    dev_curand_states_cpu.push_back(dist(engine));
-  }
-  float *dev_curand_states = dev_curand_states_cpu.data();
-  auto dev_curand_states_tensor =
-      paddle::empty({static_cast<int64_t>(dev_curand_states_cpu.size())},
-                    paddle::DataType::FLOAT32,
-                    seq_lens_this_time.place());
+  float *dev_curand_states = nullptr;
+  auto dev_curand_states_tensor = paddle::empty({static_cast<int64_t>(bsz)},
+                                                paddle::DataType::FLOAT32,
+                                                seq_lens_this_time.place());
+  std::vector<float> dev_curand_states_cpu(bsz);
   int ret;
-  if (xpu_ctx_flag) {
-    ret = api::do_host2device(ctx,
-                              dev_curand_states_cpu.data(),
-                              dev_curand_states_tensor.data<float>(),
-                              dev_curand_states_cpu.size() * sizeof(float));
-    PD_CHECK(ret == 0, "do_host2device failed.");
-    dev_curand_states = dev_curand_states_tensor.data<float>();
+  if (verify_strategy == 0 /* TOPP */) {
+    // Use a unique seed per call (O(1) cost) instead of discard(offset)
+    // which is O(offset) and causes linear performance degradation.
+    uint64_t cur_seed = g_seed++;
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    for (int i = 0; i < bsz; i++) {
+      std::mt19937_64 engine(cur_seed * bsz + i);
+      dev_curand_states_cpu[i] = dist(engine);
+    }
+    if (xpu_ctx_flag) {
+      ret = api::do_host2device(ctx,
+                                dev_curand_states_cpu.data(),
+                                dev_curand_states_tensor.data<float>(),
+                                bsz * sizeof(float));
+      PD_CHECK(ret == 0, "do_host2device failed.");
+      dev_curand_states = dev_curand_states_tensor.data<float>();
+    } else {
+      dev_curand_states = dev_curand_states_cpu.data();
+    }
   }
 
   // Get data pointers (nullptr if optional not provided)

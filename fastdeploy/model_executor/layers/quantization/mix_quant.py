@@ -41,6 +41,7 @@ class MixQuantConfig(QuantConfigBase):
         hadamard_block_size: int = 128,
         moe_dynamic_quant: bool = False,
         is_moe_quantized: bool = False,
+        moe_quant_config: Optional[dict] = None,
     ) -> None:
         super().__init__()
         self.dense_quant_type = dense_quant_type
@@ -61,6 +62,10 @@ class MixQuantConfig(QuantConfigBase):
         self.hadamard_block_size = hadamard_block_size
         self.moe_dynamic_quant = moe_dynamic_quant
         self.is_moe_quantized = is_moe_quantized
+        # When moe_quant_type is an "offline" method (e.g. modelopt_fp4), this
+        # holds the original offline quantization_config dict (from model's
+        # config.json) so we can instantiate the sub-config correctly.
+        self.moe_quant_config = moe_quant_config or {}
 
     def name(self) -> str:
         return "mix_quant"
@@ -79,7 +84,28 @@ class MixQuantConfig(QuantConfigBase):
             config.get("hadamard_block_size", 128),
             config.get("moe_dynamic_quant", False),
             config.get("is_moe_quantized", False),
+            config.get("moe_quant_config", None),
         )
+
+    def _build_moe_sub_config(self, moe_quant_type: str) -> dict:
+        """
+        Build the dict passed to the sub quant-config's from_config().
+        For offline formats like modelopt_fp4 we need to forward the
+        original model-side quantization_config (with quant_algo, ignore,
+        group_size, etc). For online formats like block_wise_fp8 / wint4,
+        the minimal online fields are enough.
+        """
+        if moe_quant_type == "modelopt_fp4" and self.moe_quant_config:
+            sub = dict(self.moe_quant_config)
+            sub.setdefault("is_permuted", self.is_permuted)
+            sub.setdefault("is_quantized", True)
+            sub.setdefault("hadamard_block_size", self.hadamard_block_size)
+            return sub
+        return {
+            "is_permuted": self.is_permuted,
+            "is_quantized": not self.is_checkpoint_bf16 or self.is_moe_quantized,
+            "hadamard_block_size": self.hadamard_block_size,
+        }
 
     def get_quant_method(self, layer) -> Optional[QuantMethodBase]:
         if isinstance(layer, FusedMoE):
@@ -87,13 +113,7 @@ class MixQuantConfig(QuantConfigBase):
                 if self.image_moe_quant_type is not None:
                     return (
                         get_quantization_config(self.image_moe_quant_type)
-                        .from_config(
-                            {
-                                "is_permuted": self.is_permuted,
-                                "is_quantized": not self.is_checkpoint_bf16,
-                                "hadamard_block_size": self.hadamard_block_size,
-                            }
-                        )
+                        .from_config(self._build_moe_sub_config(self.image_moe_quant_type))
                         .get_quant_method(layer)
                     )
                 else:
@@ -102,13 +122,7 @@ class MixQuantConfig(QuantConfigBase):
                 if self.moe_quant_type is not None:
                     return (
                         get_quantization_config(self.moe_quant_type)
-                        .from_config(
-                            {
-                                "is_permuted": self.is_permuted,
-                                "is_quantized": not self.is_checkpoint_bf16 or self.is_moe_quantized,
-                                "hadamard_block_size": self.hadamard_block_size,
-                            }
-                        )
+                        .from_config(self._build_moe_sub_config(self.moe_quant_type))
                         .get_quant_method(layer)
                     )
                 else:

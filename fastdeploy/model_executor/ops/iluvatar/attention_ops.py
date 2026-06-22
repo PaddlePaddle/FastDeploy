@@ -203,6 +203,11 @@ def flash_attn_unpadded(
     causal=False,
     training=False,
 ):
+    # max_seqlen_q and max_seqlen_k must be a scalar tensor for cinn
+    if isinstance(max_seqlen_q, int):
+        max_seqlen_q = paddle.to_tensor(max_seqlen_q, dtype="int32", place="cpu")
+    if isinstance(max_seqlen_k, int):
+        max_seqlen_k = paddle.to_tensor(max_seqlen_k, dtype="int32", place="cpu")
     output = cuinfer_flash_attn_unpadded(
         query, key, value, cu_seqlens_q, cu_seqlens_k, max_seqlen_q, max_seqlen_k, causal, scale, training
     )

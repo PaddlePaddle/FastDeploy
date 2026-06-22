@@ -18,7 +18,7 @@ Request logging module
 Provides leveled request logging with L0-L3 levels:
 - L0: Critical lifecycle events (creation, completion, abort)
 - L1: Processing stage details
-- L2: Request/response content (truncated)
+- L2: Request/response content
 - L3: Full data
 """
 
@@ -43,15 +43,6 @@ def _should_log(level: int) -> bool:
     return int(level) <= int(envs.FD_LOG_REQUESTS_LEVEL)
 
 
-def _truncate(value):
-    """Truncate long content"""
-    text = str(value)
-    max_len = int(envs.FD_LOG_MAX_LEN)
-    if len(text) <= max_len:
-        return text
-    return text[:max_len]
-
-
 def log_request(level: int, message: str, **fields):
     """
     Log request message
@@ -71,10 +62,6 @@ def log_request(level: int, message: str, **fields):
         return
 
     payload = fields
-    # CONTENT level content needs to be truncated
-    if int(level) == int(RequestLogLevel.CONTENT):
-        payload = {key: _truncate(value) for key, value in fields.items()}
-
     _request_logger.info(message.format(**payload), stacklevel=2)
 
 

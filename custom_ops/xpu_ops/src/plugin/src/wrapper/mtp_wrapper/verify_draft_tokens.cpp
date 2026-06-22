@@ -255,6 +255,9 @@ static int cpu_wrapper(
     const bool accept_all) {
   for (int bid = 0; bid < max_bsz; bid++) {
     step_output_len[bid] = 0;
+    for (int i = 0; i < max_step_tokens; i++) {
+      step_output_ids[bid * max_step_tokens + i] = -1;
+    }
 
     if (bid >= real_bsz || is_block_step[bid] || stop_flags[bid]) continue;
 
@@ -295,7 +298,11 @@ static int cpu_wrapper(
 
       // Accept-all override (debug/warmup)
       if (accept_all) {
-        if (v_ctx.emit_token(i, v_ctx.step_input_ids_now[i + 1])) break;
+        int64_t token = v_ctx.step_input_ids_now[i + 1];
+        if (is_in_end(token, end_tokens, end_length)) {
+          token = 5;
+        }
+        if (v_ctx.emit_token(i, token)) break;
         continue;
       }
 
@@ -525,7 +532,7 @@ int verify_draft_tokens(
   WRAPPER_CHECK_PTR_OR_NULL(
       ctx, float, real_bsz *max_candidate_len, candidate_scores);
 
-  WRAPPER_CHECK_PTR(ctx, float, real_bsz, curand_states);
+  WRAPPER_CHECK_PTR_OR_NULL(ctx, float, real_bsz, curand_states);
   WRAPPER_CHECK_PTR(ctx, float, real_bsz, topp);
   WRAPPER_CHECK_PTR(ctx, bool, real_bsz, stop_flags);
   WRAPPER_CHECK_PTR(ctx, int, real_bsz, seq_lens_encoder);

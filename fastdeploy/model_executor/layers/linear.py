@@ -25,6 +25,9 @@ from fastdeploy.distributed.communication import (
     decode_alltoall_transpose,
     tensor_model_parallel_all_reduce,
 )
+from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
+    block_wise_cuda_graph_wrap,
+)
 from fastdeploy.model_executor.layers.quantization.quant_base import QuantMethodBase
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
@@ -36,6 +39,22 @@ from fastdeploy.model_executor.utils import (
 from fastdeploy.platforms import current_platform
 
 from .utils import _set_var_distributed, divide, get_tensor, modules_to_convert
+
+
+def may_be_do_cast(loaded_weight, param):
+
+    assert param.shape == loaded_weight.shape, (
+        f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
+    )
+    # Ensure loaded weight dtype matches model param dtype
+    if loaded_weight.dtype != param.dtype:
+        if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
+            loaded_weight = loaded_weight.view(param.dtype)
+        else:
+            assert (
+                loaded_weight.dtype == param.dtype
+            ), f"loaded_weight.dtype: {loaded_weight.dtype}, param.dtype: {param.dtype}"
+    return loaded_weight
 
 
 class UnquantizedLinearMethod(QuantMethodBase):
@@ -253,6 +272,7 @@ class LinearBase(nn.Layer):
             bias_tensor = paddle.to_tensor(get_tensor(state_dict.pop(self.bias_key)))
             self.bias.set_value(bias_tensor)
 
+    @block_wise_cuda_graph_wrap(inputs=["x"], self_attrs=["weight", "weight_scale_inv", "bias"])
     def forward_cuda(self, x: paddle.Tensor) -> paddle.Tensor:
         """
         Forward function for Linear.
@@ -403,15 +423,7 @@ class MergedReplicatedLinear(ReplicatedLinear):
                 start=param_shard_offset,
                 end=param_shard_offset + param_shard_size,
             )
-        assert param.shape == loaded_weight.shape, (
-            f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        # Ensure loaded weight dtype matches model param dtype
-        if loaded_weight.dtype != param.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.view(param.dtype)
-            else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+        loaded_weight = may_be_do_cast(loaded_weight, param)
         # (bukejiyu) After this fix, the early H2D copy for non-GPU devices is no longer needed and can be safely removed.
         h2d_copy(param, loaded_weight)
 
@@ -588,16 +600,7 @@ class MergedColumnParallelLinear(ColumnParallelLinear):
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
-
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def load_state_dict(self, state_dict: dict):
@@ -663,17 +666,18 @@ class QKVParallelLinear(ColumnParallelLinear):
         self.kv_num_heads = fd_config.model_config.num_key_value_heads if kv_num_heads is None else kv_num_heads
         self.hidden_size = fd_config.model_config.hidden_size if hidden_size is None else hidden_size
         self.head_dim = fd_config.model_config.head_dim if head_dim is None else head_dim
+        self.v_head_dim = getattr(fd_config.model_config, "v_head_dim", fd_config.model_config.head_dim)
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.local_rank = fd_config.parallel_config.tensor_parallel_rank
         self.num_heads_per_rank = divide(self.num_heads, self.tp_size)
-        if self.kv_num_heads < self.tp_size and self.tp_size % self.kv_num_heads == 0:
+        if self.kv_num_heads < self.tp_size:
             self.kv_num_heads_per_rank = 1
-            self.num_kv_head_replicas = divide(self.tp_size, self.kv_num_heads)
-            output_size = (self.num_heads + 2 * self.tp_size) * self.head_dim
+            self.num_kv_head_replicas = self.tp_size // self.kv_num_heads
+            output_size = (self.num_heads + self.tp_size) * self.head_dim + self.tp_size * self.v_head_dim
         else:
             self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.tp_size)
             self.num_kv_head_replicas = 1
-            output_size = (self.num_heads + 2 * self.kv_num_heads) * self.head_dim
+            output_size = (self.num_heads + self.kv_num_heads) * self.head_dim + self.kv_num_heads * self.v_head_dim
         input_size = self.hidden_size
         super().__init__(
             fd_config=fd_config,
@@ -686,19 +690,27 @@ class QKVParallelLinear(ColumnParallelLinear):
         )
 
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
+        v_head_dim = getattr(self, "v_head_dim", head_dim)
         shard_size_mapping = {
             "q": self.num_heads_per_rank * head_dim,
             "k": self.kv_num_heads_per_rank * head_dim,
-            "v": self.kv_num_heads_per_rank * head_dim,
+            "v": self.kv_num_heads_per_rank * v_head_dim,
         }
         return shard_size_mapping.get(loaded_shard_id)
+
+    def _get_kv_shard_id(self):
+        if self.kv_num_heads < self.tp_size:
+            return self.local_rank * self.kv_num_heads // self.tp_size
+        return self.local_rank // self.num_kv_head_replicas
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         output_dim = getattr(param, "output_dim", None)
         assert output_dim is not None
-        dim = -1 if output_dim else 0
-        head_dim = param.shape[dim] // (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        is_scale = getattr(param, "is_scale", False)
+        if is_scale:
+            weight_block_size = getattr(self.fd_config.quant_config, "weight_block_size", [128, 128])
+            scale_block_size = weight_block_size[0]
         if loaded_shard_id is None:
             if weight_need_transpose:
                 loaded_weight = get_tensor(loaded_weight)
@@ -708,11 +720,14 @@ class QKVParallelLinear(ColumnParallelLinear):
             # Loaded weight is already fused on disk
             shard_offsets = [
                 # (shard_id, shard_offset, shard_size)
-                ("q", 0, self.num_heads * head_dim),
-                ("k", self.num_heads * head_dim, self.kv_num_heads * head_dim),
-                ("v", (self.num_heads + self.kv_num_heads) * head_dim, self.kv_num_heads * head_dim),
+                ("q", 0, self.num_heads * self.head_dim),
+                ("k", self.num_heads * self.head_dim, self.kv_num_heads * self.head_dim),
+                ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.v_head_dim),
             ]
             for shard_id, shard_offset, shard_size in shard_offsets:
+                if is_scale:
+                    shard_offset //= scale_block_size
+                    shard_size = (shard_size + scale_block_size - 1) // scale_block_size
                 loaded_weight_shard = slice_fn(
                     loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size
                 )
@@ -725,39 +740,36 @@ class QKVParallelLinear(ColumnParallelLinear):
                 loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
             if self.tp_size > 1 and not self.fd_config.load_config.is_pre_sharded:
-                block_size = self._get_shard_size_mapping(loaded_shard_id, head_dim)
-                shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
+                block_size = self._get_shard_size_mapping(loaded_shard_id, self.head_dim)
+                shard_id = self.local_rank if loaded_shard_id == "q" else self._get_kv_shard_id()
                 shard_offset = shard_id * block_size
                 shard_size = block_size
+                if is_scale:
+                    shard_offset //= scale_block_size
+                    shard_size = (shard_size + scale_block_size - 1) // scale_block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size)
 
             if not param._is_initialized():
                 param.initialize()
 
             if loaded_shard_id == "q":
-
                 param_shard_offset = 0
-                param_shard_size = self.num_heads_per_rank * head_dim
+                param_shard_size = self.num_heads_per_rank * self.head_dim
             elif loaded_shard_id == "k":
-                param_shard_offset = self.num_heads_per_rank * head_dim
-                param_shard_size = self.kv_num_heads_per_rank * head_dim
+                param_shard_offset = self.num_heads_per_rank * self.head_dim
+                param_shard_size = self.kv_num_heads_per_rank * self.head_dim
             else:
                 # loaded_shard_id == "v"
-                param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * head_dim
-                param_shard_size = self.kv_num_heads_per_rank * head_dim
+                param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
+                param_shard_size = self.kv_num_heads_per_rank * self.v_head_dim
+            if is_scale:
+                param_shard_offset //= scale_block_size
+                param_shard_size = (param_shard_size + scale_block_size - 1) // scale_block_size
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):
@@ -788,7 +800,8 @@ class QKVParallelLinear(ColumnParallelLinear):
             weight_tensor = paddle.concat([q_tensor, k_tensor, v_tensor], axis=-1).transpose([1, 0])
             weight_tensor = weight_tensor.reshape(
                 [
-                    (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank) * (self.head_dim),
+                    (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
+                    + self.kv_num_heads_per_rank * self.v_head_dim,
                     self.hidden_size,
                 ]
             )
@@ -868,7 +881,7 @@ class RowParallelLinear(LinearBase):
             with_bias (bool): Whether to include bias or not. Defaults to False.
             skip_quant (bool): Whether to skip quantization or not. Defaults to False.
             enable_all_reduce_fusion (bool, optional): Whether to enable all-reduce fusion.
-                If None, it is determined by the config flag and prefix. Defaults to None.
+                If None, it is determined by the config flag. Defaults to None.
         """
         self.fd_config = fd_config
         if enable_all_reduce_fusion is None:
@@ -1009,6 +1022,23 @@ class KVBatchLinear(nn.Layer):
 
         # Override weight keys to use the combined kv_b_proj
         self.weight_key = f"{prefix}.weight"  # e.g., "kv_b_proj.weight"
+
+        if self.fd_config.load_config.load_choices == "dummy":
+            # Create K projection weight
+            self.k_b_proj_weight = self.create_parameter(
+                shape=[self.num_heads_per_partition, qk_nope_head_dim, kv_lora_rank],
+                dtype=self.weight_dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
+
+            # Create V projection weight
+            self.v_b_proj_weight = self.create_parameter(
+                shape=[self.num_heads_per_partition, kv_lora_rank, v_head_dim],
+                dtype=self.weight_dtype,
+                is_bias=False,
+                default_initializer=paddle.nn.initializer.Constant(0),
+            )
 
     def process_weights_after_loading(self):
         if self.fd_config.load_config.dynamic_load_weight:
@@ -1159,6 +1189,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         self.kv_num_heads = fd_config.model_config.num_key_value_heads if kv_num_heads is None else kv_num_heads
         self.hidden_size = fd_config.model_config.hidden_size if hidden_size is None else hidden_size
         self.head_dim = fd_config.model_config.head_dim if head_dim is None else head_dim
+        self.v_head_dim = getattr(fd_config.model_config, "v_head_dim", fd_config.model_config.head_dim)
         self.tp_size = fd_config.parallel_config.tensor_parallel_size
         self.local_rank = fd_config.parallel_config.tensor_parallel_rank
         self.num_heads_per_rank = divide(self.num_heads, self.tp_size)
@@ -1166,11 +1197,16 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         if self.kv_num_heads < self.tp_size and self.tp_size % self.kv_num_heads == 0:
             self.kv_num_heads_per_rank = 1
             self.num_kv_head_replicas = divide(self.tp_size, self.kv_num_heads)
-            output_size = (2 * self.num_heads + 2 * self.tp_size) * self.head_dim
+            output_size = (self.num_heads + self.tp_size) * self.head_dim + (
+                self.num_heads + self.tp_size
+            ) * self.v_head_dim
         else:
             self.kv_num_heads_per_rank = divide(self.kv_num_heads, self.tp_size)
             self.num_kv_head_replicas = 1
-            output_size = (2 * self.num_heads + 2 * self.kv_num_heads) * self.head_dim
+            # qkvg layout: [q (num_heads*head_dim) | k (kv_heads*head_dim) | v (kv_heads*v_head_dim) | gate (num_heads*v_head_dim)]
+            output_size = (self.num_heads + self.kv_num_heads) * self.head_dim + (
+                self.num_heads + self.kv_num_heads
+            ) * self.v_head_dim
         input_size = self.hidden_size
         super().__init__(
             fd_config=fd_config,
@@ -1182,33 +1218,47 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             weight_dtype=weight_dtype,
         )
 
+    def _get_kv_shard_id(self):
+        if self.kv_num_heads < self.tp_size:
+            return self.local_rank * self.kv_num_heads // self.tp_size
+        return self.local_rank // self.num_kv_head_replicas
+
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
         shard_size_mapping = {
             "q": self.num_heads_per_rank * head_dim,
             "k": self.kv_num_heads_per_rank * head_dim,
-            "v": self.kv_num_heads_per_rank * head_dim,
+            "v": self.kv_num_heads_per_rank * self.v_head_dim,
         }
         return shard_size_mapping.get(loaded_shard_id)
 
     def weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         assert loaded_shard_id in [
             "qkv",
+            "q",
+            "k",
+            "v",
             "gate",
-        ], f"loaded_shard_id must be one of ['qkv', 'gate'], but got {loaded_shard_id}"
-
-        if loaded_shard_id == "qkv":
-            self.qkv_weight_loader(param, loaded_weight, None)
-        else:
+        ], f"loaded_shard_id must be one of ['qkv', 'q', 'k', 'v', 'gate'], but got {loaded_shard_id}"
+        if loaded_shard_id == "gate":
             self.gate_weight_loader(param, loaded_weight)
+        elif loaded_shard_id in ("qkv", "q", "k", "v"):
+            # qkv: 传入的是 fused q+k+v 一次性拆分
+            # q/k/v: 单独传入某一头,由 qkv_weight_loader 直接放置到对应 offset
+            sub_id = None if loaded_shard_id == "qkv" else loaded_shard_id
+            self.qkv_weight_loader(param, loaded_weight, sub_id)
+        else:
+            raise ValueError(
+                f"loaded_shard_id must be one of ['qkv','q','k','v','gate'], " f"but got {loaded_shard_id}"
+            )
 
     def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id):
         output_dim = getattr(param, "output_dim", None)
         assert output_dim is not None
-        dim = -1 if output_dim else 0
-
-        # q_head + gate_head + kv_head
-        head_dim = param.shape[dim] // (2 * self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
+        is_scale = getattr(param, "is_scale", False)
+        if is_scale:
+            weight_block_size = getattr(self.fd_config.quant_config, "weight_block_size", [128, 128])
+            scale_block_size = weight_block_size[0]
         if loaded_shard_id is None:
             if weight_need_transpose:
                 loaded_weight = get_tensor(loaded_weight)
@@ -1218,11 +1268,14 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             # Loaded weight is already fused on disk
             shard_offsets = [
                 # (shard_id, shard_offset, shard_size)
-                ("q", 0, self.num_heads * head_dim),
-                ("k", self.num_heads * head_dim, self.kv_num_heads * head_dim),
-                ("v", (self.num_heads + self.kv_num_heads) * head_dim, self.kv_num_heads * head_dim),
+                ("q", 0, self.num_heads * self.head_dim),
+                ("k", self.num_heads * self.head_dim, self.kv_num_heads * self.head_dim),
+                ("v", (self.num_heads + self.kv_num_heads) * self.head_dim, self.kv_num_heads * self.v_head_dim),
             ]
             for shard_id, shard_offset, shard_size in shard_offsets:
+                if is_scale:
+                    shard_offset //= scale_block_size
+                    shard_size = (shard_size + scale_block_size - 1) // scale_block_size
                 loaded_weight_shard = slice_fn(
                     loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size
                 )
@@ -1235,10 +1288,13 @@ class QKVGateParallelLinear(ColumnParallelLinear):
                 loaded_weight = loaded_weight.transpose([1, 0])
             # Tensor parallelism splits the weight along the output_dim
             if self.tp_size > 1 and output_dim is not None:
-                block_size = self._get_shard_size_mapping(loaded_shard_id, head_dim)
-                shard_id = self.local_rank if loaded_shard_id == "q" else self.local_rank // self.num_kv_head_replicas
+                block_size = self._get_shard_size_mapping(loaded_shard_id, self.head_dim)
+                shard_id = self.local_rank if loaded_shard_id == "q" else self._get_kv_shard_id()
                 shard_offset = shard_id * block_size
                 shard_size = block_size
+                if is_scale:
+                    shard_offset //= scale_block_size
+                    shard_size = (shard_size + scale_block_size - 1) // scale_block_size
                 loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size)
 
             if not param._is_initialized():
@@ -1246,35 +1302,27 @@ class QKVGateParallelLinear(ColumnParallelLinear):
 
             if loaded_shard_id == "q":
                 param_shard_offset = 0
-                param_shard_size = self.num_heads_per_rank * head_dim
+                param_shard_size = self.num_heads_per_rank * self.head_dim
             elif loaded_shard_id == "k":
-                param_shard_offset = self.num_heads_per_rank * head_dim
-                param_shard_size = self.kv_num_heads_per_rank * head_dim
+                param_shard_offset = self.num_heads_per_rank * self.head_dim
+                param_shard_size = self.kv_num_heads_per_rank * self.head_dim
             else:
                 # loaded_shard_id == "v"
-                param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * head_dim
-                param_shard_size = self.kv_num_heads_per_rank * head_dim
+                param_shard_offset = (self.num_heads_per_rank + self.kv_num_heads_per_rank) * self.head_dim
+                param_shard_size = self.kv_num_heads_per_rank * self.v_head_dim
+            if is_scale:
+                param_shard_offset //= scale_block_size
+                param_shard_size = (param_shard_size + scale_block_size - 1) // scale_block_size
             if hasattr(param, "tensor_track"):
                 param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
             param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-            assert param.shape == loaded_weight.shape, (
-                f" Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-            )
-            # Ensure loaded weight dtype matches model param dtype
-            if loaded_weight.dtype != param.dtype:
-                if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                    loaded_weight = loaded_weight.view(param.dtype)
-                else:
-                    loaded_weight = loaded_weight.cast(param.dtype)
+            loaded_weight = may_be_do_cast(loaded_weight, param)
             h2d_copy(param, loaded_weight)
 
     def gate_weight_loader(self, param, loaded_weight):
         output_dim = getattr(param, "output_dim", None)
         assert output_dim is not None
-        dim = -1 if output_dim else 0
-        # q_head + gate_head + kv_head
-        head_dim = param.shape[dim] // (2 * self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank)
         weight_need_transpose = getattr(param, "weight_need_transpose", False)
 
         if weight_need_transpose:
@@ -1283,7 +1331,7 @@ class QKVGateParallelLinear(ColumnParallelLinear):
 
         # Tensor parallelism splits the weight along the output_dim
         if self.tp_size > 1 and output_dim is not None:
-            block_size = self.num_heads_per_rank * head_dim
+            block_size = self.num_heads_per_rank * self.v_head_dim
             shard_offset = self.local_rank * block_size
             shard_size = block_size
             loaded_weight = slice_fn(loaded_weight, output_dim, start=shard_offset, end=shard_offset + shard_size)
@@ -1291,22 +1339,16 @@ class QKVGateParallelLinear(ColumnParallelLinear):
         if not param._is_initialized():
             param.initialize()
 
-        param_shard_offset = (self.num_heads_per_rank + 2 * self.kv_num_heads_per_rank) * head_dim
-        param_shard_size = self.num_heads_per_rank * head_dim
+        param_shard_offset = (
+            self.num_heads_per_rank + self.kv_num_heads_per_rank
+        ) * self.head_dim + self.kv_num_heads_per_rank * self.v_head_dim
+        param_shard_size = self.num_heads_per_rank * self.v_head_dim
 
         if hasattr(param, "tensor_track"):
             param.tensor_track.mark(start=param_shard_offset, end=param_shard_offset + param_shard_size)
 
         param = slice_fn(param, output_dim, start=param_shard_offset, end=param_shard_offset + param_shard_size)
-        assert param.shape == loaded_weight.shape, (
-            f"Attempted to load weight ({loaded_weight.shape}) " f"into parameter ({param.shape})"
-        )
-        # Ensure loaded weight dtype matches model param dtype
-        if loaded_weight.dtype != param.dtype:
-            if loaded_weight.dtype == paddle.int8 and param.dtype == paddle.float8_e4m3fn:
-                loaded_weight = loaded_weight.view(param.dtype)
-            else:
-                loaded_weight = loaded_weight.cast(param.dtype)
+        loaded_weight = may_be_do_cast(loaded_weight, param)
         h2d_copy(param, loaded_weight)
 
     def load_weight(self, state_dict: dict):

@@ -176,7 +176,7 @@ def pre_process(
     if specific_platform and not speculative_decoding:
         # Note(ZKK): This case's code is very simple!
         ids_remove_padding, batch_id_per_token, cu_seqlens_q, cu_seqlens_k = get_padding_offset(
-            input_ids, seq_lens_this_time, None, None, token_num_cpu
+            input_ids, seq_lens_this_time, seq_lens_encoder, seq_lens_decoder, None, token_num_cpu
         )
         return (
             ids_remove_padding,
@@ -525,13 +525,14 @@ def save_output_speculate(
     sampler_output: SamplerOutput,
     model_output: ModelOutputData,
     share_inputs: InputBatch,
-    proposer_share_inputs: ProposerInputBatch,
     local_rank: int,
     tensor_parallel_rank: int,
     save_each_rank: bool = False,
     is_mtp_prefill: bool = False,
+    proposer_share_inputs: Optional[ProposerInputBatch] = None,
 ):
     if is_mtp_prefill:
+        assert proposer_share_inputs is not None
         if tensor_parallel_rank == 0:
             skip_chunk_prefill = bool(int(envs.ENABLE_V1_KVCACHE_SCHEDULER))
             if sampler_output.logprobs_tensors is None:

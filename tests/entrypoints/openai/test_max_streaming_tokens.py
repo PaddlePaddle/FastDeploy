@@ -110,7 +110,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
     async def test_integration_with_chat_stream_generator(self, mock_processor_class, mock_logger):
         response_data = [
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [1],
                     "text": "a",
@@ -124,7 +124,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": False,
             },
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [2],
                     "text": "b",
@@ -138,7 +138,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": False,
             },
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [3],
                     "text": "c",
@@ -152,7 +152,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": False,
             },
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [4],
                     "text": "d",
@@ -166,7 +166,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": False,
             },
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [5],
                     "text": "e",
@@ -180,7 +180,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": False,
             },
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [6],
                     "text": "f",
@@ -194,7 +194,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": False,
             },
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [7],
                     "text": "g",
@@ -222,7 +222,9 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance = Mock()
 
-        async def mock_process_response_chat_single(response, stream, include_stop_str_in_output, request=None):
+        async def mock_process_response_chat_single(
+            response, stream, include_stop_str_in_output, request=None, prompt_tokens=None
+        ):
             yield response
 
         mock_processor_instance.process_response_chat = mock_process_response_chat_single
@@ -282,7 +284,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         response_data = [
             [
                 {
-                    "request_id": "test-request-id_0",
+                    "request_id": "test-request-id::n::0",
                     "outputs": {
                         "token_ids": [1],
                         "text": "a",
@@ -296,7 +298,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                     "finished": False,
                 },
                 {
-                    "request_id": "test-request-id_0",
+                    "request_id": "test-request-id::n::0",
                     "outputs": {
                         "token_ids": [2],
                         "text": "b",
@@ -312,7 +314,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             ],
             [
                 {
-                    "request_id": "test-request-id_0",
+                    "request_id": "test-request-id::n::0",
                     "outputs": {
                         "token_ids": [7],
                         "text": "g",
@@ -391,7 +393,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
     async def test_completion_full_generator(self, mock_logger):
         final_response_data = [
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [7, 8, 9],
                     "text": " world!",
@@ -405,7 +407,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "metrics": {},
             },
             {
-                "request_id": "test_request_id_1",
+                "request_id": "test_request_id::n::1",
                 "outputs": {
                     "token_ids": [10, 11, 12],
                     "text": " there!",
@@ -466,8 +468,8 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         self.assertEqual(mock_dealer.write.call_count, num_choices)
 
-        mock_dealer.write.assert_any_call([b"", b"test_request_id_0"])
-        mock_dealer.write.assert_any_call([b"", b"test_request_id_1"])
+        mock_dealer.write.assert_any_call([b"", b"test_request_id::n::0"])
+        mock_dealer.write.assert_any_call([b"", b"test_request_id::n::1"])
 
         mock_response_queue.get.assert_awaited()
 
@@ -487,7 +489,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         test_cases = [
             {
                 "test_data": {
-                    "request_id": "test_0",
+                    "request_id": "test::n::0",
                     "outputs": {
                         "token_ids": [123, 456],
                         "text": "Normal AI response",
@@ -516,7 +518,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             },
             {
                 "test_data": {
-                    "request_id": "test_1",
+                    "request_id": "test::n::1",
                     "outputs": {
                         "token_ids": [123, 456, 789],
                         "text": "Edge case response",
@@ -599,7 +601,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
     async def test_chat_stream_usage_fields(self, mock_response_processor, api_server_logger):
         response_data = [
             {
-                "request_id": "test-request-id_0",
+                "request_id": "test-request-id::n::0",
                 "outputs": {
                     "token_ids": [1],
                     "text": "a",
@@ -613,7 +615,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "finished": False,
             },
             {
-                "request_id": "test-request-id_0",
+                "request_id": "test-request-id::n::0",
                 "outputs": {
                     "token_ids": [2, 3],
                     "text": "bc",
@@ -639,7 +641,9 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
 
         mock_processor_instance = Mock()
 
-        async def mock_process_response_chat(response, stream, include_stop_str_in_output, request=None):
+        async def mock_process_response_chat(
+            response, stream, include_stop_str_in_output, request=None, prompt_tokens=None
+        ):
             delta_msg_mock = Mock()
             delta_msg_mock.content = response["outputs"]["text"]
             if response["outputs"]["text"] == "a":
@@ -738,7 +742,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         response_data = [
             [
                 {
-                    "request_id": "test-request-id_0",
+                    "request_id": "test-request-id::n::0",
                     "outputs": {
                         "token_ids": [10],
                         "text": "a",
@@ -759,7 +763,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             ],
             [
                 {
-                    "request_id": "test-request-id_0",
+                    "request_id": "test-request-id::n::0",
                     "outputs": {
                         "token_ids": [2],
                         "text": "bc",
@@ -863,7 +867,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
     async def test_completion_full_generator_async_process_response_dict(self, mock_logger):
         final_response_data = [
             {
-                "request_id": "test_request_id_0",
+                "request_id": "test_request_id::n::0",
                 "outputs": {
                     "token_ids": [7, 8, 9],
                     "text": " world!",
@@ -872,7 +876,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
                 "metrics": {},
             },
             {
-                "request_id": "test_request_id_1",
+                "request_id": "test_request_id::n::1",
                 "outputs": {
                     "token_ids": [10, 11, 12],
                     "text": " there!",
@@ -947,7 +951,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
         final_response_data = [
             [
                 {
-                    "request_id": "test-request-id_0",
+                    "request_id": "test-request-id::n::0",
                     "outputs": {
                         "index": 0,
                         "send_idx": 0,
@@ -970,7 +974,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             ],
             [
                 {
-                    "request_id": "test-request-id_0",
+                    "request_id": "test-request-id::n::0",
                     "outputs": {
                         "index": 0,
                         "send_idx": 1,
@@ -993,7 +997,7 @@ class TestMaxStreamingResponseTokens(IsolatedAsyncioTestCase):
             ],
             [
                 {
-                    "request_id": "test-request-id_0",
+                    "request_id": "test-request-id::n::0",
                     "outputs": {
                         "index": 0,
                         "send_idx": 2,

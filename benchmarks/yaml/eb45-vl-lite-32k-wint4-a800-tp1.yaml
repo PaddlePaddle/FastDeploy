@@ -8,3 +8,4 @@ enable_chunked_prefill: True
 max_num_batched_tokens: 384
 quantization: wint4
 reasoning_parser: ernie-45-vl
+limit_mm_per_prompt: '{"image": 100, "video": 100}'

@@ -17,35 +17,42 @@
 from typing import Callable
 
 import paddle
+import paddle.nn.functional as F
 from paddle import nn
 
 import fastdeploy
-from fastdeploy import envs
-from fastdeploy.model_executor.layers.utils import get_tensor
-from fastdeploy.model_executor.utils import (
-    TensorTracker,
-    free_tensor,
-    process_weight_transpose,
-    set_weight_attrs,
-    weight_fully_copied,
-)
-from fastdeploy.utils import ceil_div, register_custom_python_op
-
-from ..quantization.quant_base import QuantMethodBase
-
-try:
-    from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
-
-    from .triton_moe_kernels import fused_moe_kernel_paddle
-except ImportError:
-    pass
 from fastdeploy.model_executor.layers.moe.moe import get_moe_scores
+from fastdeploy.model_executor.layers.moe.triton_moe_kernels import (
+    fused_moe_kernel_bf16,
+    fused_moe_kernel_paddle,
+)
 from fastdeploy.model_executor.layers.quantization.fp8_utils import (
     fused_stack_transpose_quant,
     quant_weight_ue8m0,
     transform_scale_ue8m0,
 )
 from fastdeploy.model_executor.layers.quantization.ops import scaled_fp8_quant
+from fastdeploy.model_executor.layers.utils import get_tensor
+from fastdeploy.model_executor.utils import (
+    TensorTracker,
+    free_tensor,
+    get_sm_version,
+    process_weight_transpose,
+    set_weight_attrs,
+    weight_fully_copied,
+)
+from fastdeploy.platforms import current_platform
+from fastdeploy.utils import ceil_div, register_custom_python_op
+
+try:
+    import triton.language as tl
+
+    from fastdeploy.model_executor.ops.gpu import tritonmoe_preprocess_func
+except ImportError:
+    pass
+
+from ..quantization.quant_base import QuantMethodBase
+from .fused_moe_backend_base import UnquantizedFusedMoEMethod
 
 
 class TritonWeightOnlyMoEMethod(QuantMethodBase):
@@ -302,7 +309,6 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         top_k = layer.top_k
@@ -310,6 +316,11 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
 
         if layer.topk_method == "noaux_tc":
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             gate_out, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -318,8 +329,10 @@ class TritonWeightOnlyMoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,
@@ -693,7 +706,6 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         if token_num == 0:
             return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
         gate_out = gate(x)
-        gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
         moe_intermediate_size = layer.moe_intermediate_size
@@ -701,6 +713,11 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
         E, N1, _ = getattr(layer, self.added_weight_attrs[0]).shape
 
         if layer.topk_method == "noaux_tc":
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
             gate_out, topk_weights, topk_ids = get_moe_scores(
                 gate_out,
                 layer.n_group,
@@ -709,8 +726,10 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
                 layer.routed_scaling_factor,
                 layer.gate_correction_bias,
                 getattr(layer, "renormalize", True),
+                use_fused_cast=use_fused,
             )
         else:
+            gate_out = gate_out.cast("float32")
             topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
                 gate_out,
                 layer.gate_correction_bias,
@@ -1248,6 +1267,11 @@ def python_op_fused_moe_kernel_paddle(
             False,
         )
 
+    if layer.routed_scaling_factor_learnable:
+        safe_topk_indices = paddle.clip(topk_ids, min=0)
+        gathered_scales = F.embedding(safe_topk_indices, layer.per_expert_scale.unsqueeze(1)).squeeze(-1)
+        topk_weights = topk_weights * gathered_scales
+
     if topk_ids_hookfunc is not None:
         topk_ids_hookfunc(topk_ids=topk_ids)
 
@@ -1425,7 +1449,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             layer.hidden_size,
             layer.moe_intermediate_size,
         ]
-        if not self.quant_config.deepgemm_scale_ue8m0:
+        if not self.quant_config.moe_blockwise_gemm_scale_ue8m0:
             self.up_gate_proj_scale_shape = [
                 layer.num_local_experts,
                 ceil_div(layer.moe_intermediate_size * 2, self.quant_config.weight_block_size[0]),
@@ -1582,7 +1606,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 ),
             )
             # weight_scale
-            if not self.quant_config.deepgemm_scale_ue8m0:
+            if not self.quant_config.moe_blockwise_gemm_scale_ue8m0:
                 setattr(
                     layer,
                     up_gate_proj_scale_name,
@@ -1653,7 +1677,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             scale_shape = self.up_gate_proj_scale_shape if weight_type == "gate_up" else self.down_proj_scale_shape
 
             # 2.crate tmp tensor and 3.quantize weight
-            if not self.quant_config.deepgemm_scale_ue8m0:
+            if not self.quant_config.moe_blockwise_gemm_scale_ue8m0:
                 scale_dtype = "float32"
                 weight = paddle.empty(shape=[weight_shape[0], weight_shape[2], weight_shape[1]], dtype=weight_dtype)
                 scale = paddle.empty(shape=[scale_shape[0], scale_shape[2], scale_shape[1]], dtype=scale_dtype)
@@ -1679,7 +1703,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                         chunk_experts = [w.contiguous() for w in expert_weight_list[start_idx:end_idx]]
 
                         w1_t_quant, w1_t_scale = fused_stack_transpose_quant(
-                            chunk_experts, use_ue8m0=self.quant_config.deepgemm_scale_ue8m0
+                            chunk_experts, use_ue8m0=self.quant_config.moe_blockwise_gemm_scale_ue8m0
                         )
                         w1_t_quant = w1_t_quant.reshape([local_chunk_size, -1, w1_t_quant.shape[-1]])
                         w1_t_scale = w1_t_scale.reshape([local_chunk_size, -1, w1_t_scale.shape[-1]])
@@ -1728,29 +1752,13 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 ),
             )
 
-            if not self.quant_config.deepgemm_scale_ue8m0:
+            if not self.quant_config.moe_blockwise_gemm_scale_ue8m0:
                 getattr(layer, weight_name).copy_(weight.transpose([0, 2, 1]).contiguous(), False)
                 getattr(layer, scale_name).copy_(scale.transpose([0, 2, 1]).contiguous(), False)
             else:
                 getattr(layer, weight_name).copy_(weight, False)
                 scale_param = getattr(layer, scale_name)
                 scale_param.data = scale
-            if bool(envs.FD_USE_BLACKWELL_GEMM):
-                import blackwell_ops
-
-                scale_bw = blackwell_ops.unpack_and_convert_scale(scale, None)
-                scale_bw_name = scale_name + "_bw"
-                setattr(
-                    layer,
-                    scale_bw_name,
-                    scale_bw,
-                )
-                if layer.fd_config.scheduler_config.splitwise_role != "mixed":
-                    setattr(
-                        layer,
-                        scale_name,
-                        None,
-                    )
 
         if self.quant_config.is_checkpoint_bf16:
             # dynamic quantize
@@ -1776,7 +1784,7 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
                 process_weight_transpose(layer, down_proj_weight_name)
                 process_weight_transpose(layer, up_gate_proj_scale_name)
                 process_weight_transpose(layer, down_proj_scale_name)
-            if self.quant_config.deepgemm_scale_ue8m0:
+            if self.quant_config.moe_blockwise_gemm_scale_ue8m0:
                 up_gate_proj_scale = getattr(layer, self.added_scale_attrs[0])
                 new_up_gate_proj_scale = paddle.empty(
                     up_gate_proj_scale.shape[:1] + up_gate_proj_scale.shape[1:][::-1], dtype=up_gate_proj_scale.dtype
@@ -1845,7 +1853,12 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         Triton compute Fused MoE.
         """
 
-        gate_out = gate(x)
+        if isinstance(gate, paddle.Tensor):
+            # This is for multi view latent moe.
+            gate_out = gate
+        else:
+            gate_out = gate(x)
+
         gate_out = gate_out.cast("float32")
         top_k = layer.top_k
         num_local_experts = layer.num_local_experts
@@ -1853,6 +1866,10 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
         hidden_size = layer.hidden_size
         E, N1, _ = getattr(layer, self.added_weight_attrs[0]).shape
         N2 = getattr(layer, self.added_weight_attrs[1]).shape[1]
+
+        if fc1_latent_proj is None:
+            assert hidden_size == x.shape[-1], "they must be same"
+        assert N1 == 2 * moe_intermediate_size, "they must be same"
 
         gate_correction_bias = layer.gate_correction_bias
         # for triton op input
@@ -1891,3 +1908,387 @@ class BlockWiseFP8MoEMethod(QuantMethodBase):
             fc1_latent_proj,
             fc2_latent_proj,
         )
+
+
+_SM100_CONFIGS = {
+    1: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 4,
+        "num_stages": 5,
+    },
+    2: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    4: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 64,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    8: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 32,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    16: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    24: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    32: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 16,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    48: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    64: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 4,
+    },
+    96: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    128: {
+        "BLOCK_SIZE_M": 16,
+        "BLOCK_SIZE_N": 64,
+        "BLOCK_SIZE_K": 128,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 3,
+    },
+    256: {
+        "BLOCK_SIZE_M": 32,
+        "BLOCK_SIZE_N": 128,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 4,
+        "num_stages": 5,
+    },
+    512: {
+        "BLOCK_SIZE_M": 64,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 5,
+    },
+    1024: {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4,
+    },
+    1536: {
+        "BLOCK_SIZE_M": 256,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 3,
+    },
+    2048: {
+        "BLOCK_SIZE_M": 256,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 3,
+    },
+    3072: {
+        "BLOCK_SIZE_M": 128,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 4,
+    },
+    4096: {
+        "BLOCK_SIZE_M": 256,
+        "BLOCK_SIZE_N": 256,
+        "BLOCK_SIZE_K": 64,
+        "GROUP_SIZE_M": 1,
+        "num_warps": 8,
+        "num_stages": 3,
+    },
+}
+
+
+class TritonMoEMethod(UnquantizedFusedMoEMethod):
+    """
+    Use Triton Group Gemm (BF16 unquantized) to compute Fused MoE.
+
+    Activated via: export FD_MOE_BACKEND=triton
+    Weight layout (CUDA path): [E, K, 2N] for up_gate_proj, [E, N, K] for down_proj.
+    This matches UnquantizedFusedMoEMethod.create_weights layout on CUDA.
+    """
+
+    def __init__(self, quant_config=None):
+        super().__init__(quant_config)
+
+    def process_loaded_weights(self, layer: nn.Layer, state_dict):
+        """Stack individual expert weights into the stacked parameter."""
+        up_gate_proj_weights, down_proj_weights, _, _ = layer.extract_moe_ffn_weights(state_dict)
+        layer.up_gate_proj_weight.set_value(paddle.stack(up_gate_proj_weights, axis=0))
+        layer.down_proj_weight.set_value(paddle.stack(down_proj_weights, axis=0))
+
+    def _get_default_config(self, M: int, E: int) -> dict:
+        """
+        GPU-aware heuristic tile config for BF16 MoE.
+
+        SM100 (B200): nearest-key lookup from SGLang tuned config
+          (triton_3_5_1/E=64,N=1856,device_name=NVIDIA_B200.json).
+        Others: original vLLM-ported heuristic.
+
+        M: number of tokens (pre-expansion token count).
+        E: number of (local) experts, SM100 not need.
+        """
+
+        if get_sm_version() >= 100:
+            best_key = min(_SM100_CONFIGS.keys(), key=lambda x: abs(x - M))
+            return _SM100_CONFIGS[best_key]
+
+        # Default heuristic for all other GPUs (SM80 & SM90) (ported from vLLM)
+        if M <= 32:
+            block_m = 16
+        elif M <= 96:
+            block_m = 32
+        elif M <= 512:
+            block_m = 64
+        else:
+            block_m = 128
+
+        block_n = 64 if M <= 64 else 128
+        block_k = 64
+
+        tokens_per_expert = M // max(E, 1)
+        group_m = 16 if tokens_per_expert > 128 else 1
+
+        num_warps = 4 if M <= 128 else 8
+        num_stages = 4 if M <= 32 else 3
+
+        return {
+            "BLOCK_SIZE_M": block_m,
+            "BLOCK_SIZE_N": block_n,
+            "BLOCK_SIZE_K": block_k,
+            "GROUP_SIZE_M": group_m,
+            "num_warps": num_warps,
+            "num_stages": num_stages,
+        }
+
+    def apply_tp(
+        self,
+        layer: nn.Layer,
+        x: paddle.Tensor,
+        gate: nn.Layer,
+        topk_ids_hookfunc: Callable = None,
+        fc1_latent_proj: nn.Layer = None,
+        fc2_latent_proj: nn.Layer = None,
+    ) -> paddle.Tensor:
+        """
+        BF16 Triton Fused MoE forward.
+
+        Pipeline:
+          1. Gate + topk routing
+          2. tritonmoe_preprocess -> sorted_token_ids, expert_ids, num_tokens_post_padded
+          3. fused_moe_kernel_bf16 GEMM1: [tokens*topk, K] x [E, K, 2N] -> [tokens*topk, 2N]
+          4. SwiGLU activation
+          5. fused_moe_kernel_bf16 GEMM2: [tokens*topk, N] x [E, N, K] -> [tokens*topk, K]
+             (with MUL_ROUTED_WEIGHT=True to fuse router weight multiplication)
+          6. Reshape + sum over topk dim
+        """
+        token_num = x.shape[0]
+        if token_num == 0:
+            return paddle.zeros([token_num, layer.hidden_size], dtype=x.dtype)
+
+        top_k = layer.top_k
+        num_local_experts = layer.num_local_experts
+        moe_intermediate_size = layer.moe_intermediate_size
+        hidden_size = layer.hidden_size
+
+        # --- 1. Routing ---
+        gate_out = gate(x)
+
+        if layer.topk_method == "noaux_tc":
+            use_fused = (
+                layer.fd_config.scheduler_config.enable_moe_scores_elementwise_fuse and current_platform.is_cuda()
+            )
+            if not use_fused:
+                gate_out = gate_out.cast("float32")
+
+            _, topk_weights, topk_ids = get_moe_scores(
+                gate_out,
+                layer.n_group,
+                layer.topk_group,
+                top_k,
+                layer.routed_scaling_factor,
+                layer.gate_correction_bias,
+                getattr(layer, "renormalize", True),
+                use_fused_cast=use_fused,
+                topk_reduce_func=getattr(layer, "topk_reduce_func", None),
+            )
+        else:
+            gate_out = gate_out.cast("float32")
+            topk_ids, topk_weights = fastdeploy.model_executor.ops.gpu.moe_topk_select(
+                gate_out,
+                layer.gate_correction_bias,
+                top_k,
+                True,  # apply_norm_weight
+                False,
+            )
+
+        if topk_ids_hookfunc is not None:
+            topk_ids_hookfunc(topk_ids=topk_ids)
+
+        # --- 2. Preprocess: sort tokens by expert assignment ---
+        num_token_expert_pairs = token_num * top_k
+        # vLLM convention: pass num_tokens (pre-expansion), NOT tokens*top_k.
+        cfg = self._get_default_config(token_num, num_local_experts)
+
+        sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
+            topk_ids, num_local_experts, cfg["BLOCK_SIZE_M"]
+        )
+        max_possible_num_post_padded = sorted_token_ids.shape[0]
+
+        # --- 3. GEMM1: hidden -> up_gate (BF16 x BF16 -> BF16) ---
+        # up_gate_proj_weight layout: [E, hidden_size, inter*2] => stride_be, stride_bk, stride_bn
+        up_gate_proj_out = paddle.empty(
+            [num_token_expert_pairs, moe_intermediate_size * 2],
+            dtype=x.dtype,
+        )
+        grid1 = (
+            ceil_div(max_possible_num_post_padded, cfg["BLOCK_SIZE_M"])
+            * ceil_div(moe_intermediate_size * 2, cfg["BLOCK_SIZE_N"]),
+        )
+        fused_moe_kernel_bf16[grid1](
+            x,
+            layer.up_gate_proj_weight,
+            up_gate_proj_out,
+            None,  # topk_weights_ptr (no weight mul on GEMM1)
+            sorted_token_ids,
+            expert_ids,
+            num_tokens_post_padded,
+            N=moe_intermediate_size * 2,
+            K=hidden_size,
+            EM=max_possible_num_post_padded,
+            num_valid_tokens=num_token_expert_pairs,
+            stride_am=x.strides[0],
+            stride_ak=x.strides[1],
+            stride_be=layer.up_gate_proj_weight.strides[0],
+            stride_bk=layer.up_gate_proj_weight.strides[1],
+            stride_bn=layer.up_gate_proj_weight.strides[2],
+            stride_cm=up_gate_proj_out.strides[0],
+            stride_cn=up_gate_proj_out.strides[1],
+            BLOCK_SIZE_M=cfg["BLOCK_SIZE_M"],
+            BLOCK_SIZE_N=cfg["BLOCK_SIZE_N"],
+            BLOCK_SIZE_K=cfg["BLOCK_SIZE_K"],
+            GROUP_SIZE_M=cfg["GROUP_SIZE_M"],
+            MUL_ROUTED_WEIGHT=False,
+            top_k=top_k,
+            compute_type=tl.bfloat16,
+            even_Ks=(hidden_size % cfg["BLOCK_SIZE_K"] == 0),
+            num_warps=cfg["num_warps"],
+            num_stages=cfg["num_stages"],
+        )
+
+        # --- 4. SwiGLU activation ---
+        down_proj_input = paddle.incubate.nn.functional.swiglu(up_gate_proj_out)
+
+        # --- 5. GEMM2: inter -> hidden, fuse router weight multiplication ---
+        # down_proj_weight layout: [E, moe_intermediate_size, hidden_size] => stride_be, stride_bk, stride_bn
+        down_proj_out = paddle.empty(
+            (num_token_expert_pairs, hidden_size),
+            dtype=x.dtype,
+        )
+        grid2 = (
+            ceil_div(max_possible_num_post_padded, cfg["BLOCK_SIZE_M"]) * ceil_div(hidden_size, cfg["BLOCK_SIZE_N"]),
+        )
+        fused_moe_kernel_bf16[grid2](
+            down_proj_input,
+            layer.down_proj_weight,
+            down_proj_out,
+            topk_weights,
+            sorted_token_ids,
+            expert_ids,
+            num_tokens_post_padded,
+            N=hidden_size,
+            K=moe_intermediate_size,
+            EM=max_possible_num_post_padded,
+            num_valid_tokens=num_token_expert_pairs,
+            stride_am=down_proj_input.strides[0],
+            stride_ak=down_proj_input.strides[1],
+            stride_be=layer.down_proj_weight.strides[0],
+            stride_bk=layer.down_proj_weight.strides[1],
+            stride_bn=layer.down_proj_weight.strides[2],
+            stride_cm=down_proj_out.strides[0],
+            stride_cn=down_proj_out.strides[1],
+            BLOCK_SIZE_M=cfg["BLOCK_SIZE_M"],
+            BLOCK_SIZE_N=cfg["BLOCK_SIZE_N"],
+            BLOCK_SIZE_K=cfg["BLOCK_SIZE_K"],
+            GROUP_SIZE_M=cfg["GROUP_SIZE_M"],
+            MUL_ROUTED_WEIGHT=True,
+            top_k=1,
+            compute_type=tl.bfloat16,
+            even_Ks=(moe_intermediate_size % cfg["BLOCK_SIZE_K"] == 0),
+            num_warps=cfg["num_warps"],
+            num_stages=cfg["num_stages"],
+        )
+
+        # --- 6. Reduce over topk ---
+        down_proj_out.reshape_([token_num, top_k, hidden_size])
+        out = down_proj_out.sum(axis=1)
+        return out
+
+    def apply_ep_prefill(
+        self, layer, x, gate, topk_ids_hookfunc=None, shared_experts=None, fc1_latent_proj=None, fc2_latent_proj=None
+    ):
+        raise NotImplementedError("TritonMoEMethod does not support EP prefill yet.")
+
+    def apply_ep_decode(
+        self, layer, x, gate, topk_ids_hookfunc=None, shared_experts=None, fc1_latent_proj=None, fc2_latent_proj=None
+    ):
+        raise NotImplementedError("TritonMoEMethod does not support EP decode yet.")

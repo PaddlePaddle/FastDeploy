@@ -16,8 +16,6 @@
 
 from typing import TYPE_CHECKING
 
-import paddle
-
 from fastdeploy.model_executor.ops.gpu import ngram_match
 
 from .base import Proposer
@@ -36,23 +34,17 @@ class NgramProposer(Proposer):
     def __init__(self, fd_config: "FDConfig"):
         super().__init__(fd_config)
         self.max_ngram_size = self.speculative_config.max_ngram_size
-        self.input_ids_len = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cpu()
-        self.input_ids_len_gpu = paddle.zeros(shape=[self.max_num_seqs, 1], dtype="int64").cuda()
-
-    def update(self, bid: int, seq_len: int):
-        """
-        update
-        """
-        self.input_ids_len[bid] = seq_len
-        self.input_ids_len_gpu[bid] = seq_len
 
     def _run_impl(self, share_inputs):
         """
         run
         """
+        # pad_to_max forces the kernel to write a fixed seq_lens_this_time =
+        # num_speculative_tokens + 1, padding unfilled draft slots with a placeholder token.
+        # Required when target cudagraph is enabled (capture-time slt must
+        # match replay-time slt; see ngram_match.cu for details). Disabled
+        # when cudagraph is off to avoid wasted verify on placeholders.
         ngram_match(
-            share_inputs["input_ids_cpu"].cuda(),
-            self.input_ids_len_gpu,
             share_inputs["token_ids_all"],
             share_inputs["prompt_lens"],
             share_inputs["step_idx"],
@@ -64,4 +56,5 @@ class NgramProposer(Proposer):
             share_inputs["max_dec_len"],
             self.max_ngram_size,
             self.max_draft_token_num,
+            self.graph_opt_config.use_cudagraph,
         )

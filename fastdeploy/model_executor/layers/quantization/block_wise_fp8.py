@@ -83,6 +83,13 @@ class BlockWiseFP8Config(QuantConfigBase):
         self.is_checkpoint_bf16 = is_checkpoint_bf16
         self.deepgemm_scale_ue8m0 = True if get_sm_version() >= 100 else False
 
+        self.moe_blockwise_gemm_scale_ue8m0 = self.deepgemm_scale_ue8m0
+        # ZKK add this code!
+        if self.deepgemm_scale_ue8m0:
+            # triton backend only used float32 scale!!!!
+            if not (self.use_deep_gemm or self.use_blackwell_gemm):
+                self.moe_blockwise_gemm_scale_ue8m0 = False
+
     def name(self) -> str:
         return "block_wise_fp8"
 
@@ -165,7 +172,7 @@ def deep_gemm_fp8_gemm_nt(
                 linear_out,
             )
             if bias is not None:
-                linear_out = paddle.add(linear_out, bias)
+                linear_out.add_(bias)
     else:
         fp8_gemm_nt(
             (x, x_scale_tensor),
@@ -380,7 +387,7 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             )
             x_scale_tensor = x_scale_tensor.T[: x.shape[0], ...]
 
-        if get_sm_version() == 100 and current_platform.is_cuda():
+        if get_sm_version() >= 100 and current_platform.is_cuda():
             deep_gemm_fp8_gemm_nt(
                 x,
                 x_scale_tensor,
@@ -401,5 +408,4 @@ class BlockWiseFP8LinearMethod(QuantMethodBase):
             )
             if layer.with_bias:
                 linear_out = paddle.add(linear_out, layer.bias)
-
         return linear_out

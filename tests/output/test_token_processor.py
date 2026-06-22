@@ -25,7 +25,12 @@ import paddle
 import pytest
 
 from fastdeploy import envs
-from fastdeploy.engine.request import Request, RequestMetrics, RequestOutput
+from fastdeploy.engine.request import (
+    Request,
+    RequestMetrics,
+    RequestOutput,
+    RequestStatus,
+)
 from fastdeploy.output import token_processor
 from fastdeploy.output.token_processor import (
     MAX_BSZ,
@@ -172,29 +177,41 @@ class _Metric:
 
 class _Metrics:
     def __init__(self):
-        self.spec_decode_num_accepted_tokens_total = _Metric()
-        self.spec_decode_num_emitted_tokens_total = _Metric()
-        self.spec_decode_draft_acceptance_rate = _Metric()
-        self.spec_decode_efficiency = _Metric()
-        self.spec_decode_num_draft_tokens_total = _Metric()
-        self.spec_decode_draft_single_head_acceptance_rate = [_Metric() for _ in range(MAX_DRAFT_TOKENS)]
-        self.time_per_output_token = _Metric()
-        self.generation_tokens_total = _Metric()
-        self.time_to_first_token = _Metric()
-        self.request_queue_time = _Metric()
-        self.request_prefill_time = _Metric()
-        self.request_decode_time = _Metric()
-        self.request_inference_time = _Metric()
-        self.request_generation_tokens = _Metric()
-        self.num_requests_running = _Metric()
-        self.request_success_total = _Metric()
-        self.available_gpu_block_num = _Metric()
-        self.batch_size = _Metric()
-        self.available_batch_size = _Metric()
-        self.request_token_ratio = _Metric()
+        self._metric_store = {}
+
+    def _key(self, name, labelvalues=None):
+        if labelvalues:
+            return (name, frozenset(labelvalues.items()))
+        return (name, None)
+
+    def _get_metric(self, name, labelvalues=None):
+        key = self._key(name, labelvalues)
+        if key not in self._metric_store:
+            self._metric_store[key] = _Metric()
+        return self._metric_store[key]
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return self._get_metric(name)
+
+    def __hasattr__(self, name):
+        return any(k[0] == name for k in self._metric_store)
 
     def _init_speculative_metrics(self, method, num_speculative_tokens):
         return None
+
+    def set_value(self, name, value, labelvalues=None):
+        self._get_metric(name, labelvalues).set(value)
+
+    def inc_value(self, name, value=1, labelvalues=None):
+        self._get_metric(name, labelvalues).inc(value)
+
+    def dec_value(self, name, value=1, labelvalues=None):
+        self._get_metric(name, labelvalues).dec(value)
+
+    def obs_value(self, name, value, labelvalues=None):
+        self._get_metric(name, labelvalues).observe(value)
 
 
 def test_init_allocates_expected_buffers():
@@ -542,7 +559,12 @@ def test_record_speculative_decoding_metrics_tracks_acceptance():
         assert metrics.spec_decode_num_emitted_tokens_total.value == 5
         assert pytest.approx(metrics.spec_decode_draft_acceptance_rate.value) == 0.75
         assert pytest.approx(metrics.spec_decode_efficiency.value) == pytest.approx(5 / 6)
-        assert pytest.approx(metrics.spec_decode_draft_single_head_acceptance_rate[0].value) == 1.5
+        assert (
+            pytest.approx(
+                metrics._get_metric("spec_decode_draft_single_head_acceptance_rate", labelvalues={"head": "0"}).value
+            )
+            == 1.5
+        )
 
 
 def test_recycle_resources_prefill_sends_first_token():
@@ -601,8 +623,8 @@ def test_recycle_resources_prefill_failure_sets_error():
     with mock.patch.object(envs, "ENABLE_V1_KVCACHE_SCHEDULER", False):
         processor._recycle_resources(task_id, 0, task, result, is_prefill=True)
 
-    assert result.error_code == 400
-    assert "failed" in result.error_message
+    assert result.error_code == 501
+    assert "failed" in result.error_msg
     assert connector.calls and connector.calls[0][1][0] is result
 
 
@@ -670,6 +692,7 @@ def test_process_batch_output_consumes_tokens_and_finishes_task():
         prompt_token_ids_len=0,
         num_total_tokens=1,
         block_tables=[1],
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     task.get = lambda key, default=None: getattr(task, key, default)
@@ -707,11 +730,13 @@ def test_process_batch_output_logprob_records_topk_and_caching():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
-    processor.output_tokens[1, 0] = 1
+    # mtext[1] packs bsz (low 16 bits) | actual_topk (high 16 bits)
+    processor.output_tokens[1, 0] = 1 | ((K + 1) << 16)
     token_block = np.arange(K + 1, dtype=np.int64) + 3
     processor.output_tokens[2 : 2 + K + 1] = paddle.to_tensor(token_block.reshape([-1, 1]))
     processor.output_scores[: K + 1] = paddle.ones([K + 1, 1], dtype="float32")
@@ -740,7 +765,7 @@ def test_process_batch_output_speculative_logprob_handles_draft_batch():
     )
     processor._batch_result_buffer = [target]
     processor.cached_generated_tokens = mock.Mock()
-    processor.output_tokens[1, 0] = 4
+    processor.output_tokens[1, 0] = 4 | ((K + 1) << 8)
     processor.output_tokens[2, 0] = 1
     processor.output_tokens[3, 0] = 1
 
@@ -783,6 +808,7 @@ def test_process_batch_output_speculative_recovery_stop_finishes():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     rm.tasks_list[0] = task
@@ -833,7 +859,8 @@ def test_process_batch_output_prefill_chunk_and_adapter_skip():
     task.get = lambda key, default=None: getattr(task, key, default)
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
-    processor.output_tokens[1, 0] = 1
+    # mtext[1] packs bsz (low 16 bits) | actual_topk (high 16 bits)
+    processor.output_tokens[1, 0] = 1 | ((K + 1) << 16)
     processor.output_tokens[2 : 2 + K + 1] = paddle.to_tensor(np.ones([K + 1, 1], dtype=np.int64))
     processor.output_scores[: K + 1] = paddle.ones([K + 1, 1], dtype="float32")
     processor.output_ranks[0] = paddle.to_tensor(0, dtype="int64")
@@ -910,11 +937,12 @@ def test_process_batch_output_speculative_logprob_targets_topk_scores():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     rm.tasks_list[0] = task
     rm.req_dict[task.request_id] = task
-    processor.output_tokens[1, 0] = 3
+    processor.output_tokens[1, 0] = 3 | ((K + 1) << 8)
     processor.output_tokens[2, 0] = 1
     processor.output_tokens[3, 0] = 2
     token_block = np.arange(MAX_DRAFT_TOKENS * (K + 1), dtype=np.int64).reshape([-1, 1]) + 3
@@ -1075,6 +1103,7 @@ def test_process_batch_output_records_second_decode_token():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     task.metrics.inference_start_time = time.time()
@@ -1099,16 +1128,46 @@ def test_record_speculative_metrics_calls_init_when_missing():
 
     class _MinimalMetrics:
         def __init__(self):
+            self._metric_store = {}
+            self._created_attrs = set()
             self.init_called = False
 
+        def _get_metric(self, name, labelvalues=None):
+            key = (name, frozenset(labelvalues.items()) if labelvalues else None)
+            if key not in self._metric_store:
+                self._metric_store[key] = _Metric()
+            return self._metric_store[key]
+
+        def __getattr__(self, name):
+            if name.startswith("_"):
+                raise AttributeError(name)
+            if name not in self._created_attrs:
+                raise AttributeError(name)
+            return self._get_metric(name)
+
         def _init_speculative_metrics(self, method, num_speculative_tokens):
-            self.spec_decode_num_accepted_tokens_total = _Metric()
-            self.spec_decode_num_emitted_tokens_total = _Metric()
-            self.spec_decode_draft_acceptance_rate = _Metric()
-            self.spec_decode_efficiency = _Metric()
-            self.spec_decode_num_draft_tokens_total = _Metric()
-            self.spec_decode_draft_single_head_acceptance_rate = [_Metric() for _ in range(MAX_DRAFT_TOKENS)]
             self.init_called = True
+            for n in (
+                "spec_decode_num_accepted_tokens_total",
+                "spec_decode_num_emitted_tokens_total",
+                "spec_decode_draft_acceptance_rate",
+                "spec_decode_efficiency",
+                "spec_decode_num_draft_tokens_total",
+                "spec_decode_draft_single_head_acceptance_rate",
+            ):
+                self._created_attrs.add(n)
+
+        def set_value(self, name, value, labelvalues=None):
+            self._get_metric(name, labelvalues).set(value)
+
+        def inc_value(self, name, value=1, labelvalues=None):
+            self._get_metric(name, labelvalues).inc(value)
+
+        def dec_value(self, name, value=1, labelvalues=None):
+            self._get_metric(name, labelvalues).dec(value)
+
+        def obs_value(self, name, value, labelvalues=None):
+            self._get_metric(name, labelvalues).observe(value)
 
     processor.accept_token_num_per_head = [1, 1] + [0] * (MAX_DRAFT_TOKENS - 2)
     processor.num_accepted_tokens = 2
@@ -1144,6 +1203,7 @@ def test_process_batch_output_prefill_sets_draft_tokens():
         num_total_tokens=1,
         block_tables=[1],
         get=lambda key, default=None: None,
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     rm.tasks_list[0] = task
@@ -1185,6 +1245,7 @@ def test_process_batch_output_logs_recovery_stop_for_non_speculative():
         prompt_token_ids_len=0,
         num_total_tokens=1,
         block_tables=[1],
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     task.get = lambda k, d=None: getattr(task, k, d)
@@ -1222,6 +1283,7 @@ def test_process_batch_output_sets_multimodal_token_counts():
         num_total_tokens=1,
         block_tables=[1],
         multimodal_inputs={"num_input_image_tokens": 4, "num_input_video_tokens": 5},
+        status=RequestStatus.RUNNING_DECODE,
     )
     task.trace_carrier = None
     task.get = lambda key, default=None: getattr(task, key, default)

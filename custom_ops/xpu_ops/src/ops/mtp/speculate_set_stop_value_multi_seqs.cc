@@ -22,9 +22,24 @@
 #endif
 
 namespace api = baidu::xpu::api;
+
+/**
+ * @brief Stop-sequence detection for speculative decoding.
+ *
+ * for bid in [0, bs):
+ *   if step_idx[bid] + accept_num[bid] < min_tokens[bid]: skip
+ *   if stop_flags[bid]: skip
+ *   tokens = token_ids_all[bid][prompt_len:] ++ accept_tokens[bid]
+ *   for each stop_seq in stop_seqs[bid]:
+ *     for accept_idx in [-1, accept_num-2]:  // -1 = delayed match from prev
+ * round if tokens[..accept_idx] ends with stop_seq: accept_nums[bid] =
+ * accept_idx + 1 accept_tokens[bid][accept_idx] = end_id break
+ *   // stop_flags is NOT set here; handled by downstream operators.
+ */
 void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
                                const paddle::Tensor &accept_num,
-                               const paddle::Tensor &pre_ids,
+                               const paddle::Tensor &token_ids_all,
+                               const paddle::Tensor &prompt_lens,
                                const paddle::Tensor &step_idx,
                                const paddle::Tensor &stop_flags,
                                const paddle::Tensor &seq_lens,
@@ -45,9 +60,10 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
   std::vector<int64_t> shape = accept_tokens.shape();
   std::vector<int64_t> stop_seqs_shape = stop_seqs.shape();
   int bs_now = shape[0];
-  int stop_seqs_bs = stop_seqs_shape[0];
-  int stop_seqs_max_len = stop_seqs_shape[1];
-  int pre_ids_len = pre_ids.shape()[1];
+  // Align with GPU: stop_seqs shape is [bs, stop_seqs_bs, stop_seqs_max_len]
+  int stop_seqs_bs = stop_seqs_shape[1];
+  int stop_seqs_max_len = stop_seqs_shape[2];
+  int max_model_len = token_ids_all.shape()[1];
   int accept_tokens_len = accept_tokens.shape()[1];
 
   int r = fastdeploy::plugin::speculate_set_stop_value_multi_seqs(
@@ -55,7 +71,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
       const_cast<bool *>(stop_flags.data<bool>()),
       const_cast<int64_t *>(accept_tokens.data<int64_t>()),
       const_cast<int *>(accept_num.data<int>()),
-      pre_ids.data<int64_t>(),
+      token_ids_all.data<int64_t>(),
+      prompt_lens.data<int64_t>(),
       step_idx.data<int64_t>(),
       stop_seqs.data<int64_t>(),
       stop_seqs_len.data<int>(),
@@ -66,7 +83,7 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
       accept_tokens_len,
       stop_seqs_bs,
       stop_seqs_max_len,
-      pre_ids_len);
+      max_model_len);
   PD_CHECK(r == 0,
            "fastdeploy::plugin::speculate_set_stop_value_multi_seqs failed.");
 }
@@ -74,7 +91,8 @@ void SpecGetStopFlagsMultiSeqs(const paddle::Tensor &accept_tokens,
 PD_BUILD_STATIC_OP(speculate_set_stop_value_multi_seqs)
     .Inputs({"accept_tokens",
              "accept_num",
-             "pre_ids",
+             "token_ids_all",
+             "prompt_lens",
              "step_idx",
              "stop_flags",
              "seq_lens",

@@ -43,7 +43,7 @@ from fastdeploy.logger.request_logger import (
     log_request,
     log_request_error,
 )
-from fastdeploy.utils import ErrorType
+from fastdeploy.utils import ErrorType, make_choice_id
 from fastdeploy.worker.output import LogprobsLists
 
 
@@ -106,7 +106,7 @@ class OpenAIServingCompletion(OpenAiServingBase):
             request_prompts = request_prompt_ids
         ctx.preprocess_requests = []
         for idx, prompt in enumerate(request_prompts):
-            request_id_idx = f"{request_id}_{idx}"
+            request_id_idx = make_choice_id(request_id, idx)
             current_req_dict = request.to_dict_for_infer(request_id_idx, prompt)
             current_req_dict["arrival_time"] = time.time()
             ctx.preprocess_requests.append(current_req_dict)
@@ -355,9 +355,10 @@ class OpenAIServingCompletion(OpenAiServingBase):
             return res
         except Exception as e:
             log_request_error(
-                message="request[{request_id}] Error in completion_full_generator: {error}",
+                message="request[{request_id}] Error in completion_full_generator: {error}, {traceback}",
                 request_id=ctx.request_id,
                 error=e,
+                traceback=traceback.format_exc(),
             )
             return self._create_error_response(str(e))
 

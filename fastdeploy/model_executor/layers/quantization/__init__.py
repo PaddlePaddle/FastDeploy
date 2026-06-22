@@ -30,6 +30,7 @@ QUANTIZATION_METHODS: List[str] = [
     "weight_only",
     "block_wise_fp8",
     "w4afp8",
+    "wfp4afp8",
     "w8a8",
     "w4a8",
     "wfp8afp8",
@@ -68,9 +69,38 @@ def _is_full_quantization_config(quantization_dict):
     return False
 
 
+def _is_mega_moe_quantization_config(quantization_config):
+    return isinstance(quantization_config, dict) and quantization_config.get("moe_quant_type") == "wfp4afp8"
+
+
+def _get_mega_moe_quantization_config():
+    return {
+        "quantization": "mix_quant",
+        "kv_cache_quant_type": "block_wise_fp8",
+        "dense_quant_type": "block_wise_fp8",
+        "moe_quant_type": "wfp4afp8",
+        "is_quantized": False,
+    }
+
+
 def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     if args.quantization is not None and isinstance(args.quantization, str):
         args.quantization = parse_quantization(args.quantization)
+
+    enable_mega_moe = getattr(args, "enable_mega_moe", False)
+    if enable_mega_moe:
+        mega_moe_quantization_config = _get_mega_moe_quantization_config()
+
+        if args.quantization is None and model_config.quantization_config is None:
+            args.quantization = mega_moe_quantization_config
+        if args.quantization is not None and not _is_mega_moe_quantization_config(args.quantization):
+            raise ValueError("--enable-mega-moe requires moe_quant_type=wfp4afp8.")
+        if model_config.quantization_config is not None and not _is_mega_moe_quantization_config(
+            model_config.quantization_config
+        ):
+            raise ValueError(
+                "--enable-mega-moe conflicts with model quantization_config. It requires moe_quant_type=wfp4afp8."
+            )
 
     # Determine whether CLI --quantization is a simple method name or a full JSON quantization_config
     cli_quantization = args.quantization
@@ -83,8 +113,40 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     model_quantization_config = model_config.quantization_config
     quantization_config = model_quantization_config
 
+    # override an offline NVFP4 (modelopt) checkpoint with a top-level mix_quant config so that MoE continues
+    # to load NVFP4 weights while dense layers fall back to another online
+    # quantization (e.g. block_wise_fp8). For example, eb5-800B-fp4
+    mix_quant_overrides_nvfp4 = (
+        cli_is_full_config
+        and isinstance(cli_quantization, dict)
+        and cli_quantization.get("quantization") == "mix_quant"
+        and cli_quantization.get("moe_quant_type") == "modelopt_fp4"
+        and isinstance(model_quantization_config, dict)
+        and model_quantization_config.get("quant_method") == "modelopt"
+        and model_quantization_config.get("quant_algo", "").upper() == "NVFP4"
+    )
+
     # If CLI provides a full quantization_config JSON, handle priority with config.json
-    if cli_is_full_config:
+    if mix_quant_overrides_nvfp4:
+        logger.warning(
+            "Using --quantization mix_quant to override model's NVFP4 config.json. "
+            "MoE will load NVFP4 weights from the checkpoint, dense layers will "
+            f"use '{cli_quantization.get('dense_quant_type')}' online quantization."
+        )
+        merged = dict(cli_quantization)
+        # Pass the original NVFP4 dict through to MixQuantConfig so it can
+        # instantiate ModelOptNvFp4Config for MoE layers.
+        merged["moe_quant_config"] = dict(model_quantization_config)
+        # Only MoE is offline-quantized in the checkpoint; dense Linear
+        # weights are still bf16 and should be quantized online.
+        merged["is_quantized"] = False
+        merged["is_moe_quantized"] = True
+        quantization_config = merged
+        # MoE routing uses model_config.is_moe_quantized.
+        model_config.is_moe_quantized = True
+        # Skip _get_offline_quant_config_name; use mix_quant cls instead.
+        model_quantization_config = None
+    elif cli_is_full_config:
         if model_quantization_config is not None:
             if model_quantization_config != cli_quantization:
                 logger.warning(
@@ -101,7 +163,12 @@ def parse_quant_config(args, model_config, is_ernie, is_v1_loader):
     # 1.model_config.is_quantized
     # TODO(bukejiyu)  model_config.is_quantized is v0 only need to be removed in future
     if model_config.model_format == "torch":
-        if quantization_config is not None:
+        # In the mix_quant-override-NVFP4 hybrid case, only MoE weights are
+        # offline-quantized; dense Linear weights are still bf16 and must NOT
+        # be flagged as quantized (otherwise Linear.is_quantized becomes True
+        # and attention weight-loading looks for non-existent ".quant_weight"
+        # keys, leaving attention weights at init and producing garbage).
+        if quantization_config is not None and not mix_quant_overrides_nvfp4:
             model_config.is_quantized = True
     else:
         if not model_config.is_quantized:
@@ -214,6 +281,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
     from .w4afp8 import W4AFP8Config
     from .w8a8 import W8A8Config
     from .weight_only import WeightOnlyConfig, WINT4Config, WINT8Config
+    from .wfp4afp8 import WFP4AFP8Config
     from .wfp8afp8 import WFP8AFP8Config
     from .wint2 import WINT2Config
 
@@ -230,6 +298,7 @@ def get_quantization_config(quantization: str) -> Type[QuantConfigBase]:
         "w8a8": W8A8Config,
         "w4a8": W4A8Config,
         "wfp8afp8": WFP8AFP8Config,
+        "wfp4afp8": WFP4AFP8Config,
         "tensor_wise_fp8": TensorWiseFP8Config,
         "kvcache": KvCacheQuantConfig,
         "mix_quant": MixQuantConfig,

@@ -21,6 +21,7 @@ import queue
 import threading
 import time
 import traceback
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import numpy as np
 import paddle
@@ -618,7 +619,11 @@ class CacheMessagerV1:
         self.engine_cache_task_thread_lock = threading.Lock()
         self.engine_cache_tasks = [dict() for _ in range(512)]
         self.idx_cache_task_dict = {}
+        self.pending_layer0_signals = {}
+        self.pending_layer0_signal_lock = threading.Lock()
         self.cache_prefilled_engine_ids_queue = queue.Queue()  # keep batch slot index for each prefill step
+        # Max concurrent tasks = layers * requests, but capped to avoid over-subscription
+        self._cache_write_executor = ThreadPoolExecutor(max_workers=32)
         if splitwise_role == "prefill":
             consume_signals_thread = threading.Thread(target=self.consume_signals)
             consume_signals_thread.daemon = True
@@ -661,7 +666,28 @@ class CacheMessagerV1:
                             current_info["status"] = "init"
                             logger.info(f"Get cache info from D: finish add cache task: {current_info}")
                             self.cache_info[info["request_id"]] = current_info
-                            self.idx_cache_task_dict[current_info["current_id"]] = current_info
+                            current_id = current_info["current_id"]
+                            with self.engine_cache_task_thread_lock:
+                                self.idx_cache_task_dict[current_id] = current_info
+                                with self.pending_layer0_signal_lock:
+                                    recovered_signal = self.pending_layer0_signals.pop(current_id, None)
+                            if recovered_signal is not None:
+                                _, prefilled_token_num = recovered_signal
+                                if prefilled_token_num <= current_info["need_prefill_tokens"]:
+                                    recovered_signal_batch = [recovered_signal]
+                                    logger.info(
+                                        "cache_task_register_recover_layer0_signal: "
+                                        f"current_id: {current_id}, "
+                                        f"recovered_signal_batch: {recovered_signal_batch}"
+                                    )
+                                    self.cache_prefilled_engine_ids_queue.put(recovered_signal_batch)
+                                else:
+                                    logger.info(
+                                        "cache_task_register_drop_layer0_signal: "
+                                        f"current_id: {current_id}, "
+                                        f"recovered_signal: {recovered_signal}, "
+                                        f"need_prefill_tokens: {current_info['need_prefill_tokens']}"
+                                    )
                         else:
                             logger.info(f"Get cache info from P: {info}")
                             self.cache_info[info["request_id"]] = info
@@ -679,7 +705,9 @@ class CacheMessagerV1:
         """
         layerwise_send_cache_thread:
         send cache to other instance
+        Optimized with FULL concurrent processing: both within-layer and cross-layer parallelism.
         """
+
         while True:
             try:
                 batch_engine_signals = self.cache_prefilled_engine_ids_queue.get()
@@ -723,107 +751,106 @@ class CacheMessagerV1:
                     if sended_layer_idx == prefilled_layer_idx:  # computation not in next layer
                         time.sleep(0.001)
 
-                    for layer_idx in range(start_layer_idx, end_layer_idx + 1):
-                        for i, (block_id_start, block_id_end) in enumerate(block_start_end_list):
-                            engine_index = batch_engine_signals[i][0]
-                            task = self.idx_cache_task_dict[engine_index]
-                            req_id = task["request_id"]
-                            if (
-                                block_id_start >= block_id_end
-                            ):  # no blocks need to transfer for this request in this chunk
-                                task["sended_layer_id"] += 1
-                                assert task["sended_layer_id"] == layer_idx
-                                if task["sended_layer_id"] == self.num_layers - 1:
-                                    task["sended_layer_id"] = -1
-                                continue
+                    # FULL CONCURRENT: submit ALL (layer x request) combinations at once
+                    num_layers_to_send = end_layer_idx - start_layer_idx + 1
+                    num_requests = len(block_start_end_list)
+                    total_tasks = num_layers_to_send * num_requests
+
+                    # Pre-establish all RDMA connections BEFORE concurrent writes (connections are NOT thread-safe)
+                    connection_info = {}  # Maps request_idx to (decode_ip, decode_idx, protocol)
+                    for i, (block_id_start, block_id_end) in enumerate(block_start_end_list):
+                        if block_id_start >= block_id_end:
+                            continue  # No blocks to transfer
+                        engine_index = batch_engine_signals[i][0]
+                        task = self.idx_cache_task_dict[engine_index]
+                        current_transfer_protocol = task["transfer_protocol"]
+
+                        if current_transfer_protocol == "rdma":
+                            decode_ip, decode_rdma_ports = get_decode_ip_idx(task)
+                            decode_tp_size = task.get("decode_tp_size", self.nranks)
+                            if len(decode_rdma_ports) == self.nranks:
+                                decode_idx = int(decode_rdma_ports[self.rank])
+                            elif len(decode_rdma_ports) == 1:
+                                decode_idx = decode_rdma_ports[0]
                             else:
-                                current_transfer_protocol = task["transfer_protocol"]
-                                if task["transfer_protocol"] == "rdma":
-                                    decode_ip, decode_rdma_ports = get_decode_ip_idx(task)
-                                    # Default decode_tp_size to prefill tp_size (self.nranks) if not specified
-                                    decode_tp_size = task.get("decode_tp_size", self.nranks)
-                                    if len(decode_rdma_ports) == self.nranks:
-                                        decode_idx = int(decode_rdma_ports[self.rank])
-                                    elif len(decode_rdma_ports) == 1:
-                                        decode_idx = decode_rdma_ports[0]
-                                    else:
-                                        task["status"] = "the tp_size of prefill and decode is mismatch"
-                                        continue
+                                task["status"] = "the tp_size of prefill and decode is mismatch"
+                                continue
 
-                                    if "error" in task["status"]:
-                                        continue
+                            if "error" in task["status"]:
+                                continue
 
-                                    # TODO: use is connected to check if the connection is still alive
-                                    logger.debug(
-                                        f"rdma, start connect decode, {decode_ip}:{decode_idx}, "
-                                        f"prefill_tp_size:{self.nranks}, decode_tp_size:{decode_tp_size}"
-                                    )
-                                    status = self.messager[current_transfer_protocol].connect(
-                                        decode_ip, decode_idx, decode_tp_size
-                                    )
-                                    if status:
-                                        logger.debug(f"connect to {decode_ip}:{decode_idx} success")
-                                    else:
-                                        logger.error(f"connect to {decode_ip}:{decode_idx} failed")
-                                        task["status"] = "connection error"
-                                        continue
-                                elif task["transfer_protocol"] == "ipc":
-                                    decode_device_ids = (
-                                        task["decode_device_ids"]
-                                        if "decode_device_ids" in task
-                                        else task["device_ids"]
-                                    )
-                                    decode_ip = "0.0.0.0"
-                                    decode_idx = int(decode_device_ids[self.rank])
+                            # Establish connection once per request (serial, thread-safe)
+                            logger.debug(
+                                f"rdma, pre-connect decode, {decode_ip}:{decode_idx}, "
+                                f"prefill_tp_size:{self.nranks}, decode_tp_size:{decode_tp_size}"
+                            )
+                            status = self.messager[current_transfer_protocol].connect(
+                                decode_ip, decode_idx, decode_tp_size
+                            )
+                            if status:
+                                logger.debug(f"pre-connect to {decode_ip}:{decode_idx} success")
+                                connection_info[i] = (decode_ip, decode_idx, current_transfer_protocol)
+                            else:
+                                logger.error(f"pre-connect to {decode_ip}:{decode_idx} failed")
+                                task["status"] = "connection error"
+                                continue
+                        elif current_transfer_protocol == "ipc":
+                            decode_device_ids = (
+                                task["decode_device_ids"] if "decode_device_ids" in task else task["device_ids"]
+                            )
+                            decode_ip = "0.0.0.0"
+                            decode_idx = int(decode_device_ids[self.rank])
+                            connection_info[i] = (decode_ip, decode_idx, current_transfer_protocol)
 
-                                src_block_ids = task["src_block_ids"][block_id_start:block_id_end]
-                                dest_block_ids = task["dest_block_ids"][block_id_start:block_id_end]
-                                if current_transfer_protocol == "ipc":
-                                    src_block_ids = paddle.to_tensor(src_block_ids, dtype="int32", place="cpu")
-                                    dest_block_ids = paddle.to_tensor(dest_block_ids, dtype="int32", place="cpu")
+                    if total_tasks > 1:
+                        # Create per-task completion tracking
+                        task_completion_lock = threading.Lock()
+                        completed_layers_per_request = {i: set() for i in range(num_requests)}
 
-                                logger.info(
-                                    f"start write cache for a layer, {req_id}, {layer_idx}, {decode_ip}, {decode_idx}, block_id_start {block_id_start} block_id_end {block_id_end}"
-                                )
-                                tic = time.perf_counter()
-                                return_code = self.messager[current_transfer_protocol].write_cache(
-                                    decode_ip,
-                                    decode_idx,
-                                    src_block_ids,
-                                    dest_block_ids,
+                        futures = {}
+                        for layer_idx in range(start_layer_idx, end_layer_idx + 1):
+                            for i, (block_id_start, block_id_end) in enumerate(block_start_end_list):
+                                engine_index = batch_engine_signals[i][0]
+                                task = self.idx_cache_task_dict[engine_index]
+                                future = self._cache_write_executor.submit(
+                                    self._write_cache_for_request_concurrent,
+                                    task,
                                     layer_idx,
+                                    block_id_start,
+                                    block_id_end,
+                                    current_prefilled_token_num_list[i],
+                                    i,
+                                    task_completion_lock,
+                                    completed_layers_per_request,
+                                    start_layer_idx,
+                                    end_layer_idx,
+                                    connection_info,
                                 )
-                                if return_code != 0:
-                                    task["status"] = "write cache error"
-                                    logger.error(
-                                        f"write cache failed, layer_idx: {layer_idx}, req_id: {req_id}, dest_ip: {decode_ip}, block_id_start {block_id_start} block_id_end {block_id_end}"
-                                    )
-                                tok = time.perf_counter()
-                                cost_time = tok - tic
-                                block_num = len(src_block_ids)
-                                avg_time_per_block = cost_time * 1000 / block_num  # ms
-                                send_cache_speed = block_num * self.block_bytes / 1073741824 / cost_time  # GB/s
-                                logger.debug(
-                                    f"finish write cache for a layer, {req_id}, {layer_idx}, {decode_ip}, {decode_idx},"
-                                    f"block_num: {block_num}, send_cache_speed(GB/s): {round(send_cache_speed, 5)},"
-                                    f"avg_time per block(ms): {round(avg_time_per_block, 5)} block_id_start {block_id_start} block_id_end {block_id_end}"
+                                futures[future] = (layer_idx, i, engine_index)
+
+                        # Wait for all writes to complete
+                        for future in as_completed(futures):
+                            layer_idx, i, engine_index = futures[future]
+                            try:
+                                future.result()
+                            except Exception as e:
+                                logger.error(f"Error in concurrent cache write layer {layer_idx} request {i}: {e}")
+                    else:
+                        # Single task, no need for thread pool
+                        for layer_idx in range(start_layer_idx, end_layer_idx + 1):
+                            for i, (block_id_start, block_id_end) in enumerate(block_start_end_list):
+                                engine_index = batch_engine_signals[i][0]
+                                task = self.idx_cache_task_dict[engine_index]
+                                self._write_cache_for_request_single(
+                                    task,
+                                    layer_idx,
+                                    block_id_start,
+                                    block_id_end,
+                                    current_prefilled_token_num_list[i],
+                                    i,
+                                    connection_info,
                                 )
 
-                                task["sended_layer_id"] += 1
-                                assert task["sended_layer_id"] == layer_idx
-                                if task["sended_layer_id"] == self.num_layers - 1:
-                                    self.idx_cache_task_dict[engine_index]["sended_block_num"] += (
-                                        block_id_end - block_id_start
-                                    )
-                                    if current_prefilled_token_num_list[i] == task["need_prefill_tokens"]:
-                                        if "error" not in task["status"]:
-                                            task["status"] = "finished"
-                                            logger.info(
-                                                f"Finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end}, "
-                                                f"need_prefill_tokens {task['need_prefill_tokens']}, cache dtype: {self.cache_dtype}"
-                                            )
-                                    else:
-                                        task["sended_layer_id"] = -1
                     if end_layer_idx == self.num_layers - 1:
                         with self.engine_cache_task_thread_lock:
                             for engine_idx, _ in batch_engine_signals:
@@ -842,13 +869,195 @@ class CacheMessagerV1:
                                     logger.info(
                                         f"Put successful cache writing task in engine worker queue, req_id: {task['request_id']}, status: {task['status']}"
                                     )
-                                    self.engine_cache_tasks[task["current_id"]] = dict()
+                                    current_id = task["current_id"]
+                                    self.engine_cache_tasks[current_id] = dict()
                                     del self.cache_info[task["request_id"]]
-                                    del self.idx_cache_task_dict[task["current_id"]]
+                                    del self.idx_cache_task_dict[current_id]
+                                    with self.pending_layer0_signal_lock:
+                                        self.pending_layer0_signals.pop(current_id, None)
                         break
             except Exception as e:
                 logger.error(f"prefill layerwise send cache thread has exception: {e} {traceback.format_exc()!s}")
                 time.sleep(0.01)
+
+    def _write_cache_for_request_concurrent(
+        self,
+        task,
+        layer_idx,
+        block_id_start,
+        block_id_end,
+        prefilled_token_num,
+        request_idx,
+        task_completion_lock,
+        completed_layers_per_request,
+        start_layer_idx,
+        end_layer_idx,
+        connection_info,
+    ):
+        """
+        Helper function for FULL concurrent cache writes (layer x request parallelism).
+        Handles concurrent state updates safely.
+        Connection must be pre-established before calling this function.
+        """
+        req_id = task["request_id"]
+        if block_id_start >= block_id_end:
+            # no blocks need to transfer for this request in this chunk
+            with task_completion_lock:
+                completed_layers_per_request[request_idx].add(layer_idx)
+                # Check if all layers completed for this request
+                if len(completed_layers_per_request[request_idx]) == (end_layer_idx - start_layer_idx + 1):
+                    task["sended_layer_id"] = end_layer_idx
+                    if end_layer_idx == self.num_layers - 1:
+                        if prefilled_token_num == task["need_prefill_tokens"]:
+                            if "error" not in task["status"]:
+                                task["status"] = "finished"
+                                logger.info(f"Finish write cache for all layers (no blocks), req_id: {req_id}")
+                        else:
+                            task["sended_layer_id"] = -1
+            return
+
+        # Use pre-established connection info (connection was made serially before concurrent writes)
+        if request_idx not in connection_info:
+            # Connection failed during pre-connect phase
+            if "error" not in task["status"]:
+                task["status"] = "connection error"
+                logger.error(
+                    f"connection info not found for request_idx: {request_idx}, "
+                    f"req_id: {req_id}, layer_idx: {layer_idx}"
+                )
+            return
+
+        decode_ip, decode_idx, current_transfer_protocol = connection_info[request_idx]
+
+        if "error" in task["status"]:
+            return
+
+        src_block_ids = task["src_block_ids"][block_id_start:block_id_end]
+        dest_block_ids = task["dest_block_ids"][block_id_start:block_id_end]
+        if current_transfer_protocol == "ipc":
+            src_block_ids = paddle.to_tensor(src_block_ids, dtype="int32", place="cpu")
+            dest_block_ids = paddle.to_tensor(dest_block_ids, dtype="int32", place="cpu")
+
+        logger.info(
+            f"start write cache for a layer, {req_id}, {layer_idx}, {decode_ip}, {decode_idx}, "
+            f"block_id_start {block_id_start}, block_id_end {block_id_end}"
+        )
+        tic = time.perf_counter()
+        return_code = self.messager[current_transfer_protocol].write_cache(
+            decode_ip,
+            decode_idx,
+            src_block_ids,
+            dest_block_ids,
+            layer_idx,
+        )
+        if return_code != 0:
+            with task_completion_lock:
+                task["status"] = "write cache error"
+            logger.error(
+                f"write cache failed, layer_idx: {layer_idx}, req_id: {req_id}, "
+                f"dest_ip: {decode_ip}, block_id_start {block_id_start}, "
+                f"block_id_end {block_id_end}, return_code: {return_code}, "
+                f"start_layer_idx: {start_layer_idx}, end_layer_idx: {end_layer_idx}, "
+                f"src_block_ids: {src_block_ids}, dest_block_ids: {dest_block_ids}"
+            )
+        tok = time.perf_counter()
+        cost_time = tok - tic
+        block_num = len(src_block_ids)
+        avg_time_per_block = cost_time * 1000 / block_num  # ms
+        send_cache_speed = block_num * self.block_bytes / 1073741824 / cost_time  # GB/s
+        logger.debug(
+            f"finish write cache for a layer, {req_id}, {layer_idx}, {decode_ip}, {decode_idx},"
+            f"block_num: {block_num}, send_cache_speed(GB/s): {round(send_cache_speed, 5)},"
+            f"avg_time per block(ms): {round(avg_time_per_block, 5)} block_id_start {block_id_start} block_id_end {block_id_end}"
+        )
+
+        # Thread-safe state update
+        with task_completion_lock:
+            completed_layers_per_request[request_idx].add(layer_idx)
+            # Check if all layers completed for this request
+            if len(completed_layers_per_request[request_idx]) == (end_layer_idx - start_layer_idx + 1):
+                task["sended_layer_id"] = end_layer_idx
+                if end_layer_idx == self.num_layers - 1:
+                    engine_index = task["current_id"]
+                    self.idx_cache_task_dict[engine_index]["sended_block_num"] += block_id_end - block_id_start
+                    if prefilled_token_num == task["need_prefill_tokens"]:
+                        if "error" not in task["status"]:
+                            task["status"] = "finished"
+                            logger.info(
+                                f"Finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end}, "
+                                f"need_prefill_tokens {task['need_prefill_tokens']}, cache dtype: {self.cache_dtype}"
+                            )
+                    else:
+                        task["sended_layer_id"] = -1
+
+    def _write_cache_for_request_single(
+        self, task, layer_idx, block_id_start, block_id_end, prefilled_token_num, request_idx, connection_info
+    ):
+        """
+        Helper function to write cache for a single request at a single layer (sequential mode).
+        Connection must be pre-established before calling this function.
+        """
+        req_id = task["request_id"]
+        if block_id_start >= block_id_end:
+            task["sended_layer_id"] = layer_idx
+            if task["sended_layer_id"] == self.num_layers - 1:
+                if prefilled_token_num == task["need_prefill_tokens"]:
+                    if "error" not in task["status"]:
+                        task["status"] = "finished"
+                        logger.info(f"Finish write cache for all layers (no blocks), req_id: {req_id}")
+                else:
+                    task["sended_layer_id"] = -1
+            return
+
+        # Use pre-established connection info
+        if request_idx not in connection_info:
+            if "error" not in task["status"]:
+                task["status"] = "connection error"
+            return
+
+        decode_ip, decode_idx, current_transfer_protocol = connection_info[request_idx]
+
+        if "error" in task["status"]:
+            return
+
+        src_block_ids = task["src_block_ids"][block_id_start:block_id_end]
+        dest_block_ids = task["dest_block_ids"][block_id_start:block_id_end]
+        if current_transfer_protocol == "ipc":
+            src_block_ids = paddle.to_tensor(src_block_ids, dtype="int32", place="cpu")
+            dest_block_ids = paddle.to_tensor(dest_block_ids, dtype="int32", place="cpu")
+
+        logger.info(
+            f"start write cache for a layer, {req_id}, {layer_idx}, {decode_ip}, {decode_idx}, block_id_start {block_id_start} block_id_end {block_id_end}"
+        )
+        tic = time.perf_counter()
+        return_code = self.messager[current_transfer_protocol].write_cache(
+            decode_ip,
+            decode_idx,
+            src_block_ids,
+            dest_block_ids,
+            layer_idx,
+        )
+        if return_code != 0:
+            task["status"] = "write cache error"
+            logger.error(f"write cache failed, layer_idx: {layer_idx}, req_id: {req_id}, dest_ip: {decode_ip}")
+        tok = time.perf_counter()
+        cost_time = tok - tic
+        block_num = len(src_block_ids)
+        send_cache_speed = block_num * self.block_bytes / 1073741824 / cost_time  # GB/s
+        logger.debug(
+            f"finish write cache for a layer, {req_id}, {layer_idx}, send_cache_speed(GB/s): {round(send_cache_speed, 5)}"
+        )
+
+        task["sended_layer_id"] = layer_idx
+        if task["sended_layer_id"] == self.num_layers - 1:
+            engine_index = task["current_id"]
+            self.idx_cache_task_dict[engine_index]["sended_block_num"] += block_id_end - block_id_start
+            if prefilled_token_num == task["need_prefill_tokens"]:
+                if "error" not in task["status"]:
+                    task["status"] = "finished"
+                    logger.info(f"Finish write cache for all layers, req_id: {req_id}, block_id_end {block_id_end}")
+            else:
+                task["sended_layer_id"] = -1
 
     def consume_signals(self):
         paddle.device.set_device("cpu")
@@ -856,34 +1065,40 @@ class CacheMessagerV1:
         while True:
             try:
                 get_output_kv_signal(kv_signal_data, self.rank_id, 1)  # wait_flag
-                if not self.cache_info:
-                    time.sleep(0.01)
-                    continue
-                tasks_count = kv_signal_data[0]
+                has_cache_info = bool(self.cache_info)
+                tasks_count = kv_signal_data[0].item()
                 if tasks_count == -1:
                     continue
+                if not has_cache_info:
+                    logger.debug("consume_signals get kv signal before cache info is ready")
                 layer_id = kv_signal_data[1].item()
                 if layer_id == self.num_layers - 1:
                     logger.info(f"tasks_count: {tasks_count}, layer_id: {layer_id} self.rank_id {self.rank_id}")
-                batch_engine_signals = []
                 # format for signal to put in cache_prefilled_engine_ids_queue: [(engine_idx1, prefilled_token_num1), (engine_idx2, prefilled_token_num2)]
                 with self.engine_cache_task_thread_lock:
                     for bi in range(tasks_count):
                         engine_idx = kv_signal_data[3 * bi + 2].item()
                         chuck_token_offset = kv_signal_data[3 * bi + 3].item()
                         current_seq_len = kv_signal_data[3 * bi + 4].item()
+                        prefilled_token_num = chuck_token_offset + current_seq_len
                         self.engine_cache_tasks[engine_idx]["prefilled_layer_idx"] = layer_id
-                        self.engine_cache_tasks[engine_idx]["prefilled_token_num"] = (
-                            chuck_token_offset + current_seq_len
-                        )
-                        batch_engine_signals.append((engine_idx, chuck_token_offset + current_seq_len))
-                    if layer_id == 0:
-                        logger.info(
-                            f"Put batch_engine_signals {batch_engine_signals} into cache_prefilled_engine_ids_queue"
-                        )
-                        self.cache_prefilled_engine_ids_queue.put(batch_engine_signals)
+                        self.engine_cache_tasks[engine_idx]["prefilled_token_num"] = prefilled_token_num
+                        if layer_id == 0:
+                            with self.pending_layer0_signal_lock:
+                                self.pending_layer0_signals[engine_idx] = (engine_idx, prefilled_token_num)
+                    # Recover signals for engine_idxs that already have cache_info registered.
+                    # This handles the case where cache_info arrives before layer0 signal.
+                    recovered_signals = []
+                    with self.pending_layer0_signal_lock:
+                        for engine_idx in list(self.pending_layer0_signals.keys()):
+                            if engine_idx in self.idx_cache_task_dict:
+                                recovered_signals.append(self.pending_layer0_signals.pop(engine_idx))
+                if recovered_signals:
+                    for signal in recovered_signals:
+                        logger.info(f"consume_signals recovered signal: {signal}")
+                        self.cache_prefilled_engine_ids_queue.put([signal])
             except Exception as e:
-                logger.error(f"Consume signals get exception: {e}")
+                logger.error(f"Consume signals get exception: {e}, {traceback.format_exc()}")
 
     def _handle_connect_task(self):
         while True:

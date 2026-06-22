@@ -25,7 +25,7 @@ from utils import FakeModelConfig, get_default_test_fd_config
 
 from fastdeploy.config import SpeculativeConfig
 from fastdeploy.engine.request import Request, RequestType
-from fastdeploy.spec_decode.mtp import MTPProposer
+from fastdeploy.spec_decode.mtp_cuda import MTPProposerCUDA as MTPProposer
 
 
 class TestMTPProposer(unittest.TestCase):
@@ -121,6 +121,7 @@ class TestMTPProposer(unittest.TestCase):
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.worker.input_batch.get_rope")
     def test_init_and_config_methods(self, mock_rope, mock_attn_backend, mock_model_loader):
+        # Note: get_model_loader/get_attention_backend are still in mtp.py base class
         """Test initialization and config update methods"""
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
@@ -352,7 +353,7 @@ class TestMTPProposer(unittest.TestCase):
     def test_forward_meta_and_exist_prefill(
         self, mock_rope, mock_attn_backend, mock_model_loader, mock_ipc_signal_cls
     ):
-        """Test _initialize_forward_meta, _initialize_forward_meta_xpu, and exist_prefill"""
+        """Test _initialize_forward_meta and exist_prefill"""
         mock_ipc_signal = Mock()
         mock_ipc_signal.value = [0] * self.fd_config.parallel_config.tensor_parallel_size
         mock_ipc_signal_cls.return_value = mock_ipc_signal
@@ -370,14 +371,12 @@ class TestMTPProposer(unittest.TestCase):
         proposer.initialize_kv_cache(main_model_num_blocks=10)
         proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
 
-        # Test _initialize_forward_meta
+        # Test _initialize_forward_meta (CUDA version creates a new ForwardMeta)
         proposer._initialize_forward_meta(step_use_cudagraph=False)
         self.assertIsNotNone(proposer.forward_meta)
 
-        # Test _initialize_forward_meta_xpu
-        proposer._initialize_forward_meta_xpu()
-        if hasattr(proposer.forward_meta, "pos_emb_type") and proposer.forward_meta.pos_emb_type is not None:
-            self.assertEqual(proposer.forward_meta.pos_emb_type, "NORMAL")
+        # NOTE: _initialize_forward_meta_xpu is now in MTPProposerXPU (mtp_xpu.py).
+        # XPU-specific forward_meta initialization is tested separately in XPU environment.
 
         # Test exist_prefill
         proposer.exist_prefill_flag = True
@@ -391,8 +390,8 @@ class TestMTPProposer(unittest.TestCase):
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.worker.input_batch.get_rope")
-    @patch("fastdeploy.spec_decode.mtp.draft_model_preprocess")
-    @patch("fastdeploy.spec_decode.mtp.eagle_get_hidden_states")
+    @patch("fastdeploy.spec_decode.mtp_cuda.draft_model_preprocess")
+    @patch("fastdeploy.spec_decode.mtp_cuda.eagle_get_hidden_states")
     def test_prepare_inputs_and_post_process(
         self, mock_eagle, mock_preprocess, mock_rope, mock_attn_backend, mock_model_loader
     ):
@@ -422,44 +421,6 @@ class TestMTPProposer(unittest.TestCase):
         proposer.role = "prefill"
         sampled_token_ids = paddle.ones([2, 1], dtype="int64")
         proposer._post_process(sampled_token_ids)
-
-    @patch("fastdeploy.spec_decode.mtp.current_platform")
-    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
-    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.worker.input_batch.get_rope")
-    @patch("fastdeploy.spec_decode.mtp.draft_model_preprocess")
-    @patch("fastdeploy.spec_decode.mtp.eagle_get_hidden_states")
-    def test_prepare_inputs_xpu_branch(
-        self, mock_eagle, mock_preprocess, mock_rope, mock_attn_backend, mock_model_loader, mock_platform
-    ):
-        """Test _prepare_inputs XPU branch (line 754)"""
-        mock_platform.is_cuda.return_value = False
-        mock_platform.is_maca.return_value = False
-        mock_platform.is_xpu.return_value = True
-
-        mock_model = Mock()
-        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
-        mock_model_loader.return_value.load_model.return_value = mock_model
-        mock_attn = Mock()
-        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
-        mock_rope.return_value = paddle.zeros([1, 2048, 64])
-        # XPU branch returns only target_hidden_states, not tuple
-        mock_eagle.return_value = paddle.zeros([2, 768], dtype="bfloat16")
-        mock_preprocess.return_value = None
-
-        proposer = MTPProposer(
-            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
-        )
-        full_hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
-        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
-
-        # Test _prepare_inputs with XPU platform (covers line 754)
-        proposer._prepare_inputs(full_hidden_states)
-        mock_preprocess.assert_called()
-        mock_eagle.assert_called()
-        # Verify eagle_get_hidden_states was called without returning output_token_num
-        self.assertEqual(mock_eagle.call_count, 1)
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
@@ -497,89 +458,11 @@ class TestMTPProposer(unittest.TestCase):
         task.chunk_idx = 2
         proposer.update_task_chunk_prefill(task)
 
-    # NOTE: Temporarily skipped - _get_self_hidden_states_cuda method does not exist
-    # @patch("fastdeploy.spec_decode.mtp.eagle_get_self_hidden_states")
-    # @patch("fastdeploy.spec_decode.mtp.get_model_loader")
-    # @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    # @patch("fastdeploy.worker.input_batch.get_rope")
-    # def test_get_self_hidden_states_cuda(
-    #     self, mock_rope, mock_attn_backend, mock_model_loader, mock_eagle_self_hidden
-    # ):
-    #     """Test _get_self_hidden_states_cuda method (lines 1140-1148)"""
-    #     mock_model = Mock()
-    #     mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
-    #     mock_model_loader.return_value.load_model.return_value = mock_model
-    #     mock_attn = Mock()
-    #     mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-    #     mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
-    #     mock_rope.return_value = paddle.zeros([1, 2048, 64])
-    #     mock_eagle_self_hidden.return_value = (
-    #         paddle.zeros([2, 768], dtype="bfloat16"),
-    #         paddle.to_tensor([2], dtype="int32"),
-    #     )
-    #
-    #     # Use num_speculative_tokens=2 to ensure num_model_steps > 1
-    #     self.fd_config.speculative_config.num_speculative_tokens = 2
-    #     proposer = MTPProposer(
-    #         self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
-    #     )
-    #     proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
-    #     proposer.model_inputs.last_seq_lens_this_time = paddle.zeros([2, 1], dtype="int32")
-    #     proposer.model_inputs["step_idx"] = paddle.ones([2, 1], dtype="int64")
-    #
-    #     hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
-    #
-    #     # Test _get_self_hidden_states_cuda directly (covers lines 1140-1148)
-    #     proposer._get_self_hidden_states_cuda(hidden_states)
-    #
-    #     # Verify eagle_get_self_hidden_states was called
-    #     mock_eagle_self_hidden.assert_called_once()
-
-    @patch("fastdeploy.spec_decode.mtp.eagle_get_self_hidden_states")
-    @patch("fastdeploy.spec_decode.mtp.current_platform")
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.worker.input_batch.get_rope")
-    def test_get_self_hidden_states_xpu(
-        self, mock_rope, mock_attn_backend, mock_model_loader, mock_platform, mock_eagle_self_hidden
-    ):
-        """Test _get_self_hidden_states_xpu method (lines 1130-1137, 1125)"""
-        mock_platform.is_cuda.return_value = False
-        mock_platform.is_maca.return_value = False
-        mock_platform.is_xpu.return_value = True
-
-        mock_model = Mock()
-        mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
-        mock_model_loader.return_value.load_model.return_value = mock_model
-        mock_attn = Mock()
-        mock_attn.get_kv_cache_shape.return_value = ([2, 12, 16, 64], [2, 12, 16, 64])
-        mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
-        mock_rope.return_value = paddle.zeros([1, 2048, 64])
-        mock_eagle_self_hidden.return_value = paddle.zeros([2, 768], dtype="bfloat16")
-
-        # Use num_speculative_tokens=2 to ensure num_model_steps > 1
-        self.fd_config.speculative_config.num_speculative_tokens = 2
-        proposer = MTPProposer(
-            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
-        )
-        proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
-        proposer.model_inputs.last_seq_lens_this_time = paddle.zeros([2, 1], dtype="int32")
-        proposer.model_inputs["step_idx"] = paddle.ones([2, 1], dtype="int64")
-
-        hidden_states = paddle.zeros([2, 768], dtype="bfloat16")
-
-        # Test _get_self_hidden_states_xpu directly (covers lines 1130-1137)
-        proposer._get_self_hidden_states_xpu(hidden_states)
-
-        # Verify eagle_get_self_hidden_states was called
-        mock_eagle_self_hidden.assert_called_once()
-
-    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
-    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.worker.input_batch.get_rope")
-    @patch("fastdeploy.spec_decode.mtp.draft_model_postprocess")
-    @patch("fastdeploy.spec_decode.mtp.mtp_step_paddle")
-    def test_update_status(self, mock_mtp_step, mock_postprocess, mock_rope, mock_attn_backend, mock_model_loader):
+    @patch("fastdeploy.spec_decode.mtp_cuda.draft_model_postprocess")
+    def test_update_status(self, mock_postprocess, mock_rope, mock_attn_backend, mock_model_loader):
         """Test _update_status"""
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
@@ -589,22 +472,16 @@ class TestMTPProposer(unittest.TestCase):
         mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
         mock_postprocess.return_value = None
-        mock_mtp_step.return_value = None
 
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         proposer.model_inputs.seq_lens_this_time = proposer.model_inputs["seq_lens_this_time_buffer"]
 
-        # Test with ENABLE_V1_KVCACHE_SCHEDULER=False
-        with patch("fastdeploy.spec_decode.mtp.envs.ENABLE_V1_KVCACHE_SCHEDULER", False):
-            proposer._update_status()
-            mock_mtp_step.assert_called()
-
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.worker.input_batch.get_rope")
-    @patch("fastdeploy.spec_decode.mtp.hybrid_mtp_ngram")
+    @patch("fastdeploy.spec_decode.mtp_cuda.hybrid_mtp_ngram")
     def test_extend_draft_token_and_run_impl(self, mock_ngram, mock_rope, mock_attn_backend, mock_model_loader):
         """Test _extend_draft_token_with_ngram_match and _run_impl"""
         mock_model = Mock()
@@ -675,9 +552,8 @@ class TestMTPProposer(unittest.TestCase):
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
     @patch("fastdeploy.worker.input_batch.get_rope")
-    @patch("fastdeploy.spec_decode.mtp.current_platform")
-    def test_cache_type_branches(self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader):
-        """Cover _get_cache_type CUDA/XPU/unsupported branches"""
+    def test_cache_type_branches(self, mock_rope, mock_attn_backend, mock_model_loader):
+        """Cover _get_cache_type for MTPProposerCUDA (always returns 'uint8')."""
         mock_model = Mock()
         mock_model.compute_logits = Mock(return_value=paddle.zeros([2, 32000]))
         mock_model_loader.return_value.load_model.return_value = mock_model
@@ -686,27 +562,10 @@ class TestMTPProposer(unittest.TestCase):
         mock_attn_backend.return_value = lambda *args, **kwargs: mock_attn
         mock_rope.return_value = paddle.zeros([1, 2048, 64])
 
-        # CUDA branch
-        mock_platform.is_cuda.return_value = True
-        mock_platform.is_xpu.return_value = False
         proposer = MTPProposer(
             self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
         )
         self.assertEqual(proposer._get_cache_type(), "uint8")
-
-        # XPU branch
-        mock_platform.is_cuda.return_value = False
-        mock_platform.is_xpu.return_value = True
-        proposer = MTPProposer(
-            self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
-        )
-        self.assertEqual(proposer._get_cache_type(), "int8")
-
-        # Unsupported branch: reuse existing proposer to avoid RuntimeError in __init__
-        mock_platform.is_cuda.return_value = False
-        mock_platform.is_xpu.return_value = False
-        with self.assertRaises(NotImplementedError):
-            proposer._get_cache_type()
 
     @patch("fastdeploy.spec_decode.mtp.get_model_loader")
     @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
@@ -764,21 +623,20 @@ class TestMTPProposer(unittest.TestCase):
         self.assertTrue(proposer.model_inputs["stop_flags"][0].item())
         self.assertEqual(proposer.model_inputs["seq_lens_this_time_buffer"][0].item(), 0)
 
-    @patch("fastdeploy.spec_decode.mtp.get_model_loader")
-    @patch("fastdeploy.spec_decode.mtp.get_attention_backend")
-    @patch("fastdeploy.worker.input_batch.get_rope")
     @patch("fastdeploy.spec_decode.mtp.current_platform")
-    def test_unsupported_platform_raises_runtime_error(
-        self, mock_platform, mock_rope, mock_attn_backend, mock_model_loader
-    ):
-        """Cover RuntimeError in __init__ when platform is unsupported (line 120)."""
+    def test_unsupported_platform_raises_runtime_error(self, mock_platform):
+        """Cover RuntimeError in create_mtp_proposer when platform is unsupported."""
         mock_platform.is_xpu.return_value = False
         mock_platform.is_cuda.return_value = False
         mock_platform.is_maca.return_value = False
         mock_platform.__str__ = lambda self: "UnsupportedPlatform"
 
+        from fastdeploy.spec_decode.mtp import create_mtp_proposer
+
         with self.assertRaises(RuntimeError) as ctx:
-            MTPProposer(self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs)
+            create_mtp_proposer(
+                self.fd_config, self.main_model, self.local_rank, self.device_id, self.target_model_inputs
+            )
         self.assertIn("Unsupported platform for MTP", str(ctx.exception))
 
 

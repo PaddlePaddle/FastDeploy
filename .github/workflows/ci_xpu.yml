@@ -50,3 +50,28 @@ jobs:
       MODEL_PATH: /ssd3/model
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  xpu_unit_test:
+    name: xpu_unit_test
+    needs: [clone, xpu_build_test]
+    uses: ./.github/workflows/_xpu_unit_test.yml
+    with:
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
+      FASTDEPLOY_WHEEL_URL: ${{ needs.xpu_build_test.outputs.wheel_path }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  xpu_coverage_report:
+    name: xpu_coverage_report
+    needs: [clone, xpu_4cards_case_test, xpu_8cards_case_test, xpu_unit_test]
+    if: ${{ always() && needs.clone.result == 'success' }}
+    uses: ./.github/workflows/_xpu_coverage_report.yml
+    with:
+      DOCKER_IMAGE: ccr-2vdh3abv-pub.cnc.bj.baidubce.com/paddlepaddle/fastdeploy-xpu:ci
+      FASTDEPLOY_ARCHIVE_URL: ${{ needs.clone.outputs.repo_archive_url }}
+      COVERAGE_UNIT_TEST_URL: ${{ needs.xpu_unit_test.outputs.coverage_data_url }}
+      COVERAGE_4CARDS_URL: ${{ needs.xpu_4cards_case_test.outputs.coverage_data_url }}
+      COVERAGE_8CARDS_URL: ${{ needs.xpu_8cards_case_test.outputs.coverage_data_url }}
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -44,8 +44,10 @@ class TestTokenPenalty(unittest.TestCase):
             for orig, penal in zip(original_values.numpy(), penalized_values.numpy()):
                 if orig < 0:
                     self.assertLess(penal, orig, "负值应该乘以惩罚因子")
-                else:
+                elif orig > 0:
                     self.assertLess(penal, orig, "正值应该除以惩罚因子")
+                else:
+                    self.assertEqual(penal, orig, "零值不受惩罚影响")
 
     def test_compare_with_naive_implementation(self):
         res = get_token_penalty_once(self.pre_ids, self.logits, self.penalty_scores)

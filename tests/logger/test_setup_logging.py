@@ -286,7 +286,7 @@ class TestChannelLoggers(unittest.TestCase):
         expected_files = {
             "main": "fastdeploy.log",
             "request": "request.log",
-            "console": "console.log",
+            "console": "fastdeploy.log",
         }
         self.assertEqual(FastDeployLogger._channel_files, expected_files)
 

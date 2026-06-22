@@ -18,6 +18,8 @@ export FD_METAX_KVCACHE_MEM=8
 export ENABLE_V1_KVCACHE_SCHEDULER=1
 export FD_ENC_DEC_BLOCK_NUM=2
 export FD_SAMPLING_CLASS="rejection"
+export FD_ENABLE_E2W_TENSOR_CONVERT=0
+export FD_ENGINE_TASK_QUEUE_WITH_SHM=0
 # export PADDLE_PDX_DISABLE_DEV_MODEL_WL=true
 
 export MODEL_ROOT_PATH="/data/models/PaddlePaddle"
@@ -86,14 +88,14 @@ while true; do
     POLL_COUNT=$((POLL_COUNT + 1))
     if [ $POLL_COUNT -ge $SERVER_TIMEOUT_SEC ]; then
         cat ${SERVER_LOG_FILE}
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         echo "[TIMEOUT] Server process is about to terminate and exit the script!"
         exit 1
     fi
 
     if ! kill -0 $SERVER_PID >/dev/null 2>&1; then
         cat ${SERVER_LOG_FILE}
-        cat log/workerlog.0
+        cat log/paddle/workerlog.0
         echo "[ERROR] Server process(PID: $SERVER_PID) has exited abnormally and no keywords were detected!"
         exit 1
     fi

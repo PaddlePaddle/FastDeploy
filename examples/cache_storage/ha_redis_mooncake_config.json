@@ -1,0 +1,8 @@
+{
+  "metadata_server": "redis://127.0.0.1:6399",
+  "global_segment_size": 1000000000,
+  "local_buffer_size": 134217728,
+  "protocol": "rdma",
+  "rdma_devices": "",
+  "master_server_addr": "redis://127.0.0.1:6399"
+}

@@ -25,11 +25,13 @@ try:
         w8a16_group_gemm,
         w8a16_group_gemv,
         wi4a16_group_gemm,
+        wi4a16_group_gemv,
     )
 except:
     w8a16_group_gemm = None
     w8a16_group_gemv = None
     wi4a16_group_gemm = None
+    wi4a16_group_gemv = None
     restore_tokens_per_expert = None
 
 
@@ -46,8 +48,12 @@ def _pre_process_expert_ffn(
             group_gemm_func = w8a16_group_gemm
             tokens_per_expert = tokens_expert_prefix_sum
     else:
-        group_gemm_func = wi4a16_group_gemm
-        tokens_per_expert = tokens_expert_prefix_sum
+        if moe_phase == "decode":
+            group_gemm_func = wi4a16_group_gemv
+            tokens_per_expert = restore_tokens_per_expert(tokens_expert_prefix_sum).to("int32")
+        else:
+            group_gemm_func = wi4a16_group_gemm
+            tokens_per_expert = tokens_expert_prefix_sum
     return group_gemm_func, tokens_per_expert
 
 

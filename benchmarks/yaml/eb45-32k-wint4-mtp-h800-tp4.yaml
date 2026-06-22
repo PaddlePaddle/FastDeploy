@@ -4,3 +4,4 @@ gpu_memory_utilization: 0.8
 kv_cache_ratio: 0.71
 tensor_parallel_size: 4
 quantization: wint4
+speculative_config: '{"method": "mtp", "num_speculative_tokens": 1, "model": "/root/paddlejob/ERNIE-45-Turbo/mtp/"}'

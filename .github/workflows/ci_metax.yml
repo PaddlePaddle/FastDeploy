@@ -7,7 +7,6 @@ on:
       - synchronize
     branches:
       - develop
-      - release/**
 
 permissions:
   contents: read
@@ -24,8 +23,8 @@ jobs:
 
     steps:
       - name: Trigger Jenkins job
-        timeout-minutes: 120
-        uses: MetaX-MACA/simple-jenkins-githubaction@v1.1
+        timeout-minutes: 60
+        uses: MetaX-MACA/simple-jenkins-githubaction@v1.2
         with:
           job_name: paddle_fastdeploy_metax_smoketest
           username: fastdeploy_builder

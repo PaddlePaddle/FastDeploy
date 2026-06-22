@@ -42,6 +42,9 @@ def _build_args(**overrides):
         revision=None,
         chat_template=None,
         tool_parser_plugin=None,
+        output_fallback=None,
+        output_fallback_plugin=None,
+        output_fallback_config=None,
         host="0.0.0.0",
         port=9000,
         metrics_port=None,
@@ -77,7 +80,7 @@ def _reload_api_server(args):
         def get(key, default=None):
             return [] if key == "FD_API_KEY" else default
 
-    fake_envs_mod.TRACES_ENABLE = "false"
+    fake_envs_mod.FD_TRACE = "off"
     fake_envs_mod.FD_SERVICE_NAME = ""
     fake_envs_mod.FD_HOST_NAME = ""
     fake_envs_mod.TRACES_EXPORTER = "console"
@@ -446,7 +449,7 @@ async def test_chat_and_completion_routes():
 async def test_chat_completion_tracing():
     args = _build_args(dynamic_load_weight=False)
     api_server = _reload_api_server(args)
-    api_server.envs.TRACES_ENABLE = "true"
+    api_server.envs.FD_TRACE = "otel"
     api_server.app.state.dynamic_load_weight = False
 
     fake_req = SimpleNamespace(headers={"x-request-id": "1"})
@@ -479,8 +482,8 @@ async def test_chat_completion_tracing():
     assert resp_comp.status_code == 200
     assert getattr(body, "trace_context", None) == "ctx"
 
-    # TRACES_ENABLE=True but req.headers is None/empty (missing branch 379, 415)
-    api_server.envs.TRACES_ENABLE = "true"
+    # FD_TRACE=otel but req.headers is None/empty (missing branch 379, 415)
+    api_server.envs.FD_TRACE = "otel"
     fake_req_no_headers = SimpleNamespace(headers=None)
     body2 = SimpleNamespace(model_dump_json=lambda: "{}", stream=False)
     api_server.app.state.chat_handler = SimpleNamespace(create_chat_completion=AsyncMock(return_value=chat_resp))
@@ -828,44 +831,30 @@ def _mock_abort_control_response(api_server, result, status_code=200):
 async def test_abort_requests_with_req_ids():
     args = _build_args()
     api_server = _reload_api_server(args)
-    _mock_abort_control_response(
-        api_server,
-        {
-            "aborted": [{"request_id": "req-1_0", "output_token_count": 10}],
-            "not_found": ["req-999"],
-        },
-    )
+    api_server.app.state.engine_client = MagicMock()
+    api_server.app.state.engine_client.abort_reqs = AsyncMock(return_value=None)
     req = MagicMock()
     req.json = AsyncMock(return_value={"req_ids": ["req-1", "req-999"]})
     resp = await api_server.abort_requests(req)
     assert resp.status_code == 200
-    control_req = api_server.app.state.engine_client.run_control_method.await_args.args[0]
-    assert control_req.method == "abort_requests"
-    assert control_req.args["req_ids"] == ["req-1", "req-999"]
-    assert control_req.args["abort_all"] is False
+    call_kwargs = api_server.app.state.engine_client.abort_reqs.await_args.kwargs
+    assert call_kwargs["req_ids"] == ["req-1", "req-999"]
+    assert call_kwargs["abort_all"] is False
 
 
 @pytest.mark.asyncio
 async def test_abort_requests_with_abort_all():
     args = _build_args()
     api_server = _reload_api_server(args)
-    _mock_abort_control_response(
-        api_server,
-        {
-            "aborted": [
-                {"request_id": "req-1_0", "output_token_count": 5},
-                {"request_id": "req-2_0", "output_token_count": 12},
-            ],
-            "not_found": [],
-        },
-    )
+    api_server.app.state.engine_client = MagicMock()
+    api_server.app.state.engine_client.abort_reqs = AsyncMock(return_value=None)
     req = MagicMock()
     req.json = AsyncMock(return_value={"abort_all": True})
     resp = await api_server.abort_requests(req)
     assert resp.status_code == 200
-    control_req = api_server.app.state.engine_client.run_control_method.await_args.args[0]
-    assert control_req.args["abort_all"] is True
-    assert control_req.args["req_ids"] == []
+    call_kwargs = api_server.app.state.engine_client.abort_reqs.await_args.kwargs
+    assert call_kwargs["abort_all"] is True
+    assert call_kwargs["req_ids"] == []
 
 
 @pytest.mark.asyncio

@@ -79,6 +79,7 @@ class ForwardMeta:
 
     # Attention backend object
     attn_backend: AttentionBackend = None
+    attn_backends: Optional[list[AttentionBackend]] = None
     # Forward mode used during attention
     forward_mode: ForwardMode = ForwardMode.MIXED
     # Attention mask
@@ -123,6 +124,14 @@ class ForwardMeta:
     kv_num_blocks_x_cpu: Optional[paddle.Tensor] = None
 
     decoder_chunk_size_device: Optional[paddle.Tensor] = None
+
+    # Buffer for decode unified attention stage
+    decode_block_indices: Optional[paddle.Tensor] = None
+    decode_num_blocks: Optional[paddle.Tensor] = None
+    decode_chunk_size: Optional[paddle.Tensor] = None
+    decode_tmp_workspace: Optional[paddle.Tensor] = None
+    decode_tmp_m: Optional[paddle.Tensor] = None
+    decode_tmp_d: Optional[paddle.Tensor] = None
 
     # Sequence length of encoder for ever batch
     seq_lens_encoder: Optional[paddle.Tensor] = None
