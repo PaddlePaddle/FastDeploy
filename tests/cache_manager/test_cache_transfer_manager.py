@@ -663,6 +663,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.head_dim = 2
         self.manager.num_layers = 1
         self.manager.num_extra_layers = 0
+        self.manager.cache_scale_shape = [self.manager.num_gpu_blocks, self.manager.head_num, self.manager.block_size]
 
         with patch("fastdeploy.cache_manager.cache_transfer_manager.cuda_host_alloc", side_effect=[10, 20, 30, 40]):
             self.manager._init_storage_buffer(args)
