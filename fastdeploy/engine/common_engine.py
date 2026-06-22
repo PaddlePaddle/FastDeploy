@@ -65,7 +65,10 @@ from fastdeploy.inter_communicator import (
 )
 from fastdeploy.inter_communicator.fmq import FMQ
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.metrics.prometheus_multiprocess_setup import setup_dp_prometheus_dir, get_original_prom_dir
+from fastdeploy.metrics.prometheus_multiprocess_setup import (
+    get_original_prom_dir,
+    setup_dp_prometheus_dir,
+)
 from fastdeploy.model_executor.guided_decoding import schema_checker
 from fastdeploy.plugins.token_processor import load_token_processor_plugins
 from fastdeploy.spec_decode import SpecMethod

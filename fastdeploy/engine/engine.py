@@ -50,7 +50,10 @@ from fastdeploy.logger.request_logger import (
     log_request_error,
 )
 from fastdeploy.metrics.metrics import main_process_metrics
-from fastdeploy.metrics.prometheus_multiprocess_setup import setup_dp_prometheus_dir, get_original_prom_dir
+from fastdeploy.metrics.prometheus_multiprocess_setup import (
+    get_original_prom_dir,
+    setup_dp_prometheus_dir,
+)
 from fastdeploy.platforms import current_platform
 from fastdeploy.utils import EngineError, console_logger, envs, llm_logger
 
