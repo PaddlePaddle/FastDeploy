@@ -68,7 +68,7 @@ class FDRunner:
 
     def __init__(
         self,
-        model_name_or_path: str,
+        model_name_or_path: str = "",
         tensor_parallel_size: int = 1,
         max_num_seqs: int = 1,
         max_model_len: int = 1024,
@@ -125,6 +125,28 @@ class FDRunner:
         topp_params = SamplingParams(temperature=0.0, top_p=0, max_tokens=max_tokens)
         outputs = self.generate(prompts, topp_params, **kwargs)
         return outputs
+
+    def generate_with_sampling_params(
+        self,
+        prompts: Union[list[str], list[int], list[list[int]]],
+        sampling_params,
+        **kwargs: Any,
+    ) -> list[tuple[list[int], str, list[int]]]:
+        """直接使用传入的 SamplingParams 对象进行生成。
+
+        Args:
+            prompts: 输入提示，可以是字符串列表或 token_ids 列表
+            sampling_params: SamplingParams 对象
+            **kwargs: 其他参数
+
+        Returns:
+            list[tuple[list[int], str, list[int]]]: (生成的token_ids, 生成的文本, prompt_token_ids)
+        """
+        from fastdeploy.engine.sampling_params import SamplingParams
+
+        sampling_params_obj = SamplingParams(**sampling_params)
+        req_outputs = self.llm.generate(prompts=prompts, sampling_params=sampling_params_obj, **kwargs)
+        return req_outputs
 
     def __enter__(self):
         return self

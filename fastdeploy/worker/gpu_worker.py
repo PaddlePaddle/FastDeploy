@@ -255,7 +255,23 @@ class GpuWorker(WorkerBase):
         # than subsequent requests, causing occasional first-run divergence.
         if envs.FD_DETERMINISTIC_MODE:
             set_random_seed(self.fd_config.model_config.seed)
-            self.model_runner.share_inputs.reset_share_inputs()
+            # self.model_runner.share_inputs.reset_share_inputs()
+            if hasattr(self.model_runner.share_inputs, "reset_share_inputs"):
+                self.model_runner.share_inputs.reset_share_inputs()
+            elif isinstance(self.model_runner.share_inputs, dict):
+                # 创建一个临时的 InputBatch 来借用它的逻辑
+                from fastdeploy.worker.input_batch import InputBatch
+
+                temp_batch = InputBatch.__new__(InputBatch)
+                temp_batch.__dict__.update(self.model_runner.share_inputs)  # 把字典内容注入
+                temp_batch.model_config = self.fd_config.model_config
+                temp_batch.scheduler_config = self.fd_config.scheduler_config
+                temp_batch.cache_config = self.fd_config.cache_config
+                temp_batch.reset_share_inputs()
+                # 把结果写回字典
+                self.model_runner.share_inputs.update(
+                    {k: v for k, v in temp_batch.__dict__.items() if k in self.model_runner.share_inputs}
+                )
 
     def check_health(self) -> bool:
         """ """

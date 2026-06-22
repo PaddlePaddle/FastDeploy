@@ -69,12 +69,15 @@ def run_with_timeout(target, args=(), kwargs={}, timeout=60 * 5):
     try:
         result = result_queue.get(timeout=60)
     except Exception as e:
+        print_logs()
         raise RuntimeError(f"Failed to get result from worker: {e}")
     finally:
         result_queue.close()
         result_queue.join_thread()
         clean_ports([FD_CACHE_QUEUE_PORT])
 
+    if isinstance(result, Exception):
+        raise result
     return result
 
 
@@ -109,6 +112,89 @@ def form_model_get_output_topp0(
         print(f"Failed using {load_choices} loader to load model from {model_path}.")
         traceback.print_exc()
         pytest.fail(f"Failed to initialize LLM model from {model_path}")
+
+
+def form_model_get_output_logprobs(
+    fd_runner,
+    prompts,
+    llm_params={},
+    sampling_params={},
+    result_queue=None,
+):
+    """使用传入的 sampling_params 进行生成。
+
+    Args:
+        fd_runner: FDRunner 类
+        llm_params: LLM 参数字典，包含 model_path, tensor_parallel_size, max_num_seqs,
+                   max_model_len, load_choices, quantization, prompts 等
+        sampling_params: SamplingParams 对象（可选）
+        speculative_config: 推测配置
+        enable_prefix_caching: 是否启用前缀缓存
+        enable_logprob: 是否启用 logprobs
+        result_queue: 结果队列
+    """
+    try:
+        with fd_runner(llm_params) as fd_model:
+            fd_outputs = fd_model.generate_with_sampling_params(prompts, sampling_params)
+            result_queue.put(fd_outputs)
+    except Exception as e:
+        import sys
+
+        print(
+            f"Failed using {llm_params['load_choices']} loader to load model from {llm_params['model_path']}.",
+            flush=True,
+        )
+        traceback.print_exc()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        result_queue.put(RuntimeError(f"Worker failed: {e}\n{traceback.format_exc()}"))
+
+
+def form_model_pd_consistency_test(
+    fd_runner,
+    prompts,
+    llm_params={},
+    d_sampling_params={},
+    p_sampling_params={},
+    result_queue=None,
+):
+    """
+    Test PD (Prefill-Decode) disaggregation consistency.
+
+    Runs the model in decode-only mode first, then re-runs with prefill-only
+    mode using the token ids produced by the decode step, and verifies that
+    the outputs from both stages are identical.
+    """
+    try:
+        with fd_runner(**llm_params) as fd_model:
+            # First pass: decode
+            d_output = fd_model.generate_with_sampling_params(prompts, d_sampling_params)
+
+            # Extract prompt_token_ids + d_token_ids from d_output
+            tokenizer = fd_model.llm.llm_engine.data_processor.tokenizer
+            eos_token_id = tokenizer.eos_token_id
+            prefill_prompts = []
+            for prompt, req_output in zip(prompts, d_output):
+                prompt_token_ids = req_output.prompt_token_ids
+                if not prompt_token_ids:
+                    token_ids = fd_model.llm.llm_engine.data_processor.text2ids(prompt)
+                    prompt_token_ids = token_ids.tolist() if hasattr(token_ids, "tolist") else list(token_ids)
+                    req_output.prompt_token_ids = prompt_token_ids
+                d_token_ids = req_output.outputs.token_ids
+
+                prefill_prompts.append(list(prompt_token_ids) + list(d_token_ids))
+
+            # Second pass: prefill
+            p_output = fd_model.generate_with_sampling_params(prefill_prompts, p_sampling_params)
+            result_queue.put((d_output, p_output, eos_token_id))
+    except Exception as e:
+        import sys
+
+        print(f"Failed in pd_consistency_test: {e}", flush=True)
+        traceback.print_exc()
+        sys.stdout.flush()
+        sys.stderr.flush()
+        result_queue.put(RuntimeError(f"Worker failed: {e}\n{traceback.format_exc()}"))
 
 
 def kill_process_on_port(port: int):
@@ -279,3 +365,54 @@ def calculate_diff_rate(text1, text2):
     edit_distance = dp[len1][len2]
     max_len = max(len1, len2)
     return edit_distance / max_len if max_len > 0 else 0.0
+
+
+def compare_p_d_logprobs(d_output, p_output, eos_token_id):
+    """比较 Decode 和 Prefill 阶段的 logprobs 是否一致。
+
+    Args:
+        d_output: Decode 阶段的输出 (RequestOutput 列表)
+        p_output: Prefill 阶段的输出 (RequestOutput 列表)
+
+    Returns:
+        True 如果所有 token 的 logprobs 一致
+
+    Raises:
+        AssertionError: 如果某个 token 位置的 logprobs 不一致，报告第几个 token 出错
+    """
+    for req_idx, (d_req, p_req) in enumerate(zip(d_output, p_output)):
+        d_token_ids = d_req.outputs.token_ids
+        d_logprobs = d_req.outputs.logprobs
+        p_prompt_logprobs = p_req.prompt_logprobs
+
+        prefill_start_idx = len(d_req.prompt_token_ids)
+
+        # 过滤掉 eos_token_id
+        filtered = [(i, t) for i, t in enumerate(d_token_ids) if t != eos_token_id]
+
+        for idx, (i, token_id) in enumerate(filtered):
+            # decode 阶段的 logprob
+            d_val = None
+            if d_logprobs and i < len(d_logprobs) and d_logprobs[i] is not None and token_id in d_logprobs[i]:
+                obj = d_logprobs[i][token_id]
+                d_val = obj.logprob if hasattr(obj, "logprob") else float(obj)
+
+            # prefill 阶段对应位置的 logprob
+            p_idx = prefill_start_idx + i
+            p_val = None
+            if (
+                p_prompt_logprobs
+                and p_idx < len(p_prompt_logprobs)
+                and p_prompt_logprobs[p_idx] is not None
+                and token_id in p_prompt_logprobs[p_idx]
+            ):
+                obj = p_prompt_logprobs[p_idx][token_id]
+                p_val = obj.logprob if hasattr(obj, "logprob") else float(obj)
+
+            if d_val is None and p_val is None:
+                continue
+            if d_val is None or p_val is None or abs(d_val - p_val) != 0:
+                raise AssertionError(
+                    f"Request {req_idx}, Token {i} (token_id={token_id}): "
+                    f"logprob 不一致 - Decode={d_val}, Prefill={p_val}"
+                )

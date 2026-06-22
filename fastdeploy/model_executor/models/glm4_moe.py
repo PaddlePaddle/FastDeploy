@@ -16,6 +16,7 @@
 
 from __future__ import annotations
 
+import os
 import re
 from functools import partial
 from typing import Dict
@@ -252,6 +253,7 @@ class Glm4MoeAttention(nn.Layer):
             prefix=prefix,
             use_neox_rotary_style=True,
             rms_norm_eps=fd_config.model_config.rms_norm_eps,
+            skip_attn=bool(int(os.getenv("FD_SKIP_IN_DETERMINISTIC", "0"))),
         )
         if self.use_qk_norm:
             self.qk_norm = QKRMSNorm(
