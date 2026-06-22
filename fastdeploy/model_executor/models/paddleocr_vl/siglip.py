@@ -26,7 +26,7 @@ from paddleformers.transformers.model_utils import PretrainedModel
 from fastdeploy.model_executor.utils import h2d_copy, slice_fn
 
 from .config import PaddleOCRVisionConfig
-from .siglip_ops import get_activation_fn, neox_rope_embedding
+from .siglip_ops import _siglip_activation, neox_rope_embedding_eager
 
 
 class SiglipAttention(nn.Layer):
@@ -125,7 +125,7 @@ class SiglipAttention(nn.Layer):
     ):
         B, seq_length, D = hidden_states.shape
         qkv = self.qkv_proj(hidden_states)
-        q, k, v = neox_rope_embedding(qkv, cos_emb, sin_emb, self.num_heads, self.head_dim)
+        q, k, v = neox_rope_embedding_eager(qkv, cos_emb, sin_emb, self.num_heads, self.head_dim)
         attn_output = self.flash_attn_func(
             q,
             k,
@@ -303,7 +303,7 @@ class SiglipMLP(nn.Layer):
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
-        hidden_states = get_activation_fn(self.config.hidden_act)(hidden_states[0])
+        hidden_states = _siglip_activation(hidden_states[0])
         hidden_states = self.fc2(hidden_states)
         return hidden_states
 
