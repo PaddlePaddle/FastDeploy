@@ -606,7 +606,7 @@ elif paddle.is_compiled_with_cuda():
 elif paddle.is_compiled_with_xpu():
     assert False, "For XPU, please use setup_ops.py in the xpu_ops directory to compile custom ops."
 elif paddle.is_compiled_with_custom_device("iluvatar_gpu"):
-    _iluvatar_clang_cuda_flags = ["-Wno-non-pod-varargs", "-DPADDLE_DEV", "-DPADDLE_WITH_CUSTOM_DEVICE"]
+    _iluvatar_clang_cuda_flags = ["-Wno-non-pod-varargs", "-DPADDLE_DEV", "-DPADDLE_WITH_CUSTOM_DEVICE", "-std=c++17"]
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(

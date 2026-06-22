@@ -62,9 +62,11 @@ class MhaAttentionMetadata(AttentionMetadata):
 
 class MhaAttnBackend(AttentionBackend):
     """
-    The backend class that uses paddle native attention implementation.
-    Which is used only for testing purpose.
+    Iluvatar Multi-head Attention Backend.
     """
+
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: MhaAttentionMetadata
 
     def __init__(
         self,

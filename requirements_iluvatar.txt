@@ -46,4 +46,3 @@ aistudio_sdk
 p2pstore
 py-cpuinfo
 transformers>=4.55.1,<5.0.0
-paddleocr[doc-parser]==3.3.2

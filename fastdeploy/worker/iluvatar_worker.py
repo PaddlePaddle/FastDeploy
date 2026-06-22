@@ -87,7 +87,8 @@ class IluvatarWorker(GpuWorker):
             by adjusting the `gpu_memory_utilization` parameter.
         """
         # 1. Record memory state before profile run
-        return int(float(os.getenv("FD_ILUVATAR_KVCACHE_MEM", "3")) * 1024**3)
+        default_kv_cache_mem = 6 if self.model_config.model_type == "paddleocr_vl" else 3
+        return int(float(os.getenv("FD_ILUVATAR_KVCACHE_MEM", default_kv_cache_mem)) * 1024**3)
 
 
 # TODO (yuzhe.wu): move it int work_process.py after baidu reconstructs the logic of workproc
