@@ -2290,7 +2290,13 @@ class FDConfig:
 
         # Adjustment GraphOptConfig
         if self.scheduler_config is not None and self.scheduler_config.splitwise_role == "prefill":
-            self.graph_opt_config.use_cudagraph = self.graph_opt_config.cudagraph_only_prefill
+            # Piecewise CUDAGraph for prefill worker: if graph_opt_level >= 1 and not full_cuda_graph,
+            # reuse the mixed piecewise path (capture_model_prefill_and_mixed) for the prefill worker.
+            # Otherwise fall back to cudagraph_only_prefill flag (legacy path).
+            if self.graph_opt_config.graph_opt_level >= 1 and not self.graph_opt_config.full_cuda_graph:
+                self.graph_opt_config.use_cudagraph = True
+            else:
+                self.graph_opt_config.use_cudagraph = self.graph_opt_config.cudagraph_only_prefill
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(

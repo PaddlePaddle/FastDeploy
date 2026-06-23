@@ -1512,7 +1512,16 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.enable_chunked_moe:
             self.forward_meta.max_moe_num_chunk = dist_status.max_moe_num_chunk
 
-        only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
+        # PD prefill workers with piecewise CUDAGraph (graph_opt_level>=1, not full_cuda_graph) only
+        # capture prefill/mixed graphs (via capture_model_prefill_and_mixed), never decode graphs.
+        # Exclude such workers from the decode CUDAGraph path to avoid lazy decode capture at runtime.
+        is_pd_prefill_piecewise = (
+            hasattr(self, "graph_opt_config")
+            and self.fd_config.scheduler_config.splitwise_role == "prefill"
+            and self.graph_opt_config.graph_opt_level >= 1
+            and not self.graph_opt_config.full_cuda_graph
+        )
+        only_decode_use_cudagraph = self.use_cudagraph and if_only_decode and not is_pd_prefill_piecewise
 
         # Update config about moe for better performance
         # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
@@ -1537,6 +1546,7 @@ class GPUModelRunner(ModelRunnerBase):
             and self.use_cudagraph
             and self.graph_opt_config.graph_opt_level > 0
             and not self.graph_opt_config.full_cuda_graph
+            and (self.fd_config.scheduler_config.splitwise_role != "prefill" or self.exist_prefill())
         ):
             self.forward_meta.step_use_cudagraph = True
 
@@ -2224,6 +2234,8 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info("Skipping CUDA graph capture. Please check GraphOptimizationConfig")
             return
         time_before_capture = time.perf_counter()
+        if self.fd_config.parallel_config.use_ep:
+            self.fd_config.model_config.moe_phase.phase = "prefill"
         capture_sizes = self.cudagraph_capture_sizes_prefill.copy()
         for capture_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(

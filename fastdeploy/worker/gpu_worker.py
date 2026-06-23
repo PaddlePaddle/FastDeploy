@@ -223,27 +223,43 @@ class GpuWorker(WorkerBase):
         """
         Perform the warm-up and the graph optimization.
 
-        Execution modes:
+        Execution modes (mixed worker):
         | Mode                              | Prefill + Mixed          | Decode                   |
         |-----------------------------------|--------------------------|--------------------------|
         | Dynamic (graph_opt_level=0)       | Dynamic                  | Dynamic + CUDAGraph      |
         | Static Full Graph (full=True)     | Dynamic                  | Static + CUDAGraph       |
         | Static Split Graph (full=False)   | Static + CUDAGraph       | Dynamic + CUDAGraph      |
+
+        PD disaggregation:
+        | Role    | graph_opt_level>=1, full=False | Otherwise                    |
+        |---------|-------------------------------|------------------------------|
+        | prefill | Piecewise CUDAGraph (prefill) | Dynamic (cudagraph_only_pref)|
+        | decode  | Dynamic + CUDAGraph           | Dynamic + CUDAGraph          |
         """
+        splitwise_role = self.fd_config.scheduler_config.splitwise_role
+        is_pd_prefill = splitwise_role == "prefill"
+        is_pd_decode = splitwise_role == "decode"
+        use_piecewise = (
+            self.fd_config.graph_opt_config.graph_opt_level >= 1
+            and not self.fd_config.graph_opt_config.full_cuda_graph
+        )
+
         if self.fd_config.graph_opt_config.graph_opt_level >= 1 and not self.model_runner.use_cudagraph:
             self.model_runner.sot_warmup()
         if self.fd_config.graph_opt_config.graph_opt_level >= 1:
             self.model_runner.vision_encoder_compile()
 
-        # Static split graph mode: capture CUDAGraph for prefill/mixed phase
-        if (
-            self.fd_config.graph_opt_config.graph_opt_level >= 1
-            and not self.fd_config.graph_opt_config.full_cuda_graph
-        ):
+        # Piecewise CUDAGraph capture for prefill/mixed phase.
+        # In PD disaggregation: only the prefill worker (with piecewise enabled) runs this;
+        # the decode worker never captures prefill/mixed graphs.
+        if use_piecewise and not is_pd_decode:
             self.model_runner.capture_model_prefill_and_mixed()
 
-        # Capture CUDAGraph for decode phase (all modes)
-        self.model_runner.capture_model()
+        # Decode-phase CUDAGraph capture.
+        # In PD disaggregation: the prefill worker running piecewise CUDAGraph skips this;
+        # the decode worker always runs this.
+        if not (is_pd_prefill and use_piecewise):
+            self.model_runner.capture_model()
 
         # Deterministic mode: reset RNG and share_inputs after warmup.
         # Warmup _dummy_run() calls consume CUDA RNG state and leave stale
