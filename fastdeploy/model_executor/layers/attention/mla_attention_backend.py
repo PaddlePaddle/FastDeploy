@@ -620,9 +620,13 @@ class MLAAttentionBackend(AttentionBackend):
         """
         Calculate kv cache shape for MLA
         """
-        layer_id = self.layer_id
+        layer_id = getattr(self, "layer_id", None)
         value_cache_shape = []
-        if self.window_attn_skip_freq is not None and self.window_attn_skip_freq[layer_id] == 1:
+        if (
+            layer_id is not None
+            and self.window_attn_skip_freq is not None
+            and self.window_attn_skip_freq[layer_id] == 1
+        ):
             fp8_key_cahe_dim = self.kv_lora_rank + 4 * (self.kv_lora_rank // 128) + 2 * self.qk_rope_head_dim
             key_cache_shape = [max_num_blocks, 1, self.block_size, fp8_key_cahe_dim]
         else:
