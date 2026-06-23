@@ -20,6 +20,7 @@ from unittest.mock import patch
 
 import numpy as np
 import paddle
+from utils import MockForwardMeta
 
 from fastdeploy.config import (
     CacheConfig,
@@ -104,7 +105,7 @@ class FakeModel:
         self.hidden_size = hidden_size
         self.weight = paddle.rand([hidden_size, vocab_size], dtype="float32")
 
-    def compute_logits(self, x):
+    def compute_logits(self, x, forward_meta=None):
         return paddle.matmul(x.astype("float32"), self.weight)
 
 
@@ -175,6 +176,7 @@ class TestGPUPromptLogprobs(unittest.TestCase):
         model_runner.model = FakeModel(cfg.model_config.vocab_size, cfg.model_config.hidden_size)
 
         model_runner.in_progress_prompt_logprobs = {}
+        model_runner.forward_meta = MockForwardMeta()
 
         return model_runner
 
