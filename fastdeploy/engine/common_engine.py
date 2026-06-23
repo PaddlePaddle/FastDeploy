@@ -981,6 +981,8 @@ class EngineService:
                                 LoggingEventName.ASK_DECODE_RESOURCE_START, task.request_id, getattr(task, "user", "")
                             )
                             task.metrics.ask_decode_resource_start_time = time.time()
+                            if envs.FD_PD_LOG_REQUEST:
+                                self.llm_logger.info(f"[PD_LOG] P sends Request: {task.to_dict()}")
                             while True:
                                 self.split_connector.send_splitwise_tasks([task], task.idx)
                                 status, msg = self.split_connector.check_decode_allocated(task)
@@ -1011,6 +1013,8 @@ class EngineService:
                                 LoggingEventName.ASK_DECODE_RESOURCE_START, task.request_id, getattr(task, "user", "")
                             )
                             task.metrics.ask_decode_resource_start_time = time.time()
+                            if envs.FD_PD_LOG_REQUEST:
+                                self.llm_logger.info(f"[PD_LOG] P sends Request: {task.to_dict()}")
                             self.split_connector.send_splitwise_tasks([task], task.idx)
 
                         for task in tasks:
@@ -2095,6 +2099,8 @@ class EngineService:
                         f"D has received tasks to preallocate resource for tasks: {[task.request_id for task in tasks]}"
                     )
                     for task in tasks:
+                        if envs.FD_PD_LOG_REQUEST:
+                            self.llm_logger.info(f"[PD_LOG] D received Request: {task.to_dict()}")
                         task.metrics.decode_recv_req_time = time.time()
                     allocate_resource_requests.extend(tasks)
                 elif isinstance(tasks[0], RequestOutput):
