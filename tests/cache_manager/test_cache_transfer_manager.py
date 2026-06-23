@@ -497,6 +497,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.has_cache_scale = True
         self.manager.swap_space_ready_signal = DummySignal()
         self.manager.value_cache_shape = [2, 1, 1, 1]
+        self.manager.cache_scale_shape = [self.manager.num_gpu_blocks, self.manager.head_num, self.manager.block_size]
 
         with (
             patch(
