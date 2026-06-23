@@ -231,7 +231,7 @@ class TestMultiApiServer(unittest.TestCase):
         for i, prom_dir in enumerate(prom_dirs):
             # The directory should contain the server index (0 or 1)
             # to uniquely identify each server's metrics directory
-            self.assertIn(f"_dp{i}", prom_dir, f"PROMETHEUS_MULTIPROC_DIR for server {i} should contain _dp{i}")
+            self.assertIn(f"/dp{i}", prom_dir, f"PROMETHEUS_MULTIPROC_DIR for server {i} should contain /dp{i}")
 
 
 if __name__ == "__main__":
