@@ -613,7 +613,7 @@ async def test_update_weights_route_validation():
     assert valid_resp.status_code == 200
     control_request = api_server.app.state.engine_client.run_control_method.await_args.args[0]
     assert control_request.method == "update_weights"
-    assert control_request.args == {"version": "v2", "verify_checksum": True}
+    assert control_request.args == {"version": "v2", "verify_checksum": True, "timeout": 180}
 
     invalid_version_req = MagicMock()
     invalid_version_req.body = AsyncMock(return_value=b'{"version":1}')
@@ -626,6 +626,22 @@ async def test_update_weights_route_validation():
     invalid_checksum_req.json = AsyncMock(return_value={"verify_checksum": "true"})
     invalid_checksum_resp = await api_server.update_weights(invalid_checksum_req)
     assert invalid_checksum_resp.status_code == 400
+
+    api_server.app.state.engine_client.run_control_method.reset_mock()
+    custom_timeout_req = MagicMock()
+    custom_timeout_req.body = AsyncMock(return_value=b'{"timeout":120}')
+    custom_timeout_req.json = AsyncMock(return_value={"timeout": 120})
+    custom_timeout_resp = await api_server.update_weights(custom_timeout_req)
+    assert custom_timeout_resp.status_code == 200
+    control_request = api_server.app.state.engine_client.run_control_method.await_args.args[0]
+    assert control_request.args == {"timeout": 120}
+
+    for invalid_timeout in [True, 0, -1, "120", 1.5, None]:
+        invalid_timeout_req = MagicMock()
+        invalid_timeout_req.body = AsyncMock(return_value=b'{"timeout":null}')
+        invalid_timeout_req.json = AsyncMock(return_value={"timeout": invalid_timeout})
+        invalid_timeout_resp = await api_server.update_weights(invalid_timeout_req)
+        assert invalid_timeout_resp.status_code == 400
 
 
 @pytest.mark.asyncio
