@@ -3650,7 +3650,7 @@ class GPUModelRunner(ModelRunnerBase):
                 continue
             offset = self.share_inputs["cu_seqlens_q"][batch_id]
             prompt_hidden_states = hidden_states[offset : offset + num_logits]
-            logits = self.model.compute_logits(prompt_hidden_states)
+            logits = self.model.compute_logits(prompt_hidden_states, self.forward_meta)
             prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]
             prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
             if logprobs_mode == "raw_logprobs":
