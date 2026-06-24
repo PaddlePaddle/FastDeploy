@@ -1114,6 +1114,9 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
 
         result = eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
         self.assertEqual(result, {"ok": True})
+        worker_request = eng._call_worker.call_args.args[0]
+        self.assertEqual(worker_request.args, {})
+        self.assertEqual(eng._call_worker.call_args.args[1], 180)
         self._detach_finalizer(eng)
 
     def test_control_update_weights_updates_cfg_version(self):
@@ -1138,15 +1141,21 @@ class TestCommonEngineAdditionalCoverage(unittest.TestCase):
         eng.cache_task_queue = Mock(put_transfer_task=Mock())
         eng._wait_for_control_responses = AsyncMock(return_value=[{"ok": True}])
 
-        result = eng._control_update_weights(ControlRequest(request_id="ctrl", method="update_weights"))
+        result = eng._control_update_weights(
+            ControlRequest(request_id="ctrl", method="update_weights", args={"version": "v2", "timeout": 120})
+        )
 
         self.assertEqual(result, [{"version": "new-version"}])
+        worker_request = eng._call_worker.call_args.args[0]
+        self.assertEqual(worker_request.args, {"version": "v2"})
+        self.assertEqual(eng._call_worker.call_args.args[1], 120)
         payload = eng.cache_task_queue.put_transfer_task.call_args.args[0]
         self.assertEqual(payload[0], CacheStatus.CTRL)
         self.assertEqual(payload[1].method, "update_weights")
+        self.assertEqual(payload[1].args, {"version": "v2"})
         self.assertIn("update_weights", payload[1].request_id)
         eng._wait_for_control_responses.assert_awaited_once_with(
-            payload[1].request_id, 60, executors=["cache_transfer"]
+            payload[1].request_id, 120, executors=["cache_transfer"]
         )
         self._detach_finalizer(eng)
 
