@@ -1434,7 +1434,15 @@ class EngineService(EngineServicePrepareMixin):
                 error_msg = "Pause LLM Engine first before calling updating weights"
                 self.llm_logger.error(error_msg)
                 raise Exception(error_msg)
-        responses = self._call_worker(control_request, 60)
+        timeout = control_request.args.get("timeout", 180)
+        worker_args = copy.deepcopy(control_request.args)
+        worker_args.pop("timeout", None)
+        worker_request = ControlRequest(
+            request_id=control_request.request_id,
+            method=control_request.method,
+            args=worker_args,
+        )
+        responses = self._call_worker(worker_request, timeout)
 
         if responses:
             new_version = None
@@ -1452,11 +1460,13 @@ class EngineService(EngineServicePrepareMixin):
             update_cache_request = ControlRequest(
                 request_id=f"{control_request.request_id}_update_weights",
                 method="update_weights",
-                args=copy.deepcopy(control_request.args),
+                args=copy.deepcopy(worker_args),
             )
             self.cache_task_queue.put_transfer_task((CacheStatus.CTRL, update_cache_request))
             asyncio.run(
-                self._wait_for_control_responses(update_cache_request.request_id, 60, executors=["cache_transfer"])
+                self._wait_for_control_responses(
+                    update_cache_request.request_id, timeout, executors=["cache_transfer"]
+                )
             )
             self.llm_logger.info("Successfully updated cache-transfer metadata after weight update.")
 
