@@ -576,7 +576,7 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
             elif isinstance(generator, ChatCompletionResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
-                return JSONResponse(content=generator.model_dump())
+                return Response(content=generator.model_dump_json(), media_type="application/json")
             else:
                 wrapped_generator = wrap_streaming_generator(generator)
                 return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")
