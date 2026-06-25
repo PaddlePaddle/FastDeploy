@@ -783,6 +783,8 @@ class ProposerInputBatch(InputBatch):
         self.cache_config: CacheConfig = fd_config.cache_config
         self.speculative_config: SpeculativeConfig = fd_config.speculative_config
         self.enable_pd_reorder: bool = False
+        self.swa_rope_theta = getattr(self.fd_config.model_config, "swa_rope_theta", None)
+        self.swa_rope_emb = None
 
     def init_share_inputs(self):
         # share with targe model
