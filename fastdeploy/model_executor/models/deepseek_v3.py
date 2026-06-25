@@ -299,16 +299,25 @@ class DeepseekV3MLAAttention(nn.Layer):
         self.kv_lora_rank = fd_config.model_config.kv_lora_rank
 
         # swa
-        self.swa_layer_list = getattr(fd_config.model_config, "window_attn_skip_freq", None)
+        self.window_attn_skip_freq = getattr(fd_config.model_config, "window_attn_skip_freq", None)
         self.sliding_window = getattr(fd_config.model_config, "sliding_window", 0)
+        self.swa_rope_theta = getattr(fd_config.model_config, "swa_rope_theta", None)
 
         self.attn_softmax_scale = self.qk_head_dim**-0.5
 
         if fd_config.model_config.model_type == "glm_moe_dsa":
             self.rope_theta = fd_config.model_config.rope_parameters["rope_theta"]
+
+        if (
+            self.window_attn_skip_freq is not None
+            and self.window_attn_skip_freq[self.layer_id] == 1
+            and self.swa_rope_theta is not None
+        ):
+            self.rope_theta = self.swa_rope_theta
         else:
             self.rope_theta = fd_config.model_config.rope_theta
 
+        print("layer_id ", self.layer_id, "rope_theta:", self.rope_theta)
         self.rms_norm_eps = fd_config.model_config.rms_norm_eps
 
         assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
@@ -525,9 +534,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         need_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
         need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
 
-        window_attn_skip_freq = getattr(self.fd_config.model_config, "window_attn_skip_freq", None)
-
-        if window_attn_skip_freq is not None and window_attn_skip_freq[self.layer_id] == 1:
+        if self.window_attn_skip_freq is not None and self.window_attn_skip_freq[self.layer_id] == 1:
             attn_out = self.forward_swa_static(
                 forward_meta=forward_meta,
                 query_nope=query_nope,

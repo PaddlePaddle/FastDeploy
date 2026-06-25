@@ -108,6 +108,9 @@ class InputBatch:
         else:
             self.max_chunk_tokens = self.fd_config.get_max_chunk_tokens(self.model_config.mm_max_tokens_per_item)
 
+        self.swa_rope_theta = getattr(self.fd_config.model_config, "swa_rope_theta", None)
+        self.swa_rope_emb = None
+
     def init_share_inputs(self):
         max_num_seqs = self.scheduler_config.max_num_seqs
 
@@ -245,6 +248,14 @@ class InputBatch:
                 model_config=self.model_config,
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
+            if self.swa_rope_theta is not None:
+                self.swa_rope_emb = get_rope(
+                    rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
+                    position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+                    base=self.swa_rope_theta,
+                    model_config=self.model_config,
+                    partial_rotary_factor=self.model_config.partial_rotary_factor,
+                )
             if self.is_mm_model:
                 self.image_features = None
                 self.image_grid_thws = None
@@ -727,6 +738,14 @@ class InputBatch:
                     model_config=self.model_config,
                     partial_rotary_factor=self.model_config.partial_rotary_factor,
                 )
+                if self.swa_rope_theta is not None:
+                    self.swa_rope_emb = get_rope(
+                        rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
+                        position_ids=paddle.arange(self.model_config.max_model_len).reshape((1, -1)),
+                        base=self.swa_rope_theta,
+                        model_config=self.model_config,
+                        partial_rotary_factor=self.model_config.partial_rotary_factor,
+                    )
                 if self.is_mm_model:
                     self.image_features = None
                     self.image_grid_thws = None
@@ -829,6 +848,14 @@ class ProposerInputBatch(InputBatch):
             model_config=self.model_config,
             partial_rotary_factor=self.model_config.partial_rotary_factor,
         )
+        if self.swa_rope_theta is not None:
+            self.swa_rope_emb = get_rope(
+                rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
+                position_ids=tmp_position_ids,
+                base=self.swa_rope_theta,
+                model_config=self.model_config,
+                partial_rotary_factor=self.model_config.partial_rotary_factor,
+            )
 
         # self.caches = self.cache_kvs
         # Inherit generation hyperparameters from the main model for consistency
@@ -1059,6 +1086,14 @@ class ProposerInputBatch(InputBatch):
                 model_config=self.model_config,
                 partial_rotary_factor=self.model_config.partial_rotary_factor,
             )
+            if self.swa_rope_theta is not None:
+                self.swa_rope_emb = get_rope(
+                    rotary_dim=self.rotary_dim if rotary_percent < 1.0 else self.model_config.head_dim,
+                    position_ids=tmp_position_ids,
+                    base=self.swa_rope_theta,
+                    model_config=self.model_config,
+                    partial_rotary_factor=self.model_config.partial_rotary_factor,
+                )
 
             # Reset generation hyperparameters from the main model
             self.top_p = self.target_model_input_batch["top_p"]
