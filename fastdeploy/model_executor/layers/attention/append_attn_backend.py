@@ -327,7 +327,6 @@ class AppendAttentionBackend(AttentionBackend):
             if self.swa_rope_theta is not None:
                 rotary_embs = forward_meta.swa_rotary_embs
 
-        # print("layer_id ",layer.layer_id  ,"rope_theta:",forward_meta.rotary_embs,"swa_rope_theta:",forward_meta.swa_rotary_embs)
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
         k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None

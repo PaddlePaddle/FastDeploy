@@ -317,7 +317,6 @@ class DeepseekV3MLAAttention(nn.Layer):
         else:
             self.rope_theta = fd_config.model_config.rope_theta
 
-        print("layer_id ", self.layer_id, "rope_theta:", self.rope_theta)
         self.rms_norm_eps = fd_config.model_config.rms_norm_eps
 
         assert self.q_lora_rank is not None, "self.q_lora_rank is None, Please Check your config."
