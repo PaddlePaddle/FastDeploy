@@ -185,6 +185,7 @@ class AppendAttentionBackend(AttentionBackend):
         self.sink_size: int = getattr(fd_config.model_config, "sink_size", 0)
         self.window_attn_skip_freq: list = getattr(fd_config.model_config, "window_attn_skip_freq", [0])
         self.head_wise_swa_ratio: float = getattr(fd_config.model_config, "head_wise_swa_ratio", 0.0)
+        self.swa_rope_theta = getattr(fd_config.model_config, "swa_rope_theta", None)
 
         self.head_wise_full_hidden = 0
         if self.head_wise_swa_ratio > 0.0:
@@ -320,8 +321,11 @@ class AppendAttentionBackend(AttentionBackend):
             forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
 
         sliding_window = 0
+        rotary_embs = forward_meta.rotary_embs
         if len(self.window_attn_skip_freq) > 1 and self.window_attn_skip_freq[layer.layer_id] == 1:
             sliding_window = self.sliding_window if self.sliding_window > 0 else layer.sliding_window
+            if self.swa_rope_theta is not None:
+                rotary_embs = forward_meta.swa_rotary_embs
 
         norm_after_rope_in_kernel = not getattr(layer, "qk_norm_before_rope", False)
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
@@ -401,8 +405,8 @@ class AppendAttentionBackend(AttentionBackend):
             assert forward_meta.rotary_embs.shape[0] == 2
             do_rope(
                 qkv,
-                forward_meta.rotary_embs[0],
-                forward_meta.rotary_embs[1],
+                rotary_embs[0],
+                rotary_embs[1],
                 forward_meta.cu_seqlens_q,
                 forward_meta.seq_lens_decoder,
                 forward_meta.batch_id_per_token,
@@ -476,7 +480,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
                 res,
-                forward_meta.rotary_embs,
+                rotary_embs,
                 forward_meta.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,
@@ -532,7 +536,7 @@ class AppendAttentionBackend(AttentionBackend):
                 forward_meta.decoder_tile_ids_per_batch,
                 forward_meta.decoder_num_blocks_cpu,
                 forward_meta.max_len_tensor_cpu,
-                forward_meta.rotary_embs,
+                rotary_embs,
                 forward_meta.attn_mask,
                 layer.qkv_bias,
                 layer.qkv_scale,

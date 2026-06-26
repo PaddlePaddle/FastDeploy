@@ -69,6 +69,7 @@ class ForwardMeta:
     ids_remove_padding: paddle.Tensor
     # Rotation position embedding
     rotary_embs: Optional[paddle.Tensor] = None
+    swa_rotary_embs: Optional[paddle.Tensor] = None
 
     # Use cuda graph in this step or not. Used to avoid run cuda graph when in dummy run or prefill stage.
     step_use_cudagraph: bool = False

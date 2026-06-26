@@ -1466,6 +1466,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
+            swa_rotary_embs=self.share_inputs["swa_rope_emb"],
             attn_backend=self.attn_backends[0],
             attn_backends=self.attn_backends,
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
