@@ -196,6 +196,7 @@ environment_variables: dict[str, Callable[[], Any]] = {
     # Number of worker threads for prepare requests in prefill instance
     "FD_PREFILL_PREPARE_REQ_THREAD_NUM": lambda: int(os.getenv("FD_PREFILL_PREPARE_REQ_THREAD_NUM", "3")),
     "FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS": lambda: int(os.getenv("FD_PREFILL_WAIT_DECODE_RESOURCE_SECONDS", "30")),
+    "FD_MAX_INFLIGHT_PREFILL": lambda: int(os.getenv("FD_MAX_INFLIGHT_PREFILL", "20")),
     # Timeout (seconds) for D to reclaim preallocated blocks if P never follows through. 0 to disable.
     "FD_DECODE_PREALLOC_BLOCK_TIMEOUT": lambda: int(os.getenv("FD_DECODE_PREALLOC_BLOCK_TIMEOUT", "1200")),
     "FD_ENABLE_REQUEST_DISCONNECT_STOP_INFERENCE": lambda: int(
