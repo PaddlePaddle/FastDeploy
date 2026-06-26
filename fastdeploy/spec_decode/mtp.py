@@ -245,14 +245,10 @@ class MTPProposer(Proposer):
 
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
-        # 2. If no need to profile, create kv cache unless kvcache_storage_backend or
-        #    p/d disaggregation is enabled. Note: CPU cache (num_cpu_blocks > 0) does NOT
-        #    prevent GPU runner from creating GPU cache tensors; cache transfer manager
-        #    handles CPU<->GPU swap on top of the GPU tensors created here.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
-        )
+        # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
+        #    Note: even when CPU cache (num_cpu_blocks > 0) is enabled, GPU runner still
+        #    creates GPU cache tensors; cache transfer manager handles CPU<->GPU swap.
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
 
         if not create_cache_tensor:
             logger.info(f"Waiting for cache managers to create kv cache.. {cache_ready_signal.value}")
@@ -440,13 +436,31 @@ class MTPProposer(Proposer):
         """
         Clear allocated cacheKV
         """
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
+        local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
+
+        cache_ready_signal_data = np.zeros(shape=[self.parallel_config.tensor_parallel_size], dtype=np.int32)
+        cache_ready_signal = IPCSignal(
+            name="cache_ready_signal",
+            array=cache_ready_signal_data,
+            dtype=np.int32,
+            suffix=self.parallel_config.local_engine_worker_queue_port,
+            create=False,
         )
-        if not create_cache_tensor:
-            for name, tensor in self.cache_kvs_map.items():
-                unset_data_ipc(tensor, name, True, False)
+
+        if not profile:
+            if create_cache_tensor:
+                if (
+                    self.fd_config.cache_config.num_cpu_blocks > 0
+                    or self.fd_config.cache_config.kvcache_storage_backend
+                ):
+                    logger.info("Waiting for cache transfer manager to unlink cuda ipc")
+                    while cache_ready_signal.value[local_rank] != 0:
+                        time.sleep(0.1)
+                    logger.info("Stop waiting! cache transfer manager has unlinked cuda ipc")
+            else:
+                for name, tensor in self.cache_kvs_map.items():
+                    unset_data_ipc(tensor, name, True, False)
         self.cache_kvs_map.clear()
         del self.model_inputs["caches"]
         if self.forward_meta is not None:
