@@ -454,8 +454,7 @@ class DeepseekV3MLAAttention(nn.Layer):
         key_pe: paddle.Tensor,
     ):
         """MLA static attention with sliding window indexer."""
-        q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
-
+        q_nope_out = self.kv_b_proj_bmm.forward_k_b_thd(query_nope)
         q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
         q_input.reshape_(
             [
@@ -488,13 +487,10 @@ class DeepseekV3MLAAttention(nn.Layer):
             attn_softmax_scale=self.attn_softmax_scale,
         )
 
-        fmqa_out = fmqa_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose([1, 0, 2])
+        fmqa_out = fmqa_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank])
 
-        return (
-            self.kv_b_proj_bmm(fmqa_out, proj_type="v")
-            .transpose([1, 0, 2])
-            .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
-        )
+        fmqa_out = self.kv_b_proj_bmm.forward_v_b_htr(fmqa_out)
+        return fmqa_out.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
 
     def forward(
         self,
@@ -578,8 +574,6 @@ class DeepseekV3MLAAttention(nn.Layer):
                 )
                 key[..., : self.qk_nope_head_dim] = key_nope
                 key[..., self.qk_nope_head_dim :] = full_k_pe.unsqueeze(1)
-                if self.qk_head_dim - self.v_head_dim != 0:
-                    value = paddle.nn.functional.pad(value, [0, self.qk_head_dim - self.v_head_dim], value=0)
 
                 fmha_out = self.mla_attn(
                     q=query,
@@ -591,8 +585,6 @@ class DeepseekV3MLAAttention(nn.Layer):
                     forward_meta=forward_meta,
                 )
 
-                fmha_out.reshape_([-1, self.num_attention_heads_tp, self.qk_head_dim])
-                fmha_out = fmha_out[:, :, : self.v_head_dim]
                 fmha_out.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
                 attn_out = fmha_out
 
@@ -627,7 +619,7 @@ class DeepseekV3MLAAttention(nn.Layer):
                     query_nope = decoder_query_nope.reshape([0, -1, self.qk_nope_head_dim])
                     query_pe = decoder_query_pe.reshape([0, -1, self.qk_rope_head_dim])
 
-                q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]), proj_type="k").transpose([1, 0, 2])
+                q_nope_out = self.kv_b_proj_bmm.forward_k_b_thd(query_nope)
 
                 q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
                 q_input.reshape_(
@@ -647,13 +639,9 @@ class DeepseekV3MLAAttention(nn.Layer):
                     forward_meta=forward_meta,
                 )
 
-                fmqa_out = fmqa_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose([1, 0, 2])
-
-                fmqa_out = (
-                    self.kv_b_proj_bmm(fmqa_out, proj_type="v")
-                    .transpose([1, 0, 2])
-                    .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
-                )
+                fmqa_out = fmqa_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank])
+                fmqa_out = self.kv_b_proj_bmm.forward_v_b_htr(fmqa_out)
+                fmqa_out = fmqa_out.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
 
                 if int(os.getenv("USE_FLASH_MLA", "0")) == 0 and self.prop.major == 9:
                     pass
@@ -1036,8 +1024,8 @@ class DeepseekV32DSAAttention(DeepseekV3MLAAttention):
         query_nope, query_pe = query.split([self.qk_nope_head_dim, self.qk_rope_head_dim], axis=-1)
 
         query_pe, key_pe = self.rotary_emb(forward_meta.position_ids, query_pe, key_pe)
-        q_nope_out = self.kv_b_proj_bmm(query_nope.transpose([1, 0, 2]).contiguous(), proj_type="k")
-        q_input = paddle.concat([q_nope_out.transpose([1, 0, 2]).contiguous(), query_pe], axis=-1)
+        q_nope_out = self.kv_b_proj_bmm.forward_k_b_thd(query_nope)
+        q_input = paddle.concat([q_nope_out, query_pe], axis=-1)
 
         compressed_kv = self.kv_a_layernorm(compressed_kv)[0]
         # kv = paddle.concat([compressed_kv, key_pe.squeeze(1)], axis=-1)
@@ -1053,15 +1041,9 @@ class DeepseekV32DSAAttention(DeepseekV3MLAAttention):
             forward_meta=forward_meta,
         )
 
-        fmha_out = fmha_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank]).transpose([1, 0, 2])
-        fmha_out = (
-            self.kv_b_proj_bmm(
-                fmha_out,
-                proj_type="v",
-            )
-            .transpose([1, 0, 2])
-            .reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
-        )
+        fmha_out = fmha_out.reshape_([-1, self.num_attention_heads_tp, self.kv_lora_rank])
+        fmha_out = self.kv_b_proj_bmm.forward_v_b_htr(fmha_out)
+        fmha_out = fmha_out.reshape_([-1, self.num_attention_heads_tp * self.v_head_dim])
 
         output = self.o_proj(fmha_out)
 
