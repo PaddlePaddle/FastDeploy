@@ -3226,19 +3226,19 @@ class GPUModelRunner(ModelRunnerBase):
 
             cache_clear_cost = 0.0
             cache_rebuild_cost = 0.0
-            clear_start = time.perf_counter()
-            self._maybe_clear_memory_for_weight_update(
-                clear_kv_cache=release_cache, clear_cuda_graph=self.use_cudagraph
-            )
-            cache_clear_cost = time.perf_counter() - clear_start
+            if release_cache:
+                clear_start = time.perf_counter()
+                self._maybe_clear_memory_before_weight_update(clear_kv_cache=True, clear_cuda_graph=self.use_cudagraph)
+                cache_clear_cost = time.perf_counter() - clear_start
 
             result = self.dynamic_weight_manager.update_weights_by_gdr(version, verify_checksum)
 
-            rebuild_start = time.perf_counter()
-            self._maybe_rebuild_memory_after_weight_update(
-                rebuild_kv_cache=release_cache, rebuild_cuda_graph=self.use_cudagraph
-            )
-            cache_rebuild_cost = time.perf_counter() - rebuild_start
+            if release_cache:
+                rebuild_start = time.perf_counter()
+                self._maybe_rebuild_memory_after_weight_update(
+                    rebuild_kv_cache=True, rebuild_cuda_graph=self.use_cudagraph
+                )
+                cache_rebuild_cost = time.perf_counter() - rebuild_start
 
             result["release_cache"] = release_cache
             result["cache_clear_cost"] = cache_clear_cost
@@ -3246,7 +3246,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.dynamic_weight_manager.finalize_update()
             return result
         else:
-            self._maybe_clear_memory_for_weight_update(clear_kv_cache=False, clear_cuda_graph=self.use_cudagraph)
+            self._maybe_clear_memory_before_weight_update(clear_kv_cache=False, clear_cuda_graph=self.use_cudagraph)
             result = self.dynamic_weight_manager.update_weights_by_rdma(version, verify_checksum)
             self._maybe_rebuild_memory_after_weight_update(
                 rebuild_kv_cache=False, rebuild_cuda_graph=self.use_cudagraph
@@ -3254,7 +3254,7 @@ class GPUModelRunner(ModelRunnerBase):
             self.dynamic_weight_manager.finalize_update()
             return result
 
-    def _maybe_clear_memory_for_weight_update(self, clear_kv_cache=False, clear_cuda_graph=False):
+    def _maybe_clear_memory_before_weight_update(self, clear_kv_cache=False, clear_cuda_graph=False):
         if clear_kv_cache:
             # Clear cache on cache transfer manager
             cache_flag = (
