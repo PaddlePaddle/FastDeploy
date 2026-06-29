@@ -18,7 +18,10 @@ import io
 import os
 from tempfile import NamedTemporaryFile as ntf
 
-import decord
+import numpy as np
+import paddle
+
+from fastdeploy.utils import get_logger
 
 try:
     # moviepy 1.0
@@ -26,6 +29,8 @@ try:
 except:
     # moviepy 2.0
     import moviepy as mp
+
+logger = get_logger("video_utils")
 
 
 def is_gif(data: bytes) -> bool:
@@ -35,19 +40,24 @@ def is_gif(data: bytes) -> bool:
     return data[:6] in (b"GIF87a", b"GIF89a")
 
 
-class VideoReaderWrapper(decord.VideoReader):
-    """
-    Solving memory leak bug
+class _NumpyFrame:
+    """Wrapper so that frame[idx].asnumpy() keeps working with paddlecodec."""
 
-    https://github.com/dmlc/decord/issues/208
-    """
+    def __init__(self, array):
+        self._array = array
+
+    def asnumpy(self):
+        return self._array
+
+
+class VideoReaderWrapper:
+    """paddlecodec VideoDecoder wrapper with GIF support."""
 
     def __init__(self, video_path, *args, **kwargs):
         with ntf(delete=True, suffix=".gif") as gif_file:
             gif_input = None
             self.original_file = None
             if isinstance(video_path, str):
-                self.original_file = video_path
                 if video_path.lower().endswith(".gif"):
                     gif_input = video_path
             elif isinstance(video_path, bytes):
@@ -70,14 +80,58 @@ class VideoReaderWrapper(decord.VideoReader):
                 video_path = mp4_file.name
                 self.original_file = video_path
 
-            super().__init__(video_path, *args, **kwargs)
-            self.seek(0)
+            with paddle.use_compat_guard(enable=True, scope={"torchcodec"}):
+                try:
+                    import sys
+
+                    from torchcodec.decoders import VideoDecoder
+
+                    sys.modules["torchcodec"] = None
+                except (ImportError, RuntimeError) as e:
+                    logger.error(
+                        f"Failed to load 'torchcodec' backend via Paddle proxy.\n"
+                        f"  - Common Causes:\n"
+                        f"    1. Conflict with official 'torch' or 'torchcodec' packages.\n"
+                        f"    2. Missing FFmpeg libraries or System library mismatch (CXXABI).\n"
+                        f"  - Recommended Fix Steps:\n"
+                        f"    1. Install dependencies: `conda install ffmpeg -c conda-forge` or `apt-get update && apt-get install ffmpeg` \n"
+                        f"    2. Uninstall conflicts: `pip uninstall torchcodec paddlecodec -y`\n"
+                        f"    3. Reinstall packages: `pip install paddlecodec --force-reinstall`\n"
+                        f"  - If you encounter 'CXXABI' or 'libstdc++' errors, your system libraries might be outdated.\n"
+                        f"    Try prioritizing Conda libraries by running: `LD_LIBRARY_PATH=$CONDA_PREFIX/lib:$LD_LIBRARY_PATH python your_script.py`\n"
+                        f"  - Original Error: {e}"
+                    )
+                    raise
+                PADDLECODEC_NUM_THREADS = int(os.environ.get("PADDLECODEC_NUM_THREADS", 0))
+                self._decoder = VideoDecoder(
+                    video_path,
+                    seek_mode="exact",
+                    num_ffmpeg_threads=PADDLECODEC_NUM_THREADS,
+                    device=kwargs.get("device", "cpu"),
+                    dimension_order="NHWC",
+                )
+
+    def __len__(self):
+        return self._decoder.metadata.num_frames
 
     def __getitem__(self, key):
-        frames = super().__getitem__(key)
-        self.seek(0)
-        return frames
+        if isinstance(key, (int, np.integer)):
+            frame = self._decoder.get_frames_at(indices=[int(key)]).data[0]
+            return _NumpyFrame(frame.numpy())
+        if isinstance(key, slice):
+            indices = list(range(*key.indices(len(self))))
+        else:
+            indices = list(key) if not isinstance(key, list) else key
+        frames = self._decoder.get_frames_at(indices=indices).data
+        return _NumpyFrame(frames.numpy())
+
+    def get_avg_fps(self):
+        return self._decoder.metadata.average_fps
 
     def __del__(self):
-        if self.original_file and os.path.exists(self.original_file):
-            os.remove(self.original_file)
+        original_file = getattr(self, "original_file", None)
+        if original_file and os.path.exists(original_file):
+            try:
+                os.remove(original_file)
+            except OSError:
+                pass

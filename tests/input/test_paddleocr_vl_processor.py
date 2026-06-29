@@ -415,7 +415,7 @@ class Test_DataProcessor(unittest.TestCase):
         self.assertEqual(result, "final_output")
 
     @patch(f"{MODULE_PATH}.sample_frames")
-    @patch(f"{MODULE_PATH}.read_video_decord")
+    @patch(f"{MODULE_PATH}.read_video_paddlecodec")
     def test_load_and_process_video(self, mock_read_video, mock_sample_frames):
         """测试 _load_and_process_video 的帧采样逻辑"""
         mock_reader = MagicMock()
@@ -542,7 +542,7 @@ class Test_DataProcessor(unittest.TestCase):
             mock_add_proc_vid.assert_called_once_with(self.dummy_processed_video_cache, ANY, "vid1")
 
     @patch(f"{MODULE_PATH}.sample_frames")
-    @patch(f"{MODULE_PATH}.read_video_decord")
+    @patch(f"{MODULE_PATH}.read_video_paddlecodec")
     def test_load_and_process_video_no_sampling(self, mock_read_video, mock_sample_frames):
         """新增：测试 _load_and_process_video 不采样（fps=-1）"""
         mock_reader = MagicMock()
