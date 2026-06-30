@@ -23,7 +23,7 @@ xlwt
 visualdl
 setuptools-scm>=8
 prometheus-client
-paddlecodec
+paddlecodec==0.1.0
 moviepy
 triton
 crcmod
