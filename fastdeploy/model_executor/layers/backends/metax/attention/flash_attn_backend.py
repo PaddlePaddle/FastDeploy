@@ -38,7 +38,6 @@ from fastdeploy.model_executor.ops.gpu import merge_qkv as merge_qkv_cu
 from fastdeploy.model_executor.ops.gpu import split_qkv as split_qkv_cu
 from fastdeploy.spec_decode import SpecMethod
 
-
 _METAX_ATTENTION_DEBUG_COUNT = 0
 
 
@@ -533,7 +532,9 @@ class FlashAttentionBackend(AttentionBackend):
             cos_values = []
             sin_values = []
             for token_offset in range(end - start):
-                cos, sin = self._safe_rotary_for_token(rotary_embs_np, int(global_batch_idx), base_position + token_offset)
+                cos, sin = self._safe_rotary_for_token(
+                    rotary_embs_np, int(global_batch_idx), base_position + token_offset
+                )
                 cos_values.append(cos)
                 sin_values.append(sin)
             cos_np = np.asarray(cos_values, dtype=np.float32)[:, None, :]
@@ -625,11 +626,7 @@ class FlashAttentionBackend(AttentionBackend):
             .astype(np.int64)
         )
         seq_lens_decode = (
-            self.attention_metadata.seq_lens_decode[: self.decode_len]
-            .cpu()
-            .numpy()
-            .reshape(-1)
-            .astype(np.int64)
+            self.attention_metadata.seq_lens_decode[: self.decode_len].cpu().numpy().reshape(-1).astype(np.int64)
         )
         block_tables = self.attention_metadata.block_table_decode[: self.decode_len].cpu().numpy()
 

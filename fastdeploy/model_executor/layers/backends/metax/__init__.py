@@ -21,7 +21,9 @@ __all__ = [
 ]
 
 try:
-    from .moe.fused_moe_triton_metax_backend import MetaxTritonWeightOnlyMoEMethod
+    from .moe.fused_moe_triton_metax_backend import (
+        MetaxTritonWeightOnlyMoEMethod as MetaxTritonWeightOnlyMoEMethod,
+    )
 
     __all__.append("MetaxTritonWeightOnlyMoEMethod")
 except ImportError:
@@ -29,8 +31,10 @@ except ImportError:
 
 try:
     from .moe.fused_moe_cutlass_metax_backend import (
-        MetaxCutlassUnquantizedFusedMoEMethod,
-        MetaxCutlassWeightOnlyMoEMethod,
+        MetaxCutlassUnquantizedFusedMoEMethod as MetaxCutlassUnquantizedFusedMoEMethod,
+    )
+    from .moe.fused_moe_cutlass_metax_backend import (
+        MetaxCutlassWeightOnlyMoEMethod as MetaxCutlassWeightOnlyMoEMethod,
     )
 
     __all__.extend(

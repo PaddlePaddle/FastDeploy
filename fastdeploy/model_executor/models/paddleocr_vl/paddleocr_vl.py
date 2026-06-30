@@ -14,8 +14,8 @@
 # limitations under the License.
 """
 
-import re
 import os
+import re
 from functools import partial
 from typing import Dict, Optional, Union
 
@@ -268,6 +268,7 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
+
         def weight_iterator():
             for name, weight in state_dict.items():
                 if not isinstance(weight, paddle.Tensor):

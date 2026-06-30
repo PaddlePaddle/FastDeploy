@@ -73,6 +73,9 @@ def top_k_top_p_sampling(
 
     """
     top_p_class = envs.FD_SAMPLING_CLASS.lower()
+    if top_p_class in ("greedy", "cpu") and not current_platform.is_maca():
+        logger.warning(f"FD_SAMPLING_CLASS={top_p_class} is only supported on MetaX; fallback to base sampling.")
+        top_p_class = "base"
     topp_seed_device = None
 
     # In deterministic mode, reset CUDA generator offset before sampling.
