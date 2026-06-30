@@ -33,6 +33,8 @@ def rotate_half(x):
         Dh = paddle.shape(x)[-1]
     x1 = x[..., : Dh // 2]
     x2 = x[..., Dh // 2 :]
+    if current_platform.is_maca():
+        return paddle.stack([x2 * -1.0, x1], axis=-2).flatten(-2)
     return paddle.concat([-x2, x1], axis=-1)
 
 

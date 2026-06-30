@@ -14,6 +14,7 @@
 # limitations under the License.
 """
 
+import os
 from typing import Callable, Dict, Optional
 
 import numpy as np
@@ -142,6 +143,18 @@ class RMSNorm(nn.Layer):
 
         self.init_weight()
 
+    def _safe_rms_norm(self, x: paddle.Tensor, residual_input: Optional[paddle.Tensor]):
+        if residual_input is not None:
+            x = x + residual_input
+        residual_out = x
+
+        x_fp32 = x.astype("float32")
+        weight_fp32 = self.weight.astype("float32")
+        variance = paddle.mean(paddle.square(x_fp32), axis=-1, keepdim=True)
+        norm_out = x_fp32 * paddle.rsqrt(variance + self.eps)
+        norm_out = norm_out * weight_fp32
+        return norm_out, residual_out
+
     def init_weight(self):
         """
         Initialize the weights and biases.
@@ -249,6 +262,8 @@ class RMSNorm(nn.Layer):
                     norm_out = rms_norm(x, self.weight, self.eps)
                     return norm_out.astype(x_dtype), residual_out
                 norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
+            elif current_platform.is_maca() and os.getenv("FD_METAX_SAFE_RMSNORM", "0") == "1":
+                norm_out = self._safe_rms_norm(x, residual_input)
             # enable trtllm all reduce fusion
             elif self.enable_all_reduce_fusion and x.shape[0] <= 2048:
                 norm_out = flashinfer_allreduce_residual_rmsnorm(

@@ -14,16 +14,30 @@
 
 from .attention.flash_attn_backend import FlashAttentionBackend
 from .attention.mla_attn_metax_backend import MetaxMLAAttentionBackend
-from .moe.fused_moe_cutlass_metax_backend import (
-    MetaxCutlassUnquantizedFusedMoEMethod,
-    MetaxCutlassWeightOnlyMoEMethod,
-)
-from .moe.fused_moe_triton_metax_backend import MetaxTritonWeightOnlyMoEMethod
 
 __all__ = [
     "FlashAttentionBackend",
     "MetaxMLAAttentionBackend",
-    "MetaxTritonWeightOnlyMoEMethod",
-    "MetaxCutlassWeightOnlyMoEMethod",
-    "MetaxCutlassUnquantizedFusedMoEMethod",
 ]
+
+try:
+    from .moe.fused_moe_triton_metax_backend import MetaxTritonWeightOnlyMoEMethod
+
+    __all__.append("MetaxTritonWeightOnlyMoEMethod")
+except ImportError:
+    pass
+
+try:
+    from .moe.fused_moe_cutlass_metax_backend import (
+        MetaxCutlassUnquantizedFusedMoEMethod,
+        MetaxCutlassWeightOnlyMoEMethod,
+    )
+
+    __all__.extend(
+        [
+            "MetaxCutlassWeightOnlyMoEMethod",
+            "MetaxCutlassUnquantizedFusedMoEMethod",
+        ]
+    )
+except ImportError:
+    pass

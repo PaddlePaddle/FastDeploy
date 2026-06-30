@@ -189,13 +189,14 @@ def process_weights_after_loading(sublayers_dict: dict, fd_config: FDConfig):
                 return
         if hasattr(model_sublayer, "quant_method"):
             quant_method = getattr(model_sublayer, "quant_method", None)
-            unquant_moe_layer = get_moe_method()
-            if unquant_moe_layer is None:
-                unquant_moe_cls = object
-            else:
-                unquant_moe_cls = type(unquant_moe_layer)
-            if type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls:
+            if type(quant_method) is UnquantizedLinearMethod:
                 # skip unquantized linear
+                return
+            try:
+                unquant_moe_layer = get_moe_method()
+            except ImportError:
+                unquant_moe_layer = None
+            if unquant_moe_layer is not None and type(quant_method) is type(unquant_moe_layer):
                 return
             if not hasattr(quant_method, "process_weights_after_loading"):
                 return
@@ -267,12 +268,13 @@ def process_final_after_loading(model, fd_config: FDConfig):
             continue
         quant_method = getattr(sublayer, "quant_method", None)
         if quant_method is not None:
-            unquant_moe_layer = get_moe_method()
-            if unquant_moe_layer is None:
-                unquant_moe_cls = object
-            else:
-                unquant_moe_cls = type(unquant_moe_layer)
-            is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or type(quant_method) is unquant_moe_cls
+            try:
+                unquant_moe_layer = get_moe_method()
+            except ImportError:
+                unquant_moe_layer = None
+            is_unquant_cls = type(quant_method) is UnquantizedLinearMethod or (
+                unquant_moe_layer is not None and type(quant_method) is type(unquant_moe_layer)
+            )
             is_offline_quantized_ckpt = not (fd_config.quant_config and fd_config.quant_config.is_checkpoint_bf16)
             # Hybrid mix_quant case: individual sublayer's sub-config may be
             # offline even when global quant_config is bf16-checkpoint. Those

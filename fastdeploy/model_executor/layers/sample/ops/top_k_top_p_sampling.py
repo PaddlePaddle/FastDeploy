@@ -14,8 +14,10 @@
 # limitations under the License.
 """
 
+import os
 from typing import Literal, Optional
 
+import numpy as np
 import paddle
 
 from fastdeploy import envs
@@ -27,6 +29,7 @@ if current_platform.is_gcu():
 from paddleformers.utils.log import logger
 
 _DETERMINISTIC_RNG_SEED = 42
+_CPU_SAMPLING_DEBUG_STEPS = 0
 
 
 def _reset_cuda_generator_for_determinism():
@@ -80,7 +83,13 @@ def top_k_top_p_sampling(
     if envs.FD_DETERMINISTIC_MODE:
         _reset_cuda_generator_for_determinism()
 
-    if top_p_class == "rejection":
+    if top_p_class == "greedy":
+        ids = paddle.argmax(x, axis=-1).reshape([-1, 1])
+        _ = None
+    elif top_p_class == "cpu":
+        ids = cpu_top_p_sampling(x, top_p, top_k, threshold, topp_seed, seed)
+        _ = None
+    elif top_p_class == "rejection":
         ids = rejection_top_p_sampling(x, top_p, top_k, top_k_list, seed, order)
         _ = None
     else:
@@ -135,6 +144,98 @@ def top_k_top_p_sampling(
                     mode="truncated",
                 )
     return _, ids
+
+
+def _flat_numpy_or_none(tensor: Optional[paddle.Tensor]):
+    if tensor is None:
+        return None
+    return tensor.cpu().numpy().reshape(-1)
+
+
+def _value_at(values, idx, default):
+    if values is None or values.size == 0:
+        return default
+    if idx < values.size:
+        return values[idx]
+    return values[-1]
+
+
+def cpu_top_p_sampling(
+    probs: paddle.Tensor,
+    top_p: paddle.Tensor,
+    top_k: Optional[paddle.Tensor] = None,
+    threshold: Optional[paddle.Tensor] = None,
+    topp_seed: Optional[paddle.Tensor] = None,
+    seed: int = -1,
+) -> paddle.Tensor:
+    """MetaX-safe fallback that samples on CPU and copies token ids back."""
+    global _CPU_SAMPLING_DEBUG_STEPS
+    probs_np = probs.astype("float32").cpu().numpy()
+    top_p_np = _flat_numpy_or_none(top_p)
+    top_k_np = _flat_numpy_or_none(top_k)
+    threshold_np = _flat_numpy_or_none(threshold)
+    topp_seed_np = _flat_numpy_or_none(topp_seed)
+
+    out_ids = np.empty((probs_np.shape[0], 1), dtype="int64")
+    vocab_size = probs_np.shape[1]
+    all_ids = np.arange(vocab_size, dtype="int64")
+    debug_topk = int(os.getenv("FD_CPU_SAMPLING_DEBUG_TOPK", "0") or "0")
+    for row_idx, original_row in enumerate(probs_np):
+        row = np.nan_to_num(original_row, nan=0.0, posinf=0.0, neginf=0.0)
+        row = np.maximum(row, 0.0)
+        fallback_id = int(np.argmax(row))
+        if debug_topk > 0 and row_idx == 0 and _CPU_SAMPLING_DEBUG_STEPS < debug_topk:
+            k = min(10, vocab_size)
+            top_ids = np.argpartition(row, -k)[-k:]
+            top_ids = top_ids[np.argsort(-row[top_ids])]
+            top_probs = row[top_ids]
+            logger.warning(
+                f"CPU sampling debug step {_CPU_SAMPLING_DEBUG_STEPS}: "
+                f"top_ids={top_ids.tolist()} top_probs={top_probs.tolist()} "
+                f"sum={float(row.sum()):.6g} nan_count={int(np.isnan(original_row).sum())}"
+            )
+            _CPU_SAMPLING_DEBUG_STEPS += 1
+
+        threshold_value = _value_at(threshold_np, row_idx, None)
+        if threshold_value is not None:
+            row = np.where(row >= float(threshold_value), row, 0.0)
+
+        top_k_value = int(_value_at(top_k_np, row_idx, 0))
+        if 0 < top_k_value < vocab_size:
+            candidate_ids = np.argpartition(row, -top_k_value)[-top_k_value:].astype("int64")
+            candidate_probs = row[candidate_ids]
+        else:
+            candidate_ids = all_ids
+            candidate_probs = row
+
+        top_p_value = float(_value_at(top_p_np, row_idx, 1.0))
+        top_p_value = min(max(top_p_value, 0.0), 1.0)
+        if top_p_value < 1.0:
+            order = np.argsort(-candidate_probs)
+            sorted_probs = candidate_probs[order]
+            cumulative = np.cumsum(sorted_probs)
+            keep = (cumulative - sorted_probs) <= top_p_value
+            if not keep.any():
+                keep[0] = True
+            candidate_ids = candidate_ids[order[keep]]
+            candidate_probs = sorted_probs[keep]
+
+        prob_sum = float(candidate_probs.sum())
+        if prob_sum <= 0.0:
+            out_ids[row_idx, 0] = fallback_id
+            continue
+
+        candidate_probs = candidate_probs / prob_sum
+        seed_value = _value_at(topp_seed_np, row_idx, None)
+        if seed_value is not None:
+            rng = np.random.default_rng(int(seed_value) & 0xFFFFFFFF)
+        elif seed >= 0:
+            rng = np.random.default_rng((int(seed) + row_idx) & 0xFFFFFFFF)
+        else:
+            rng = np.random.default_rng()
+        out_ids[row_idx, 0] = int(rng.choice(candidate_ids, p=candidate_probs))
+
+    return paddle.to_tensor(out_ids, dtype="int64", place=probs.place)
 
 
 def air_top_p_sampling(

@@ -22,6 +22,35 @@ import paddle
 import paddle.nn as nn
 
 from fastdeploy.model_executor.utils import h2d_copy
+from fastdeploy.platforms import current_platform
+
+
+class PaddleOCRVLProjectorLayerNorm(nn.Layer):
+    def __init__(self, normalized_shape: int, epsilon: float = 1e-5):
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.epsilon = epsilon
+        self.weight = self.create_parameter(
+            shape=[normalized_shape],
+            default_initializer=nn.initializer.Constant(1.0),
+        )
+        self.bias = self.create_parameter(
+            shape=[normalized_shape],
+            default_initializer=nn.initializer.Constant(0.0),
+            is_bias=True,
+        )
+
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
+        if current_platform.is_maca():
+            output_dtype = hidden_states.dtype
+            hidden_states = hidden_states.astype("float32")
+            mean = hidden_states.mean(axis=-1, keepdim=True)
+            centered = hidden_states - mean
+            variance = (centered * centered).mean(axis=-1, keepdim=True)
+            hidden_states = centered * paddle.rsqrt(variance + self.epsilon)
+            hidden_states = hidden_states * self.weight.astype("float32") + self.bias.astype("float32")
+            return hidden_states.astype(output_dtype)
+        return nn.functional.layer_norm(hidden_states, [self.normalized_shape], self.weight, self.bias, self.epsilon)
 
 
 class GELUActivation(nn.Layer):
@@ -57,7 +86,7 @@ class Projector(nn.Layer):
 
         self.hidden_size = self.vision_config.hidden_size * self.merge_kernel_size[0] * self.merge_kernel_size[1]
 
-        self.pre_norm = nn.LayerNorm(self.vision_config.hidden_size, epsilon=1e-05)
+        self.pre_norm = PaddleOCRVLProjectorLayerNorm(self.vision_config.hidden_size, epsilon=1e-05)
         self.linear_1 = nn.Linear(self.hidden_size, self.hidden_size)
         self.linear_1.weight.weight_loader = self.weight_loader
         self.act = GELUActivation()

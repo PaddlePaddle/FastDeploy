@@ -15,6 +15,7 @@
 """
 
 from dataclasses import dataclass
+import os
 from typing import Dict
 
 import numpy as np
@@ -189,6 +190,7 @@ class VocabParallelEmbedding(nn.Layer):
 
         self.prefix = prefix
         self.dropout = nn.Dropout(self.hidden_dropout_prob)
+        self._cpu_embedding_weight = None
 
     def load_state_dict(self, state_dict: Dict[str, paddle.Tensor | np.ndarray]):
         """
@@ -203,6 +205,7 @@ class VocabParallelEmbedding(nn.Layer):
             weight_tensor = get_tensor(state_dict.pop(self.prefix + ".weight")).astype(paddle.get_default_dtype())
 
         self.embeddings.weight.set_value(weight_tensor)
+        self._cpu_embedding_weight = None
 
     @classmethod
     def _get_indices(
@@ -291,6 +294,18 @@ class VocabParallelEmbedding(nn.Layer):
             h2d_copy(param[:, : shard_weight.shape[1]], shard_weight)
             if param.shape[1] != shard_weight.shape[1]:
                 param[:, shard_weight.shape[1] :].fill_(0)
+        self._cpu_embedding_weight = None
+
+    def _safe_cpu_embedding(self, ids_remove_padding: paddle.Tensor) -> paddle.Tensor:
+        if self.world_size != 1 or self.column_cut:
+            raise NotImplementedError("FD_METAX_SAFE_EMBEDDING only supports tensor_parallel_size=1.")
+        if self._cpu_embedding_weight is None:
+            self._cpu_embedding_weight = self.embeddings.weight.astype("float32").cpu().numpy()
+
+        ids = ids_remove_padding.cpu().numpy().reshape(-1).astype("int64")
+        safe_ids = np.where((ids >= 0) & (ids < self._cpu_embedding_weight.shape[0]), ids, 0)
+        output = self._cpu_embedding_weight[safe_ids]
+        return paddle.to_tensor(output, dtype=self.embeddings.weight.dtype, place=ids_remove_padding.place)
 
     def forward(self, ids_remove_padding: paddle.Tensor = None, forward_meta: ForwardMeta = None) -> paddle.Tensor:
         """
@@ -305,6 +320,8 @@ class VocabParallelEmbedding(nn.Layer):
         """
         if forward_meta is not None and forward_meta.is_zero_size:
             return paddle.empty([0, self.embedding_dim], dtype=self.embeddings.weight.dtype)
+        if current_platform.is_maca() and os.getenv("FD_METAX_SAFE_EMBEDDING", "0") == "1":
+            return self._safe_cpu_embedding(ids_remove_padding)
         if self.column_cut:
             input_embedings = self.embeddings(ids_remove_padding)
             inputs_embeds_temp = []
