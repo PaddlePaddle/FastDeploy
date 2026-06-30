@@ -475,6 +475,7 @@ async def benchmark(
             )
         else:
             print("Initial test run completed. Starting main benchmark run...")
+        await asyncio.sleep(1.0)
     else:
         print("Warm up disabled (--no-warmup). Skipping initial test run.")
 
