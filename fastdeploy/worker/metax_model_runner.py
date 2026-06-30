@@ -20,7 +20,7 @@ import queue
 import time
 from concurrent.futures import Future
 from threading import Thread
-from typing import List, Optional, cast
+from typing import List, Optional, Tuple, cast
 
 import numpy as np
 import paddle
@@ -398,6 +398,10 @@ class MetaxModelRunner(ModelRunnerBase):
         """
         if not self.enable_mm:
             return
+
+        def _grid_thw_tuple(grid_thw) -> Tuple[int, int, int]:
+            return tuple(int(v) for v in grid_thw)
+
         self.share_inputs["image_features_list"] = [-1] * self.scheduler_config.max_num_seqs
         img_index = 0
         req_idx_img_index_map = {}
@@ -417,6 +421,10 @@ class MetaxModelRunner(ModelRunnerBase):
             "position_ids_offset": [0],
             "max_tokens_lst": [],
         }
+        pending_mm_hash_order = []
+        pending_mm_grid_thw = {}
+        mm_num_token_func = None
+        mm_feature_info_batches = []
 
         for request in request_list:
             if request.task_type.value != RequestType.PREFILL.value:
@@ -447,6 +455,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 img_index = img_index + 1
                 inputs = request.multimodal_inputs
                 if self.encoder_cache is not None:
+                    mm_num_token_func = inputs["mm_num_token_func"]
                     if envs.FD_ENABLE_MAX_PREFILL:
                         if "vit_seqlen" in inputs:
                             vit_seqlen_list = inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
@@ -471,86 +480,138 @@ class MetaxModelRunner(ModelRunnerBase):
                     grid_thw_lst_per_req = []
                     for i, mm_hash in enumerate(mm_hashes_list):
                         image_offset = np.prod(grid_thw_list[i])
+                        grid_thw_key = _grid_thw_tuple(grid_thw_list[i])
                         logger.debug(
                             f"run idx {i} with mm_hash {mm_hash} image_offset: {image_offset} grid_thw: {grid_thw_list[i]}"
                         )
                         if mm_hash in self.encoder_cache:
                             encoder_cache_info_per_req.append((mm_hash, feature_positions[i], True))
-                            continue
-
-                        encoder_cache_info_per_req.append((mm_hash, feature_positions[i], False))
-                        if envs.FD_ENABLE_MAX_PREFILL:
-                            multi_vision_inputs["images_lst"].append(
-                                inputs["images"][image_start_idx : image_start_idx + image_offset].to(self.device)
-                            )
-                            multi_vision_inputs["grid_thw_lst"].append(paddle.to_tensor(grid_thw_list[i]))
-                            grid_thw_lst_per_req.append(paddle.to_tensor(grid_thw_list[i], dtype=paddle.int64))
-                            multi_vision_inputs["cu_seqlens"].append(vit_seqlen_list[i])
-                            multi_vision_inputs["vit_position_ids_lst"].append(vit_position_ids_list[i])
                         else:
-                            multi_vision_inputs["images_lst"].append(
-                                paddle.to_tensor(
-                                    inputs["images"][image_start_idx : image_start_idx + image_offset],
-                                    dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
-                                )
-                            )
-                            multi_vision_inputs["grid_thw_lst"].append(
-                                paddle.to_tensor(grid_thw_list[i], dtype=paddle.int64)
-                            )
-                            grid_thw_lst_per_req.append(paddle.to_tensor(grid_thw_list[i], dtype=paddle.int64))
+                            encoder_cache_info_per_req.append((mm_hash, feature_positions[i], False))
+                            if mm_hash not in pending_mm_grid_thw:
+                                pending_mm_hash_order.append(mm_hash)
+                                pending_mm_grid_thw[mm_hash] = grid_thw_key
+                                if envs.FD_ENABLE_MAX_PREFILL:
+                                    multi_vision_inputs["images_lst"].append(
+                                        inputs["images"][image_start_idx : image_start_idx + image_offset].to(
+                                            self.device
+                                        )
+                                    )
+                                    multi_vision_inputs["grid_thw_lst"].append(grid_thw_key)
+                                    grid_thw_lst_per_req.append(grid_thw_key)
+                                    multi_vision_inputs["cu_seqlens"].append(vit_seqlen_list[i])
+                                    multi_vision_inputs["vit_position_ids_lst"].append(vit_position_ids_list[i])
+                                else:
+                                    grid_thw_tensor = paddle.to_tensor(grid_thw_key, dtype=paddle.int64)
+                                    multi_vision_inputs["images_lst"].append(
+                                        paddle.to_tensor(
+                                            inputs["images"][image_start_idx : image_start_idx + image_offset],
+                                            dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
+                                        )
+                                    )
+                                    multi_vision_inputs["grid_thw_lst"].append(grid_thw_tensor)
+                                    grid_thw_lst_per_req.append(grid_thw_tensor)
+                            else:
+                                if pending_mm_grid_thw[mm_hash] != grid_thw_key:
+                                    raise ValueError(
+                                        f"mm_hash {mm_hash} grid_thw mismatch: "
+                                        f"{pending_mm_grid_thw[mm_hash]} != {grid_thw_key}"
+                                    )
                         image_start_idx += image_offset
                     multi_vision_inputs["grid_thw_lst_batches"].append(grid_thw_lst_per_req)
                     multi_vision_inputs["encoder_cache_info"].append(encoder_cache_info_per_req)
                 else:
-                    if envs.FD_ENABLE_MAX_PREFILL:
-                        multi_vision_inputs["images_lst"].append(
-                            inputs["images"][request.image_start : request.image_end].to(self.device)
-                        )
-                        multi_vision_inputs["grid_thw_lst"].extend(
-                            paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
-                        )
-                        multi_vision_inputs["grid_thw_lst_batches"].append(
-                            paddle.to_tensor(inputs["grid_thw"][request.num_image_start : request.num_image_end])
-                        )
-                        multi_vision_inputs["cu_seqlens"].extend(
-                            inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
-                        )
-                        multi_vision_inputs["vit_position_ids_lst"].extend(
-                            inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
-                        )
+                    feature_positions = self._get_feature_positions(
+                        mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
+                        prefill_start_index=request.prefill_start_index,
+                        prefill_end_index=request.prefill_end_index,
+                    )
+                    batch_mm_dedup_enabled = "paddleocr" in self.model_config.model_type and "mm_hashes" in inputs
+                    if batch_mm_dedup_enabled:
+                        mm_num_token_func = inputs["mm_num_token_func"]
+                        grid_thw_list = inputs["grid_thw"][request.num_image_start : request.num_image_end]
+                        mm_hashes_list = inputs["mm_hashes"][request.num_image_start : request.num_image_end]
+                        image_start_idx = request.image_start
+                        mm_feature_info_per_req = []
+                        grid_thw_lst_per_req = []
+                        for i, mm_hash in enumerate(mm_hashes_list):
+                            image_offset = np.prod(grid_thw_list[i])
+                            grid_thw_key = _grid_thw_tuple(grid_thw_list[i])
+                            mm_feature_info_per_req.append((mm_hash, feature_positions[i]))
+                            if mm_hash not in pending_mm_grid_thw:
+                                pending_mm_hash_order.append(mm_hash)
+                                pending_mm_grid_thw[mm_hash] = grid_thw_key
+                                if envs.FD_ENABLE_MAX_PREFILL:
+                                    multi_vision_inputs["images_lst"].append(
+                                        inputs["images"][image_start_idx : image_start_idx + image_offset].to(
+                                            self.device
+                                        )
+                                    )
+                                    multi_vision_inputs["grid_thw_lst"].append(grid_thw_key)
+                                    grid_thw_lst_per_req.append(grid_thw_key)
+                                    multi_vision_inputs["cu_seqlens"].append(
+                                        inputs["vit_seqlen"][request.num_image_start + i]
+                                    )
+                                    multi_vision_inputs["vit_position_ids_lst"].append(
+                                        inputs["vit_position_ids"][request.num_image_start + i]
+                                    )
+                                else:
+                                    grid_thw_tensor = paddle.to_tensor(grid_thw_key, dtype=paddle.int64)
+                                    multi_vision_inputs["images_lst"].append(
+                                        paddle.to_tensor(
+                                            inputs["images"][image_start_idx : image_start_idx + image_offset],
+                                            dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
+                                        )
+                                    )
+                                    multi_vision_inputs["grid_thw_lst"].append(grid_thw_tensor)
+                                    grid_thw_lst_per_req.append(grid_thw_tensor)
+                            else:
+                                if pending_mm_grid_thw[mm_hash] != grid_thw_key:
+                                    raise ValueError(
+                                        f"mm_hash {mm_hash} grid_thw mismatch: "
+                                        f"{pending_mm_grid_thw[mm_hash]} != {grid_thw_key}"
+                                    )
+                            image_start_idx += image_offset
+                        multi_vision_inputs["grid_thw_lst_batches"].append(grid_thw_lst_per_req)
+                        mm_feature_info_batches.append(mm_feature_info_per_req)
                     else:
-                        multi_vision_inputs["images_lst"].append(
-                            paddle.to_tensor(
-                                inputs["images"][request.image_start : request.image_end],
-                                dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
+                        if envs.FD_ENABLE_MAX_PREFILL:
+                            grid_thw_batch = [
+                                _grid_thw_tuple(grid_thw)
+                                for grid_thw in inputs["grid_thw"][request.num_image_start : request.num_image_end]
+                            ]
+                            multi_vision_inputs["images_lst"].append(
+                                inputs["images"][request.image_start : request.image_end].to(self.device)
                             )
-                        )
-                        multi_vision_inputs["grid_thw_lst"].extend(
-                            paddle.to_tensor(
-                                inputs["grid_thw"][request.num_image_start : request.num_image_end],
-                                dtype=paddle.int64,
+                            multi_vision_inputs["grid_thw_lst"].extend(grid_thw_batch)
+                            multi_vision_inputs["grid_thw_lst_batches"].append(grid_thw_batch)
+                            multi_vision_inputs["cu_seqlens"].extend(
+                                inputs["vit_seqlen"][request.num_image_start : request.num_image_end]
                             )
-                        )
-                        multi_vision_inputs["grid_thw_lst_batches"].append(
-                            paddle.to_tensor(
-                                inputs["grid_thw"][request.num_image_start : request.num_image_end],
-                                dtype=paddle.int64,
+                            multi_vision_inputs["vit_position_ids_lst"].extend(
+                                inputs["vit_position_ids"][request.num_image_start : request.num_image_end]
                             )
-                        )
-                    multi_vision_inputs["feature_position_list"].extend(
-                        self._get_feature_positions(
-                            mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
-                            prefill_start_index=request.prefill_start_index,
-                            prefill_end_index=request.prefill_end_index,
-                        )
-                    )
-                    multi_vision_inputs["feature_position_list_batches"].append(
-                        self._get_feature_positions(
-                            mm_positions=inputs["mm_positions"][request.num_image_start : request.num_image_end],
-                            prefill_start_index=request.prefill_start_index,
-                            prefill_end_index=request.prefill_end_index,
-                        )
-                    )
+                        else:
+                            multi_vision_inputs["images_lst"].append(
+                                paddle.to_tensor(
+                                    inputs["images"][request.image_start : request.image_end],
+                                    dtype="uint8" if "ernie" in self.model_config.model_type else "bfloat16",
+                                )
+                            )
+                            multi_vision_inputs["grid_thw_lst"].extend(
+                                paddle.to_tensor(
+                                    inputs["grid_thw"][request.num_image_start : request.num_image_end],
+                                    dtype=paddle.int64,
+                                )
+                            )
+                            multi_vision_inputs["grid_thw_lst_batches"].append(
+                                paddle.to_tensor(
+                                    inputs["grid_thw"][request.num_image_start : request.num_image_end],
+                                    dtype=paddle.int64,
+                                )
+                            )
+                        multi_vision_inputs["feature_position_list"].extend(feature_positions)
+                        multi_vision_inputs["feature_position_list_batches"].append(feature_positions)
         if self.encoder_cache is not None:
             if len(multi_vision_inputs["images_lst"]) > 0 or len(multi_vision_inputs["encoder_cache_info"]) > 0:
                 image_features_output = None
@@ -559,25 +620,28 @@ class MetaxModelRunner(ModelRunnerBase):
 
                 logger.debug(f"encoder_cache_info: {multi_vision_inputs['encoder_cache_info']}")
                 feature_idx = 0
+                fresh_mm_feature_cache = {}
+                if image_features_output is not None:
+                    assert mm_num_token_func is not None
+                    for mm_hash in pending_mm_hash_order:
+                        grid_thw = pending_mm_grid_thw[mm_hash]
+                        mm_token_length = mm_num_token_func(grid_thw=grid_thw)
+                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
+                        fresh_mm_feature_cache[mm_hash] = mm_feature
+                        self.encoder_cache[mm_hash] = mm_feature.detach().clone()
+                        feature_idx += mm_token_length
                 image_features_list = []
                 for index, encoder_cache_info in enumerate(multi_vision_inputs["encoder_cache_info"]):
-                    merge_image_features, thw_idx = [], 0
+                    merge_image_features = []
                     for mm_hash, feature_position, use_cache in encoder_cache_info:
                         if use_cache:
                             assert mm_hash in self.encoder_cache, f"{mm_hash} not in encoder cache"
-                            mm_feature = self.encoder_cache[mm_hash].to(self.device)
+                            mm_feature = self.encoder_cache[mm_hash]
                         else:
                             assert (
-                                image_features_output is not None
-                            ), f"image_features_output is None, images_lst length: {len(multi_vision_inputs['images_lst'])}"
-                            grid_thw = multi_vision_inputs["grid_thw_lst_batches"][index][thw_idx]
-                            mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
-                            mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
-
-                            # add feature to encoder cache
-                            self.encoder_cache[mm_hash] = mm_feature.detach().cpu()
-                            feature_idx += mm_token_length
-                            thw_idx += 1
+                                mm_hash in fresh_mm_feature_cache
+                            ), f"{mm_hash} not in fresh multimodal feature cache"
+                            mm_feature = fresh_mm_feature_cache[mm_hash]
 
                         feature_start = feature_position.offset
                         feature_end = feature_position.offset + feature_position.length
@@ -589,22 +653,43 @@ class MetaxModelRunner(ModelRunnerBase):
         elif len(multi_vision_inputs["images_lst"]) > 0:
             image_features_output = self.extract_vision_features(multi_vision_inputs)
             image_features_list = []
-            feature_idx = 0
-            for index, feature_position_item in enumerate(multi_vision_inputs["feature_position_list_batches"]):
-                grid_thw_lst = multi_vision_inputs["grid_thw_lst_batches"][index]
-                assert len(feature_position_item) == len(grid_thw_lst), f"{feature_position_item} != {grid_thw_lst}"
-                merge_image_features, thw_idx = [], 0
-                for feature_position in feature_position_item:
-                    grid_thw = grid_thw_lst[thw_idx]
-                    mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+            if len(mm_feature_info_batches) > 0:
+                feature_idx = 0
+                fresh_mm_feature_cache = {}
+                assert mm_num_token_func is not None
+                for mm_hash in pending_mm_hash_order:
+                    grid_thw = pending_mm_grid_thw[mm_hash]
+                    mm_token_length = mm_num_token_func(grid_thw=grid_thw)
                     mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
-
-                    feature_start = feature_position.offset
-                    feature_end = feature_position.offset + feature_position.length
-                    merge_image_features.append(mm_feature[feature_start:feature_end])
+                    fresh_mm_feature_cache[mm_hash] = mm_feature
                     feature_idx += mm_token_length
-                    thw_idx += 1
-                image_features_list.append(paddle.concat(merge_image_features, axis=0))
+                for mm_feature_info_per_req in mm_feature_info_batches:
+                    merge_image_features = []
+                    for mm_hash, feature_position in mm_feature_info_per_req:
+                        mm_feature = fresh_mm_feature_cache[mm_hash]
+                        feature_start = feature_position.offset
+                        feature_end = feature_position.offset + feature_position.length
+                        merge_image_features.append(mm_feature[feature_start:feature_end])
+                    image_features_list.append(paddle.concat(merge_image_features, axis=0))
+            else:
+                feature_idx = 0
+                for index, feature_position_item in enumerate(multi_vision_inputs["feature_position_list_batches"]):
+                    grid_thw_lst = multi_vision_inputs["grid_thw_lst_batches"][index]
+                    assert len(feature_position_item) == len(
+                        grid_thw_lst
+                    ), f"{feature_position_item} != {grid_thw_lst}"
+                    merge_image_features, thw_idx = [], 0
+                    for feature_position in feature_position_item:
+                        grid_thw = grid_thw_lst[thw_idx]
+                        mm_token_length = inputs["mm_num_token_func"](grid_thw=grid_thw)
+                        mm_feature = image_features_output[feature_idx : feature_idx + mm_token_length]
+
+                        feature_start = feature_position.offset
+                        feature_end = feature_position.offset + feature_position.length
+                        merge_image_features.append(mm_feature[feature_start:feature_end])
+                        feature_idx += mm_token_length
+                        thw_idx += 1
+                    image_features_list.append(paddle.concat(merge_image_features, axis=0))
             for idx, index in req_idx_img_index_map.items():
                 if index != -1:
                     self.share_inputs["image_features_list"][idx] = image_features_list[index]
@@ -2661,11 +2746,26 @@ class MetaxModelRunner(ModelRunnerBase):
 
     def extract_vision_features_paddleocr(self, inputs: dict[str, list[paddle.Tensor]]) -> paddle.Tensor:
         if envs.FD_ENABLE_MAX_PREFILL:
-            inputs["vit_position_ids_lst"] = np.concatenate(inputs["vit_position_ids_lst"])
-            images = paddle.concat(inputs["images_lst"]).cast("bfloat16")
-            grid_thw = paddle.to_tensor(inputs["grid_thw_lst"], dtype="int64")
-            position_ids = paddle.to_tensor(inputs["vit_position_ids_lst"], dtype="int64")
-            cu_seqlens = paddle.cumsum(paddle.to_tensor(inputs["cu_seqlens"])).cast("int32")
+            images = paddle.concat(inputs["images_lst"], axis=0)
+            if images.dtype != paddle.bfloat16:
+                images = images.cast("bfloat16")
+
+            # Batch metadata once on the same place as images to avoid repeated small tensor work.
+            device_place = images.place
+            grid_thw = paddle.to_tensor(
+                np.asarray(inputs["grid_thw_lst"], dtype=np.int64), dtype="int64", place=device_place
+            )
+            position_ids = paddle.to_tensor(
+                np.concatenate(inputs["vit_position_ids_lst"]).astype(np.int64, copy=False),
+                dtype="int64",
+                place=device_place,
+            )
+            cu_seqlens = paddle.to_tensor(
+                np.cumsum(np.asarray(inputs["cu_seqlens"], dtype=np.int32), dtype=np.int32),
+                dtype="int32",
+                place=device_place,
+            )
+            projector_grid_thw = inputs["grid_thw_lst"]
         else:
             assert inputs["images"] is not None
             grid_thw = inputs["grid_thw"]
@@ -2680,6 +2780,7 @@ class MetaxModelRunner(ModelRunnerBase):
 
             position_ids = paddle.concat(position_ids, axis=0).to(images.place)
             cu_seqlens = paddle.to_tensor(cu_seqlens, dtype=paddle.int32).to(images.place)
+            projector_grid_thw = grid_thw
 
         with paddle.amp.auto_cast(
             True,
@@ -2697,8 +2798,7 @@ class MetaxModelRunner(ModelRunnerBase):
                 use_rope=True,
                 window_size=-1,
             )
-            image_features = self.model.projector(image_features, grid_thw)
-            image_features = paddle.concat(image_features, axis=0)
+            image_features = self.model.projector(image_features, projector_grid_thw, return_packed=True)
 
         return image_features
 

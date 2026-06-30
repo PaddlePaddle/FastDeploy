@@ -15,13 +15,16 @@
 """
 
 import re
+import os
+from functools import partial
 from typing import Dict, Optional, Union
 
 import numpy as np
 import paddle
 import paddle.nn as nn
+from paddleformers.transformers import PretrainedModel
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import FDConfig, ModelConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta
 from fastdeploy.model_executor.graph_optimization.decorator import (
     support_graph_optimization,
@@ -38,12 +41,69 @@ from fastdeploy.model_executor.models.model_base import (
 )
 from fastdeploy.model_executor.utils import (
     default_weight_loader,
+    process_final_after_loading,
     process_weights_after_loading,
 )
 from fastdeploy.platforms import current_platform
 
 from .projector import Projector
 from .siglip import SiglipVisionModel
+
+
+class PaddleOCRVLPretrainedModel(PretrainedModel):
+    """
+    PaddleOCRVLPretrainedModel
+    """
+
+    config_class = FDConfig
+
+    def _init_weight(self, layer):
+        """
+        _init_weight
+        """
+        return None
+
+    @classmethod
+    def arch_name(self):
+        return "PaddleOCRVLForConditionalGeneration"
+
+    @classmethod
+    def _get_tensor_parallel_mappings(cls, config: ModelConfig, is_split=True):
+        from paddleformers.transformers.conversion_utils import split_or_merge_func
+
+        fn = split_or_merge_func(
+            is_split=is_split,
+            tensor_model_parallel_size=config.tensor_model_parallel_size,
+            tensor_parallel_rank=config.tensor_parallel_rank,
+            num_attention_heads=config.num_attention_heads,
+        )
+
+        def get_tensor_parallel_split_mappings(num_layers):
+            final_actions = {}
+
+            base_actions = {
+                "lm_head.weight": partial(fn, is_column=True),
+                "model.embed_tokens.weight": partial(fn, is_column=False),
+                "model.layers.0.self_attn.o_proj.weight": partial(fn, is_column=False),
+                "model.layers.0.mlp.down_proj.weight": partial(fn, is_column=False),
+                "model.layers.0.self_attn.q_proj.weight": partial(fn, is_column=True),
+                "model.layers.0.mlp.gate_proj.weight": partial(fn, is_column=True),
+                "model.layers.0.mlp.up_proj.weight": partial(fn, is_column=True),
+            }
+
+            if config.num_key_value_heads % config.tensor_model_parallel_size == 0:
+                base_actions["model.layers.0.self_attn.k_proj.weight"] = partial(fn, is_column=True)
+                base_actions["model.layers.0.self_attn.v_proj.weight"] = partial(fn, is_column=True)
+
+            for key, action in base_actions.items():
+                if "layers.0." in key:
+                    for i in range(num_layers):
+                        final_actions[key.replace("layers.0.", f"layers.{i}.")] = action
+                final_actions[key] = action
+
+            return final_actions
+
+        return get_tensor_parallel_split_mappings(config.num_hidden_layers)
 
 
 @support_graph_optimization
@@ -208,10 +268,14 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
                 A dictionary containing model parameters, where keys are parameter names
                 and values are NumPy arrays or PaddlePaddle tensors.
         """
-        self.model.load_state_dict(state_dict)
-        self.visual.load_state_dict(state_dict)
-        self.projector.load_state_dict(state_dict)
-        self.lm_head.load_state_dict(state_dict)
+        def weight_iterator():
+            for name, weight in state_dict.items():
+                if not isinstance(weight, paddle.Tensor):
+                    weight = paddle.to_tensor(weight)
+                yield name, weight
+
+        self.load_weights(weight_iterator())
+        process_final_after_loading(self, self.fd_config)
 
     @property
     def projector(self):
@@ -241,6 +305,28 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         image_token_num = image_mask.sum()
 
         if image_token_num > 0:
+            if image_features is None:
+                return input_embeddings
+
+            image_token_count = int(image_token_num.item())
+            image_feature_count = int(image_features.shape[0])
+            if image_feature_count != image_token_count and (
+                current_platform.is_maca() or os.getenv("FD_PADDLEOCR_VL_ALIGN_IMAGE_FEATURES", "0") == "1"
+            ):
+                from paddleformers.utils.log import logger
+
+                logger.warning(
+                    "PaddleOCR-VL image feature/token mismatch: "
+                    f"features={image_feature_count}, tokens={image_token_count}. "
+                    "Aligning features to avoid MetaX worker abort."
+                )
+                image_features = image_features[:image_token_count]
+                image_feature_count = int(image_features.shape[0])
+                if image_feature_count < image_token_count:
+                    token_indices = paddle.nonzero(image_mask).flatten()[:image_feature_count]
+                    input_embeddings[token_indices] = image_features.cast(self._dtype)
+                    return input_embeddings
+
             input_embeddings[image_mask] = image_features.cast(self._dtype)
         return input_embeddings
 

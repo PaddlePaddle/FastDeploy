@@ -18,7 +18,9 @@ import os
 from dataclasses import dataclass, field
 from typing import List, Optional
 
+import numpy as np
 import paddle
+from paddleformers.utils.log import logger
 
 from fastdeploy.config import FDConfig
 from fastdeploy.model_executor.forward_meta import ForwardMeta, ForwardMode
@@ -35,6 +37,41 @@ from fastdeploy.model_executor.ops.gpu import cache_kv_with_rope
 from fastdeploy.model_executor.ops.gpu import merge_qkv as merge_qkv_cu
 from fastdeploy.model_executor.ops.gpu import split_qkv as split_qkv_cu
 from fastdeploy.spec_decode import SpecMethod
+
+
+_METAX_ATTENTION_DEBUG_COUNT = 0
+
+
+def _debug_array_health(name: str, value) -> None:
+    global _METAX_ATTENTION_DEBUG_COUNT
+    if os.getenv("FD_METAX_ATTENTION_DEBUG", "0") != "1":
+        return
+
+    limit = int(os.getenv("FD_METAX_ATTENTION_DEBUG_LIMIT", "200") or "200")
+    if _METAX_ATTENTION_DEBUG_COUNT >= limit:
+        return
+
+    try:
+        if isinstance(value, paddle.Tensor):
+            data = value.astype("float32").cpu().numpy()
+            shape = list(value.shape)
+        else:
+            data = np.asarray(value, dtype=np.float32)
+            shape = list(data.shape)
+
+        nan_count = int(np.isnan(data).sum())
+        inf_count = int(np.isinf(data).sum())
+        finite = data[np.isfinite(data)]
+        min_value = float(finite.min()) if finite.size else None
+        max_value = float(finite.max()) if finite.size else None
+        logger.warning(
+            f"FD_METAX_ATTENTION_DEBUG {name}: shape={shape} "
+            f"nan={nan_count} inf={inf_count} min={min_value} max={max_value}"
+        )
+        _METAX_ATTENTION_DEBUG_COUNT += 1
+    except Exception as exc:
+        logger.warning(f"FD_METAX_ATTENTION_DEBUG {name}: health check failed: {exc}")
+        _METAX_ATTENTION_DEBUG_COUNT += 1
 
 
 @dataclass
@@ -119,6 +156,10 @@ class FlashAttentionBackend(AttentionBackend):
         self.dtype = paddle.get_default_dtype()
         self.num_layers: int = fd_config.model_config.num_hidden_layers
         self.max_partition_size: int = int(os.getenv("FLAGS_max_partition_size", 32768))
+        self.separate_decode_kv = os.getenv("FD_METAX_SEPARATE_DECODE_KV", "0") == "1"
+        self.safe_prefill_attn = os.getenv("FD_METAX_SAFE_PREFILL_ATTN", "0") == "1"
+        self.safe_decode_attn = os.getenv("FD_METAX_SAFE_DECODE_ATTN", "0") == "1" or self.safe_prefill_attn
+        self.safe_rope_source = os.getenv("FD_METAX_SAFE_ROPE_SOURCE", "auto").lower()
 
         self.pd_disaggregation_mode: str = fd_config.parallel_config.pd_disaggregation_mode
 
@@ -152,6 +193,10 @@ class FlashAttentionBackend(AttentionBackend):
         forward_meta.forward_mode = ForwardMode.NATIVE
         self.prefill_info_dict = {}
         self.decode_info_dict = {}
+        self.hybrid_stage_meta = None
+        self.prefill_qkv = None
+        self.decode_qkv = None
+        self.merged_output = None
 
         prefill_non_zeros_ids = forward_meta.seq_lens_this_time > 1
         decode_non_zeros_ids = forward_meta.seq_lens_this_time == 1
@@ -173,7 +218,7 @@ class FlashAttentionBackend(AttentionBackend):
             )
             self.prefill_info_dict["seq_lens_prefill"] = paddle.zeros(self.prefill_len, dtype="int32")
 
-            local_ids = paddle.arange(self.prefill_len, dtype="int32")
+            local_ids = paddle.arange(self.prefill_len, dtype="int64").astype("int32")
             self.prefill_info_dict["batch_ids_per_token"] = paddle.repeat_interleave(
                 local_ids, repeats=seq_lens_this_time_prefill, axis=0
             )
@@ -187,7 +232,7 @@ class FlashAttentionBackend(AttentionBackend):
                 axis=0,
             )
 
-            local_ids = paddle.arange(self.decode_len, dtype="int32")
+            local_ids = paddle.arange(self.decode_len, dtype="int64").astype("int32")
             batch_ids_per_token_decode = paddle.repeat_interleave(local_ids, repeats=seq_lens_this_time_decode, axis=0)
 
             self.attention_metadata.decoder_batch_ids[: self.decode_len].copy_(batch_ids_decode)  # global batch id
@@ -309,14 +354,363 @@ class FlashAttentionBackend(AttentionBackend):
             neox_style=self.is_neox_style,  # is neox style
         )
 
-    def forward_prefill(self, prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
-        q, k, v = self.apply_rope_prefill(
-            prefill_qkv,
-            forward_meta.rotary_embs,
-            forward_meta.caches[k_cache_id],
-            forward_meta.caches[v_cache_id],
-            forward_meta.block_tables,
+    def apply_rope_decode_and_cache(self, qkv, rotary_embs, caches_k, caches_v, block_tables):
+        return cache_kv_with_rope(
+            qkv,
+            rotary_embs,
+            self.attention_metadata.batch_ids_per_token_decode,
+            self.attention_metadata.decoder_batch_ids,
+            self.attention_metadata.cu_seqlens_q_decode,
+            self.attention_metadata.seq_lens_decode,
+            caches_k,
+            caches_v,
+            block_tables,
+            self.num_heads,
+            self.kv_num_heads,
+            self.head_dim,
+            self.block_size,
+            out_dims=4,
+            neox_style=self.is_neox_style,  # is neox style
         )
+
+    def _safe_default_rotary_for_position(self, position_idx):
+        indices = np.arange(0, self.head_dim, 2, dtype=np.float32)
+        inv_freq = 1.0 / (float(self.rope_theta) ** (indices / float(self.head_dim)))
+        freqs = np.float32(position_idx) * inv_freq
+        cos_half = np.cos(freqs).astype(np.float32)
+        sin_half = np.sin(freqs).astype(np.float32)
+        if self.is_neox_style:
+            return (
+                np.concatenate([cos_half, cos_half], axis=-1),
+                np.concatenate([sin_half, sin_half], axis=-1),
+            )
+        return cos_half, sin_half
+
+    def _rotary_values_are_valid(self, cos, sin):
+        if cos is None or sin is None:
+            return False
+        cos = np.asarray(cos, dtype=np.float32)
+        sin = np.asarray(sin, dtype=np.float32)
+        if not np.all(np.isfinite(cos)) or not np.all(np.isfinite(sin)):
+            return False
+        max_abs = max(float(np.max(np.abs(cos))), float(np.max(np.abs(sin))))
+        return max_abs <= 2.0
+
+    def _safe_rotary_for_token(self, rotary_embs_np, global_batch_idx, position_idx):
+        if self.safe_rope_source == "cpu_default":
+            return self._safe_default_rotary_for_position(position_idx)
+
+        if rotary_embs_np.ndim == 6:
+            cos = rotary_embs_np[global_batch_idx, 0, 0, position_idx, 0]
+            sin = rotary_embs_np[global_batch_idx, 1, 0, position_idx, 0]
+        elif rotary_embs_np.ndim == 5:
+            cos = rotary_embs_np[0, 0, position_idx, 0]
+            sin = rotary_embs_np[1, 0, position_idx, 0]
+        else:
+            raise ValueError(f"Unsupported rotary_embs shape: {rotary_embs_np.shape}")
+
+        if self.safe_rope_source == "auto" and not self._rotary_values_are_valid(cos, sin):
+            return self._safe_default_rotary_for_position(position_idx)
+
+        return cos, sin
+
+    def _safe_apply_rotary_np(self, x, cos, sin):
+        half = self.head_dim // 2
+        if self.is_neox_style:
+            cos = cos[..., :half]
+            sin = sin[..., :half]
+            left = x[..., :half]
+            right = x[..., half:]
+            return np.concatenate([left * cos - right * sin, right * cos + left * sin], axis=-1)
+
+        cos = cos[..., :half]
+        sin = sin[..., :half]
+        even = x[..., 0::2]
+        odd = x[..., 1::2]
+        out = np.empty_like(x)
+        out[..., 0::2] = even * cos - odd * sin
+        out[..., 1::2] = odd * cos + even * sin
+        return out
+
+    def _safe_cache_prefill_kv(
+        self,
+        k_np,
+        v_np,
+        caches_k,
+        caches_v,
+        block_tables,
+        batch_ids,
+        cu_seqlens,
+        seq_lens_prefill,
+        place,
+    ):
+        block_tables_np = block_tables.cpu().numpy()
+        flat_indices = []
+        token_indices = []
+
+        for local_batch_idx, global_batch_idx in enumerate(batch_ids):
+            start = int(cu_seqlens[local_batch_idx])
+            end = int(cu_seqlens[local_batch_idx + 1])
+            base_position = int(seq_lens_prefill[local_batch_idx])
+            for token_offset in range(end - start):
+                position = base_position + token_offset
+                block_table_idx = position // self.block_size
+                block_id = int(block_tables_np[int(global_batch_idx), block_table_idx])
+                if block_id < 0:
+                    continue
+                flat_indices.append(block_id * self.block_size + position % self.block_size)
+                token_indices.append(start + token_offset)
+
+        if not flat_indices:
+            logger.warning("FD_METAX_ATTENTION_DEBUG safe prefill did not find valid KV cache slots")
+            return
+
+        flat_indices_np = np.asarray(flat_indices, dtype=np.int64)
+        token_indices_np = np.asarray(token_indices, dtype=np.int64)
+        k_updates_np = k_np[token_indices_np]
+        v_updates_np = v_np[token_indices_np]
+        _debug_array_health("prefill.safe_cache_flat_indices", flat_indices_np)
+        _debug_array_health("prefill.safe_cache_k_updates", k_updates_np)
+        _debug_array_health("prefill.safe_cache_v_updates", v_updates_np)
+
+        try:
+            flat_indices_tensor = paddle.to_tensor(flat_indices_np, dtype="int64", place=place)
+            flat_k = caches_k.reshape([-1, self.kv_num_heads, self.head_dim])
+            flat_v = caches_v.reshape([-1, self.kv_num_heads, self.head_dim])
+            k_updates = paddle.to_tensor(k_updates_np, dtype=caches_k.dtype, place=place)
+            v_updates = paddle.to_tensor(v_updates_np, dtype=caches_v.dtype, place=place)
+            updated_k = paddle.scatter(flat_k, flat_indices_tensor, k_updates, overwrite=True)
+            updated_v = paddle.scatter(flat_v, flat_indices_tensor, v_updates, overwrite=True)
+            caches_k.copy_(updated_k.reshape(caches_k.shape), False)
+            caches_v.copy_(updated_v.reshape(caches_v.shape), False)
+            return
+        except Exception as exc:
+            logger.warning(f"FD_METAX_ATTENTION_DEBUG device KV cache update failed, using CPU fallback: {exc}")
+
+        caches_k_np = caches_k.astype("float32").cpu().numpy()
+        caches_v_np = caches_v.astype("float32").cpu().numpy()
+        for flat_index, token_index in zip(flat_indices, token_indices):
+            block_id = flat_index // self.block_size
+            block_offset = flat_index % self.block_size
+            caches_k_np[block_id, block_offset] = k_np[token_index]
+            caches_v_np[block_id, block_offset] = v_np[token_index]
+        caches_k.copy_(paddle.to_tensor(caches_k_np, dtype=caches_k.dtype, place=place), False)
+        caches_v.copy_(paddle.to_tensor(caches_v_np, dtype=caches_v.dtype, place=place), False)
+
+    def _safe_apply_rope_prefill(self, qkv, rotary_embs, caches_k, caches_v, block_tables):
+        output_dtype = qkv.dtype
+        output_place = qkv.place
+        qkv_np = qkv.astype("float32").cpu().numpy()
+        rotary_embs_np = rotary_embs.astype("float32").cpu().numpy()
+        _debug_array_health("prefill.safe_qkv_input", qkv_np)
+        _debug_array_health("prefill.safe_rotary_embs", rotary_embs_np)
+
+        q_size = self.num_heads * self.head_dim
+        kv_size = self.kv_num_heads * self.head_dim
+        q_raw = qkv_np[:, :q_size].reshape([qkv_np.shape[0], self.num_heads, self.head_dim])
+        k_raw = qkv_np[:, q_size : q_size + kv_size].reshape([qkv_np.shape[0], self.kv_num_heads, self.head_dim])
+        v_raw = qkv_np[:, q_size + kv_size : q_size + 2 * kv_size].reshape(
+            [qkv_np.shape[0], self.kv_num_heads, self.head_dim]
+        )
+
+        q_out = q_raw.copy()
+        k_out = k_raw.copy()
+        v_out = v_raw.copy()
+
+        batch_ids = self.prefill_info_dict["batch_ids"].cpu().numpy().reshape(-1).astype(np.int64)
+        cu_seqlens = self.prefill_info_dict["cu_seqlens_q"].cpu().numpy().reshape(-1).astype(np.int64)
+        seq_lens_prefill = self.prefill_info_dict["seq_lens_prefill"].cpu().numpy().reshape(-1).astype(np.int64)
+        _debug_array_health("prefill.safe_batch_ids", batch_ids)
+        _debug_array_health("prefill.safe_cu_seqlens", cu_seqlens)
+        _debug_array_health("prefill.safe_seq_lens_prefill", seq_lens_prefill)
+
+        for local_batch_idx, global_batch_idx in enumerate(batch_ids):
+            start = int(cu_seqlens[local_batch_idx])
+            end = int(cu_seqlens[local_batch_idx + 1])
+            base_position = int(seq_lens_prefill[local_batch_idx])
+            if end <= start:
+                continue
+            cos_values = []
+            sin_values = []
+            for token_offset in range(end - start):
+                cos, sin = self._safe_rotary_for_token(rotary_embs_np, int(global_batch_idx), base_position + token_offset)
+                cos_values.append(cos)
+                sin_values.append(sin)
+            cos_np = np.asarray(cos_values, dtype=np.float32)[:, None, :]
+            sin_np = np.asarray(sin_values, dtype=np.float32)[:, None, :]
+            if local_batch_idx == 0:
+                _debug_array_health("prefill.safe_cos_first_batch", cos_np[: min(4, cos_np.shape[0])])
+                _debug_array_health("prefill.safe_sin_first_batch", sin_np[: min(4, sin_np.shape[0])])
+            q_out[start:end] = self._safe_apply_rotary_np(q_raw[start:end], cos_np, sin_np)
+            k_out[start:end] = self._safe_apply_rotary_np(k_raw[start:end], cos_np, sin_np)
+
+        _debug_array_health("prefill.safe_q_after_rope", q_out)
+        _debug_array_health("prefill.safe_k_after_rope", k_out)
+        _debug_array_health("prefill.safe_v_after_rope", v_out)
+        self._safe_cache_prefill_kv(
+            k_out,
+            v_out,
+            caches_k,
+            caches_v,
+            block_tables,
+            batch_ids,
+            cu_seqlens,
+            seq_lens_prefill,
+            output_place,
+        )
+        return (
+            paddle.to_tensor(q_out, dtype=output_dtype, place=output_place),
+            paddle.to_tensor(k_out, dtype=output_dtype, place=output_place),
+            paddle.to_tensor(v_out, dtype=output_dtype, place=output_place),
+        )
+
+    def _safe_prefill_attention(self, q, k, v, cu_seqlens_q):
+        output_dtype = q.dtype
+        output_place = q.place
+        q_np = q.astype("float32").cpu().numpy()
+        k_np = k.astype("float32").cpu().numpy()
+        v_np = v.astype("float32").cpu().numpy()
+        _debug_array_health("prefill.q_after_rope", q_np)
+        _debug_array_health("prefill.k_after_rope", k_np)
+        _debug_array_health("prefill.v_after_rope", v_np)
+        if self.num_heads != self.kv_num_heads:
+            if self.num_heads % self.kv_num_heads != 0:
+                raise ValueError(f"num_heads {self.num_heads} must be divisible by kv_num_heads {self.kv_num_heads}")
+            repeat = self.num_heads // self.kv_num_heads
+            k_np = np.repeat(k_np, repeats=repeat, axis=1)
+            v_np = np.repeat(v_np, repeats=repeat, axis=1)
+        seqlens = [int(x) for x in cu_seqlens_q.cpu().numpy().reshape(-1).tolist()]
+
+        outputs = []
+        for start, end in zip(seqlens[:-1], seqlens[1:]):
+            q_seg = np.transpose(q_np[start:end], [1, 0, 2])
+            k_seg = np.transpose(k_np[start:end], [1, 2, 0])
+            v_seg = np.transpose(v_np[start:end], [1, 0, 2])
+            scores = np.matmul(q_seg, k_seg) * (self.head_dim**-0.5)
+            if self.causal:
+                seq_len = end - start
+                causal_mask = np.triu(np.full([seq_len, seq_len], -np.inf, dtype=np.float32), k=1)
+                scores = scores + causal_mask[None, :, :]
+            scores = scores - np.max(scores, axis=-1, keepdims=True)
+            probs = np.exp(scores)
+            probs = probs / np.sum(probs, axis=-1, keepdims=True)
+            outputs.append(np.transpose(np.matmul(probs, v_seg), [1, 0, 2]))
+
+        prefill_out = np.concatenate(outputs, axis=0) if len(outputs) > 1 else outputs[0]
+        return paddle.to_tensor(prefill_out, dtype=output_dtype, place=output_place)
+
+    def _safe_decode_attention(self, decode_qkv, rotary_embs, caches_k, caches_v):
+        output_dtype = decode_qkv.dtype
+        output_place = decode_qkv.place
+
+        qkv_np = decode_qkv.astype("float32").cpu().numpy()
+        rotary_embs_np = rotary_embs.astype("float32").cpu().numpy()
+        caches_k_np = caches_k.astype("float32").cpu().numpy()
+        caches_v_np = caches_v.astype("float32").cpu().numpy()
+
+        q_size = self.num_heads * self.head_dim
+        kv_size = self.kv_num_heads * self.head_dim
+        q_raw = qkv_np[:, :q_size].reshape([qkv_np.shape[0], self.num_heads, self.head_dim])
+        k_raw = qkv_np[:, q_size : q_size + kv_size].reshape([qkv_np.shape[0], self.kv_num_heads, self.head_dim])
+        v_raw = qkv_np[:, q_size + kv_size : q_size + 2 * kv_size].reshape(
+            [qkv_np.shape[0], self.kv_num_heads, self.head_dim]
+        )
+
+        batch_ids = self.decode_info_dict["batch_ids"].cpu().numpy().reshape(-1).astype(np.int64)
+        cu_decode = (
+            self.attention_metadata.cu_seqlens_q_decode[: self.decode_len + 1]
+            .cpu()
+            .numpy()
+            .reshape(-1)
+            .astype(np.int64)
+        )
+        seq_lens_decode = (
+            self.attention_metadata.seq_lens_decode[: self.decode_len]
+            .cpu()
+            .numpy()
+            .reshape(-1)
+            .astype(np.int64)
+        )
+        block_tables = self.attention_metadata.block_table_decode[: self.decode_len].cpu().numpy()
+
+        outputs = np.empty([qkv_np.shape[0], self.num_heads, self.head_dim], dtype=np.float32)
+        repeat = self.num_heads // self.kv_num_heads
+        if self.num_heads % self.kv_num_heads != 0:
+            raise ValueError(f"num_heads {self.num_heads} must be divisible by kv_num_heads {self.kv_num_heads}")
+
+        _debug_array_health("decode.safe_qkv_input", qkv_np)
+        _debug_array_health("decode.safe_batch_ids", batch_ids)
+        _debug_array_health("decode.safe_cu_seqlens", cu_decode)
+        _debug_array_health("decode.safe_seq_lens", seq_lens_decode)
+
+        for local_batch_idx, global_batch_idx in enumerate(batch_ids):
+            start = int(cu_decode[local_batch_idx])
+            end = int(cu_decode[local_batch_idx + 1])
+            base_position = int(seq_lens_decode[local_batch_idx])
+            for token_offset, row_idx in enumerate(range(start, end)):
+                position = base_position + token_offset
+                cos, sin = self._safe_rotary_for_token(rotary_embs_np, int(global_batch_idx), position)
+                cos_np = np.asarray(cos, dtype=np.float32)[None, None, :]
+                sin_np = np.asarray(sin, dtype=np.float32)[None, None, :]
+                q_cur = self._safe_apply_rotary_np(q_raw[row_idx : row_idx + 1], cos_np, sin_np)[0]
+                k_cur = self._safe_apply_rotary_np(k_raw[row_idx : row_idx + 1], cos_np, sin_np)[0]
+                v_cur = v_raw[row_idx]
+
+                block_id = int(block_tables[local_batch_idx, position // self.block_size])
+                if block_id < 0:
+                    raise ValueError(f"Invalid decode block id {block_id} for position {position}")
+                block_offset = position % self.block_size
+                caches_k_np[block_id, block_offset] = k_cur
+                caches_v_np[block_id, block_offset] = v_cur
+
+                k_ctx = []
+                v_ctx = []
+                for ctx_position in range(position + 1):
+                    ctx_block_id = int(block_tables[local_batch_idx, ctx_position // self.block_size])
+                    if ctx_block_id < 0:
+                        continue
+                    ctx_block_offset = ctx_position % self.block_size
+                    k_ctx.append(caches_k_np[ctx_block_id, ctx_block_offset])
+                    v_ctx.append(caches_v_np[ctx_block_id, ctx_block_offset])
+
+                k_ctx = np.asarray(k_ctx, dtype=np.float32)
+                v_ctx = np.asarray(v_ctx, dtype=np.float32)
+                if repeat != 1:
+                    k_ctx = np.repeat(k_ctx, repeats=repeat, axis=1)
+                    v_ctx = np.repeat(v_ctx, repeats=repeat, axis=1)
+
+                scores = np.einsum("hd,thd->ht", q_cur, k_ctx) * (self.head_dim**-0.5)
+                scores = scores - np.max(scores, axis=-1, keepdims=True)
+                probs = np.exp(scores)
+                probs = probs / np.sum(probs, axis=-1, keepdims=True)
+                outputs[row_idx] = np.einsum("ht,thd->hd", probs, v_ctx)
+
+        _debug_array_health("decode.safe_output", outputs)
+        caches_k.copy_(paddle.to_tensor(caches_k_np, dtype=caches_k.dtype, place=output_place), False)
+        caches_v.copy_(paddle.to_tensor(caches_v_np, dtype=caches_v.dtype, place=output_place), False)
+        return paddle.to_tensor(outputs, dtype=output_dtype, place=output_place)
+
+    def forward_prefill(self, prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
+        _debug_array_health("prefill.qkv_input", prefill_qkv)
+        if self.safe_prefill_attn:
+            q, k, v = self._safe_apply_rope_prefill(
+                prefill_qkv,
+                forward_meta.rotary_embs,
+                forward_meta.caches[k_cache_id],
+                forward_meta.caches[v_cache_id],
+                forward_meta.block_tables,
+            )
+        else:
+            q, k, v = self.apply_rope_prefill(
+                prefill_qkv,
+                forward_meta.rotary_embs,
+                forward_meta.caches[k_cache_id],
+                forward_meta.caches[v_cache_id],
+                forward_meta.block_tables,
+            )
+
+        if self.safe_prefill_attn:
+            return self._safe_prefill_attention(q, k, v, self.prefill_info_dict["cu_seqlens_q"])
 
         prefill_out = flash_attn_unpadded_func(
             q,
@@ -333,12 +727,41 @@ class FlashAttentionBackend(AttentionBackend):
         return prefill_out
 
     def forward_decode(self, decode_qkv, k_cache_id, v_cache_id, forward_meta: ForwardMeta):
+        k_cache = forward_meta.caches[k_cache_id]
+        v_cache = forward_meta.caches[v_cache_id]
+
+        if self.safe_decode_attn:
+            return self._safe_decode_attention(decode_qkv, forward_meta.rotary_embs, k_cache, v_cache)
+
+        if self.separate_decode_kv:
+            q, _, _ = self.apply_rope_decode_and_cache(
+                decode_qkv,
+                forward_meta.rotary_embs,
+                k_cache,
+                v_cache,
+                forward_meta.block_tables,
+            )
+            decode_out = flash_attn_kvcache_func(
+                q,
+                k_cache,
+                v_cache,
+                self.attention_metadata.seq_lens_decode + 1,
+                self.attention_metadata.block_table_decode,
+                None,
+                None,
+                rotary_cos=None,
+                rotary_sin=None,
+                causal=self.causal,
+                is_rotary_interleaved=True,
+            )[0].squeeze(1)
+            return decode_out
+
         q, k, v = self.apply_rope_decode(decode_qkv, forward_meta.rotary_embs)
 
         decode_out = flash_attn_kvcache_func(
             q,
-            forward_meta.caches[k_cache_id],
-            forward_meta.caches[v_cache_id],
+            k_cache,
+            v_cache,
             self.attention_metadata.seq_lens_decode,
             self.attention_metadata.block_table_decode,
             k,
@@ -364,12 +787,17 @@ class FlashAttentionBackend(AttentionBackend):
         elif self.has_decode and not self.has_prefill:
             out = self.forward_decode(qkv, k_cache_id, v_cache_id, forward_meta)
 
-        else:
+        elif self.has_prefill and self.has_decode:
             self.split_pd_qkv(qkv)
             prefill_output = self.forward_prefill(self.prefill_qkv, layer_id, k_cache_id, v_cache_id, forward_meta)
             decode_output = self.forward_decode(self.decode_qkv, k_cache_id, v_cache_id, forward_meta)
             self.merge_pd_output(prefill_output, decode_output)
             out = self.merged_output
+        else:
+            out_shape = [qkv.shape[0], self.num_heads * self.head_dim]
+            if qkv.dim() != 2:
+                out_shape = [qkv.shape[0], self.num_heads, self.head_dim]
+            return paddle.empty(out_shape, dtype=qkv.dtype)
 
         if qkv.dim() == 2:
             out = out.view([-1, self.num_heads * self.head_dim])

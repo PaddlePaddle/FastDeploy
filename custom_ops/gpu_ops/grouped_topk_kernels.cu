@@ -617,6 +617,24 @@ void invokeFusedNoAuxTc(InT* gating_output,
   size_t const extra_bytes = 16 + static_cast<size_t>(n_group) * sizeof(float);
   size_t const smem_bytes = val_aligned + idx_bytes + extra_bytes;
 
+#ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
+  grouped_topk_fused_kernel<InT, IdxT>
+      <<<static_cast<uint32_t>(num_tokens),
+         static_cast<uint32_t>(n_group) * WARP_SIZE,
+         smem_bytes,
+         stream>>>(scores,
+                   topk_values,
+                   topk_indices,
+                   gating_output,
+                   e_score_correction_bias,
+                   num_tokens,
+                   num_experts,
+                   n_group,
+                   topk_group,
+                   topk,
+                   renormalize,
+                   routed_scaling_factor);
+#else
   cudaLaunchConfig_t config;
   config.gridDim = static_cast<uint32_t>(num_tokens);
   config.blockDim = static_cast<uint32_t>(n_group) * WARP_SIZE;
@@ -642,6 +660,7 @@ void invokeFusedNoAuxTc(InT* gating_output,
                      topk,
                      renormalize,
                      routed_scaling_factor);
+#endif
 }
 
 #define INSTANTIATE_FUSED_NOAUX_TC(InT, IdxT)  \

@@ -217,7 +217,7 @@ __global__ void prefill_absorb_cache_kernel(
       printf("block_idx1 %d != block_idx %d\n", block_idx1, block_idx);
       printf("token_idx %d\n", token_idx);
       printf("slot_mapping %d\n", slot_mapping[token_idx]);
-      asm volatile("trap;");
+      __trap();
     }
 
     if (bias < nope_hidden_size) {  // pe

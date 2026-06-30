@@ -15,8 +15,10 @@
 """
 
 import math
+import os
 from typing import Optional, Tuple
 
+import numpy as np
 import paddle
 from paddle import nn
 
@@ -30,6 +32,17 @@ if current_platform.is_cuda() or current_platform.is_maca():
 from .utils import CpuGuard
 
 
+def _arange_float32(*args, **kwargs):
+    kwargs.pop("dtype", None)
+    if current_platform.is_maca():
+        return paddle.arange(*args, **kwargs, dtype="int64").astype("float32")
+    return paddle.arange(*args, **kwargs, dtype="float32")
+
+
+def _use_metax_safe_rope3d() -> bool:
+    return current_platform.is_maca() and os.getenv("FD_METAX_SAFE_ROPE3D", "1") != "0"
+
+
 class ErnieRotaryEmbedding:
     def __init__(self, rotary_dim, base, partial_rotary_factor):
         """
@@ -41,7 +54,7 @@ class ErnieRotaryEmbedding:
 
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
-        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        inv_freq = self.base ** (-_arange_float32(0, self.rotary_dim, 2) / self.rotary_dim)
         partial_rotary_position_ids = position_ids / self.partial_rotary_factor
         freqs = paddle.einsum("ij,k->ijk", partial_rotary_position_ids.cast("float32"), inv_freq)
         if current_platform.is_xpu() or paddle.is_compiled_with_custom_device("iluvatar_gpu"):
@@ -92,7 +105,7 @@ class GlmRotaryEmbedding:
             inv_freq = 1.0 / (self.base ** (idx / self.rotary_dim))
             freqs = paddle.outer(position_ids.astype(inv_freq.dtype), inv_freq)
         else:
-            inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+            inv_freq = self.base ** (-_arange_float32(0, self.rotary_dim, 2) / self.rotary_dim)
             freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
         if current_platform.is_xpu():
             # shape: [B, S, D]
@@ -121,7 +134,7 @@ class QwenRotaryEmbedding:
     def __call__(self, position_ids):
         bsz, max_seq_len = position_ids.shape[:2]
         rot_emb = paddle.zeros((2, bsz, max_seq_len, 1, self.rotary_dim), dtype="float32")
-        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        inv_freq = self.base ** (-_arange_float32(0, self.rotary_dim, 2) / self.rotary_dim)
 
         # shape: [B, S, D/2]
         freqs = paddle.einsum("ij,k->ijk", position_ids.cast("float32"), inv_freq)
@@ -162,7 +175,7 @@ def yarn_linear_ramp_mask(min, max, dim):
     if min == max:
         max += 0.001  # Prevent singularity
 
-    linear_func = (paddle.arange(dim, dtype=paddle.float32) - min) / (max - min)
+    linear_func = (_arange_float32(dim) - min) / (max - min)
     ramp_func = paddle.clip(linear_func, 0, 1)
     return ramp_func
 
@@ -225,7 +238,7 @@ class DeepseekScalingRotaryEmbedding(nn.Layer):
         self.register_buffer("cos_sin_cache", cache, persistable=True)
 
     def _compute_inv_freq(self, scaling_factor: float) -> paddle.Tensor:
-        pos_freqs = self.base ** (paddle.arange(0, self.rotary_dim, 2, dtype=paddle.float32) / self.rotary_dim)
+        pos_freqs = self.base ** (_arange_float32(0, self.rotary_dim, 2) / self.rotary_dim)
 
         inv_freq_extrapolation = 1.0 / pos_freqs
         inv_freq_interpolation = 1.0 / (scaling_factor * pos_freqs)
@@ -244,10 +257,7 @@ class DeepseekScalingRotaryEmbedding(nn.Layer):
 
     def _compute_cos_sin_cache(self) -> paddle.Tensor:
         inv_freq = self._compute_inv_freq(self.scaling_factor)
-        t = paddle.arange(
-            self.max_position_embeddings * self.scaling_factor,
-            dtype=paddle.float32,
-        )
+        t = _arange_float32(self.max_position_embeddings * self.scaling_factor)
         freqs = paddle.einsum("i,j->ij", t, inv_freq)
         cos = freqs.cos() * self.mscale
         sin = freqs.sin() * self.mscale
@@ -297,7 +307,7 @@ class YarnScalingRotaryEmbedding:
 
     def __call__(self, position_ids):
         seq_length = position_ids.shape[-1]
-        pos_freqs = self.base ** (paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        pos_freqs = self.base ** (_arange_float32(0, self.rotary_dim, 2) / self.rotary_dim)
         inv_freq_extrapolation = 1.0 / pos_freqs
         inv_freq_interpolation = 1.0 / (self.scale * pos_freqs)
 
@@ -443,6 +453,9 @@ class ErnieVlRotaryEmbedding3D:
         self.base = base
         self.partial_rotary_factor = partial_rotary_factor
         self.max_position = max_position
+        rope_scaling = rope_scaling or {}
+        if freq_allocation is None and rope_scaling.get("mrope_section"):
+            freq_allocation = rope_scaling["mrope_section"][0]
         self.freq_allocation = freq_allocation
         self.mrope_section = rope_scaling.get("mrope_section", None)
         self._init_using_position_axis()
@@ -476,7 +489,7 @@ class ErnieVlRotaryEmbedding3D:
 
         # Build position_ids_3d: [bsz, max_position, 3]
         position_ids_3d = paddle.tile(
-            paddle.arange(self.max_position, dtype="float32").unsqueeze(0).unsqueeze(-1),
+            _arange_float32(self.max_position).unsqueeze(0).unsqueeze(-1),
             [bsz, 1, 3],
         )
         for i in range(bsz):
@@ -491,7 +504,7 @@ class ErnieVlRotaryEmbedding3D:
             position_ids_3d[i, : position_ids_3d_real.shape[0], :] = position_ids_3d_real
 
         # inv_freq: [rotary_dim // 2]
-        inv_freq = 1.0 / (self.base ** (paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim))
+        inv_freq = 1.0 / (self.base ** (_arange_float32(0, self.rotary_dim, 2) / self.rotary_dim))
 
         rot_emb_list = []
         for i in range(bsz):
@@ -536,19 +549,81 @@ class QwenVlRotaryEmbedding3D:
         self.base = base
         self.paritial_rotary_factor = partial_rotary_factor
         self.max_position = max_position
+        rope_scaling = rope_scaling or {}
+        if freq_allocation is None and rope_scaling.get("mrope_section"):
+            freq_allocation = rope_scaling["mrope_section"][0]
         self.freq_allocation = freq_allocation
         self.rope_scaling = rope_scaling
         self.mrope_interleaved = None
         if "mrope_interleaved" in self.rope_scaling:
             self.mrope_interleaved = self.rope_scaling["mrope_interleaved"]
 
+    def _numpy_call(self, position_ids, max_len_lst, cumsum_seqlens):
+        position_ids_np = position_ids.numpy() if isinstance(position_ids, paddle.Tensor) else np.asarray(position_ids)
+        position_ids_np = position_ids_np.astype("int64", copy=False)
+        bsz = len(cumsum_seqlens) - 1
+        half_dim = self.rotary_dim // 2
+        section_t = int(self.freq_allocation)
+        section_h = (half_dim - section_t) // 2
+        section_w = (half_dim - section_t) // 2
+
+        positions = np.arange(self.max_position, dtype=np.float32) / float(self.paritial_rotary_factor)
+        indices = np.arange(0, self.rotary_dim, 2, dtype=np.float32)
+        inv_freq = 1.0 / np.power(float(self.base), indices / float(self.rotary_dim))
+        sinusoid = positions[:, None] * inv_freq[None, :]
+        sin = np.sin(sinusoid).astype("float32")
+        cos = np.cos(sinusoid).astype("float32")
+
+        rot_emb_list = []
+        for i in range(bsz):
+            pos_3d = np.repeat(np.arange(self.max_position, dtype=np.int64)[:, None], 3, axis=1)
+            pos_cur = position_ids_np[cumsum_seqlens[i] : cumsum_seqlens[i + 1]]
+            prefix_max_pos = int(np.max(pos_cur[..., 0])) + 1 if pos_cur.size > 0 else 0
+            max_len = int(max_len_lst[i])
+            if max_len > 0:
+                dec_pos = np.repeat(np.arange(max_len, dtype=np.int64)[:, None], 3, axis=1) + prefix_max_pos
+                pos_real = np.concatenate([pos_cur, dec_pos], axis=0)
+            else:
+                pos_real = pos_cur
+            real_len = min(pos_real.shape[0], self.max_position)
+            if real_len > 0:
+                pos_3d[:real_len, :] = pos_real[:real_len, :]
+            pos_3d = np.clip(pos_3d, 0, self.max_position - 1)
+
+            if self.mrope_interleaved:
+                sin_thw = sin[pos_3d[:, 0]].copy()
+                sin_thw[:, 1 : section_h * 3 : 3] = sin[pos_3d[:, 1]][:, 1 : section_h * 3 : 3]
+                sin_thw[:, 2 : section_w * 3 : 3] = sin[pos_3d[:, 2]][:, 2 : section_w * 3 : 3]
+                cos_thw = cos[pos_3d[:, 0]].copy()
+                cos_thw[:, 1 : section_h * 3 : 3] = cos[pos_3d[:, 1]][:, 1 : section_h * 3 : 3]
+                cos_thw[:, 2 : section_w * 3 : 3] = cos[pos_3d[:, 2]][:, 2 : section_w * 3 : 3]
+            else:
+                sin_t = sin[pos_3d[:, 0], :section_t]
+                sin_h = sin[pos_3d[:, 1], section_t : section_t + section_h]
+                sin_w = sin[pos_3d[:, 2], section_t + section_h : section_t + section_h + section_w]
+                sin_thw = np.concatenate([sin_t, sin_h, sin_w], axis=-1)
+
+                cos_t = cos[pos_3d[:, 0], :section_t]
+                cos_h = cos[pos_3d[:, 1], section_t : section_t + section_h]
+                cos_w = cos[pos_3d[:, 2], section_t + section_h : section_t + section_h + section_w]
+                cos_thw = np.concatenate([cos_t, cos_h, cos_w], axis=-1)
+
+            rot_emb = np.stack([cos_thw, sin_thw], axis=0)[:, None, :, None, :]
+            rot_emb = np.concatenate([rot_emb, rot_emb], axis=-1)
+            rot_emb_list.append(paddle.to_tensor(rot_emb, dtype="float32"))
+
+        return rot_emb_list
+
     def __call__(self, position_ids, max_len_lst, cumsum_seqlens):
+        if _use_metax_safe_rope3d():
+            return self._numpy_call(position_ids, max_len_lst, cumsum_seqlens)
+
         rot_emb = paddle.zeros((2, 1, self.max_position, 1, self.rotary_dim // 2), dtype="float32")
 
         bsz = len(cumsum_seqlens) - 1
         # position_ids_3d: [bsz, seq_len, 3]
         position_ids_3d = paddle.tile(
-            paddle.arange(self.max_position, dtype="float32").unsqueeze(0).unsqueeze(-1),
+            _arange_float32(self.max_position).unsqueeze(0).unsqueeze(-1),
             [bsz, 1, 3],
         )
         for i in range(bsz):
@@ -563,11 +638,11 @@ class QwenVlRotaryEmbedding3D:
             position_ids_3d[i, : position_ids_3d_real.shape[0], :] = position_ids_3d_real
 
         # position_ids: [bsz(1), seq_len]
-        position_ids = paddle.arange(0, self.max_position, 1, dtype="float32").reshape((1, -1))
+        position_ids = _arange_float32(0, self.max_position, 1).reshape((1, -1))
 
         position_ids = position_ids / self.paritial_rotary_factor
 
-        indices = paddle.arange(0, self.rotary_dim, 2, dtype="float32")
+        indices = _arange_float32(0, self.rotary_dim, 2)
         indices = 1 / self.base ** (indices / self.rotary_dim)
         # sinusoid_inp: [bsz(1), seq_len, 1, head_dim // 2]
         sinusoid_inp = position_ids.unsqueeze(-1) * indices.unsqueeze(0)

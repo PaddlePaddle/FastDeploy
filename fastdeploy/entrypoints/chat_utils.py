@@ -144,7 +144,20 @@ class MultimodalPartParser:
             return media_io.load_file(localpath)
 
 
-def parse_content_part(mm_parser, part):
+def _defer_content_part_loading(part, defer_mm_loading: bool) -> bool:
+    return defer_mm_loading and bool(part.get("uuid", None))
+
+
+def _content_part_needs_parser(part, defer_mm_loading: bool) -> bool:
+    part_type = part.get("type", None)
+    if part_type == "image_url":
+        return bool(part.get("image_url", None)) and not _defer_content_part_loading(part, defer_mm_loading)
+    if part_type == "video_url":
+        return bool(part.get("video_url", None)) and not _defer_content_part_loading(part, defer_mm_loading)
+    return False
+
+
+def parse_content_part(mm_parser, part, defer_mm_loading: bool = False):
     """only support openai compatible format for now"""
 
     part_type = part.get("type", None)
@@ -156,9 +169,16 @@ def parse_content_part(mm_parser, part):
         if not part.get("image_url", None) and not part.get("uuid", None):
             raise ValueError("Both image_url and uuid are missing")
 
+        url = None
         if part.get("image_url", None):
             url = part["image_url"]["url"]
-            image = mm_parser.parse_image(url)
+            deferred_loading = _defer_content_part_loading(part, defer_mm_loading)
+            if deferred_loading:
+                image = None
+            else:
+                if mm_parser is None:
+                    mm_parser = MultimodalPartParser()
+                image = mm_parser.parse_image(url)
         else:
             image = None
 
@@ -166,15 +186,24 @@ def parse_content_part(mm_parser, part):
         parsed["type"] = "image"
         parsed["data"] = image
         parsed["uuid"] = part.get("uuid", None)
+        if url is not None and deferred_loading:
+            parsed["url"] = url
 
         return parsed
     if part_type == "video_url":
         if not part.get("video_url", None) and not part.get("uuid", None):
             raise ValueError("Both video_url and uuid are missing")
 
+        url = None
         if part.get("video_url", None):
             url = part["video_url"]["url"]
-            video = mm_parser.parse_video(url)
+            deferred_loading = _defer_content_part_loading(part, defer_mm_loading)
+            if deferred_loading:
+                video = None
+            else:
+                if mm_parser is None:
+                    mm_parser = MultimodalPartParser()
+                video = mm_parser.parse_video(url)
         else:
             video = None
 
@@ -182,6 +211,8 @@ def parse_content_part(mm_parser, part):
         parsed["type"] = "video"
         parsed["data"] = video
         parsed["uuid"] = part.get("uuid", None)
+        if url is not None and deferred_loading:
+            parsed["url"] = url
 
         return parsed
 
@@ -189,11 +220,10 @@ def parse_content_part(mm_parser, part):
 
 
 # TODO async
-def parse_chat_messages(messages: List[ChatCompletionMessageParam]):
+def parse_chat_messages(messages: List[ChatCompletionMessageParam], defer_mm_loading: bool = False):
     """Parse chat messages to [dict]"""
 
-    mm_parser = MultimodalPartParser()
-
+    mm_parser = None
     conversation = []
     for message in messages:
         role = message["role"]
@@ -205,7 +235,11 @@ def parse_chat_messages(messages: List[ChatCompletionMessageParam]):
         elif isinstance(content, str):
             parsed_content = [{"type": "text", "text": content}]
         else:
-            parsed_content = [parse_content_part(mm_parser, part) for part in content]
+            parsed_content = []
+            for part in content:
+                if mm_parser is None and _content_part_needs_parser(part, defer_mm_loading):
+                    mm_parser = MultimodalPartParser()
+                parsed_content.append(parse_content_part(mm_parser, part, defer_mm_loading))
 
         conversation.append({"role": role, "content": parsed_content})
     return conversation

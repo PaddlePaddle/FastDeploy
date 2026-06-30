@@ -92,6 +92,15 @@ class EngineClient:
         self.tensor_parallel_size = self.fd_config.parallel_config.tensor_parallel_size
         self.enable_mm = self.fd_config.enable_mm_runtime
         self.max_logprobs = max_logprobs
+        architectures = getattr(self.fd_config.model_config, "architectures", None)
+        architecture = architectures[0] if isinstance(architectures, (list, tuple)) and architectures else ""
+        max_encoder_cache = getattr(self.fd_config.cache_config, "max_encoder_cache", 0) or 0
+        enable_local_processor_cache = (
+            self.enable_mm
+            and "PaddleOCR" in architecture
+            and isinstance(max_encoder_cache, (int, float))
+            and max_encoder_cache > 0
+        )
         input_processor = InputPreprocessor(
             self.fd_config.model_config,
             self.fd_config.structured_outputs_config.reasoning_parser,
@@ -99,6 +108,7 @@ class EngineClient:
             self.fd_config.mm_processor_kwargs,
             self.fd_config.tool_parser,
             self.enable_mm and self.fd_config.cache_config.max_processor_cache > 0,
+            enable_local_processor_cache=enable_local_processor_cache,
             enable_mm_runtime=self.enable_mm,
         )
         self.enable_logprob = self.fd_config.model_config.enable_logprob

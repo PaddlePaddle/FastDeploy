@@ -141,6 +141,25 @@ def get_sm_version(archs):
     return list(arch_set)
 
 
+def metax_supports_fused_moe(maca_path: str) -> bool:
+    """
+    The fused MoE op depends on mctlassEx contiguous-grouped GEMM APIs, which
+    are not available in all MACA SDK versions.
+    """
+    header = Path(maca_path) / "include" / "mctlassEx" / "mctlassEx.h"
+    try:
+        content = header.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return False
+    required_symbols = (
+        "MCTLASS_EX_DATATYPE_BF16",
+        "MCTLASS_EX_DATATYPE_INT8",
+        "mctlassExContiguousGroupedGemmAlgo_t",
+        "mctlassExContiguousGroupedDesc_t",
+    )
+    return all(symbol in content for symbol in required_symbols)
+
+
 def get_nvcc_version():
     """
     Get cuda version of nvcc.
@@ -674,6 +693,7 @@ elif paddle.is_compiled_with_custom_device("gcu"):
     )
 elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
     maca_path = os.getenv("MACA_PATH", "/opt/maca")
+    cu_bridge_path = os.path.join(maca_path, "tools", "cu-bridge")
     sources = [
         "gpu_ops/update_inputs_v1.cu",
         "gpu_ops/save_with_output_msg.cc",
@@ -732,21 +752,30 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "gpu_ops/swap_cache_batch.cu",
         "gpu_ops/gelu_tanh.cu",
         "metax_ops/moe_dispatch.cu",
-        "metax_ops/moe_ffn.cu",
         "metax_ops/moe_reduce.cu",
-        "metax_ops/fused_moe.cu",
         "metax_ops/cache_kv_with_rope.cu",
         "metax_ops/cpp_extensions.cc",
         "metax_ops/split_merge_qkv.cu",
     ]
 
+    if metax_supports_fused_moe(maca_path):
+        sources.append("metax_ops/fused_moe.cu")
+        sources.append("metax_ops/moe_ffn.cu")
+    else:
+        print(
+            "Skip metax_ops/fused_moe.cu and metax_ops/moe_ffn.cu: current MACA SDK mctlassEx "
+            "does not expose contiguous-grouped GEMM APIs.",
+            flush=True,
+        )
+
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
     sources += find_end_files("gpu_ops/speculate_decoding", ".cc")
 
     metax_extra_compile_args = {
-        "cxx": ["-O3"],
+        "cxx": ["-O3", "-std=c++17"],
         "nvcc": [
             "-O3",
+            "-std=c++17",
             "-Ithird_party/nlohmann_json/include",
             "-Igpu_ops",
             "-DPADDLE_DEV",
@@ -794,11 +823,15 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
                 os.path.join(maca_path, "include"),
                 os.path.join(maca_path, "include/mcr"),
                 os.path.join(maca_path, "include/common"),
+                os.path.join(maca_path, "include/mcblas"),
                 os.path.join(maca_path, "include/mcfft"),
+                os.path.join(maca_path, "include/mcdnn"),
                 os.path.join(maca_path, "include/mcrand"),
                 os.path.join(maca_path, "include/mcsparse"),
-                os.path.join(maca_path, "include/mcblas"),
                 os.path.join(maca_path, "include/mcsolver"),
+                os.path.join(maca_path, "include/mckl"),
+                os.path.join(cu_bridge_path, "include"),
+                os.path.join(cu_bridge_path, "include/nvtx3"),
             ],
         ),
     )

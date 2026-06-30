@@ -27,7 +27,7 @@ from typing import Any, Dict, Optional
 import numpy as np
 import zmq
 
-from fastdeploy.entrypoints.chat_utils import parse_chat_messages
+from fastdeploy.entrypoints.chat_utils import MultimodalPartParser, parse_chat_messages
 from fastdeploy.input.base_processor import BaseTextProcessor
 from fastdeploy.input.encodings import EncodingRegistry
 from fastdeploy.input.image_processors import ImageProcessorRegistry
@@ -38,6 +38,7 @@ from fastdeploy.utils import data_processor_logger
 _DEFAULT_MM_LIMITS = {"image": 1, "video": 1, "audio": 1}
 
 _SAMPLING_EPS = 1e-5
+_PARSED_MESSAGES_KEY = "_fd_parsed_messages"
 
 
 class MultiModalProcessor(BaseTextProcessor):
@@ -58,6 +59,7 @@ class MultiModalProcessor(BaseTextProcessor):
         reasoning_parser_obj=None,
         tool_parser_obj=None,
         enable_processor_cache: bool = False,
+        enable_local_processor_cache: bool = False,
     ):
         if model_type not in MODEL_CONFIGS:
             raise ValueError(f"Unsupported model_type '{model_type}'. " f"Must be one of {sorted(MODEL_CONFIGS)}.")
@@ -65,6 +67,7 @@ class MultiModalProcessor(BaseTextProcessor):
         self.config = config
         self.cfg = MODEL_CONFIGS[model_type]
         self.enable_processor_cache = enable_processor_cache
+        self.enable_local_processor_cache = enable_local_processor_cache
 
         super().__init__(
             model_name_or_path,
@@ -175,7 +178,9 @@ class MultiModalProcessor(BaseTextProcessor):
 
     def _extract_mm_items(self, request):
         """Extract images/videos from request messages, handling processor cache."""
-        messages = parse_chat_messages(request.get("messages"))
+        messages = parse_chat_messages(request.get("messages"), defer_mm_loading=self.enable_local_processor_cache)
+        if self.enable_local_processor_cache:
+            request[_PARSED_MESSAGES_KEY] = messages
         mm_items = []
         for msg in messages:
             role = msg.get("role")
@@ -187,6 +192,25 @@ class MultiModalProcessor(BaseTextProcessor):
             for item in content:
                 if item.get("type") in ["image", "video"]:
                     mm_items.append(item)
+
+        if self.enable_local_processor_cache:
+            mm_parser = None
+            for item in mm_items:
+                uuid = item.get("uuid")
+                if uuid:
+                    cached = getattr(self.enc, "get_local_processor_cache", lambda _: None)(uuid)
+                    if cached is not None:
+                        item["data"] = cached
+                        item.pop("url", None)
+                        continue
+                if item.get("data") is None and item.get("url"):
+                    if mm_parser is None:
+                        mm_parser = MultimodalPartParser()
+                    if item.get("type") == "image":
+                        item["data"] = mm_parser.parse_image(item["url"])
+                    elif item.get("type") == "video":
+                        item["data"] = mm_parser.parse_video(item["url"])
+                    item.pop("url", None)
 
         missing_hashes, missing_idx = [], []
         for idx, item in enumerate(mm_items):
@@ -279,6 +303,7 @@ class MultiModalProcessor(BaseTextProcessor):
         chat_template_kwargs = request.get("chat_template_kwargs", {})
         if self.cfg.chat_template_pass_request:
             # ernie: pass full request to apply_chat_template
+            request.pop(_PARSED_MESSAGES_KEY, None)
             prompt = self.tokenizer.apply_chat_template(
                 request,
                 tokenize=False,
@@ -286,7 +311,16 @@ class MultiModalProcessor(BaseTextProcessor):
                 **chat_template_kwargs,
             )
         else:
-            messages = parse_chat_messages(request.get("messages"))
+            messages = None
+            if self.enable_local_processor_cache:
+                messages = request.pop(_PARSED_MESSAGES_KEY, None)
+            if messages is None:
+                messages = parse_chat_messages(
+                    request.get("messages"),
+                    defer_mm_loading=self.enable_local_processor_cache,
+                )
+            else:
+                messages = self._messages_for_chat_template(messages)
             prompt = self.tokenizer.apply_chat_template(
                 messages,
                 tokenize=False,
@@ -314,6 +348,7 @@ class MultiModalProcessor(BaseTextProcessor):
             return self.enc.prompt_token_ids2outputs(prompt_token_ids)
 
         images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = self._extract_mm_items(request)
+        request.pop(_PARSED_MESSAGES_KEY, None)
         outputs = self.enc.prompt_token_ids2outputs(prompt_token_ids, mm_items)
 
         if self.enable_processor_cache:
@@ -349,12 +384,53 @@ class MultiModalProcessor(BaseTextProcessor):
         if not tokens:
             return
         if isinstance(tokens, str):
-            tokens_str = self.tokenizer.tokenize(tokens)
-            tokens = self.tokenizer.convert_tokens_to_ids(tokens_str)
+            tokens = self._encode_literal_text_with_cache(tokens)
         num_tokens = len(tokens)
         outputs["input_ids"].extend(tokens)
         outputs["token_type_ids"].extend([IDS_TYPE_FLAG["text"]] * num_tokens)
         self.enc.add_text_positions(outputs, num_tokens)
+
+    @staticmethod
+    def _messages_for_chat_template(messages):
+        """Return parsed messages without heavy decoded multimodal payloads."""
+        template_messages = []
+        for message in messages:
+            content = message.get("content")
+            if not isinstance(content, list):
+                template_messages.append(message)
+                continue
+            template_content = []
+            for part in content:
+                if isinstance(part, dict) and part.get("type") in ("image", "video"):
+                    template_content.append({key: value for key, value in part.items() if key not in ("data", "url")})
+                else:
+                    template_content.append(part)
+            template_messages.append({"role": message.get("role"), "content": template_content})
+        return template_messages
+
+    @staticmethod
+    def _processed_request_summary(request):
+        multimodal_inputs = request.get("multimodal_inputs") or {}
+        prompt_token_ids = request.get("prompt_token_ids")
+        if prompt_token_ids is None:
+            prompt_token_ids = []
+        prompt_tokens = request.get("prompt_tokens")
+        mm_hashes = multimodal_inputs.get("mm_hashes")
+        if mm_hashes is None:
+            mm_hashes = []
+        mm_hash_sample = mm_hashes[:4]
+        if not isinstance(mm_hash_sample, list):
+            mm_hash_sample = list(mm_hash_sample)
+        return {
+            "request_id": request.get("request_id"),
+            "prompt_token_ids_len": request.get("prompt_token_ids_len", len(prompt_token_ids)),
+            "prompt_text_len": len(prompt_tokens) if isinstance(prompt_tokens, str) else None,
+            "max_tokens": request.get("max_tokens"),
+            "num_input_image_tokens": multimodal_inputs.get("num_input_image_tokens", 0),
+            "num_input_video_tokens": multimodal_inputs.get("num_input_video_tokens", 0),
+            "mm_count": len(mm_hashes),
+            "mm_hashes": mm_hash_sample,
+        }
 
     def process_request_dict(self, request, max_model_len=None):
         """Process a request dictionary into model inputs."""
@@ -489,7 +565,6 @@ class MultiModalProcessor(BaseTextProcessor):
             if request.get("response_max_tokens") is not None and request.get("enable_thinking") is False:
                 request["max_tokens"] = min(request["response_max_tokens"], request["max_tokens"])
 
-        data_processor_logger.info(f"Processed request {request}")
         return request
 
     def _tokenize_request(self, request):

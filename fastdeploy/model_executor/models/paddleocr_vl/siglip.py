@@ -30,6 +30,34 @@ from .config import PaddleOCRVisionConfig
 from .siglip_ops import get_activation_fn, neox_rope_embedding
 
 
+class SiglipVisionLayerNorm(nn.Layer):
+    def __init__(self, normalized_shape: int, epsilon: float = 1e-5):
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.epsilon = epsilon
+        self.weight = self.create_parameter(
+            shape=[normalized_shape],
+            default_initializer=nn.initializer.Constant(1.0),
+        )
+        self.bias = self.create_parameter(
+            shape=[normalized_shape],
+            default_initializer=nn.initializer.Constant(0.0),
+            is_bias=True,
+        )
+
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
+        if current_platform.is_maca():
+            output_dtype = hidden_states.dtype
+            hidden_states = hidden_states.astype("float32")
+            mean = hidden_states.mean(axis=-1, keepdim=True)
+            centered = hidden_states - mean
+            variance = (centered * centered).mean(axis=-1, keepdim=True)
+            hidden_states = centered * paddle.rsqrt(variance + self.epsilon)
+            hidden_states = hidden_states * self.weight.astype("float32") + self.bias.astype("float32")
+            return hidden_states.astype(output_dtype)
+        return F.layer_norm(hidden_states, [self.normalized_shape], self.weight, self.bias, self.epsilon)
+
+
 class SiglipAttention(nn.Layer):
     def __init__(self, config):
         super().__init__()
@@ -71,6 +99,29 @@ class SiglipAttention(nn.Layer):
 
             self.flash_attn_func = flash_attn_unpadded
             self.flash_attn_kwargs = {"scale": self.scale, "training": False}
+
+    def _metax_attention(self, q, k, v, cu_seqlens):
+        output_dtype = q.dtype
+        q = q.astype("float32")
+        k = k.astype("float32")
+        v = v.astype("float32")
+
+        if cu_seqlens is None:
+            seqlens = [0, q.shape[0]]
+        else:
+            seqlens = [int(x) for x in cu_seqlens.cpu().numpy().tolist()]
+
+        outputs = []
+        for start, end in zip(seqlens[:-1], seqlens[1:]):
+            q_seg = q[start:end].transpose([1, 0, 2])
+            k_seg = k[start:end].transpose([1, 2, 0])
+            v_seg = v[start:end].transpose([1, 0, 2])
+            scores = paddle.matmul(q_seg, k_seg) * self.scale
+            probs = F.softmax(scores, axis=-1)
+            outputs.append(paddle.matmul(probs, v_seg).transpose([1, 0, 2]))
+
+        attn_output = paddle.concat(outputs, axis=0) if len(outputs) > 1 else outputs[0]
+        return attn_output.astype(output_dtype)
 
     def qkv_weight_loader(self, param, loaded_weight, loaded_shard_id: Optional[str] = None):
         # Tensor parallelism splits the weight along the output_dim
@@ -127,20 +178,28 @@ class SiglipAttention(nn.Layer):
         cos_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
         sin_emb: Optional[paddle.Tensor] = None,  # (cos, sin)
     ):
-        B, seq_length, D = hidden_states.shape
+        if hidden_states.dim() == 3:
+            if hidden_states.shape[0] != 1:
+                raise ValueError(f"SiglipAttention only supports batch=1, got {hidden_states.shape}")
+            hidden_states = hidden_states[0]
+
+        seq_length, D = hidden_states.shape
         qkv = self.qkv_proj(hidden_states)
         q, k, v = neox_rope_embedding(qkv, cos_emb, sin_emb, self.num_heads, self.head_dim)
-        attn_output = self.flash_attn_func(
-            q,
-            k,
-            v,
-            cu_seqlens,
-            cu_seqlens,
-            max_seqlen,
-            max_seqlen,
-            causal=False,
-            **self.flash_attn_kwargs,
-        )[0]
+        if current_platform.is_maca():
+            attn_output = self._metax_attention(q, k, v, cu_seqlens)
+        else:
+            attn_output = self.flash_attn_func(
+                q,
+                k,
+                v,
+                cu_seqlens,
+                cu_seqlens,
+                max_seqlen,
+                max_seqlen,
+                causal=False,
+                **self.flash_attn_kwargs,
+            )[0]
 
         attn_output = attn_output.reshape((seq_length, -1))
         attn_output = self.out_proj(attn_output)
@@ -255,25 +314,26 @@ class SiglipVisionEmbeddings(nn.Layer):
                 flatten_image_grid_thw = self.flatten_list(image_grid_thw)
                 flatten_image_grid_thw = np.array(flatten_image_grid_thw)
                 assert batch_size == 1
-                start = 0
 
                 assert sum([np.prod(x) for x in flatten_image_grid_thw]) == embeddings.shape[1], (
                     flatten_image_grid_thw,
                     embeddings.shape,
                 )
                 embeddings = embeddings.squeeze(0)
-                tmp_embeddings = list()
-                for image_grid in image_grid_thw:
-                    t, h, w = image_grid
-                    end = start + t * h * w
-                    image_embeddings = embeddings[int(start) : int(end), :]
-                    position_embedding = (
-                        self.interpolate_pos_encoding(image_embeddings, h, w, True).squeeze(0).tile((t, 1))
-                    ).astype(image_embeddings.dtype)
-                    image_embeddings = image_embeddings + position_embedding
-                    tmp_embeddings.append(image_embeddings)
-                    start = end
-                embeddings = paddle.concat(tmp_embeddings, axis=0).unsqueeze(0)
+                packed_position_embeddings = []
+                for t, h, w in flatten_image_grid_thw:
+                    t, h, w = map(int, (t, h, w))
+                    position_embedding = self.fetch_position_embedding_lfu_cache(embeddings, h, w).squeeze(0)
+                    if t > 1:
+                        position_embedding = position_embedding.tile((t, 1))
+                    if position_embedding.dtype != embeddings.dtype:
+                        position_embedding = position_embedding.astype(embeddings.dtype)
+                    packed_position_embeddings.append(position_embedding)
+                if len(packed_position_embeddings) == 1:
+                    packed_position_embeddings = packed_position_embeddings[0]
+                else:
+                    packed_position_embeddings = paddle.concat(packed_position_embeddings, axis=0)
+                embeddings = (embeddings + packed_position_embeddings).unsqueeze(0)
             else:
                 embeddings = embeddings + self.packing_position_embedding(position_ids)
             return embeddings
@@ -307,7 +367,7 @@ class SiglipMLP(nn.Layer):
 
     def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
         hidden_states = self.fc1(hidden_states)
-        hidden_states = get_activation_fn(self.config.hidden_act)(hidden_states[0])
+        hidden_states = get_activation_fn(self.config.hidden_act)(hidden_states)
         hidden_states = self.fc2(hidden_states)
         return hidden_states
 
@@ -316,12 +376,12 @@ class SiglipEncoderLayer(paddle.nn.Layer):
     def __init__(self, config):
         super().__init__()
         self.embed_dim = config.hidden_size
-        self.layer_norm1 = paddle.nn.LayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
+        self.layer_norm1 = SiglipVisionLayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
         self.self_attn = SiglipAttention(config)
-        self.layer_norm2 = paddle.nn.LayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
+        self.layer_norm2 = SiglipVisionLayerNorm(self.embed_dim, epsilon=config.layer_norm_eps)
         self.mlp = SiglipMLP(config)
 
-    def forward(
+    def _forward_impl(
         self,
         hidden_states,
         attention_mask,
@@ -331,9 +391,7 @@ class SiglipEncoderLayer(paddle.nn.Layer):
         cos_emb=None,
         sin_emb=None,
     ):
-
         residual = hidden_states
-        ############################
         ln1_out = self.layer_norm1(hidden_states)
 
         x = self.self_attn(
@@ -346,18 +404,46 @@ class SiglipEncoderLayer(paddle.nn.Layer):
             sin_emb=sin_emb,
         )
 
-        hs_post_attn = residual + x
-
-        residual = hs_post_attn
+        hidden_states = residual + x
+        residual = hidden_states
         ln2_out = self.layer_norm2(residual)
 
         mlp_out = self.mlp(ln2_out)
+        output = residual + mlp_out
+        return output
 
-        hidden_states_out = residual + mlp_out
+    def forward(
+        self,
+        hidden_states,
+        attention_mask,
+        output_attentions=False,
+        cu_seqlens=None,
+        max_seqlen=None,
+        cos_emb=None,
+        sin_emb=None,
+    ):
+        if hidden_states.dim() == 3 and hidden_states.shape[0] == 1:
+            hidden_states_out = self._forward_impl(
+                hidden_states=hidden_states[0],
+                attention_mask=attention_mask,
+                output_attentions=output_attentions,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                cos_emb=cos_emb,
+                sin_emb=sin_emb,
+            )
+            return (hidden_states_out.unsqueeze(0),)
 
-        outputs = (hidden_states_out,)
-
-        return outputs
+        hidden_states_out = self._forward_impl(
+            hidden_states=hidden_states,
+            attention_mask=attention_mask,
+            output_attentions=output_attentions,
+            cu_seqlens=cu_seqlens,
+            max_seqlen=max_seqlen,
+            cos_emb=cos_emb,
+            sin_emb=sin_emb,
+        )
+        return (hidden_states_out,)
 
 
 class SigLIPRotaryEmbedding(nn.Layer):
@@ -368,12 +454,14 @@ class SigLIPRotaryEmbedding(nn.Layer):
         self.rope_init()
 
     def rope_init(self):
-        arange = paddle.arange(0, self.dim, 2, dtype="float32")
+        arange = paddle.arange(0, self.dim, 2, dtype="int64").astype("float32")
         inv_freq = 1.0 / (self.theta ** (arange / self.dim))
         self.register_buffer("inv_freq", inv_freq.astype(paddle.get_default_dtype()), persistable=False)
 
     def forward(self, seqlen: int) -> paddle.Tensor:
-        seq = paddle.arange(seqlen, dtype=self.inv_freq.dtype)
+        if isinstance(seqlen, paddle.Tensor):
+            seqlen = int(seqlen.cpu().numpy().item())
+        seq = paddle.arange(seqlen, dtype="int64").astype(self.inv_freq.dtype)
         freqs = paddle.outer(seq, self.inv_freq)
         return freqs
 
@@ -600,7 +688,7 @@ class SiglipMultiheadAttentionPoolingHead(nn.Layer):
             default_initializer=paddle.nn.initializer.Normal(),
         )
         self.attention = nn.MultiHeadAttention(config.hidden_size, config.num_attention_heads)
-        self.layernorm = nn.LayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
+        self.layernorm = SiglipVisionLayerNorm(config.hidden_size, epsilon=config.layer_norm_eps)
         self.mlp = SiglipMLP(config)
 
     def forward(self, hidden_state, key_padding_mask=None):
@@ -624,7 +712,7 @@ class SiglipVisionTransformer(nn.Layer):
 
         self.embeddings = SiglipVisionEmbeddings(config)
         self.encoder = SiglipEncoder(config)
-        self.post_layernorm = nn.LayerNorm(embed_dim, epsilon=config.layer_norm_eps)
+        self.post_layernorm = SiglipVisionLayerNorm(embed_dim, epsilon=config.layer_norm_eps)
         self.use_head = True if not hasattr(config, "vision_use_head") else config.vision_use_head
         if self.use_head:
             self.head = SiglipMultiheadAttentionPoolingHead(config)
@@ -677,7 +765,6 @@ class SiglipVisionTransformer(nn.Layer):
             end = cu_seqlens[i + 1]
             tensor = last_hidden_state[:, start:end, :].squeeze(0)
             sample_hidden_state.append(tensor)
-
         return sample_hidden_state
 
 

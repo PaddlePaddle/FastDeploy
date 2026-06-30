@@ -19,9 +19,13 @@ from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
+from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.engine.request import ControlRequest
-from fastdeploy.worker.worker_process import PaddleDisWorkerProc
+from fastdeploy.worker.worker_process import (
+    PaddleDisWorkerProc,
+    update_fd_config_for_paddleocr,
+)
 
 
 class TestInterceptPaddleLoggers(unittest.TestCase):
@@ -110,6 +114,38 @@ class TestInterceptPaddleLoggers(unittest.TestCase):
 
         # After exception, getLogger should still be restored
         self.assertEqual(logging.getLogger, original_getLogger)
+
+
+class TestPaddleOCRWorkerConfig(unittest.TestCase):
+    def setUp(self):
+        self._original_enable_max_prefill = envs.FD_ENABLE_MAX_PREFILL
+
+    def tearDown(self):
+        envs.FD_ENABLE_MAX_PREFILL = self._original_enable_max_prefill
+
+    def _fd_config(self, max_encoder_cache):
+        fd_config = Mock()
+        fd_config.model_config.architectures = ["PaddleOCRVLForConditionalGeneration"]
+        fd_config.cache_config.enable_prefix_caching = True
+        fd_config.cache_config.max_encoder_cache = max_encoder_cache
+        return fd_config
+
+    def test_paddleocr_defaults_disable_encoder_cache(self):
+        envs.FD_ENABLE_MAX_PREFILL = 0
+        fd_config = self._fd_config(max_encoder_cache=None)
+
+        update_fd_config_for_paddleocr(fd_config)
+
+        self.assertEqual(envs.FD_ENABLE_MAX_PREFILL, 1)
+        self.assertFalse(fd_config.cache_config.enable_prefix_caching)
+        self.assertEqual(fd_config.cache_config.max_encoder_cache, 0)
+
+    def test_paddleocr_preserves_explicit_encoder_cache(self):
+        fd_config = self._fd_config(max_encoder_cache=4096)
+
+        update_fd_config_for_paddleocr(fd_config)
+
+        self.assertEqual(fd_config.cache_config.max_encoder_cache, 4096)
 
 
 class TestWorkerProcessControlMethod(unittest.TestCase):

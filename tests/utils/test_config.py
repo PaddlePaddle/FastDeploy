@@ -53,8 +53,8 @@ _BP = {"architectures": ["LlamaForCausalLM"], "hidden_size": 4096, "num_attentio
        "intermediate_size": 11008}
 _EP = {"tensor_parallel_size": 4, "enable_expert_parallel": True, "data_parallel_size": 1}
 
-def _plat(cuda=False, xpu=False, hpu=False):  # noqa: E302
-    return SimpleNamespace(is_xpu=lambda: xpu, is_cuda=lambda: cuda, is_maca=lambda: False,
+def _plat(cuda=False, xpu=False, hpu=False, maca=False):  # noqa: E302
+    return SimpleNamespace(is_xpu=lambda: xpu, is_cuda=lambda: cuda, is_maca=lambda: maca,
                            is_iluvatar=lambda: False, is_intel_hpu=lambda: hpu)
 
 def _fr(gen=True, pool=False, mm=False, reason=False, arch="LlamaForCausalLM", dpt=None):  # noqa: E302
@@ -331,6 +331,26 @@ class TestFDConfig(unittest.TestCase):
 
     def test_mm_dynload_subconfig(self):
         assert _mfd(self.mp, model_config=_mm()).cache_config.max_encoder_cache == 0
+        self.mp.setattr("fastdeploy.config.current_platform", _plat(maca=True))
+        paddleocr_mm = _fdm(
+            enable_mm=True,
+            architectures=["PaddleOCRVLForConditionalGeneration"],
+            max_model_len=2048,
+            mm_max_tokens_per_item={"image": 256, "video": 0, "audio": 0},
+        )
+        fd_paddleocr = _mfd(
+            self.mp,
+            model_config=paddleocr_mm,
+            scheduler={"max_num_batched_tokens": 2048},
+        )
+        assert fd_paddleocr.cache_config.max_encoder_cache == 2048
+        fd_paddleocr_no_cache = _mfd(
+            self.mp,
+            model_config=paddleocr_mm,
+            cache={"max_encoder_cache": 0},
+            scheduler={"max_num_batched_tokens": 2048},
+        )
+        assert fd_paddleocr_no_cache.cache_config.max_encoder_cache == 0
         e5 = _mfd(self.mp, model_config=_fdm(architectures=["Ernie5ForCausalLM"]))
         assert getattr(e5.cache_config, "disable_chunked_mm_input", False) is True
         dyn = _mfd(self.mp, load_config=LoadConfig({"dynamic_load_weight": True}))
@@ -421,7 +441,8 @@ class TestFDConfig(unittest.TestCase):
         fd6 = _mfd(self.mp, structured_outputs_config=so, speculative_config=SpeculativeConfig({"method": "mtp"}))
         assert fd6.structured_outputs_config.guided_decoding_backend == "off"
         assert _mfd(self.mp, model_config=_mm(), cache={"max_encoder_cache": -1}).cache_config.max_encoder_cache == 0
-        assert _mfd(self.mp, model_config=_mm(), cache={"max_encoder_cache": 10}).cache_config.max_encoder_cache == 0
+        fd_cache = _mfd(self.mp, model_config=_mm(), cache={"max_encoder_cache": 10})
+        assert fd_cache.cache_config.max_encoder_cache == fd_cache.scheduler_config.max_num_batched_tokens
 
     def test_guided_check(self):
         self._cuda()

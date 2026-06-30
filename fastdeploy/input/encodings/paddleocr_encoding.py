@@ -14,6 +14,8 @@
 
 """PaddleOCR-VL encoding strategy."""
 
+from collections import OrderedDict
+
 import numpy as np
 from PIL import Image
 
@@ -38,6 +40,33 @@ class PaddleOCREncoding(QwenEncoding):
     - load_video: use sample_frames_paddleocr instead of sample_frames_qwen
     """
 
+    def init_extra(self, processor_kwargs):
+        self._local_processor_cache = OrderedDict()
+        try:
+            self._local_processor_cache_size = int(processor_kwargs.get("local_processor_cache_size", 16))
+        except (TypeError, ValueError):
+            self._local_processor_cache_size = 16
+
+    def _get_cached_image(self, uuid):
+        if not self.enable_local_processor_cache or not uuid:
+            return None
+        cached = self._local_processor_cache.get(uuid)
+        if cached is not None:
+            self._local_processor_cache.move_to_end(uuid)
+        return cached
+
+    def get_local_processor_cache(self, uuid):
+        return self._get_cached_image(uuid)
+
+    def _put_cached_image(self, uuid, pixel_values, grid_thw):
+        if not self.enable_local_processor_cache or not uuid or self._local_processor_cache_size <= 0:
+            return
+        t, h, w = map(int, grid_thw)
+        self._local_processor_cache[uuid] = (pixel_values, {"thw": (t, h, w)})
+        self._local_processor_cache.move_to_end(uuid)
+        while len(self._local_processor_cache) > self._local_processor_cache_size:
+            self._local_processor_cache.popitem(last=False)
+
     def _make_outputs(self) -> dict:
         outputs = super()._make_outputs()
         outputs["vit_seqlen"] = []
@@ -45,6 +74,11 @@ class PaddleOCREncoding(QwenEncoding):
         return outputs
 
     def add_image(self, img, outputs, uuid, token_len=None):
+        cached = self._get_cached_image(uuid)
+        if cached is not None:
+            self.add_processed_image(cached, outputs, uuid, token_len)
+            return
+
         ret = self.image_processor.preprocess(images=[img.convert("RGB")])
         num_tokens = ret["grid_thw"].prod() // self.image_processor.merge_size**2
         grid_thw = ret["grid_thw"].tolist()
@@ -75,6 +109,7 @@ class PaddleOCREncoding(QwenEncoding):
         numel = h * w
         outputs["vit_seqlen"].append(numel)
         outputs["vit_position_ids"].append(np.arange(numel) % numel)
+        self._put_cached_image(uuid, ret["pixel_values"], grid_thw)
 
     def add_processed_image(self, img_cache, outputs, uuid, token_len=None):
         super().add_processed_image(img_cache, outputs, uuid, token_len)

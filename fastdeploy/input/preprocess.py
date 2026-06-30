@@ -48,6 +48,7 @@ class InputPreprocessor:
         mm_processor_kwargs: Optional[Dict[str, Any]] = None,
         tool_parser: str = None,
         enable_processor_cache: bool = False,
+        enable_local_processor_cache: bool = False,
         enable_mm_runtime: Optional[bool] = None,
     ) -> None:
         self.model_config = model_config
@@ -57,6 +58,7 @@ class InputPreprocessor:
         self.mm_processor_kwargs = mm_processor_kwargs
         self.tool_parser = tool_parser
         self.enable_processor_cache = enable_processor_cache
+        self.enable_local_processor_cache = enable_local_processor_cache
         self.enable_mm_runtime = self.model_config.enable_mm if enable_mm_runtime is None else enable_mm_runtime
 
     def create_processor(self):
@@ -122,6 +124,7 @@ class InputPreprocessor:
                     reasoning_parser_obj=reasoning_parser_obj,
                     tool_parser_obj=tool_parser_obj,
                     enable_processor_cache=self.enable_processor_cache,
+                    enable_local_processor_cache=self.enable_local_processor_cache,
                 )
 
         return self.processor

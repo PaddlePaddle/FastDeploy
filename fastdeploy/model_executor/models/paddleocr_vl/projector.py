@@ -17,10 +17,40 @@
 import math
 from typing import Optional
 
+import numpy as np
 import paddle
 import paddle.nn as nn
 
 from fastdeploy.model_executor.utils import h2d_copy
+from fastdeploy.platforms import current_platform
+
+
+class PaddleOCRVLProjectorLayerNorm(nn.Layer):
+    def __init__(self, normalized_shape: int, epsilon: float = 1e-5):
+        super().__init__()
+        self.normalized_shape = normalized_shape
+        self.epsilon = epsilon
+        self.weight = self.create_parameter(
+            shape=[normalized_shape],
+            default_initializer=nn.initializer.Constant(1.0),
+        )
+        self.bias = self.create_parameter(
+            shape=[normalized_shape],
+            default_initializer=nn.initializer.Constant(0.0),
+            is_bias=True,
+        )
+
+    def forward(self, hidden_states: paddle.Tensor) -> paddle.Tensor:
+        if current_platform.is_maca():
+            output_dtype = hidden_states.dtype
+            hidden_states = hidden_states.astype("float32")
+            mean = hidden_states.mean(axis=-1, keepdim=True)
+            centered = hidden_states - mean
+            variance = (centered * centered).mean(axis=-1, keepdim=True)
+            hidden_states = centered * paddle.rsqrt(variance + self.epsilon)
+            hidden_states = hidden_states * self.weight.astype("float32") + self.bias.astype("float32")
+            return hidden_states.astype(output_dtype)
+        return nn.functional.layer_norm(hidden_states, [self.normalized_shape], self.weight, self.bias, self.epsilon)
 
 
 class GELUActivation(nn.Layer):
@@ -56,37 +86,51 @@ class Projector(nn.Layer):
 
         self.hidden_size = self.vision_config.hidden_size * self.merge_kernel_size[0] * self.merge_kernel_size[1]
 
-        self.pre_norm = nn.LayerNorm(self.vision_config.hidden_size, epsilon=1e-05)
+        self.pre_norm = PaddleOCRVLProjectorLayerNorm(self.vision_config.hidden_size, epsilon=1e-05)
         self.linear_1 = nn.Linear(self.hidden_size, self.hidden_size)
         self.linear_1.weight.weight_loader = self.weight_loader
         self.act = GELUActivation()
         self.linear_2 = nn.Linear(self.hidden_size, self.text_config.hidden_size)
         self.linear_2.weight.weight_loader = self.weight_loader
 
-    def forward(self, image_features, image_grid_thw):
+    def _build_merge_permutation(self, image_grid_thw):
         m1, m2 = self.merge_kernel_size
+        if isinstance(image_grid_thw, paddle.Tensor):
+            image_grid_thw = image_grid_thw.cpu().numpy()
+
+        merge_indices = []
+        merge_lengths = []
+        start = 0
+        for image_grid in image_grid_thw:
+            t, h, w = map(int, image_grid)
+            if h % m1 != 0 or w % m2 != 0:
+                raise ValueError(f"grid {image_grid} is not divisible by merge_kernel_size {self.merge_kernel_size}")
+            local = np.arange(t * h * w, dtype=np.int64).reshape((t, h // m1, m1, w // m2, m2))
+            local = local.transpose((0, 1, 3, 2, 4)).reshape(-1)
+            merge_indices.append(local + start)
+            merge_lengths.append(t * (h // m1) * (w // m2))
+            start += t * h * w
+
+        if len(merge_indices) == 0:
+            return np.empty((0,), dtype=np.int64), merge_lengths
+        return np.concatenate(merge_indices, axis=0), merge_lengths
+
+    def forward(self, image_features, image_grid_thw, return_packed: bool = False):
         if isinstance(image_features, (list, tuple)):
-            processed_features = list()
-            for image_feature, image_grid in zip(image_features, image_grid_thw):
-                image_feature = self.pre_norm(image_feature)  # shape: (T*H*W, D)
-                t, h, w = image_grid
-                from einops import rearrange
-
-                image_feature = rearrange(
-                    image_feature,
-                    "(t h p1 w p2) d -> (t h w) (p1 p2 d)",
-                    t=int(t),
-                    h=int(h // m1),
-                    p1=int(m1),
-                    w=int(w // m2),
-                    p2=int(m2),
-                )
-                hidden_states = self.linear_1(image_feature)
-                hidden_states = self.act(hidden_states)
-                hidden_states = self.linear_2(hidden_states)
-                processed_features.append(hidden_states)
-
-            return processed_features
+            packed_image_features = (
+                image_features[0] if len(image_features) == 1 else paddle.concat(image_features, axis=0)
+            )
+            packed_image_features = self.pre_norm(packed_image_features)
+            merge_indices, merge_lengths = self._build_merge_permutation(image_grid_thw)
+            merge_indices = paddle.to_tensor(merge_indices, dtype="int64", place=packed_image_features.place)
+            packed_image_features = paddle.index_select(packed_image_features, merge_indices, axis=0)
+            hidden_states = paddle.reshape(packed_image_features, [-1, self.hidden_size])
+            hidden_states = self.linear_1(hidden_states)
+            hidden_states = self.act(hidden_states)
+            hidden_states = self.linear_2(hidden_states)
+            if return_packed:
+                return hidden_states
+            return list(paddle.split(hidden_states, merge_lengths, axis=0))
 
         dim = image_features.shape[-1]
         image_features = paddle.reshape(image_features, [-1, dim])

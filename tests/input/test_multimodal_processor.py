@@ -19,6 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import numpy as np
 
+from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.encodings import ErnieEncoding, PaddleOCREncoding, QwenEncoding
 from fastdeploy.input.mm_model_config import (
     ERNIE4_5_VL,
@@ -48,6 +49,7 @@ def _make_processor(model_type, **overrides):
     proc.cfg = MODEL_CONFIGS[model_type]
     proc.config = MagicMock()
     proc.enable_processor_cache = False
+    proc.enable_local_processor_cache = False
     proc.model_name_or_path = "/mock/model"
     proc.tokenizer_type = proc.cfg.tokenizer_type
     proc.limit_mm_per_prompt = dict(_DEFAULT_MM_LIMITS)
@@ -1395,6 +1397,20 @@ class TestAddText(unittest.TestCase):
         self.assertEqual(outputs["token_type_ids"], [IDS_TYPE_FLAG["text"]])
         proc.enc.add_text_positions.assert_called_once_with(outputs, 1)
 
+    def test_string_tokenization_uses_literal_cache(self):
+        proc = _make_processor(QWEN_VL)
+        proc.tokenizer.tokenize.return_value = ["hello"]
+        proc.tokenizer.convert_tokens_to_ids.return_value = [42]
+        outputs = {"input_ids": [], "token_type_ids": []}
+
+        proc._add_text("hello", outputs)
+        proc._add_text("hello", outputs)
+
+        self.assertEqual(outputs["input_ids"], [42, 42])
+        proc.tokenizer.tokenize.assert_called_once_with("hello")
+        proc.tokenizer.convert_tokens_to_ids.assert_called_once_with(["hello"])
+        self.assertEqual(proc.enc.add_text_positions.call_count, 2)
+
     def test_list_tokens(self):
         proc = _make_processor(QWEN_VL)
         outputs = {"input_ids": [], "token_type_ids": []}
@@ -1402,6 +1418,54 @@ class TestAddText(unittest.TestCase):
         self.assertEqual(outputs["input_ids"], [10, 20, 30])
         self.assertEqual(outputs["token_type_ids"], [0, 0, 0])
         proc.enc.add_text_positions.assert_called_once_with(outputs, 3)
+
+
+# ===================================================================
+# chat_utils — parse_chat_messages tests
+# ===================================================================
+class TestParseChatMessages(unittest.TestCase):
+    """Tests for multimodal chat message parsing."""
+
+    @patch("fastdeploy.entrypoints.chat_utils.MultimodalPartParser")
+    def test_deferred_uuid_image_does_not_create_parser(self, mock_parser_cls):
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "uuid": "img_uuid", "image_url": {"url": "file://img.jpg"}},
+                    {"type": "text", "text": "describe"},
+                ],
+            }
+        ]
+
+        parsed = parse_chat_messages(messages, defer_mm_loading=True)
+
+        mock_parser_cls.assert_not_called()
+        self.assertEqual(parsed[0]["content"][0]["type"], "image")
+        self.assertIsNone(parsed[0]["content"][0]["data"])
+        self.assertEqual(parsed[0]["content"][0]["uuid"], "img_uuid")
+        self.assertEqual(parsed[0]["content"][0]["url"], "file://img.jpg")
+
+    @patch("fastdeploy.entrypoints.chat_utils.MultimodalPartParser")
+    def test_non_deferred_image_reuses_parser(self, mock_parser_cls):
+        parser = mock_parser_cls.return_value
+        parser.parse_image.side_effect = ["img1", "img2"]
+        messages = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image_url", "image_url": {"url": "file://img1.jpg"}},
+                    {"type": "image_url", "image_url": {"url": "file://img2.jpg"}},
+                ],
+            }
+        ]
+
+        parsed = parse_chat_messages(messages)
+
+        mock_parser_cls.assert_called_once()
+        self.assertEqual(parser.parse_image.call_count, 2)
+        self.assertEqual([part["data"] for part in parsed[0]["content"]], ["img1", "img2"])
+        self.assertNotIn("url", parsed[0]["content"][0])
 
 
 # ===================================================================
@@ -1489,6 +1553,58 @@ class TestExtractMmItems(unittest.TestCase):
         self.assertEqual(images, [])
         self.assertEqual(videos, [])
 
+    @patch("fastdeploy.input.multimodal_processor.MultimodalPartParser")
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_local_processor_cache_uses_deferred_image_without_loading_url(self, mock_parse, mock_parser_cls):
+        """A deferred image_url can be satisfied from the local processed cache."""
+        cached_image = (np.zeros((4, 3, 28, 28)), {"thw": (1, 4, 4)})
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "data": None, "uuid": "img_uuid", "url": "file://img.jpg"},
+                ],
+            }
+        ]
+        proc = _make_processor(PADDLEOCR_VL, enable_local_processor_cache=True)
+        proc.enc.get_local_processor_cache.return_value = cached_image
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        request = {"messages": [{"role": "user", "content": "test"}]}
+
+        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = proc._extract_mm_items(request)
+
+        mock_parse.assert_called_once_with(request["messages"], defer_mm_loading=True)
+        mock_parser_cls.assert_not_called()
+        self.assertEqual(images, [cached_image])
+        self.assertEqual(videos, [])
+        self.assertEqual(image_uuid, ["img_uuid"])
+        self.assertNotIn("url", mm_items[0])
+
+    @patch("fastdeploy.input.multimodal_processor.MultimodalPartParser")
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_local_processor_cache_miss_loads_deferred_image_url(self, mock_parse, mock_parser_cls):
+        """A deferred image_url is loaded normally on local cache miss."""
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "image", "data": None, "uuid": "img_uuid", "url": "file://img.jpg"},
+                ],
+            }
+        ]
+        parser = mock_parser_cls.return_value
+        parser.parse_image.return_value = "loaded_img"
+        proc = _make_processor(PADDLEOCR_VL, enable_local_processor_cache=True)
+        proc.enc.get_local_processor_cache.return_value = None
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        request = {"messages": [{"role": "user", "content": "test"}]}
+
+        images, videos, image_uuid, video_uuid, dealer, missing_idx, mm_items = proc._extract_mm_items(request)
+
+        parser.parse_image.assert_called_once_with("file://img.jpg")
+        self.assertEqual(images, ["loaded_img"])
+        self.assertNotIn("url", mm_items[0])
+
 
 # ===================================================================
 # MultiModalProcessor — request2ids tests
@@ -1568,6 +1684,113 @@ class TestRequest2ids(unittest.TestCase):
         # For ernie, the full request (not parsed messages) is passed
         call_args = proc.tokenizer.apply_chat_template.call_args
         self.assertIs(call_args[0][0], request)
+
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_request2ids_defers_template_parse_when_local_cache_enabled(self, mock_parse):
+        """PaddleOCR local cache path should reuse parsed messages for chat template."""
+        mock_parse.return_value = [
+            {"role": "user", "content": [{"type": "text", "text": "hello"}]},
+        ]
+        proc = _make_processor(PADDLEOCR_VL, enable_local_processor_cache=True)
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+
+        proc.tokenizer.apply_chat_template = MagicMock(return_value="formatted prompt")
+        outputs_dict = {
+            "input_ids": [10],
+            "token_type_ids": [0],
+            "position_ids": [np.array([[0], [0], [0]])],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 1,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+            "vit_seqlen": [],
+            "vit_position_ids": [],
+        }
+        proc.text2ids = MagicMock(return_value=outputs_dict)
+
+        request = {"messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]}
+        proc.request2ids(request)
+
+        mock_parse.assert_called_once_with(request["messages"], defer_mm_loading=True)
+        proc.tokenizer.apply_chat_template.assert_called_once()
+
+    @patch("fastdeploy.input.multimodal_processor.parse_chat_messages")
+    def test_request2ids_strips_heavy_mm_payloads_from_template_messages(self, mock_parse):
+        """Decoded multimodal payloads should not be passed into the chat template."""
+        mock_parse.return_value = [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "image",
+                        "data": (np.zeros((4, 3, 28, 28)), {"thw": (1, 4, 4)}),
+                        "uuid": "img_uuid",
+                        "url": "data:image/jpeg;base64,large",
+                    },
+                ],
+            },
+        ]
+        proc = _make_processor(PADDLEOCR_VL, enable_local_processor_cache=True)
+        proc.role_prefixes = {"user": "", "assistant": "", "system": ""}
+        proc.tokenizer.apply_chat_template = MagicMock(return_value="formatted prompt")
+        outputs_dict = {
+            "input_ids": [10],
+            "token_type_ids": [0],
+            "position_ids": [np.array([[0], [0], [0]])],
+            "images": [],
+            "grid_thw": [],
+            "image_type_ids": [],
+            "labels": [],
+            "cur_position": 1,
+            "video_cnt": 0,
+            "num_input_image_tokens": 0,
+            "num_input_video_tokens": 0,
+            "mm_positions": [],
+            "mm_hashes": [],
+            "fps": [],
+            "vit_seqlen": [],
+            "vit_position_ids": [],
+        }
+        proc.text2ids = MagicMock(return_value=outputs_dict)
+
+        request = {"messages": [{"role": "user", "content": [{"type": "text", "text": "hello"}]}]}
+        proc.request2ids(request)
+
+        template_messages = proc.tokenizer.apply_chat_template.call_args[0][0]
+        image_part = template_messages[0]["content"][0]
+        self.assertEqual(image_part, {"type": "image", "uuid": "img_uuid"})
+        mock_parse.assert_called_once_with(request["messages"], defer_mm_loading=True)
+
+    def test_processed_request_summary_excludes_heavy_payloads(self):
+        proc = _make_processor(PADDLEOCR_VL)
+        request = {
+            "request_id": "req",
+            "prompt_tokens": "hello",
+            "prompt_token_ids": [1, 2, 3],
+            "max_tokens": 4,
+            "messages": [{"role": "user", "content": "large"}],
+            "multimodal_inputs": {
+                "images": np.zeros((4, 3, 28, 28)),
+                "mm_hashes": ["img_uuid"],
+                "num_input_image_tokens": 215,
+                "num_input_video_tokens": 0,
+            },
+        }
+
+        summary = proc._processed_request_summary(request)
+
+        self.assertEqual(summary["request_id"], "req")
+        self.assertEqual(summary["prompt_token_ids_len"], 3)
+        self.assertEqual(summary["mm_count"], 1)
+        self.assertNotIn("messages", summary)
+        self.assertNotIn("images", summary)
 
 
 # =====================================================================
