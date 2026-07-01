@@ -3616,6 +3616,9 @@ class GPUModelRunner(ModelRunnerBase):
         prompt_logprobs_list: list[Optional[LogprobsTensors]] = self.scheduler_config.max_num_seqs * [None]
         completed_prefill_reqs: list[Request] = []
         for req_id, request in self.prompt_logprobs_reqs.items():
+            idx = self.share_inputs["req_ids"].index(req_id) if req_id in self.share_inputs["req_ids"] else -1
+            if idx < 0 or self.share_inputs["seq_lens_this_time_cpu"][idx].item() <= 0:
+                continue
             num_prompt_logprobs = request.sampling_params.prompt_logprobs
             if request.prompt_token_ids is None or num_prompt_logprobs is None:
                 continue
