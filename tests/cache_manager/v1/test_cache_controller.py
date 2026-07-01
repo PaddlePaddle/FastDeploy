@@ -1461,6 +1461,7 @@ class TestDestructor(unittest.TestCase):
     def test_del_calls_free_host_cache(self, mock_free):
         """Lines 1089-1090: __del__ calls _free_host_cache."""
         controller = create_cache_controller()
+        mock_free.reset_mock()
         controller.__del__()
         mock_free.assert_called_once()
 
