@@ -667,11 +667,22 @@ def test_launchers_and_controller():
         with pytest.raises(Exception):
             api_server.launch_api_server()
 
+    # workers > 1 branch: StandaloneApplication
+    api_server.args.workers = 2
     with (
         patch("fastdeploy.entrypoints.openai.api_server.is_port_available", return_value=True),
         patch("fastdeploy.entrypoints.openai.api_server.StandaloneApplication.run", side_effect=RuntimeError("fail")),
     ):
         api_server.launch_api_server()
+
+    # workers == 1 branch: uvicorn.run
+    api_server.args.workers = 1
+    with (
+        patch("fastdeploy.entrypoints.openai.api_server.is_port_available", return_value=True),
+        patch("fastdeploy.entrypoints.openai.api_server.uvicorn.run", side_effect=RuntimeError("fail")) as uv_run,
+    ):
+        api_server.launch_api_server()
+        uv_run.assert_called_once()
 
     with patch("fastdeploy.entrypoints.openai.api_server.uvicorn.run") as uv_run:
         api_server.run_metrics_server()
