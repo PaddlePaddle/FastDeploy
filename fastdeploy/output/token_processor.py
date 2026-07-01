@@ -422,21 +422,17 @@ class TokenProcessor:
         """
         if self.speculative_decoding:
             raise NotImplementedError("GET_SAVE_OUTPUT_V1 does not support speculative decoding")
-        rank_id = self.cfg.parallel_config.local_data_parallel_id
         while True:
             try:
-                if (
-                    self.cfg.parallel_config.enable_expert_parallel and self.cfg.parallel_config.data_parallel_size > 1
-                ) or (rank_id == 0):
-                    receive_datas = self.zmq_server.recv_pyobj()
-                    assert isinstance(receive_datas, list)
-                    if envs.FD_DEBUG:
-                        llm_logger.debug(f"token_processor receive_data {receive_datas}")
+                receive_datas = self.zmq_server.recv_pyobj()
+                assert isinstance(receive_datas, list)
+                if envs.FD_DEBUG:
+                    llm_logger.debug(f"token_processor receive_data {receive_datas}")
 
-                    self._reschedule_preempt_task_use_zmq(receive_datas)
+                self._reschedule_preempt_task_use_zmq(receive_datas)
 
-                    batch_result = self._process_batch_output_use_zmq(receive_datas)
-                    self.postprocess(batch_result)
+                batch_result = self._process_batch_output_use_zmq(receive_datas)
+                self.postprocess(batch_result)
             except Exception as e:
                 log_request_error(
                     message="Receive message:{receive_datas}, error:{error}, {traceback}",
