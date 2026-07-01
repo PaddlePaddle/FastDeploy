@@ -436,6 +436,9 @@ async def benchmark(
     if len(ip_list) >= 1:
         api_url = f"http://{ip_list[0]}{args.endpoint}"
 
+    # warmup短输出：取128和hyper_parameters中max_tokens的最小值
+    warmup_output_len = min(128, hyper_parameters.get("max_tokens", 128))
+    warmup_hyper = {k: v for k, v in hyper_parameters.items() if k != "max_tokens"}
     test_input = RequestFuncInput(
         model=model_id,
         model_name=model_name,
@@ -443,9 +446,9 @@ async def benchmark(
         no=test_no,
         prompt_len=0,
         history_QA=test_history_QA,
-        hyper_parameters=hyper_parameters,
+        hyper_parameters=warmup_hyper,
         api_url=api_url,
-        output_len=test_output_len,
+        output_len=warmup_output_len,
         logprobs=logprobs,
         ignore_eos=ignore_eos,
         debug=debug,
