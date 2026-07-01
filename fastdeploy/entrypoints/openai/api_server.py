@@ -319,6 +319,8 @@ async def lifespan(app: FastAPI):
     try:
         if envs.FD_ENABLE_ASYNC_LLM:
             await llm_engine.shutdown()
+        else:
+            llm_engine._exit_sub_services()
         await engine_client.connection_manager.close()
         engine_client.zmq_client.close()
         from prometheus_client import multiprocess
@@ -801,8 +803,6 @@ def launch_api_server() -> None:
                 host=args.host,
                 port=args.port,
                 log_config=UVICORN_CONFIG,
-                timeout_keep_alive=args.timeout,
-                timeout_graceful_shutdown=args.timeout_graceful_shutdown,
             )
 
     except Exception as e:
