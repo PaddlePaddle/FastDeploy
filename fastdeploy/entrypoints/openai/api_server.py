@@ -793,7 +793,18 @@ def launch_api_server() -> None:
     }
 
     try:
-        StandaloneApplication(app, options).run()
+        if args.workers > 1:
+            StandaloneApplication(app, options).run()
+        else:
+            uvicorn.run(
+                app,
+                host=args.host,
+                port=args.port,
+                log_config=UVICORN_CONFIG,
+                timeout_keep_alive=args.timeout,
+                timeout_graceful_shutdown=args.timeout_graceful_shutdown,
+            )
+
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
 
