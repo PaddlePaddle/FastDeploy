@@ -89,9 +89,15 @@ class EngineServicePrepareMixin:
 
     def _fetch_request_prefill(self) -> bool:
         """Fetch and prepare requests for a prefill instance. Returns True if tasks were fetched."""
+        max_inflight_prefill = envs.FD_MAX_INFLIGHT_PREFILL
+        inflight_prefill = len(self.resource_manager.running)
+        if inflight_prefill >= max_inflight_prefill:
+            return False
+        available_for_new = max_inflight_prefill - inflight_prefill
         num_prefill_batch = min(
             int(self.resource_manager.available_batch()),
             self.cfg.max_prefill_batch,
+            available_for_new,
         )
         max_num_batched_tokens = self.cfg.scheduler_config.max_num_batched_tokens
         available_blocks = self.cfg.cache_config.max_block_num_per_seq
