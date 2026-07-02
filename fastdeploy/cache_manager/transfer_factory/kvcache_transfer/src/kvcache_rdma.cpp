@@ -1533,8 +1533,17 @@ bool RDMACommunicator::post_send_with_retry(struct RdmaContext* ctx,
           errno,
           retries + 1,
           max_retries);
-      // Drain CQ to free SQ slots before retrying
-      poll_cq_with_timeout(ctx, RDMA_POLL_CQE_TIMEOUT, 1);
+      // Non-blocking CQ drain to free SQ slots before retrying.
+      // Do not use poll_cq_with_timeout here: ibv_post_send failure does not
+      // guarantee a CQE is available (e.g. sync errors, unsignaled WRs), so a
+      // blocking wait would stall the retry loop for up to
+      // RDMA_POLL_CQE_TIMEOUT per attempt (up to 210s total).
+      {
+        struct ibv_wc wc_array[32];
+        int n;
+        while ((n = ibv_poll_cq(ctx->cq, 32, wc_array)) > 0) {
+        }
+      }
       usleep(1000);
       retries++;
       if (bad_wr)
