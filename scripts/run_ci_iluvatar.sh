@@ -309,6 +309,8 @@ for tensor_parallel_size in "${tensor_parallel_sizes[@]}"; do
 done
 
 echo -e "\n============ Online: start to test PaddleOCR-VL ==========="
+pip3 install paddleocr[doc-parser]==3.3.2
+
 clear_message
 echo "Start server..."
 python -m fastdeploy.entrypoints.openai.api_server \
@@ -322,7 +324,7 @@ python -m fastdeploy.entrypoints.openai.api_server \
        --max-num-seqs 64 \
        --workers 2 \
        --block-size 16 \
-       --graph-optimization-config '{"use_cudagraph": true}' > server.log 2>&1 &
+       --graph-optimization-config '{"graph_opt_level":2, "use_cudagraph": true}' > server.log 2>&1 &
 
 check_server_status
 

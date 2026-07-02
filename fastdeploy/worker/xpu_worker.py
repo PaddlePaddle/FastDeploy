@@ -184,6 +184,12 @@ class XpuWorker(WorkerBase):
         if self.model_runner.use_cudagraph:
             self.model_runner.capture_model()
 
+        if envs.FD_XPU_PROFILE_PREFILL:
+            self.model_runner.prefill_only_profile_run()
+
+        if envs.FD_XPU_PROFILE_DECODE:
+            self.model_runner.decode_only_profile_run()
+
     def check_health(self) -> bool:
         """ """
         return True

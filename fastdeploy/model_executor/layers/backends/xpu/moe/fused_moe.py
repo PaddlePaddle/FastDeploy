@@ -17,6 +17,7 @@
 import os
 from typing import Callable
 
+import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.utils.log import logger
@@ -307,6 +308,16 @@ class XPUMoEMethod(MoEMethodBase):
         layer.up_gate_proj_weight.set_value(stacked_up_gate_proj_weights)
         layer.down_proj_weight.set_value(stacked_down_proj_weights)
 
+    def compute_gate(self, x: paddle.Tensor, gate: nn.Layer) -> paddle.Tensor:
+        """Compute gate output, use random fill in profile mode."""
+        gate_input = x.cast("float32") if gate.weight.dtype == paddle.float32 else x
+        gate_out = gate(gate_input)
+        if gate_out.dtype != paddle.float32:
+            gate_out = gate_out.cast("float32")
+        if envs.FD_XPU_PROFILE_EXPERT_BALANCE:
+            gate_out = paddle.to_tensor(np.random.rand(x.shape[0], gate.weight.shape[1]).astype("float32"))
+        return gate_out
+
     def apply_tp(
         self,
         layer: nn.Layer,
@@ -317,7 +328,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply TP Scatter Op.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = self.compute_gate(x, gate)
         if layer.topk_method == "noaux_tc":
             _, topk_weights, topk_idx = get_moe_scores(
                 gate_out,
@@ -421,7 +432,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply the EP prefill method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = self.compute_gate(x, gate)
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_prefill_runner.moe_select(layer, gate_out)
 
@@ -515,7 +526,7 @@ class XPUMoEMethod(MoEMethodBase):
         """
         Apply the EP decoder method.
         """
-        gate_out = gate(x.cast("float32"))
+        gate_out = self.compute_gate(x, gate)
 
         # 1. Select topk experts and weights
         topk_idx, topk_weights = self.ep_decoder_runner.moe_select(layer, gate_out)

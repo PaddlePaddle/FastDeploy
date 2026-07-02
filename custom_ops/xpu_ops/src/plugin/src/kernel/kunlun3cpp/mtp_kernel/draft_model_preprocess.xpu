@@ -85,7 +85,7 @@ __global__ void draft_model_preprocess(int64_t* draft_tokens,
     if (target_model_stop_flags_now) {
       should_skip = true;
     }
-    if (!should_skip && !is_splitwise_prefill &&
+    if (!is_splitwise_prefill &&
         target_model_step_idx_now + num_model_step >= max_dec_len_now) {
       should_skip = true;
     }

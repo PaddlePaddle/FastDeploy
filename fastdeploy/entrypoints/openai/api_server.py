@@ -500,6 +500,22 @@ async def update_weights(request: Request) -> Response:
             )
         args["verify_checksum"] = request_data["verify_checksum"]
 
+    # Validate and extract timeout parameter
+    if "timeout" in request_data:
+        if not isinstance(request_data["timeout"], int) or isinstance(request_data["timeout"], bool):
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid parameter type", "message": "timeout must be an integer"},
+            )
+        if request_data["timeout"] <= 0:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "Invalid parameter value", "message": "timeout must be positive"},
+            )
+        args["timeout"] = request_data["timeout"]
+    else:
+        args["timeout"] = 180
+
     control_request = ControlRequest(request_id, "update_weights", args)
     control_response = await app.state.engine_client.run_control_method(control_request)
     return control_response.to_api_json_response()
@@ -589,7 +605,7 @@ async def create_chat_completion(request: ChatCompletionRequest, req: Request):
             elif isinstance(generator, ChatCompletionResponse):
                 api_server_logger.debug(f"release: {connection_semaphore.status()}")
                 connection_semaphore.release()
-                return JSONResponse(content=generator.model_dump())
+                return Response(content=generator.model_dump_json(), media_type="application/json")
             else:
                 wrapped_generator = wrap_streaming_generator(generator)
                 return StreamingResponse(content=wrapped_generator(), media_type="text/event-stream")

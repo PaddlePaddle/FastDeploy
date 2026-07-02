@@ -24,8 +24,8 @@ void FlashAttnUnpaddedKernel(const paddle::Tensor& q,
                              int num_heads,
                              int head_dim,
                              int num_kv_heads,
-                             int max_seqlens_q,
-                             int max_seqlens_k,
+                             const paddle::Tensor& max_seqlens_q_,
+                             const paddle::Tensor& max_seqlens_k_,
                              bool causal,
                              float scale,
                              paddle::Tensor& out) {
@@ -148,10 +148,15 @@ void FlashAttnUnpaddedKernel(const paddle::Tensor& q,
   cuinferTensorDescriptor_t lse_desc;
   CUINFER_CHECK(cuinferCreateTensorDescriptor(&lse_desc));
 
+  PD_CHECK(max_seqlens_q_.is_cpu(), "max_seqlens_q tensor must be on CPU");
+  PD_CHECK(max_seqlens_k_.is_cpu(), "max_seqlens_k tensor must be on CPU");
+  const int32_t* max_seqlens_q = max_seqlens_q_.data<int32_t>();
+  const int32_t* max_seqlens_k = max_seqlens_k_.data<int32_t>();
+
   FmhaFwdFuncArguments args;
   args.batch = batch_size;
-  args.max_seqlen_q = max_seqlens_q;
-  args.max_seqlen_k = max_seqlens_k;
+  args.max_seqlen_q = *max_seqlens_q;
+  args.max_seqlen_k = *max_seqlens_k;
   args.is_causal = causal;
   args.scaling = scale;
   args.window_size_left = -1;
@@ -197,8 +202,8 @@ std::vector<paddle::Tensor> FlashAttnUnpadded(
     const paddle::Tensor& v,
     const paddle::Tensor& cu_seqlens_q,
     const paddle::Tensor& cu_seqlens_k,
-    int max_seqlens_q,
-    int max_seqlens_k,
+    const paddle::Tensor& max_seqlens_q,
+    const paddle::Tensor& max_seqlens_k,
     bool causal,
     float scale,
     bool training) {
@@ -248,23 +253,37 @@ std::vector<paddle::Tensor> FlashAttnUnpadded(
 }
 
 std::vector<std::vector<int64_t>> FlashAttnUnpaddedInferShape(
-    const std::vector<int64_t>& q_shape) {
+    const std::vector<int64_t>& q_shape,
+    const std::vector<int64_t>& k_shape,
+    const std::vector<int64_t>& v_shape,
+    const std::vector<int64_t>& cu_seqlens_q_shape,
+    const std::vector<int64_t>& cu_seqlens_k_shape,
+    const std::vector<int64_t>& max_seqlens_q_shape,
+    const std::vector<int64_t>& max_seqlens_k_shape) {
   return {{q_shape[0], q_shape[1], q_shape[2]}};
 }
 
 std::vector<paddle::DataType> FlashAttnUnpaddedInferDtype(
-    const paddle::DataType& q_dtype) {
+    const paddle::DataType& q_dtype,
+    const paddle::DataType& k_dtype,
+    const paddle::DataType& v_dtype,
+    const paddle::DataType& cu_seqlens_q_dtype,
+    const paddle::DataType& cu_seqlens_k_dtype,
+    const paddle::DataType& max_seqlens_q_dtype,
+    const paddle::DataType& max_seqlens_k_dtype) {
   return {q_dtype};
 }
 
 PD_BUILD_STATIC_OP(cuinfer_flash_attn_unpadded)
-    .Inputs({"q", "k", "v", "cu_seqlens_q", "cu_seqlens_k"})
+    .Inputs({"q",
+             "k",
+             "v",
+             "cu_seqlens_q",
+             "cu_seqlens_k",
+             "max_seqlens_q",
+             "max_seqlens_k"})
     .Outputs({"out"})
-    .Attrs({"max_seqlens_q:int",
-            "max_seqlens_k:int",
-            "causal:bool",
-            "scale:float",
-            "training:bool"})
+    .Attrs({"causal:bool", "scale:float", "training:bool"})
     .SetKernelFn(PD_KERNEL(FlashAttnUnpadded))
     .SetInferShapeFn(PD_INFER_SHAPE(FlashAttnUnpaddedInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(FlashAttnUnpaddedInferDtype));

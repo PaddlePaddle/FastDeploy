@@ -87,25 +87,53 @@ class IluvatarModelRunner(GPUModelRunner):
         ), f"attn_backends should be empty before initialization, got {len(self.attn_backends)} backends"
 
         num_heads = self.model_config.num_attention_heads // self.parallel_config.tensor_parallel_size
-        self.model_config.kv_num_heads = max(
-            1,
-            int(self.model_config.num_key_value_heads) // self.parallel_config.tensor_parallel_size,
-        )
+        kv_num_heads_per_layer = self._get_kv_num_heads_per_layer()
+        self.model_config.kv_num_heads = kv_num_heads_per_layer[0]
+        head_dim = self.model_config.head_dim
         attn_cls = get_attention_backend()
         attn_backend = attn_cls(
             self.fd_config,
             kv_num_heads=self.model_config.kv_num_heads,
             num_heads=num_heads,
-            head_dim=self.model_config.head_dim,
+            head_dim=head_dim,
         )
-        self.attn_backends.append(attn_backend)
+        record_backends = {self.model_config.kv_num_heads: attn_backend}
+        for kv_num_heads in kv_num_heads_per_layer:
+            # NOTE: If an attn_backend were created for each duplicate kv_num_heads,
+            # the gpu memory usage would surge when enable cuda_graph,
+            # therefore the duplicate kv_num_heads would be reused.
+            if kv_num_heads not in record_backends:
+                new_attn_backend = attn_cls(
+                    self.fd_config,
+                    kv_num_heads=kv_num_heads,
+                    num_heads=num_heads,
+                    head_dim=head_dim,
+                )
+                record_backends[kv_num_heads] = new_attn_backend
+            self.attn_backends.append(record_backends[kv_num_heads])
+        # Keep the per-layer list for layer_id indexing and KV cache shape lookup,
+        # while using the unique list only to avoid repeated metadata init.
+        self.unique_attn_backends = list(record_backends.values())
 
     def initialize_kv_cache(self, profile: bool = False) -> None:
         super(IluvatarModelRunner, self).initialize_kv_cache(profile)
         paddle.device.empty_cache()
 
     def initialize_forward_meta(self, is_dummy_or_profile_run=False):
-        super(IluvatarModelRunner, self).initialize_forward_meta(is_dummy_or_profile_run)
+        # Parent GPUModelRunner initializes metadata by iterating self.attn_backends.
+        # Temporarily expose only unique backend instances to avoid repeating the
+        # same Iluvatar attention metadata preparation for layers sharing kv_num_heads.
+        per_layer_attn_backends = self.attn_backends
+        self.attn_backends = self.unique_attn_backends
+        try:
+            super(IluvatarModelRunner, self).initialize_forward_meta(is_dummy_or_profile_run)
+        finally:
+            self.attn_backends = per_layer_attn_backends
+
+        # Restore the per-layer mapping required by Attention.forward().
+        self.forward_meta.attn_backend = per_layer_attn_backends[0]
+        self.forward_meta.attn_backends = per_layer_attn_backends
+
         only_decode = self.forward_meta.attn_backend.prefill_len == 0
         self.fd_config.model_config.moe_phase.phase = "decode" if only_decode else "prefill"
 

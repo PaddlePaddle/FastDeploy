@@ -30,6 +30,7 @@ from fastdeploy.model_executor.layers.attention.base_attention_backend import (
 )
 from fastdeploy.model_executor.ops.iluvatar import (
     mixed_fused_paged_attention,
+    mixed_reorder_hidden_states,
     paged_attention,
     prefill_fused_paged_attention,
 )
@@ -62,9 +63,11 @@ class MhaAttentionMetadata(AttentionMetadata):
 
 class MhaAttnBackend(AttentionBackend):
     """
-    The backend class that uses paddle native attention implementation.
-    Which is used only for testing purpose.
+    Iluvatar Multi-head Attention Backend.
     """
+
+    __infer_dynamic_dims_fields__ = ["attention_metadata"]
+    attention_metadata: MhaAttentionMetadata
 
     def __init__(
         self,
@@ -132,7 +135,12 @@ class MhaAttnBackend(AttentionBackend):
         self.prefill_info_dict = {}
         self.decode_info_dict = {}
         prefill_batch_ids = paddle.where(forward_meta.seq_lens_encoder)[0]
-        decode_batch_ids = paddle.where(forward_meta.seq_lens_decoder)[0]
+        decode_batch_ids = paddle.where(
+            paddle.logical_and(
+                forward_meta.seq_lens_encoder == 0,
+                forward_meta.seq_lens_decoder > 0,
+            )
+        )[0]
         self.prefill_len = len(prefill_batch_ids)
         self.decode_len = len(decode_batch_ids)
         # only prefill
@@ -167,50 +175,9 @@ class MhaAttnBackend(AttentionBackend):
             self.attention_metadata.decode_seq_lens.copy_(forward_meta.seq_lens_decoder[decode_batch_ids] + 1)
             self.attention_metadata.decode_block_tables.copy_(forward_meta.block_tables[decode_batch_ids, :])
 
-            self.tmp_buffer = paddle.zeros(
-                [self.prefill_num_tokens + self.decode_len, self.hidden_dim], dtype=self.dtype
-            )
-            prefill_start, decode_start, start = 0, self.prefill_num_tokens, 0
-            non_zeros_ids = paddle.where(forward_meta.seq_lens_this_time)[0]
-            non_zeros_seq_lens = forward_meta.seq_lens_this_time[non_zeros_ids]
-            end = non_zeros_seq_lens[0]
-            if end > 1:
-                last_stage = "prefill"
-                prefill_end = end
-                decode_end = decode_start
-            else:
-                last_stage = "decode"
-                prefill_end = 0
-                decode_end = decode_start + end
-
-            self.id_group = []
-            self.reverse_id_group = []
-            for seq_len in non_zeros_seq_lens[1:]:
-                if seq_len > 1:
-                    if last_stage == "decode":
-                        self.id_group.append((decode_start, decode_end))
-                        self.reverse_id_group.append((start, end))
-                        decode_start = decode_end
-                        start = end
-                        last_stage = "prefill"
-                    prefill_end += seq_len
-                    end += seq_len
-                else:
-                    if last_stage == "prefill":
-                        self.id_group.append((prefill_start, prefill_end))
-                        self.reverse_id_group.append((start, end))
-                        prefill_start = prefill_end
-                        start = end
-                        last_stage = "decode"
-                    decode_end += seq_len
-                    end += seq_len
-
-            if prefill_start < prefill_end:
-                self.id_group.append((prefill_start, prefill_end))
-                self.reverse_id_group.append((start, end))
-            if decode_start < decode_end:
-                self.id_group.append((decode_start, decode_end))
-                self.reverse_id_group.append((start, end))
+            self.seq_lens_encoder = forward_meta.seq_lens_encoder
+            self.seq_lens_decoder = forward_meta.seq_lens_decoder
+            self.seq_lens_this_time = forward_meta.seq_lens_this_time
 
     def get_attention_meta(self):
         """get_attention_meta"""
@@ -229,14 +196,24 @@ class MhaAttnBackend(AttentionBackend):
         return key_cache_shape, value_cache_shape
 
     def transpose(self, hidden_states):
-        for ids, reverse_ids in zip(self.id_group, self.reverse_id_group):
-            self.tmp_buffer[ids[0] : ids[1], :] = hidden_states[reverse_ids[0] : reverse_ids[1], :]
-        return self.tmp_buffer
+        return mixed_reorder_hidden_states(
+            hidden_states,
+            self.seq_lens_encoder,
+            self.seq_lens_decoder,
+            self.seq_lens_this_time,
+            self.prefill_num_tokens,
+            False,
+        )
 
     def reverse_transpose(self, hidden_states):
-        for ids, reverse_ids in zip(self.id_group, self.reverse_id_group):
-            self.tmp_buffer[reverse_ids[0] : reverse_ids[1], :] = hidden_states[ids[0] : ids[1], :]
-        return self.tmp_buffer
+        return mixed_reorder_hidden_states(
+            hidden_states,
+            self.seq_lens_encoder,
+            self.seq_lens_decoder,
+            self.seq_lens_this_time,
+            self.prefill_num_tokens,
+            True,
+        )
 
     def forward_mixed(
         self,
