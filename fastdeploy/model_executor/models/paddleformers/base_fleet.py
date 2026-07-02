@@ -33,8 +33,6 @@ else:
     from paddlefleet.models.gpt.lm_head import GPTLMHead
     from paddlefleet.transformer.layer import FleetLayer
     from paddlefleet.transformer.transformer_config import TransformerConfig
-    from paddleformers.transformers import AutoConfig
-    from paddleformers.transformers.auto.modeling import AutoModelForCausalLM
     from paddleformers.utils.log import logger
 
     from fastdeploy.model_executor.forward_meta import ForwardMeta  # noqa: F401
@@ -65,6 +63,8 @@ else:
             hidden_size_per_attention_head: int,
             hidden_size_per_partition: int,
             layer_id: int,
+            window_attn_skip_freq=None,
+            sliding_window: int = 0,
         ):
             """
             Initialize FastDeployAttention.
@@ -86,6 +86,8 @@ else:
             self.hidden_size_per_attention_head = hidden_size_per_attention_head
             self.hidden_size_per_partition = hidden_size_per_partition
             self.layer_id = layer_id
+            self.window_attn_skip_freq = window_attn_skip_freq
+            self.sliding_window = sliding_window
 
         def forward(
             self,
@@ -167,85 +169,117 @@ else:
                     need_do_prefill = forward_meta.max_len_tensor_cpu[1] > 0
                     need_do_decode = forward_meta.max_len_tensor_cpu[2] > 0
 
-                    # MLA mode: pass q, k, v, compressed_kv, k_pe separately
-                    # Reference: deepseek_v3.py line 389
-                    #
-                    # Note:
-                    # - Prefill (flash_attn_func): expects 3D tensors [seq, heads, dim]
-                    # - Decode (multi_head_latent_attention): expects 2D tensors [seq, heads*dim]
-                    # So we need to flatten q for decode phase only
-
-                    # Process compressed_kv and k_pe
-
                     assert kv_compressed is not None, "kv_compressed must be provided when use"
                     compressed_kv = kv_compressed.squeeze(0)
-                    k_pos_emb = k_pos_emb.squeeze(0)
+                    k_pos_emb_sq = k_pos_emb.squeeze(0)
 
-                    output = None
-                    fmqa_out = None
-                    if need_do_prefill:
-                        # Prefill: keep 3D tensors for flash_attn_func
-                        output = self.fd_attention.forward(
-                            q=q,
-                            k=k,
-                            v=v,
-                            qkv=None,
-                            compressed_kv=compressed_kv,
-                            k_pe=k_pos_emb,
-                            forward_meta=forward_meta,
-                        )
-                        output.reshape_([output.shape[0], output.shape[1] * output.shape[2]])
-
-                    if need_do_decode:
-                        # Decode: use absorbed q for multi_head_latent_attention C++ kernel
-                        # q_absorbed: [s, heads, kv_lora_rank + qk_rope_head_dim] (after squeeze_to_3d)
-                        # C++ kernel expects: [token_num, heads * (kv_lora_rank + qk_rope_head_dim)]
-                        q_abs = squeeze_to_3d(q_absorbed, "q_absorbed") if q_absorbed.ndim == 4 else q_absorbed
-                        seq_len = int(q_abs.shape[0])
-                        q_input = q_abs.reshape([seq_len, -1])
-
-                        fmqa_out = self.fd_attention.forward(
-                            q=q_input,
-                            k=None,
-                            v=None,
-                            qkv=None,
-                            compressed_kv=compressed_kv,
-                            k_pe=k_pos_emb,
-                            forward_meta=forward_meta,
-                        )
-
-                        # V de-absorption: kernel output [token, heads * kv_lora_rank]
-                        # -> [heads, token, kv_lora_rank] @ wv_b [heads, kv_lora_rank, v_head_dim]
-                        # -> [token, heads * v_head_dim]
+                    if self.window_attn_skip_freq is not None and self.window_attn_skip_freq[self.layer_id] == 1:
                         kv_lora_rank = self.config.kv_lora_rank
-                        v_head_dim = self.config.v_head_dim
-                        num_heads = fmqa_out.shape[-1] // kv_lora_rank
-                        fmqa_out = fmqa_out.reshape([-1, num_heads, kv_lora_rank]).transpose([1, 0, 2])
-                        fmqa_out = paddle.bmm(fmqa_out, v_b_proj_weight)
-                        fmqa_out = fmqa_out.transpose([1, 0, 2]).reshape([-1, num_heads * v_head_dim])
-                        # Merge prefill and decode outputs if both are present
-                        if need_do_prefill:
-                            try:
-                                from fastdeploy.model_executor.ops.gpu import (
-                                    merge_prefill_decode_output,
-                                )
 
-                                merge_prefill_decode_output(
-                                    output,
-                                    fmqa_out,
-                                    forward_meta.seq_lens_encoder,
-                                    forward_meta.seq_lens_decoder,
-                                    forward_meta.seq_lens_this_time,
-                                    forward_meta.cu_seqlens_q,
-                                    num_heads,
-                                    v_head_dim,
-                                    1,
-                                )
-                            except (ImportError, AttributeError):
-                                logger.warning("merge_prefill_decode_output not available, using decode output only")
+                        q_input = squeeze_to_3d(q_absorbed, "q_absorbed") if q_absorbed.ndim == 4 else q_absorbed
+                        num_attention_heads_tp = q_input.shape[1]
+
+                        """DSA sliding-window attention path, mirroring DeepseekV3MLAAttention.forward_swa_static."""
+                        from fastdeploy.model_executor.layers.attention import (
+                            DSAAttentionBackend,
+                        )
+                        from fastdeploy.model_executor.models.deepseek_v3 import (
+                            get_swa_indexer_top_k,
+                        )
+
+                        indexer_top_k = paddle.full([q_input.shape[0], 1, self.sliding_window[0]], -1, dtype="int32")
+                        get_swa_indexer_top_k(
+                            indexer_top_k,
+                            forward_meta.block_tables,
+                            forward_meta.cu_seqlens_q,
+                            forward_meta.seq_lens_encoder,
+                            forward_meta.seq_lens_decoder,
+                            forward_meta.batch_id_per_token,
+                        )
+                        fmqa_out = DSAAttentionBackend.forward_static(
+                            q=q_input.contiguous(),
+                            indexer_topk=indexer_top_k,
+                            compressed_kv=compressed_kv,
+                            k_pe=k_pos_emb_sq,
+                            latent_cache=forward_meta.caches[self.layer_id],
+                            forward_meta=forward_meta,
+                            attn_softmax_scale=self.softmax_scale,
+                        )
+
+                        fmqa_out = fmqa_out.reshape_([-1, num_attention_heads_tp, kv_lora_rank]).transpose([1, 0, 2])
+                        fmqa_out = paddle.bmm(fmqa_out, v_b_proj_weight)
+                        output = fmqa_out.transpose([1, 0, 2]).reshape(
+                            [-1, num_attention_heads_tp * self.config.v_head_dim]
+                        )
+
+                    else:
+                        output = None
+                        fmqa_out = None
+                        if need_do_prefill:
+                            # Prefill: keep 3D tensors for flash_attn_func
+                            output = self.fd_attention.forward(
+                                q=q,
+                                k=k,
+                                v=v,
+                                qkv=None,
+                                compressed_kv=compressed_kv,
+                                k_pe=k_pos_emb_sq,
+                                forward_meta=forward_meta,
+                            )
+                            output.reshape_([output.shape[0], output.shape[1] * output.shape[2]])
+
+                        if need_do_decode:
+                            # Decode: use absorbed q for multi_head_latent_attention C++ kernel
+                            # q_absorbed: [s, heads, kv_lora_rank + qk_rope_head_dim] (after squeeze_to_3d)
+                            # C++ kernel expects: [token_num, heads * (kv_lora_rank + qk_rope_head_dim)]
+                            q_abs = squeeze_to_3d(q_absorbed, "q_absorbed") if q_absorbed.ndim == 4 else q_absorbed
+                            seq_len = int(q_abs.shape[0])
+                            q_input = q_abs.reshape([seq_len, -1])
+
+                            fmqa_out = self.fd_attention.forward(
+                                q=q_input,
+                                k=None,
+                                v=None,
+                                qkv=None,
+                                compressed_kv=compressed_kv,
+                                k_pe=k_pos_emb_sq,
+                                forward_meta=forward_meta,
+                            )
+
+                            # V de-absorption: kernel output [token, heads * kv_lora_rank]
+                            # -> [heads, token, kv_lora_rank] @ wv_b [heads, kv_lora_rank, v_head_dim]
+                            # -> [token, heads * v_head_dim]
+                            kv_lora_rank = self.config.kv_lora_rank
+                            v_head_dim = self.config.v_head_dim
+                            num_heads = fmqa_out.shape[-1] // kv_lora_rank
+                            fmqa_out = fmqa_out.reshape([-1, num_heads, kv_lora_rank]).transpose([1, 0, 2])
+                            fmqa_out = paddle.bmm(fmqa_out, v_b_proj_weight)
+                            fmqa_out = fmqa_out.transpose([1, 0, 2]).reshape([-1, num_heads * v_head_dim])
+                            # Merge prefill and decode outputs if both are present
+                            if need_do_prefill:
+                                try:
+                                    from fastdeploy.model_executor.ops.gpu import (
+                                        merge_prefill_decode_output,
+                                    )
+
+                                    merge_prefill_decode_output(
+                                        output,
+                                        fmqa_out,
+                                        forward_meta.seq_lens_encoder,
+                                        forward_meta.seq_lens_decoder,
+                                        forward_meta.seq_lens_this_time,
+                                        forward_meta.cu_seqlens_q,
+                                        num_heads,
+                                        v_head_dim,
+                                        1,
+                                    )
+                                except (ImportError, AttributeError):
+                                    logger.warning(
+                                        "merge_prefill_decode_output not available, using decode output only"
+                                    )
+                                    output = fmqa_out
+                            else:
                                 output = fmqa_out
-                        else:
-                            output = fmqa_out
                 else:
                     # Standard mode: concatenate QKV
                     seq_len = int(q.shape[0])
@@ -286,7 +320,21 @@ else:
             logger.info("Initializing PaddleFormers backend.")
             self.fd_config = fd_config  # FastDeploy's top-level FDConfig
             self.model_config = fd_config.model_config  # FastDeploy's ModelConfig
-            self.paddleformers_config = AutoConfig.from_pretrained(self.model_config.model)
+            if True:
+                from ernie5.pretrain import Ernie5V2Config
+                from paddleformers.transformers.configuration_utils import (
+                    PretrainedConfig,
+                )
+
+                _config_dict, _ = PretrainedConfig.get_config_dict(
+                    self.model_config.model, _configuration_file="model_config.json"
+                )
+                self.paddleformers_config = Ernie5V2Config.from_dict(_config_dict)
+                self.paddleformers_config.moe_dequant_input = True
+            else:
+                from paddleformers.transformers import AutoConfig
+
+                self.paddleformers_config = AutoConfig.from_pretrained(self.model_config.model)
 
             # Assign parallel config from fd_config.parallel_config to paddleformers_config
             parallel_config = fd_config.parallel_config
@@ -306,6 +354,7 @@ else:
             self.paddleformers_config.use_cpu_initialization = True
             self.paddleformers_config.perform_initialization = False
             self.paddleformers_config.gated_attention = getattr(self.paddleformers_config, "use_gated_attn", False)
+            self.paddleformers_config.moe_layer_interval = getattr(self.paddleformers_config, "moe_layer_freq", 1)
             if getattr(self.paddleformers_config, "multi_latent_attention", False):
                 self.paddleformers_config.qk_head_dim = (
                     self.paddleformers_config.qk_rope_head_dim + self.paddleformers_config.qk_nope_head_dim
@@ -334,11 +383,24 @@ else:
                 "load_via_cpu": True,
                 "load_checkpoint_format": "flex_checkpoint",
             }
-            # Set random seed before model construction for reproducibility
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_config.model,
-                **model_load_kwargs,
-            )
+            if True:
+                from fleet_bridge import AutoModelForCausalLM
+
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_config.model,
+                    config=self.paddleformers_config,
+                    dtype=self.model_config.dtype,
+                )
+            else:
+                from paddleformers.transformers.auto.modeling import (
+                    AutoModelForCausalLM,
+                )
+
+                # Set random seed before model construction for reproducibility
+                self.model = AutoModelForCausalLM.from_pretrained(
+                    self.model_config.model,
+                    **model_load_kwargs,
+                )
 
             self.model.eval()
             # Patch PaddleFleet core_attention with FastDeploy attention
@@ -721,6 +783,8 @@ else:
                 hidden_size_per_attention_head=hidden_size_per_attention_head,
                 hidden_size_per_partition=hidden_size_per_partition,
                 layer_id=fd_layer_id,
+                window_attn_skip_freq=getattr(fd_config.model_config, "window_attn_skip_freq", None),
+                sliding_window=getattr(fd_config.model_config, "sliding_window", 0),
             )
 
             # Replace core_attention object
