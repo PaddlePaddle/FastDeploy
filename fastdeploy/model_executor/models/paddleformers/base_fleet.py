@@ -323,7 +323,6 @@ else:
             self.fd_config = fd_config  # FastDeploy's top-level FDConfig
             self.model_config = fd_config.model_config  # FastDeploy's ModelConfig
             if USE_ERNIE:
-                from ernie5.pretrain import Ernie5V2Config
                 from paddleformers.transformers.configuration_utils import (
                     PretrainedConfig,
                 )
@@ -331,6 +330,8 @@ else:
                 _config_dict, _ = PretrainedConfig.get_config_dict(
                     self.model_config.model, _configuration_file="model_config.json"
                 )
+                from ernie5.pretrain import Ernie5V2Config
+
                 self.paddleformers_config = Ernie5V2Config.from_dict(_config_dict)
                 self.paddleformers_config.moe_dequant_input = True
             else:

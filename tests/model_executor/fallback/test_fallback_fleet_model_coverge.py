@@ -1126,8 +1126,117 @@ class TestPaddleFleetModelBaseInit:
         fd_config.graph_opt_config.use_cudagraph = False
         return fd_config
 
+    def _make_ernie_sys_mocks(self, mock_pf_config, mock_model):
+        """Return sys.modules patches for the USE_ERNIE=True code path in __init__.
+
+        Because USE_ERNIE=True in this environment, AutoConfig / AutoModelForCausalLM
+        are imported locally (not module-level attrs), so we must mock them via
+        sys.modules rather than patch.object(bf_mod, ...).
+        """
+        mock_ernie5_v2_config_cls = MagicMock()
+        mock_ernie5_v2_config_cls.from_dict = MagicMock(return_value=mock_pf_config)
+
+        mock_pretrained_config = MagicMock()
+        mock_pretrained_config.get_config_dict = MagicMock(return_value=({}, None))
+
+        mock_fleet_bridge = MagicMock()
+        mock_fleet_bridge.AutoModelForCausalLM.from_pretrained = MagicMock(return_value=mock_model)
+
+        return patch.dict(
+            "sys.modules",
+            {
+                "ernie5": MagicMock(),
+                "ernie5.pretrain": MagicMock(Ernie5V2Config=mock_ernie5_v2_config_cls),
+                "paddleformers.transformers.configuration_utils": MagicMock(PretrainedConfig=mock_pretrained_config),
+                "fleet_bridge": mock_fleet_bridge,
+            },
+        )
+
+    def _make_paddleformers_sys_mocks(self, mock_pf_config, mock_model):
+        """Return sys.modules patches for the USE_ERNIE=False (default) code path.
+
+        USE_ERNIE=False → AutoConfig.from_pretrained and paddleformers AutoModelForCausalLM
+        are used via local imports, so we mock them in sys.modules.
+        """
+        mock_auto_config_cls = MagicMock()
+        mock_auto_config_cls.from_pretrained = MagicMock(return_value=mock_pf_config)
+
+        mock_auto_model_cls = MagicMock()
+        mock_auto_model_cls.from_pretrained = MagicMock(return_value=mock_model)
+
+        return (
+            patch.dict(
+                "sys.modules",
+                {
+                    "paddleformers.transformers": MagicMock(AutoConfig=mock_auto_config_cls),
+                    "paddleformers.transformers.auto.modeling": MagicMock(AutoModelForCausalLM=mock_auto_model_cls),
+                },
+            ),
+            mock_auto_config_cls,
+            mock_auto_model_cls,
+        )
+
     def test_init_standard_model(self):
-        """Lines 285-349: __init__ basic path (multi_latent_attention=False)."""
+        """Lines 285-349: __init__ basic path (USE_ERNIE=False, multi_latent_attention=False)."""
+        import fastdeploy.model_executor.models.paddleformers.base_fleet as bf_mod
+
+        fd_config = self._make_fd_config()
+
+        mock_pf_config = MagicMock()
+        mock_pf_config.tensor_model_parallel_size = 1
+        mock_pf_config.multi_latent_attention = False
+
+        mock_model = MagicMock()
+
+        sys_mocks, mock_auto_config_cls, mock_auto_model_cls = self._make_paddleformers_sys_mocks(
+            mock_pf_config, mock_model
+        )
+
+        with (
+            sys_mocks,
+            patch.object(bf_mod, "patch_paddlefleet_core_attention", return_value=2),
+            patch.object(PaddleFleetModelBase, "_init_paddlefleet_parallel_state"),
+            patch.object(PaddleFleetModelBase, "_sync_config_from_text_config"),
+            patch.object(paddle.nn.Layer, "__init__", lambda self, *a, **kw: None),
+        ):
+            model = object.__new__(PaddleFleetModelBase)
+            PaddleFleetModelBase.__init__(model, fd_config)
+
+        assert model.fd_config is fd_config
+        assert model.paddleformers_config is mock_pf_config
+        mock_auto_config_cls.from_pretrained.assert_called_once_with(fd_config.model_config.model)
+        mock_model.eval.assert_called_once()
+
+    def test_init_mla_model_computes_qk_head_dim(self):
+        """Lines 309-312: USE_ERNIE=False, multi_latent_attention=True → qk_head_dim = rope+nope."""
+        import fastdeploy.model_executor.models.paddleformers.base_fleet as bf_mod
+
+        fd_config = self._make_fd_config()
+
+        mock_pf_config = MagicMock()
+        mock_pf_config.tensor_model_parallel_size = 1
+        mock_pf_config.multi_latent_attention = True
+        mock_pf_config.qk_rope_head_dim = 64
+        mock_pf_config.qk_nope_head_dim = 128
+
+        mock_model = MagicMock()
+
+        sys_mocks, _, _ = self._make_paddleformers_sys_mocks(mock_pf_config, mock_model)
+
+        with (
+            sys_mocks,
+            patch.object(bf_mod, "patch_paddlefleet_core_attention", return_value=0),
+            patch.object(PaddleFleetModelBase, "_init_paddlefleet_parallel_state"),
+            patch.object(PaddleFleetModelBase, "_sync_config_from_text_config"),
+            patch.object(paddle.nn.Layer, "__init__", lambda self, *a, **kw: None),
+        ):
+            model = object.__new__(PaddleFleetModelBase)
+            PaddleFleetModelBase.__init__(model, fd_config)
+
+        assert mock_pf_config.qk_head_dim == 64 + 128
+
+    def test_init_use_ernie_true_standard_model(self):
+        """USE_ERNIE=True path: ernie5 + fleet_bridge are used instead of paddleformers."""
         import fastdeploy.model_executor.models.paddleformers.base_fleet as bf_mod
 
         fd_config = self._make_fd_config()
@@ -1139,17 +1248,13 @@ class TestPaddleFleetModelBaseInit:
         mock_model = MagicMock()
 
         with (
-            patch.object(bf_mod, "AutoConfig") as mock_ac,
-            patch.object(bf_mod, "AutoModelForCausalLM") as mock_am,
+            self._make_ernie_sys_mocks(mock_pf_config, mock_model),
+            patch.object(bf_mod, "USE_ERNIE", True),
             patch.object(bf_mod, "patch_paddlefleet_core_attention", return_value=2),
             patch.object(PaddleFleetModelBase, "_init_paddlefleet_parallel_state"),
             patch.object(PaddleFleetModelBase, "_sync_config_from_text_config"),
             patch.object(paddle.nn.Layer, "__init__", lambda self, *a, **kw: None),
         ):
-
-            mock_ac.from_pretrained.return_value = mock_pf_config
-            mock_am.from_pretrained.return_value = mock_model
-
             model = object.__new__(PaddleFleetModelBase)
             PaddleFleetModelBase.__init__(model, fd_config)
 
@@ -1157,8 +1262,8 @@ class TestPaddleFleetModelBaseInit:
         assert model.paddleformers_config is mock_pf_config
         mock_model.eval.assert_called_once()
 
-    def test_init_mla_model_computes_qk_head_dim(self):
-        """Lines 309-312: multi_latent_attention=True → qk_head_dim computed from rope+nope."""
+    def test_init_use_ernie_true_mla(self):
+        """USE_ERNIE=True + multi_latent_attention=True → qk_head_dim = rope+nope, ernie5 path."""
         import fastdeploy.model_executor.models.paddleformers.base_fleet as bf_mod
 
         fd_config = self._make_fd_config()
@@ -1172,21 +1277,16 @@ class TestPaddleFleetModelBaseInit:
         mock_model = MagicMock()
 
         with (
-            patch.object(bf_mod, "AutoConfig") as mock_ac,
-            patch.object(bf_mod, "AutoModelForCausalLM") as mock_am,
+            self._make_ernie_sys_mocks(mock_pf_config, mock_model),
+            patch.object(bf_mod, "USE_ERNIE", True),
             patch.object(bf_mod, "patch_paddlefleet_core_attention", return_value=0),
             patch.object(PaddleFleetModelBase, "_init_paddlefleet_parallel_state"),
             patch.object(PaddleFleetModelBase, "_sync_config_from_text_config"),
             patch.object(paddle.nn.Layer, "__init__", lambda self, *a, **kw: None),
         ):
-
-            mock_ac.from_pretrained.return_value = mock_pf_config
-            mock_am.from_pretrained.return_value = mock_model
-
             model = object.__new__(PaddleFleetModelBase)
             PaddleFleetModelBase.__init__(model, fd_config)
 
-        # qk_head_dim should be set to rope+nope
         assert mock_pf_config.qk_head_dim == 64 + 128
 
 
