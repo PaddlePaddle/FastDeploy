@@ -45,6 +45,8 @@ else:
 
     from fastdeploy.model_executor.layers.attention.attention import Attention
 
+    USE_ERNIE = False
+
     class FastDeployAttention(FleetLayer):
         """
         FastDeploy version of DotProductAttention, holding an internal FastDeploy Attention module.
@@ -320,7 +322,7 @@ else:
             logger.info("Initializing PaddleFormers backend.")
             self.fd_config = fd_config  # FastDeploy's top-level FDConfig
             self.model_config = fd_config.model_config  # FastDeploy's ModelConfig
-            if True:
+            if USE_ERNIE:
                 from ernie5.pretrain import Ernie5V2Config
                 from paddleformers.transformers.configuration_utils import (
                     PretrainedConfig,
@@ -383,7 +385,7 @@ else:
                 "load_via_cpu": True,
                 "load_checkpoint_format": "flex_checkpoint",
             }
-            if True:
+            if USE_ERNIE:
                 from fleet_bridge import AutoModelForCausalLM
 
                 self.model = AutoModelForCausalLM.from_pretrained(
