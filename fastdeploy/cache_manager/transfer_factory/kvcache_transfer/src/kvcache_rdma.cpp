@@ -1513,8 +1513,9 @@ bool RDMACommunicator::post_send_with_retry(struct RdmaContext* ctx,
     last_wr->send_flags |= IBV_SEND_SIGNALED;
   }
 
+  struct ibv_send_wr* cur_wr = wr_list;
   do {
-    ret = ibv_post_send(ctx->qp, wr_list, &bad_wr);
+    ret = ibv_post_send(ctx->qp, cur_wr, &bad_wr);
     if (ret == 0) {
       if (need_poll) {
         ctx->conn.wc_count = 0;
@@ -1532,8 +1533,13 @@ bool RDMACommunicator::post_send_with_retry(struct RdmaContext* ctx,
           errno,
           retries + 1,
           max_retries);
+      // Drain CQ to free SQ slots before retrying
+      poll_cq_with_timeout(ctx, RDMA_POLL_CQE_TIMEOUT, 1);
       usleep(1000);
       retries++;
+      if (bad_wr)
+        cur_wr =
+            bad_wr;  // resume from the failed WR instead of retrying from head
     }
   } while (retries < max_retries);
 
