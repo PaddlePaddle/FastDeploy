@@ -23,13 +23,13 @@ docker pull ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0-20260
 ### 3.1 Start Container
 
 ```bash
-docker run -itd --name paddle_infer --network host -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/paddle:/home/paddle -v /usr/local/corex/bin/ixsmi:/usr/local/corex/bin/ixsmi -v /usr/local/corex/lib64/libcuda.so.1:/usr/local/corex/lib64/libcuda.so.1 -v /usr/local/corex/lib64/libixml.so:/usr/local/corex/lib64/libixml.so -v /usr/local/corex/lib64/libixthunk.so:/usr/local/corex/lib64/libixthunk.so --privileged --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0-20260507
-docker exec -it paddle_infer bash
+docker run -itd --name fd_iluvatar -v /usr/src:/usr/src -v /lib/modules:/lib/modules -v /dev:/dev -v /home/workspace:/home/workspace -v /usr/local/corex-4.3.8/bin/ixsmi:/usr/local/corex/bin/ixsmi -v /usr/local/corex-4.3.8/lib64/libcuda.so.1:/usr/local/corex/lib64/libcuda.so.1 -v /usr/local/corex-4.3.8/lib64/libixml.so:/usr/local/corex/lib64/libixml.so -v /usr/local/corex-4.3.8/lib64/libixthunk.so:/usr/local/corex/lib64/libixthunk.so --privileged --shm-size=64G --net=host --cap-add=ALL --pid=host ccr-2vdh3abv-pub.cnc.bj.baidubce.com/device/paddle-ixuca:3.3.0-20260507
+docker exec -it fd_iluvatar bash
 ```
 
 Note: Because the 4.3.8 SDK in the image is incompatible with KMD, paddle cannot find the iluvatar device. Therefore, it is temporarily necessary to map ixsmi, libcuda.so.1, libixml.so, and libixthunk.so from the host corex-4.3.8 directory into the container.
 
-/home/paddle contains the model files, *.whl packages, and scripts.
+/home/workspace contains the model files, *.whl packages, and scripts.
 
 ### 3.2 Install paddle
 
@@ -458,14 +458,9 @@ curl -X POST "http://0.0.0.0:8180/v1/chat/completions" \
 ### 4.3 PaddleOCR-VL series
 #### 4.3.1 PaddleOCR-VL-0.9B
 
-- (Optional) Build and install paddleocr from source
-
-To install the latest `paddleocr`, you can compile it from source. The version in the image is `3.3.2`.
-
+- install paddleocr
 ```bash
-git clone -b main https://github.com/PaddlePaddle/PaddleOCR.git
-cd PaddleOCR
-pip3 install -e ".[doc-parser]"
+pip3 install paddleocr[doc-parser]==3.3.2
 ```
 
 Refer to [gpu doc](https://github.com/PaddlePaddle/FastDeploy/blob/develop/docs/best_practices/PaddleOCR-VL-0.9B.md), the command as bellow:
@@ -478,17 +473,17 @@ export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
 export FD_SAMPLING_CLASS=rejection
 export CUDA_VISIBLE_DEVICES=1
 python3 -m fastdeploy.entrypoints.openai.api_server \
-       --model /data1/fastdeploy/PaddleOCR-VL \
-       --port 8180 \
-       --metrics-port 8471 \
-       --engine-worker-queue-port 8472 \
-       --cache-queue-port 55660 \
-       --max-model-len 16384 \
-       --max-num-batched-tokens 16384 \
-       --max-num-seqs 64 \
-       --workers 2 \
-       --block-size 16 \
-       --graph-optimization-config '{"use_cudagraph": true}'
+        --model /data1/fastdeploy/PaddleOCR-VL \
+        --port 8180 \
+        --metrics-port 8471 \
+        --max-model-len 4096 \
+        --max-num-batched-tokens 4096 \
+        --max-num-seqs 256 \
+        --block-size 16 \
+        --workers 2 \
+        --gpu-memory-utilization 0.7 \
+        --graph-optimization-config '{"graph_opt_level":2, "use_cudagraph": true}'
+
 ```
 
 client:
@@ -508,14 +503,14 @@ The output is:
 
 **benchmark**
 
-1. Download and extract image datasets
+1) Download and extract image datasets
 
 ```bash
 wget https://paddle-model-ecology.bj.bcebos.com/paddlex/PaddleX3.0/deploy/internal/tmp/images.tar
 tar xvf images.tar
 ```
 
-2. Prepare `infer_ocr_vl_benchmark.py`
+2) Prepare `infer_ocr_vl_benchmark.py`
 
 ```python
 import os
@@ -532,13 +527,80 @@ for file_name in file_list:
         res.save_to_markdown(save_path="output", pretty=False)
 ```
 
-3. execute `infer_ocr_vl_benchmark.py` on client
+3) execute `infer_ocr_vl_benchmark.py` on client
 
 ```bash
 python3 infer_ocr_vl_benchmark.py
 ```
 
-After each image is inferred, a corresponding `md` file will be generated in the `output` path. Running the entire benchmark (1355 images) takes approximately 1.8 hours.
+#### 4.3.2 PaddleOCR-VL-1.6-0.9B
+
+- install paddleocr
+
+```bash
+pip3 install paddleocr[doc-parser]==3.6.0
+```
+
+server:
+```bash
+#!/bin/bash
+export PADDLE_XCCL_BACKEND=iluvatar_gpu
+export LD_PRELOAD=/usr/local/corex/lib64/libcuda.so.1
+export FD_SAMPLING_CLASS=rejection
+export CUDA_VISIBLE_DEVICES=1
+python3 -m fastdeploy.entrypoints.openai.api_server \
+        --model /data1/fastdeploy/PaddleOCR-VL-1.6 \
+        --port 8180 \
+        --metrics-port 8471 \
+        --max-model-len 4096 \
+        --max-num-batched-tokens 4096 \
+        --max-num-seqs 256 \
+        --block-size 16 \
+        --workers 2 \
+        --gpu-memory-utilization 0.7 \
+        --graph-optimization-config '{"graph_opt_level":2, "use_cudagraph": true}'
+
+```
+
+client:
+
+**simple demo**
+
+```bash
+paddleocr doc_parser -i https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/paddleocr_vl_demo.png --vl_rec_backend fastdeploy-server --vl_rec_server_url http://127.0.0.1:8180/v1 --device iluvatar_gpu --pipeline_version v1.6
+```
+
+**benchmark**
+
+1) Download and extract image datasets
+
+```bash
+wget https://paddle-model-ecology.bj.bcebos.com/paddlex/PaddleX3.0/deploy/internal/tmp/images.tar
+tar xvf images.tar
+```
+
+2) Prepare `infer_ocr_vl_benchmark.py`
+
+```python
+import os
+from paddleocr import PaddleOCRVL
+
+input_path = "./images"
+pipeline = PaddleOCRVL(vl_rec_backend="fastdeploy-server", vl_rec_server_url="http://127.0.0.1:8180/v1", device="iluvatar_gpu", pipeline_version="v1.6")
+file_list = os.listdir(input_path)
+for file_name in file_list:
+    file_path = os.path.join(input_path, file_name)
+    output = pipeline.predict(file_path)
+    for res in output:
+        res.print()
+        res.save_to_markdown(save_path="output", pretty=False)
+```
+
+3) execute `infer_ocr_vl_benchmark.py` on client
+
+```bash
+python3 infer_ocr_vl_benchmark.py
+```
 
 ## 5. Quantization Format Support
 - `W8A16`: `--quantization wint8`

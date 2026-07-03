@@ -1457,19 +1457,17 @@ class TestFreeHostCache(unittest.TestCase):
 class TestDestructor(unittest.TestCase):
     """Test __del__ method (lines 1089-1090)."""
 
-    @patch("fastdeploy.cache_manager.v1.cache_controller.CacheController._free_host_cache")
-    def test_del_calls_free_host_cache(self, mock_free):
+    def test_del_calls_free_host_cache(self):
         """Lines 1089-1090: __del__ calls _free_host_cache."""
         controller = create_cache_controller()
+        controller._free_host_cache = MagicMock()
         controller.__del__()
-        mock_free.assert_called_once()
+        controller._free_host_cache.assert_called_once()
 
-    @patch(
-        "fastdeploy.cache_manager.v1.cache_controller.CacheController._free_host_cache", side_effect=Exception("err")
-    )
-    def test_del_swallows_exception(self, mock_free):
+    def test_del_swallows_exception(self):
         """Lines 1089-1090: __del__ swallows exceptions."""
         controller = create_cache_controller()
+        controller._free_host_cache = MagicMock(side_effect=Exception("err"))
         # Should not raise
         controller.__del__()
 

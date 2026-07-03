@@ -1129,6 +1129,30 @@ class KVBatchLinear(nn.Layer):
         out = paddle.bmm(x, self.k_b_proj_weight)
         return out
 
+    def forward_k_b_thd(self, x: paddle.Tensor) -> paddle.Tensor:
+        """
+        Forward K_b projection for token-head-dim layout.
+
+        Args:
+            x: Input tensor with shape [tokens, heads, qk_nope_head_dim]
+
+        Returns:
+            K_b projection output with shape [tokens, heads, kv_lora_rank]
+        """
+        return paddle.einsum("thd,hdr->thr", x, self.k_b_proj_weight)
+
+    def forward_v_b_htr(self, x: paddle.Tensor) -> paddle.Tensor:
+        """
+        Forward V_b projection for token-head-rank layout.
+
+        Args:
+            x: Input tensor with shape [tokens, heads, kv_lora_rank]
+
+        Returns:
+            V_b projection output with shape [tokens, heads, v_head_dim]
+        """
+        return paddle.einsum("thr,hrv->thv", x, self.v_b_proj_weight)
+
     def forward_v_b(self, x: paddle.Tensor) -> paddle.Tensor:
         """
         Forward pass for V_b projection using bmm
@@ -1217,6 +1241,11 @@ class QKVGateParallelLinear(ColumnParallelLinear):
             skip_quant=skip_quant,
             weight_dtype=weight_dtype,
         )
+
+    def _get_kv_shard_id(self):
+        if self.kv_num_heads < self.tp_size:
+            return self.local_rank * self.kv_num_heads // self.tp_size
+        return self.local_rank // self.num_kv_head_replicas
 
     def _get_shard_size_mapping(self, loaded_shard_id: str, head_dim: int):
         shard_size_mapping = {

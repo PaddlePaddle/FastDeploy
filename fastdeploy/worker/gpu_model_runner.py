@@ -308,6 +308,8 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_overlap_schedule:
             logger.info("Using overlap schedule")
         self.current_launch_token_num = 0
+        # swa config
+        self.window_attn_skip_freq = getattr(self.fd_config.model_config, "window_attn_skip_freq", None)
 
     def _async_output_busy_loop(self):
         """Entrypoint for the thread which handles outputs asynchronously."""
@@ -1464,6 +1466,7 @@ class GPUModelRunner(ModelRunnerBase):
         self.forward_meta = ForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
+            swa_rotary_embs=self.share_inputs["swa_rope_emb"],
             attn_backend=self.attn_backends[0],
             attn_backends=self.attn_backends,
             decoder_batch_ids=self.share_inputs["decoder_batch_ids"],
@@ -1598,7 +1601,8 @@ class GPUModelRunner(ModelRunnerBase):
         key_cache_shapes = []
         value_cache_shapes = []
         indexer_cache_shapes = []
-        for attn_backend in self.attn_backends:
+        for layer_id, attn_backend in enumerate(self.attn_backends):
+            attn_backend.layer_id = layer_id
             kv_cache_shape = attn_backend.get_kv_cache_shape(
                 max_num_blocks=max_block_num, kv_cache_quant_type=kv_cache_quant_type
             )
@@ -1611,14 +1615,10 @@ class GPUModelRunner(ModelRunnerBase):
 
         # Check if gpu runner needs to create kv cache
         # 1. During profiling, it creates its own kv cache.
-        # 2. If no need to profile, create kv cache unless kvcache_storage_backend or
-        #    p/d disaggregation is enabled. Note: CPU cache (num_cpu_blocks > 0) does NOT
-        #    prevent GPU runner from creating GPU cache tensors; cache transfer manager
-        #    handles CPU<->GPU swap on top of the GPU tensors created here.
-        create_cache_tensor = profile or not (
-            self.fd_config.cache_config.kvcache_storage_backend
-            or self.fd_config.scheduler_config.splitwise_role != "mixed"
-        )
+        # 2. GPU runner creates kv cache tensor unless p/d disaggregation is enabled.
+        #    Note: even when CPU cache (num_cpu_blocks > 0) is enabled, GPU runner still
+        #    creates GPU cache tensors; cache transfer manager handles CPU<->GPU swap.
+        create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
 
         cache_ready_signal = self.cache_ready_signal
         if not create_cache_tensor:
@@ -1648,6 +1648,23 @@ class GPUModelRunner(ModelRunnerBase):
                 logger.info(
                     f"..creating kv cache for layer {i}: key:{key_cache_shape}, value:{value_cache_shape}, indexer:{indexer_cache_shape}"
                 )
+                # swa mla cache type
+                if self.mla_cache and self.window_attn_skip_freq is not None and self.window_attn_skip_freq[i] == 1:
+                    cache_type = "uint8"
+                    kv_cache_quant_type = "uint8"
+                else:
+                    # Get kv cache dtype
+                    cache_type = self.model_config.dtype
+                    kv_cache_quant_type = None
+
+                    if (
+                        self.quant_config
+                        and hasattr(self.quant_config, "kv_cache_quant_type")
+                        and self.quant_config.kv_cache_quant_type is not None
+                    ):
+                        cache_type = "uint8"
+                        kv_cache_quant_type = self.quant_config.kv_cache_quant_type
+
                 key_cache = paddle.full(shape=key_cache_shape, fill_value=0, dtype=cache_type)
                 set_data_ipc(key_cache, key_cache_name)
                 self.cache_kvs_map[key_cache_name] = key_cache
@@ -3046,6 +3063,27 @@ class GPUModelRunner(ModelRunnerBase):
                 * (self.cache_config.block_size)
                 * num_layers
             )  # compress_kv + k_pe
+            if self.window_attn_skip_freq is not None:
+                required_memory = (
+                    # mla
+                    (
+                        byte_of_dtype
+                        * (self.fd_config.model_config.kv_lora_rank + self.fd_config.model_config.qk_rope_head_dim)
+                        * (self.cache_config.block_size)
+                        * (num_layers - sum(self.window_attn_skip_freq[:num_layers]))
+                    )
+                    # dsa
+                    + (
+                        (
+                            self.fd_config.model_config.kv_lora_rank
+                            + self.fd_config.model_config.kv_lora_rank // 128 * 4
+                            + 2 * self.fd_config.model_config.qk_rope_head_dim
+                        )
+                        * (self.cache_config.block_size)
+                        * sum(self.window_attn_skip_freq[:num_layers])
+                    )
+                )
+
         elif self.dsa_cache:
             required_memory = (
                 1
@@ -3075,15 +3113,15 @@ class GPUModelRunner(ModelRunnerBase):
         if self.enable_cache_manager_v1:
             self.cache_controller.free_gpu_cache()
         else:
-            create_cache_tensor = profile or not (
-                self.fd_config.cache_config.kvcache_storage_backend
-                or self.fd_config.scheduler_config.splitwise_role != "mixed"
-            )
+            create_cache_tensor = profile or self.fd_config.scheduler_config.splitwise_role == "mixed"
             local_rank = self.local_rank % self.parallel_config.tensor_parallel_size
 
             if not profile:
                 if create_cache_tensor:
-                    if self.fd_config.cache_config.num_cpu_blocks > 0:
+                    if (
+                        self.fd_config.cache_config.num_cpu_blocks > 0
+                        or self.fd_config.cache_config.kvcache_storage_backend
+                    ):
                         logger.info("Waiting for cache transfer manager to unlink cuda ipc")
                         while self.cache_ready_signal.value[local_rank] != 0:
                             time.sleep(0.1)
@@ -3578,6 +3616,9 @@ class GPUModelRunner(ModelRunnerBase):
         prompt_logprobs_list: list[Optional[LogprobsTensors]] = self.scheduler_config.max_num_seqs * [None]
         completed_prefill_reqs: list[Request] = []
         for req_id, request in self.prompt_logprobs_reqs.items():
+            idx = self.share_inputs["req_ids"].index(req_id) if req_id in self.share_inputs["req_ids"] else -1
+            if idx < 0 or self.share_inputs["seq_lens_this_time_cpu"][idx].item() <= 0:
+                continue
             num_prompt_logprobs = request.sampling_params.prompt_logprobs
             if request.prompt_token_ids is None or num_prompt_logprobs is None:
                 continue
@@ -3613,7 +3654,7 @@ class GPUModelRunner(ModelRunnerBase):
                 continue
             offset = self.share_inputs["cu_seqlens_q"][batch_id]
             prompt_hidden_states = hidden_states[offset : offset + num_logits]
-            logits = self.model.compute_logits(prompt_hidden_states)
+            logits = self.model.compute_logits(prompt_hidden_states, self.forward_meta)
             prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]
             prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
             if logprobs_mode == "raw_logprobs":
