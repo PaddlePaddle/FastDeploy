@@ -137,8 +137,12 @@ def xpu_pre_process(
         ) = speculate_pre_process(
             token_num_cpu, input_ids, seq_lens_this_time, draft_tokens, seq_lens_encoder, seq_lens_decoder
         )
-        share_inputs["cu_seqlens_q_output"] = cu_seqlens_q_output
-        share_inputs["batch_id_per_token_output"] = batch_id_per_token_output
+        if use_cudagraph:
+            share_inputs["cu_seqlens_q_output"].copy_(cu_seqlens_q_output, False)
+            share_inputs["batch_id_per_token_output"].copy_(batch_id_per_token_output, False)
+        else:
+            share_inputs["cu_seqlens_q_output"] = cu_seqlens_q_output
+            share_inputs["batch_id_per_token_output"] = batch_id_per_token_output
     else:
         (
             ids_remove_padding,
