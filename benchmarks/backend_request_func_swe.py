@@ -61,6 +61,8 @@ class RequestFuncInput:
     tokenizer_model: str = None
     tokenizer_path: str = None
     stream: bool = True
+    session_id: Optional[str] = None
+    turn_idx: Optional[int] = None
 
 
 @dataclass
@@ -410,6 +412,10 @@ async def async_request_eb_openai_chat_completions(
         "Content-Type": "application/json",
         "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
     }
+    if request_func_input.session_id is not None:
+        headers["X-SMG-Routing-Key"] = f"{request_func_input.session_id}"
+    if request_func_input.session_id is not None and request_func_input.turn_idx is not None:
+        headers["X-Request-Id"] = f"{request_func_input.session_id}:{request_func_input.turn_idx}"
 
     output = RequestFuncOutput()
     output.prompt_len = 0
@@ -495,12 +501,15 @@ async def async_request_eb_openai_chat_completions(
                                             "arguments": "",
                                         }
 
+                                    if tc.get("id"):
+                                        tool_call_buffer[idx]["id"] = tc["id"]
+
                                     func = tc.get("function", {})
 
-                                    if "name" in func:
+                                    if func.get("name"):
                                         tool_call_buffer[idx]["name"] = func["name"]
 
-                                    if "arguments" in func:
+                                    if func.get("arguments"):
                                         tool_call_buffer[idx]["arguments"] += func["arguments"]
 
                             # 过滤 role / finish / usage 等空包，只用真正 token 包统计 TTFT/ITL。
@@ -531,7 +540,7 @@ async def async_request_eb_openai_chat_completions(
 
                                 # Decoding phase
                                 else:
-                                    # 1个chunk包含多个token 修正：MTP服务端把多个 token 合并到同一个流式 chunk 里，
+                                    # buffer burst 修正：如果服务端把多个 token 合并到同一个流式 chunk 里，
                                     # 直接把整段间隔记成单个 ITL 会高估解码间隔。这里参考 sglang 官方
                                     # bench_serving 的做法：用真实 token 增量摊分该 chunk 的等待时间。
                                     cur_completion_tokens = (data.get("usage") or {}).get("completion_tokens")
@@ -664,7 +673,6 @@ async def async_request_eb_openai_chat_completions(
 
 async def simple_tool_call(model_output, tool_url: str, timeout=60):
     """调用工具函数"""
-    import re
 
     import httpx
 
@@ -676,18 +684,20 @@ async def simple_tool_call(model_output, tool_url: str, timeout=60):
         args = tc.get("arguments", {})
         tool_id = tc.get("id")
     else:
-        match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
-        if not match:
-            return "", False, "", tool_id
-
-        block = match.group(1).strip()
-        lines = block.splitlines()
-        tool_name = lines[0].strip()
-
-        key = re.search(r"<arg_key>(.*?)</arg_key>", block)
-        val = re.search(r"<arg_value>(.*?)</arg_value>", block)
-
-        args = {key.group(1): val.group(1)} if key and val else {}
+        # 取消正则逻辑
+        return "", False, "", tool_id
+        # match = re.search(r"<tool_call>(.*?)</tool_call>", model_output.generated_text, re.S)
+        # if not match:
+        #     return "", False, "", tool_id
+        #
+        # block = match.group(1).strip()
+        # lines = block.splitlines()
+        # tool_name = lines[0].strip()
+        #
+        # key = re.search(r"<arg_key>(.*?)</arg_key>", block)
+        # val = re.search(r"<arg_value>(.*?)</arg_value>", block)
+        #
+        # args = {key.group(1): val.group(1)} if key and val else {}
 
     if not tool_name:
         return "", False, "", tool_id
@@ -778,6 +788,8 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                 round_input = copy.deepcopy(request_func_input)
                 round_input.history_QA = history
                 round_input.no = f"{round_input.no}_{prompt_no}"
+                round_input.session_id = request_func_input.no
+                round_input.turn_idx = prompt_no
                 if use_token_ids:
                     if len(input_ids_all) == 0:
                         # 拼接token_ids模式，首轮token_ids
