@@ -189,7 +189,13 @@ else:
                             get_swa_indexer_top_k,
                         )
 
-                        indexer_top_k = paddle.full([q_input.shape[0], 1, self.sliding_window[0]], -1, dtype="int32")
+                        window_size = (
+                            self.sliding_window[0]
+                            if isinstance(self.sliding_window, (list, tuple))
+                            else self.sliding_window
+                        )
+                        indexer_top_k = paddle.full([q_input.shape[0], 1, window_size], -1, dtype="int32")
+
                         get_swa_indexer_top_k(
                             indexer_top_k,
                             forward_meta.block_tables,
