@@ -16,6 +16,7 @@
 
 Covers:
 - FastDeployAttention.forward MLA branch (lines 166-249)
+- FastDeployAttention.forward MLA DSA sliding-window attention path (lines 176-213)
 - FastDeployAttention.forward edge cases (squeeze_to_3d errors, scale restore)
 - patch_paddlefleet_core_attention error branches (lines 633-705)
 - PaddleFleetModelBase.forward zero-size & fallback branches (lines 530-561)
@@ -1125,8 +1126,117 @@ class TestPaddleFleetModelBaseInit:
         fd_config.graph_opt_config.use_cudagraph = False
         return fd_config
 
+    def _make_ernie_sys_mocks(self, mock_pf_config, mock_model):
+        """Return sys.modules patches for the USE_ERNIE=True code path in __init__.
+
+        Because USE_ERNIE=True in this environment, AutoConfig / AutoModelForCausalLM
+        are imported locally (not module-level attrs), so we must mock them via
+        sys.modules rather than patch.object(bf_mod, ...).
+        """
+        mock_ernie5_v2_config_cls = MagicMock()
+        mock_ernie5_v2_config_cls.from_dict = MagicMock(return_value=mock_pf_config)
+
+        mock_pretrained_config = MagicMock()
+        mock_pretrained_config.get_config_dict = MagicMock(return_value=({}, None))
+
+        mock_fleet_bridge = MagicMock()
+        mock_fleet_bridge.AutoModelForCausalLM.from_pretrained = MagicMock(return_value=mock_model)
+
+        return patch.dict(
+            "sys.modules",
+            {
+                "ernie5": MagicMock(),
+                "ernie5.pretrain": MagicMock(Ernie5V2Config=mock_ernie5_v2_config_cls),
+                "paddleformers.transformers.configuration_utils": MagicMock(PretrainedConfig=mock_pretrained_config),
+                "fleet_bridge": mock_fleet_bridge,
+            },
+        )
+
+    def _make_paddleformers_sys_mocks(self, mock_pf_config, mock_model):
+        """Return sys.modules patches for the USE_ERNIE=False (default) code path.
+
+        USE_ERNIE=False → AutoConfig.from_pretrained and paddleformers AutoModelForCausalLM
+        are used via local imports, so we mock them in sys.modules.
+        """
+        mock_auto_config_cls = MagicMock()
+        mock_auto_config_cls.from_pretrained = MagicMock(return_value=mock_pf_config)
+
+        mock_auto_model_cls = MagicMock()
+        mock_auto_model_cls.from_pretrained = MagicMock(return_value=mock_model)
+
+        return (
+            patch.dict(
+                "sys.modules",
+                {
+                    "paddleformers.transformers": MagicMock(AutoConfig=mock_auto_config_cls),
+                    "paddleformers.transformers.auto.modeling": MagicMock(AutoModelForCausalLM=mock_auto_model_cls),
+                },
+            ),
+            mock_auto_config_cls,
+            mock_auto_model_cls,
+        )
+
     def test_init_standard_model(self):
-        """Lines 285-349: __init__ basic path (multi_latent_attention=False)."""
+        """Lines 285-349: __init__ basic path (USE_ERNIE=False, multi_latent_attention=False)."""
+        import fastdeploy.model_executor.models.paddleformers.base_fleet as bf_mod
+
+        fd_config = self._make_fd_config()
+
+        mock_pf_config = MagicMock()
+        mock_pf_config.tensor_model_parallel_size = 1
+        mock_pf_config.multi_latent_attention = False
+
+        mock_model = MagicMock()
+
+        sys_mocks, mock_auto_config_cls, mock_auto_model_cls = self._make_paddleformers_sys_mocks(
+            mock_pf_config, mock_model
+        )
+
+        with (
+            sys_mocks,
+            patch.object(bf_mod, "patch_paddlefleet_core_attention", return_value=2),
+            patch.object(PaddleFleetModelBase, "_init_paddlefleet_parallel_state"),
+            patch.object(PaddleFleetModelBase, "_sync_config_from_text_config"),
+            patch.object(paddle.nn.Layer, "__init__", lambda self, *a, **kw: None),
+        ):
+            model = object.__new__(PaddleFleetModelBase)
+            PaddleFleetModelBase.__init__(model, fd_config)
+
+        assert model.fd_config is fd_config
+        assert model.paddleformers_config is mock_pf_config
+        mock_auto_config_cls.from_pretrained.assert_called_once_with(fd_config.model_config.model)
+        mock_model.eval.assert_called_once()
+
+    def test_init_mla_model_computes_qk_head_dim(self):
+        """Lines 309-312: USE_ERNIE=False, multi_latent_attention=True → qk_head_dim = rope+nope."""
+        import fastdeploy.model_executor.models.paddleformers.base_fleet as bf_mod
+
+        fd_config = self._make_fd_config()
+
+        mock_pf_config = MagicMock()
+        mock_pf_config.tensor_model_parallel_size = 1
+        mock_pf_config.multi_latent_attention = True
+        mock_pf_config.qk_rope_head_dim = 64
+        mock_pf_config.qk_nope_head_dim = 128
+
+        mock_model = MagicMock()
+
+        sys_mocks, _, _ = self._make_paddleformers_sys_mocks(mock_pf_config, mock_model)
+
+        with (
+            sys_mocks,
+            patch.object(bf_mod, "patch_paddlefleet_core_attention", return_value=0),
+            patch.object(PaddleFleetModelBase, "_init_paddlefleet_parallel_state"),
+            patch.object(PaddleFleetModelBase, "_sync_config_from_text_config"),
+            patch.object(paddle.nn.Layer, "__init__", lambda self, *a, **kw: None),
+        ):
+            model = object.__new__(PaddleFleetModelBase)
+            PaddleFleetModelBase.__init__(model, fd_config)
+
+        assert mock_pf_config.qk_head_dim == 64 + 128
+
+    def test_init_use_ernie_true_standard_model(self):
+        """USE_ERNIE=True path: ernie5 + fleet_bridge are used instead of paddleformers."""
         import fastdeploy.model_executor.models.paddleformers.base_fleet as bf_mod
 
         fd_config = self._make_fd_config()
@@ -1138,17 +1248,13 @@ class TestPaddleFleetModelBaseInit:
         mock_model = MagicMock()
 
         with (
-            patch.object(bf_mod, "AutoConfig") as mock_ac,
-            patch.object(bf_mod, "AutoModelForCausalLM") as mock_am,
+            self._make_ernie_sys_mocks(mock_pf_config, mock_model),
+            patch.object(bf_mod, "USE_ERNIE", True),
             patch.object(bf_mod, "patch_paddlefleet_core_attention", return_value=2),
             patch.object(PaddleFleetModelBase, "_init_paddlefleet_parallel_state"),
             patch.object(PaddleFleetModelBase, "_sync_config_from_text_config"),
             patch.object(paddle.nn.Layer, "__init__", lambda self, *a, **kw: None),
         ):
-
-            mock_ac.from_pretrained.return_value = mock_pf_config
-            mock_am.from_pretrained.return_value = mock_model
-
             model = object.__new__(PaddleFleetModelBase)
             PaddleFleetModelBase.__init__(model, fd_config)
 
@@ -1156,8 +1262,8 @@ class TestPaddleFleetModelBaseInit:
         assert model.paddleformers_config is mock_pf_config
         mock_model.eval.assert_called_once()
 
-    def test_init_mla_model_computes_qk_head_dim(self):
-        """Lines 309-312: multi_latent_attention=True → qk_head_dim computed from rope+nope."""
+    def test_init_use_ernie_true_mla(self):
+        """USE_ERNIE=True + multi_latent_attention=True → qk_head_dim = rope+nope, ernie5 path."""
         import fastdeploy.model_executor.models.paddleformers.base_fleet as bf_mod
 
         fd_config = self._make_fd_config()
@@ -1171,27 +1277,295 @@ class TestPaddleFleetModelBaseInit:
         mock_model = MagicMock()
 
         with (
-            patch.object(bf_mod, "AutoConfig") as mock_ac,
-            patch.object(bf_mod, "AutoModelForCausalLM") as mock_am,
+            self._make_ernie_sys_mocks(mock_pf_config, mock_model),
+            patch.object(bf_mod, "USE_ERNIE", True),
             patch.object(bf_mod, "patch_paddlefleet_core_attention", return_value=0),
             patch.object(PaddleFleetModelBase, "_init_paddlefleet_parallel_state"),
             patch.object(PaddleFleetModelBase, "_sync_config_from_text_config"),
             patch.object(paddle.nn.Layer, "__init__", lambda self, *a, **kw: None),
         ):
-
-            mock_ac.from_pretrained.return_value = mock_pf_config
-            mock_am.from_pretrained.return_value = mock_model
-
             model = object.__new__(PaddleFleetModelBase)
             PaddleFleetModelBase.__init__(model, fd_config)
 
-        # qk_head_dim should be set to rope+nope
         assert mock_pf_config.qk_head_dim == 64 + 128
 
 
 # ============================================================================
 # Tests for model_base._try_resolve_paddleformers paddlefleet error branch
 # ============================================================================
+
+
+# ============================================================================
+# Tests for FastDeployAttention.forward MLA DSA sliding-window attention path
+# (lines 176-213 of base_fleet.py)
+# ============================================================================
+
+
+def _create_mla_swa_attention(kv_lora_rank=4, v_head_dim=2, num_heads=2, layer_id=0, sliding_window=32):
+    """Create a FastDeployAttention with window_attn_skip_freq set so the SWA branch is taken."""
+    mock_config = MagicMock()
+    mock_config.multi_latent_attention = True
+    mock_config.kv_lora_rank = kv_lora_rank
+    mock_config.v_head_dim = v_head_dim
+
+    mock_fd_attention = MagicMock()
+    del mock_fd_attention.scale
+
+    # window_attn_skip_freq[layer_id] == 1 triggers the SWA branch
+    window_attn_skip_freq = [1] * (layer_id + 1)
+
+    with patch.object(FleetLayer, "__init__", lambda self, config: None):
+        attn = FastDeployAttention(
+            config=mock_config,
+            fd_attention=mock_fd_attention,
+            num_attention_heads=num_heads,
+            num_key_value_heads=num_heads,
+            softmax_scale=0.125,
+            hidden_size_per_attention_head=kv_lora_rank,
+            hidden_size_per_partition=num_heads * kv_lora_rank,
+            layer_id=layer_id,
+            window_attn_skip_freq=window_attn_skip_freq,
+            sliding_window=[sliding_window],
+        )
+    attn.config = mock_config
+    return attn, mock_fd_attention
+
+
+class TestFastDeployAttentionMLASWA:
+    """Test FastDeployAttention.forward DSA sliding-window attention branch (lines 176-213)."""
+
+    def _make_forward_meta(self, seq_len, sliding_window, layer_id=0):
+        forward_meta = MagicMock()
+        # Both prefill and decode non-zero so is_mla check passes;
+        # the SWA branch exits early before the prefill/decode split.
+        forward_meta.max_len_tensor_cpu = [0, seq_len, 0]
+        forward_meta.block_tables = MagicMock()
+        forward_meta.cu_seqlens_q = MagicMock()
+        forward_meta.seq_lens_encoder = MagicMock()
+        forward_meta.seq_lens_decoder = MagicMock()
+        forward_meta.batch_id_per_token = MagicMock()
+        forward_meta.caches = {layer_id: MagicMock()}
+        return forward_meta
+
+    def test_swa_branch_3d_q_absorbed(self):
+        """Lines 176-213: window_attn_skip_freq[layer_id]==1, q_absorbed 3D -> DSA path,
+        verifies reshape/bmm/transpose output shape [seq, heads*v_head_dim]."""
+        kv_lora_rank, v_head_dim, num_heads = 4, 2, 2
+        seq_len = 3
+        layer_id = 0
+        sliding_window = 8
+        attn, _ = _create_mla_swa_attention(kv_lora_rank, v_head_dim, num_heads, layer_id, sliding_window)
+
+        forward_meta = self._make_forward_meta(seq_len, sliding_window, layer_id)
+        attn.config.forward_meta = forward_meta
+
+        query = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        key = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        value = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        kv_compressed = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        k_pos_emb = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        # 3D q_absorbed: [seq, heads, kv_lora_rank]
+        q_absorbed = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        v_b_proj_weight = paddle.randn([num_heads, kv_lora_rank, v_head_dim])
+
+        # DSAAttentionBackend.forward_static returns [seq, heads * kv_lora_rank]
+        dsa_out_flat = paddle.randn([seq_len, num_heads * kv_lora_rank])
+
+        mock_dsa = MagicMock()
+        mock_dsa.forward_static = MagicMock(return_value=dsa_out_flat)
+        mock_get_swa_indexer = MagicMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "fastdeploy.model_executor.layers.attention": MagicMock(DSAAttentionBackend=mock_dsa),
+                "fastdeploy.model_executor.models.deepseek_v3": MagicMock(get_swa_indexer_top_k=mock_get_swa_indexer),
+            },
+        ):
+            result = attn.forward(
+                query=query,
+                key=key,
+                value=value,
+                attention_mask=None,
+                kv_compressed=kv_compressed,
+                k_pos_emb=k_pos_emb,
+                q_absorbed=q_absorbed,
+                v_b_proj_weight=v_b_proj_weight,
+            )
+
+        assert result is not None
+        # output shape after unsqueeze(0) in MLA return: [1, seq, heads*v_head_dim]
+        assert result.shape[0] == 1
+        assert result.shape[1] == seq_len
+        assert result.shape[2] == num_heads * v_head_dim
+        mock_dsa.forward_static.assert_called_once()
+        mock_get_swa_indexer.assert_called_once()
+
+    def test_swa_branch_4d_q_absorbed_squeeze(self):
+        """Line 179: q_absorbed 4D (batch=1) -> squeeze_to_3d called before DSA path."""
+        kv_lora_rank, v_head_dim, num_heads = 4, 2, 2
+        seq_len = 2
+        layer_id = 0
+        sliding_window = 8
+        attn, _ = _create_mla_swa_attention(kv_lora_rank, v_head_dim, num_heads, layer_id, sliding_window)
+
+        forward_meta = self._make_forward_meta(seq_len, sliding_window, layer_id)
+        attn.config.forward_meta = forward_meta
+
+        query = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        key = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        value = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        kv_compressed = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        k_pos_emb = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        # 4D q_absorbed with batch=1 triggers the squeeze_to_3d branch on line 179
+        q_absorbed = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        v_b_proj_weight = paddle.randn([num_heads, kv_lora_rank, v_head_dim])
+
+        dsa_out_flat = paddle.randn([seq_len, num_heads * kv_lora_rank])
+        mock_dsa = MagicMock()
+        mock_dsa.forward_static = MagicMock(return_value=dsa_out_flat)
+        mock_get_swa_indexer = MagicMock()
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "fastdeploy.model_executor.layers.attention": MagicMock(DSAAttentionBackend=mock_dsa),
+                "fastdeploy.model_executor.models.deepseek_v3": MagicMock(get_swa_indexer_top_k=mock_get_swa_indexer),
+            },
+        ):
+            result = attn.forward(
+                query=query,
+                key=key,
+                value=value,
+                attention_mask=None,
+                kv_compressed=kv_compressed,
+                k_pos_emb=k_pos_emb,
+                q_absorbed=q_absorbed,
+                v_b_proj_weight=v_b_proj_weight,
+            )
+
+        assert result is not None
+        assert result.shape[0] == 1
+        assert result.shape[1] == seq_len
+        assert result.shape[2] == num_heads * v_head_dim
+
+    def test_swa_branch_skip_freq_zero_bypasses_swa(self):
+        """window_attn_skip_freq[layer_id]==0 -> SWA branch NOT taken, falls through to normal MLA path."""
+        kv_lora_rank, v_head_dim, num_heads = 4, 2, 2
+        seq_len = 2
+        layer_id = 0
+
+        mock_config = MagicMock()
+        mock_config.multi_latent_attention = True
+        mock_config.kv_lora_rank = kv_lora_rank
+        mock_config.v_head_dim = v_head_dim
+
+        mock_fd_attention = MagicMock()
+        del mock_fd_attention.scale
+
+        # skip_freq == 0 -> condition fails, normal path taken
+        window_attn_skip_freq = [0]
+        with patch.object(FleetLayer, "__init__", lambda self, config: None):
+            attn = FastDeployAttention(
+                config=mock_config,
+                fd_attention=mock_fd_attention,
+                num_attention_heads=num_heads,
+                num_key_value_heads=num_heads,
+                softmax_scale=0.125,
+                hidden_size_per_attention_head=kv_lora_rank,
+                hidden_size_per_partition=num_heads * kv_lora_rank,
+                layer_id=layer_id,
+                window_attn_skip_freq=window_attn_skip_freq,
+                sliding_window=[32],
+            )
+        attn.config = mock_config
+
+        forward_meta = MagicMock()
+        forward_meta.max_len_tensor_cpu = [0, seq_len, 0]
+        forward_meta.block_tables = MagicMock()
+        forward_meta.cu_seqlens_q = MagicMock()
+        forward_meta.seq_lens_encoder = MagicMock()
+        forward_meta.seq_lens_decoder = MagicMock()
+        forward_meta.batch_id_per_token = MagicMock()
+        forward_meta.caches = {layer_id: MagicMock()}
+        attn.config.forward_meta = forward_meta
+
+        query = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        key = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        value = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        kv_compressed = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        k_pos_emb = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+
+        prefill_output = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        mock_fd_attention.forward.return_value = prefill_output
+
+        result = attn.forward(
+            query=query,
+            key=key,
+            value=value,
+            attention_mask=None,
+            kv_compressed=kv_compressed,
+            k_pos_emb=k_pos_emb,
+        )
+        # Normal MLA prefill path was used; DSA was never called
+        assert result is not None
+        mock_fd_attention.forward.assert_called_once()
+
+    def test_swa_branch_indexer_shape(self):
+        """Line 190: indexer_top_k shape is [seq, 1, sliding_window[0]] filled with -1."""
+        kv_lora_rank, v_head_dim, num_heads = 4, 2, 2
+        seq_len = 5
+        sliding_window = 16
+        layer_id = 0
+        attn, _ = _create_mla_swa_attention(kv_lora_rank, v_head_dim, num_heads, layer_id, sliding_window)
+
+        forward_meta = self._make_forward_meta(seq_len, sliding_window, layer_id)
+        attn.config.forward_meta = forward_meta
+
+        query = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        key = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        value = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        kv_compressed = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        k_pos_emb = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        q_absorbed = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        v_b_proj_weight = paddle.randn([num_heads, kv_lora_rank, v_head_dim])
+
+        captured = {}
+
+        def fake_get_swa_indexer_top_k(indexer_top_k, *args, **kwargs):
+            captured["indexer_shape"] = list(indexer_top_k.shape)
+            captured["indexer_fill"] = int(indexer_top_k[0, 0, 0])
+
+        dsa_out_flat = paddle.randn([seq_len, num_heads * kv_lora_rank])
+        mock_dsa = MagicMock()
+        mock_dsa.forward_static = MagicMock(return_value=dsa_out_flat)
+
+        with patch.dict(
+            "sys.modules",
+            {
+                "fastdeploy.model_executor.layers.attention": MagicMock(DSAAttentionBackend=mock_dsa),
+                "fastdeploy.model_executor.models.deepseek_v3": MagicMock(
+                    get_swa_indexer_top_k=fake_get_swa_indexer_top_k
+                ),
+            },
+        ):
+            attn.forward(
+                query=query,
+                key=key,
+                value=value,
+                attention_mask=None,
+                kv_compressed=kv_compressed,
+                k_pos_emb=k_pos_emb,
+                q_absorbed=q_absorbed,
+                v_b_proj_weight=v_b_proj_weight,
+            )
+
+        assert captured["indexer_shape"] == [
+            seq_len,
+            1,
+            sliding_window,
+        ], f"Expected [{seq_len}, 1, {sliding_window}], got {captured['indexer_shape']}"
+        assert captured["indexer_fill"] == -1, f"Expected fill=-1, got {captured['indexer_fill']}"
 
 
 class TestTryResolvePaddlefleetImportError:
