@@ -319,6 +319,8 @@ async def lifespan(app: FastAPI):
     try:
         if envs.FD_ENABLE_ASYNC_LLM:
             await llm_engine.shutdown()
+        else:
+            llm_engine._exit_sub_services()
         await engine_client.connection_manager.close()
         engine_client.zmq_client.close()
         from prometheus_client import multiprocess
@@ -793,7 +795,16 @@ def launch_api_server() -> None:
     }
 
     try:
-        StandaloneApplication(app, options).run()
+        if args.workers > 1:
+            StandaloneApplication(app, options).run()
+        else:
+            uvicorn.run(
+                app,
+                host=args.host,
+                port=args.port,
+                log_config=UVICORN_CONFIG,
+            )
+
     except Exception as e:
         api_server_logger.error(f"launch sync http server error, {e}, {str(traceback.format_exc())}")
 
