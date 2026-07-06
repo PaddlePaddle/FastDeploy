@@ -49,7 +49,7 @@ def setup_multiprocess_prometheus():
     return user_dir
 
 
-def setup_dp_prometheus_dir(dp_id, base_dir, env_dict=None):
+def setup_dp_prometheus_dir(dp_id, base_dir, env_dict=None, move_existing=False):
     """Set up an isolated PROMETHEUS_MULTIPROC_DIR subdirectory for a DP rank.
 
     For DP0: moves existing .db files from base_dir into dp0/ and updates env.
@@ -64,7 +64,7 @@ def setup_dp_prometheus_dir(dp_id, base_dir, env_dict=None):
     """
     prom_dir_dp = os.path.join(base_dir, f"dp{dp_id}")
     os.makedirs(prom_dir_dp, exist_ok=True)
-    if dp_id == 0 and os.path.isdir(base_dir):
+    if move_existing and dp_id == 0 and os.path.isdir(base_dir):
         for fname in os.listdir(base_dir):
             src = os.path.join(base_dir, fname)
             if os.path.isfile(src) and fname.endswith(".db"):

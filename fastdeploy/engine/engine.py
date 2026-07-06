@@ -903,11 +903,11 @@ class LLMEngine:
                         + f" data parallel id {i}"
                     )
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                        setup_dp_prometheus_dir(i, base_prom_dir)
+                        setup_dp_prometheus_dir(i, base_prom_dir, move_existing=True)
                     self.dp_processed[-1].start()
 
                 if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                    setup_dp_prometheus_dir(0, base_prom_dir)
+                    setup_dp_prometheus_dir(0, base_prom_dir, move_existing=True)
 
                 for i in range(
                     1,

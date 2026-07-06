@@ -2774,13 +2774,13 @@ class EngineService:
                         + f" data parallel id {i}"
                     )
                     if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                        setup_dp_prometheus_dir(i, base_prom_dir)
+                        setup_dp_prometheus_dir(i, base_prom_dir, move_existing=True)
                     self.dp_processed[-1].start()
                     while self.launched_expert_service_signal.value[i] == 0:
                         time.sleep(1)
 
                 if envs.FD_ENABLE_INTERNAL_ADAPTER:
-                    setup_dp_prometheus_dir(0, base_prom_dir)
+                    setup_dp_prometheus_dir(0, base_prom_dir, move_existing=True)
 
     def check_worker_initialize_status(self):
         """
