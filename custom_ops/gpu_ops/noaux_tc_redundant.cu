@@ -74,6 +74,11 @@ std::vector<paddle::DataType> NoauxTcRedundantInferDtype(
 std::vector<std::vector<int64_t>> NoauxTcRedundantInferShape(
     const std::vector<int64_t>& scores_shape,
     const std::vector<int64_t>&,
+    const std::vector<int64_t>&,
+    const std::vector<int64_t>&,
+    const std::vector<int64_t>&,
+    const int n_group,
+    const int topk_group,
     const int topk) {
   auto num_tokens = scores_shape[0];
   auto topk_values_shape = std::vector<int64_t>{num_tokens, topk};

@@ -58,22 +58,28 @@ def scaled_fp8_quant(
 
     if scale is None:
         if use_per_token_if_dynamic:
-            scale = paddle.empty([shape[0], 1], dtype=paddle.float32)
+            scale = paddle.zeros([shape[0], 1], dtype=paddle.float32)
             from fastdeploy.model_executor.ops.gpu import (
                 dynamic_per_token_scaled_fp8_quant,
             )
 
-            dynamic_per_token_scaled_fp8_quant(output, input, scale, scale_ub)
+            result = dynamic_per_token_scaled_fp8_quant(output, input, scale, scale_ub)
+            if result is not None:
+                output = result
         else:
             scale = paddle.zeros([1], dtype=paddle.float32)
             from fastdeploy.model_executor.ops.gpu import dynamic_scaled_fp8_quant
 
-            dynamic_scaled_fp8_quant(output, input, scale)
+            result = dynamic_scaled_fp8_quant(output, input, scale)
+            if result is not None:
+                output = result
     else:
         # num_token_padding not implemented for this case
         # assert (scale.numel() == 1 or num_token_padding is None)
         from fastdeploy.model_executor.ops.gpu import static_scaled_fp8_quant
 
-        static_scaled_fp8_quant(output, input, scale)
+        result = static_scaled_fp8_quant(output, input, scale)
+        if result is not None:
+            output = result
 
     return output, scale

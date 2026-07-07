@@ -1151,6 +1151,15 @@ class GraphOptimizationConfig:
             )
         self.cudagraph_capture_sizes = dedup_sizes
 
+        dedup_prefill_sizes = list(set(self.cudagraph_capture_sizes_prefill))
+        if len(dedup_prefill_sizes) < len(self.cudagraph_capture_sizes_prefill):
+            logger.info(
+                ("cudagraph prefill sizes specified by model runner" " %s is overridden by config %s"),
+                self.cudagraph_capture_sizes_prefill,
+                dedup_prefill_sizes,
+            )
+        self.cudagraph_capture_sizes_prefill = dedup_prefill_sizes
+
         # Sort to make sure cudagraph capture sizes are in descending order
         self.cudagraph_capture_sizes.sort(reverse=True)
         self.cudagraph_capture_sizes_prefill.sort(reverse=True)
