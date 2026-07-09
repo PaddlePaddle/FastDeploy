@@ -38,7 +38,7 @@ AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=6 * 60 * 60)
 class RequestFuncInput:
     """Input for requesting LLMs via API"""
 
-    no: int
+    no: str
     prompt: str
     history_QA: Optional[dict]
     hyper_parameters: dict
@@ -61,6 +61,8 @@ class RequestFuncInput:
     tokenizer_model: str = None
     tokenizer_path: str = None
     stream: bool = True
+    session_id: Optional[str] = None
+    turn_idx: Optional[int] = None
 
 
 @dataclass

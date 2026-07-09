@@ -24,6 +24,7 @@ import json
 import os
 import random
 import time
+import uuid
 import warnings
 from argparse import ArgumentParser as FlexibleArgumentParser
 from collections.abc import AsyncGenerator, Iterable
@@ -63,12 +64,12 @@ class BenchmarkMetrics:
     request_goodput: float
     output_throughput: float
     total_token_throughput: float
-    # 全局聚合解码速度(过滤 burst 与 preemption 后)
-    s_decode_clean: float  # tok/s
-    n_itls_total: int  # 全部 itl 样本数
-    n_itls_burst: int  # itl < 1ms 的数量
-    n_itls_preempt: int  # itl > 500ms 的数量
-    n_itls_clean: int  # 1ms <= itl <= 500ms 的数量
+    # 解码速度(过滤 TPOT<1ms 的请求后)
+    s_decode_filtered_mean: float  # tok/s
+    s_decode_filtered_median: float  # tok/s
+    n_decode_total: int  # 参与统计的总请求数
+    n_decode_filtered: int  # 被过滤的请求数(TPOT<1ms)
+    n_decode_reliable: int  # 可信请求数(TPOT>=1ms)
     mean_s_decode: float
     median_s_decode: float
     std_s_decode: float
@@ -266,10 +267,6 @@ def calculate_metrics(
                 else:
                     s_decodes.append(0)
             completed += 1
-        else:
-            actual_output_lens.append(0)
-            input_lens.append(0)
-            infer_input_lens.append(0)
 
     if goodput_config_dict:
         valid_metrics = []
@@ -296,20 +293,25 @@ def calculate_metrics(
             stacklevel=2,
         )
 
-    # === Cleaned ITL aggregation ===
-    BURST_THRESHOLD_S = 0.001  # 1 ms
-    PREEMPT_THRESHOLD_S = 0.5  # 500 ms
-    all_itls_flat: list[float] = []
+    # === 解码速度过滤：TPOT < 1ms 的请求视为不可信(引擎批量flush伪象) ===
+    MIN_TPOT_S = 0.001  # 1ms
+    reliable_s_decodes = []
+    n_decode_total = 0
+    n_decode_filtered = 0
     for o in outputs:
-        if o.success:
-            all_itls_flat.extend(o.itl)
-    _arr = np.asarray(all_itls_flat, dtype=float) if all_itls_flat else np.empty(0)
-    n_itls_total = int(_arr.size)
-    n_itls_burst = int((_arr < BURST_THRESHOLD_S).sum())
-    n_itls_preempt = int((_arr > PREEMPT_THRESHOLD_S).sum())
-    _clean = _arr[(_arr >= BURST_THRESHOLD_S) & (_arr <= PREEMPT_THRESHOLD_S)]
-    n_itls_clean = int(_clean.size)
-    s_decode_clean = float(_clean.size / _clean.sum()) if _clean.sum() > 0 else 0.0
+        if not o.success or o.output_tokens <= 1:
+            continue
+        decode_time = sum(o.itl) if o.itl else 0
+        if decode_time <= 0:
+            continue
+        n_decode_total += 1
+        tokens = o.output_tokens - 1
+        tpot = decode_time / tokens
+        if tpot >= MIN_TPOT_S:
+            reliable_s_decodes.append(tokens / decode_time)
+        else:
+            n_decode_filtered += 1
+    n_decode_reliable = len(reliable_s_decodes)
 
     metrics = BenchmarkMetrics(
         completed=completed,
@@ -319,6 +321,11 @@ def calculate_metrics(
         request_goodput=good_completed / dur_s,
         output_throughput=sum(actual_output_lens) / dur_s,
         total_token_throughput=(total_input + sum(actual_output_lens)) / dur_s,
+        s_decode_filtered_mean=float(np.mean(reliable_s_decodes)) if reliable_s_decodes else 0.0,
+        s_decode_filtered_median=float(np.median(reliable_s_decodes)) if reliable_s_decodes else 0.0,
+        n_decode_total=n_decode_total,
+        n_decode_filtered=n_decode_filtered,
+        n_decode_reliable=n_decode_reliable,
         mean_s_decode=np.mean(s_decodes or 0) * 1,  # ttfts is empty if streaming is not supported by backend
         std_s_decode=np.std(s_decodes or 0) * 1,
         median_s_decode=np.median(s_decodes or 0) * 1,
@@ -371,11 +378,6 @@ def calculate_metrics(
         std_res_ttft_ms=np.std(res_ttfts or 0) * 1000,
         median_res_ttft_ms=np.median(res_ttfts or 0) * 1000,
         percentiles_res_ttft_ms=[(p, np.percentile(res_ttfts or 0, p) * 1000) for p in selected_percentiles],
-        s_decode_clean=s_decode_clean,
-        n_itls_total=n_itls_total,
-        n_itls_burst=n_itls_burst,
-        n_itls_preempt=n_itls_preempt,
-        n_itls_clean=n_itls_clean,
     )
 
     return metrics, actual_output_lens
@@ -439,11 +441,12 @@ async def benchmark(
     # warmup短输出：取128和hyper_parameters中max_tokens的最小值
     warmup_output_len = min(128, hyper_parameters.get("max_tokens", 128))
     warmup_hyper = {k: v for k, v in hyper_parameters.items() if k != "max_tokens"}
+    warmup_request_id = f"warmup_{uuid.uuid4().hex[:8]}"
     test_input = RequestFuncInput(
         model=model_id,
         model_name=model_name,
         prompt=test_prompt,
-        no=test_no,
+        no=warmup_request_id,
         prompt_len=0,
         history_QA=test_history_QA,
         hyper_parameters=warmup_hyper,
@@ -460,6 +463,8 @@ async def benchmark(
         tokenizer_model=args.tokenizer_model,
         tokenizer_path=args.tokenizer_path,
         stream=args.stream,
+        session_id=f"warmup-{uuid.uuid4().hex}",
+        turn_idx=0,
     )
 
     if args.warmup:
@@ -772,7 +777,7 @@ async def benchmark(
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
         "infer_input_lens": [output.prompt_tokens for output in outputs],
-        "output_lens": actual_output_lens,
+        "output_lens": [output.output_tokens for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "res_ttfts": [output.res_ttft for output in outputs],
         "itls": [output.itl for output in outputs],
@@ -781,11 +786,11 @@ async def benchmark(
         "reasoning_contents": [output.reasoning_content for output in outputs],
         "errors": [output.error for output in outputs],
         "metrics": [output.metrics for output in outputs],
-        "s_decode_clean": metrics.s_decode_clean,
-        "n_itls_total": metrics.n_itls_total,
-        "n_itls_burst": metrics.n_itls_burst,
-        "n_itls_preempt": metrics.n_itls_preempt,
-        "n_itls_clean": metrics.n_itls_clean,
+        "s_decode_filtered_mean": metrics.s_decode_filtered_mean,
+        "s_decode_filtered_median": metrics.s_decode_filtered_median,
+        "n_decode_total": metrics.n_decode_total,
+        "n_decode_filtered": metrics.n_decode_filtered,
+        "n_decode_reliable": metrics.n_decode_reliable,
     }
 
     def process_one_metric(
@@ -934,25 +939,21 @@ async def benchmark(
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name}:", value))
             result[f"p{p_word}_{metric_attribute_name}"] = value
 
-    print("{s:{c}^{n}}".format(s="解码速度 (ITL全局聚合)", n=50, c="-"))
-    _tot = max(metrics.n_itls_total, 1)
-    print("{:<40} {:<10d}".format("Total ITLs:", metrics.n_itls_total))
+    print("{s:{c}^{n}}".format(s="解码速度 (过滤TPOT<1ms)", n=50, c="-"))
+    _n_total = max(metrics.n_decode_total, 1)
+    print("{:<40} {:<10d}".format("Total requests:", metrics.n_decode_total))
     print(
         "{:<40} {:<10d} ({:.2f}%)".format(
-            "ITL < 1ms (burst):", metrics.n_itls_burst, 100 * metrics.n_itls_burst / _tot
+            "Filtered (TPOT<1ms):", metrics.n_decode_filtered, 100 * metrics.n_decode_filtered / _n_total
         )
     )
     print(
         "{:<40} {:<10d} ({:.2f}%)".format(
-            "ITL > 500ms (preempt):", metrics.n_itls_preempt, 100 * metrics.n_itls_preempt / _tot
+            "Reliable (TPOT>=1ms):", metrics.n_decode_reliable, 100 * metrics.n_decode_reliable / _n_total
         )
     )
-    print(
-        "{:<40} {:<10d} ({:.2f}%)".format(
-            "ITL clean [1ms,500ms]:", metrics.n_itls_clean, 100 * metrics.n_itls_clean / _tot
-        )
-    )
-    print("{:<40} {:<10.2f}".format("Decode speed (clean, tok/s):", metrics.s_decode_clean))
+    print("{:<40} {:<10.2f}".format("Mean Decode (tok/s):", metrics.s_decode_filtered_mean))
+    print("{:<40} {:<10.2f}".format("Median Decode (tok/s):", metrics.s_decode_filtered_median))
     process_one_length("s_decode", "Decode", "解码速度(tok/s)")
     process_one_metric("ttft", "TTFT", "Time to First Token")
     process_one_metric("s_ttft", "S_TTFT", "Infer Time to First Token")
@@ -1057,7 +1058,7 @@ def benchmark_metrics(
         "output_throughput": metrics.output_throughput,
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
-        "output_lens": actual_output_lens,
+        "output_lens": [output.output_tokens for output in outputs],
         "ttfts": [output.ttft for output in outputs],
         "itls": [output.itl for output in outputs],
         "input_texts": ["" for input in input_requests],
@@ -1131,6 +1132,21 @@ def benchmark_metrics(
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name}:", value))
             result[f"p{p_word}_{metric_attribute_name}"] = value
 
+    print("{s:{c}^{n}}".format(s="解码速度 (过滤TPOT<1ms)", n=50, c="-"))
+    _n_total = max(metrics.n_decode_total, 1)
+    print("{:<40} {:<10d}".format("Total requests:", metrics.n_decode_total))
+    print(
+        "{:<40} {:<10d} ({:.2f}%)".format(
+            "Filtered (TPOT<1ms):", metrics.n_decode_filtered, 100 * metrics.n_decode_filtered / _n_total
+        )
+    )
+    print(
+        "{:<40} {:<10d} ({:.2f}%)".format(
+            "Reliable (TPOT>=1ms):", metrics.n_decode_reliable, 100 * metrics.n_decode_reliable / _n_total
+        )
+    )
+    print("{:<40} {:<10.2f}".format("Mean Decode (tok/s):", metrics.s_decode_filtered_mean))
+    print("{:<40} {:<10.2f}".format("Median Decode (tok/s):", metrics.s_decode_filtered_median))
     process_one_length("s_decode", "Decode", "解码速度(tok/s)")
     process_one_metric("ttft", "TTFT", "Time to First Token")
     process_one_metric("s_ttft", "S_TTFT", "Infer Time to First Token")
