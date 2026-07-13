@@ -3642,35 +3642,43 @@ class GPUModelRunner(ModelRunnerBase):
                 # In the == case, there are no more prompt logprobs to produce
                 # but we want to defer returning them to the next step where we
                 # have new generated tokens to return.
-                num_logits = num_tokens
+                num_logits_total = num_tokens
             else:
                 # This is the last chunk of prompt tokens to return.
-                num_logits = num_remaining_tokens
+                num_logits_total = num_remaining_tokens
                 completed_prefill_reqs.append(request)
                 prompt_logprobs_list[batch_id] = logprobs_tensors
-            if num_logits <= 0:
+            if num_logits_total <= 0:
                 # This can happen for the final chunk if we prefilled exactly
                 # (num_prompt_tokens - 1) tokens for this request in the prior
                 # step. There are no more prompt logprobs to produce.
                 continue
             offset = self.share_inputs["cu_seqlens_q"][batch_id]
-            prompt_hidden_states = hidden_states[offset : offset + num_logits]
-            logits = self.model.compute_logits(prompt_hidden_states, self.forward_meta)
-            prompt_token_ids = request.prompt_token_ids[start_tok : start_tok + num_logits]
-            prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
-            if logprobs_mode == "raw_logprobs":
-                raw_logprobs = self.sampler.compute_logprobs(logits)
-            elif logprobs_mode == "raw_logits":
-                raw_logprobs = logits
-            token_ids, logprobs, ranks = self.sampler.gather_logprobs(
-                raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
-            )
-            # Synchronize before using token_ids, logprobs and ranks to ensure async copy are completed.
-            paddle.device.synchronize()
-            chunk_slice = slice(start_idx, start_idx + num_logits)
-            logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
-            logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)
-            logprobs_tensors.selected_token_ranks[chunk_slice].copy_(ranks, False)
+            max_prompt_logprobs_chunk_size = 8 * 1024
+            for chunk_offset in range(0, num_logits_total, max_prompt_logprobs_chunk_size):
+                chunk_num_logits = min(max_prompt_logprobs_chunk_size, num_logits_total - chunk_offset)
+                prompt_hidden_states = hidden_states[offset + chunk_offset : offset + chunk_offset + chunk_num_logits]
+                logits = self.model.compute_logits(prompt_hidden_states, self.forward_meta)
+                prompt_token_ids = request.prompt_token_ids[
+                    start_tok + chunk_offset : start_tok + chunk_offset + chunk_num_logits
+                ]
+                prompt_token_ids_tensor = paddle.to_tensor(prompt_token_ids, dtype="int64")
+                if logprobs_mode == "raw_logprobs":
+                    raw_logprobs = self.sampler.compute_logprobs(logits)
+                elif logprobs_mode == "raw_logits":
+                    raw_logprobs = logits
+                token_ids, logprobs, ranks = self.sampler.gather_logprobs(
+                    raw_logprobs, num_prompt_logprobs, prompt_token_ids_tensor
+                )
+                # Synchronize before using token_ids, logprobs and ranks to ensure async copy are completed.
+                paddle.device.synchronize()
+                chunk_slice = slice(
+                    start_idx + chunk_offset,
+                    start_idx + chunk_offset + chunk_num_logits,
+                )
+                logprobs_tensors.logprob_token_ids[chunk_slice].copy_(token_ids, False)
+                logprobs_tensors.logprobs[chunk_slice].copy_(logprobs, False)
+                logprobs_tensors.selected_token_ranks[chunk_slice].copy_(ranks, False)
 
         for req in completed_prefill_reqs:
             del self.prompt_logprobs_reqs[req.request_id]
