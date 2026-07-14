@@ -1815,8 +1815,11 @@ class GPUModelRunner(ModelRunnerBase):
                     int(swa_num_key_value_heads) // self.parallel_config.tensor_parallel_size,
                 )
                 return [
-                    swa_kv_num_heads if (i < len(window_attn_skip_freq) and window_attn_skip_freq[i] == 1)
-                    else kv_num_heads
+                    (
+                        swa_kv_num_heads
+                        if (i < len(window_attn_skip_freq) and window_attn_skip_freq[i] == 1)
+                        else kv_num_heads
+                    )
                     for i in range(num_hidden_layers)
                 ]
             return [kv_num_heads] * num_hidden_layers

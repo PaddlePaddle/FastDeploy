@@ -226,7 +226,9 @@ else:
                         if need_do_prefill:
                             # Prefill: keep 3D tensors for flash_attn_func
                             if self.config.qk_head_dim - self.config.v_head_dim != 0:
-                                v = paddle.nn.functional.pad(v, [0, self.config.qk_head_dim - self.config.v_head_dim], value=0)
+                                v = paddle.nn.functional.pad(
+                                    v, [0, self.config.qk_head_dim - self.config.v_head_dim], value=0
+                                )
                             output = self.fd_attention.forward(
                                 q=q,
                                 k=k,
@@ -368,7 +370,7 @@ else:
             self.paddleformers_config.max_seq_len = self.model_config.max_model_len
             self.paddleformers_config.params_dtype = self.model_config.dtype or "bfloat16"
             self.paddleformers_config.moe_token_dispatcher_type = "deepep"
-            
+
             self.paddleformers_config.use_cpu_initialization = True
             self.paddleformers_config.perform_initialization = False
             self.paddleformers_config.gated_attention = getattr(self.paddleformers_config, "use_gated_attn", False)
@@ -408,7 +410,10 @@ else:
                     rank = paddle.distributed.get_rank() if paddle.distributed.is_initialized() else 0
                     allocated = paddle.device.cuda.memory_allocated() / 1024**3
                     reserved = paddle.device.cuda.memory_reserved() / 1024**3
-                    print(f"[GPU MEM][rank={rank}][{tag}] allocated={allocated:.2f}GB reserved={reserved:.2f}GB", flush=True)
+                    print(
+                        f"[GPU MEM][rank={rank}][{tag}] allocated={allocated:.2f}GB reserved={reserved:.2f}GB",
+                        flush=True,
+                    )
 
                 _print_gpu_mem("before_from_pretrained")
                 self.model = AutoModelForCausalLM.from_pretrained(
@@ -803,7 +808,9 @@ else:
                 )
             else:
                 num_attention_heads = getattr(
-                    core_attn, "num_attention_heads_per_partition", getattr(core_attn.config, "num_attention_heads", None)
+                    core_attn,
+                    "num_attention_heads_per_partition",
+                    getattr(core_attn.config, "num_attention_heads", None),
                 )
                 num_key_value_heads = getattr(
                     core_attn,
@@ -868,9 +875,7 @@ else:
                         is_bias=False,
                         default_initializer=paddle.nn.initializer.Constant(0),
                     )
-                fd_attn_instance.sinks.set_value(
-                    offset_val.astype(fd_attn_instance.sinks.dtype)
-                )
+                fd_attn_instance.sinks.set_value(offset_val.astype(fd_attn_instance.sinks.dtype))
                 logger.info(
                     f"Wired softmax_offset -> sinks for layer {fd_layer_id} "
                     f"(shape={list(fd_attn_instance.sinks.shape)}, "

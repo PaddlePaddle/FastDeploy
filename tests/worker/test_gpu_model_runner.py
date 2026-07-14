@@ -1104,7 +1104,9 @@ class TestGetKvNumHeadsPerLayer(unittest.TestCase):
     def test_swa_basic(self):
         """SWA layers get swa_kv_num_heads, non-SWA layers get normal kv_num_heads"""
         runner = self._make_runner(
-            4, 8, tp_size=1,
+            4,
+            8,
+            tp_size=1,
             window_attn_skip_freq=[1, 0, 1, 0],
             swa_num_key_value_heads=4,
         )
@@ -1116,7 +1118,9 @@ class TestGetKvNumHeadsPerLayer(unittest.TestCase):
     def test_swa_with_tp(self):
         """SWA with tensor parallelism divides both head counts"""
         runner = self._make_runner(
-            4, 8, tp_size=2,
+            4,
+            8,
+            tp_size=2,
             window_attn_skip_freq=[1, 0, 0, 1],
             swa_num_key_value_heads=4,
         )
@@ -1127,7 +1131,9 @@ class TestGetKvNumHeadsPerLayer(unittest.TestCase):
     def test_swa_all_layers(self):
         """All layers are SWA"""
         runner = self._make_runner(
-            3, 8, tp_size=1,
+            3,
+            8,
+            tp_size=1,
             window_attn_skip_freq=[1, 1, 1],
             swa_num_key_value_heads=2,
         )
@@ -1137,7 +1143,9 @@ class TestGetKvNumHeadsPerLayer(unittest.TestCase):
     def test_swa_skip_freq_shorter_than_layers(self):
         """window_attn_skip_freq shorter than num_hidden_layers -> extra layers use normal heads"""
         runner = self._make_runner(
-            5, 8, tp_size=1,
+            5,
+            8,
+            tp_size=1,
             window_attn_skip_freq=[1, 0, 1],
             swa_num_key_value_heads=4,
         )
@@ -1148,7 +1156,9 @@ class TestGetKvNumHeadsPerLayer(unittest.TestCase):
     def test_swa_only_window_attn_skip_freq_set(self):
         """Only window_attn_skip_freq set, swa_num_key_value_heads is None -> no SWA logic"""
         runner = self._make_runner(
-            3, 6, tp_size=1,
+            3,
+            6,
+            tp_size=1,
             window_attn_skip_freq=[1, 0, 1],
             swa_num_key_value_heads=None,
         )
@@ -1158,7 +1168,9 @@ class TestGetKvNumHeadsPerLayer(unittest.TestCase):
     def test_swa_only_swa_num_kv_heads_set(self):
         """Only swa_num_key_value_heads set, window_attn_skip_freq is None -> no SWA logic"""
         runner = self._make_runner(
-            3, 6, tp_size=1,
+            3,
+            6,
+            tp_size=1,
             window_attn_skip_freq=None,
             swa_num_key_value_heads=4,
         )
@@ -1168,7 +1180,9 @@ class TestGetKvNumHeadsPerLayer(unittest.TestCase):
     def test_swa_kv_heads_min_clamp(self):
         """swa_num_key_value_heads // tp_size < 1 should clamp to 1"""
         runner = self._make_runner(
-            2, 8, tp_size=8,
+            2,
+            8,
+            tp_size=8,
             window_attn_skip_freq=[1, 0],
             swa_num_key_value_heads=2,
         )

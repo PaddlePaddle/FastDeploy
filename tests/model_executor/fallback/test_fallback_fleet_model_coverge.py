@@ -1579,7 +1579,9 @@ class TestPatchCoreAttentionSWADetection:
     Covers: window_attn_skip_freq-based is_swa_layer branch and swa_num_* config usage.
     """
 
-    def _make_model_with_layers(self, layer_numbers, window_attn_skip_freq=None, swa_num_attention_heads=None, swa_num_key_value_heads=None):
+    def _make_model_with_layers(
+        self, layer_numbers, window_attn_skip_freq=None, swa_num_attention_heads=None, swa_num_key_value_heads=None
+    ):
         """Create a mock model with TransformerLayers for patching tests."""
         model = MagicMock()
         layers = []
@@ -1729,7 +1731,9 @@ class TestPatchCoreAttentionSoftmaxOffset:
         mock_attention_cls = MagicMock()
         mock_attn_instance = MagicMock()
         # Use a real paddle parameter for sinks so shape/dtype are accessible
-        sinks_param = paddle.create_parameter(shape=[4], dtype="float32", default_initializer=paddle.nn.initializer.Constant(0))
+        sinks_param = paddle.create_parameter(
+            shape=[4], dtype="float32", default_initializer=paddle.nn.initializer.Constant(0)
+        )
         mock_attn_instance.sinks = sinks_param
         mock_attn_instance.create_parameter = MagicMock(return_value=sinks_param)
         mock_attention_cls.return_value = mock_attn_instance
