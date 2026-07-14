@@ -17,6 +17,7 @@
 """Generic PaddleFormers modeling backend base class."""
 
 import logging
+import os
 
 from fastdeploy.model_executor.utils import is_paddlefleet_available
 
@@ -45,7 +46,7 @@ else:
 
     from fastdeploy.model_executor.layers.attention.attention import Attention
 
-    USE_ERNIE = True
+    USE_ERNIE = os.environ.get("FD_FALLBACK_FLEET_USE_ERNIE", "0")
 
     class FastDeployAttention(FleetLayer):
         """
