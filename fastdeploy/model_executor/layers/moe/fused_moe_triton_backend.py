@@ -747,14 +747,33 @@ class Wfp8Afp8MoEMethod(QuantMethodBase):
             "num_stages": 4,
         }
         if token_num <= E:
-            config = {
-                "BLOCK_SIZE_M": 64,
-                "BLOCK_SIZE_N": 128,
-                "BLOCK_SIZE_K": 128,
-                "GROUP_SIZE_M": 1,
-                "num_warps": 4,
-                "num_stages": 4,
-            }
+            if token_num <= 16:
+                config = {
+                    "BLOCK_SIZE_M": 16,
+                    "BLOCK_SIZE_N": 64,
+                    "BLOCK_SIZE_K": 128,
+                    "GROUP_SIZE_M": 1,
+                    "num_warps": 4,
+                    "num_stages": 4,
+                }
+            elif token_num <= 32:
+                config = {
+                    "BLOCK_SIZE_M": 32,
+                    "BLOCK_SIZE_N": 64,
+                    "BLOCK_SIZE_K": 128,
+                    "GROUP_SIZE_M": 1,
+                    "num_warps": 4,
+                    "num_stages": 3,
+                }
+            else:
+                config = {
+                    "BLOCK_SIZE_M": 64,
+                    "BLOCK_SIZE_N": 128,
+                    "BLOCK_SIZE_K": 128,
+                    "GROUP_SIZE_M": 1,
+                    "num_warps": 4,
+                    "num_stages": 3,
+                }
 
         sorted_token_ids, expert_ids, num_tokens_post_padded = tritonmoe_preprocess_func(
             topk_ids, num_local_experts, config["BLOCK_SIZE_M"]
