@@ -3267,12 +3267,6 @@ class GPUModelRunner(ModelRunnerBase):
             kv_cache_status.value[0] = KVCacheStatus.CLEARING
         if self.use_cudagraph:
             self.model.clear_graph_opt_backend()
-            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
-                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
-                    clear_all_block_wise_graphs,
-                )
-
-                clear_all_block_wise_graphs()
             if (
                 self.speculative_decoding
                 and self.spec_method == SpecMethod.MTP
