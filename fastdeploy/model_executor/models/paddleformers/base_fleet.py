@@ -45,7 +45,7 @@ else:
 
     from fastdeploy.model_executor.layers.attention.attention import Attention
 
-    USE_ERNIE = False
+    USE_ERNIE = True
 
     class FastDeployAttention(FleetLayer):
         """
@@ -225,6 +225,8 @@ else:
                         fmqa_out = None
                         if need_do_prefill:
                             # Prefill: keep 3D tensors for flash_attn_func
+                            if self.config.qk_head_dim - self.config.v_head_dim != 0:
+                                v = paddle.nn.functional.pad(v, [0, self.config.qk_head_dim - self.config.v_head_dim], value=0)
                             output = self.fd_attention.forward(
                                 q=q,
                                 k=k,
@@ -297,6 +299,13 @@ else:
                     k_flat = k.reshape([seq_len, -1])
                     v_flat = v.reshape([seq_len, -1])
 
+                    logger.info(
+                        f"[DEBUG concat_qkv] layer={self.layer_id} "
+                        f"q={list(q.shape)} k={list(k.shape)} v={list(v.shape)} "
+                        f"q_flat={list(q_flat.shape)} k_flat={list(k_flat.shape)} v_flat={list(v_flat.shape)} "
+                        f"fd_attn kv_num_heads={self.fd_attention.kv_num_heads} head_dim={self.fd_attention.head_dim}"
+                    )
+
                     # Concatenate QKV: [seq, (q_heads + kv_heads + kv_heads) * head_dim]
                     qkv = paddle.concat([q_flat, k_flat, v_flat], axis=-1)
 
@@ -351,15 +360,15 @@ else:
             self.paddleformers_config.tensor_model_parallel_size = parallel_config.tensor_parallel_size
             self.paddleformers_config.sequence_parallel = parallel_config.sequence_parallel
             self.paddleformers_config.expert_model_parallel_size = parallel_config.expert_parallel_size
+            print("config", self.paddleformers_config)
             # if parallel_config.expert_parallel_size > 1 and parallel_config.sequence_parallel == False:
             #     self.paddleformers_config.tensor_model_parallel_size = 1
             #     logger.warning("When using expert parallelism and tensor parallelism, sequence parallelism must be used in fleet set tp=1 .")
             self.paddleformers_config.parallel_output = self.paddleformers_config.tensor_model_parallel_size == 1
             self.paddleformers_config.max_seq_len = self.model_config.max_model_len
             self.paddleformers_config.params_dtype = self.model_config.dtype or "bfloat16"
-            # self.paddleformers_config.moe_grouped_gemm = True
             self.paddleformers_config.moe_token_dispatcher_type = "deepep"
-            # self.paddleformers_config.use_cpu_initialization = True
+            
             self.paddleformers_config.use_cpu_initialization = True
             self.paddleformers_config.perform_initialization = False
             self.paddleformers_config.gated_attention = getattr(self.paddleformers_config, "use_gated_attn", False)
@@ -395,11 +404,19 @@ else:
             if USE_ERNIE:
                 from fleet_bridge import AutoModelForCausalLM
 
+                def _print_gpu_mem(tag):
+                    rank = paddle.distributed.get_rank() if paddle.distributed.is_initialized() else 0
+                    allocated = paddle.device.cuda.memory_allocated() / 1024**3
+                    reserved = paddle.device.cuda.memory_reserved() / 1024**3
+                    print(f"[GPU MEM][rank={rank}][{tag}] allocated={allocated:.2f}GB reserved={reserved:.2f}GB", flush=True)
+
+                _print_gpu_mem("before_from_pretrained")
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.model_config.model,
                     config=self.paddleformers_config,
                     dtype=self.model_config.dtype,
                 )
+                _print_gpu_mem("after_from_pretrained")
             else:
                 from paddleformers.transformers.auto.modeling import (
                     AutoModelForCausalLM,
@@ -494,6 +511,9 @@ else:
                 current_tp_size = getattr(tp_group, "nranks", None)
                 if current_tp_size is None:
                     current_tp_size = getattr(tp_group, "world_size", None)
+            else:
+                hcg = fleet.get_hybrid_communicate_group()
+                parallel_state.initialize_model_parallel(hcg)
 
             expected_tp_size = parallel_config.tensor_parallel_size
             need_init = tp_group is None or current_tp_size != expected_tp_size
@@ -587,39 +607,41 @@ else:
             Returns:
                 hidden_states: [TotalTokens, HiddenDim]
             """
-            # Handle empty batch case (e.g., DP worker with no data in EP mode)
-            if getattr(forward_meta, "is_zero_size", False) or inputs["ids_remove_padding"].shape[0] == 0:
-                # Return zero tensor with correct shape: [0, hidden_size]
-                hidden_size = self.model_config.hidden_size
-                dtype = self.model_config.dtype
-                return paddle.empty([0, hidden_size], dtype=dtype)
-
-            ids_remove_padding = inputs["ids_remove_padding"]
-            num_tokens = ids_remove_padding.shape[0]
-            batch_id_per_token = forward_meta.batch_id_per_token  # [num_tokens]
-            seq_lens_decoder = forward_meta.seq_lens_decoder  # [batch_size, 1]
-
-            if batch_id_per_token is not None and seq_lens_decoder is not None:
-                decoder_offsets = seq_lens_decoder.squeeze(-1)  # [batch_size]
-                # Ensure decoder_offsets is at least 1D tensor
-                if decoder_offsets.ndim == 0:
-                    decoder_offsets = decoder_offsets.reshape([1])
-                token_decoder_offsets = paddle.index_select(
-                    decoder_offsets, batch_id_per_token, axis=0
-                )  # [num_tokens]
-
-                cu_seqlens = forward_meta.cu_seqlens_q  # [batch_size + 1]
-                if cu_seqlens is not None:
-                    token_global_idx = paddle.arange(num_tokens, dtype="int64")
-                    request_start_idx = paddle.index_select(cu_seqlens[:-1], batch_id_per_token, axis=0)
-                    relative_positions = token_global_idx - request_start_idx.astype("int64")
-                else:
-                    relative_positions = paddle.zeros([num_tokens], dtype="int64")
-                position_ids = token_decoder_offsets.astype("int64") + relative_positions
+            # In EP mode, idle ranks (is_zero_size=True) must NOT skip the full forward pass:
+            # MoE layers use alltoall collectives that require ALL EP ranks to participate,
+            # even those with zero tokens. Feed a fake token id so the model can run normally,
+            # then strip the fake output before returning.
+            is_zero_size = getattr(forward_meta, "is_zero_size", False) or inputs["ids_remove_padding"].shape[0] == 0
+            if is_zero_size:
+                ids_remove_padding = paddle.zeros([1], dtype="int64")  # fake token id
+                position_ids = paddle.zeros([1], dtype="int64")
             else:
-                position_ids = paddle.arange(num_tokens, dtype="int64")
-                if seq_lens_decoder is not None:
-                    position_ids = position_ids + seq_lens_decoder[0, 0].astype("int64")
+                ids_remove_padding = inputs["ids_remove_padding"]
+                num_tokens = ids_remove_padding.shape[0]
+                batch_id_per_token = forward_meta.batch_id_per_token  # [num_tokens]
+                seq_lens_decoder = forward_meta.seq_lens_decoder  # [batch_size, 1]
+
+                if batch_id_per_token is not None and seq_lens_decoder is not None:
+                    decoder_offsets = seq_lens_decoder.squeeze(-1)  # [batch_size]
+                    # Ensure decoder_offsets is at least 1D tensor
+                    if decoder_offsets.ndim == 0:
+                        decoder_offsets = decoder_offsets.reshape([1])
+                    token_decoder_offsets = paddle.index_select(
+                        decoder_offsets, batch_id_per_token, axis=0
+                    )  # [num_tokens]
+
+                    cu_seqlens = forward_meta.cu_seqlens_q  # [batch_size + 1]
+                    if cu_seqlens is not None:
+                        token_global_idx = paddle.arange(num_tokens, dtype="int64")
+                        request_start_idx = paddle.index_select(cu_seqlens[:-1], batch_id_per_token, axis=0)
+                        relative_positions = token_global_idx - request_start_idx.astype("int64")
+                    else:
+                        relative_positions = paddle.zeros([num_tokens], dtype="int64")
+                    position_ids = token_decoder_offsets.astype("int64") + relative_positions
+                else:
+                    position_ids = paddle.arange(num_tokens, dtype="int64")
+                    if seq_lens_decoder is not None:
+                        position_ids = position_ids + seq_lens_decoder[0, 0].astype("int64")
             forward_meta.rope_already_applied = True
             # Also set forward_meta on each TransformerLayer's config
             # so that FastDeployAttention can retrieve it from core_attn.config
@@ -658,6 +680,9 @@ else:
             # [b, s, h] -> [s, h] (b=1)
             hidden_states = hidden_states.squeeze(0)
 
+            # Strip fake token injected for EP idle ranks
+            if is_zero_size:
+                return hidden_states[:0]  # [0, hidden_size]
             return hidden_states
 
         @paddle.no_grad()
@@ -746,13 +771,48 @@ else:
             # Get configuration info
             # Prefer per-partition values (values after TP sharding),
             # because PaddleFleet's QKV output is already per-partition when TP>1
-            num_attention_heads = getattr(
-                core_attn, "num_attention_heads_per_partition", getattr(core_attn.config, "num_attention_heads", None)
+            #
+            # Detect whether this layer is a sliding-window attention (SWA) layer.
+            # SWA layers may have different kv_num_heads / head_dim than full-attention layers.
+            window_attn_skip_freq = getattr(fd_config.model_config, "window_attn_skip_freq", None)
+            is_swa_layer = (
+                window_attn_skip_freq is not None
+                and layer_number < len(window_attn_skip_freq)
+                and window_attn_skip_freq[layer_number] == 1
             )
-            num_key_value_heads = getattr(
-                core_attn,
-                "num_query_groups_per_partition",
-                getattr(core_attn.config, "num_key_value_heads", num_attention_heads),
+
+            if is_swa_layer:
+                # SWA layer: use swa_* config fields when available
+                num_attention_heads = getattr(
+                    core_attn,
+                    "num_attention_heads_per_partition",
+                    getattr(
+                        core_attn.config,
+                        "swa_num_attention_heads",
+                        getattr(core_attn.config, "num_attention_heads", None),
+                    ),
+                )
+                num_key_value_heads = getattr(
+                    core_attn,
+                    "num_query_groups_per_partition",
+                    getattr(
+                        core_attn.config,
+                        "swa_num_key_value_heads",
+                        getattr(core_attn.config, "num_key_value_heads", num_attention_heads),
+                    ),
+                )
+            else:
+                num_attention_heads = getattr(
+                    core_attn, "num_attention_heads_per_partition", getattr(core_attn.config, "num_attention_heads", None)
+                )
+                num_key_value_heads = getattr(
+                    core_attn,
+                    "num_query_groups_per_partition",
+                    getattr(core_attn.config, "num_key_value_heads", num_attention_heads),
+                )
+            logger.info(
+                f"Layer {layer_number} is_swa={is_swa_layer}: "
+                f"num_attention_heads={num_attention_heads}, num_key_value_heads={num_key_value_heads}"
             )
             hidden_size_per_attention_head = getattr(core_attn, "hidden_size_per_attention_head", None)
             if hidden_size_per_attention_head is not None:
@@ -767,10 +827,18 @@ else:
 
             fd_layer_id = layer_number
 
+            # Detect paddlefleet softmax_offset (a.k.a. attention sink bias).
+            # paddlefleet stores it on DotProductAttention.softmax_offset as either
+            # None (vanilla), a zeros tensor (off-by-one) or a learnable parameter.
+            # FastDeploy's Attention exposes the same math via `with_sinks` / `self.sinks`.
+            softmax_offset = getattr(core_attn, "softmax_offset", None)
+            has_sinks = softmax_offset is not None
+
             # Create Attention instance inside FastDeployAttention
             fd_attn_instance = Attention(
                 fd_config=fd_config,
                 layer_id=fd_layer_id,
+                with_sinks=has_sinks,
             )
 
             # Override Attention instance's head config to match PaddleFleet model
@@ -781,6 +849,33 @@ else:
             logger.info(
                 f"Overriding Attention config: num_heads={num_attention_heads}, kv_num_heads={num_key_value_heads}, head_dim={hidden_size_per_attention_head}"
             )
+
+            # Wire paddlefleet's softmax_offset -> FastDeploy sinks. Both have
+            # shape [num_heads_per_partition] and identical softmax-off-by-one
+            # semantics: exp(qk_i) / (sum_j exp(qk_j) + exp(offset_h)).
+            if has_sinks:
+                offset_val = softmax_offset.detach()
+                if (
+                    fd_attn_instance.sinks.shape[0] != num_attention_heads
+                    or fd_attn_instance.sinks.dtype != offset_val.dtype
+                ):
+                    # Rebuild sinks parameter so shape/dtype match paddlefleet's
+                    # per-partition softmax_offset (fd_config-derived num_heads
+                    # may differ from paddlefleet's when TP topology differs).
+                    fd_attn_instance.sinks = fd_attn_instance.create_parameter(
+                        shape=[num_attention_heads],
+                        dtype=offset_val.dtype,
+                        is_bias=False,
+                        default_initializer=paddle.nn.initializer.Constant(0),
+                    )
+                fd_attn_instance.sinks.set_value(
+                    offset_val.astype(fd_attn_instance.sinks.dtype)
+                )
+                logger.info(
+                    f"Wired softmax_offset -> sinks for layer {fd_layer_id} "
+                    f"(shape={list(fd_attn_instance.sinks.shape)}, "
+                    f"dtype={fd_attn_instance.sinks.dtype})"
+                )
 
             # Create FastDeployAttention object and directly replace core_attention
             fast_deploy_core_attn = FastDeployAttention(

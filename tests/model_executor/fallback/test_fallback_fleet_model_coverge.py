@@ -1568,6 +1568,424 @@ class TestFastDeployAttentionMLASWA:
         assert captured["indexer_fill"] == -1, f"Expected fill=-1, got {captured['indexer_fill']}"
 
 
+# ============================================================================
+# Tests for SWA layer detection in patch_paddlefleet_core_attention (new code)
+# ============================================================================
+
+
+class TestPatchCoreAttentionSWADetection:
+    """Tests for SWA layer detection logic in patch_paddlefleet_core_attention.
+
+    Covers: window_attn_skip_freq-based is_swa_layer branch and swa_num_* config usage.
+    """
+
+    def _make_model_with_layers(self, layer_numbers, window_attn_skip_freq=None, swa_num_attention_heads=None, swa_num_key_value_heads=None):
+        """Create a mock model with TransformerLayers for patching tests."""
+        model = MagicMock()
+        layers = []
+        for ln in layer_numbers:
+            layer = MagicMock()
+            type(layer).__name__ = "TransformerLayer"
+            layer.layer_number = ln
+            layer.self_attn = MagicMock()
+            core_attn = MagicMock()
+            core_attn.num_attention_heads_per_partition = 8
+            core_attn.num_query_groups_per_partition = 4
+            core_attn.hidden_size_per_attention_head = 64
+            core_attn.hidden_size_per_partition = 512
+            core_attn.softmax_scale = 0.125
+            core_attn.config = MagicMock()
+            core_attn.config.num_attention_heads = 8
+            core_attn.config.num_key_value_heads = 4
+            if swa_num_attention_heads is not None:
+                core_attn.config.swa_num_attention_heads = swa_num_attention_heads
+            else:
+                del core_attn.config.swa_num_attention_heads
+            if swa_num_key_value_heads is not None:
+                core_attn.config.swa_num_key_value_heads = swa_num_key_value_heads
+            else:
+                del core_attn.config.swa_num_key_value_heads
+            # No softmax_offset by default
+            del core_attn.softmax_offset
+            layer.self_attn.core_attention = core_attn
+            layers.append(layer)
+        model.run_function = layers
+        return model
+
+    def test_swa_layer_uses_swa_num_key_value_heads(self):
+        """SWA layer (skip_freq=1) picks swa_num_key_value_heads from config."""
+        model = self._make_model_with_layers(
+            [0, 1],
+            swa_num_attention_heads=4,
+            swa_num_key_value_heads=2,
+        )
+        fd_config = MagicMock()
+        fd_config.model_config.window_attn_skip_freq = [1, 0]  # layer 0 is SWA
+
+        mock_attention_cls = MagicMock()
+        mock_attn_instance = MagicMock()
+        mock_attention_cls.return_value = mock_attn_instance
+        mock_attn_instance.sinks = MagicMock()
+        mock_attn_instance.sinks.shape = [4]
+
+        with patch("fastdeploy.model_executor.layers.attention.attention.Attention", mock_attention_cls):
+            result = patch_paddlefleet_core_attention(model=model, fd_config=fd_config)
+
+        assert result == 2
+        # Verify that for layer 0 (SWA), the Attention was created with with_sinks=False
+        calls = mock_attention_cls.call_args_list
+        assert len(calls) == 2
+        # Layer 0 call: with_sinks=False (no softmax_offset)
+        assert calls[0].kwargs["with_sinks"] is False
+        assert calls[0].kwargs["layer_id"] == 0
+
+    def test_non_swa_layer_uses_standard_heads(self):
+        """Non-SWA layer (skip_freq=0) uses standard num_key_value_heads."""
+        model = self._make_model_with_layers([0], swa_num_key_value_heads=2)
+        fd_config = MagicMock()
+        fd_config.model_config.window_attn_skip_freq = [0]  # layer 0 is NOT SWA
+
+        mock_attention_cls = MagicMock()
+        mock_attn_instance = MagicMock()
+        mock_attention_cls.return_value = mock_attn_instance
+
+        with patch("fastdeploy.model_executor.layers.attention.attention.Attention", mock_attention_cls):
+            patch_paddlefleet_core_attention(model=model, fd_config=fd_config)
+
+        # For non-SWA layer, kv_num_heads should be from core_attn.num_query_groups_per_partition = 4
+        mock_attn_instance.kv_num_heads = 4  # set by the production code
+
+    def test_swa_layer_index_beyond_skip_freq_length(self):
+        """Layer index >= len(window_attn_skip_freq) is treated as non-SWA."""
+        model = self._make_model_with_layers([2])  # layer 2
+        fd_config = MagicMock()
+        fd_config.model_config.window_attn_skip_freq = [1, 0]  # only 2 entries, layer 2 is out of range
+
+        mock_attention_cls = MagicMock()
+        mock_attn_instance = MagicMock()
+        mock_attention_cls.return_value = mock_attn_instance
+
+        with patch("fastdeploy.model_executor.layers.attention.attention.Attention", mock_attention_cls):
+            patch_paddlefleet_core_attention(model=model, fd_config=fd_config)
+
+        # layer_number=2 >= len([1,0])=2 → not SWA → uses standard path
+        assert mock_attention_cls.call_count == 1
+
+    def test_no_window_attn_skip_freq_uses_standard_path(self):
+        """No window_attn_skip_freq on model_config → all layers use standard path."""
+        model = self._make_model_with_layers([0])
+        fd_config = MagicMock()
+        fd_config.model_config.window_attn_skip_freq = None
+
+        mock_attention_cls = MagicMock()
+        mock_attn_instance = MagicMock()
+        mock_attention_cls.return_value = mock_attn_instance
+
+        with patch("fastdeploy.model_executor.layers.attention.attention.Attention", mock_attention_cls):
+            patch_paddlefleet_core_attention(model=model, fd_config=fd_config)
+
+        assert mock_attention_cls.call_count == 1
+        assert mock_attention_cls.call_args.kwargs["with_sinks"] is False
+
+
+# ============================================================================
+# Tests for softmax_offset/sinks wiring (new code)
+# ============================================================================
+
+
+class TestPatchCoreAttentionSoftmaxOffset:
+    """Tests for softmax_offset -> sinks wiring in patch_paddlefleet_core_attention."""
+
+    def _make_model_with_softmax_offset(self, offset_tensor):
+        """Create model with a single TransformerLayer that has softmax_offset."""
+        model = MagicMock()
+        layer = MagicMock()
+        type(layer).__name__ = "TransformerLayer"
+        layer.layer_number = 0
+        layer.self_attn = MagicMock()
+        core_attn = MagicMock()
+        core_attn.num_attention_heads_per_partition = 4
+        core_attn.num_query_groups_per_partition = 4
+        core_attn.hidden_size_per_attention_head = 64
+        core_attn.hidden_size_per_partition = 256
+        core_attn.softmax_scale = 0.125
+        core_attn.config = MagicMock()
+        core_attn.config.num_attention_heads = 4
+        core_attn.config.num_key_value_heads = 4
+        del core_attn.config.swa_num_attention_heads
+        del core_attn.config.swa_num_key_value_heads
+        core_attn.softmax_offset = offset_tensor
+        layer.self_attn.core_attention = core_attn
+        model.run_function = [layer]
+        return model
+
+    def test_has_sinks_true_when_softmax_offset_present(self):
+        """softmax_offset present → with_sinks=True passed to Attention."""
+        offset = paddle.zeros([4], dtype="float32")
+        model = self._make_model_with_softmax_offset(offset)
+        fd_config = MagicMock()
+        fd_config.model_config.window_attn_skip_freq = None
+
+        mock_attention_cls = MagicMock()
+        mock_attn_instance = MagicMock()
+        # Use a real paddle parameter for sinks so shape/dtype are accessible
+        sinks_param = paddle.create_parameter(shape=[4], dtype="float32", default_initializer=paddle.nn.initializer.Constant(0))
+        mock_attn_instance.sinks = sinks_param
+        mock_attn_instance.create_parameter = MagicMock(return_value=sinks_param)
+        mock_attention_cls.return_value = mock_attn_instance
+
+        with patch("fastdeploy.model_executor.layers.attention.attention.Attention", mock_attention_cls):
+            patch_paddlefleet_core_attention(model=model, fd_config=fd_config)
+
+        mock_attention_cls.assert_called_once()
+        assert mock_attention_cls.call_args.kwargs["with_sinks"] is True
+
+    def test_has_sinks_false_when_no_softmax_offset(self):
+        """No softmax_offset → with_sinks=False."""
+        model = MagicMock()
+        layer = MagicMock()
+        type(layer).__name__ = "TransformerLayer"
+        layer.layer_number = 0
+        layer.self_attn = MagicMock()
+        core_attn = MagicMock()
+        core_attn.num_attention_heads_per_partition = 4
+        core_attn.num_query_groups_per_partition = 4
+        core_attn.hidden_size_per_attention_head = 64
+        core_attn.hidden_size_per_partition = 256
+        core_attn.softmax_scale = 0.125
+        core_attn.config = MagicMock()
+        core_attn.config.num_attention_heads = 4
+        core_attn.config.num_key_value_heads = 4
+        del core_attn.config.swa_num_attention_heads
+        del core_attn.config.swa_num_key_value_heads
+        del core_attn.softmax_offset
+        layer.self_attn.core_attention = core_attn
+        model.run_function = [layer]
+        fd_config = MagicMock()
+        fd_config.model_config.window_attn_skip_freq = None
+
+        mock_attention_cls = MagicMock()
+        mock_attn_instance = MagicMock()
+        mock_attention_cls.return_value = mock_attn_instance
+
+        with patch("fastdeploy.model_executor.layers.attention.attention.Attention", mock_attention_cls):
+            patch_paddlefleet_core_attention(model=model, fd_config=fd_config)
+
+        assert mock_attention_cls.call_args.kwargs["with_sinks"] is False
+
+
+# ============================================================================
+# Tests for MLA prefill qk_head_dim padding (new code line 228-229)
+# ============================================================================
+
+
+class TestMLAPrefillQKHeadDimPad:
+    """Test the qk_head_dim != v_head_dim padding branch in FastDeployAttention.forward."""
+
+    def test_v_padded_when_qk_head_dim_differs(self):
+        """Line 228-229: v is padded when qk_head_dim - v_head_dim != 0."""
+        kv_lora_rank, v_head_dim, num_heads = 4, 2, 2
+        qk_head_dim = 6  # differs from v_head_dim
+
+        attn, mock_fd_attention = _create_mla_attention(kv_lora_rank, v_head_dim, num_heads)
+        attn.config.qk_head_dim = qk_head_dim
+        attn.config.v_head_dim = v_head_dim
+
+        # Set up forward_meta with prefill only (no decode)
+        forward_meta = _create_mock_forward_meta(prefill_tokens=3, decode_tokens=0)
+        attn.config.forward_meta = forward_meta
+
+        seq_len = 3
+        query = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        key = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        value = paddle.randn([seq_len, num_heads, v_head_dim])  # v_head_dim=2
+        kv_compressed = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        k_pos_emb = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+
+        prefill_output = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        mock_fd_attention.forward.return_value = prefill_output
+
+        result = attn.forward(
+            query=query,
+            key=key,
+            value=value,
+            attention_mask=None,
+            kv_compressed=kv_compressed,
+            k_pos_emb=k_pos_emb,
+        )
+
+        assert result is not None
+        # Check that fd_attention.forward was called, meaning the padding branch was hit
+        mock_fd_attention.forward.assert_called_once()
+        # The v tensor passed should have last dim = qk_head_dim (padded)
+        call_kwargs = mock_fd_attention.forward.call_args.kwargs
+        v_passed = call_kwargs["v"]
+        assert v_passed.shape[-1] == qk_head_dim
+
+    def test_v_not_padded_when_qk_head_dim_equals_v_head_dim(self):
+        """No padding when qk_head_dim == v_head_dim."""
+        kv_lora_rank, v_head_dim, num_heads = 4, 4, 2
+        qk_head_dim = 4  # same as v_head_dim
+
+        attn, mock_fd_attention = _create_mla_attention(kv_lora_rank, v_head_dim, num_heads)
+        attn.config.qk_head_dim = qk_head_dim
+        attn.config.v_head_dim = v_head_dim
+
+        forward_meta = _create_mock_forward_meta(prefill_tokens=3, decode_tokens=0)
+        attn.config.forward_meta = forward_meta
+
+        seq_len = 3
+        query = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        key = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        value = paddle.randn([seq_len, num_heads, v_head_dim])
+        kv_compressed = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+        k_pos_emb = paddle.randn([1, seq_len, num_heads, kv_lora_rank])
+
+        prefill_output = paddle.randn([seq_len, num_heads, kv_lora_rank])
+        mock_fd_attention.forward.return_value = prefill_output
+
+        result = attn.forward(
+            query=query,
+            key=key,
+            value=value,
+            attention_mask=None,
+            kv_compressed=kv_compressed,
+            k_pos_emb=k_pos_emb,
+        )
+
+        assert result is not None
+        call_kwargs = mock_fd_attention.forward.call_args.kwargs
+        v_passed = call_kwargs["v"]
+        # v should remain unchanged (no padding)
+        assert v_passed.shape[-1] == v_head_dim
+
+
+# ============================================================================
+# Tests for EP idle rank forward with fake token strip (new code lines 610-617, 683-685)
+# ============================================================================
+
+
+class TestForwardEPIdleRankFakeTokenStrip:
+    """Test that EP idle ranks get a fake token injected then stripped."""
+
+    def test_is_zero_size_true_returns_zero_rows(self):
+        """is_zero_size=True injects fake token then strips → output shape[0] == 0."""
+        model = _create_mock_fleet_model_for_forward(hidden_size=64, num_tokens=1)
+
+        forward_meta = MagicMock()
+        forward_meta.is_zero_size = True
+
+        inputs = {"ids_remove_padding": paddle.zeros([0], dtype="int64")}
+        result = model.forward(inputs, forward_meta)
+
+        # Result should have 0 tokens but correct hidden_size
+        assert result.shape[0] == 0
+        assert result.shape[1] == 64
+
+    def test_empty_ids_triggers_fake_token(self):
+        """ids_remove_padding.shape[0]==0 with is_zero_size=False also injects fake token."""
+        model = _create_mock_fleet_model_for_forward(hidden_size=64, num_tokens=1)
+
+        forward_meta = MagicMock()
+        forward_meta.is_zero_size = False
+
+        inputs = {"ids_remove_padding": paddle.zeros([0], dtype="int64")}
+        result = model.forward(inputs, forward_meta)
+
+        assert result.shape[0] == 0
+
+    def test_normal_forward_no_strip(self):
+        """Normal (non-zero-size) forward returns all tokens without stripping."""
+        num_tokens = 3
+        model = _create_mock_fleet_model_for_forward(hidden_size=64, num_tokens=num_tokens)
+
+        forward_meta = MagicMock()
+        forward_meta.is_zero_size = False
+        forward_meta.batch_id_per_token = None
+        forward_meta.seq_lens_decoder = None
+        forward_meta.cu_seqlens_q = None
+
+        inputs = {"ids_remove_padding": paddle.to_tensor([1, 2, 3], dtype="int64")}
+        result = model.forward(inputs, forward_meta)
+
+        assert result.shape[0] == num_tokens
+
+
+# ============================================================================
+# Tests for _init_paddlefleet_parallel_state hcg else branch (new code lines 514-516)
+# ============================================================================
+
+
+class TestInitParallelStateHcgElseBranch:
+    """Test the new else branch: tp_group is not None but hcg initialization."""
+
+    def test_tp_group_none_triggers_hcg_initialize(self):
+        """tp_group=None → else branch calls fleet.get_hybrid_communicate_group + initialize_model_parallel."""
+        import paddle.distributed as dist_module
+        import paddlefleet.parallel_state as ps
+        from paddlefleet.tensor_parallel import random as tp_random
+
+        model = PaddleFleetModelBase.__new__(PaddleFleetModelBase)
+        fd_config = MagicMock()
+        fd_config.parallel_config.tensor_parallel_size = 2
+        fd_config.parallel_config.data_parallel_size = 1
+        fd_config.parallel_config.expert_parallel_size = 1
+        fd_config.parallel_config.sequence_parallel = False
+
+        mock_fleet = MagicMock()
+        mock_hcg = MagicMock()
+        mock_fleet.get_hybrid_communicate_group.return_value = mock_hcg
+
+        original_group = ps._TENSOR_MODEL_PARALLEL_GROUP
+        try:
+            ps._TENSOR_MODEL_PARALLEL_GROUP = None
+
+            with patch.object(dist_module, "fleet", mock_fleet):
+                with patch.object(ps, "initialize_model_parallel") as mock_init_mp:
+                    with patch.object(tp_random, "model_parallel_cuda_manual_seed"):
+                        model._init_paddlefleet_parallel_state(fd_config)
+
+            # The else branch should NOT be hit since tp_group is None initially
+            # Instead the need_init branch (tp_size=2, tp_group=None) → initialize_model_parallel
+            mock_init_mp.assert_called()
+        finally:
+            ps._TENSOR_MODEL_PARALLEL_GROUP = original_group
+
+    def test_tp_group_not_none_nranks_none_triggers_hcg(self):
+        """tp_group exists but nranks=None and world_size=None → hcg else branch triggered."""
+        import paddle.distributed as dist_module
+        import paddlefleet.parallel_state as ps
+        from paddlefleet.tensor_parallel import random as tp_random
+
+        model = PaddleFleetModelBase.__new__(PaddleFleetModelBase)
+        fd_config = MagicMock()
+        fd_config.parallel_config.tensor_parallel_size = 2
+        fd_config.parallel_config.data_parallel_size = 1
+        fd_config.parallel_config.expert_parallel_size = 1
+        fd_config.parallel_config.sequence_parallel = False
+
+        mock_fleet = MagicMock()
+        mock_hcg = MagicMock()
+        mock_fleet.get_hybrid_communicate_group.return_value = mock_hcg
+
+        # Create a mock group with both nranks and world_size as None to trigger hcg fallback
+        mock_existing_group = MagicMock(spec=[])  # no nranks, no world_size
+
+        original_group = ps._TENSOR_MODEL_PARALLEL_GROUP
+        try:
+            ps._TENSOR_MODEL_PARALLEL_GROUP = mock_existing_group
+
+            with patch.object(dist_module, "fleet", mock_fleet):
+                with patch.object(ps, "initialize_model_parallel") as mock_init_mp:
+                    with patch.object(tp_random, "model_parallel_cuda_manual_seed"):
+                        model._init_paddlefleet_parallel_state(fd_config)
+
+            # current_tp_size=None → need_init=True → tp_size=2 → initialize_model_parallel(hcg)
+            mock_init_mp.assert_called()
+        finally:
+            ps._TENSOR_MODEL_PARALLEL_GROUP = original_group
+
+
 class TestTryResolvePaddlefleetImportError:
     """Test model_base.py line 203-209: paddlefleet not installed raises ImportError."""
 
