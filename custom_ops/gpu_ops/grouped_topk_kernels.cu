@@ -767,6 +767,8 @@ std::vector<paddle::DataType> GroupedTopkInferDtype(
 std::vector<std::vector<int64_t>> GroupedTopkInferShape(
     const std::vector<int64_t>& gating_output_shape,
     const std::vector<int64_t>&,
+    const int n_group,
+    const int topk_group,
     const int topk) {
   auto num_tokens = gating_output_shape[0];
   auto num_experts = gating_output_shape[1];

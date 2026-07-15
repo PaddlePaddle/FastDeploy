@@ -140,3 +140,9 @@ def create_guard(default_value):
 
 sot_warmup_guard, in_sot_warmup_mode = create_guard(False)
 profile_run_guard, in_profile_run_mode = create_guard(False)
+
+# Guard for the prefill SOT warmup + piecewise-CUDAGraph capture phase.
+# When active, keep the SOT-compiled graph intact during prefill capture
+# by avoiding extra graph break points or graph fragmentation.
+# The decode-only CUDAGraph capture runs OUTSIDE this guard.
+prefill_cudagraph_guard, in_prefill_cudagraph_mode = create_guard(False)

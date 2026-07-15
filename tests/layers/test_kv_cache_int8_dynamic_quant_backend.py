@@ -103,7 +103,7 @@ class DummyFDConfig:
         self.graph_opt_config = type(
             "GraphOptConfig",
             (),
-            {"cudagraph_capture_sizes": None},
+            {"cudagraph_capture_sizes": None, "full_cuda_graph": True},
         )()
         self.parallel_config = type(
             "ParallelConfig",

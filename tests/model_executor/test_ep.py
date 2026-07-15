@@ -398,9 +398,7 @@ def test_eprunner_moe_select_noaux_tc_without_redundant(monkeypatch):
     def fake_get_moe_scores(*_args, **_kwargs):
         return "score", paddle.to_tensor([[0.5]]), paddle.to_tensor([[1]], dtype="int64")
 
-    from fastdeploy.model_executor.layers.moe import moe as moe_module
-
-    monkeypatch.setattr(moe_module, "get_moe_scores", fake_get_moe_scores, raising=True)
+    monkeypatch.setattr(ep, "get_moe_scores", fake_get_moe_scores, raising=True)
 
     runner = ep.EPPrefillRunner(
         top_k=2,

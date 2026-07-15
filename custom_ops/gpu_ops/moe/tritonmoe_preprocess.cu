@@ -29,10 +29,25 @@ std::vector<std::vector<int64_t>> tritonmoe_preprocessInferShape(
     const std::vector<int64_t>& topk_ids,
     int64_t num_experts,
     int64_t GEMM_BLOCK_SIZE_M) {
+  // Compute numel from shape; any dim == -1 means dynamic/unknown.
+  // If the shape is fully static and positive, compute the exact upper bound.
+  // Otherwise fall back to symbolic (-1) so that SOT treats them as
+  // SymbolicInt rather than raising "negative dimension" errors.
+  bool has_dynamic_dim = false;
   int topk_ids_numel = 1;
   for (int64_t dim : topk_ids) {
+    if (dim < 0) {
+      has_dynamic_dim = true;
+      break;
+    }
     topk_ids_numel *= static_cast<int>(dim);
   }
+
+  if (has_dynamic_dim) {
+    // Return symbolic shapes so downstream SOT infer_meta stays valid.
+    return {{-1}, {-1}, {1}};
+  }
+
   int max_num_tokens_padded;
   if (topk_ids_numel < num_experts + 1) {
     max_num_tokens_padded = topk_ids_numel * GEMM_BLOCK_SIZE_M;

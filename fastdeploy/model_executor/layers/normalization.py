@@ -21,9 +21,6 @@ import paddle
 from paddle import nn
 
 from fastdeploy.model_executor.forward_meta import ForwardMeta
-from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
-    block_wise_cuda_graph_wrap,
-)
 from fastdeploy.platforms import current_platform
 
 if current_platform.is_gcu():
@@ -212,7 +209,6 @@ class RMSNorm(nn.Layer):
         paddle.distributed.all_gather(multi_outs, out, self.tp_group)
         return multi_outs[:token_num, :]
 
-    @block_wise_cuda_graph_wrap(inputs=["x", "residual_input"], self_attrs=["weight"])
     def forward(
         self,
         x,
@@ -236,24 +232,26 @@ class RMSNorm(nn.Layer):
                   The `residual_output` is the result of applying the normalization and possibly other
                   operations (like linear transformation) on the `residual_input`.
         """
+        has_residual = residual_input is not None
+
         x_dtype = x.dtype
         x = x.astype(self.weight.dtype)
-        if residual_input is not None:
+        if has_residual:
             residual_input_dtype = residual_input.dtype
             residual_input = residual_input.astype(self.weight.dtype)
 
-        if residual_input is None:
+        if not has_residual:
             residual_out = x
         use_allreduce_fused = (
             self.enable_all_reduce_fusion
             and self.tp_size > 1
             and x.shape[0] <= 2048
-            and residual_input is not None
+            and has_residual
             and current_platform.is_cuda()
         )
         if proxy_rmsnorm is None:
             if current_platform.is_gcu():
-                if residual_input is None:
+                if not has_residual:
                     norm_out = rms_norm(x, self.weight, self.eps)
                     return norm_out.astype(x_dtype), residual_out
                 norm_out = self.norm_func(x, residual_input, self.weight, self.eps)
@@ -266,7 +264,7 @@ class RMSNorm(nn.Layer):
             else:
                 if is_batch_invariant_mode_enabled():
                     # M-invariant path: per-row Triton kernel, no cross-row reduction
-                    if residual_input is not None:
+                    if has_residual:
                         x = x + residual_input
                     norm_out = rms_norm_batch_invariant(x, self.weight, self.eps), x
                 else:
@@ -286,20 +284,16 @@ class RMSNorm(nn.Layer):
         else:
             if use_allreduce_fused:
                 norm_out = flashinfer_allreduce_residual_rmsnorm(
-                    fd_config=self.fd_config,
-                    input_tensor=x,
-                    residual=residual_input,
-                    weight=self.weight,
-                    eps=self.eps,
+                    fd_config=self.fd_config, input_tensor=x, residual=residual_input, weight=self.weight, eps=self.eps
                 )
                 assert norm_out[0] is not None, "Trtllm-all-reduce fusion failed!"
             else:
-                if residual_input is not None:
+                if has_residual:
                     x = x + residual_input
                 norm_out = proxy_rmsnorm(x, self.weight, self.eps), x
 
         out = norm_out[0].astype(x_dtype)
-        if residual_input is not None:
+        if has_residual:
             residual_out = norm_out[1].astype(residual_input_dtype)
 
         if self.split_x:

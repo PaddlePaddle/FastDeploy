@@ -331,17 +331,6 @@ class AppendAttentionBackend(AttentionBackend):
         q_norm_weight = getattr(layer, "q_norm_weight", None) if norm_after_rope_in_kernel else None
         k_norm_weight = getattr(layer, "k_norm_weight", None) if norm_after_rope_in_kernel else None
 
-        if self.rope_3d:
-            assert len(forward_meta.rotary_embs.shape) == 6
-        else:
-            assert len(forward_meta.rotary_embs.shape) == 5
-            if layer.use_neox_rotary_style:
-                assert forward_meta.rotary_embs.shape[0:4] == [2, 1, self.max_seq_len, 1]
-                # 128 is qwen3
-                # 32 is glm
-                # 64 is gpt-oss
-                assert forward_meta.rotary_embs.shape[4] in [128, 32, 64]
-
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,

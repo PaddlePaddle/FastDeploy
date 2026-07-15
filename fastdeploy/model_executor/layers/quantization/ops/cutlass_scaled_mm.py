@@ -67,7 +67,12 @@ def cutlass_scaled_mm(
     )
 
     out = paddle.empty([m, n], dtype=out_dtype)
-    fastdeploy.model_executor.ops.gpu.cutlass_scaled_mm(out, a, b, scale_a, scale_b, bias)
+    result = fastdeploy.model_executor.ops.gpu.cutlass_scaled_mm(out, a, b, scale_a, scale_b, bias)
+    # In dynamic mode the C++ inplace kernel returns None; use the pre-allocated
+    # buffer directly.  In static (PIR) mode the op returns a new SSA value that
+    # must be used so downstream ops see the correct dependency edge.
+    if result is not None:
+        out = result
 
     return out
 
@@ -116,17 +121,23 @@ def scaled_fp8_quant(
                 dynamic_per_token_scaled_fp8_quant,
             )
 
-            dynamic_per_token_scaled_fp8_quant(output, input, scale, scale_ub)
+            result = dynamic_per_token_scaled_fp8_quant(output, input, scale, scale_ub)
+            if result is not None:
+                output = result
         else:
             scale = paddle.zeros([1], dtype=paddle.float32)
             from fastdeploy.model_executor.ops.gpu import dynamic_scaled_fp8_quant
 
-            dynamic_scaled_fp8_quant(output, input, scale)
+            result = dynamic_scaled_fp8_quant(output, input, scale)
+            if result is not None:
+                output = result
     else:
         # num_token_padding not implemented for this case
         # assert (scale.numel() == 1 or num_token_padding is None)
         from fastdeploy.model_executor.ops.gpu import static_scaled_fp8_quant
 
-        static_scaled_fp8_quant(output, input, scale)
+        result = static_scaled_fp8_quant(output, input, scale)
+        if result is not None:
+            output = result
 
     return output, scale

@@ -193,19 +193,14 @@ class CudaGraphPiecewiseBackend:
 
     def __call__(self, **kwargs) -> List[paddle.Tensor] | paddle.Tensor:
         # Get real shape (total num tokens)
-        if (
-            self.speculative_decoding
-            and self.real_bsz_to_captured_size
-            and all(self.real_bsz_to_captured_size.values())
-        ):
-            seq_lens_this_time: paddle.Tensor = kwargs["forward_meta"].seq_lens_this_time
-            real_bsz = kwargs["forward_meta"].real_bsz
-            num_running_requests = real_bsz if real_bsz > 0 else int((seq_lens_this_time.flatten() > 0).sum().item())
-            num_running_requests = max(1, num_running_requests)
-            real_shape = self.real_bsz_to_captured_size[num_running_requests]
-        else:
-            ids_remove_padding: paddle.Tensor = kwargs["forward_meta"].ids_remove_padding
-            real_shape = ids_remove_padding.shape[0]
+        # For both MTP speculative decoding and regular decode, use ids_remove_padding.shape[0]
+        # directly as the real_shape key into real_shape_to_captured_size.
+        # In MTP, cudagraph_capture_sizes are already scaled by (num_speculative_tokens+1),
+        # so ids_remove_padding.shape[0] == capture_size and the lookup is correct.
+        # This avoids using real_bsz (a concrete Python int) which causes SOT to specialize
+        # on each distinct batch size, generating multiple code objects and breaking warmup_impl.
+        ids_remove_padding: paddle.Tensor = kwargs["forward_meta"].ids_remove_padding
+        real_shape = ids_remove_padding.shape[0]
         exist_prefill = kwargs["forward_meta"].exist_prefill
         # Static split graph mode: use Static + CUDAGraph for prefill/mixed phase
         static_cudagraph_for_prefill = exist_prefill and not self.full_cuda_graph and self.dy2st

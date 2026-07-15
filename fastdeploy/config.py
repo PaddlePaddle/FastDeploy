@@ -1151,6 +1151,15 @@ class GraphOptimizationConfig:
             )
         self.cudagraph_capture_sizes = dedup_sizes
 
+        dedup_prefill_sizes = list(set(self.cudagraph_capture_sizes_prefill))
+        if len(dedup_prefill_sizes) < len(self.cudagraph_capture_sizes_prefill):
+            logger.info(
+                ("cudagraph prefill sizes specified by model runner" " %s is overridden by config %s"),
+                self.cudagraph_capture_sizes_prefill,
+                dedup_prefill_sizes,
+            )
+        self.cudagraph_capture_sizes_prefill = dedup_prefill_sizes
+
         # Sort to make sure cudagraph capture sizes are in descending order
         self.cudagraph_capture_sizes.sort(reverse=True)
         self.cudagraph_capture_sizes_prefill.sort(reverse=True)
@@ -1213,6 +1222,13 @@ class GraphOptimizationConfig:
         draft_capture_sizes += [16 * i for i in range(9, 17)]
         # Shape [256, 288, ... 992, 1024]
         draft_capture_sizes += [32 * i for i in range(9, 33)]
+
+        # Shape [1024, 1088, ... 2048] step=64
+        draft_capture_sizes += [64 * i for i in range(17, 33)]
+        # Shape [2048, 2176, ... 4096] step=128
+        draft_capture_sizes += [128 * i for i in range(17, 33)]
+        # Shape [4096, 4352, ... 8192] step=256
+        draft_capture_sizes += [256 * i for i in range(17, 33)]
 
         draft_capture_sizes_prefill = draft_capture_sizes.copy()
         draft_capture_sizes.append(max_capture_size)
@@ -2283,7 +2299,13 @@ class FDConfig:
 
         # Adjustment GraphOptConfig
         if self.scheduler_config is not None and self.scheduler_config.splitwise_role == "prefill":
-            self.graph_opt_config.use_cudagraph = self.graph_opt_config.cudagraph_only_prefill
+            # Piecewise CUDAGraph for prefill worker: if graph_opt_level >= 1 and not full_cuda_graph,
+            # reuse the mixed piecewise path (capture_model_prefill_and_mixed) for the prefill worker.
+            # Otherwise fall back to cudagraph_only_prefill flag (legacy path).
+            if self.graph_opt_config.graph_opt_level >= 1 and not self.graph_opt_config.full_cuda_graph:
+                self.graph_opt_config.use_cudagraph = True
+            else:
+                self.graph_opt_config.use_cudagraph = self.graph_opt_config.cudagraph_only_prefill
         if self.load_config is not None and self.load_config.dynamic_load_weight is True:
             self.graph_opt_config.graph_opt_level = 0
             logger.info(

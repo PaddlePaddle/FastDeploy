@@ -31,6 +31,7 @@ from fastdeploy.config import PREEMPTED_TOKEN_ID, FDConfig
 from fastdeploy.engine.pooling_params import PoolingParams
 from fastdeploy.engine.request import BatchRequest, ImagePosition, Request, RequestType
 from fastdeploy.model_executor.graph_optimization.utils import (
+    prefill_cudagraph_guard,
     profile_run_guard,
     sot_warmup_guard,
 )
@@ -1511,7 +1512,16 @@ class GPUModelRunner(ModelRunnerBase):
         if self.fd_config.parallel_config.enable_chunked_moe:
             self.forward_meta.max_moe_num_chunk = dist_status.max_moe_num_chunk
 
-        only_decode_use_cudagraph = self.use_cudagraph and if_only_decode
+        # PD prefill workers with piecewise CUDAGraph (graph_opt_level>=1, not full_cuda_graph) only
+        # capture prefill/mixed graphs (via capture_model_prefill_and_mixed), never decode graphs.
+        # Exclude such workers from the decode CUDAGraph path to avoid lazy decode capture at runtime.
+        is_pd_prefill_piecewise = (
+            hasattr(self, "graph_opt_config")
+            and self.fd_config.scheduler_config.splitwise_role == "prefill"
+            and self.graph_opt_config.graph_opt_level >= 1
+            and not self.graph_opt_config.full_cuda_graph
+        )
+        only_decode_use_cudagraph = self.use_cudagraph and if_only_decode and not is_pd_prefill_piecewise
 
         # Update config about moe for better performance
         # TODO(wanglongzhi):Modifying the config at runtime is not appropriate; it needs to be moved to forward_meta. It will be used in MoEMethodBase.apply()
@@ -1536,6 +1546,7 @@ class GPUModelRunner(ModelRunnerBase):
             and self.use_cudagraph
             and self.graph_opt_config.graph_opt_level > 0
             and not self.graph_opt_config.full_cuda_graph
+            and (self.fd_config.scheduler_config.splitwise_role != "prefill" or self.exist_prefill())
         ):
             self.forward_meta.step_use_cudagraph = True
 
@@ -2213,6 +2224,7 @@ class GPUModelRunner(ModelRunnerBase):
         time_after_capture = time.perf_counter()
         logger.info(f"Cuda Graph capturing took {time_after_capture - time_before_capture} seconds")
 
+    @prefill_cudagraph_guard(True)
     @sot_warmup_guard(True)
     def capture_model_prefill_and_mixed(self) -> None:
         """
@@ -2222,6 +2234,8 @@ class GPUModelRunner(ModelRunnerBase):
             logger.info("Skipping CUDA graph capture. Please check GraphOptimizationConfig")
             return
         time_before_capture = time.perf_counter()
+        if self.fd_config.parallel_config.use_ep:
+            self.fd_config.model_config.moe_phase.phase = "prefill"
         capture_sizes = self.cudagraph_capture_sizes_prefill.copy()
         for capture_size in sorted(capture_sizes, reverse=True):
             self._dummy_run(
@@ -3144,12 +3158,6 @@ class GPUModelRunner(ModelRunnerBase):
         if self.use_cudagraph:
             self.model.clear_graph_opt_backend()
 
-            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
-                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
-                    clear_all_block_wise_graphs,
-                )
-
-                clear_all_block_wise_graphs()
             if (
                 self.speculative_decoding
                 and self.spec_method == SpecMethod.MTP
@@ -3259,12 +3267,6 @@ class GPUModelRunner(ModelRunnerBase):
             kv_cache_status.value[0] = KVCacheStatus.CLEARING
         if self.use_cudagraph:
             self.model.clear_graph_opt_backend()
-            if envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
-                from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
-                    clear_all_block_wise_graphs,
-                )
-
-                clear_all_block_wise_graphs()
             if (
                 self.speculative_decoding
                 and self.spec_method == SpecMethod.MTP
@@ -3692,48 +3694,4 @@ class GPUModelRunner(ModelRunnerBase):
             fd_config=self.fd_config,
             block_table=self.share_inputs["block_tables"],
             total_block_num=self.num_gpu_blocks,
-        )
-
-    def capture_block_wise_graphs(self) -> None:
-        """
-        Independent capture loop for block-wise CUDA graphs.
-        Pre-captures graphs for designated token counts so that at runtime,
-        matching sizes replay the graph while other sizes fall back to eager.
-        """
-        if not envs.FD_USE_BLOCK_WISE_CUDA_GRAPH:
-            return
-
-        from fastdeploy.model_executor.graph_optimization.cuda_graph_op import (
-            set_block_wise_capturing,
-        )
-
-        # Parse capture sizes from env var
-        sizes_str = envs.FD_BLOCK_WISE_CUDA_GRAPH_SIZES
-        capture_sizes = sorted([int(s.strip()) for s in sizes_str.split(",") if s.strip()], reverse=True)
-        if not capture_sizes:
-            logger.warning("FD_BLOCK_WISE_CUDA_GRAPH_SIZES is empty, skipping block-wise CUDA graph capture")
-            return
-
-        logger.info(f"Block-wise CUDA graph capture starting for sizes: {sorted(capture_sizes)}")
-        time_before_capture = time.perf_counter()
-
-        set_block_wise_capturing(True)
-        try:
-            for num_tokens in capture_sizes:
-                batch_size = min(num_tokens, self.scheduler_config.max_num_seqs)
-                if batch_size < 1:
-                    batch_size = 1
-                self._dummy_run(
-                    num_tokens=num_tokens,
-                    batch_size=batch_size,
-                    in_capturing=False,
-                )
-                logger.info(f"Block-wise CUDA graph captured for num_tokens={num_tokens}")
-        finally:
-            set_block_wise_capturing(False)
-
-        time_after_capture = time.perf_counter()
-        logger.info(
-            f"Block-wise CUDA graph capturing took {time_after_capture - time_before_capture:.3f} seconds "
-            f"for {len(capture_sizes)} sizes"
         )
