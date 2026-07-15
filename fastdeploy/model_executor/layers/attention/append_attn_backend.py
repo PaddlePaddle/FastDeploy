@@ -319,6 +319,8 @@ class AppendAttentionBackend(AttentionBackend):
         rope_already_applied = getattr(forward_meta, "rope_already_applied", False)
         if rope_already_applied and forward_meta.rotary_embs is not None:
             forward_meta.rotary_embs = self._get_identity_rotary_embs(forward_meta.rotary_embs)
+            if forward_meta.swa_rotary_embs is not None:
+                forward_meta.swa_rotary_embs = self._get_identity_rotary_embs(forward_meta.swa_rotary_embs)
 
         sliding_window = 0
         rotary_embs = forward_meta.rotary_embs
