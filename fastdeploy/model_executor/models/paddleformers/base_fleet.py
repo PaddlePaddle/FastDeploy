@@ -46,7 +46,7 @@ else:
 
     from fastdeploy.model_executor.layers.attention.attention import Attention
 
-    USE_ERNIE = os.environ.get("FD_FALLBACK_FLEET_USE_ERNIE", "0")
+    USE_ERNIE = os.environ.get("FD_FALLBACK_FLEET_USE_ERNIE", False)
 
     class FastDeployAttention(FleetLayer):
         """
@@ -215,21 +215,15 @@ else:
                             attn_softmax_scale=self.softmax_scale,
                         )
 
-                        fmqa_out = fmqa_out.reshape_([-1, num_attention_heads_tp, kv_lora_rank]).transpose([1, 0, 2])
-                        fmqa_out = paddle.bmm(fmqa_out, v_b_proj_weight)
-                        output = fmqa_out.transpose([1, 0, 2]).reshape(
-                            [-1, num_attention_heads_tp * self.config.v_head_dim]
-                        )
+                        fmqa_out = fmqa_out.reshape_([-1, num_attention_heads_tp, kv_lora_rank])
+                        fmqa_out = paddle.einsum("thr,hrv->thv", fmqa_out, v_b_proj_weight)
+                        output = fmqa_out.reshape([-1, num_attention_heads_tp * self.config.v_head_dim])
 
                     else:
                         output = None
                         fmqa_out = None
                         if need_do_prefill:
                             # Prefill: keep 3D tensors for flash_attn_func
-                            if self.config.qk_head_dim - self.config.v_head_dim != 0:
-                                v = paddle.nn.functional.pad(
-                                    v, [0, self.config.qk_head_dim - self.config.v_head_dim], value=0
-                                )
                             output = self.fd_attention.forward(
                                 q=q,
                                 k=k,
@@ -265,9 +259,9 @@ else:
                             kv_lora_rank = self.config.kv_lora_rank
                             v_head_dim = self.config.v_head_dim
                             num_heads = fmqa_out.shape[-1] // kv_lora_rank
-                            fmqa_out = fmqa_out.reshape([-1, num_heads, kv_lora_rank]).transpose([1, 0, 2])
-                            fmqa_out = paddle.bmm(fmqa_out, v_b_proj_weight)
-                            fmqa_out = fmqa_out.transpose([1, 0, 2]).reshape([-1, num_heads * v_head_dim])
+                            fmqa_out = fmqa_out.reshape([-1, num_heads, kv_lora_rank])
+                            fmqa_out = paddle.einsum("thr,hrv->thv", fmqa_out, v_b_proj_weight)
+                            fmqa_out = fmqa_out.reshape([-1, num_heads * v_head_dim])
                             # Merge prefill and decode outputs if both are present
                             if need_do_prefill:
                                 try:
@@ -301,13 +295,6 @@ else:
                     q_flat = q.reshape([seq_len, -1])
                     k_flat = k.reshape([seq_len, -1])
                     v_flat = v.reshape([seq_len, -1])
-
-                    logger.info(
-                        f"[DEBUG concat_qkv] layer={self.layer_id} "
-                        f"q={list(q.shape)} k={list(k.shape)} v={list(v.shape)} "
-                        f"q_flat={list(q_flat.shape)} k_flat={list(k_flat.shape)} v_flat={list(v_flat.shape)} "
-                        f"fd_attn kv_num_heads={self.fd_attention.kv_num_heads} head_dim={self.fd_attention.head_dim}"
-                    )
 
                     # Concatenate QKV: [seq, (q_heads + kv_heads + kv_heads) * head_dim]
                     qkv = paddle.concat([q_flat, k_flat, v_flat], axis=-1)
@@ -363,7 +350,6 @@ else:
             self.paddleformers_config.tensor_model_parallel_size = parallel_config.tensor_parallel_size
             self.paddleformers_config.sequence_parallel = parallel_config.sequence_parallel
             self.paddleformers_config.expert_model_parallel_size = parallel_config.expert_parallel_size
-            print("config", self.paddleformers_config)
             # if parallel_config.expert_parallel_size > 1 and parallel_config.sequence_parallel == False:
             #     self.paddleformers_config.tensor_model_parallel_size = 1
             #     logger.warning("When using expert parallelism and tensor parallelism, sequence parallelism must be used in fleet set tp=1 .")
@@ -407,22 +393,11 @@ else:
             if USE_ERNIE:
                 from fleet_bridge import AutoModelForCausalLM
 
-                def _print_gpu_mem(tag):
-                    rank = paddle.distributed.get_rank() if paddle.distributed.is_initialized() else 0
-                    allocated = paddle.device.cuda.memory_allocated() / 1024**3
-                    reserved = paddle.device.cuda.memory_reserved() / 1024**3
-                    print(
-                        f"[GPU MEM][rank={rank}][{tag}] allocated={allocated:.2f}GB reserved={reserved:.2f}GB",
-                        flush=True,
-                    )
-
-                _print_gpu_mem("before_from_pretrained")
                 self.model = AutoModelForCausalLM.from_pretrained(
                     self.model_config.model,
                     config=self.paddleformers_config,
                     dtype=self.model_config.dtype,
                 )
-                _print_gpu_mem("after_from_pretrained")
             else:
                 from paddleformers.transformers.auto.modeling import (
                     AutoModelForCausalLM,

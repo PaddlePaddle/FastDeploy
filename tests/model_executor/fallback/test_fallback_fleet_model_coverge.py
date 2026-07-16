@@ -1064,11 +1064,14 @@ class TestInitPaddlefleetParallelState:
             ps._TENSOR_MODEL_PARALLEL_GROUP = None
 
             with patch.object(dist_module, "fleet", mock_fleet):
-                with patch.object(dist_module, "get_rank", return_value=0):
-                    with patch.object(dist_module, "new_group", return_value=mock_new_group):
-                        # Seed function raises AssertionError → should be silently ignored
-                        with patch.object(tp_random, "model_parallel_cuda_manual_seed", side_effect=AssertionError):
-                            model._init_paddlefleet_parallel_state(fd_config)  # must not raise
+                with patch.object(ps, "initialize_model_parallel"):
+                    with patch.object(dist_module, "get_rank", return_value=0):
+                        with patch.object(dist_module, "new_group", return_value=mock_new_group):
+                            # Seed function raises AssertionError → should be silently ignored
+                            with patch.object(
+                                tp_random, "model_parallel_cuda_manual_seed", side_effect=AssertionError
+                            ):
+                                model._init_paddlefleet_parallel_state(fd_config)  # must not raise
         finally:
             ps._TENSOR_MODEL_PARALLEL_GROUP = original_group
 
@@ -1787,11 +1790,16 @@ class TestMLAPrefillQKHeadDimPad:
     """Test the qk_head_dim != v_head_dim padding branch in FastDeployAttention.forward."""
 
     def test_v_padded_when_qk_head_dim_differs(self):
-        """Line 228-229: v is padded when qk_head_dim - v_head_dim != 0."""
+        """Prefill branch passes v as-is to fd_attention.forward (no padding applied in base_fleet).
+
+        qk_head_dim and v_head_dim are int values; even when they differ,
+        the current implementation does not pad v — it passes it unchanged.
+        """
         kv_lora_rank, v_head_dim, num_heads = 4, 2, 2
         qk_head_dim = 6  # differs from v_head_dim
 
         attn, mock_fd_attention = _create_mla_attention(kv_lora_rank, v_head_dim, num_heads)
+        # Use real int values (not MagicMock) so isinstance(x, int) check passes
         attn.config.qk_head_dim = qk_head_dim
         attn.config.v_head_dim = v_head_dim
 
@@ -1819,12 +1827,12 @@ class TestMLAPrefillQKHeadDimPad:
         )
 
         assert result is not None
-        # Check that fd_attention.forward was called, meaning the padding branch was hit
+        # fd_attention.forward must be called once (prefill path)
         mock_fd_attention.forward.assert_called_once()
-        # The v tensor passed should have last dim = qk_head_dim (padded)
+        # v is passed as-is (no padding in current implementation)
         call_kwargs = mock_fd_attention.forward.call_args.kwargs
         v_passed = call_kwargs["v"]
-        assert v_passed.shape[-1] == qk_head_dim
+        assert v_passed.shape[-1] == v_head_dim
 
     def test_v_not_padded_when_qk_head_dim_equals_v_head_dim(self):
         """No padding when qk_head_dim == v_head_dim."""
