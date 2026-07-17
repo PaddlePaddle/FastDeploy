@@ -1074,5 +1074,144 @@ class TestExecuteModel(unittest.TestCase):
         self.assertEqual(runner._cached_real_bsz, 22)
 
 
+class TestGetKvNumHeadsPerLayer(unittest.TestCase):
+    """Tests for GPUModelRunner._get_kv_num_heads_per_layer"""
+
+    def _make_runner(self, num_hidden_layers, num_key_value_heads, tp_size=1, **extra_attrs):
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.model_config = Mock()
+        runner.model_config.num_hidden_layers = num_hidden_layers
+        runner.model_config.num_key_value_heads = num_key_value_heads
+        runner.model_config.num_key_value_heads_list = None
+        runner.parallel_config = Mock()
+        runner.parallel_config.tensor_parallel_size = tp_size
+        for k, v in extra_attrs.items():
+            setattr(runner.model_config, k, v)
+        return runner
+
+    def test_uniform_heads_no_swa(self):
+        """No SWA config -> uniform kv_num_heads across all layers"""
+        runner = self._make_runner(4, 8, tp_size=2, window_attn_skip_freq=None, swa_num_key_value_heads=None)
+        result = runner._get_kv_num_heads_per_layer()
+        self.assertEqual(result, [4, 4, 4, 4])
+
+    def test_uniform_heads_tp1(self):
+        """TP=1, no SWA"""
+        runner = self._make_runner(3, 6, tp_size=1, window_attn_skip_freq=None, swa_num_key_value_heads=None)
+        result = runner._get_kv_num_heads_per_layer()
+        self.assertEqual(result, [6, 6, 6])
+
+    def test_swa_basic(self):
+        """SWA layers get swa_kv_num_heads, non-SWA layers get normal kv_num_heads"""
+        runner = self._make_runner(
+            4,
+            8,
+            tp_size=1,
+            window_attn_skip_freq=[1, 0, 1, 0],
+            swa_num_key_value_heads=4,
+        )
+        result = runner._get_kv_num_heads_per_layer()
+        # layer 0: swa (skip_freq=1) -> 4, layer 1: normal -> 8,
+        # layer 2: swa -> 4, layer 3: normal -> 8
+        self.assertEqual(result, [4, 8, 4, 8])
+
+    def test_swa_with_tp(self):
+        """SWA with tensor parallelism divides both head counts"""
+        runner = self._make_runner(
+            4,
+            8,
+            tp_size=2,
+            window_attn_skip_freq=[1, 0, 0, 1],
+            swa_num_key_value_heads=4,
+        )
+        result = runner._get_kv_num_heads_per_layer()
+        # kv_num_heads = 8 // 2 = 4, swa_kv_num_heads = 4 // 2 = 2
+        self.assertEqual(result, [2, 4, 4, 2])
+
+    def test_swa_all_layers(self):
+        """All layers are SWA"""
+        runner = self._make_runner(
+            3,
+            8,
+            tp_size=1,
+            window_attn_skip_freq=[1, 1, 1],
+            swa_num_key_value_heads=2,
+        )
+        result = runner._get_kv_num_heads_per_layer()
+        self.assertEqual(result, [2, 2, 2])
+
+    def test_swa_skip_freq_shorter_than_layers(self):
+        """window_attn_skip_freq shorter than num_hidden_layers -> extra layers use normal heads"""
+        runner = self._make_runner(
+            5,
+            8,
+            tp_size=1,
+            window_attn_skip_freq=[1, 0, 1],
+            swa_num_key_value_heads=4,
+        )
+        result = runner._get_kv_num_heads_per_layer()
+        # i=0: swa(4), i=1: normal(8), i=2: swa(4), i=3: out of range->normal(8), i=4: normal(8)
+        self.assertEqual(result, [4, 8, 4, 8, 8])
+
+    def test_swa_only_window_attn_skip_freq_set(self):
+        """Only window_attn_skip_freq set, swa_num_key_value_heads is None -> no SWA logic"""
+        runner = self._make_runner(
+            3,
+            6,
+            tp_size=1,
+            window_attn_skip_freq=[1, 0, 1],
+            swa_num_key_value_heads=None,
+        )
+        result = runner._get_kv_num_heads_per_layer()
+        self.assertEqual(result, [6, 6, 6])
+
+    def test_swa_only_swa_num_kv_heads_set(self):
+        """Only swa_num_key_value_heads set, window_attn_skip_freq is None -> no SWA logic"""
+        runner = self._make_runner(
+            3,
+            6,
+            tp_size=1,
+            window_attn_skip_freq=None,
+            swa_num_key_value_heads=4,
+        )
+        result = runner._get_kv_num_heads_per_layer()
+        self.assertEqual(result, [6, 6, 6])
+
+    def test_swa_kv_heads_min_clamp(self):
+        """swa_num_key_value_heads // tp_size < 1 should clamp to 1"""
+        runner = self._make_runner(
+            2,
+            8,
+            tp_size=8,
+            window_attn_skip_freq=[1, 0],
+            swa_num_key_value_heads=2,
+        )
+        result = runner._get_kv_num_heads_per_layer()
+        # kv_num_heads = max(1, 8//8) = 1, swa_kv_num_heads = max(1, 2//8) = 1
+        self.assertEqual(result, [1, 1])
+
+    def test_num_key_value_heads_list(self):
+        """When num_key_value_heads_list is provided, use per-layer values"""
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.model_config = Mock()
+        runner.model_config.num_hidden_layers = 3
+        runner.model_config.num_key_value_heads_list = [8, 4, 16]
+        runner.parallel_config = Mock()
+        runner.parallel_config.tensor_parallel_size = 2
+        result = runner._get_kv_num_heads_per_layer()
+        self.assertEqual(result, [4, 2, 8])
+
+    def test_num_key_value_heads_list_mismatch_raises(self):
+        """Mismatched list length raises ValueError"""
+        runner = GPUModelRunner.__new__(GPUModelRunner)
+        runner.model_config = Mock()
+        runner.model_config.num_hidden_layers = 3
+        runner.model_config.num_key_value_heads_list = [8, 4]
+        runner.parallel_config = Mock()
+        runner.parallel_config.tensor_parallel_size = 1
+        with self.assertRaises(ValueError):
+            runner._get_kv_num_heads_per_layer()
+
+
 if __name__ == "__main__":
     unittest.main()
