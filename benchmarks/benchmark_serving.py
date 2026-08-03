@@ -62,6 +62,7 @@ class BenchmarkMetrics:
     total_output: int
     request_throughput: float
     request_goodput: float
+    input_throughput: float
     output_throughput: float
     total_token_throughput: float
     # 解码速度(过滤 TPOT<1ms 的请求后)
@@ -319,6 +320,7 @@ def calculate_metrics(
         total_output=sum(actual_output_lens),
         request_throughput=completed / dur_s,
         request_goodput=good_completed / dur_s,
+        input_throughput=total_input / dur_s,
         output_throughput=sum(actual_output_lens) / dur_s,
         total_token_throughput=(total_input + sum(actual_output_lens)) / dur_s,
         s_decode_filtered_mean=float(np.mean(reliable_s_decodes)) if reliable_s_decodes else 0.0,
@@ -762,6 +764,7 @@ async def benchmark(
     print("{:<40} {:<10.3f}".format("Request throughput (req/s):", metrics.request_throughput))
     if goodput_config_dict:
         print("{:<40} {:<10.2f}".format("Request goodput (req/s):", metrics.request_goodput))
+    print("{:<40} {:<10.2f}".format("Input token throughput (tok/s):", metrics.input_throughput))
     print("{:<40} {:<10.2f}".format("Output token throughput (tok/s):", metrics.output_throughput))
     print("{:<40} {:<10.2f}".format("Total Token throughput (tok/s):", metrics.total_token_throughput))
 
@@ -772,6 +775,7 @@ async def benchmark(
         "total_output_tokens": metrics.total_output,
         "request_throughput": metrics.request_throughput,
         "request_goodput:": (metrics.request_goodput if goodput_config_dict else None),
+        "input_throughput": metrics.input_throughput,
         "output_throughput": metrics.output_throughput,
         "reasoning_lens": [output.reasoning_tokens for output in outputs],
         "total_token_throughput": metrics.total_token_throughput,
@@ -1045,6 +1049,7 @@ def benchmark_metrics(
     print("{:<40} {:<10.2f}".format("Request throughput (req/s):", metrics.request_throughput))
     if goodput_config_dict:
         print("{:<40} {:<10.2f}".format("Request goodput (req/s):", metrics.request_goodput))
+    print("{:<40} {:<10.2f}".format("Input token throughput (tok/s):", metrics.input_throughput))
     print("{:<40} {:<10.2f}".format("Output token throughput (tok/s):", metrics.output_throughput))
     print("{:<40} {:<10.2f}".format("Total Token throughput (tok/s):", metrics.total_token_throughput))
 
@@ -1055,6 +1060,7 @@ def benchmark_metrics(
         "total_output_tokens": metrics.total_output,
         "request_throughput": metrics.request_throughput,
         "request_goodput:": (metrics.request_goodput if goodput_config_dict else None),
+        "input_throughput": metrics.input_throughput,
         "output_throughput": metrics.output_throughput,
         "total_token_throughput": metrics.total_token_throughput,
         "input_lens": [output.prompt_len for output in outputs],
