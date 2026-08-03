@@ -857,7 +857,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                     return outputs, metrics
 
                 # llm_cost = s1 - s0
-                input_tokens += output.prompt_tokens
+                input_tokens = output.prompt_tokens
                 output_tokens += output.output_tokens
 
                 # 更新output_ids
@@ -971,7 +971,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                             )
                             return outputs, metrics
 
-                        input_tokens += output.prompt_tokens
+                        input_tokens = output.prompt_tokens
                         output_tokens += output.output_tokens
                         # 若session输入长度超过max_prompt_len，则停止session
                         if max_prompt_len and input_tokens >= max_prompt_len:
