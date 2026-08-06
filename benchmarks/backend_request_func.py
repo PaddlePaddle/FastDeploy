@@ -28,11 +28,26 @@ import traceback
 import uuid
 from dataclasses import dataclass, field
 from typing import Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
 from tqdm.asyncio import tqdm
 
 AIOHTTP_TIMEOUT = aiohttp.ClientTimeout(total=int(os.environ.get("AIOHTTP_TIMEOUT", 6 * 60 * 60)))
+
+
+def _get_control_url(api_url: str, endpoint: str) -> str:
+    parsed = urlsplit(api_url)
+    return urlunsplit((parsed.scheme, parsed.netloc, endpoint, "", ""))
+
+
+async def _close_session(session: aiohttp.ClientSession, api_url: str, session_id: str) -> None:
+    url = _get_control_url(api_url, "/close_session")
+    async with session.post(url=url, json={"session_id": session_id}) as response:
+        if response.status != 200:
+            raise RuntimeError(
+                f"Failed to close session {session_id}: {response.status} {await response.text()}"
+            )
 
 
 @dataclass
@@ -64,6 +79,8 @@ class RequestFuncInput:
     stream: bool = True
     session_id: Optional[str] = None
     turn_idx: Optional[int] = None
+    enable_session_control: bool = False
+    session_control_url: Optional[str] = None
 
 
 @dataclass
@@ -411,6 +428,9 @@ async def async_request_eb_openai_chat_completions(
     if request_func_input.ignore_eos:
         payload["ignore_eos"] = request_func_input.ignore_eos
 
+    if request_func_input.session_id:
+        payload["session_id"] = request_func_input.session_id
+
     headers = {
         "Content-Type": "application/json",
         "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY')}",
@@ -727,7 +747,7 @@ async def simple_tool_call(model_output, tool_url: str, timeout=60):
         return str(e), False, tool_name, tool_id
 
 
-async def async_request_eb_openai_chat_completions_multi_turn(
+async def _async_request_eb_openai_chat_completions_multi_turn(
     request_func_input: RequestFuncInput,
     pbar: Optional[tqdm] = None,
 ):
@@ -1022,6 +1042,35 @@ async def async_request_eb_openai_chat_completions_multi_turn(
     )
 
     return outputs, metrics
+
+
+async def async_request_eb_openai_chat_completions_multi_turn(
+    request_func_input: RequestFuncInput,
+    pbar: Optional[tqdm] = None,
+):
+    if not request_func_input.enable_session_control:
+        return await _async_request_eb_openai_chat_completions_multi_turn(request_func_input, pbar)
+
+    request_func_input.session_id = request_func_input.session_id or uuid.uuid4().hex
+    result = None
+    try:
+        result = await _async_request_eb_openai_chat_completions_multi_turn(request_func_input, pbar)
+    finally:
+        try:
+            async with aiohttp.ClientSession(trust_env=True, timeout=AIOHTTP_TIMEOUT) as session:
+                await _close_session(
+                    session,
+                    request_func_input.session_control_url or request_func_input.api_url,
+                    request_func_input.session_id,
+                )
+        except Exception:
+            close_error = traceback.format_exc()
+            logging.error("Failed to close session %s: %s", request_func_input.session_id, close_error)
+            if result and result[0]:
+                result[0][-1].success = False
+                result[0][-1].error += close_error
+
+    return result
 
 
 async def async_request_eb_openai_completions(
