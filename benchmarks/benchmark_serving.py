@@ -995,6 +995,14 @@ async def benchmark(
     if args.multi_turn:
         process_session_metrics(session_metrics, "session_e2e_time", "Session E2EL")
         process_session_metrics(session_metrics, "pure_llm_time", "Session llm_E2EL")
+        # per-turn 环境等待时长（来自 RequestFuncOutput.env_wait_time）
+        if "env_wait" in selected_percentile_metrics:
+            env_wait_values = [
+                o.env_wait_time
+                for o in outputs
+                if getattr(o, "success", False) and getattr(o, "env_wait_time", 0.0) > 0
+            ]
+            print_metric_from_array(env_wait_values, "Env Wait", is_time=True)
         process_session_metrics(session_metrics, "tool_calls", "Tool Calls", is_time=False)
         process_session_metrics(session_metrics, "input_tokens", "Session Input Tokens", is_time=False)
         process_session_metrics(session_metrics, "output_tokens", "Session Output Tokens", is_time=False)
