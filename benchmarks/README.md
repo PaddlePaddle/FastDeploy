@@ -157,7 +157,7 @@ python benchmarks/benchmark_mtp.py \
   - `random_token_ids`：随机 token id 序列输入
 - --random-input-len：随机输入长度。`random` 时对应英文单词数，`random_token_ids` 时对应 token 数，默认 200
 - --random-output-len：随机输出长度，默认 1024
-- --random-range-ratio：输入输出长度变化范围比，[length * (1 - range_ratio), length * (1 + range_ratio)]，默认 0.1
+- --random-range-ratio：输入输出长度变化范围比，[length *(1 - range_ratio), length* (1 + range_ratio)]，默认 0.1
 
 #### 使用方式（随机英文单词输入）：
 ```bash
