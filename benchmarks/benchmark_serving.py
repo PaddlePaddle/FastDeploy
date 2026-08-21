@@ -443,6 +443,9 @@ async def benchmark(
     # warmup短输出：取128和hyper_parameters中max_tokens的最小值
     warmup_output_len = min(128, hyper_parameters.get("max_tokens", 128))
     warmup_hyper = {k: v for k, v in hyper_parameters.items() if k != "max_tokens"}
+    # warmup 缩短了 max_tokens，min_tokens 必须一起收敛，否则服务端返回 400
+    if warmup_hyper.get("min_tokens") is not None:
+        warmup_hyper["min_tokens"] = min(int(warmup_hyper["min_tokens"]), warmup_output_len)
     warmup_request_id = f"warmup_{uuid.uuid4().hex[:8]}"
     test_input = RequestFuncInput(
         model=model_id,
