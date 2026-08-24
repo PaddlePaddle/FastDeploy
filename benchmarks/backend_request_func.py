@@ -17,6 +17,7 @@
 # This file is modified from https://github.com/vllm-project/vllm/blob/main/benchmarks/backend_request_func.py
 
 
+import asyncio
 import copy
 import io
 import json
@@ -91,6 +92,8 @@ class RequestFuncOutput:
     metrics: dict = field(default_factory=dict)
     tool_calls: list = field(default_factory=list)
     output_ids: list = field(default_factory=list)
+    # 本轮请求之前的环境交互等待时长（秒），来自数据集里对应 tool 消息的 env_interact_time
+    env_wait_time: float = 0.0
 
 
 @dataclass
@@ -788,6 +791,19 @@ async def async_request_eb_openai_chat_completions_multi_turn(
     ) as session:
         for i, message in enumerate(ori_history):
             if message["role"] == "user" or message["role"] == "tool":
+                # 模拟真实 rollout 里工具执行 / 环境交互的等待时间：
+                # 数据集里 tool 消息可能带 env_interact_time（秒）， 表示上一步 assistant 生成完到 tool 结果返回的耗时。
+                turn_env_wait = 0.0
+                env_delay = message.get("env_interact_time") if isinstance(message, dict) else None
+                if env_delay and os.environ.get("DISABLE_ENV_TOOL_WAIT", "").lower() not in ("1", "true", "yes", "on"):
+                    try:
+                        delay_sec = float(env_delay)
+                    except (TypeError, ValueError):
+                        delay_sec = 0.0
+                    if delay_sec > 0:
+                        turn_env_wait = delay_sec
+                        await asyncio.sleep(delay_sec)
+
                 history.append(message)
                 round_input = copy.deepcopy(request_func_input)
                 round_input.history_QA = history
@@ -841,6 +857,7 @@ async def async_request_eb_openai_chat_completions_multi_turn(
                 )
                 s1 = time.perf_counter()
                 llm_time += s1 - s0
+                output.env_wait_time = turn_env_wait
 
                 outputs.append(output)
 

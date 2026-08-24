@@ -458,6 +458,9 @@ async def benchmark(
     # warmup短输出：取128和hyper_parameters中max_tokens的最小值
     warmup_output_len = min(128, hyper_parameters.get("max_tokens", 128))
     warmup_hyper = {k: v for k, v in hyper_parameters.items() if k != "max_tokens"}
+    # warmup 缩短了 max_tokens，min_tokens 必须一起收敛，否则服务端返回 400
+    if warmup_hyper.get("min_tokens") is not None:
+        warmup_hyper["min_tokens"] = min(int(warmup_hyper["min_tokens"]), warmup_output_len)
     warmup_request_id = f"warmup_{uuid.uuid4().hex[:8]}"
     test_input = RequestFuncInput(
         model=model_id,
@@ -1010,6 +1013,14 @@ async def benchmark(
     if args.multi_turn:
         process_session_metrics(session_metrics, "session_e2e_time", "Session E2EL")
         process_session_metrics(session_metrics, "pure_llm_time", "Session llm_E2EL")
+        # per-turn 环境等待时长（来自 RequestFuncOutput.env_wait_time）
+        if "env_wait" in selected_percentile_metrics:
+            env_wait_values = [
+                o.env_wait_time
+                for o in outputs
+                if getattr(o, "success", False) and getattr(o, "env_wait_time", 0.0) > 0
+            ]
+            print_metric_from_array(env_wait_values, "Env Wait", is_time=True)
         process_session_metrics(session_metrics, "tool_calls", "Tool Calls", is_time=False)
         process_session_metrics(session_metrics, "input_tokens", "Session Input Tokens", is_time=False)
         process_session_metrics(session_metrics, "output_tokens", "Session Output Tokens", is_time=False)

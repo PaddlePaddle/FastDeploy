@@ -145,15 +145,21 @@ python benchmarks/benchmark_mtp.py \
 --dataset-path：测试数据集路径
 ```
 
-### 指定输入输出长度，构造随机纯文输入测试
+### 指定输入输出长度测试
+
+支持两种随机构造输入的方式：
+- `random`：构造随机英文单词拼接的纯文输入
+- `random_token_ids`：直接构造随机 token id 序列作为输入（通过 prompt_token_ids 请求，不依赖英文单词表，长度控制更精确，也可覆盖非英文 token 场景）
 
 相关参数：
-- --dataset-name：指定数据集类，指定为"random"可构造随机纯文输入
-- --random-input-len：随机输入长度，对应英文单词数，默认200
-- --random-output-len：随机输出长度，默认1024
-- --random-range-ratio：输入输出长度变化范围比，[length *(1 - range_ratio), length* (1 + range_ratio)]，默认0.1
+- --dataset-name：指定数据集类
+  - `random`：随机英文单词拼接的纯文输入
+  - `random_token_ids`：随机 token id 序列输入
+- --random-input-len：随机输入长度。`random` 时对应英文单词数，`random_token_ids` 时对应 token 数，默认 200
+- --random-output-len：随机输出长度，默认 1024
+- --random-range-ratio：输入输出长度变化范围比，[length *(1 - range_ratio), length* (1 + range_ratio)]，默认 0.1
 
-#### 使用方式：
+#### 使用方式（随机英文单词输入）：
 ```bash
 python benchmark_serving.py \
   --backend openai-chat \
@@ -162,6 +168,26 @@ python benchmark_serving.py \
   --host 0.0.0.0 \
   --port 9812 \
   --dataset-name random \
+  --random-input-len 200 \
+  --random-output-len 1024 \
+  --random-range-ratio 0.1 \
+  --percentile-metrics ttft,tpot,itl,e2el,s_ttft,s_itl,s_e2el,s_decode,input_len,s_input_len,output_len \
+  --metric-percentiles 80,95,99,99.9,99.95,99.99 \
+  --num-prompts 2000 \
+  --max-concurrency 100 \
+  --save-result > infer_log.txt 2>&1 &
+```
+
+#### 使用方式（随机 token id 输入）：
+将 `--dataset-name` 改为 `random_token_ids` 即可，`--random-input-len` 语义变为 token 数：
+```bash
+python benchmark_serving.py \
+  --backend openai-chat \
+  --model EB45T \
+  --endpoint /v1/chat/completions \
+  --host 0.0.0.0 \
+  --port 9812 \
+  --dataset-name random_token_ids \
   --random-input-len 200 \
   --random-output-len 1024 \
   --random-range-ratio 0.1 \
