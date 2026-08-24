@@ -65,12 +65,8 @@ class BenchmarkMetrics:
     input_throughput: float
     output_throughput: float
     total_token_throughput: float
-    # 解码速度(过滤 TPOT<1ms 的请求后)
-    s_decode_filtered_mean: float  # tok/s
-    s_decode_filtered_median: float  # tok/s
-    n_decode_total: int  # 参与统计的总请求数
-    n_decode_filtered: int  # 被过滤的请求数(TPOT<1ms)
-    n_decode_reliable: int  # 可信请求数(TPOT>=1ms)
+    # 解码速度：首 token 之后每秒真实到达的 token 数，全量统计不过滤
+    n_decode_total: int  # 参与统计的请求数
     mean_s_decode: float
     median_s_decode: float
     std_s_decode: float
@@ -259,10 +255,19 @@ def calculate_metrics(
             else:
                 # sglang等无arrival_time场景fallback
                 if outputs[i].output_tokens > 1:
-                    decode_time = outputs[i].latency - outputs[i].ttft
+                    # ITL 条目数 = 首个可见 chunk 之后真实到达的 token 数（按服务端 usage 增量摊分），
+                    # sum(itl) = 对应的完整解码区间。用 len/sum 而不是 (output_tokens-1)/sum：
+                    # 首个 chunk 在 MTP 下可能一次带 1~3 个 token，减 1 会有系统偏差。
+                    # 也不用 latency-ttft：解析器攒批时被吞掉的 token 会被计进 TTFT，解码速度虚高。
+                    if outputs[i].itl:
+                        decode_time = sum(outputs[i].itl)
+                        decode_tokens = len(outputs[i].itl)
+                    else:
+                        decode_time = outputs[i].latency - outputs[i].ttft
+                        decode_tokens = outputs[i].output_tokens - 1
 
                     if decode_time > 0:
-                        s_decodes.append((outputs[i].output_tokens - 1) / decode_time)
+                        s_decodes.append(decode_tokens / decode_time)
                     else:
                         s_decodes.append(0)
                 else:
@@ -309,25 +314,10 @@ def calculate_metrics(
         total_input += prefill_only_input
         print(f"零输出(prefill-only)请求: {prefill_only_reqs} 条, " f"补入 ITPS 的输入 token: {prefill_only_input}")
 
-    # === 解码速度过滤：TPOT < 1ms 的请求视为不可信(引擎批量flush伪象) ===
-    MIN_TPOT_S = 0.001  # 1ms
-    reliable_s_decodes = []
-    n_decode_total = 0
-    n_decode_filtered = 0
-    for o in outputs:
-        if not o.success or o.output_tokens <= 1:
-            continue
-        decode_time = sum(o.itl) if o.itl else 0
-        if decode_time <= 0:
-            continue
-        n_decode_total += 1
-        tokens = o.output_tokens - 1
-        tpot = decode_time / tokens
-        if tpot >= MIN_TPOT_S:
-            reliable_s_decodes.append(tokens / decode_time)
-        else:
-            n_decode_filtered += 1
-    n_decode_reliable = len(reliable_s_decodes)
+    # 解码速度只有一份口径：上面循环里按 len(itl)/sum(itl) 逐请求算好的 s_decodes。
+    # ITL 由服务端 usage 的 token 增量摊分得到（含被解析器攒批吞掉的 token 与收尾 token），
+    # 所以 sum(itl) 就是真实解码区间，不需要"TPOT<1ms 视为不可信"这类兜底过滤。
+    n_decode_total = len([s for s in s_decodes if s > 0])
 
     metrics = BenchmarkMetrics(
         completed=completed,
@@ -338,11 +328,7 @@ def calculate_metrics(
         input_throughput=total_input / dur_s,
         output_throughput=sum(actual_output_lens) / dur_s,
         total_token_throughput=(total_input + sum(actual_output_lens)) / dur_s,
-        s_decode_filtered_mean=float(np.mean(reliable_s_decodes)) if reliable_s_decodes else 0.0,
-        s_decode_filtered_median=float(np.median(reliable_s_decodes)) if reliable_s_decodes else 0.0,
         n_decode_total=n_decode_total,
-        n_decode_filtered=n_decode_filtered,
-        n_decode_reliable=n_decode_reliable,
         mean_s_decode=np.mean(s_decodes or 0) * 1,  # ttfts is empty if streaming is not supported by backend
         std_s_decode=np.std(s_decodes or 0) * 1,
         median_s_decode=np.median(s_decodes or 0) * 1,
@@ -808,11 +794,7 @@ async def benchmark(
         "reasoning_contents": [output.reasoning_content for output in outputs],
         "errors": [output.error for output in outputs],
         "metrics": [output.metrics for output in outputs],
-        "s_decode_filtered_mean": metrics.s_decode_filtered_mean,
-        "s_decode_filtered_median": metrics.s_decode_filtered_median,
         "n_decode_total": metrics.n_decode_total,
-        "n_decode_filtered": metrics.n_decode_filtered,
-        "n_decode_reliable": metrics.n_decode_reliable,
     }
 
     def process_one_metric(
@@ -961,22 +943,8 @@ async def benchmark(
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name}:", value))
             result[f"p{p_word}_{metric_attribute_name}"] = value
 
-    print("{s:{c}^{n}}".format(s="解码速度 (过滤TPOT<1ms)", n=50, c="-"))
-    _n_total = max(metrics.n_decode_total, 1)
-    print("{:<40} {:<10d}".format("Total requests:", metrics.n_decode_total))
-    print(
-        "{:<40} {:<10d} ({:.2f}%)".format(
-            "Filtered (TPOT<1ms):", metrics.n_decode_filtered, 100 * metrics.n_decode_filtered / _n_total
-        )
-    )
-    print(
-        "{:<40} {:<10d} ({:.2f}%)".format(
-            "Reliable (TPOT>=1ms):", metrics.n_decode_reliable, 100 * metrics.n_decode_reliable / _n_total
-        )
-    )
-    print("{:<40} {:<10.2f}".format("Mean Decode (tok/s):", metrics.s_decode_filtered_mean))
-    print("{:<40} {:<10.2f}".format("Median Decode (tok/s):", metrics.s_decode_filtered_median))
-    process_one_length("s_decode", "Decode", "解码速度(tok/s)")
+    print("{:<40} {:<10d}".format("Requests in decode stats:", metrics.n_decode_total))
+    process_one_length("s_decode", "Decode", "解码速度(tok/s, 首token之后)")
     process_one_metric("ttft", "TTFT", "Time to First Token")
     process_one_metric("s_ttft", "S_TTFT", "Infer Time to First Token")
     process_one_metric("res_ttft", "Response TTFT", "包含思考首token耗时")
@@ -1164,22 +1132,8 @@ def benchmark_metrics(
             print("{:<40} {:<10.2f}".format(f"P{p_word} {metric_name}:", value))
             result[f"p{p_word}_{metric_attribute_name}"] = value
 
-    print("{s:{c}^{n}}".format(s="解码速度 (过滤TPOT<1ms)", n=50, c="-"))
-    _n_total = max(metrics.n_decode_total, 1)
-    print("{:<40} {:<10d}".format("Total requests:", metrics.n_decode_total))
-    print(
-        "{:<40} {:<10d} ({:.2f}%)".format(
-            "Filtered (TPOT<1ms):", metrics.n_decode_filtered, 100 * metrics.n_decode_filtered / _n_total
-        )
-    )
-    print(
-        "{:<40} {:<10d} ({:.2f}%)".format(
-            "Reliable (TPOT>=1ms):", metrics.n_decode_reliable, 100 * metrics.n_decode_reliable / _n_total
-        )
-    )
-    print("{:<40} {:<10.2f}".format("Mean Decode (tok/s):", metrics.s_decode_filtered_mean))
-    print("{:<40} {:<10.2f}".format("Median Decode (tok/s):", metrics.s_decode_filtered_median))
-    process_one_length("s_decode", "Decode", "解码速度(tok/s)")
+    print("{:<40} {:<10d}".format("Requests in decode stats:", metrics.n_decode_total))
+    process_one_length("s_decode", "Decode", "解码速度(tok/s, 首token之后)")
     process_one_metric("ttft", "TTFT", "Time to First Token")
     process_one_metric("s_ttft", "S_TTFT", "Infer Time to First Token")
     process_one_metric("tpot", "TPOT", "Time per Output Token (excl. 1st token)")

@@ -352,6 +352,9 @@ async def async_request_eb_openai_chat_completions(
         payload["stream_options"] = {
             "include_usage": True,
             "continuous_usage_stats": True,
+            # sglang 扩展：解析器攒批时补发只带 usage 的空 delta 包，否则这些
+            # token 会被算进 TTFT，解码速度被高估。不支持的服务端会忽略该字段。
+            "step_usage_chunks": "first_token",
         }
     if request_func_input.json_data:
         json_data = request_func_input.json_data
@@ -496,7 +499,18 @@ async def async_request_eb_openai_chat_completions(
                             reason_content = choices[0]["delta"].get("reasoning_content")
                             tool_calls = choices[0]["delta"].get("tool_calls")
                             completion_token_ids = choices[0]["delta"].get("completion_token_ids", [])
+                            # 服务端已生成的累计 token 数：优先用 usage(continuous_usage_stats)，
+                            # 否则退化为按 token_ids 长度推断。
+                            cur_completion_tokens = (data.get("usage") or {}).get("completion_tokens")
+                            if cur_completion_tokens is None and completion_token_ids:
+                                cur_completion_tokens = len(output.output_ids) + len(completion_token_ids)
                             has_token_chunk = bool(content or reason_content or tool_calls or completion_token_ids)
+                            # reasoning/tool-call parser 攒批时 delta 为空，服务端只发 usage 心跳包
+                            # （sglang 侧开关 stream_options.step_usage_chunks）。token 数增长
+                            # 就是一次真实的 token 到达，必须计入 TTFT/ITL，否则被攒批吞掉的 token
+                            # 会被算进 TTFT，解码区间被压缩、解码速度虚高。
+                            if not has_token_chunk and cur_completion_tokens is not None:
+                                has_token_chunk = cur_completion_tokens > last_output_len
                             if tool_calls:
                                 for tc in tool_calls:
                                     idx = tc.get("index", 0)
@@ -536,10 +550,6 @@ async def async_request_eb_openai_chat_completions(
                                         output.prompt_len = 0
 
                                     # 首 token 也要更新 last_output_len，用于后续 burst 摊分
-                                    cur_completion_tokens = (data.get("usage") or {}).get("completion_tokens")
-                                    if cur_completion_tokens is None and completion_token_ids:
-                                        # 没有 usage 时退化为按 token_ids 长度推断
-                                        cur_completion_tokens = len(output.output_ids) + len(completion_token_ids)
                                     if cur_completion_tokens is not None:
                                         last_output_len = cur_completion_tokens
                                     else:
@@ -550,10 +560,6 @@ async def async_request_eb_openai_chat_completions(
                                     # buffer burst 修正：如果服务端把多个 token 合并到同一个流式 chunk 里，
                                     # 直接把整段间隔记成单个 ITL 会高估解码间隔。这里参考 sglang 官方
                                     # bench_serving 的做法：用真实 token 增量摊分该 chunk 的等待时间。
-                                    cur_completion_tokens = (data.get("usage") or {}).get("completion_tokens")
-                                    if cur_completion_tokens is None and completion_token_ids:
-                                        cur_completion_tokens = len(output.output_ids) + len(completion_token_ids)
-
                                     chunk_gap = timestamp - most_recent_timestamp
                                     if cur_completion_tokens is not None:
                                         num_new_tokens = cur_completion_tokens - last_output_len
@@ -596,6 +602,16 @@ async def async_request_eb_openai_chat_completions(
                             prompt_tokens_details = usage.get("prompt_tokens_details") or {}
                             if output.prompt_len == 0:
                                 output.prompt_len = prompt_tokens_details.get("cached_tokens", 0)
+                            # 收尾 usage 包：把最后一批"生成了但没随 delta 下发"的 token 补进 ITL，
+                            # 否则分子(总 token)覆盖不到分母(ITL 区间)，解码速度会被高估。
+                            tail_tokens = output.output_tokens - last_output_len
+                            if tail_tokens > 0 and ttft > 0.0:
+                                tail_gap = timestamp - most_recent_timestamp
+                                if tail_gap > 0:
+                                    output.itl.extend([tail_gap / tail_tokens] * tail_tokens)
+                                last_output_len = output.output_tokens
+                                most_recent_timestamp = timestamp
+                                token_timestamps.append(wall_timestamp)
 
                         last_chunk_timestamp = timestamp
 
