@@ -20,6 +20,7 @@
 import argparse
 import asyncio
 import gc
+import inspect
 import json
 import os
 import random
@@ -32,6 +33,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Optional
 
+import aiohttp
 import numpy as np
 import yaml
 from backend_request_func import (
@@ -553,11 +555,27 @@ async def benchmark(
             api_url = f"http://{ip_list[0]}{args.endpoint}"
         semaphore = asyncio.Semaphore(max_concurrency) if max_concurrency else None
 
+        # 复用一个 ClientSession + 长连接池：默认每个请求新建 session 会给每次压测请求
+        # 建一条新 TCP 连接，长时间大压测（num-prompts 上万）会堆积大量 TIME_WAIT，
+        # 甚至耗尽本地端口，干扰时延测量。
+        shared_session = None
+        if "session" in inspect.signature(request_func).parameters:
+            conn_limit = max_concurrency * 2 if max_concurrency else 0
+            shared_session = aiohttp.ClientSession(
+                trust_env=True,
+                read_bufsize=10 * 1024 * 1024,
+                timeout=aiohttp.ClientTimeout(total=6 * 60 * 60, sock_connect=60),
+                connector=aiohttp.TCPConnector(limit=conn_limit, ttl_dns_cache=600),
+            )
+
         async def limited_request_func(request_func_input, pbar):
+            kwargs = {"request_func_input": request_func_input, "pbar": pbar}
+            if shared_session is not None:
+                kwargs["session"] = shared_session
             if semaphore is None:
-                return await request_func(request_func_input=request_func_input, pbar=pbar)
+                return await request_func(**kwargs)
             async with semaphore:
-                return await request_func(request_func_input=request_func_input, pbar=pbar)
+                return await request_func(**kwargs)
 
         tasks: list[asyncio.Task] = []
         benchmark_start_time = time.perf_counter()
@@ -603,6 +621,8 @@ async def benchmark(
             tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
 
         outputs: list[RequestFuncOutput] = await asyncio.gather(*tasks)
+        if shared_session is not None:
+            await shared_session.close()
     else:
         # 多ip按DP均分并发
         assert max_concurrency, "multi-IP 模式必须指定 max_concurrency"
