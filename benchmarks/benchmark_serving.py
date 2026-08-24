@@ -294,6 +294,21 @@ def calculate_metrics(
             stacklevel=2,
         )
 
+    # === 零输出(prefill-only)请求补计 ===
+    # prompt 超长时服务端(allow_auto_truncate)会把输入截到 max_req_input_len 并把 max_new_tokens
+    # 压到 0：prefill 真实算过，但回包没有任何 content，客户端判成 "No generated text found!"。
+    # 这类请求的输入 token 只补进 ITPS(input/total token throughput)分子，不参与
+    # completed / TTFT / TPOT / OTPS 等其他指标。
+    prefill_only_reqs = 0
+    prefill_only_input = 0
+    for o in outputs:
+        if o.prompt_tokens > 0 and not o.output_tokens:
+            prefill_only_reqs += 1
+            prefill_only_input += o.prompt_tokens
+    if prefill_only_reqs:
+        total_input += prefill_only_input
+        print(f"零输出(prefill-only)请求: {prefill_only_reqs} 条, " f"补入 ITPS 的输入 token: {prefill_only_input}")
+
     # === 解码速度过滤：TPOT < 1ms 的请求视为不可信(引擎批量flush伪象) ===
     MIN_TPOT_S = 0.001  # 1ms
     reliable_s_decodes = []
