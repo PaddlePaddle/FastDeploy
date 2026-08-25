@@ -173,17 +173,7 @@ class XPUAttentionBackend(AttentionBackend):
         # (forward_meta.rope_already_applied=True), so feed identity RoPE (cos=1, sin=0)
         # to block_attn to avoid rotating twice. Aligned with append_attn_backend.
         if getattr(forward_meta, "rope_already_applied", False) and metadata.rotary_embs is not None:
-            need_recreate = (
-                not hasattr(self, "_identity_rotary_embs")
-                or self._identity_rotary_embs is None
-                or self._identity_rotary_embs.shape != metadata.rotary_embs.shape
-            )
-            if need_recreate:
-                identity = paddle.zeros_like(metadata.rotary_embs)
-                identity[0] = 1.0
-                identity[1] = 0.0
-                self._identity_rotary_embs = identity
-            metadata.rotary_embs = self._identity_rotary_embs
+            metadata.rotary_embs = self._get_identity_rotary_embs(metadata.rotary_embs)
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,

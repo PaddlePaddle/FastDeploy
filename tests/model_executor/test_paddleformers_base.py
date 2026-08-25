@@ -2669,20 +2669,25 @@ class TestBuildPositionIdsFromLods:
         return out.numpy().tolist()
 
     def test_returns_none_without_xpu_metadata(self):
+        """Return None when XPU LOD metadata is absent (non-XPU devices)."""
         assert PaddleFormersModelBase._build_position_ids_from_lods(SimpleNamespace(), 4) is None
 
     def test_pure_prefill(self):
+        """Pure prefill positions start from 0 within each request."""
         assert self._positions([3, 2], [0, 0], []) == [0, 1, 2, 0, 1]
 
     def test_pure_decode(self):
+        """Pure decode positions equal the cached token count per request."""
         assert self._positions([], [], [7, 12]) == [7, 12]
 
     def test_mixed_prefill_and_decode(self):
+        """Mixed step packs encoder tokens first, decode position comes last."""
         # One decoding request (14 tokens cached) plus one 3-token prefill: adjust_batch
         # puts the encoder tokens first, so the decode position comes last.
         assert self._positions([3], [0], [14]) == [0, 1, 2, 14]
 
     def test_prefill_with_prefix_cache(self):
+        """Prefill with prefix cache starts numbering at the cached length."""
         # 5 cached tokens (prefix cache / chunked prefill) then 2 new tokens.
         assert self._positions([2], [5], []) == [5, 6]
 

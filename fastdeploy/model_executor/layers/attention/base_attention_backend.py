@@ -49,6 +49,41 @@ class AttentionBackend(ABC):
         """Initialize the forward metadata."""
         raise NotImplementedError
 
+    def _get_identity_rotary_embs(self, original_rotary_embs: paddle.Tensor) -> paddle.Tensor:
+        """
+        Create identity rotary embeddings (cos=1, sin=0) that make RoPE a no-op.
+
+        This is used when RoPE has already been applied externally (e.g., by PaddleFormers).
+        The identity transformation ensures: x * cos(0) + y * sin(0) = x, preserving the input.
+
+        Text models pack rotary embs as [2, batch, seq, 1, head_dim] (axis 0 = [cos, sin]),
+        while multimodal models use [batch, 2, 1, max_len, 1, head_dim] (axis 1 = [cos, sin]),
+        so the cos/sin axis is located by shape.
+
+        NOTE: Shape can change between prefill/decode, so we check if cached shape matches.
+        """
+        # Check if we need to recreate (shape mismatch or not cached)
+        need_recreate = (
+            not hasattr(self, "_identity_rotary_embs")
+            or self._identity_rotary_embs is None
+            or self._identity_rotary_embs.shape != original_rotary_embs.shape
+        )
+
+        if need_recreate:
+            # Create identity RoPE: cos=1, sin=0
+            identity = paddle.zeros_like(original_rotary_embs)
+            if identity.shape[0] != 2 and len(identity.shape) > 1 and identity.shape[1] == 2:
+                # Multimodal layout: [batch, 2, 1, max_len, 1, head_dim]
+                identity[:, 0] = 1.0  # cos = 1
+                identity[:, 1] = 0.0  # sin = 0
+            else:
+                # Text layout: [2, batch, seq, 1, head_dim]
+                identity[0] = 1.0  # cos = 1
+                identity[1] = 0.0  # sin = 0
+            self._identity_rotary_embs = identity
+
+        return self._identity_rotary_embs
+
     def create_kv_cache(
         self,
         num_layers: int,

@@ -819,16 +819,26 @@ class PaddleFormersModelBase(nn.Layer):
         mismatch gives every token a wrong position.
         """
         len_info = getattr(forward_meta, "len_info_cpu", None)
-        if len_info is None:
+        enc_lod_cpu = getattr(forward_meta, "encoder_seq_lod_cpu", None)
+        dec_lod_cpu = getattr(forward_meta, "decoder_seq_lod_cpu", None)
+        enc_base_cpu = getattr(forward_meta, "prefix_len_cpu", None)
+        dec_base_cpu = getattr(forward_meta, "decoder_context_len_cache_cpu", None)
+        if (
+            len_info is None
+            or enc_lod_cpu is None
+            or dec_lod_cpu is None
+            or enc_base_cpu is None
+            or dec_base_cpu is None
+        ):
             return None
         len_info = len_info.numpy()
         enc_batch, dec_batch = int(len_info[0]), int(len_info[1])
-        enc_lod = forward_meta.encoder_seq_lod_cpu.numpy()
-        dec_lod = forward_meta.decoder_seq_lod_cpu.numpy()
+        enc_lod = enc_lod_cpu.numpy()
+        dec_lod = dec_lod_cpu.numpy()
         # prefix_len / decoder_context_len_cache hold seq_lens_decoder (already computed
         # tokens) for the encoder and decoder requests respectively, in packed order.
-        enc_base = forward_meta.prefix_len_cpu.numpy()
-        dec_base = forward_meta.decoder_context_len_cache_cpu.numpy()
+        enc_base = enc_base_cpu.numpy()
+        dec_base = dec_base_cpu.numpy()
 
         positions = np.zeros([num_tokens], dtype="int64")
         for i in range(enc_batch):
