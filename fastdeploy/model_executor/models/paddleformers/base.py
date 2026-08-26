@@ -20,6 +20,7 @@ import re
 from collections.abc import Iterable
 from typing import TYPE_CHECKING
 
+import numpy as np
 import paddle
 from paddle import nn
 from paddleformers.nn.attention.interface import ALL_ATTENTION_FUNCTIONS
@@ -807,6 +808,51 @@ class PaddleFormersModelBase(nn.Layer):
             inputs_embeds *= self.embed_scale
         return inputs_embeds
 
+    @staticmethod
+    def _build_position_ids_from_lods(forward_meta, num_tokens):
+        """RoPE positions for the XPU packed-token layout, or None on other devices.
+
+        `xpu_pre_process` runs `adjust_batch`, which regroups the packed tokens into
+        [encoder requests ..., decoder requests ...] instead of batch order. Positions
+        therefore cannot be derived from batch_id_per_token / cu_seqlens_q, which still
+        describe the pre-`adjust_batch` order: in a mixed prefill+decode step that
+        mismatch gives every token a wrong position.
+        """
+        len_info = getattr(forward_meta, "len_info_cpu", None)
+        enc_lod_cpu = getattr(forward_meta, "encoder_seq_lod_cpu", None)
+        dec_lod_cpu = getattr(forward_meta, "decoder_seq_lod_cpu", None)
+        enc_base_cpu = getattr(forward_meta, "prefix_len_cpu", None)
+        dec_base_cpu = getattr(forward_meta, "decoder_context_len_cache_cpu", None)
+        if (
+            len_info is None
+            or enc_lod_cpu is None
+            or dec_lod_cpu is None
+            or enc_base_cpu is None
+            or dec_base_cpu is None
+        ):
+            return None
+        len_info = len_info.numpy()
+        enc_batch, dec_batch = int(len_info[0]), int(len_info[1])
+        enc_lod = enc_lod_cpu.numpy()
+        dec_lod = dec_lod_cpu.numpy()
+        # prefix_len / decoder_context_len_cache hold seq_lens_decoder (already computed
+        # tokens) for the encoder and decoder requests respectively, in packed order.
+        enc_base = enc_base_cpu.numpy()
+        dec_base = dec_base_cpu.numpy()
+
+        positions = np.zeros([num_tokens], dtype="int64")
+        for i in range(enc_batch):
+            start, end = int(enc_lod[i]), int(enc_lod[i + 1])
+            base = int(enc_base[i])
+            positions[start:end] = np.arange(base, base + end - start, dtype="int64")
+        enc_tokens = int(enc_lod[enc_batch])
+        for i in range(dec_batch):
+            start = enc_tokens + int(dec_lod[i])
+            end = enc_tokens + int(dec_lod[i + 1])
+            base = int(dec_base[i])
+            positions[start:end] = np.arange(base, base + end - start, dtype="int64")
+        return paddle.to_tensor(positions)
+
     @paddle.no_grad()
     def forward(
         self,
@@ -829,7 +875,8 @@ class PaddleFormersModelBase(nn.Layer):
         batch_id_per_token = forward_meta.batch_id_per_token  # [num_tokens]
         seq_lens_decoder = forward_meta.seq_lens_decoder  # [batch_size, 1]
 
-        if batch_id_per_token is not None and seq_lens_decoder is not None:
+        position_ids = self._build_position_ids_from_lods(forward_meta, num_tokens)
+        if position_ids is None and batch_id_per_token is not None and seq_lens_decoder is not None:
             decoder_offsets = seq_lens_decoder.squeeze(-1)  # [batch_size]
             token_decoder_offsets = paddle.index_select(decoder_offsets, batch_id_per_token, axis=0)  # [num_tokens]
 
@@ -841,7 +888,7 @@ class PaddleFormersModelBase(nn.Layer):
             else:
                 relative_positions = paddle.zeros([num_tokens], dtype="int64")
             position_ids = token_decoder_offsets.astype("int64") + relative_positions
-        else:
+        elif position_ids is None:
             position_ids = paddle.arange(num_tokens, dtype="int64")
             if seq_lens_decoder is not None:
                 position_ids = position_ids + seq_lens_decoder[0, 0].astype("int64")

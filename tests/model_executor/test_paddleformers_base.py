@@ -44,6 +44,7 @@ from fastdeploy.model_executor.layers.linear import (
 )
 from fastdeploy.model_executor.layers.normalization import RMSNorm
 from fastdeploy.model_executor.models.paddleformers.base import (
+    PaddleFormersModelBase,
     PaddleFormersRMSNormWrapper,
     getattr_iter,
     maybe_prefix,
@@ -2631,6 +2632,64 @@ class TestPaddleFormersQKVParallelLinearUnit:
         layer_torch = self._build_layer(model_format="torch")
         with pytest.raises(ValueError, match="only supported for model_format='paddle'"):
             layer_torch.weight_loader(param, fused_weight, None)
+
+
+class TestBuildPositionIdsFromLods:
+    """position_ids must follow the XPU packed-token layout produced by adjust_batch.
+
+    On XPU, `xpu_pre_process` calls `adjust_batch`, which regroups the packed tokens
+    into [encoder requests ..., decoder requests ...] instead of batch order, so
+    positions may not be derived from batch_id_per_token / cu_seqlens_q.
+    """
+
+    @staticmethod
+    def _forward_meta(enc_lens, enc_prefix, dec_cached):
+        enc_lod = [0]
+        for n in enc_lens:
+            enc_lod.append(enc_lod[-1] + n)
+        dec_lod = [0]
+        for _ in dec_cached:
+            dec_lod.append(dec_lod[-1] + 1)
+
+        def cpu(values):
+            return paddle.to_tensor(values, dtype="int32", place=paddle.CPUPlace())
+
+        return SimpleNamespace(
+            len_info_cpu=cpu([len(enc_lens), len(dec_cached), enc_lod[-1]]),
+            encoder_seq_lod_cpu=cpu(enc_lod),
+            decoder_seq_lod_cpu=cpu(dec_lod),
+            prefix_len_cpu=cpu(enc_prefix or [0]),
+            decoder_context_len_cache_cpu=cpu(dec_cached or [0]),
+        )
+
+    def _positions(self, enc_lens, enc_prefix, dec_cached):
+        num_tokens = sum(enc_lens) + len(dec_cached)
+        forward_meta = self._forward_meta(enc_lens, enc_prefix, dec_cached)
+        out = PaddleFormersModelBase._build_position_ids_from_lods(forward_meta, num_tokens)
+        return out.numpy().tolist()
+
+    def test_returns_none_without_xpu_metadata(self):
+        """Return None when XPU LOD metadata is absent (non-XPU devices)."""
+        assert PaddleFormersModelBase._build_position_ids_from_lods(SimpleNamespace(), 4) is None
+
+    def test_pure_prefill(self):
+        """Pure prefill positions start from 0 within each request."""
+        assert self._positions([3, 2], [0, 0], []) == [0, 1, 2, 0, 1]
+
+    def test_pure_decode(self):
+        """Pure decode positions equal the cached token count per request."""
+        assert self._positions([], [], [7, 12]) == [7, 12]
+
+    def test_mixed_prefill_and_decode(self):
+        """Mixed step packs encoder tokens first, decode position comes last."""
+        # One decoding request (14 tokens cached) plus one 3-token prefill: adjust_batch
+        # puts the encoder tokens first, so the decode position comes last.
+        assert self._positions([3], [0], [14]) == [0, 1, 2, 14]
+
+    def test_prefill_with_prefix_cache(self):
+        """Prefill with prefix cache starts numbering at the cached length."""
+        # 5 cached tokens (prefix cache / chunked prefill) then 2 new tokens.
+        assert self._positions([2], [5], []) == [5, 6]
 
 
 if __name__ == "__main__":

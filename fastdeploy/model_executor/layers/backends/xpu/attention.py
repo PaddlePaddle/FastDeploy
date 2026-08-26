@@ -169,6 +169,11 @@ class XPUAttentionBackend(AttentionBackend):
         forward_mixed
         """
         metadata = self.attention_metadata
+        # In the PaddleFormers fallback path the model already applied RoPE
+        # (forward_meta.rope_already_applied=True), so feed identity RoPE (cos=1, sin=0)
+        # to block_attn to avoid rotating twice. Aligned with append_attn_backend.
+        if getattr(forward_meta, "rope_already_applied", False) and metadata.rotary_embs is not None:
+            metadata.rotary_embs = self._get_identity_rotary_embs(metadata.rotary_embs)
         if self.pd_disaggregation_mode == "per_query":
             metadata.kv_signal_data_list[layer.layer_id] = init_signal_layerwise(
                 metadata.kv_signal_metadata,
