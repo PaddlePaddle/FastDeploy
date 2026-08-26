@@ -2,13 +2,14 @@ name: Publish Job
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 18 * * *'   # 2:00 AM China Standard Time (UTC+8)
-  push:
-    # branches:
-    #   - develop
-    tags:
-      - '*'
+  # Repository is no longer maintained: scheduled and push triggers are disabled.
+  # schedule:
+  #   - cron: '0 18 * * *'   # 2:00 AM China Standard Time (UTC+8)
+  # push:
+  #   branches:
+  #     - develop
+  #   tags:
+  #     - '*'
 
 permissions: read-all
 

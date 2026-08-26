@@ -1,8 +1,10 @@
 name: Re-run
 
 on:
-  issue_comment:
-    types: [created]
+  # Repository is no longer maintained: automatic triggers are disabled.
+  # issue_comment:
+  #   types: [created]
+  workflow_dispatch:
 
 jobs:
   re-run:

@@ -1,12 +1,14 @@
 name: CI_METAX
 
 on:
-  pull_request_target:
-    types:
-      - opened
-      - synchronize
-    branches:
-      - develop
+  # Repository is no longer maintained: automatic triggers are disabled.
+  # pull_request_target:
+  #   types:
+  #     - opened
+  #     - synchronize
+  #   branches:
+  #     - develop
+  workflow_dispatch:
 
 permissions:
   contents: read

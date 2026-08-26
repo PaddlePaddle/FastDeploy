@@ -1,8 +1,10 @@
 name: Remove Skip-CI Labels
 
 on:
-  pull_request_target:
-    types: [synchronize]
+  # Repository is no longer maintained: automatic triggers are disabled.
+  # pull_request_target:
+  #   types: [synchronize]
+  workflow_dispatch:
 
 permissions:
   pull-requests: write
