@@ -1,0 +1,4492 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../log/">
+      
+      
+        <link rel="next" href="../environment_variables/">
+      
+      
+        
+          <link rel="alternate" href="../../../usage/code_overview/" hreflang="en">
+        
+          <link rel="alternate" href="./" hreflang="zh">
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>代码概述 - 飞桨大语言模型推理部署工具包</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#fastdeploy" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../../" title="飞桨大语言模型推理部署工具包" class="md-header__button md-logo" aria-label="飞桨大语言模型推理部署工具包" data-md-component="logo">
+      
+  <img src="../../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            飞桨大语言模型推理部署工具包
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              代码概述
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="选择当前语言">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="../../../usage/code_overview/" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="zh" class="md-select__link">
+              简体中文
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PaddlePaddle/FastDeploy" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../" title="飞桨大语言模型推理部署工具包" class="md-nav__button md-logo" aria-label="飞桨大语言模型推理部署工具包" data-md-component="logo">
+      
+  <img src="../../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    飞桨大语言模型推理部署工具包
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PaddlePaddle/FastDeploy" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FastDeploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速入门
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    快速入门
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安装
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    安装
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/nvidia_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    英伟达 GPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/kunlunxin_xpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    昆仑芯 XPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/intel_gaudi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    英特尔 Gaudi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/hygon_dcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    海光 DCU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/Enflame_gcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    燧原 S60
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/iluvatar_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    天数 CoreX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/metax_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    沐曦 C550
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/ernie-4.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/ernie-4.5-vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_qwen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen3-0.6b快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_qwen25_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen2.5-VL系列快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    在线服务
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    在线服务
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    兼容 OpenAI 协议的服务化部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    监控Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    调度器
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/graceful_shutdown_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    服务优雅关闭
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/router/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load-Balancing Scheduling Router
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../offline_inference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    离线推理
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Best Practices
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-0.3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-21B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-300B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-21B-A3B-Thinking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B-Thinking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/PaddleOCR-VL-0.9B/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleOCR-VL-0.9B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    常见问题
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    量化
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    量化
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/online_quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    在线量化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/wint2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WINT2量化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    特性
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    特性
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/prefix_caching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    前缀缓存
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/disaggregated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    分离式部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/chunked_prefill/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    分块预填充
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/load_balance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    负载均衡
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/speculative_decoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    投机解码
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/structured_outputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    结构化输出
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/reasoning_output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    思考链内容
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/thinking_budget/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    思考预算
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/early_stop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    早停功能
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    插件机制
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/paddleformers_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleFormers 后端
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    采样策略
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/multi-node_deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    多机部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/graph_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    图优化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/data_parallel_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据并行
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/plas_attention/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PLAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supported_models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    支持模型列表
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    基准测试
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    用法
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    用法
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    日志说明
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    代码概述
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    代码概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        目录结构总览
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fastdeploy_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        一、核心代码目录 (fastdeploy/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="一、核心代码目录 (fastdeploy/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-engine-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. engine/ - 核心引擎模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-model_executor-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. model_executor/ - 模型执行器
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. model_executor/ - 模型执行器">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-models-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 models/ - 模型实现
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-layers-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 layers/ - 网络层实现
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 其他子模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-scheduler-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. scheduler/ - 调度器模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-entrypoints-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. entrypoints/ - API 入口
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. entrypoints/ - API 入口">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-openai-openai-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 openai/ - OpenAI 兼容 API
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-worker-worker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. worker/ - Worker 进程模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-input-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. input/ - 输入处理模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-output-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. output/ - 输出处理模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-cache_manager-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. cache_manager/ - 缓存管理模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-platforms-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. platforms/ - 硬件平台支持
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-metrics-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. metrics/ - 监控指标模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. 其他重要模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. 配置文件
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom_ops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        二、自定义算子目录 (custom_ops/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="二、自定义算子目录 (custom_ops/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gpu_ops-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gpu_ops/ - GPU 算子详解
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        三、测试目录 (tests/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="三、测试目录 (tests/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        测试目录详解
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        四、脚本工具目录 (scripts/)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        五、其他目录
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="五、其他目录">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#docs-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        docs/ - 文档
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        examples/ - 示例代码
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmarks-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmarks/ - 性能基准
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tools-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tools/ - 开发工具
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dockerfiles-docker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dockerfiles/ - Docker 镜像
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        六、开发指引速查
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="六、开发指引速查">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        添加新模型
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        添加新算子
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        新硬件平台适配
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        优化推理性能
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PD 分离部署
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        七、配置体系
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environment_variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    环境变量
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI 使用说明
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI 使用说明
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chat命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/complete/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complete命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/collect-env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collect Env命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/run-batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Batch命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/tokenizer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tokenizer命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    可观测性
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    可观测性
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trace服务
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        目录结构总览
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fastdeploy_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        一、核心代码目录 (fastdeploy/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="一、核心代码目录 (fastdeploy/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-engine-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. engine/ - 核心引擎模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-model_executor-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. model_executor/ - 模型执行器
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. model_executor/ - 模型执行器">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-models-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 models/ - 模型实现
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-layers-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 layers/ - 网络层实现
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 其他子模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-scheduler-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. scheduler/ - 调度器模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-entrypoints-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. entrypoints/ - API 入口
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. entrypoints/ - API 入口">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-openai-openai-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 openai/ - OpenAI 兼容 API
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-worker-worker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. worker/ - Worker 进程模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-input-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. input/ - 输入处理模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-output-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. output/ - 输出处理模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-cache_manager-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. cache_manager/ - 缓存管理模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-platforms-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. platforms/ - 硬件平台支持
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-metrics-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. metrics/ - 监控指标模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. 其他重要模块
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. 配置文件
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#custom_ops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        二、自定义算子目录 (custom_ops/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="二、自定义算子目录 (custom_ops/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gpu_ops-gpu" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gpu_ops/ - GPU 算子详解
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        三、测试目录 (tests/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="三、测试目录 (tests/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        测试目录详解
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        四、脚本工具目录 (scripts/)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        五、其他目录
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="五、其他目录">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#docs-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        docs/ - 文档
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        examples/ - 示例代码
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmarks-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmarks/ - 性能基准
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tools-" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tools/ - 开发工具
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dockerfiles-docker" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dockerfiles/ - Docker 镜像
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        六、开发指引速查
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="六、开发指引速查">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        添加新模型
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        添加新算子
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        新硬件平台适配
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        优化推理性能
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pd" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PD 分离部署
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_9" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        七、配置体系
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="./">English</a></p>
+<h1 id="fastdeploy">FastDeploy 代码结构详解</h1>
+<p>本文档详细介绍 FastDeploy 代码库的结构，帮助开发者快速了解各模块功能，便于开发和新功能扩展。</p>
+<hr />
+<h2 id="_1">目录结构总览</h2>
+<pre><code>FastDeploy/
+├── fastdeploy/          # 核心代码目录
+├── custom_ops/          # C++/CUDA 自定义算子
+├── tests/               # 单元测试
+├── scripts/             # 工具脚本
+├── tools/               # 开发工具
+├── docs/                # 文档
+├── examples/            # 示例代码
+├── benchmarks/          # 性能基准测试
+├── dockerfiles/         # Docker 镜像构建文件
+└── setup.py             # Python 包安装脚本
+</code></pre>
+<hr />
+<h2 id="fastdeploy_1">一、核心代码目录 (fastdeploy/)</h2>
+<p>主入口文件 <code>fastdeploy/__init__.py</code> 导出核心类：</p>
+<ul>
+<li><code>LLM</code> - 主入口类，离线推理接口</li>
+<li><code>SamplingParams</code> - 采样参数配置</li>
+<li><code>ModelRegistry</code> - 模型注册器</li>
+<li><code>version</code> - 版本信息</li>
+</ul>
+<h3 id="1-engine-">1. engine/ - 核心引擎模块</h3>
+<p><strong>功能</strong>: 管理 LLM 推理的生命周期，协调各组件工作。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>engine.py</code></td>
+<td><code>LLMEngine</code> 核心引擎类，管理调度器、预处理器、资源管理器</td>
+<td>修改引擎行为、添加新组件的入口</td>
+</tr>
+<tr>
+<td><code>async_llm.py</code></td>
+<td>异步 LLM 接口，<code>AsyncRequestQueue</code> 请求队列管理</td>
+<td>异步推理、流式输出相关开发</td>
+</tr>
+<tr>
+<td><code>request.py</code></td>
+<td>请求核心数据结构：<code>Request</code>, <code>RequestOutput</code>, <code>RequestStatus</code></td>
+<td>新增请求字段、修改请求处理逻辑</td>
+</tr>
+<tr>
+<td><code>sampling_params.py</code></td>
+<td><code>SamplingParams</code> 采样参数配置</td>
+<td>添加新采样策略参数</td>
+</tr>
+<tr>
+<td><code>args_utils.py</code></td>
+<td><code>EngineArgs</code> 引擎参数解析</td>
+<td>新增引擎配置参数</td>
+</tr>
+<tr>
+<td><code>resource_manager.py</code></td>
+<td>GPU/CPU 资源管理</td>
+<td>资源分配优化</td>
+</tr>
+</tbody>
+</table>
+<p><strong>子目录</strong>:</p>
+<ul>
+<li><code>sched/</code> - 调度核心实现，包含 <code>resource_manager_v1.py</code> (<strong>核心调度逻辑所在</strong>)</li>
+</ul>
+<hr />
+<h3 id="2-model_executor-">2. model_executor/ - 模型执行器</h3>
+<p><strong>功能</strong>: 模型推理的核心执行模块，包含模型定义、网络层、算子等。</p>
+<h4 id="21-models-">2.1 models/ - 模型实现</h4>
+<table>
+<thead>
+<tr>
+<th>文件/目录</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_base.py</code></td>
+<td><code>ModelRegistry</code> 模型注册基类</td>
+<td><strong>添加新模型必看</strong></td>
+</tr>
+<tr>
+<td><code>deepseek_v3.py</code></td>
+<td>DeepSeek V3 模型</td>
+<td>MoE 大模型参考</td>
+</tr>
+<tr>
+<td><code>ernie4_5_moe.py</code></td>
+<td>ERNIE 4.5 MoE 模型</td>
+<td>百度主力模型</td>
+</tr>
+<tr>
+<td><code>ernie4_5_mtp.py</code></td>
+<td>ERNIE 4.5 MTP 多token预测</td>
+<td>推测解码模型</td>
+</tr>
+<tr>
+<td><code>qwen2.py</code></td>
+<td>Qwen2 模型</td>
+<td>通用模型参考</td>
+</tr>
+<tr>
+<td><code>qwen3.py</code></td>
+<td>Qwen3 模型</td>
+<td>最新模型参考</td>
+</tr>
+<tr>
+<td><code>ernie4_5_vl/</code></td>
+<td>ERNIE 4.5 视觉语言模型</td>
+<td>多模态模型开发参考</td>
+</tr>
+<tr>
+<td><code>qwen2_5_vl/</code></td>
+<td>Qwen2.5 VL 多模态模型</td>
+<td>VL 模型参考</td>
+</tr>
+<tr>
+<td><code>paddleocr_vl/</code></td>
+<td>PaddleOCR VL 模型</td>
+<td>OCR 多模态参考</td>
+</tr>
+</tbody>
+</table>
+<h4 id="22-layers-">2.2 layers/ - 网络层实现</h4>
+<table>
+<thead>
+<tr>
+<th>子目录/文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>attention/</code></td>
+<td>注意力机制实现 (flash_attn, append_attn, mla_attn)</td>
+<td><strong>优化注意力性能首选</strong></td>
+</tr>
+<tr>
+<td><code>moe/</code></td>
+<td>MoE 层实现 (Cutlass, Triton, DeepGEMM 后端)</td>
+<td>MoE 性能优化</td>
+</tr>
+<tr>
+<td><code>quantization/</code></td>
+<td>量化层 (FP8, W4A8, WINT2, Weight-only)</td>
+<td>量化方案开发</td>
+</tr>
+<tr>
+<td><code>linear.py</code></td>
+<td>线性层实现</td>
+<td>矩阵乘法优化</td>
+</tr>
+<tr>
+<td><code>embeddings.py</code></td>
+<td>嵌入层实现</td>
+<td>词嵌入修改</td>
+</tr>
+<tr>
+<td><code>normalization.py</code></td>
+<td>归一化层 (RMSNorm, LayerNorm)</td>
+<td>归一化优化</td>
+</tr>
+<tr>
+<td><code>rotary_embedding.py</code></td>
+<td>旋转位置编码 ROPE</td>
+<td>位置编码修改</td>
+</tr>
+<tr>
+<td><code>sample/</code></td>
+<td>采样器实现</td>
+<td>采样策略开发</td>
+</tr>
+<tr>
+<td><code>backends/</code></td>
+<td>硬件后端实现 (cuda, xpu, dcu, hpu, metax, gcu, npu)</td>
+<td><strong>新硬件适配入口</strong></td>
+</tr>
+</tbody>
+</table>
+<h4 id="23">2.3 其他子模块</h4>
+<table>
+<thead>
+<tr>
+<th>目录</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_loader/</code></td>
+<td>模型权重加载器</td>
+<td>新模型格式支持</td>
+</tr>
+<tr>
+<td><code>guided_decoding/</code></td>
+<td>引导解码 (JSON/regex 约束输出)</td>
+<td>结构化输出开发</td>
+</tr>
+<tr>
+<td><code>graph_optimization/</code></td>
+<td>图优化 (CUDA Graph)</td>
+<td>推理性能优化</td>
+</tr>
+<tr>
+<td><code>logits_processor/</code></td>
+<td>Logits 处理器</td>
+<td>输出控制逻辑</td>
+</tr>
+<tr>
+<td><code>ops/</code></td>
+<td>Python 可调用算子 (按硬件平台组织)</td>
+<td>算子调用入口</td>
+</tr>
+</tbody>
+</table>
+<p><strong>关键文件</strong>:</p>
+<ul>
+<li><code>model_base.py</code> - 模型基类、注册器定义</li>
+<li><code>pre_and_post_process.py</code> - 前后处理工具</li>
+</ul>
+<hr />
+<h3 id="3-scheduler-">3. scheduler/ - 调度器模块</h3>
+<p><strong>功能</strong>: 请求调度，支持单机、分布式、PD 分离等场景。</p>
+<blockquote>
+<p><strong>注意</strong>:
+- 核心调度逻辑主要在 <code>engine/sched/resource_manager_v1.py</code> 中实现
+- 本目录下的 scheduler 正在<strong>逐步废弃</strong>，PD 分离调度请使用 <code>router/</code> 或 <code>golang_router/</code></p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>global_scheduler.py</code></td>
+<td><code>GlobalScheduler</code> 分布式调度器 (Redis)</td>
+<td>(逐步废弃)</td>
+</tr>
+<tr>
+<td><code>local_scheduler.py</code></td>
+<td><code>LocalScheduler</code> 本地调度器</td>
+<td>(逐步废弃)</td>
+</tr>
+<tr>
+<td><code>splitwise_scheduler.py</code></td>
+<td><code>SplitwiseScheduler</code> PD 分离调度</td>
+<td>(逐步废弃，请使用 router)</td>
+</tr>
+<tr>
+<td><code>dp_scheduler.py</code></td>
+<td>数据并行调度器</td>
+<td>(逐步废弃)</td>
+</tr>
+<tr>
+<td><code>config.py</code></td>
+<td><code>SchedulerConfig</code> 调度配置</td>
+<td>调度参数调整</td>
+</tr>
+<tr>
+<td><code>storage.py</code></td>
+<td>存储适配器，封装 Redis 连接</td>
+<td>存储层修改</td>
+</tr>
+</tbody>
+</table>
+<p><strong>调度核心实现</strong> (<code>engine/sched/</code>):</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>resource_manager_v1.py</code></td>
+<td>核心调度逻辑，包含 <code>ScheduledDecodeTask</code>、<code>ScheduledPreemptTask</code> 等任务类</td>
+<td><strong>调度策略修改首选</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="4-entrypoints-api">4. entrypoints/ - API 入口</h3>
+<p><strong>功能</strong>: 对外服务接口，包括离线推理和在线 API 服务。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>llm.py</code></td>
+<td><code>LLM</code> 主入口类，离线推理接口</td>
+<td><strong>使用 FastDeploy 入口</strong></td>
+</tr>
+<tr>
+<td><code>engine_client.py</code></td>
+<td>引擎客户端</td>
+<td>请求转发逻辑修改</td>
+</tr>
+</tbody>
+</table>
+<h4 id="41-openai-openai-api">4.1 openai/ - OpenAI 兼容 API</h4>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_server.py</code></td>
+<td>FastAPI 服务器</td>
+<td><strong>部署服务入口</strong></td>
+</tr>
+<tr>
+<td><code>protocol.py</code></td>
+<td>OpenAI 协议定义</td>
+<td>API 格式修改</td>
+</tr>
+<tr>
+<td><code>serving_chat.py</code></td>
+<td>Chat Completion API</td>
+<td>聊天接口开发</td>
+</tr>
+<tr>
+<td><code>serving_completion.py</code></td>
+<td>Completion API</td>
+<td>补全接口开发</td>
+</tr>
+<tr>
+<td><code>serving_embedding.py</code></td>
+<td>Embedding API</td>
+<td>向量化接口</td>
+</tr>
+<tr>
+<td><code>tool_parsers/</code></td>
+<td>工具调用解析器</td>
+<td>Function Calling 开发</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="5-worker-worker">5. worker/ - Worker 进程模块</h3>
+<p><strong>功能</strong>: 模型推理的实际执行进程。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gpu_model_runner.py</code></td>
+<td><strong>GPU 模型运行器</strong> (核心推理循环)</td>
+<td><strong>推理流程修改首选</strong></td>
+</tr>
+<tr>
+<td><code>gpu_worker.py</code></td>
+<td>GPU Worker 进程管理</td>
+<td>Worker 生命周期管理</td>
+</tr>
+<tr>
+<td><code>xpu_model_runner.py</code></td>
+<td>XPU 模型运行器</td>
+<td>昆仑芯片适配</td>
+</tr>
+<tr>
+<td><code>hpu_model_runner.py</code></td>
+<td>HPU 模型运行器</td>
+<td>Intel HPU 适配</td>
+</tr>
+<tr>
+<td><code>worker_process.py</code></td>
+<td>Worker 进程基类</td>
+<td>进程管理逻辑</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="6-input-">6. input/ - 输入处理模块</h3>
+<p><strong>功能</strong>: 输入数据预处理，包括分词、多模态输入处理。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>text_processor.py</code></td>
+<td><code>BaseDataProcessor</code> 文本处理器基类</td>
+<td>输入处理扩展</td>
+</tr>
+<tr>
+<td><code>multimodal_processor.py</code></td>
+<td>统一多模态处理器</td>
+<td>多模态输入处理</td>
+</tr>
+<tr>
+<td><code>ernie4_5_tokenizer.py</code></td>
+<td>ERNIE 4.5 分词器</td>
+<td>分词逻辑修改</td>
+</tr>
+<tr>
+<td><code>preprocess.py</code></td>
+<td>输入预处理工具</td>
+<td>预处理流程</td>
+</tr>
+</tbody>
+</table>
+<p><strong>多模态处理子目录</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>目录</th>
+<th>功能</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>encodings/</code></td>
+<td>模型特定编码策略 (Ernie, Qwen, PaddleOCR)</td>
+</tr>
+<tr>
+<td><code>image_processors/</code></td>
+<td>图像预处理 (Adaptive, Qwen, Qwen3, PaddleOCR)</td>
+</tr>
+<tr>
+<td><code>multimodal_processor.py</code></td>
+<td>统一多模态处理器</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="7-output-">7. output/ - 输出处理模块</h3>
+<p><strong>功能</strong>: 推理结果后处理，流式输出管理。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>token_processor.py</code></td>
+<td><code>TokenProcessor</code> Token 输出处理</td>
+<td>流式输出、推测解码</td>
+</tr>
+<tr>
+<td><code>pooler.py</code></td>
+<td>池化输出处理</td>
+<td>Embedding 输出</td>
+</tr>
+<tr>
+<td><code>stream_transfer_data.py</code></td>
+<td>流式传输数据结构</td>
+<td>数据传输格式</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="8-cache_manager-">8. cache_manager/ - 缓存管理模块</h3>
+<p><strong>功能</strong>: KV Cache 管理，支持前缀缓存、跨设备传输。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prefix_cache_manager.py</code></td>
+<td><code>PrefixCacheManager</code> 前缀树缓存</td>
+<td><strong>KV Cache 优化首选</strong></td>
+</tr>
+<tr>
+<td><code>cache_transfer_manager.py</code></td>
+<td>KV Cache 跨设备传输</td>
+<td>PD 分离缓存传输</td>
+</tr>
+<tr>
+<td><code>cache_data.py</code></td>
+<td><code>BlockNode</code>, <code>CacheStatus</code> 数据结构</td>
+<td>缓存数据定义</td>
+</tr>
+<tr>
+<td><code>multimodal_cache_manager.py</code></td>
+<td>多模态缓存管理</td>
+<td>多模态缓存</td>
+</tr>
+</tbody>
+</table>
+<p><strong>子目录</strong>:</p>
+<ul>
+<li><code>transfer_factory/</code> - 缓存传输工厂 (IPC, RDMA)</li>
+</ul>
+<hr />
+<h3 id="9-platforms-">9. platforms/ - 硬件平台支持</h3>
+<p><strong>功能</strong>: 多硬件平台适配，定义各平台的算子和特性。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base.py</code></td>
+<td><code>Platform</code> 基类，<code>_Backend</code> 枚举</td>
+<td><strong>新硬件适配入口</strong></td>
+</tr>
+<tr>
+<td><code>cuda.py</code></td>
+<td>NVIDIA CUDA 平台</td>
+<td>GPU 优化</td>
+</tr>
+<tr>
+<td><code>xpu.py</code></td>
+<td>百度昆仑 XPU 平台</td>
+<td>昆仑芯片适配</td>
+</tr>
+<tr>
+<td><code>dcu.py</code></td>
+<td>AMD DCU (ROCm) 平台</td>
+<td>AMD GPU 适配</td>
+</tr>
+<tr>
+<td><code>maca.py</code></td>
+<td>MetaX GPU (MACA) 平台</td>
+<td>壁仞 GPU 适配</td>
+</tr>
+<tr>
+<td><code>intel_hpu.py</code></td>
+<td>Intel HPU 平台</td>
+<td>Intel Gaudi 适配</td>
+</tr>
+<tr>
+<td><code>iluvatar.py</code></td>
+<td>天数智芯 GPU 平台</td>
+<td>天数智芯适配</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="10-metrics-">10. metrics/ - 监控指标模块</h3>
+<p><strong>功能</strong>: Prometheus 指标收集，性能监控。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metrics.py</code></td>
+<td>Prometheus 指标定义</td>
+<td>新增监控指标</td>
+</tr>
+<tr>
+<td><code>stats.py</code></td>
+<td>ZMQ 指标统计</td>
+<td>分布式监控</td>
+</tr>
+<tr>
+<td><code>trace_util.py</code></td>
+<td>OpenTelemetry 分布式追踪</td>
+<td>链路追踪</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="11">11. 其他重要模块</h3>
+<table>
+<thead>
+<tr>
+<th>目录</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>inter_communicator/</code></td>
+<td>进程间通信 (ZMQ)</td>
+<td>Engine-Worker 通信修改</td>
+</tr>
+<tr>
+<td><code>spec_decode/</code></td>
+<td>推测解码 (MTP, N-gram)</td>
+<td>推测解码策略开发</td>
+</tr>
+<tr>
+<td><code>distributed/</code></td>
+<td>分布式通信 (AllReduce)</td>
+<td>分布式推理开发</td>
+</tr>
+<tr>
+<td><code>multimodal/</code></td>
+<td>多模态数据处理</td>
+<td>多模态功能扩展</td>
+</tr>
+<tr>
+<td><code>reasoning/</code></td>
+<td>推理模式解析 (DeepSeek R1 风格)</td>
+<td>思考链解析</td>
+</tr>
+<tr>
+<td><code>router/</code></td>
+<td>请求路由器，<strong>PD 分离调度推荐使用</strong></td>
+<td><strong>PD 分离部署首选</strong></td>
+</tr>
+<tr>
+<td><code>golang_router/</code></td>
+<td>Go 语言实现的路由器，PD 间调度性能更优</td>
+<td><strong>高性能 PD 分离场景</strong></td>
+</tr>
+<tr>
+<td><code>eplb/</code></td>
+<td>Expert Parallel 负载均衡</td>
+<td>MoE 负载均衡</td>
+</tr>
+<tr>
+<td><code>rl/</code></td>
+<td>强化学习 Rollout</td>
+<td>RLHF 场景</td>
+</tr>
+<tr>
+<td><code>plugins/</code></td>
+<td>插件系统</td>
+<td>自定义扩展</td>
+</tr>
+<tr>
+<td><code>logger/</code></td>
+<td>日志模块</td>
+<td>日志格式修改</td>
+</tr>
+<tr>
+<td><code>trace/</code></td>
+<td>追踪模块</td>
+<td>性能分析</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="12">12. 配置文件</h3>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>config.py</code></td>
+<td><code>FDConfig</code> 总配置类</td>
+<td><strong>配置参数修改入口</strong></td>
+</tr>
+<tr>
+<td><code>envs.py</code></td>
+<td>环境变量配置</td>
+<td>新增环境变量</td>
+</tr>
+<tr>
+<td><code>utils.py</code></td>
+<td>通用工具函数</td>
+<td>工具函数复用</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="custom_ops">二、自定义算子目录 (custom_ops/)</h2>
+<p><strong>功能</strong>: C++/CUDA 高性能算子实现，按硬件平台组织。</p>
+<pre><code>custom_ops/
+├── gpu_ops/           # NVIDIA GPU 算子 (主要)
+├── cpu_ops/           # CPU 算子
+├── xpu_ops/           # 百度昆仑 XPU 算子
+├── iluvatar_ops/      # 天数智芯 GPU 算子
+├── metax_ops/         # MetaX GPU 算子
+├── utils/             # 公共工具
+└── third_party/       # 第三方库 (cutlass, DeepGEMM)
+</code></pre>
+<h3 id="gpu_ops-gpu">gpu_ops/ - GPU 算子详解</h3>
+<table>
+<thead>
+<tr>
+<th>目录/文件</th>
+<th>功能</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>append_attn/</code></td>
+<td>Append Attention 实现</td>
+<td><strong>注意力优化首选</strong></td>
+</tr>
+<tr>
+<td><code>moe/</code></td>
+<td>MoE 算子 (fused_moe, expert_dispatch)</td>
+<td>MoE 性能优化</td>
+</tr>
+<tr>
+<td><code>flash_mask_attn/</code></td>
+<td>Flash Mask Attention</td>
+<td>注意力掩码优化</td>
+</tr>
+<tr>
+<td><code>mla_attn/</code></td>
+<td>Multi-Head Latent Attention</td>
+<td>MLA 模型支持</td>
+</tr>
+<tr>
+<td><code>machete/</code></td>
+<td>Machete GEMM</td>
+<td>矩阵乘法优化</td>
+</tr>
+<tr>
+<td><code>quantization/</code></td>
+<td>量化算子</td>
+<td>量化性能优化</td>
+</tr>
+<tr>
+<td><code>sample_kernels/</code></td>
+<td>采样算子</td>
+<td>采样性能优化</td>
+</tr>
+<tr>
+<td><code>speculate_decoding/</code></td>
+<td>推测解码算子</td>
+<td>推测解码优化</td>
+</tr>
+<tr>
+<td><code>cutlass_kernels/</code></td>
+<td>CUTLASS 内核</td>
+<td>高性能 GEMM</td>
+</tr>
+<tr>
+<td><code>cpp_extensions.cc</code></td>
+<td>C++ 扩展入口</td>
+<td><strong>新增算子注册入口</strong></td>
+</tr>
+<tr>
+<td><code>append_attention.cu</code></td>
+<td>Append Attention 核心</td>
+<td>注意力核心实现</td>
+</tr>
+</tbody>
+</table>
+<p><strong>关键算子文件</strong>:</p>
+<ul>
+<li><code>fused_rotary_position_encoding.cu</code> - 融合旋转位置编码</li>
+<li><code>multi_head_latent_attention.cu</code> - MLA 注意力</li>
+<li><code>per_token_quant_fp8.cu</code> - FP8 量化</li>
+</ul>
+<hr />
+<h2 id="tests">三、测试目录 (tests/)</h2>
+<p><strong>功能</strong>: 单元测试和端到端测试，按模块组织。</p>
+<pre><code>tests/
+├── e2e/               # 端到端服务测试
+├── operators/         # 算子单元测试
+├── model_executor/    # 模型执行器测试
+├── model_loader/      # 模型加载测试
+├── layers/            # 网络层测试
+├── scheduler/         # 调度器测试
+├── cache_manager/     # 缓存管理测试
+├── entrypoints/       # API 入口测试
+├── input/             # 输入处理测试
+├── output/            # 输出处理测试
+├── metrics/           # 指标测试
+├── distributed/       # 分布式测试
+├── graph_optimization/# 图优化测试
+├── quantization/      # 量化测试
+├── multimodal/        # 多模态测试
+├── xpu_ci/            # XPU CI 测试
+├── ci_validation/     # CI 验证测试
+├── ci_use/            # CI 工具测试
+└── conftest.py        # pytest 配置
+</code></pre>
+<h3 id="_2">测试目录详解</h3>
+<table>
+<thead>
+<tr>
+<th>目录</th>
+<th>内容</th>
+<th>开发指引</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>e2e/</code></td>
+<td>各模型服务完整测试 (ERNIE, Qwen, DeepSeek 等)</td>
+<td><strong>服务集成测试</strong></td>
+</tr>
+<tr>
+<td><code>operators/</code></td>
+<td>算子单元测试 (<code>test_fused_moe.py</code>, <code>test_flash_mask_attn.py</code> 等)</td>
+<td><strong>算子开发必写测试</strong></td>
+</tr>
+<tr>
+<td><code>layers/</code></td>
+<td>网络层测试 (attention, moe, quantization)</td>
+<td>网络层测试</td>
+</tr>
+<tr>
+<td><code>model_executor/</code></td>
+<td>模型执行流程测试</td>
+<td>模型执行测试</td>
+</tr>
+<tr>
+<td><code>scheduler/</code></td>
+<td>调度器功能测试</td>
+<td>调度逻辑验证</td>
+</tr>
+<tr>
+<td><code>cache_manager/</code></td>
+<td>缓存管理测试</td>
+<td>缓存逻辑验证</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="scripts">四、脚本工具目录 (scripts/)</h2>
+<p><strong>功能</strong>: CI/CD、性能调优、工具脚本。</p>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>功能</th>
+<th>使用场景</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run_unittest.sh</code></td>
+<td>单元测试运行</td>
+<td>本地测试</td>
+</tr>
+<tr>
+<td><code>run_ci_xpu.sh</code></td>
+<td>XPU CI 运行</td>
+<td>昆仑 CI</td>
+</tr>
+<tr>
+<td><code>run_ci_hpu.sh</code></td>
+<td>HPU CI 运行</td>
+<td>Intel HPU CI</td>
+</tr>
+<tr>
+<td><code>run_ci_dcu.sh</code></td>
+<td>DCU CI 运行</td>
+<td>AMD DCU CI</td>
+</tr>
+<tr>
+<td><code>coverage_run.sh</code></td>
+<td>代码覆盖率统计</td>
+<td>代码质量</td>
+</tr>
+<tr>
+<td><code>tune_cublaslt_int8_gemm.py</code></td>
+<td>cuBLASLt INT8 GEMM 调优</td>
+<td>性能调优</td>
+</tr>
+<tr>
+<td><code>tune_cutlass_fp8_gemm.py</code></td>
+<td>CUTLASS FP8 GEMM 调优</td>
+<td>性能调优</td>
+</tr>
+<tr>
+<td><code>offline_w4a8.py</code></td>
+<td>离线 W4A8 量化工具</td>
+<td>模型量化</td>
+</tr>
+<tr>
+<td><code>extract_mtp_weight_from_safetensor.py</code></td>
+<td>MTP 权重提取</td>
+<td>模型处理</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="_3">五、其他目录</h2>
+<h3 id="docs-">docs/ - 文档</h3>
+<ul>
+<li>使用文档、API 文档、架构设计文档</li>
+</ul>
+<h3 id="examples-">examples/ - 示例代码</h3>
+<ul>
+<li>各模型使用示例、部署示例</li>
+</ul>
+<h3 id="benchmarks-">benchmarks/ - 性能基准</h3>
+<ul>
+<li>性能测试脚本、基准数据</li>
+</ul>
+<h3 id="tools-">tools/ - 开发工具</h3>
+<ul>
+<li><code>codestyle/</code> - 代码风格检查工具</li>
+<li><code>dockerfile/</code> - Docker 构建工具</li>
+</ul>
+<h3 id="dockerfiles-docker">dockerfiles/ - Docker 镜像</h3>
+<ul>
+<li>各平台运行环境 Dockerfile</li>
+</ul>
+<hr />
+<h2 id="_4">六、开发指引速查</h2>
+<h3 id="_5">添加新模型</h3>
+<ol>
+<li>参考 <code>models/model_base.py</code> 了解模型注册机制</li>
+<li>在 <code>models/</code> 下创建新模型文件</li>
+<li>在 <code>input/</code> 下添加对应的输入处理器</li>
+<li>在 <code>tests/model_executor/</code> 下添加测试</li>
+</ol>
+<h3 id="_6">添加新算子</h3>
+<ol>
+<li>在 <code>custom_ops/gpu_ops/</code> 下实现 CUDA 算子</li>
+<li>在 <code>cpp_extensions.cc</code> 中注册算子</li>
+<li>在 <code>model_executor/ops/gpu/</code> 下添加 Python 封装</li>
+<li>在 <code>tests/operators/</code> 下添加测试</li>
+</ol>
+<h3 id="_7">新硬件平台适配</h3>
+<ol>
+<li>参考 <code>platforms/base.py</code> 创建新平台类</li>
+<li>在 <code>custom_ops/</code> 下创建硬件算子目录</li>
+<li>在 <code>model_executor/layers/backends/</code> 下创建后端实现</li>
+<li>在 <code>worker/</code> 下创建模型运行器</li>
+</ol>
+<h3 id="_8">优化推理性能</h3>
+<ol>
+<li>注意力优化：<code>custom_ops/gpu_ops/append_attn/</code></li>
+<li>MoE 优化：<code>custom_ops/gpu_ops/moe/</code></li>
+<li>图优化：<code>fastdeploy/model_executor/graph_optimization/</code></li>
+</ol>
+<h3 id="pd">PD 分离部署</h3>
+<ol>
+<li>路由器：<code>router/router.py</code> (Python 实现，推荐)</li>
+<li>高性能路由：<code>golang_router/</code> (Go 实现，PD 间调度性能更优)</li>
+<li>缓存传输：<code>cache_manager/cache_transfer_manager.py</code></li>
+</ol>
+<hr />
+<h2 id="_9">七、配置体系</h2>
+<pre><code>FDConfig (config.py)
+├── ModelConfig      # 模型配置
+├── CacheConfig      # 缓存配置
+├── ParallelConfig   # 并行配置
+├── SchedulerConfig  # 调度配置
+├── LoRAConfig       # LoRA 配置
+└── ...
+
+环境变量配置 (envs.py)
+├── FD_* 系列环境变量
+└── 运行时行为控制
+</code></pre>
+<hr />
+<p>本文档涵盖了 FastDeploy 代码库的主要模块和关键文件，可作为代码导航和开发参考使用。如有疑问，请参考各模块的详细文档或源码注释。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 Maintained by FastDeploy
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

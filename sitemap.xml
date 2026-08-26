@@ -1,0 +1,1137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">
+    <url>
+        <loc>None./</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="None"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/"/>
+    </url>
+    <url>
+        <loc>Nonebenchmark/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebenchmark/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/benchmark/"/>
+    </url>
+    <url>
+        <loc>Noneoffline_inference/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneoffline_inference/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/offline_inference/"/>
+    </url>
+    <url>
+        <loc>Noneparameters/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneparameters/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/parameters/"/>
+    </url>
+    <url>
+        <loc>Nonesupported_models/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonesupported_models/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/supported_models/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/DeepSeek-V3/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/DeepSeek-V3/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/DeepSeek-V3/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/Disaggregated/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/Disaggregated/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/Disaggregated/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/ERNIE-4.5-0.3B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-0.3B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-0.3B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/ERNIE-4.5-21B-A3B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-21B-A3B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-21B-A3B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/ERNIE-4.5-21B-A3B-Thinking/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-21B-A3B-Thinking/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-21B-A3B-Thinking/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/ERNIE-4.5-300B-A47B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-300B-A47B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-300B-A47B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/ERNIE-4.5-VL-28B-A3B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-VL-28B-A3B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/ERNIE-4.5-VL-28B-A3B-Thinking/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-VL-28B-A3B-Thinking/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-VL-28B-A3B-Thinking/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/ERNIE-4.5-VL-424B-A47B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-VL-424B-A47B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/FAQ/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/FAQ/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/FAQ/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/GLM-4-MoE-Text/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/GLM-4-MoE-Text/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/GLM-4-MoE-Text/"/>
+    </url>
+    <url>
+        <loc>Nonebest_practices/PaddleOCR-VL-0.9B/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/PaddleOCR-VL-0.9B/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/PaddleOCR-VL-0.9B/"/>
+    </url>
+    <url>
+        <loc>Nonecli/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/"/>
+    </url>
+    <url>
+        <loc>Nonecli/bench/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/bench/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/bench/"/>
+    </url>
+    <url>
+        <loc>Nonecli/chat/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/chat/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/chat/"/>
+    </url>
+    <url>
+        <loc>Nonecli/collect-env/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/collect-env/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/collect-env/"/>
+    </url>
+    <url>
+        <loc>Nonecli/complete/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/complete/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/complete/"/>
+    </url>
+    <url>
+        <loc>Nonecli/run-batch/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/run-batch/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/run-batch/"/>
+    </url>
+    <url>
+        <loc>Nonecli/serve/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/serve/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/serve/"/>
+    </url>
+    <url>
+        <loc>Nonecli/tokenizer/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/tokenizer/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/tokenizer/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/chunked_prefill/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/chunked_prefill/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/chunked_prefill/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/data_parallel_service/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/data_parallel_service/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/data_parallel_service/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/disaggregated/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/disaggregated/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/disaggregated/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/early_stop/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/early_stop/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/early_stop/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/global_cache_pooling/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/global_cache_pooling/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/global_cache_pooling/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/graph_optimization/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/graph_optimization/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/graph_optimization/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/load_balance/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/load_balance/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/load_balance/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/logits_processor/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/logits_processor/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/logits_processor/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/multi-node_deployment/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/multi-node_deployment/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/multi-node_deployment/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/paddleformers_backend/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/paddleformers_backend/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/paddleformers_backend/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/plas_attention/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/plas_attention/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/plas_attention/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/plugins/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/plugins/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/plugins/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/pooling_models/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/pooling_models/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/pooling_models/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/prefix_caching/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/prefix_caching/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/prefix_caching/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/reasoning_output/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/reasoning_output/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/reasoning_output/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/sampling/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/sampling/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/sampling/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/speculative_decoding/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/speculative_decoding/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/speculative_decoding/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/structured_outputs/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/structured_outputs/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/structured_outputs/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/thinking_budget/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/thinking_budget/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/thinking_budget/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/tool_calling/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/tool_calling/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/tool_calling/"/>
+    </url>
+    <url>
+        <loc>Nonefeatures/weight_update/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/weight_update/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/weight_update/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/ernie-4.5-vl-thinking/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/ernie-4.5-vl-thinking/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/ernie-4.5-vl-thinking/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/ernie-4.5-vl/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/ernie-4.5-vl/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/ernie-4.5-vl/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/ernie-4.5/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/ernie-4.5/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/ernie-4.5/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/quick_start/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/quick_start/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/quick_start/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/quick_start_qwen/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/quick_start_qwen/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/quick_start_qwen/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/quick_start_qwen25_vl/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/quick_start_qwen25_vl/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/quick_start_qwen25_vl/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/quick_start_vl/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/quick_start_vl/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/quick_start_vl/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/installation/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/installation/Enflame_gcu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/Enflame_gcu/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/Enflame_gcu/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/installation/hygon_dcu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/hygon_dcu/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/hygon_dcu/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/installation/iluvatar_gpu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/iluvatar_gpu/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/iluvatar_gpu/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/installation/intel_gaudi/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/intel_gaudi/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/intel_gaudi/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/installation/kunlunxin_xpu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/kunlunxin_xpu/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/kunlunxin_xpu/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/installation/metax_gpu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/metax_gpu/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/metax_gpu/"/>
+    </url>
+    <url>
+        <loc>Noneget_started/installation/nvidia_gpu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/nvidia_gpu/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/nvidia_gpu/"/>
+    </url>
+    <url>
+        <loc>Noneobservability/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneobservability/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/observability/"/>
+    </url>
+    <url>
+        <loc>Noneobservability/trace/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneobservability/trace/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/observability/trace/"/>
+    </url>
+    <url>
+        <loc>Noneonline_serving/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/"/>
+    </url>
+    <url>
+        <loc>Noneonline_serving/graceful_shutdown_service/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/graceful_shutdown_service/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/graceful_shutdown_service/"/>
+    </url>
+    <url>
+        <loc>Noneonline_serving/metrics/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/metrics/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/metrics/"/>
+    </url>
+    <url>
+        <loc>Noneonline_serving/router/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/router/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/router/"/>
+    </url>
+    <url>
+        <loc>Noneonline_serving/router_faq/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/router_faq/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/router_faq/"/>
+    </url>
+    <url>
+        <loc>Noneonline_serving/scheduler/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/scheduler/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/scheduler/"/>
+    </url>
+    <url>
+        <loc>Nonequantization/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonequantization/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/quantization/"/>
+    </url>
+    <url>
+        <loc>Nonequantization/nvfp4/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonequantization/nvfp4/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/quantization/nvfp4/"/>
+    </url>
+    <url>
+        <loc>Nonequantization/online_quantization/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonequantization/online_quantization/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/quantization/online_quantization/"/>
+    </url>
+    <url>
+        <loc>Nonequantization/wint2/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonequantization/wint2/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/quantization/wint2/"/>
+    </url>
+    <url>
+        <loc>Noneusage/code_overview/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/code_overview/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/code_overview/"/>
+    </url>
+    <url>
+        <loc>Noneusage/environment_variables/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/environment_variables/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/environment_variables/"/>
+    </url>
+    <url>
+        <loc>Noneusage/fastdeploy_unit_test_guide/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/fastdeploy_unit_test_guide/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/fastdeploy_unit_test_guide/"/>
+    </url>
+    <url>
+        <loc>Noneusage/kunlunxin_xpu_deployment/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/kunlunxin_xpu_deployment/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/kunlunxin_xpu_deployment/"/>
+    </url>
+    <url>
+        <loc>Noneusage/log/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/log/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/log/"/>
+    </url>
+    <url>
+        <loc>Noneusage/usage_stats_collection/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/usage_stats_collection/"/>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/usage_stats_collection/"/>
+    </url>
+    <url>
+        <loc>Nonezh/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="None"/>
+    </url>
+    <url>
+        <loc>Nonezh/benchmark/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/benchmark/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebenchmark/"/>
+    </url>
+    <url>
+        <loc>Nonezh/offline_inference/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/offline_inference/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneoffline_inference/"/>
+    </url>
+    <url>
+        <loc>Nonezh/parameters/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/parameters/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneparameters/"/>
+    </url>
+    <url>
+        <loc>Nonezh/supported_models/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/supported_models/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonesupported_models/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/DeepSeek-V3/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/DeepSeek-V3/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/DeepSeek-V3/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/Disaggregated/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/Disaggregated/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/Disaggregated/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/ERNIE-4.5-0.3B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-0.3B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-0.3B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/ERNIE-4.5-21B-A3B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-21B-A3B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-21B-A3B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/ERNIE-4.5-21B-A3B-Thinking/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-21B-A3B-Thinking/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-21B-A3B-Thinking/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/ERNIE-4.5-300B-A47B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-300B-A47B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-300B-A47B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-VL-28B-A3B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/ERNIE-4.5-VL-28B-A3B-Thinking/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-VL-28B-A3B-Thinking/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-VL-28B-A3B-Thinking/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/ERNIE-4.5-VL-424B-A47B-Paddle/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/FAQ/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/FAQ/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/FAQ/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/GLM-4-MoE-Text/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/GLM-4-MoE-Text/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/GLM-4-MoE-Text/"/>
+    </url>
+    <url>
+        <loc>Nonezh/best_practices/PaddleOCR-VL-0.9B/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/best_practices/PaddleOCR-VL-0.9B/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonebest_practices/PaddleOCR-VL-0.9B/"/>
+    </url>
+    <url>
+        <loc>Nonezh/cli/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/"/>
+    </url>
+    <url>
+        <loc>Nonezh/cli/bench/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/bench/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/bench/"/>
+    </url>
+    <url>
+        <loc>Nonezh/cli/chat/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/chat/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/chat/"/>
+    </url>
+    <url>
+        <loc>Nonezh/cli/collect-env/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/collect-env/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/collect-env/"/>
+    </url>
+    <url>
+        <loc>Nonezh/cli/complete/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/complete/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/complete/"/>
+    </url>
+    <url>
+        <loc>Nonezh/cli/run-batch/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/run-batch/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/run-batch/"/>
+    </url>
+    <url>
+        <loc>Nonezh/cli/serve/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/serve/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/serve/"/>
+    </url>
+    <url>
+        <loc>Nonezh/cli/tokenizer/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/cli/tokenizer/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonecli/tokenizer/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/chunked_prefill/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/chunked_prefill/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/chunked_prefill/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/data_parallel_service/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/data_parallel_service/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/data_parallel_service/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/disaggregated/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/disaggregated/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/disaggregated/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/early_stop/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/early_stop/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/early_stop/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/global_cache_pooling/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/global_cache_pooling/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/global_cache_pooling/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/graph_optimization/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/graph_optimization/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/graph_optimization/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/load_balance/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/load_balance/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/load_balance/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/logits_processor/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/logits_processor/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/logits_processor/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/multi-node_deployment/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/multi-node_deployment/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/multi-node_deployment/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/paddleformers_backend/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/paddleformers_backend/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/paddleformers_backend/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/plas_attention/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/plas_attention/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/plas_attention/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/plugins/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/plugins/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/plugins/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/pooling_models/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/pooling_models/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/pooling_models/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/prefix_caching/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/prefix_caching/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/prefix_caching/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/reasoning_output/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/reasoning_output/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/reasoning_output/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/sampling/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/sampling/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/sampling/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/speculative_decoding/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/speculative_decoding/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/speculative_decoding/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/structured_outputs/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/structured_outputs/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/structured_outputs/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/thinking_budget/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/thinking_budget/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/thinking_budget/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/tool_calling/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/tool_calling/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/tool_calling/"/>
+    </url>
+    <url>
+        <loc>Nonezh/features/weight_update/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/features/weight_update/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonefeatures/weight_update/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/ernie-4.5-vl-thinking/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/ernie-4.5-vl-thinking/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/ernie-4.5-vl-thinking/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/ernie-4.5-vl/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/ernie-4.5-vl/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/ernie-4.5-vl/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/ernie-4.5/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/ernie-4.5/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/ernie-4.5/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/quick_start/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/quick_start/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/quick_start/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/quick_start_qwen/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/quick_start_qwen/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/quick_start_qwen/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/quick_start_qwen25_vl/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/quick_start_qwen25_vl/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/quick_start_qwen25_vl/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/quick_start_vl/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/quick_start_vl/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/quick_start_vl/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/installation/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/installation/Enflame_gcu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/Enflame_gcu/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/Enflame_gcu/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/installation/hygon_dcu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/hygon_dcu/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/hygon_dcu/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/installation/iluvatar_gpu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/iluvatar_gpu/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/iluvatar_gpu/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/installation/intel_gaudi/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/intel_gaudi/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/intel_gaudi/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/installation/kunlunxin_xpu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/kunlunxin_xpu/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/kunlunxin_xpu/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/installation/metax_gpu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/metax_gpu/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/metax_gpu/"/>
+    </url>
+    <url>
+        <loc>Nonezh/get_started/installation/nvidia_gpu/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/get_started/installation/nvidia_gpu/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneget_started/installation/nvidia_gpu/"/>
+    </url>
+    <url>
+        <loc>Nonezh/observability/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/observability/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneobservability/"/>
+    </url>
+    <url>
+        <loc>Nonezh/observability/trace/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/observability/trace/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneobservability/trace/"/>
+    </url>
+    <url>
+        <loc>Nonezh/online_serving/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/"/>
+    </url>
+    <url>
+        <loc>Nonezh/online_serving/graceful_shutdown_service/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/graceful_shutdown_service/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/graceful_shutdown_service/"/>
+    </url>
+    <url>
+        <loc>Nonezh/online_serving/metrics/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/metrics/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/metrics/"/>
+    </url>
+    <url>
+        <loc>Nonezh/online_serving/router/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/router/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/router/"/>
+    </url>
+    <url>
+        <loc>Nonezh/online_serving/router_faq/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/router_faq/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/router_faq/"/>
+    </url>
+    <url>
+        <loc>Nonezh/online_serving/scheduler/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/online_serving/scheduler/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneonline_serving/scheduler/"/>
+    </url>
+    <url>
+        <loc>Nonezh/quantization/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/quantization/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonequantization/"/>
+    </url>
+    <url>
+        <loc>Nonezh/quantization/nvfp4/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/quantization/nvfp4/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonequantization/nvfp4/"/>
+    </url>
+    <url>
+        <loc>Nonezh/quantization/online_quantization/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/quantization/online_quantization/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonequantization/online_quantization/"/>
+    </url>
+    <url>
+        <loc>Nonezh/quantization/wint2/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/quantization/wint2/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Nonequantization/wint2/"/>
+    </url>
+    <url>
+        <loc>Nonezh/usage/code_overview/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/code_overview/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/code_overview/"/>
+    </url>
+    <url>
+        <loc>Nonezh/usage/environment_variables/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/environment_variables/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/environment_variables/"/>
+    </url>
+    <url>
+        <loc>Nonezh/usage/fastdeploy_unit_test_guide/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/fastdeploy_unit_test_guide/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/fastdeploy_unit_test_guide/"/>
+    </url>
+    <url>
+        <loc>Nonezh/usage/kunlunxin_xpu_deployment/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/kunlunxin_xpu_deployment/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/kunlunxin_xpu_deployment/"/>
+    </url>
+    <url>
+        <loc>Nonezh/usage/log/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/log/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/log/"/>
+    </url>
+    <url>
+        <loc>Nonezh/usage/usage_stats_collection/</loc>
+        <lastmod>2026-08-26</lastmod>
+        <changefreq>daily</changefreq>
+        <xhtml:link rel="alternate" hreflang="zh" href="Nonezh/usage/usage_stats_collection/"/>
+        <xhtml:link rel="alternate" hreflang="en" href="Noneusage/usage_stats_collection/"/>
+    </url>
+</urlset>

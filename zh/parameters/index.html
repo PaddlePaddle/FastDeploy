@@ -1,0 +1,3009 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+        
+          <link rel="alternate" href="../../parameters/" hreflang="en">
+        
+          <link rel="alternate" href="./" hreflang="zh">
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Parameters - 飞桨大语言模型推理部署工具包</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#fastdeploy" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../" title="飞桨大语言模型推理部署工具包" class="md-header__button md-logo" aria-label="飞桨大语言模型推理部署工具包" data-md-component="logo">
+      
+  <img src="../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            飞桨大语言模型推理部署工具包
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Parameters
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="选择当前语言">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="../../parameters/" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="zh" class="md-select__link">
+              简体中文
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PaddlePaddle/FastDeploy" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../" title="飞桨大语言模型推理部署工具包" class="md-nav__button md-logo" aria-label="飞桨大语言模型推理部署工具包" data-md-component="logo">
+      
+  <img src="../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    飞桨大语言模型推理部署工具包
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PaddlePaddle/FastDeploy" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FastDeploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速入门
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    快速入门
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安装
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    安装
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/installation/nvidia_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    英伟达 GPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/installation/kunlunxin_xpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    昆仑芯 XPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/installation/intel_gaudi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    英特尔 Gaudi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/installation/hygon_dcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    海光 DCU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/installation/Enflame_gcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    燧原 S60
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/installation/iluvatar_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    天数 CoreX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/installation/metax_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    沐曦 C550
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/quick_start_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/ernie-4.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/ernie-4.5-vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/quick_start_qwen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen3-0.6b快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../get_started/quick_start_qwen25_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen2.5-VL系列快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    在线服务
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    在线服务
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../online_serving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    兼容 OpenAI 协议的服务化部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../online_serving/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    监控Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../online_serving/scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    调度器
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../online_serving/graceful_shutdown_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    服务优雅关闭
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../online_serving/router/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load-Balancing Scheduling Router
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../offline_inference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    离线推理
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Best Practices
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../best_practices/ERNIE-4.5-0.3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../best_practices/ERNIE-4.5-21B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../best_practices/ERNIE-4.5-300B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../best_practices/ERNIE-4.5-21B-A3B-Thinking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B-Thinking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../best_practices/PaddleOCR-VL-0.9B/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleOCR-VL-0.9B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../best_practices/FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    常见问题
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    量化
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    量化
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantization/online_quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    在线量化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../quantization/wint2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WINT2量化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    特性
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    特性
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/prefix_caching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    前缀缓存
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/disaggregated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    分离式部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/chunked_prefill/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    分块预填充
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/load_balance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    负载均衡
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/speculative_decoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    投机解码
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/structured_outputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    结构化输出
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/reasoning_output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    思考链内容
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/thinking_budget/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    思考预算
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/early_stop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    早停功能
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    插件机制
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/paddleformers_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleFormers 后端
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    采样策略
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/multi-node_deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    多机部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/graph_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    图优化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/data_parallel_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据并行
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../features/plas_attention/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PLAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../supported_models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    支持模型列表
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    基准测试
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    用法
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    用法
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usage/log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    日志说明
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usage/code_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    代码概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../usage/environment_variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    环境变量
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI 使用说明
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI 使用说明
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chat命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/complete/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complete命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/collect-env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collect Env命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/run-batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Batch命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../cli/tokenizer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tokenizer命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    可观测性
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    可观测性
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../observability/trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trace服务
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-kvcachenum_gpu_blocks_overrideblock_size" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. KVCache分配与num_gpu_blocks_override、block_size的关系？
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-kv_cache_ratioblock_sizemax_num_seqs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. kv_cache_ratio、block_size、max_num_seqs的关系？
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-enable_chunked_prefill" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. enable_chunked_prefill参数配置说明
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-api_key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. api_key 参数使用说明
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="./">English</a></p>
+<h1 id="fastdeploy">FastDeploy参数说明</h1>
+<p>在使用FastDeploy部署模型（包括离线推理、服务化部署），涉及如下参数配置，其实需要注意，在使用离线推理时，各参数配置即为如下参数名；而在使用命令行启动服务时，相应参数中的分隔符需要从<code>_</code>修改为<code>-</code>，如<code>max_model_len</code>在命令行中则为<code>--max-model-len</code>。</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">参数名</th>
+<th style="text-align: left;">类型</th>
+<th style="text-align: left;">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>port</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">仅服务化部署需配置，服务HTTP请求端口号，默认8000</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>metrics_port</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">仅服务化部署需配置，服务监控Metrics端口号，默认None（与主端口共用）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_waiting_time</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">仅服务化部署需配置，服务请求建立连接最大等待时间，默认-1 表示无等待时间限制</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_concurrency</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">仅服务化部署需配置，服务实际建立连接数目，默认512</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>engine_worker_queue_port</code></td>
+<td style="text-align: left;"><code>list[int]</code></td>
+<td style="text-align: left;">FastDeploy内部引擎进程通信端口列表，会根据data_parallel_size自动分配</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache_queue_port</code></td>
+<td style="text-align: left;"><code>list[int]</code></td>
+<td style="text-align: left;">FastDeploy内部KVCache进程通信端口列表，会根据data_parallel_size自动分配</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_model_len</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">推理默认最大支持上下文长度，默认2048</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_completion_tokens</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">服务级最大生成token数硬上限。请求中的max_tokens会被截断至此值。默认：None（受max_model_len - input_len约束）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>reasoning_max_tokens</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">服务级推理/思考token数硬上限。请求中的reasoning_max_tokens会被截断至此值。默认：None（不限制）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>response_max_tokens</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">服务级回复token数硬上限。请求中的response_max_tokens会被截断至此值。默认：None（不限制）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>min_completion_tokens</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">服务级最小生成长度下限。实际min_tokens = max(服务值, 请求值)，请求不能低于此下限。默认：None（不限制）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>input_max_tokens</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">服务级输入token数上限。超过此值的请求将被拒绝。默认：None（不限制，受max_model_len约束）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tensor_parallel_size</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">模型默认张量并行数，默认1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>data_parallel_size</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">模型默认数据并行数，默认1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>block_size</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">KVCache管理粒度(Token数)，推荐默认值64</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_num_seqs</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">Decode阶段最大的并发数，默认为8</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>mm_processor_kwargs</code></td>
+<td style="text-align: left;"><code>dict[str]</code></td>
+<td style="text-align: left;">多模态处理器参数配置，如：{"image_min_pixels": 3136, "video_fps": 2}</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tokenizer</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">tokenizer 名或路径，默认为模型路径</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>use_warmup</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">是否在启动时进行warmup，会自动生成极限长度数据进行warmup，默认0（不启用）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>limit_mm_per_prompt</code></td>
+<td style="text-align: left;"><code>dict[str]</code></td>
+<td style="text-align: left;">限制每个prompt中多模态数据的数量，如：{"image": 10, "video": 3}，默认都为1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>enable_mm</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;"><strong>[已废弃]</strong> 是否支持多模态数据（仅针对多模模型），模型架构会自动检测是否为多模态模型，无需手动设置</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>quantization</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">模型量化策略，当在加载BF16 CKPT时，指定wint4、wint8、block_wise_fp8、wfp8afp8时，支持权重无损在线4bit/8bit量化，默认不量化KVCache。如果该参数会被解析为dict，可指定<code>mix_quant</code>混合量化，其中<code>dense_quant_type</code>、<code>moe_quant_type</code>和<code>kv_cache_quant_type</code>分别指定DenseGEMM、MOE和KVCache量化类型，缺省时不量化，如<code>'{"quantization":"mix_quant","dense_quant_type":"wint8","moe_quant_type":"wint4","kv_cache_quant_type":"block_wise_fp8"}'</code>，注：仅AppendAttn后端支持KVCache在线量化<code>block_wise_fp8</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>gpu_memory_utilization</code></td>
+<td style="text-align: left;"><code>float</code></td>
+<td style="text-align: left;">GPU显存利用率，默认0.9</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>num_gpu_blocks_override</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">预分配KVCache块数，此参数可由FastDeploy自动根据显存情况计算，无需用户配置，默认为None</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_num_batched_tokens</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">Prefill阶段最大Batch的Token数量，默认为None(与max_model_len一致)</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>kv_cache_ratio</code></td>
+<td style="text-align: left;"><code>float</code></td>
+<td style="text-align: left;">KVCache块按kv_cache_ratio比例分给Prefill阶段和Decode阶段, 默认0.75</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>enable_prefix_caching</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">是否开启Prefix Caching，默认True（GPU/XPU/HPU平台），其他平台默认False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>swap_space</code></td>
+<td style="text-align: left;"><code>float</code></td>
+<td style="text-align: left;">开启Prefix Caching时，用于swap KVCache的CPU内存大小，单位GB，默认None</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>enable_chunked_prefill</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">开启Chunked Prefill，默认False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_num_partial_prefills</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">开启Chunked Prefill时，Prefill阶段的最大并发数，默认1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_long_partial_prefills</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">开启Chunked Prefill时，Prefill阶段并发中包启的最多长请求数，默认1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>long_prefill_token_threshold</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">开启Chunked Prefill时，请求Token数超过此值的请求被视为长请求，默认为max_model_len*0.04</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>static_decode_blocks</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">推理过程中，每条请求强制从Prefill的KVCache分配对应块数给Decode使用，默认2</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>reasoning_parser</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">指定要使用的推理解析器，以便从模型输出中提取推理内容</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>use_cudagraph</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;"><strong>[已废弃，从2.3版本开始]</strong> CUDAGraph 默认开启，现在通过 <code>graph_optimization_config</code> 中的 <code>use_cudagraph</code> 参数控制，详细说明参考 <a href="../features/graph_optimization/">graph_optimization.md</a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>graph_optimization_config</code></td>
+<td style="text-align: left;"><code>dict[str]</code></td>
+<td style="text-align: left;">可以配置计算图优化相关的参数，默认值为'{"use_cudagraph":true, "graph_opt_level":0}'，详细说明参考 <a href="../features/graph_optimization/">graph_optimization.md</a></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>disable_custom_all_reduce</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">关闭Custom all-reduce，默认False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>use_internode_ll_two_stage</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">是否在DeepEP MoE中使用两阶段通信, default: False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>disable_sequence_parallel_moe</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">禁止在TP+EP中使用序列并行优化, default: False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>splitwise_role</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">是否开启splitwise推理，默认值mixed， 支持参数为["mixed", "decode", "prefill"]</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>innode_prefill_ports</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">prefill 实例内部引擎启动端口 （仅单机PD分离需要），默认值None</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>guided_decoding_backend</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">指定要使用的guided decoding后端，支持 <code>auto</code>、<code>xgrammar</code>、 <code>guidance</code>、<code>off</code>, 默认为 <code>off</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>guided_decoding_disable_any_whitespace</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">guided decoding期间是否禁止生成空格，默认False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>speculative_config</code></td>
+<td style="text-align: left;"><code>dict[str]</code></td>
+<td style="text-align: left;">投机解码配置，仅支持标准格式json字符串，默认为None</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>dynamic_load_weight</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">是否动态加载权重，默认False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>enable_expert_parallel</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">是否启用专家并行，默认False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>enable_logprob</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">是否启用输出token返回logprob，默认False。如果不需要使用logprob，则在启动时可以省略此参数</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>logprobs_mode</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">指定logprobs中返回的内容，默认<code>raw_logprobs</code>。支持的模式：<code>raw_logprobs</code>、<code>processed_logprobs</code>、<code>raw_logits</code>、<code>processed_logits</code>。processed表示logits应用温度、惩罚、禁止词处理后计算的logprobs</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_logprobs</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">服务支持返回的最大logprob数量，默认20。-1表示词表大小。</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>served_model_name</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">API 中使用的模型名称，如果未指定，模型名称将与--model参数相同</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>revision</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">自动下载模型时，用于指定模型的Git版本，分支名或tag</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>chat_template</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">指定模型拼接使用的模板，支持字符串与文件路径，默认为None，如未指定，则使用模型默认模板</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tool_call_parser</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">指定要使用的function call解析器，以便从模型输出中抽取 function call内容</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>tool_parser_plugin</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">指定要注册的tool parser文件路径，以便注册不在代码库中的parser，parser中代码格式需遵循代码库中格式</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>load_choices</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">权重加载器选择，默认使用"default_v1"。支持"default"和"default_v1"，后者用于加载torch权重和权重加速</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>model_loader_extra_config</code></td>
+<td style="text-align: left;"><code>dict[str]</code></td>
+<td style="text-align: left;">模型加载器额外配置选项。支持：<br> - <code>enable_multithread_load</code> (bool): 启用多线程权重加载。<br> - <code>num_threads</code> (int): 加载线程数，默认为8。<br> - <code>disable_mmap</code> (bool): 禁用内存映射文件访问，当mmap不支持时使用。<br> 示例：<code>'{"enable_multithread_load": true, "num_threads": 8}'</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_encoder_cache</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">编码器缓存的最大token数（使用0表示禁用），默认-1（自动计算）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>max_processor_cache</code></td>
+<td style="text-align: left;"><code>float</code></td>
+<td style="text-align: left;">处理器缓存的最大字节数（以GiB为单位，使用0表示禁用），默认-1（自动计算）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>api_key</code></td>
+<td style="text-align: left;"><code>list[str]</code></td>
+<td style="text-align: left;">校验服务请求头中的API密钥，支持传入多个密钥；与环境变量<code>FD_API_KEY</code>中的值效果相同，且优先级高于环境变量配置</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>enable_output_caching</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">是否启用输出tokens的KV缓存，仅在V1调度器（ENABLE_V1_KVCACHE_SCHEDULER=1）下有效，默认True</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>workers</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">仅服务化部署需配置，API服务器worker进程数量，默认1</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>timeout</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">仅服务化部署需配置，worker静默超时时间（秒），设置为0表示禁用超时，默认0</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>timeout_graceful_shutdown</code></td>
+<td style="text-align: left;"><code>int</code></td>
+<td style="text-align: left;">仅服务化部署需配置，优雅关闭超时时间（秒），设置为0表示无限超时，默认0</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>router</code></td>
+<td style="text-align: left;"><code>str</code></td>
+<td style="text-align: left;">路由服务器URL，用于splitwise部署中的请求路由，如 <code>http://127.0.0.1:8000</code></td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>disable_chunked_mm_input</code></td>
+<td style="text-align: left;"><code>bool</code></td>
+<td style="text-align: left;">禁用多模态输入的分块处理，默认False</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>logits_processors</code></td>
+<td style="text-align: left;"><code>list[str]</code></td>
+<td style="text-align: left;">服务支持的logits处理器的完全限定类名（FQCN）列表，如 <code>fastdeploy.model_executor.logits_processor:LogitBiasLogitsProcessor</code></td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-kvcachenum_gpu_blocks_overrideblock_size">1. KVCache分配与<code>num_gpu_blocks_override</code>、<code>block_size</code>的关系？</h2>
+<p>FastDeploy在推理过程中，显存被<code>模型权重</code>、<code>预分配KVCache块</code>和<code>模型计算中间激活值</code>占用。其中预分配KVCache块由<code>num_gpu_blocks_override</code>决定，其单位为<code>block_size</code>(默认64），即一个块可以存储64个Token的KVCache。</p>
+<p>在实际推理中，用户很难知道<code>num_gpu_blocks_override</code>到底该配置到多少合适，因此FastDeploy采用如下方式来自动推导并配置这个值，流程如下:
+- 加载模型，在完成模型加载后，记录当前显存占用情况<code>total_memory_after_load</code>和FastDeploy框架占用的显存值<code>fd_memory_after_load</code>; 注意前者为GPU实际被占用显存（可能有其它进程也占用），后者是FD框架本身占用显存；</p>
+<ul>
+<li>根据用户配置的<code>max_num_batched_tokens</code>(默认为<code>max_model_len</code>)，Fake相应长度的输入数据进行Prefill计算，记录当前FastDeploy框架显存最大分配值<code>fd_memory_after_prefill</code>，因此可以认为<code>模型计算中间激活值</code>为<code>fd_memory_after_prefill - fd_memory_after_load</code>;</li>
+<li>截止当前，认为GPU卡可以剩分配KVCache的显存(以A800 80G为例)为<code>80GB * gpu_memory_utilization - total_memory_after_load - (fd_memory_after_prefill - fd_memory_after_load)</code></li>
+<li>根据模型KVCache的精度（如8bit/16bit)，计算一个block占用的KVCache大小，从而计算出总共可分配的block数量，赋值给<code>num_gpu_blocks_override</code></li>
+</ul>
+<blockquote>
+<p>在服务启动日志中，我们可以在log/fastdeploy.log中找到<code>Reset block num, the total_block_num:17220, prefill_kvcache_block_num:12915</code>，其中<code>total_block_num</code>即为自动计算出来的KVCache block数量，将其乘以<code>block_size</code>即可知道整个服务可以缓存多少Token的KV值。</p>
+</blockquote>
+<h2 id="2-kv_cache_ratioblock_sizemax_num_seqs">2. <code>kv_cache_ratio</code>、<code>block_size</code>、<code>max_num_seqs</code>的关系？</h2>
+<ul>
+<li>FastDeploy里面将KVCache按照<code>kv_cache_ratio</code>分为Prefill阶段使用和Decode阶段使用，在配置这个参数时，可以按照<code>kv_cache_ratio = 平均输入Token数/(平均输入+平均输出Token数)</code>进行配置，常规情况输入是输出的3倍，因此可以配置成0.75</li>
+<li><code>max_num_seqs</code>是Decode阶段的最大并发数，一般而言可以配置成最大值128，但用户也可以根据KVCache情况作调用，例如输出的KVCache Token量为<code>decode_token_cache = total_block_num * (1 - kv_cache_ratio) * block_size</code>，为了防止极端情况下的显存不足问题，可以配置<code>max_num_seqs = decode_token_cache / 平均输出Token数</code>，不高于128即可。</li>
+</ul>
+<h2 id="3-enable_chunked_prefill">3. <code>enable_chunked_prefill</code>参数配置说明</h2>
+<p>当启用 <code>enable_chunked_prefill</code> 时，服务通过动态分块处理长输入序列，显著提升GPU资源利用率。在此模式下，原有 <code>max_num_batched_tokens</code> 参数不再约束预填充阶段的批处理token数量（限制单次prefill的token数量），因此引入 <code>max_num_partial_prefills</code> 参数，专门用于限制同时处理的分块批次数。</p>
+<p>为优化短请求的调度优先级，新增 <code>max_long_partial_prefills</code> 与 <code>long_prefill_token_threshold</code> 参数组合。前者限制单个预填充批次中的长请求数量，后者定义长请求的token阈值。系统会优先保障短请求的批处理空间，从而在混合负载场景下降低短请求延迟，同时保持整体吞吐稳定。</p>
+<h2 id="4-api_key">4. <code>api_key</code> 参数使用说明</h2>
+<p>启动参数多值配置方式， 优先级高于环境变量中配置。</p>
+<pre><code class="language-bash">  --api-key &quot;key1&quot;
+  --api-key &quot;key2&quot;
+</code></pre>
+<p>环境变量多值配置方式，使用逗号分隔</p>
+<pre><code class="language-bash">  export FD_API_KEY=&quot;key1,key2&quot;
+</code></pre>
+<p>使用 Curl 命令请求时，增加 API_KEY头信息，进行请求合法性校验。匹配任一<code>api_key</code>即可。</p>
+<pre><code class="language-bash">curl -X POST &quot;http://0.0.0.0:8265/v1/chat/completions&quot; \
+-H &quot;Content-Type: application/json&quot; \
+-H &quot;Authorization: Bearer key1&quot; \
+-d '{
+  &quot;messages&quot;: [
+    {&quot;role&quot;: &quot;user&quot;, &quot;content&quot;:&quot;你好&quot;}
+  ],
+  &quot;stream&quot;: false,
+  &quot;return_token_ids&quot;: true,
+  &quot;chat_template_kwargs&quot;: {&quot;enable_thinking&quot;: true}
+}'
+</code></pre>
+<p>解析<code>Authorization: Bearer</code> 后 <code>key1</code>进行校验。</p>
+<p>使用 openai sdk 进行请求时，需要传<code>api_key</code>参数。</p>
+<pre><code class="language-python">client = OpenAI(
+    api_key=&quot;your-api-key-here&quot;,
+    base_url=&quot;http://localhost:8000/v1&quot;
+)
+</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 Maintained by FastDeploy
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

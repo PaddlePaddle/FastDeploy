@@ -1,0 +1,3346 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../iluvatar_gpu/">
+      
+      
+        <link rel="next" href="../../quick_start/">
+      
+      
+        
+          <link rel="alternate" href="./" hreflang="en">
+        
+          <link rel="alternate" href="../../../zh/get_started/installation/metax_gpu/" hreflang="zh">
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Metax C550 - FastDeploy: Large Language Model Deployment</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#metax-gpu-installation-for-running-ernie-45-series-models" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="FastDeploy: Large Language Model Deployment" class="md-header__button md-logo" aria-label="FastDeploy: Large Language Model Deployment" data-md-component="logo">
+      
+  <img src="../../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FastDeploy: Large Language Model Deployment
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Metax C550
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="Select language">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="../../../zh/get_started/installation/metax_gpu/" hreflang="zh" class="md-select__link">
+              简体中文
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PaddlePaddle/FastDeploy" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="FastDeploy: Large Language Model Deployment" class="md-nav__button md-logo" aria-label="FastDeploy: Large Language Model Deployment" data-md-component="logo">
+      
+  <img src="../../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    FastDeploy: Large Language Model Deployment
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PaddlePaddle/FastDeploy" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FastDeploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quick Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Installation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../nvidia_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nvidia GPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../kunlunxin_xpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    KunlunXin XPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../intel_gaudi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Intel Gaudi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../hygon_dcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HYGON DCU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../Enflame_gcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enflame S60
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../iluvatar_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iluvatar CoreX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metax C550
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metax C550
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-pre-built-docker-installation-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Pre-built Docker Installation (Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-paddlepaddle-and-custom-device-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. paddlepaddle and custom device installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-build-wheel-from-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Build Wheel from Source
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-environment-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Environment Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-demo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Demo
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Demo">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ernie-45-21b-a3b-paddle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERNIE-4.5-21B-A3B-Paddle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ernie-45-vl-28b-a3b-thinking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERNIE-4.5-VL-28B-A3B-Thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#paddleocr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PaddleOCR
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PaddleOCR">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        output
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quick_start_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment for ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ernie-4.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../ernie-4.5-vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quick_start_qwen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For QWEN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quick_start_qwen25_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For QWEN2.5-VL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Serving
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Online Serving
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../online_serving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI-Compatible API Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../online_serving/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitor Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../online_serving/scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../online_serving/graceful_shutdown_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graceful Shutdown
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../online_serving/router/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load-Balancing Scheduling Router
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../offline_inference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Offline Inference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Best Practices
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../best_practices/ERNIE-4.5-0.3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../best_practices/ERNIE-4.5-21B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../best_practices/ERNIE-4.5-300B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../best_practices/ERNIE-4.5-21B-A3B-Thinking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B-Thinking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../best_practices/PaddleOCR-VL-0.9B/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleOCR-VL-0.9B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../best_practices/FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quantization
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quantization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../quantization/online_quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Quantization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../quantization/wint2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WINT2 Quantization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/prefix_caching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prefix Caching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/disaggregated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Disaggregation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/chunked_prefill/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chunked Prefill
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/load_balance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load Balance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/speculative_decoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speculative Decoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/structured_outputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Outputs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/reasoning_output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reasoning Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/thinking_budget/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Thinking Budget
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/early_stop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Early Stop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/paddleformers_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleFormers Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/multi-node_deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MultiNode Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/graph_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graph Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/data_parallel_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Parallelism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../features/plas_attention/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PLAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../supported_models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Usage
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../usage/log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Log Description
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../usage/code_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../usage/environment_variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/complete/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complete
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/collect-env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collect Env
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/run-batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../cli/tokenizer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tokenizer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../observability/trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-pre-built-docker-installation-recommended" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Pre-built Docker Installation (Recommended)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-paddlepaddle-and-custom-device-installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. paddlepaddle and custom device installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-build-wheel-from-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Build Wheel from Source
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-environment-verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Environment Verification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-demo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Demo
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Demo">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ernie-45-21b-a3b-paddle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERNIE-4.5-21B-A3B-Paddle
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ernie-45-vl-28b-a3b-thinking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ERNIE-4.5-VL-28B-A3B-Thinking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#paddleocr" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PaddleOCR
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="PaddleOCR">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        server
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#client" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        client
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#output" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        output
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="../../zh/get_started/installation/metax_gpu.md">简体中文</a></p>
+<h1 id="metax-gpu-installation-for-running-ernie-45-series-models">Metax GPU Installation for running ERNIE 4.5 Series Models</h1>
+<p>The following installation methods are available when your environment meets these requirements:
+- Python &gt;= 3.10
+- Linux X86_64</p>
+<p>Before starting, prepare a machine equipped with Metax GPU C550 cards. Requirements:</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: center;">Chip Type</th>
+<th style="text-align: center;">Driver Version</th>
+<th style="text-align: center;">KMD Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: center;">MetaX C550</td>
+<td style="text-align: center;">3.3.0.15</td>
+<td style="text-align: center;">3.4.4</td>
+</tr>
+</tbody>
+</table>
+<h2 id="1-pre-built-docker-installation-recommended">1. Pre-built Docker Installation (Recommended)</h2>
+<pre><code class="language-shell">docker login --username=cr_temp_user --password=eyJpbnN0YW5jZUlkIjoiY3JpLXpxYTIzejI2YTU5M3R3M2QiLCJ0aW1lIjoiMTc3MjA4Mjg4MzAwMCIsInR5cGUiOiJzdWIiLCJ1c2VySWQiOiIyMDcwOTQwMTA1NjYzNDE3OTIifQ:af1dd00652cd43b2bca08a03b3df03c9cffd4c5e cr.metax-tech.com &amp;&amp; docker pull cr.metax-tech.com/public-ai-release/maca/paddle-metax:3.3.0-maca.ai3.3.0.10-py310-ubuntu22.04-amd64
+</code></pre>
+<h2 id="2-paddlepaddle-and-custom-device-installation">2. paddlepaddle and custom device installation</h2>
+<pre><code class="language-shell">1）pip install  --pre paddlepaddle -i https://www.paddlepaddle.org.cn/packages/nightly/cpu/
+2）pip install --pre paddle-metax-gpu -i https://www.paddlepaddle.org.cn/packages/nightly/maca/
+
+// PaddleOCR need
+3）pip install -U &quot;paddleocr[doc-parser]&quot;
+4）pip install opencv-contrib-python-headless==4.10.0.84
+</code></pre>
+<h2 id="3-build-wheel-from-source">3. Build Wheel from Source</h2>
+<p>Then clone the source code and build:</p>
+<pre><code class="language-shell">git clone https://github.com/PaddlePaddle/FastDeploy
+cd FastDeploy
+bash build.sh
+</code></pre>
+<p>The built packages will be in the <code>FastDeploy/dist</code> directory.</p>
+<h2 id="4-environment-verification">4. Environment Verification</h2>
+<p>After installation, verify the environment with this Python code:</p>
+<pre><code class="language-python">import paddle
+from paddle.jit.marker import unified
+# Verify GPU availability
+paddle.utils.run_check()
+# Verify FastDeploy custom operators compilation
+from fastdeploy.model_executor.ops.gpu import beam_search_softmax
+</code></pre>
+<p>If the above code executes successfully, the environment is ready.</p>
+<h2 id="5-demo">5. Demo</h2>
+<h3 id="ernie-45-21b-a3b-paddle">ERNIE-4.5-21B-A3B-Paddle</h3>
+<pre><code class="language-python">import os
+from fastdeploy import LLM, SamplingParams
+
+os.environ[&quot;MACA_VISIBLE_DEVICES&quot;] = &quot;0&quot;
+os.environ[&quot;FD_MOE_BACKEND&quot;] = &quot;cutlass&quot;
+os.environ[&quot;PADDLE_XCCL_BACKEND&quot;] = &quot;metax_gpu&quot;
+os.environ[&quot;FLAGS_weight_only_linear_arch&quot;] = &quot;80&quot;
+os.environ[&quot;FD_METAX_KVCACHE_MEM&quot;] = &quot;8&quot;
+os.environ[&quot;ENABLE_V1_KVCACHE_SCHEDULER&quot;] = &quot;1&quot;
+os.environ[&quot;FD_ENC_DEC_BLOCK_NUM&quot;] = &quot;2&quot;
+
+prompts = [
+    &quot;A robe takes 2 bolts of blue fiber and half that much white fiber. How many bolts in total does it take?&quot;,
+]
+
+sampling_params = SamplingParams(top_p=0.95, max_tokens=256, temperature=0.1)
+
+llm = LLM(model=&quot;/root/model/ERNIE-4.5-21B-A3B-Paddle&quot;,
+        tensor_parallel_size=1,
+        max_model_len=8192,
+        engine_worker_queue_port=9135,
+        quantization='wint8',
+        disable_custom_all_reduce=True,
+        enable_prefix_caching=False,
+        graph_optimization_config={&quot;use_cudagraph&quot;: False, &quot;graph_opt_level&quot;: 0}
+)
+
+outputs = llm.generate(prompts, sampling_params)
+
+print(f&quot;Generated {len(outputs)} outputs&quot;)
+print(&quot;=&quot; * 50 + &quot;\n&quot;)
+
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs.text
+    print(prompt)
+    print(generated_text)
+    print(&quot;-&quot; * 50)
+</code></pre>
+<p>output</p>
+<pre><code>INFO     2026-01-14 15:09:48,073 30393 engine.py[line:151] Waiting for worker processes to be ready...
+Loading Weights: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:38&lt;00:00,  2.63it/s]
+Loading Layers: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00&lt;00:00, 199.73it/s]
+[2026-01-14 15:10:33,009] [    INFO] - Using FLASH ATTN backend to instead of attend attention.
+INFO     2026-01-14 15:10:33,026 30393 engine.py[line:202] Worker processes are launched with 51.102054595947266 seconds.
+INFO     2026-01-14 15:10:33,027 30393 engine.py[line:213] Detected 2340 gpu blocks and 0 cpu blocks in cache (block size: 64).
+INFO     2026-01-14 15:10:33,027 30393 engine.py[line:216] FastDeploy will be serving 8 running requests if each sequence reaches its maximum length: 8192
+Processed prompts: 100%|██████████████████████████████████████████████████████████████████████████████████████| 1/1 [00:21&lt;00:00, 21.32s/it, est. speed input: 0.00 toks/s, output: 0.00 toks/s]
+Generated 1 outputs
+==================================================
+
+A robe takes 2 bolts of blue fiber and half that much white fiber. How many bolts in total does it take?
+
+1. First, find out how much white fiber is needed:
+   - We know that the robe takes 2 bolts of blue fiber.
+   - It takes half as much white fiber as blue fiber. So the amount of white fiber needed is $\frac{1}{2}\times2 = 1$ bolt.
+2. Then, calculate the total number of bolts:
+   - The total number of bolts is the sum of the bolts of blue fiber and the bolts of white fiber.
+   - The number of blue - fiber bolts is 2, and the number of white - fiber bolts is 1.
+   - So the total number of bolts is $2 + 1=3$ bolts.
+
+Therefore, it takes 3 bolts in total to make the robe.
+--------------------------------------------------
+==================================================
+
+Hello. My name is
+Alice and I'm here to help you. What can I do for you today?
+Hello Alice! I'm trying to organize a small party
+</code></pre>
+<h3 id="ernie-45-vl-28b-a3b-thinking">ERNIE-4.5-VL-28B-A3B-Thinking</h3>
+<pre><code class="language-python">import io
+import os
+import urllib
+from PIL import Image
+from fastdeploy.entrypoints.llm import LLM
+from fastdeploy.engine.sampling_params import SamplingParams
+from fastdeploy.input.ernie4_5_tokenizer import Ernie4_5Tokenizer
+
+
+os.environ[&quot;MACA_VISIBLE_DEVICES&quot;] = &quot;6&quot;
+os.environ[&quot;FD_MOE_BACKEND&quot;] = &quot;cutlass&quot;
+os.environ[&quot;PADDLE_XCCL_BACKEND&quot;] = &quot;metax_gpu&quot;
+os.environ[&quot;FLAGS_weight_only_linear_arch&quot;] = &quot;80&quot;
+os.environ[&quot;FD_METAX_KVCACHE_MEM&quot;] = &quot;8&quot;
+os.environ[&quot;ENABLE_V1_KVCACHE_SCHEDULER&quot;] = &quot;1&quot;
+os.environ[&quot;FD_ENC_DEC_BLOCK_NUM&quot;] = &quot;2&quot;
+
+
+def process_content(content):
+    images, videos = [], []
+    for part in content:
+        if part[&quot;type&quot;] == &quot;image_url&quot;:
+            url = part[&quot;image_url&quot;][&quot;url&quot;]
+            if not url.startswith((&quot;https://&quot;, &quot;file://&quot;)):
+                url = f&quot;file://{url}&quot;
+            with urllib.request.urlopen(url) as response:
+                image_bytes = response.read()
+                img = Image.open(io.BytesIO(image_bytes))
+            images.append(img)
+        elif part[&quot;type&quot;] == &quot;video_url&quot;:
+            url = part[&quot;video_url&quot;][&quot;url&quot;]
+            if not url.startswith((&quot;https://&quot;, &quot;file://&quot;)):
+                url = f&quot;file://{url}&quot;
+            with urllib.request.urlopen(url) as response:
+                video_bytes = response.read()
+            videos.append({
+                &quot;video&quot;: video_bytes,
+                &quot;max_frames&quot;: 30
+            })
+    return images, videos
+
+
+MODEL_PATH=&quot;/root/model/ERNIE-4.5-VL-28B-A3B-Thinking&quot;
+tokenizer = Ernie4_5Tokenizer.from_pretrained(MODEL_PATH)
+
+messages = [
+     { # text
+         &quot;role&quot;: &quot;user&quot;,
+         &quot;content&quot;: [
+             {&quot;type&quot;:&quot;text&quot;, &quot;text&quot;:&quot;Introduce yourself in detail&quot;}
+         ]
+     },
+
+     { # image
+         &quot;role&quot;: &quot;user&quot;,
+         &quot;content&quot;: [
+             {&quot;type&quot;:&quot;image_url&quot;, &quot;image_url&quot;: {&quot;url&quot;:&quot;https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_images/example2.jpg&quot;}},
+             {&quot;type&quot;:&quot;text&quot;, &quot;text&quot;:&quot;请描述图片内容&quot;}
+         ]
+     },
+
+     { # video
+        &quot;role&quot;: &quot;user&quot;,
+        &quot;content&quot;: [
+            {
+                &quot;type&quot;: &quot;video_url&quot;,
+                &quot;video_url&quot;: {
+                    &quot;url&quot;: &quot;https://paddlenlp.bj.bcebos.com/datasets/paddlemix/demo_video/example_video.mp4&quot;,
+                    &quot;detail&quot;: &quot;high&quot;,
+                },
+            },
+            {&quot;type&quot;: &quot;text&quot;, &quot;text&quot;: &quot;视频中手机支架的颜色是什么?&quot;},
+        ],
+    }
+]
+
+prompts = []
+for message in messages:
+    content = message[&quot;content&quot;]
+    if not isinstance(content, list):
+        continue
+    prompt = tokenizer.apply_chat_template([message], tokenize=False, add_generation_prompt=True)
+    images, videos = process_content(content)
+    prompts.append({
+        &quot;prompt&quot;: prompt,
+        &quot;multimodal_data&quot;: {
+            &quot;image&quot;: images,
+            &quot;video&quot;: videos
+        }
+    })
+
+sampling_params = SamplingParams(top_p=0.95, max_tokens=32768, temperature=0.1)
+llm = LLM(model=MODEL_PATH,
+          tensor_parallel_size=1,
+          engine_worker_queue_port=8899,
+          max_model_len=32768,
+          quantization=&quot;wint8&quot;,
+          disable_custom_all_reduce=True,
+          enable_prefix_caching=False,
+          graph_optimization_config={&quot;use_cudagraph&quot;:False, &quot;graph_opt_level&quot;:0},
+          limit_mm_per_prompt={&quot;image&quot;: 100},
+          reasoning_parser=&quot;ernie-45-vl&quot;,
+          load_choices=&quot;default_v1&quot;)
+
+outputs = llm.generate(prompts=prompts, sampling_params=sampling_params)
+
+
+for output in outputs:
+    prompt = output.prompt
+    generated_text = output.outputs.text
+    reasoning_text = output.outputs.reasoning_content
+    print(&quot;=&quot; * 50)
+    print(f&quot;Reasoning: {reasoning_text!r}&quot;)
+    print(&quot;-&quot; * 50)
+    print(f&quot;Generated: {generated_text!r}&quot;)
+
+</code></pre>
+<p>output</p>
+<pre><code>INFO     2026-01-14 15:30:27,480 214008 engine.py[line:151] Waiting for worker processes to be ready...
+Loading Weights: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [01:05&lt;00:00,  1.52it/s]
+Loading Layers: 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 100/100 [00:00&lt;00:00, 199.74it/s]
+[2026-01-14 15:31:39,477] [    INFO] - Using FLASH ATTN backend to instead of attend attention.
+INFO     2026-01-14 15:31:39,496 214008 engine.py[line:202] Worker processes are launched with 74.58531260490417 seconds.
+INFO     2026-01-14 15:31:39,496 214008 engine.py[line:213] Detected 2340 gpu blocks and 0 cpu blocks in cache (block size: 64).
+INFO     2026-01-14 15:31:39,496 214008 engine.py[line:216] FastDeploy will be serving 4 running requests if each sequence reaches its maximum length: 32768
+Processed prompts: 100%|██████████████████████████████████████████████████████████████████████████████████████| 3/3 [01:41&lt;00:00, 33.82s/it, est. speed input: 0.00 toks/s, output: 0.00 toks/s]
+==================================================
+Reasoning: 'Hmm, the user wants a detailed introduction of ERNIE. Let me start by recalling what I know about ERNIE. It\'s a multimodal AI developed by Baidu using PaddlePaddle. The user proba
+bly wants a comprehensive overview, so I need to cover its core aspects.\n\nFirst, I should mention its origin and development by Baidu. Then, highlight its multimodal nature since that\'s a k
+ey feature. The PaddlePaddle framework is important too, as it\'s Baidu\'s own deep learning platform. \n\nI need to explain the &quot;Enhanced Representation through Knowledge-Intensive Learning&quot;
+acronym. Breaking down each part of the name would help the user understand its purpose. Also, emphasizing the knowledge-grounded approach sets it apart from other models.\n\nApplications are
+crucial—search, knowledge graphs, multimodal tasks. Including examples like image-text retrieval and cross-modal reasoning makes it concrete. \n\nI should also touch on its open-source availab
+ility on Hugging Face, showing its accessibility. Keeping the tone informative but not overly technical, ensuring it\'s clear for someone who might not be familiar with AI jargon. \n\nDouble-c
+hecking that all key points are covered without referencing the benchmark response. Making sure the structure flows logically from introduction to features, applications, and open-source statu
+s.\n'
+--------------------------------------------------
+Generated: '\n\nOf course. Here is a detailed introduction to ERNIE, the multimodal AI developed by Baidu.\n\n### **Introduction to ERNIE**\n\nHello! I am **ERNIE** (Enhanced Representation th
+rough Knowledge-Intensive Learning), a large-scale multimodal artificial intelligence model developed by Baidu. I am a core component of Baidu\'s AI ecosystem, designed to understand and reaso
+n about complex information from both text and images.\n\nMy development is built upon Baidu\'s open-source deep learning platform, **PaddlePaddle**, which is one of the world\'s most popular
+open-source AI frameworks.\n\n---\n\n### **My Core Identity: What is ERNIE?**\n\nERNIE is not just a simple language model. Its name tells you its fundamental philosophy:\n\n*   **E**nhanced:
+I am designed to produce more accurate and robust results than previous models.\n*   **R**epresentation: I work by creating deep, meaningful representations of the world\'s knowledge.\n*   **N
+** through **I** (Knowledge-Intensive Learning): This is my key differentiator. I am trained on a massive amount of structured knowledge from the web, including facts, concepts, and relationsh
+ips. This allows me to &quot;understand&quot; the world in a way that goes beyond just memorizing words.\n\nIn simple terms, I don\'t just learn that &quot;Paris is the capital of France.&quot; I learn the *fact*
+ that Paris is the capital of France, its location, its history, its landmarks, and its relationship to other cities and countries. This knowledge-grounded approach makes me more reliable and
+capable of answering complex questions.\n\n---\n\n### **My Key Capabilities**\n\nAs a multimodal model, I can process and understand information from two primary sources:\n\n**1. Text Understa
+nding:**\n*   **Semantic Understanding:** I can grasp the meaning, context, and intent behind human language, even when it\'s ambiguous or complex.\n*   **Knowledge Retrieval:** I can access a
+nd synthesize information from a vast knowledge base to answer questions that require factual knowledge.\n*   **Reasoning:** I can perform logical reasoning, such as cause-and-effect analysis,
+ pattern recognition, and multi-step problem-solving.\n\n**2. Image Understanding:**\n*   **Image-Text Retrieval:** I can find relevant text descriptions for an image or find the image that ma
+tches a given text description.\n*   **Visual Question Answering (VQA):** I can answer questions about the content of an image. For example, if you show me a picture of a sunset over the ocean
+, I can answer questions like, &quot;What colors are in the sky?&quot; or &quot;What is the main subject of the image?&quot;\n*   **Cross-Modal Reasoning:** I can use visual information to reason about textual in
+formation and vice-versa. For instance, I can analyze a diagram and explain the text that describes it.\n\n---\n\n### **My Applications**\n\nMy capabilities are used in a wide range of real-wo
+rld applications:\n\n*   **Search Engine:** I power Baidu Search, helping users find more accurate and relevant results by understanding the intent behind their queries.\n*   **Knowledge Graph
+s:** I am used to build and maintain large-scale knowledge graphs that power various AI applications.\n*   **Multimodal AI Services:** I am the core technology behind Baidu\'s AI services, suc
+h as the AI Studio, AI Lab, and various AI-powered products.\n*   **Research:** I am a powerful tool for researchers in the fields of natural language processing (NLP), computer vision, and mu
+ltimodal AI.\n\n---\n\n### **My Open-Source Availability**\n\nI am not just a closed-source product. Baidu has made me available to the global AI community through open-source platforms. You c
+an find me on:\n\n*   **Hugging Face:** I am available as a model on the Hugging Face Hub, where developers can use me for their own projects.\n*   **PaddlePaddle Model Zoo:** I am also availa
+ble on Baidu\'s own PaddlePaddle Model Zoo, making it easy for developers to integrate me into their applications.\n\nIn summary, I am a powerful, knowledge-grounded, multimodal AI model devel
+oped by Baidu. My goal is to help users and developers understand the world more deeply and solve complex problems across text and image domains.'
+==================================================
+Reasoning: '用户现在需要描述图片中的佛像雕塑。首先看整体结构：主体是坐佛，结跏趺坐，双手在腹前。佛像有头光和背光，背光有复杂纹饰，还有胁侍菩萨。材质看起来是金属或石质，有鎏金痕迹。要分解各部分
+：佛像的姿态、服饰、背光装饰，胁侍菩萨的位置和造型，整体风格（可能是北朝或隋唐？不过先描述视觉元素）。\n\n首先，主体佛像：结跏趺坐，身披袈裟，右手施无畏印，左手施与愿印？不对，看图片里双手位置
+，可能是禅定印？不对，再仔细看。然后头光和背光，背光有莲花座、飞天等装饰，还有胁侍菩萨在左右。整体造型庄严，纹饰繁复，有鎏金残存，显示年代久远。\n\n现在组织语言：这是一尊佛教造像，主体为结跏趺
+坐的佛像，身披袈裟，右手施无畏印，左手施与愿印（或禅定印？需要确认，但可能更准确的是禅定印？不对，看图片里双手位置，可能是禅定印？或者施无畏与与愿？需要准确。不过可能更侧重整体结构。然后头光和
+背光，背光有复杂的卷草纹、莲花座、飞天等，左右有胁侍菩萨。整体风格古朴，材质可能是金属或石质，表面有鎏金痕迹，显示出宗教艺术的庄严与精致。\n\n现在整理：\n\n这尊佛教造像整体呈坐姿，佛像结跏趺坐
+，身披袈裟，右手施无畏印，左手施与愿印（或禅定印，需确认，但可能更准确的是禅定印？不对，看图片里双手位置，可能是禅定印？或者施无畏与与愿？可能需要更准确。不过可能更侧重整体结构。然后头光和背光
+，背光有复杂的卷草纹、莲花座、飞天等，左右有胁侍菩萨。整体风格古朴，材质可能是金属或石质，表面有鎏金痕迹，显示出宗教艺术的庄严与精致。\n\n重新描述：\n\n这尊佛教造像主体为结跏趺坐的佛像，身披袈
+裟，右手施无畏印，左手施与愿印（或禅定印，需确认，但可能更准确的是禅定印？不对，看图片里双手位置，可能是禅定印？或者施无畏与与愿？可能需要更准确。不过可能更侧重整体结构。然后头光和背光，背光有
+复杂的卷草纹、莲花座、飞天等，左右有胁侍菩萨。整体风格古朴，材质可能是金属或石质，表面有鎏金痕迹，显示出宗教艺术的庄严与精致。\n\n哦，可能更准确的是：这尊造像为坐佛，结跏趺坐，身披袈裟，右手施
+无畏印，左手施与愿印（或禅定印？需要看图片。不过可能更准确的是，右手施无畏，左手施与愿？或者禅定印？可能需要更仔细。不过可能用户需要的是整体描述，所以：\n\n这尊佛教造像整体呈坐姿，佛像结跏趺坐
+，身披袈裟，右手施无畏印，左手施与愿印（或禅定印，需确认，但可能更准确的是禅定印？不对，看图片里双手位置，可能是禅定印？或者施无畏与与愿？可能需要更准确。不过可能更侧重整体结构。然后头光和背光
+，背光有复杂的卷草纹、莲花座、飞天等，左右有胁侍菩萨。整体风格古朴，材质可能是金属或石质，表面有鎏金痕迹，显示出宗教艺术的庄严与精致。\n\n现在确定：这尊造像为坐佛，结跏趺坐，身披袈裟，右手施无
+畏印，左手施与愿印（或禅定印？可能需要更准确。不过可能更准确的是，右手施无畏，左手施与愿？或者禅定印？可能需要查资料，但作为描述，可能更侧重整体。所以最终描述：\n\n这尊佛教造像整体呈坐姿，佛像
+结跏趺坐，身披袈裟，右手施无畏印，左手施与愿印（或禅定印，需确认，但可能更准确的是禅定印？不对，看图片里双手位置，可能是禅定印？或者施无畏与与愿？可能需要更准确。不过可能更侧重整体结构。然后头
+光和背光，背光有复杂的卷草纹、莲花座、飞天等，左右有胁侍菩萨。整体风格古朴，材质可能是金属或石质，表面有鎏金痕迹，显示出宗教艺术的庄严与精致。\n\n哦，可能更准确的是：这尊造像为坐佛，结跏趺坐，
+身披袈裟，右手施无畏印，左手施与愿印（或禅定印？可能需要更准确。不过可能更准确的是，右手施无畏，左手施与愿？或者禅定印？可能需要更仔细。不过可能用户需要的是整体描述，所以：\n\n这尊佛教造像整体
+呈坐姿，佛像结跏趺坐，身披袈裟，右手施无畏印，左手施与愿印（或禅定印，需确认，但可能更准确的是禅定印？不对，看图片里双手位置，可能是禅定印？或者施无畏与与愿？可能需要更准确。不过可能更侧重整体
+结构。然后头光和背光，背光有复杂的卷草纹、莲花座、飞天等，左右有胁侍菩萨。整体风格古朴，材质可能是金属或石质，表面有鎏金痕迹，显示出宗教艺术的庄严与精致。\n\n现在确定，可能更准确的是：这尊佛教
+造像主体为结跏趺坐的佛像，身披袈裟，右手施无畏印，左手施与愿印（或禅定印？可能需要更准确。不过可能更准确的是，右手施无畏，左手施与愿？或者禅定印？可能需要更仔细。不过可能用户需要的是整体描述，
+所以：\n\n这尊佛教造像整体呈坐姿，佛像结跏趺坐，身披袈裟，右手施无畏印，左手施与愿印（或禅定印，需确认，但可能更准确的是禅定印？不对，看图片里双手位置，可能是禅定印？或者施无畏与与愿？可能需要
+更准确。不过可能更侧重整体结构。然后头光和背光，背光有复杂的卷草纹、莲花座、飞天等，左右有胁侍菩萨。整体风格古朴，材质可能是金属或石质，表面有鎏金痕迹，显示出宗教艺术的庄严与精致。\n\n现在，可
+能更准确的是：这尊造像为坐佛，结跏趺坐，身披袈裟，右手施无畏印，左手施与愿印（或禅定印？可能需要更准确。不过可能更准确的是，右手施无畏，左手施与愿？或者禅定印？可能需要更仔细。不过可能用户需要
+的是整体描述，所以：\n\n这尊佛教造像整体呈坐姿，佛像结跏趺坐，身披袈裟，右手施无畏印，左手施与愿印（或禅定印，需确认，但可能更准确的是禅定印？不对，看图片里双手位置，可能是禅定印？或者施无畏与
+与愿？可能需要更准确。不过可能更侧重整体结构。然后头光和背光，背光有复杂的卷草纹、莲花座、飞天等，左右有胁侍菩萨。整体风格古朴，材质可能是金属或石质，表面有鎏金痕迹，显示出宗教艺术的庄严与精致
+。\n\n现在，可能我需要更准确。看图片：佛像结跏趺坐，右手施无畏印（手掌张开，指向下方），左手施与愿印（手掌向上，掌心有纹路）。然后头光和背光，背光有莲花座、飞天、卷草纹等，左右有胁侍菩萨。整体
+风格古朴，材质可能是金属或石质，表面有鎏金痕迹。\n\n所以最终描述：\n\n这尊佛教造像整体呈坐姿，佛像结跏趺坐，身披袈裟，右手施无畏印，左手施与愿印。佛像头顶有头光，身后是带有复杂卷草纹、莲花座和
+飞天等装饰的背光。左右两侧各有一尊胁侍菩萨，造型端庄。整体风格古朴庄严，材质可能为金属或石质，表面保留有鎏金痕迹，显示出宗教艺术的精湛工艺与历史厚重感。\n'
+--------------------------------------------------
+Generated: '\n\n这尊佛教造像整体呈坐姿，佛像结跏趺坐，身披袈裟，右手施无畏印，左手施与愿印。佛像头顶有头光，身后是带有复杂卷草纹、莲花座和飞天等装饰的背光。左右两侧各有一尊胁侍菩萨，造型端庄。
+整体风格古朴庄严，材质可能为金属或石质，表面保留有鎏金痕迹，展现出宗教艺术的精湛工艺与历史厚重感。'
+==================================================
+Reasoning: '我现在需要解决的问题是视频中手机支架的颜色是什么。首先，我得回忆视频里的内容。根据视频显示，左边有个黑色的手机支架，吸在桌子上。然后看问题，问的是颜色，所以应该是黑色。需要确认有没
+有其他颜色，但视频里明确提到是黑色的支架，所以答案应该是黑色。\n'
+--------------------------------------------------
+Generated: '\n\n视频中手机支架的颜色是黑色。'
+</code></pre>
+<h3 id="paddleocr">PaddleOCR</h3>
+<h4 id="server">server</h4>
+<pre><code class="language-bash">export PADDLE_XCCL_BACKEND=metax_gpu
+export FLAGS_weight_only_linear_arch=80
+export FD_MOE_BACKEND=cutlass
+export FD_METAX_KVCACHE_MEM=8
+export ENABLE_V1_KVCACHE_SCHEDULER=1
+export FD_ENC_DEC_BLOCK_NUM=2
+export FD_SAMPLING_CLASS=&quot;rejection&quot;
+
+paddleocr genai_server --model_name PaddleOCR-VL-1.5-0.9B --backend fastdeploy --port 8118 --model_dir ${YOUR_MODEL_PATH}/PaddleOCR-VL-1.5/
+</code></pre>
+<h4 id="client">client</h4>
+<pre><code class="language-bash">paddleocr doc_parser \
+        --input https://paddle-model-ecology.bj.bcebos.com/paddlex/imgs/demo_image/paddleocr_vl_demo.png \
+        --vl_rec_backend fastdeploy-server \
+        --vl_rec_server_url http://localhost:8118/v1 \
+        --layout_detection_model_dir ${YOUR_MODEL_PATH}/PP-DocLayoutV3/ \
+        --vl_rec_model_dir ${YOUR_MODEL_PATH}/PaddleOCR-VL-1.5/
+</code></pre>
+<h4 id="output">output</h4>
+<pre><code class="language-bash">[33mChecking connectivity to the model hosters, this may take a while. To bypass this check, set `PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK` to `True`.[0m
+[33mNo model hoster is available! Please check your network connection to one of the following model hoster: HuggingFace (https://huggingface.co), ModelScope (https://modelscope.cn), AIStudio (https://aistudio.baidu.com), or BOS (https://paddle-model-ecology.bj.bcebos.com). Otherwise, only local models can be used.[0m
+I0212 09:14:05.937799 163217 init.cc:254] ENV [CUSTOM_DEVICE_ROOT]=/opt/conda/lib/python3.10/site-packages/paddle_custom_device
+I0212 09:14:05.937847 163217 init.cc:162] Try loading custom device libs from: [/opt/conda/lib/python3.10/site-packages/paddle_custom_device]
+I0212 09:14:07.750711 163217 custom_device_load.cc:51] Succeed in loading custom runtime in lib: /opt/conda/lib/python3.10/site-packages/paddle_custom_device/libpaddle-metax-gpu.so
+I0212 09:14:07.750746 163217 custom_device_load.cc:58] Skipped lib [/opt/conda/lib/python3.10/site-packages/paddle_custom_device/libpaddle-metax-gpu.so]: no custom engine Plugin symbol in this lib.
+I0212 09:14:07.753039 163217 custom_kernel.cc:68] Succeed in loading 973 custom kernel(s) from loaded lib(s), will be used like native ones.
+I0212 09:14:07.753350 163217 init.cc:174] Finished in LoadCustomDevice with libs_path: [/opt/conda/lib/python3.10/site-packages/paddle_custom_device]
+I0212 09:14:07.753376 163217 init.cc:260] CustomDevice: metax_gpu, visible devices count: 1
+[32mCreating model: ('PP-DocLayoutV3', '/mingkunzhang/workspace/models/modelscope.hub.metax-tech.com/models/PaddlePaddle/PP-DocLayoutV3/')[0m
+[32mCreating model: ('PaddleOCR-VL-1.5-0.9B', '/mingkunzhang/workspace/models/modelscope.hub.metax-tech.com/models/PaddlePaddle/PaddleOCR-VL-1.5/')[0m
+/opt/conda/lib/python3.10/site-packages/paddlex/inference/models/base/predictor/base_predictor.py:131: UserWarning: `model_dir` will be ignored, as it is not needed.
+  warnings.warn(&quot;`model_dir` will be ignored, as it is not needed.&quot;)
+/opt/conda/lib/python3.10/site-packages/paddlex/inference/models/doc_vlm/predictor.py:493: UserWarning: 'fastdeploy-server' does not support `min_pixels`.
+  warnings.warn(
+/opt/conda/lib/python3.10/site-packages/paddlex/inference/models/doc_vlm/predictor.py:506: UserWarning: 'fastdeploy-server' does not support `max_pixels`.
+  warnings.warn(
+[2026-02-12 09:14:46,592] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,605] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,616] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,627] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,629] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,776] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,782] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,799] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,820] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,829] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,909] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,910] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,914] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,939] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,951] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,980] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,986] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:46,993] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:47,034] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:47,042] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:47,048] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:47,088] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:47,095] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:47,161] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:47,278] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:47,381] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026-02-12 09:14:48,256] [    INFO] _client.py:1740 - HTTP Request: POST http://localhost:8118/v1/chat/completions &quot;HTTP/1.1 200 OK&quot;
+[2026/02/12 09:14:48] paddleocr INFO: Processed item 0 in 39545.345067977905 ms
+[32m{'res': {'input_path': 'paddleocr_vl_demo.png', 'page_index': None, 'page_count': None, 'width': 1524, 'height': 1368, 'model_settings': {'use_doc_preprocessor': False, 'use_layout_detection': True, 'use_chart_recognition': False, 'use_seal_recognition': False, 'use_ocr_for_image_block': False, 'format_block_content': False, 'merge_layout_blocks': True, 'markdown_ignore_labels': ['number', 'footnote', 'header', 'header_image', 'footer', 'footer_image', 'aside_text'], 'return_layout_polygon_points': True}, 'layout_det_res': {'input_path': None, 'page_index': None, 'boxes': [{'cls_id': 6, 'label': 'doc_title', 'score': 0.9300567507743835, 'coordinate': [130, 35, 1384, 127], 'order': 1, 'polygon_points': array([[130.,  35.],
+       ...,
+       [130., 127.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.8483847379684448, 'coordinate': [582, 157, 930, 183], 'order': 2, 'polygon_points': array([[582., 157.],
+       ...,
+       [582., 183.]], dtype=float32)}, {'cls_id': 14, 'label': 'image', 'score': 0.9810925126075745, 'coordinate': [777, 201, 1502, 685], 'order': None, 'polygon_points': array([[777., 201.],
+       ...,
+       [777., 685.]], dtype=float32)}, {'cls_id': 24, 'label': 'vision_footnote', 'score': 0.431095153093338, 'coordinate': [810, 702, 1452, 724], 'order': None, 'polygon_points': array([[810., 702.],
+       ...,
+       [810., 724.]], dtype=float32)}, {'cls_id': 24, 'label': 'vision_footnote', 'score': 0.6346690654754639, 'coordinate': [809, 702, 1486, 750], 'order': None, 'polygon_points': array([[ 809,  702],
+       ...,
+       [1455,  702]], dtype=int32)}, {'cls_id': 24, 'label': 'vision_footnote', 'score': 0.35058093070983887, 'coordinate': [1246, 729, 1487, 750], 'order': None, 'polygon_points': array([[1246,  729],
+       ...,
+       [1486,  729]], dtype=int32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9565537571907043, 'coordinate': [9, 199, 361, 342], 'order': 3, 'polygon_points': array([[  9., 199.],
+       ...,
+       [  9., 342.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9485597610473633, 'coordinate': [8, 344, 360, 440], 'order': 4, 'polygon_points': array([[  8., 344.],
+       ...,
+       [  8., 440.]], dtype=float32)}, {'cls_id': 17, 'label': 'paragraph_title', 'score': 0.9114848375320435, 'coordinate': [27, 455, 341, 520], 'order': 5, 'polygon_points': array([[ 27., 455.],
+       ...,
+       [ 27., 520.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9484402537345886, 'coordinate': [8, 535, 359, 655], 'order': 6, 'polygon_points': array([[  8., 535.],
+       ...,
+       [  8., 655.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9521226286888123, 'coordinate': [8, 656, 361, 773], 'order': 7, 'polygon_points': array([[  8., 656.],
+       ...,
+       [  8., 773.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9330596923828125, 'coordinate': [8, 776, 360, 846], 'order': 8, 'polygon_points': array([[  8., 776.],
+       ...,
+       [  8., 846.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9604430794715881, 'coordinate': [8, 847, 361, 1061], 'order': 9, 'polygon_points': array([[   8.,  847.],
+       ...,
+       [   8., 1061.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9469948410987854, 'coordinate': [8, 1063, 360, 1181], 'order': 10, 'polygon_points': array([[   8., 1063.],
+       ...,
+       [   8., 1181.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9434540867805481, 'coordinate': [8, 1183, 361, 1301], 'order': 11, 'polygon_points': array([[   8., 1183.],
+       ...,
+       [   8., 1301.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9266975522041321, 'coordinate': [9, 1303, 361, 1351], 'order': 12, 'polygon_points': array([[   9., 1303.],
+       ...,
+       [   9., 1351.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9517078399658203, 'coordinate': [389, 199, 742, 294], 'order': 13, 'polygon_points': array([[389., 199.],
+       ...,
+       [389., 294.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9540072679519653, 'coordinate': [389, 296, 743, 440], 'order': 14, 'polygon_points': array([[389., 296.],
+       ...,
+       [389., 440.]], dtype=float32)}, {'cls_id': 17, 'label': 'paragraph_title', 'score': 0.8874742388725281, 'coordinate': [407, 454, 721, 520], 'order': 15, 'polygon_points': array([[407., 454.],
+       ...,
+       [407., 520.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.929058313369751, 'coordinate': [390, 535, 742, 607], 'order': 16, 'polygon_points': array([[390., 535.],
+       ...,
+       [390., 607.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9516089558601379, 'coordinate': [389, 609, 742, 749], 'order': 17, 'polygon_points': array([[389., 609.],
+       ...,
+       [389., 749.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9524988532066345, 'coordinate': [389, 751, 741, 893], 'order': 18, 'polygon_points': array([[389., 751.],
+       ...,
+       [389., 893.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9566522240638733, 'coordinate': [389, 895, 742, 1037], 'order': 19, 'polygon_points': array([[ 389.,  895.],
+       ...,
+       [ 389., 1037.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9500834345817566, 'coordinate': [389, 1039, 742, 1133], 'order': 20, 'polygon_points': array([[ 389., 1039.],
+       ...,
+       [ 389., 1133.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9630914330482483, 'coordinate': [388, 1135, 742, 1351], 'order': 21, 'polygon_points': array([[ 388., 1135.],
+       ...,
+       [ 388., 1351.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9659959077835083, 'coordinate': [770, 773, 1124, 1062], 'order': 22, 'polygon_points': array([[ 770.,  773.],
+       ...,
+       [ 770., 1062.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9498739838600159, 'coordinate': [770, 1062, 1124, 1183], 'order': 23, 'polygon_points': array([[ 770., 1062.],
+       ...,
+       [ 770., 1183.]], dtype=float32)}, {'cls_id': 17, 'label': 'paragraph_title', 'score': 0.8923305869102478, 'coordinate': [790, 1198, 1103, 1263], 'order': 24, 'polygon_points': array([[ 790., 1198.],
+       ...,
+       [ 790., 1263.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9308299422264099, 'coordinate': [770, 1278, 1124, 1352], 'order': 25, 'polygon_points': array([[ 770., 1278.],
+       ...,
+       [ 770., 1352.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.8169823288917542, 'coordinate': [1154, 774, 1333, 797], 'order': 26, 'polygon_points': array([[1154.,  774.],
+       ...,
+       [1154.,  797.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9588348269462585, 'coordinate': [1151, 798, 1506, 989], 'order': 27, 'polygon_points': array([[1151.,  798.],
+       ...,
+       [1151.,  989.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9523345828056335, 'coordinate': [1152, 991, 1506, 1109], 'order': 28, 'polygon_points': array([[1152.,  991.],
+       ...,
+       [1152., 1109.]], dtype=float32)}, {'cls_id': 22, 'label': 'text', 'score': 0.9643592238426208, 'coordinate': [1152, 1111, 1507, 1352], 'order': 29, 'polygon_points': array([[1152., 1111.],
+       ...,
+       [1152., 1352.]], dtype=float32)}]}, 'parsing_res_list': [{'block_label': 'doc_title', 'block_content': '助力双方交往 搭建友谊桥梁', 'block_bbox': [130, 35, 1384, 127]}, {'block_label': 'text', 'block_content': '本报记者 沈小晓 任彦 黄培昭', 'block_bbox': [582, 157, 930, 183]}, {'block_label': 'image', 'block_content': '', 'block_bbox': [777, 201, 1502, 685]}, {'block_label': 'vision_footnote', 'block_content': '在厄立特里亚不久前举办的第六届中国风筝文化节上，当地小学生体验风筝制作。中国驻厄立特里亚大使馆供图', 'block_bbox': [809, 702, 1486, 750]}, {'block_label': 'text', 'block_content': '身着中国传统民族服装的厄立特里亚青年依次登台表演中国民族舞、现代舞、扇子舞等，曼妙的舞姿赢得现场观众阵阵掌声。这是日前厄立特里亚高等教育与研究院孔子学院(以下简称“厄特孔院”)举办“喜迎新年”中国歌舞比赛的场景。', 'block_bbox': [9, 199, 361, 342]}, {'block_label': 'text', 'block_content': '中国和厄立特里亚传统友谊深厚。近年来，在高质量共建“一带一路”框架下，中厄两国人文交流不断深化，互利合作的民意基础日益深厚。', 'block_bbox': [8, 344, 360, 440]}, {'block_label': 'paragraph_title', 'block_content': '“学好中文，我们的未来不是梦”', 'block_bbox': [27, 455, 341, 520]}, {'block_label': 'text', 'block_content': '“鲜花曾告诉我你怎样走过，大地知道你心中的每一个角落……”厄立特里亚阿斯马拉大学综合楼二层，一阵优美的歌声在走廊里回响。循着熟悉的旋律轻轻推开一间教室的门，学生们正跟着老师学唱中文歌曲《同一首歌》。', 'block_bbox': [8, 535, 359, 655]}, {'block_label': 'text', 'block_content': '这是厄特孔院阿斯马拉大学教学点的一节中文歌曲课。为了让学生们更好地理解歌词大意，老师尤斯拉·穆罕默德萨尔·侯赛因逐字翻译和解释歌词。随着伴奏声响起，学生们边唱边随着节拍摇动身体，现场气氛热烈。', 'block_bbox': [8, 656, 361, 773]}, {'block_label': 'text', 'block_content': '“这是中文歌曲初级班，共有32人。学生大部分来自首都阿斯马拉的中小学，年龄最小的仅有6岁。”尤斯拉告诉记者。', 'block_bbox': [8, 776, 360, 846]}, {'block_label': 'text', 'block_content': '尤斯拉今年23岁，是厄立特里亚一所公立学校的艺术老师。她12岁开始在厄特孔院学习中文，在2017年第十届“汉语桥”世界中学生中文比赛中获得厄立特里亚赛区第一名，并和同伴代表厄立特里亚前往中国参加决赛，获得团体优胜奖。2022年起，尤斯拉开始在厄特孔院兼职教授中文歌曲，每周末两个课时。“中国文化博大精深，我希望我的学生们能够通过中文歌曲更好地理解中国文化。”她说。', 'block_bbox': [8, 847, 361, 1061]}, {'block_label': 'text', 'block_content': '“姐姐，你想去中国吗？”“非常想！我想去看故宫、爬长城。”尤斯拉的学生中有一对能歌善舞的姐妹，姐姐露娅今年15岁，妹妹莉娅14岁，两人都已在厄特孔院学习多年，中文说得格外流利。', 'block_bbox': [8, 1063, 360, 1181]}, {'block_label': 'text', 'block_content': '露娅对记者说：“这些年来，怀着对中文和中国文化的热爱，我们姐妹俩始终相互鼓励，一起学习。我们的中文一天比一天好，还学会了中文歌和中国舞。我们一定要到中国去。学好中文，我们的未来不是梦！”', 'block_bbox': [8, 1183, 361, 1301]}, {'block_label': 'text', 'block_content': '据厄特孔院中方院长黄鸣飞介绍，这所孔院成立于2013年3月，由贵州财经大学和厄立特里亚高等教育与研究院合作建立，开设了中国语言课程和中国文化课程，注册学生2万余人次。10余年来，厄特孔院已成为当地民众了解中国的一扇窗口。', 'block_bbox': [9, 1303, 361, 1351]}, {'block_label': 'text', 'block_content': '', 'block_bbox': [389, 199, 742, 294]}, {'block_label': 'text', 'block_content': '黄鸣飞表示，随着来学习中文的人日益增多，阿斯马拉大学教学点已难以满足教学需要。2024年4月，由中企蜀道集团所属四川路桥承建的孔院教学楼项目在阿斯马拉开工建设，预计今年上半年竣工，建成后将为厄特孔院提供全新的办学场地。', 'block_bbox': [389, 296, 743, 440]}, {'block_label': 'paragraph_title', 'block_content': '“在中国学习的经历让我看到更广阔的世界”', 'block_bbox': [407, 454, 721, 520]}, {'block_label': 'text', 'block_content': '多年来，厄立特里亚广大赴华留学生和培训人员积极投身国家建设，成为助力该国发展的人才和厄中友好的见证者和推动者。', 'block_bbox': [390, 535, 742, 607]}, {'block_label': 'text', 'block_content': '在厄立特里亚全国妇女联盟工作的约翰娜·特韦尔德·凯莱塔就是其中一位。她曾在中华女子学院攻读硕士学位，研究方向是女性领导力与社会发展。其间，她实地走访中国多个地区，获得了观察中国社会发展的第一手资料。', 'block_bbox': [389, 609, 742, 749]}, {'block_label': 'text', 'block_content': '谈起在中国求学的经历，约翰娜记忆犹新：“中国的发展在当今世界是独一无二的。沿着中国特色社会主义道路坚定前行，中国创造了发展奇迹，这一切都离不开中国共产党的领导。中国的发展经验值得许多国家学习借鉴。”', 'block_bbox': [389, 751, 741, 893]}, {'block_label': 'text', 'block_content': '正在西南大学学习的厄立特里亚博士生穆卢盖塔·泽穆伊对中国怀有深厚感情。8年前，在北京师范大学获得硕士学位后，穆卢盖塔在社交媒体上写下这样一段话：“这是我人生的重要一步，自此我拥有了一双坚固的鞋子，赋予我穿越荆棘的力量。”', 'block_bbox': [389, 895, 742, 1037]}, {'block_label': 'text', 'block_content': '穆卢盖塔密切关注中国在经济、科技、教育等领域的发展，“中国在科研等方面的实力与日俱增。在中国学习的经历让我看到更广阔的世界，从中受益匪浅。”', 'block_bbox': [389, 1039, 742, 1133]}, {'block_label': 'text', 'block_content': '23岁的莉迪亚·埃斯蒂法诺斯已在厄特孔院学习3年，在中国书法、中国画等方面表现十分优秀，在2024年厄立特里亚赛区的“汉语桥”比赛中获得一等奖。莉迪亚说：“学习中国书法让我的内心变得安宁和纯粹。我也喜欢中国的服饰，希望未来能去中国学习，把中国不同民族元素融入服装设计中，创作出更多精美作品，也把厄特文化分享给更多的中国朋友。”\n“不管远近都是客人，请不用客气；相约好了在一起，我们欢迎你……”在一场中厄青年联谊活动上，四川路桥中方员工同当地大学生合唱《北京欢迎你》。厄立特里亚技术学院计算机科学与工程专业学生鲁夫塔·谢拉是其中一名演唱者，她很早便在孔院学习中文，一直在为去中国留学作准备。“这句歌词是我们两国人民友谊的生动写照。无论是投身于厄立特里亚基础设施建设的中企员工，还是在中国留学的厄立特里亚学子，两国人民携手努力，必将推动两国关系不断向前发展。”鲁夫塔说。', 'block_bbox': [388, 1135, 742, 1351]}, {'block_label': 'text', 'block_content': '', 'block_bbox': [770, 773, 1124, 1062]}, {'block_label': 'text', 'block_content': '厄立特里亚高等教育委员会主任助理萨马瑞表示：“每年我们都会组织学生到中国访问学习，目前有超过5000名厄立特里亚学生在中国留学。学习中国的教育经验，有助于提升厄立特里亚的教育水平。”', 'block_bbox': [770, 1062, 1124, 1183]}, {'block_label': 'paragraph_title', 'block_content': '“共同向世界展示非洲和亚洲的灿烂文明”', 'block_bbox': [790, 1198, 1103, 1263]}, {'block_label': 'text', 'block_content': '从阿斯马拉出发，沿着蜿蜒曲折的盘山公路一路向东寻找丝路印迹。驱车两个小时，记者来到位于厄立特里亚港口城市马萨瓦的北红海省博物馆。', 'block_bbox': [770, 1278, 1124, 1352]}, {'block_label': 'text', 'block_content': '', 'block_bbox': [1154, 774, 1333, 797]}, {'block_label': 'text', 'block_content': '博物馆二层陈列着一个发掘自阿杜利斯古城的中国古代陶制酒器，罐身上写着“万”“和”“禅”“山”等汉字。“这件文物证明，很早以前我们就通过海上丝绸之路进行贸易往来与文化交流。这也是厄立特里亚与中国友好交往历史的有力证明。”北红海省博物馆研究与文献部负责人伊萨亚斯·特斯法兹吉说。', 'block_bbox': [1151, 798, 1506, 989]}, {'block_label': 'text', 'block_content': '厄立特里亚国家博物馆考古学和人类学研究员菲尔蒙·特韦尔德十分喜爱中国文化。他表示：“学习彼此的语言和文化，将帮助厄中两国人民更好地理解彼此，助力双方交往，搭建友谊桥梁。”', 'block_bbox': [1152, 991, 1506, 1109]}, {'block_label': 'text', 'block_content': '厄立特里亚国家博物馆馆长塔吉丁·努里达姆·优素福曾多次访问中国，对中华文明的传承与创新、现代化博物馆的建设与发展印象深刻。“中国博物馆不仅有许多保存完好的文物，还充分运用先进科技手段进行展示，帮助人们更好理解中华文明。”塔吉丁说，“厄立特里亚与中国都拥有悠久的文明，始终相互理解、相互尊重。我希望未来与中国同行加强合作，共同向世界展示非洲和亚洲的灿烂文明。”', 'block_bbox': [1152, 1111, 1507, 1352]}]}}[0m
+
+</code></pre>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 Maintained by FastDeploy
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
