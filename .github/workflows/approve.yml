@@ -1,10 +1,12 @@
 name: Approval
 
 on:
-  pull_request:
-    branches:
-      - develop
-      - 'release/*'
+  # Repository is no longer maintained: automatic triggers are disabled.
+  # pull_request:
+  #   branches:
+  #     - develop
+  #     - 'release/*'
+  workflow_dispatch:
 
 env:
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

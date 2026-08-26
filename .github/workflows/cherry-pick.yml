@@ -1,9 +1,11 @@
 name: Cherry Pick
 
 on:
-  pull_request_target:
-    branches: [develop]
-    types: [closed, labeled]
+  # Repository is no longer maintained: automatic triggers are disabled.
+  # pull_request_target:
+  #   branches: [develop]
+  #   types: [closed, labeled]
+  workflow_dispatch:
 
 permissions:
   contents: write

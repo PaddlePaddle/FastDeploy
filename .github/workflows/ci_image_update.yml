@@ -2,8 +2,9 @@ name: CI Images Build
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: '0 18 * * *'   # 2:00 AM China Standard Time (UTC+8)
+  # Repository is no longer maintained: scheduled triggers are disabled.
+  # schedule:
+  #   - cron: '0 18 * * *'   # 2:00 AM China Standard Time (UTC+8)
 
 permissions: read-all
 

@@ -1,11 +1,11 @@
 name: CE Compile Job
 
 on:
-  workflow_dispatch:
-  push:
-    branches:
-      - develop
-      - 'release/*'
+  # Repository is no longer maintained: automatic triggers are disabled.
+  # push:
+  #   branches:
+  #     - develop
+  #     - 'release/*'
 permissions: read-all
 
 concurrency:
