@@ -1250,6 +1250,32 @@ class ResourceManagerV1(ResourceManager):
 
             return batch_request, error_reqs
 
+    def prefill_schedule(self):
+        with self.lock:
+            # P instance has no decode — full budget for prefill
+            batch_request = BatchRequest()
+            token_budget = self.config.scheduler_config.max_num_batched_tokens
+
+            assert len(self.waiting) == 0, "Prefill scheduler should not have waiting requests"
+
+            # Prepare prefill tasks for all running requests
+            for request in list(self.running):
+                if self._is_decoding(request):
+                    continue
+
+                num_new_tokens = self._get_num_new_tokens(request, token_budget)
+                if num_new_tokens == 0:
+                    continue
+
+                # Add requests into scheduled batch as blocks were preallocated
+                llm_logger.debug(f"schedule prefill tasks {request.request_id} with {num_new_tokens} tokens")
+                batch_request.add_request(self._prepare_prefill_task(request, num_new_tokens))
+                token_budget -= num_new_tokens
+                request.num_computed_tokens += num_new_tokens
+
+            self.update_metrics()
+            return batch_request, []
+
     def waiting_async_process(self, request: Request) -> None:
         """
         Check if async preprocessing is complete for a request.
