@@ -2073,5 +2073,42 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
   m.def("config_for_attention",
         &ConfigForAttention,
         "config for attention function");
-#endif
+
+  /**
+   * trtllm_allreduce_op.cc
+   * FlashInfer fused allreduce + residual + RMSNorm via trtllm kernel
+   */
+  bool InitTrtllmSo(const std::string& so_path);
+  std::vector<paddle::Tensor> TrtllmAllreduceResidualRmsnorm(
+      const paddle::Tensor& input_tensor,
+      const paddle::Tensor& residual,
+      const paddle::Tensor& weight,
+      const paddle::Tensor& workspace_ptrs,
+      int64_t world_size,
+      int64_t world_rank,
+      bool use_oneshot,
+      bool trigger_completion_at_end,
+      bool fp32_acc,
+      double rms_eps);
+
+  m.def("init_trtllm_so",
+        &InitTrtllmSo,
+        py::arg("so_path"),
+        "dlopen trtllm_comm.so and register TVM FFI functions. "
+        "Must be called once before trtllm_allreduce_residual_rmsnorm.");
+
+  m.def(
+      "trtllm_allreduce_residual_rmsnorm",
+      &TrtllmAllreduceResidualRmsnorm,
+      py::arg("input_tensor"),
+      py::arg("residual"),
+      py::arg("weight"),
+      py::arg("workspace_ptrs"),
+      py::arg("world_size"),
+      py::arg("world_rank"),
+      py::arg("use_oneshot"),
+      py::arg("trigger_completion_at_end"),
+      py::arg("fp32_acc"),
+      py::arg("rms_eps"),
+      "Fused allreduce + residual add + RMSNorm via FlashInfer trtllm kernel.");
 }
