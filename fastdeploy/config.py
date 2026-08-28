@@ -1639,7 +1639,7 @@ class CacheConfig:
         self.write_policy = "write_through_selective"
         self.write_through_threshold = 2
         self.num_cpu_blocks = None
-        self.use_mla_cache = envs.FD_ATTENTION_BACKEND == "MLA_ATTN"
+        self.use_mla_cache = envs.FD_ATTENTION_BACKEND in ("MLA_ATTN", "TRITON_MLA_ATTN")
 
         for key, value in args.items():
             if hasattr(self, key):

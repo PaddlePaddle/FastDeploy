@@ -24,6 +24,7 @@ from .flash_mask_attn_backend import FlashMaskAttentionBackend
 from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import PlasAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
+from .triton_mla_attention_backend import TritonMLAAttentionBackend
 
 __all__ = [
     "AttentionBackend",
@@ -37,5 +38,6 @@ __all__ = [
     "Attention",
     "PlasAttentionBackend",
     "FlashMaskAttentionBackend",
+    "TritonMLAAttentionBackend",
     "DecodeUnifiedAttentionBackend",
 ]
