@@ -14,14 +14,29 @@ segment. When the budget is reached, it terminates thinking by forcing `</think>
 ## How It Works
 
 1. **Request-side precompute (DataProcessor)**: when a request includes `thinking_budget`, the prompt token ids are scanned to determine whether thinking has started, whether it already ended, and how many tokens are already inside the thinking section.
+   Single-token markers can be precomputed by the `DataProcessor`; multi-token markers are replayed by the logits processor so partial marker prefixes are preserved.
 2. **Per-step update**: during decoding, the processor tracks `last_token_id` and `tokens_after_start`.
 3. **Budget enforcement**: once the budget is reached, it forces `</think>` directly. If `think_stop_sentence`
    is configured, it forces that sentence first and then `</think>`.
 
 ## Requirements
 
-- The model must provide valid token ids for `think_start_id` and `think_end_id` (via `ModelConfig`).
-- If either of these ids is invalid, the processor is disabled and `thinking_budget` will not take effect.
+- The model must provide either a valid `think_start_id`/`think_end_id` pair or a complete `think_token_sequences` configuration.
+- If neither mode is configured, the generic processor is disabled. A model that explicitly declares multi-token marker support fails startup when its tokenizer markers cannot be derived.
+
+### Multi-token thinking markers (`think_token_sequences`)
+
+Some tokenizers (e.g. MiniCPM4.1) do not have single `<think>`/`</think>` vocab entries: the markers
+tokenize to multiple token ids that vary with context (word-start vs. mid-text variants). In that case
+the model exposes a tokenizer-sequence builder hook. The engine invokes that hook at startup and passes
+standalone/contextual markers plus the complete forced end sequence through `ModelConfig.think_token_sequences`
+(structure: `{"start": [[...]], "end": [[...]], "forced_end": [...]}`):
+
+- Thinking segments are detected by token-sequence matching; sequence prefixes do not consume budget.
+- Once the budget is reached, the required `forced_end` sequence is emitted token by token and each emitted
+  token is verified on the following decode step.
+- Sequence derivation is selected by the explicit model hook, not by the broad `REASONING` model category;
+  builder and configuration errors propagate and stop startup.
 
 ## Request Parameters
 

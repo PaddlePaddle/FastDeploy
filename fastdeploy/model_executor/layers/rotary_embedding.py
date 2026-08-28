@@ -138,6 +138,48 @@ class QwenRotaryEmbedding:
         return rot_emb
 
 
+class MiniCPMLongRotaryEmbedding:
+    """MiniCPM LongRoPE with the full-dimension NeoX cache layout."""
+
+    def __init__(
+        self,
+        rotary_dim: int,
+        base: float,
+        max_position_embeddings: int,
+        short_factor: list[float],
+        long_factor: list[float],
+        original_max_position_embeddings: int,
+    ) -> None:
+        factor_count = rotary_dim // 2
+        if len(short_factor) != factor_count or len(long_factor) != factor_count:
+            raise ValueError(f"MiniCPM LongRoPE factors must contain {factor_count} values")
+        if min(short_factor) <= 0 or min(long_factor) <= 0:
+            raise ValueError("MiniCPM LongRoPE factors must be positive")
+
+        self.rotary_dim = rotary_dim
+        self.base = base
+        self.short_factor = short_factor
+        self.long_factor = long_factor
+        self.original_max_position_embeddings = original_max_position_embeddings
+        scale = max_position_embeddings / original_max_position_embeddings
+        self.magnitude_scale = math.sqrt(1 + math.log(scale) / math.log(original_max_position_embeddings))
+
+    def __call__(self, position_ids: paddle.Tensor) -> paddle.Tensor:
+        bsz, max_seq_len = position_ids.shape[:2]
+        factors = self.long_factor if max_seq_len > self.original_max_position_embeddings else self.short_factor
+        inv_freq = self.base ** (-paddle.arange(0, self.rotary_dim, 2, dtype="float32") / self.rotary_dim)
+        inv_freq = inv_freq / paddle.to_tensor(factors, dtype="float32")
+        # This is an outer product, so avoid routing the small startup-only
+        # calculation through cuBLAS.
+        freqs = position_ids.cast("float32").unsqueeze(-1) * inv_freq.reshape([1, 1, -1])
+        emb = paddle.concat([freqs, freqs], axis=-1).reshape((bsz, max_seq_len, 1, self.rotary_dim))
+        rotary_emb = paddle.stack(
+            [paddle.cos(emb) * self.magnitude_scale, paddle.sin(emb) * self.magnitude_scale], axis=0
+        )
+        rotary_emb.stop_gradient = True
+        return rotary_emb
+
+
 def yarn_get_mscale(scale=1, mscale=1):
     """ """
     if scale <= 1:
@@ -375,6 +417,22 @@ def get_rope_impl(
             beta_slow=model_config.rope_scaling["beta_slow"],
             use_neox_rotary_style=True,
         )
+        rotary_emb = rotary_emb_layer(position_ids)
+    elif architecture == "MiniCPMForCausalLM":
+        rope_scaling = getattr(model_config, "rope_scaling", None)
+        if rope_scaling is None:
+            rotary_emb_layer = QwenRotaryEmbedding(rotary_dim, base, partial_rotary_factor)
+        elif rope_scaling.get("rope_type", rope_scaling.get("type", "")) == "longrope":
+            rotary_emb_layer = MiniCPMLongRotaryEmbedding(
+                rotary_dim=rotary_dim,
+                base=base,
+                max_position_embeddings=model_config.max_position_embeddings,
+                short_factor=rope_scaling["short_factor"],
+                long_factor=rope_scaling["long_factor"],
+                original_max_position_embeddings=rope_scaling["original_max_position_embeddings"],
+            )
+        else:
+            raise ValueError("MiniCPMForCausalLM requires standard RoPE or longrope")
         rotary_emb = rotary_emb_layer(position_ids)
     else:
         rotary_emb_layer = ErnieRotaryEmbedding(rotary_dim, base, partial_rotary_factor)

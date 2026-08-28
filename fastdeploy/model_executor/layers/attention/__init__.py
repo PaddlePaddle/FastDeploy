@@ -21,6 +21,7 @@ from .decode_unified_attention_backend import DecodeUnifiedAttentionBackend
 from .dsa_attention_backend import DSAAttentionBackend
 from .flash_attn_backend import FlashAttentionBackend
 from .flash_mask_attn_backend import FlashMaskAttentionBackend
+from .infllmv2_attention_backend import InfLLMV2AttentionBackend
 from .mla_attention_backend import MLAAttentionBackend
 from .moba_attention_backend import PlasAttentionBackend
 from .native_paddle_backend import PaddleNativeAttnBackend
@@ -38,4 +39,5 @@ __all__ = [
     "PlasAttentionBackend",
     "FlashMaskAttentionBackend",
     "DecodeUnifiedAttentionBackend",
+    "InfLLMV2AttentionBackend",
 ]
