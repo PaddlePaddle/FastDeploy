@@ -45,9 +45,8 @@ from fastdeploy.platforms import current_platform
 compiled_mla = None
 if current_platform.is_cuda():
     from fastdeploy.model_executor.ops.gpu import (
-        decode_mla_write_cache,
         multi_head_latent_attention,
-        prefill_mla_write_cache,
+        mla_write_cache,
     )
 
 if TYPE_CHECKING:
@@ -856,7 +855,7 @@ class MLAAttentionBackend(AttentionBackend):
         latent_cache = forward_meta.caches[layer.layer_id] if hasattr(forward_meta, "caches") else None
 
         assert k_pe.shape[0] == compressed_kv.shape[0]
-        prefill_mla_write_cache(
+        mla_write_cache(
             compressed_kv,
             k_pe,
             latent_cache,
