@@ -2144,7 +2144,8 @@ class EngineService:
 
                 if not is_success:
                     if not self.enable_decode_cache_task:
-                        task.error_msg = "Not enough resources"
+                        if not task.get("error_msg", None):
+                            task.error_msg = "Not enough resources"
                         self.split_connector.send_cache_info_to_prefill([task])
                         self.llm_logger.warning(f"D has failed to send cache infos for task {task.request_id}")
                         processed_indices.append(idx)
