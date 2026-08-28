@@ -269,6 +269,8 @@ environment_variables: dict[str, Callable[[], Any]] = {
     "FD_DETERMINISTIC_LOG_MODE": lambda: bool(int(os.getenv("FD_DETERMINISTIC_LOG_MODE", "0"))),
     # Whether to use PD REORDER, can set 0 or 1
     "FD_PD_REORDER": lambda: int(os.getenv("FD_PD_REORDER", "0")),
+    # Whether to enable PD disaggregation request logging on decode side
+    "FD_PD_LOG_REQUEST": lambda: int(os.getenv("FD_PD_LOG_REQUEST", "0")),
     # Whether to probe MoE routing probabilities and use Fleet's fused SwiGLU kernel.
     "FD_MOE_PROB_IN_ADVANCE": lambda: bool(int(os.getenv("FD_MOE_PROB_IN_ADVANCE", "0"))),
     # Whether to use batch send data in zmq
