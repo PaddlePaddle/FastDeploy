@@ -212,6 +212,7 @@ __global__ void prefill_absorb_cache_kernel(
     const uint32_t block_idx = block_table_now[ori_seq_id / block_size];
     const uint32_t block_offset = ori_seq_id % block_size;
 
+#ifndef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
     const int32_t block_idx1 = slot_mapping[token_idx] / block_size;
     if (block_idx1 != block_idx) {
       printf("block_idx1 %d != block_idx %d\n", block_idx1, block_idx);
@@ -219,7 +220,7 @@ __global__ void prefill_absorb_cache_kernel(
       printf("slot_mapping %d\n", slot_mapping[token_idx]);
       asm volatile("trap;");
     }
-
+#endif
     if (bias < nope_hidden_size) {  // pe
       const uint32_t inner_bias = bias;
       const uint32_t hi = inner_bias / nope_size;
