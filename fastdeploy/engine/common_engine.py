@@ -53,6 +53,7 @@ from fastdeploy.engine.request import (
 )
 from fastdeploy.engine.resource_manager import ResourceManager
 from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.engine.sched.resource_manager_v2 import ResourceManagerV2
 from fastdeploy.engine.sched.scheduler_metrics_logger import SchedulerMetricsLogger
 from fastdeploy.eplb.utils import init_eplb_signals
 from fastdeploy.input.preprocess import InputPreprocessor
@@ -171,7 +172,14 @@ class EngineService:
         self.scheduler = cfg.scheduler_config.scheduler()
         self.enable_decode_cache_task = envs.FD_ENABLE_CACHE_TASK == "1"
 
-        if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+        if envs.ENABLE_V2_KVCACHE_SCHEDULER:
+            if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                raise ValueError(
+                    "To enable v2 lock-free scheduler, v1 scheduler must be true (export ENABLE_V1_KVCACHE_SCHEDULER=1)."
+                )
+            self.llm_logger.info("Use V2 Lock-Free KVCache Scheduler")
+            self.resource_manager = ResourceManagerV2(cfg)
+        elif envs.ENABLE_V1_KVCACHE_SCHEDULER:
             self.llm_logger.info("Use V1 KVCache Scheduler")
             self.resource_manager = ResourceManagerV1(
                 cfg.scheduler_config.max_num_seqs,
@@ -1111,6 +1119,7 @@ class EngineService:
                 if self.engine_worker_queue.exist_tasks():
                     time.sleep(0.001)
                     continue
+
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
                         is_fetching = True
@@ -1132,7 +1141,10 @@ class EngineService:
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
-                batch_request, error_tasks = self.resource_manager.schedule()
+                if self.cfg.scheduler_config.splitwise_role == "prefill":
+                    batch_request, error_tasks = self.resource_manager.prefill_schedule()
+                else:
+                    batch_request, error_tasks = self.resource_manager.schedule()
 
                 # 3. Send to engine
                 if len(batch_request) > 0:
