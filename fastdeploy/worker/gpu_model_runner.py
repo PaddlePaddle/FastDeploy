@@ -1440,6 +1440,52 @@ class GPUModelRunner(ModelRunnerBase):
         # 4. Init proposer for speculative method
         self._init_speculative_proposer()
 
+        # Usage: FD_SAVE_PDPARAMS=1 FD_SAVE_DIR=/path/to/output python -m fastdeploy...
+        if os.getenv("FD_SAVE_PDPARAMS", "0") == "1":
+            import shutil
+            import glob as glob_mod
+
+            visible_devices = os.getenv("CUDA_VISIBLE_DEVICES", "0").split(",")
+            meta_src_id = int(visible_devices[int(os.getenv("FLAGS_selected_gpus", "0"))])
+            rank = paddle.distributed.get_rank()
+
+            # Determine save directory: FD_SAVE_DIR or default to model directory
+            save_dir = os.getenv("FD_SAVE_DIR", self.fd_config.model_config.model)
+            os.makedirs(save_dir, exist_ok=True)
+
+            # Copy config and tokenizer files (only rank 0 to avoid race)
+            if rank == 0:
+                src_dir = self.fd_config.model_config.model
+                copy_patterns = [
+                    "config.json", "generation_config.json",
+                    "tokenizer*", "added_tokens.json",
+                    "special_tokens_map.json", "chat_template*",
+                ]
+                for pattern in copy_patterns:
+                    for f in glob_mod.glob(os.path.join(src_dir, pattern)):
+                        dst = os.path.join(save_dir, os.path.basename(f))
+                        if not os.path.exists(dst):
+                            shutil.copy2(f, dst)
+
+            # Save model weights (main model + proposer/MTP model if exists)
+            model_state_dict = self.model.state_dict()
+            if hasattr(self, 'proposer') and self.proposer is not None and hasattr(self.proposer, 'model'):
+                proposer_state_dict = self.proposer.model.state_dict()
+                model_state_dict.update(proposer_state_dict)
+                logger.info(f"Including proposer model weights ({len(proposer_state_dict)} params)")
+
+            clean_state_dict = {
+                k: paddle.to_tensor(v.contiguous().numpy())
+                for k, v in model_state_dict.items()
+            }
+            model_path = os.path.join(
+                save_dir,
+                f"model_state.tp{rank}.{meta_src_id}.pdparams",
+            )
+            paddle.save(clean_state_dict, model_path, safetensors=True)
+            del clean_state_dict
+            logger.info(f"Saved model state dict to {model_path}")
+
         # Load RL dynamic model
         if self.fd_config.load_config.dynamic_load_weight:
             from fastdeploy.rl.dynamic_weight_manager import DynamicWeightManager
