@@ -28,6 +28,12 @@ function __JUDGE_NIC_TYPE__() {
     gpu_first=true
     xpu_first=true
     cpu_first=true
+    # Cache ibdev2netdev output once to avoid repeated subprocess forks in the loop.
+    # Only needed for rdma-based types; cpu uses ip only.
+    _IBDEV2NETDEV_CACHE=""
+    if [[ "$type" != "cpu" ]]; then
+        _IBDEV2NETDEV_CACHE=$(ibdev2netdev 2>/dev/null)
+    fi
 
     for (( xgbe_no=0; xgbe_no < XGBE_NUM; xgbe_no++ ))
     do
@@ -41,7 +47,7 @@ function __JUDGE_NIC_TYPE__() {
         grep -qxF "$NIC_ROOTPORT" ${gpu_root_port_filename} 2>/dev/null && NIC_TYPE="GPU_NIC"
 
         if [[ "$type" == "gpu" && "$NIC_TYPE" == "GPU_NIC" ]]; then
-            ibdev=$(ibdev2netdev 2>/dev/null | awk -v nic="${NICNAME_TYPE}${xgbe_no}" '$5 == nic {print $1}')
+            ibdev=$(echo "$_IBDEV2NETDEV_CACHE" | awk -v nic="${NICNAME_TYPE}${xgbe_no}" '$5 == nic {print $1}')
             if [ -n "$ibdev" ] && ip link show "${NICNAME_TYPE}${xgbe_no}" | grep -q "state UP"; then
                 if $gpu_first; then
                     printf "KVCACHE_RDMA_NICS=%s" "$ibdev"
@@ -53,7 +59,7 @@ function __JUDGE_NIC_TYPE__() {
         fi
 
         if [[ "$type" == "xpu" && "$NIC_TYPE" == "GPU_NIC" ]]; then
-            ibdev=$(ibdev2netdev 2>/dev/null | awk -v nic="${NICNAME_TYPE}${xgbe_no}" '$5 == nic {print $1}')
+            ibdev=$(echo "$_IBDEV2NETDEV_CACHE" | awk -v nic="${NICNAME_TYPE}${xgbe_no}" '$5 == nic {print $1}')
             if [ -n "$ibdev" ] && ip link show "${NICNAME_TYPE}${xgbe_no}" | grep -q "state UP"; then
                 if $xpu_first; then
                     printf "KVCACHE_RDMA_NICS=%s,%s" "$ibdev" "$ibdev"
@@ -86,7 +92,7 @@ function __JUDGE_NIC_TYPE__() {
         fi
 
         if [[ "$type" == "cpu_ib" && "$NIC_TYPE" == "CPU_NIC" ]]; then
-            ibdev=$(ibdev2netdev 2>/dev/null | awk -v nic="${NICNAME_TYPE}${xgbe_no}" '$5 == nic {print $1}')
+            ibdev=$(echo "$_IBDEV2NETDEV_CACHE" | awk -v nic="${NICNAME_TYPE}${xgbe_no}" '$5 == nic {print $1}')
             if [ -n "$ibdev" ] && ip link show "${NICNAME_TYPE}${xgbe_no}" | grep -q "state UP" && \
                ip a show "${NICNAME_TYPE}${xgbe_no}" | grep -q "inet "; then
                 if $cpu_ib_first; then
@@ -183,11 +189,13 @@ function __main__() {
 
     if [[ "$type" == "cpu_ib" ]]; then
         first=true
+        # Cache ibdev2netdev output once outside the loop
+        _IBDEV2NETDEV_CACHE=$(ibdev2netdev 2>/dev/null)
         for bond in $(ls -d /sys/class/net/bond* 2>/dev/null); do
             bond_if=$(basename "$bond")
             __NEW_GPU_ROOTPORT_FILE__
 
-            ibdev=$(ibdev2netdev 2>/dev/null | grep -w "$bond_if" | awk '{print $1}')
+            ibdev=$(echo "$_IBDEV2NETDEV_CACHE" | grep -w "$bond_if" | awk '{print $1}')
             if [ -n "$ibdev" ] && ip link show "$bond_if" | grep -q "state UP" && \
                ip a show "$bond_if" | grep -q "inet "; then
                 if $first; then
