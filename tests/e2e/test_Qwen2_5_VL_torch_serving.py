@@ -76,6 +76,8 @@ def setup_and_run_server():
     ]
 
     print(cmd)
+    env = os.environ.copy()
+    env["FD_ENABLE_E2W_TENSOR_CONVERT"] = "1"
     # Start subprocess in new process group
     with open(log_path, "w") as logfile:
         process = subprocess.Popen(
@@ -83,6 +85,7 @@ def setup_and_run_server():
             stdout=logfile,
             stderr=subprocess.STDOUT,
             start_new_session=True,  # Enables killing full group via os.killpg
+            env=env,
         )
 
     print(f"Started API server with pid {process.pid}")
