@@ -32,6 +32,124 @@ from fastdeploy import envs
 from fastdeploy.config import FDConfig
 from fastdeploy.inter_communicator import KVCacheStatus, ModelWeightsStatus
 
+""" -------------------------------------------------------- """
+from fastdeploy.model_executor.models.model_base import ModelRegistry
+from fastdeploy.model_executor.utils import process_final_after_loading, multi_switch_config_context
+import json
+from paddle.base import core as paddle_core
+import zmq
+
+# --- dtype string → paddle dtype mapping ---
+_DTYPE_MAP = {
+    "paddle.float32": paddle.float32,
+    "paddle.float16": paddle.float16,
+    "paddle.bfloat16": paddle.bfloat16,
+    "paddle.int32": paddle.int32,
+    "paddle.int64": paddle.int64,
+    "paddle.uint8": paddle.uint8,
+}
+
+
+def receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None, recv_timeout_ms=300_000):
+    """Connect to a ReshardWorkerThread and receive all weight buckets via CUDA IPC.
+
+    The sender uses dual-buffer ping-pong: while we read from buffer A, it packs
+    into buffer B.  This allows zero-clone receiving — we yield params as views
+    directly into the sender's IPC-shared GPU buffer, and only ACK (release the
+    buffer back to the sender) after all params in the bucket have been consumed.
+
+    Args:
+        gpu_id: The training-side GPU id (determines the IPC socket path).
+        ipc_root: Root directory for IPC socket files.
+        target_device: The CUDA device id to rebuild tensors on. Defaults to gpu_id.
+        recv_timeout_ms: ZMQ receive timeout in milliseconds.
+
+    Yields:
+        (name, paddle.Tensor) tuples with original dtype and shape restored.
+    """
+    if target_device is None:
+        target_device = gpu_id
+
+    ctx = zmq.Context()
+    sock = ctx.socket(zmq.PAIR)
+    sock.setsockopt(zmq.LINGER, 0)
+    sock.setsockopt(zmq.RCVTIMEO, recv_timeout_ms)
+    ipc_addr = f"ipc:///{ipc_root}/ipc_metas_{gpu_id}"
+    sock.connect(ipc_addr)
+    print(f"[Receiver] Connected to {ipc_addr}")
+
+    bucket_count = 0
+    total_cost = 0
+
+    try:
+        while True:
+            raw = sock.recv()
+            start_time = time.time()
+
+            # --- Termination sentinel ---
+            if raw == b"END":
+                print(f"[Receiver] Received END after {bucket_count} bucket(s)")
+                break
+
+            # --- Decode bucket message ---
+            message = json.loads(raw.decode())
+            buffer_meta = message["buffer"]
+            layout = message["layout"]
+
+            # --- Rebuild flat uint8 buffer from CUDA IPC handle ---
+            buffer_meta[0] = buffer_meta[0].encode("latin-1")
+            buffer_meta[6] = int(os.getenv("FLAGS_selected_gpus", "0"))
+            lod_tensor = paddle_core.LoDTensor._new_shared_cuda(tuple(buffer_meta))
+            flat_buf_ori = paddle.to_tensor(lod_tensor)
+
+            flat_buf = flat_buf_ori.clone()
+            flat_buf_ori._clear_data()
+            flat_buf_ori = None
+            del flat_buf_ori
+            sock.send(b"OK")
+
+            # Synchronize after IPC handle init to ensure data is accessible
+            paddle.device.synchronize()
+
+            # Zero-clone: yield params as views directly from the IPC buffer.
+            # The sender has a second buffer and won't overwrite this one until we ACK.
+            n_params = len(layout)
+            for name, dtype_key, byte_offset, n_bytes, shape in layout:
+                target_dtype = _DTYPE_MAP[dtype_key]
+                param = flat_buf[byte_offset : byte_offset + n_bytes].clone().view(target_dtype).reshape(shape)
+                yield name, param
+
+            # All params consumed — ensure async GPU copies (param.copy_ in load_weights)
+            # have completed before releasing the IPC buffer back to the sender.
+            paddle.device.synchronize()
+
+            elapsed_time = time.time() - start_time
+            total_cost += elapsed_time
+
+            bucket_count += 1
+            print(
+                f"[Receiver] Bucket {bucket_count}: {n_params} params, "
+                f"buf size={flat_buf.numel()} bytes, "
+                f"elapsed_time={elapsed_time:.2f} s"
+            )
+
+            # Release IPC buffer reference and ACK — sender can now reuse this buffer
+            flat_buf._clear_data()
+            del flat_buf, lod_tensor
+            # sock.send(b"OK")
+
+        print(f"[Receiver] total cost time: {total_cost:.2f} s")
+
+    except zmq.Again:
+        print(f"[Receiver] Timeout waiting for data (timeout={recv_timeout_ms}ms)")
+        raise
+    finally:
+        sock.close()
+        ctx.term()
+        print("[Receiver] Socket closed, context terminated")
+
+""" -------------------------------------------------------- """
+
 
 class DynamicWeightManager:
     """Manages model weights loading, updating and shared state across processes."""
@@ -339,7 +457,8 @@ class DynamicWeightManager:
         # step3 : update model weight
         strategy_handlers = {
             "ipc_snapshot": self._update_ipc_snapshot,
-            "ipc": self._update_ipc,
+            # "ipc": self._update_ipc,
+            "ipc": self._update_ipc_async,
         }
 
         if handler := strategy_handlers.get(self.load_config.load_strategy):
@@ -353,6 +472,42 @@ class DynamicWeightManager:
         # step4: reinitialze kv_cache in the runner
         # step5: recapture cuda_graph
         # step6: update weight status signal
+
+    def _update_ipc_async(self):
+        """Update using IPC snapshot async for elastic recovery."""
+        logger.info(f"[ALLOC] check memory before _update_ipc_async: {paddle.device.cuda.memory_allocated() / (1024**3)}")
+        logger.info(f"[RESERVED] check memory before _update_ipc_async: {paddle.device.cuda.memory_reserved() / (1024**3)}")
+        context = paddle.LazyGuard()
+        architectures = f"{self.fd_config.model_config.architectures[0]}RL"
+        if self.fd_config.quant_config is not None:
+            quantization_context = multi_switch_config_context(
+                (self.fd_config.quant_config, "is_checkpoint_bf16", True),
+                (self.fd_config.load_config, "dynamic_load_weight", False),
+            )
+        else:
+            # bf16
+            quantization_context = multi_switch_config_context(
+                (self.fd_config.load_config, "dynamic_load_weight", False)
+            )
+        gpu_id = self._get_gpu_id()
+        weights_iterator = receive_all_buckets(gpu_id, ipc_root="/shared_ipc_meta", target_device=None, recv_timeout_ms=300000)
+        with quantization_context:
+            with context:
+                model_cls = ModelRegistry.get_class(architectures)
+                tmp_model = model_cls(self.fd_config)
+            tmp_model.eval()
+            tmp_model.load_weights(weights_iterator)
+            if self.fd_config.speculative_config.model_type != "mtp":
+                process_final_after_loading(tmp_model, self.fd_config)
+        self._capture_model_state() # thd test
+        self._update_model_from_state(tmp_model.state_dict(), "raw")
+        for param in tmp_model.state_dict().values():
+            param._clear_data()
+            del param
+        tmp_model.state_dict().clear()
+        tmp_model = None
+        logger.info(f"[ALLOC] check memory after _update_ipc_async: {paddle.device.cuda.memory_allocated() / (1024**3)}")
+        logger.info(f"[RESERVED] check memory after _update_ipc_async: {paddle.device.cuda.memory_reserved() / (1024**3)}")
 
     def restart_communication_group(self):
         if not self.first_load:
@@ -495,10 +650,22 @@ class DynamicWeightManager:
                 paddle.distributed.shutdown_process_group(self.parallel_config.ep_group)
 
         paddle.device.cuda.empty_cache()
+        logger.info(f"[ALLOC] check memory before clear_param_data: {paddle.device.cuda.memory_allocated() / (1024**3)}")
+        logger.info(f"[RESERVED] check memory before clear_param_data: {paddle.device.cuda.memory_reserved() / (1024**3)}")
         # step2: release model weight
         for model in self.model_list:
             for param in model.state_dict().values():
                 param._clear_data()
+                del param
+        self.state_dict = {} # thd test
+        gc.collect()
+        import ctypes
+        try:
+            ctypes.CDLL("libc.so.6").malloc_trim(0)
+        except Exception as e:
+            logger.warning(f"malloc_trim failed: {e}")
+        logger.info(f"[ALLOC] check memory after clear_param_data: {paddle.device.cuda.memory_allocated() / (1024**3)}")
+        logger.info(f"[RESERVED] check memory after clear_param_data: {paddle.device.cuda.memory_reserved() / (1024**3)}")
 
         self._verify_parameters("clearance")
 
