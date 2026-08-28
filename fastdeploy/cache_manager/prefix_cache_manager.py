@@ -1262,11 +1262,17 @@ class PrefixCacheManager:
 
     def wait_write_storage_task(self, req_id):
         """
-        Sync write back task
+        Sync write back task with timeout to prevent blocking the main process indefinitely.
         """
         if req_id in self.task_write_back_event:
-            self.task_write_back_event[req_id].wait()
-            del self.task_write_back_event[req_id]
+            timeout = envs.FD_AS_WAIT_TIMEOUT
+            success = self.task_write_back_event[req_id].wait(timeout=timeout)
+            if not success:
+                logger.error(
+                    f"wait_write_storage_task: write back to storage timed out after {timeout}s, "
+                    f"req_id: {req_id}, skipping to avoid blocking scheduling"
+                )
+            self.task_write_back_event.pop(req_id, None)
 
     def issue_prefetch_storage_task(self, task: ReadStorageTask, is_sync=True):
         """
@@ -1290,10 +1296,16 @@ class PrefixCacheManager:
         if req_id not in self.task_prefetch_event:
             return None
 
-        self.task_prefetch_event[req_id].wait()
-        storage_block_ids = self.storage_prefetch_block_ids[req_id]
-        del self.task_prefetch_event[req_id]
-        del self.storage_prefetch_block_ids[req_id]
+        timeout = envs.FD_AS_WAIT_TIMEOUT
+        success = self.task_prefetch_event[req_id].wait(timeout=timeout)
+        if not success:
+            logger.error(
+                f"wait_prefetch_storage_task: prefetch from storage timed out after {timeout}s, "
+                f"req_id: {req_id}, skipping to avoid blocking scheduling"
+            )
+        storage_block_ids = self.storage_prefetch_block_ids.get(req_id, [])
+        self.task_prefetch_event.pop(req_id, None)
+        self.storage_prefetch_block_ids.pop(req_id, None)
         return storage_block_ids
 
     def free_nodes_directly(self, node):
