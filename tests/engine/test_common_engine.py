@@ -37,6 +37,7 @@ from fastdeploy.cache_manager.cache_data import CacheStatus
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import (
     EngineService,
+    _build_model_thinking_token_sequences,
     _format_worker_launch_failure_message,
     _read_latest_worker_traceback,
 )
@@ -3910,3 +3911,56 @@ class TestWorkerTracebackFunctions(unittest.TestCase):
             self.assertIn("Failed to launch worker processes", result)
             self.assertIn("workerlog.*", result)
             self.assertNotIn("Traceback", result)
+
+
+class TestModelThinkingTokenSequenceHook(unittest.TestCase):
+    @staticmethod
+    def _model_config(model_cls):
+        registry = Mock()
+        registry.resolve_model_cls.return_value = (model_cls, "StubForCausalLM")
+        return types.SimpleNamespace(
+            registry=registry,
+            architectures=["StubForCausalLM"],
+            vocab_size=100,
+            _model_info=types.SimpleNamespace(),
+        )
+
+    def test_uninspected_model_config_skips_builder_resolution(self):
+        config = types.SimpleNamespace(
+            registry=Mock(),
+            architectures=["StubForCausalLM"],
+            vocab_size=100,
+            _model_info=None,
+        )
+
+        result = _build_model_thinking_token_sequences(config, Mock())
+
+        self.assertIsNone(result)
+        config.registry.resolve_model_cls.assert_not_called()
+
+    def test_model_without_builder_does_not_enable_sequence_mode(self):
+        class Model:
+            pass
+
+        result = _build_model_thinking_token_sequences(self._model_config(Model), Mock())
+
+        self.assertIsNone(result)
+
+    def test_model_builder_result_is_returned(self):
+        expected = {"start": [[1, 2]], "end": [[3, 4]], "forced_end": [3, 4]}
+
+        class Model:
+            build_thinking_token_sequences = Mock(return_value=expected)
+
+        tokenizer = Mock()
+        result = _build_model_thinking_token_sequences(self._model_config(Model), tokenizer)
+
+        self.assertEqual(result, expected)
+        Model.build_thinking_token_sequences.assert_called_once_with(tokenizer)
+
+    def test_model_builder_failure_propagates(self):
+        class Model:
+            build_thinking_token_sequences = Mock(side_effect=ValueError("invalid tokenizer markers"))
+
+        with self.assertRaisesRegex(ValueError, "invalid tokenizer markers"):
+            _build_model_thinking_token_sequences(self._model_config(Model), Mock())

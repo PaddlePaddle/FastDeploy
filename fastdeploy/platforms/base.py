@@ -31,6 +31,7 @@ class _Backend(enum.Enum):
     HPU_ATTN = enum.auto()
     FLASH_MASK_ATTN = enum.auto()
     DECODE_UNIFIED_ATTN = enum.auto()
+    INFLLMV2_ATTN = enum.auto()
 
 
 class Platform:

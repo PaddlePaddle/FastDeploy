@@ -78,6 +78,19 @@ class ModelRunnerBase(ABC):
         """
         raise NotImplementedError
 
+    def register_model_logits_processors(self) -> None:
+        """Register optional logits processors owned by the loaded model."""
+        provider = getattr(self.get_model(), "get_logits_processors", None)
+        if provider is None:
+            return
+        processors = provider()
+        if not isinstance(processors, (list, tuple)):
+            raise TypeError("get_logits_processors() must return a list or tuple")
+        registered = self.share_inputs["logits_processors"]
+        for processor in processors:
+            if all(processor is not current for current in registered):
+                registered.append(processor)
+
     @abstractmethod
     def execute_model(
         self,

@@ -111,6 +111,40 @@ def try_match_architecture_defaults(
     return None
 
 
+def validate_thinking_token_sequences(value, vocab_size: int) -> Optional[dict]:
+    """Validate the internal multi-token thinking marker transport contract."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise ValueError("think_token_sequences must be a dict or null")
+    expected_keys = {"start", "end", "forced_end"}
+    if set(value) != expected_keys:
+        raise ValueError("think_token_sequences must contain exactly start, end, and forced_end")
+
+    for name in ("start", "end"):
+        sequences = value[name]
+        if not isinstance(sequences, (list, tuple)) or not sequences:
+            raise ValueError(f"think_token_sequences.{name} must be a non-empty list of token id sequences")
+        for sequence in sequences:
+            if not isinstance(sequence, (list, tuple)) or not sequence:
+                raise ValueError(f"think_token_sequences.{name} entries must be non-empty token id sequences")
+            if any(isinstance(token_id, bool) or not isinstance(token_id, int) for token_id in sequence):
+                raise ValueError(f"think_token_sequences.{name} token ids must be integers")
+            if any(token_id < 0 or token_id >= vocab_size for token_id in sequence):
+                raise ValueError(
+                    f"think_token_sequences.{name} token ids must be in vocabulary range [0, {vocab_size})"
+                )
+
+    forced_end = value["forced_end"]
+    if not isinstance(forced_end, (list, tuple)) or not forced_end:
+        raise ValueError("think_token_sequences.forced_end must be a non-empty token id sequence")
+    if any(isinstance(token_id, bool) or not isinstance(token_id, int) for token_id in forced_end):
+        raise ValueError("think_token_sequences.forced_end token ids must be integers")
+    if any(token_id < 0 or token_id >= vocab_size for token_id in forced_end):
+        raise ValueError(f"think_token_sequences.forced_end token ids must be in vocabulary range [0, {vocab_size})")
+    return value
+
+
 class MoEPhase:
     """
     The generation phase of the moe.
@@ -209,6 +243,7 @@ class ModelConfig:
         self.is_moe_quantized = False
         self.max_model_len = 0
         self.dtype = "bfloat16"
+        self._model_info = None
         self.enable_logprob = False
         self.max_logprobs = 20
         self.logprobs_mode = "raw_logprobs"
@@ -286,6 +321,11 @@ class ModelConfig:
         self.ori_vocab_size = args.get("ori_vocab_size", self.vocab_size)
         self.think_start_id = args.get("think_start_id", -1)
         self.think_end_id = args.get("think_end_id", -1)
+        # Optional multi-token marker mode. The processor validates the exact
+        # {"start": [[...]], "end": [[...]], "forced_end": [...]} contract.
+        self.think_token_sequences = validate_thinking_token_sequences(
+            args.get("think_token_sequences"), self.vocab_size
+        )
         self.im_patch_id = args.get("image_patch_id", -1)
         self.line_break_id = args.get("line_break_id", -1)
         self.think_truncate_prompt_ids = args.get("think_truncate_prompt_ids", [-1])

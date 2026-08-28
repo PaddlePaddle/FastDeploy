@@ -41,7 +41,7 @@ from tqdm import tqdm
 
 import fastdeploy.metrics.trace as tracing
 from fastdeploy.cache_manager.cache_data import CacheStatus
-from fastdeploy.config import FDConfig
+from fastdeploy.config import FDConfig, validate_thinking_token_sequences
 from fastdeploy.engine.register_manager import RegisterManager
 from fastdeploy.engine.request import (
     ControlRequest,
@@ -122,6 +122,23 @@ def _format_worker_launch_failure_message(paddle_log_dir: str) -> str:
     if traceback_text:
         return f"{message}\n{traceback_text}"
     return message
+
+
+def _build_model_thinking_token_sequences(model_config, tokenizer) -> Optional[dict]:
+    """Invoke a model-owned tokenizer marker builder when the model provides one.
+
+    model_config._model_info is set only after ModelConfig._post_init completed
+    registry inspection (which already imported the model class), so resolving
+    the class here never re-imports model modules on the engine side.
+    """
+    if model_config._model_info is None:
+        return None
+    model_cls, _ = model_config.registry.resolve_model_cls(model_config.architectures)
+    builder = getattr(model_cls, "build_thinking_token_sequences", None)
+    if builder is None:
+        return None
+    sequences = builder(tokenizer)
+    return validate_thinking_token_sequences(sequences, model_config.vocab_size)
 
 
 class EngineService:
@@ -2553,12 +2570,20 @@ class EngineService:
         if think_start_id >= 0:
             self.llm_logger.info(f"Get think_start_id {think_start_id} from vocab.")
         else:
-            self.llm_logger.info("No <think> token found in vocabulary, the model can not do reasoning.")
+            self.llm_logger.info("No single-token <think> marker found in vocabulary.")
         think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
         if think_end_id >= 0:
             self.llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
         else:
-            self.llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+            self.llm_logger.info("No single-token </think> marker found in vocabulary.")
+        # MiniCPM4.1: <think>/</think> are multi-token; derive via model hook when single-token ids are absent.
+        think_token_sequences = None
+        if think_start_id < 0 or think_end_id < 0:
+            think_token_sequences = _build_model_thinking_token_sequences(
+                self.cfg.model_config, self.data_processor.tokenizer
+            )
+            if think_token_sequences is not None:
+                self.llm_logger.info(f"Get think_token_sequences {think_token_sequences} from tokenizer.")
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
         if line_break_id < 0:
@@ -2607,6 +2632,7 @@ class EngineService:
             f" --ori_vocab_size {ori_vocab_size}"
             f" --think_start_id {think_start_id}"
             f" --think_end_id {think_end_id}"
+            f" --think_token_sequences '{json.dumps(think_token_sequences)}'"
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
             f" --speculative_config '{self.cfg.speculative_config.to_json_string()}'"

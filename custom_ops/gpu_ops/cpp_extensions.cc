@@ -64,6 +64,57 @@ paddle::Tensor CustomNumpyToTensor(py::array numpy_array,
   return tensor;
 }
 
+std::vector<paddle::Tensor> InfLLMV2UpdateCompressedK(
+    const paddle::Tensor& current_tokens,
+    const paddle::Tensor& key_cache,
+    paddle::Tensor& compressed_k,
+    paddle::Tensor& compressed_k2,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    int kernel_size,
+    int kernel_stride);
+
+std::vector<paddle::Tensor> InfLLMV2SelectBlocks(
+    const paddle::Tensor& query,
+    const paddle::Tensor& compressed_k,
+    const paddle::Tensor& compressed_k2,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    paddle::Tensor& topk_indices,
+    paddle::Tensor& block_scores,
+    paddle::Tensor& selected_counts,
+    paddle::Tensor& coarse_lse,
+    paddle::Tensor& coarse_partial_max,
+    paddle::Tensor& coarse_partial_sum,
+    int block_size,
+    int kernel_size,
+    int kernel_stride,
+    int topk,
+    int dense_len,
+    int init_blocks,
+    int local_blocks);
+
+std::vector<paddle::Tensor> InfLLMV2AttentionForward(
+    const paddle::Tensor& query,
+    const paddle::Tensor& key_cache,
+    const paddle::Tensor& value_cache,
+    const paddle::Tensor& block_tables,
+    const paddle::Tensor& seq_lens_decoder,
+    const paddle::Tensor& seq_lens_this_time,
+    const paddle::Tensor& batch_id_per_token,
+    const paddle::Tensor& cu_seqlens_q,
+    const paddle::Tensor& topk_indices,
+    paddle::Tensor& out,
+    paddle::Tensor& partial_acc,
+    paddle::Tensor& partial_max,
+    paddle::Tensor& partial_sum);
+
 void FlashAttentionMask(const paddle::Tensor& q_input,
                         const paddle::Tensor& k_input,
                         const paddle::Tensor& v_input,
@@ -2009,6 +2060,15 @@ PYBIND11_MODULE(fastdeploy_ops, m) {
         "reasoning_phase_token_constraint function");
 
   m.def("get_attn_mask_q", &get_attn_mask_q, "get_attn_mask_q function");
+  m.def("infllmv2_update_compressed_k",
+        &InfLLMV2UpdateCompressedK,
+        "infllmv2_update_compressed_k function");
+  m.def("infllmv2_select_blocks",
+        &InfLLMV2SelectBlocks,
+        "infllmv2_select_blocks function");
+  m.def("infllmv2_attention_forward",
+        &InfLLMV2AttentionForward,
+        "infllmv2_attention_forward function");
 
   m.def("custom_numpy_to_tensor",
         &CustomNumpyToTensor,

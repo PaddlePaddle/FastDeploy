@@ -39,6 +39,7 @@ import fastdeploy.metrics.trace as tracing
 from fastdeploy.engine.args_utils import EngineArgs
 from fastdeploy.engine.common_engine import (
     EngineService,
+    _build_model_thinking_token_sequences,
     _format_worker_launch_failure_message,
 )
 from fastdeploy.engine.expert_service import start_data_parallel_service
@@ -570,12 +571,19 @@ class LLMEngine:
         if think_start_id >= 0:
             llm_logger.info(f"Get think_start_id {think_start_id} from vocab.")
         else:
-            llm_logger.info("No <think> token found in vocabulary, the model can not do reasoning.")
+            llm_logger.info("No single-token <think> marker found in vocabulary.")
         think_end_id = self.data_processor.tokenizer.get_vocab().get("</think>", -1)
         if think_end_id >= 0:
             llm_logger.info(f"Get think_end_id {think_end_id} from vocab.")
         else:
-            llm_logger.info("No </think> token found in vocabulary, the model can not do reasoning.")
+            llm_logger.info("No single-token </think> marker found in vocabulary.")
+        think_token_sequences = None
+        if think_start_id < 0 or think_end_id < 0:
+            think_token_sequences = _build_model_thinking_token_sequences(
+                self.cfg.model_config, self.data_processor.tokenizer
+            )
+            if think_token_sequences is not None:
+                llm_logger.info(f"Get think_token_sequences {think_token_sequences} from tokenizer.")
         image_patch_id = self.data_processor.tokenizer.get_vocab().get("<|IMAGE_PLACEHOLDER|>", -1)
         line_break_id = self.data_processor.tokenizer.get_vocab().get("\n", -1)
         if line_break_id < 0:
@@ -645,6 +653,7 @@ class LLMEngine:
             f" --ori_vocab_size {ori_vocab_size}"
             f" --think_start_id {think_start_id}"
             f" --think_end_id {think_end_id}"
+            f" --think_token_sequences '{json.dumps(think_token_sequences)}'"
             f" --image_patch_id {image_patch_id}"
             f" --line_break_id {line_break_id}"
             f" --think_truncate_prompt_ids '{json.dumps(think_truncate_prompt_ids)}'"
