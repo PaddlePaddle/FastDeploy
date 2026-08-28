@@ -41,7 +41,15 @@ func main() {
 	}
 
 	// Initialize logger
-	logger.Init(cfg.Log.Level, cfg.Log.Output)
+	logCfg := logger.Config{
+		Level:               cfg.Log.Level,
+		Output:              cfg.Log.Output,
+		Dir:                 cfg.Log.Dir,
+		MaxAgeDays:          cfg.Log.MaxAgeDays,
+		MaxTotalSizeMB:      cfg.Log.MaxTotalSizeMB,
+		CleanupIntervalSecs: cfg.Log.CleanupIntervalSecs,
+	}
+	logger.Init(logCfg)
 	defer logger.CloseLogFile()
 
 	// Initialize manager
@@ -59,6 +67,7 @@ func main() {
 	go scheduler_handler.StartBackupCleanupTask(context.Background(), intervalCleanupSecs)
 	statsIntervalSecs := cfg.Scheduler.StatsIntervalSecs
 	go scheduler_handler.StartStatsReporter(context.Background(), statsIntervalSecs)
+	go logger.StartLogCleanup(context.Background(), logCfg)
 
 	// Start server
 	addr := ":" + cfg.Server.Port

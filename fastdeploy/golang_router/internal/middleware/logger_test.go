@@ -12,7 +12,7 @@ import (
 
 func init() {
 	// Initialize logger to avoid nil pointer dereference in recovery middleware
-	logger.Init("info", "stdout")
+	logger.Init(logger.Config{Level: "info", Output: "stdout"})
 }
 
 func TestLoggerMiddleware(t *testing.T) {
