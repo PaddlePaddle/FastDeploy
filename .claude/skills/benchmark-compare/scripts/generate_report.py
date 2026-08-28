@@ -86,8 +86,8 @@ def parse_benchmark_log(filepath):
 def scan_log_dir(log_dir):
     """扫描日志目录，自动识别场景并提取指标
 
-    文件命名约定: *_bs<N>_[<quant>_]<fd|sg>.txt
-    例如: GLM-4.7-Flash_long_bs32_fd.txt, GLM-4.7-Flash_long_bs512_fp8_sg.txt
+    文件命名约定: *_bs<N>_[<quant>_]<fd|sg|vllm>.txt
+    例如: GLM-4.7-Flash_long_bs32_fd.txt, GLM-4.7-Flash_long_bs512_fp8_vllm.txt
     """
     data = {}
     if not os.path.isdir(log_dir):
@@ -101,11 +101,11 @@ def scan_log_dir(log_dir):
             filepath = os.path.join(root, fname)
 
             # 尝试从文件名解析场景信息
-            # 格式: *_bs<N>_[<quant>_]<fd|sg>.txt
-            m = re.search(r"_bs(\d+)_(?:(fp8|bf16|wint4|wint8)_)?(fd|sg)\.txt$", fname, re.IGNORECASE)
+            # 格式: *_bs<N>_[<quant>_]<fd|sg|vllm>.txt
+            m = re.search(r"_bs(\d+)_(?:(fp8|bf16|wint4|wint8)_)?(fd|sg|vllm)\.txt$", fname, re.IGNORECASE)
             if not m:
                 # 也尝试无 quant 的模式 (默认 bf16)
-                m = re.search(r"_bs(\d+)_(fd|sg)\.txt$", fname, re.IGNORECASE)
+                m = re.search(r"_bs(\d+)_(fd|sg|vllm)\.txt$", fname, re.IGNORECASE)
                 if m:
                     bs = m.group(1)
                     quant = "bf16"
@@ -826,10 +826,17 @@ def main():
     parser.add_argument("--max-model-len", type=int, default=65536, help="最大模型长度")
     parser.add_argument("--fd-attention", default="MLA_ATTN (FlashAttn v3)", help="FD Attention Backend")
     parser.add_argument("--sg-attention", default="flashmla", help="SG Attention Backend")
+    parser.add_argument("--vllm-attention", default="flash-attn", help="vLLM Attention Backend")
     parser.add_argument("--sg-version", default="", help="SGLang 版本")
+    parser.add_argument("--vllm-version", default="", help="vLLM 版本")
     parser.add_argument("--fd-commit-date", default="", help="FD commit 日期")
     parser.add_argument("--fd-commit-short", default="", help="FD commit 短 hash")
     parser.add_argument("--fd-commit-full", default="", help="FD commit 完整 hash")
+
+    # 框架选择（三选二对比）
+    parser.add_argument(
+        "--frameworks", default="fd,sg", help="对比哪两个框架，逗号分隔（如 vllm,sg 或 fd,vllm），默认 fd,sg"
+    )
 
     # 显示配置
     parser.add_argument("--default-quant", default="bf16", help="默认量化选择")
@@ -853,21 +860,40 @@ def main():
         print("[ERROR] 未找到有效的 benchmark 数据", file=sys.stderr)
         sys.exit(1)
 
-    # 过滤掉不完整的场景（缺少 fd 或 sg）
+    # 解析 --frameworks，决定对比哪两个框架；把它们映射到现有 HTML 模板的 fd/sg 槽位
+    fw_list = [x.strip().lower() for x in args.frameworks.split(",") if x.strip()]
+    if len(fw_list) != 2 or any(x not in ("fd", "sg", "vllm") for x in fw_list):
+        print(f"[ERROR] --frameworks 必须为 fd/sg/vllm 中的两个，逗号分隔，得到: {args.frameworks}", file=sys.stderr)
+        sys.exit(1)
+    left_fw, right_fw = fw_list[0], fw_list[1]
+
+    framework_display = {"fd": "FastDeploy", "sg": "SGLang", "vllm": "vLLM"}
+    # framework_attn_key = {"fd": "fd_attention", "sg": "sg_attention", "vllm": "vllm_attention"}
+    framework_attn_val = {
+        "fd": args.fd_attention,
+        "sg": args.sg_attention,
+        "vllm": args.vllm_attention,
+    }
+    framework_version = {"fd": "", "sg": args.sg_version, "vllm": args.vllm_version}
+
+    # 把所选两个框架的数据映射到 fd/sg 槽位 (left→fd, right→sg)
     valid_data = {}
     for key, val in benchmark_data.items():
-        if "fd" in val and "sg" in val and val["fd"] and val["sg"]:
-            valid_data[key] = val
+        left_val = val.get(left_fw)
+        right_val = val.get(right_fw)
+        if left_val and right_val:
+            valid_data[key] = {"fd": left_val, "sg": right_val}
         else:
-            print(f"[WARN] 场景 {key} 数据不完整，跳过", file=sys.stderr)
+            print(f"[WARN] 场景 {key} 缺少 {left_fw} 或 {right_fw} 数据，跳过", file=sys.stderr)
 
     if not valid_data:
-        print("[ERROR] 没有完整的对比场景数据", file=sys.stderr)
+        print(f"[ERROR] 没有完整的 {left_fw} vs {right_fw} 对比场景数据", file=sys.stderr)
         sys.exit(1)
 
+    print(f"[INFO] 对比框架: {framework_display[left_fw]} vs {framework_display[right_fw]}")
     print(f"[INFO] 有效场景: {', '.join(sorted(valid_data.keys()))}")
 
-    # 构建配置
+    # 构建配置（fd 槽=left_fw, sg 槽=right_fw）
     config = {
         "model_name": args.model_name,
         "model_type": args.model_type,
@@ -879,12 +905,12 @@ def main():
         "dp_size": args.dp,
         "ep_size": args.ep,
         "max_model_len": args.max_model_len,
-        "fd_attention": args.fd_attention,
-        "sg_attention": args.sg_attention,
-        "sg_version": args.sg_version,
-        "fd_commit_date": args.fd_commit_date,
-        "fd_commit_short": args.fd_commit_short,
-        "fd_commit_full": args.fd_commit_full,
+        "fd_attention": framework_attn_val[left_fw],
+        "sg_attention": framework_attn_val[right_fw],
+        "sg_version": framework_version[right_fw],
+        "fd_commit_date": args.fd_commit_date if left_fw == "fd" else "",
+        "fd_commit_short": args.fd_commit_short if left_fw == "fd" else "",
+        "fd_commit_full": args.fd_commit_full if left_fw == "fd" else "",
         "default_quant": args.default_quant,
         "default_bs": args.default_bs,
         "test_date": args.test_date,
@@ -894,6 +920,21 @@ def main():
 
     # 生成 HTML
     html = generate_html(valid_data, config)
+
+    # 把模板里的 "FastDeploy"/"SGLang" 文本标签替换为所选框架名
+    # 注意：CSS 类名 .fd / .sg / fd-c / sg-c 等保持不变（只是颜色样式）
+    left_name = framework_display[left_fw]
+    right_name = framework_display[right_fw]
+    if left_name != "FastDeploy" or right_name != "SGLang":
+        # 用 placeholder 中转避免 FastDeploy→X 后再被 SGLang 替换误伤
+        html = html.replace("FastDeploy", "__LEFT_FW__")
+        html = html.replace("SGLang", "__RIGHT_FW__")
+        html = html.replace("__LEFT_FW__", left_name)
+        html = html.replace("__RIGHT_FW__", right_name)
+        # FD 优势 / FD 文本也替换
+        html = html.replace("FD 优势", f"{left_name} 优势")
+        html = html.replace(">FD<", f">{left_name}<")
+        html = html.replace(">SG<", f">{right_name}<")
 
     with open(args.output, "w", encoding="utf-8") as f:
         f.write(html)

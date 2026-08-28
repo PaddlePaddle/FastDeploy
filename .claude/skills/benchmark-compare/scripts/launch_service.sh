@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # launch_service.sh — 通用推理框架服务启动脚本
-# 支持 FastDeploy / SGLang，支持单卡/多卡 TP/DP/EP/PD 分离模式
+# 支持 FastDeploy / SGLang / vLLM，支持单卡/多卡 TP/DP/EP/PD 分离模式
 set -euo pipefail
 
 # ============================================================
@@ -28,7 +28,7 @@ usage() {
 用法: bash launch_service.sh [OPTIONS]
 
 必需参数:
-  --framework <fd|sg>         推理框架 (fd=FastDeploy, sg=SGLang)
+  --framework <fd|sg|vllm>    推理框架 (fd=FastDeploy, sg=SGLang, vllm=vLLM)
   --model <PATH>              模型权重路径
   --port <PORT>               服务端口
   --gpus <DEVICES>            CUDA_VISIBLE_DEVICES (如 "0" 或 "0,1,2,3,4,5,6,7")
@@ -40,6 +40,7 @@ usage() {
   --ep <N>                    expert-parallel-size, MoE 模型专用 (默认: 0, 不启用)
                               FD: 映射为 --enable-expert-parallel (EP=TP×DP 隐式)
                               SG: 映射为 --ep-size N
+                              vLLM: 映射为 --enable-expert-parallel
   --concurrency <N>           max-num-seqs / max-running-requests (默认: 32)
   --max-model-len <N>         最大序列长度 (默认: 65536)
   --quantization <TYPE>       量化方式: none|block_wise_fp8|fp8|wint4|wint8 (默认: none)
@@ -61,6 +62,10 @@ usage() {
   # TP=4 + DP=2 + EP=8 启动 SGLang (MoE, 8卡)
   bash launch_service.sh --framework sg --model /path/to/model --port 8280 \
     --gpus 0,1,2,3,4,5,6,7 --tp 4 --dp 2 --ep 8 --venv /path/to/sglang_env/.venv
+
+  # 单卡启动 vLLM
+  bash launch_service.sh --framework vllm --model /path/to/model --port 8380 \
+    --gpus 2 --venv /path/to/vllm_env/.venv
 EOF
     exit "${1:-0}"
 }
@@ -94,8 +99,8 @@ if [[ -z "$FRAMEWORK" || -z "$MODEL" || -z "$PORT" || -z "$GPUS" || -z "$VENV" ]
     usage 1
 fi
 
-if [[ "$FRAMEWORK" != "fd" && "$FRAMEWORK" != "sg" ]]; then
-    echo "错误: --framework 必须为 fd 或 sg"
+if [[ "$FRAMEWORK" != "fd" && "$FRAMEWORK" != "sg" && "$FRAMEWORK" != "vllm" ]]; then
+    echo "错误: --framework 必须为 fd / sg / vllm"
     exit 1
 fi
 
@@ -268,11 +273,73 @@ launch_sglang() {
 }
 
 # ============================================================
+# 启动 vLLM
+# ============================================================
+launch_vllm() {
+    echo "[INFO] 启动 vLLM 服务..."
+    echo "  模型: $MODEL"
+    echo "  端口: $PORT"
+    echo "  GPU: $GPUS (TP=$TP, DP=$DP, EP=$EP)"
+    echo "  并发: $CONCURRENCY"
+    echo "  量化: $QUANTIZATION"
+    echo "  日志: $LOG_FILE"
+
+    source "$VENV/bin/activate"
+
+    export CUDA_VISIBLE_DEVICES="$GPUS"
+
+    # DP 模式下设置 MASTER_PORT 避免冲突
+    if [[ "$DP" -gt 1 ]]; then
+        export VLLM_MASTER_PORT=${VLLM_MASTER_PORT:-46000}
+        echo "[INFO] DP=$DP, 设置 VLLM_MASTER_PORT=$VLLM_MASTER_PORT 避免端口冲突"
+    fi
+
+    # 构建命令
+    local CMD="python -m vllm.entrypoints.openai.api_server"
+    CMD+=" --model $MODEL"
+    CMD+=" --host 0.0.0.0"
+    CMD+=" --port $PORT"
+    CMD+=" --tensor-parallel-size $TP"
+    CMD+=" --max-model-len $MAX_MODEL_LEN"
+    CMD+=" --max-num-seqs $CONCURRENCY"
+    CMD+=" --gpu-memory-utilization $GPU_MEM_UTIL"
+    CMD+=" --trust-remote-code"
+
+    # DP (data parallelism)
+    if [[ "$DP" -gt 1 ]]; then
+        CMD+=" --data-parallel-size $DP"
+    fi
+
+    # EP (expert parallelism)
+    if [[ "$EP" -gt 0 ]]; then
+        CMD+=" --enable-expert-parallel"
+    fi
+
+    # 量化（vLLM 用 fp8 / awq / gptq 等；映射 FD 的 block_wise_fp8 → fp8）
+    if [[ "$QUANTIZATION" != "none" ]]; then
+        local VQ="$QUANTIZATION"
+        [[ "$VQ" == "block_wise_fp8" ]] && VQ="fp8"
+        CMD+=" --quantization $VQ"
+    fi
+
+    # 额外参数
+    if [[ -n "$EXTRA_ARGS" ]]; then
+        CMD+=" $EXTRA_ARGS"
+    fi
+
+    echo "[INFO] 执行: $CMD"
+    nohup bash -c "$CMD" > "$LOG_FILE" 2>&1 &
+    echo $! > "/tmp/vllm_pid_${PORT}"
+    echo "[INFO] vLLM PID: $! (已写入 /tmp/vllm_pid_${PORT})"
+}
+
+# ============================================================
 # 主入口
 # ============================================================
 case "$FRAMEWORK" in
-    fd) launch_fastdeploy ;;
-    sg) launch_sglang ;;
+    fd)   launch_fastdeploy ;;
+    sg)   launch_sglang ;;
+    vllm) launch_vllm ;;
 esac
 
 echo "[INFO] 服务已在后台启动，请使用 health_check.sh 等待就绪"
