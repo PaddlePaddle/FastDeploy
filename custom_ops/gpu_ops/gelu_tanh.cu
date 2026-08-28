@@ -89,7 +89,7 @@ std::vector<paddle::Tensor> GeluTanh(paddle::Tensor& input) {
   DISPATCH_FLOAT_FP6_DTYPE(input.dtype(), scalar_t, {
     uint32_t vec_size = 16 / sizeof(scalar_t);
     dim3 grid(num_tokens);
-    dim3 block(std::max(d / vec_size, 1024U));
+    dim3 block(std::min(d / vec_size, 1024U));
 
 #ifdef PADDLE_WITH_CUSTOM_DEVICE_METAX_GPU
     gelu_tanh_kernel<scalar_t><<<grid, block, 0, stream>>>(

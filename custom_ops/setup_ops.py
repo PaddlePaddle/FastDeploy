@@ -738,6 +738,10 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         "metax_ops/cache_kv_with_rope.cu",
         "metax_ops/cpp_extensions.cc",
         "metax_ops/split_merge_qkv.cu",
+        "metax_ops/rotary_position_embedding.cu",
+        "metax_ops/write_cache_kv.cu",
+        "metax_ops/write_cache_kv_with_rope.cu",
+        "metax_ops/flash_attention.cu",
     ]
 
     sources += find_end_files("gpu_ops/speculate_decoding", ".cu")
@@ -756,40 +760,13 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
         ],
     }
 
-    def get_maca_version(version_file: str = "/opt/maca/Version.txt") -> list[int]:
-        try:
-            with open(version_file, "r", encoding="utf-8") as f:
-                version_str = f.readline().strip()
-                target_version = [int(part) for part in version_str.split(":")[1].split(".")]
-        except Exception as e:
-            print(f"Trigger exception: {type(e).__name__} - {e}")
-            raise
-        return target_version
-
-    maca_version = get_maca_version(f"{maca_path}/Version.txt")
-    if len(maca_version) == 4:
-        major_version = maca_version[0]
-        minor_version = maca_version[1]
-        patch_version = maca_version[2]
-        build_version = maca_version[3]
-
-        cur_maca_version = (
-            ((major_version & 0xFF) << 24)
-            | ((minor_version & 0xFF) << 16)
-            | ((patch_version & 0xFF) << 8)
-            | ((build_version & 0xFF) << 0)
-        )
-        metax_extra_compile_args["nvcc"].append(f"-DMACA_VERSION={cur_maca_version}")
-    else:
-        raise ValueError(f"MACA version invalid - {maca_version}")
-
     setup(
         name="fastdeploy_ops",
         ext_modules=CUDAExtension(
             sources=sources,
             extra_compile_args=metax_extra_compile_args,
             library_dirs=[os.path.join(maca_path, "lib")],
-            extra_link_args=["-lruntime_cu", "-lmctlassEx"],
+            extra_link_args=["-lruntime_cu", "-lmctlassEx", "-lmcFlashAttn"],
             include_dirs=[
                 os.path.join(maca_path, "include"),
                 os.path.join(maca_path, "include/mcr"),
@@ -799,6 +776,7 @@ elif paddle.device.is_compiled_with_custom_device("metax_gpu"):
                 os.path.join(maca_path, "include/mcsparse"),
                 os.path.join(maca_path, "include/mcblas"),
                 os.path.join(maca_path, "include/mcsolver"),
+                os.path.join(maca_path, "include/flash_attn"),
             ],
         ),
     )

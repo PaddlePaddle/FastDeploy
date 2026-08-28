@@ -35,7 +35,7 @@ from fastdeploy.engine.request import ImagePosition, Request, RequestType
 from fastdeploy.engine.tasks import PoolingTask
 from fastdeploy.input.image_processors.adaptive_processor import AdaptiveImageProcessor
 from fastdeploy.inter_communicator import IPCSignal, ZmqIpcClient
-from fastdeploy.model_executor.forward_meta import ForwardMeta
+from fastdeploy.model_executor.forward_meta import MetaxForwardMeta
 from fastdeploy.model_executor.graph_optimization.utils import (
     profile_run_guard,
     sot_warmup_guard,
@@ -195,7 +195,7 @@ class MetaxModelRunner(ModelRunnerBase):
         self._initialize_attn_backend()
 
         # Forward meta store the global meta information of the forward
-        self.forward_meta: ForwardMeta = None
+        self.forward_meta: MetaxForwardMeta = None
 
         # Postprocess Env params
         os.environ["INFERENCE_MSG_QUEUE_ID"] = str(self.parallel_config.local_engine_worker_queue_port)
@@ -1243,7 +1243,7 @@ class MetaxModelRunner(ModelRunnerBase):
         routing_replay_table = None
         if self.routing_replay_manager is not None:
             routing_replay_table = self.routing_replay_manager.get_routing_table()
-        self.forward_meta = ForwardMeta(
+        self.forward_meta = MetaxForwardMeta(
             ids_remove_padding=self.share_inputs["ids_remove_padding"],
             rotary_embs=self.share_inputs["rope_emb"],
             attn_backend=self.attn_backends[0],
@@ -1270,6 +1270,7 @@ class MetaxModelRunner(ModelRunnerBase):
             kv_tile_ids_per_batch=self.share_inputs["kv_tile_ids_per_batch"],
             kv_num_blocks_x_cpu=self.share_inputs["kv_num_blocks_x_cpu"],
             routing_replay_table=routing_replay_table,
+            rotary_embs_bf16=(None if self.enable_mm else self.share_inputs["rope_emb"].astype(paddle.bfloat16)),
         )
 
         dist_status = self.collect_distributed_status()
