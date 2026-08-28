@@ -78,6 +78,14 @@ DLL_EXPORT int get_padding_offset(api::Context* ctx,
                                   const int bs,
                                   const int64_t token_num);
 
+DLL_EXPORT int get_attn_mask_q(api::Context* ctx,
+                               int* startend_row_indices,
+                               const int* attn_mask_kv,
+                               const int* cu_seqlens_q,
+                               const int* cu_seqlens_k,
+                               const int kv_token_num,
+                               const int max_batch_size);
+
 DLL_EXPORT int speculate_get_padding_offset(api::Context* ctx,
                                             int* batch_id_per_token,
                                             int* cum_offsets_out,
