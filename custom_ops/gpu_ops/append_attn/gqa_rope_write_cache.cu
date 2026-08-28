@@ -1408,12 +1408,30 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
     PADDLE_ENFORCE_EQ(rotary_embs.dims()[2], max_seq_len);
     PADDLE_ENFORCE_EQ(rotary_embs.dims()[3], 1);
     if (use_neox_rotary_style) {
-      // Note(ZKK) Qwen3 like model
-      // the [0,head_dim/2), [head_dim/2,head_dim) data are totally same!
       if (rotary_embs.dims()[4] == head_dim) {
+        // Note(ZKK) Qwen3 like model (head_dim=128):
+        // the [0,head_dim/2), [head_dim/2,head_dim) data are totally same!
         rotary_dim = head_dim;
+      } else if (head_dim == 256) {
+        // Qwen3.5 partial neox rotary style (head_dim=256,
+        // partial_rotary_factor=0.25): rotary_embs.dims()[4] == rotary_dim ==
+        // head_dim * partial_rotary_factor == 64
+        rotary_dim = rotary_embs.dims()[4] * 2;
+        PADDLE_ENFORCE_LE(rotary_dim,
+                          head_dim,
+                          "Qwen3.5: rotary_dim (%d) must be <= head_dim (%d)",
+                          rotary_dim,
+                          head_dim);
+        constexpr int kPackSize = 256 / 32;  // = 8
+        PADDLE_ENFORCE_EQ(
+            rotary_dim / 2 % kPackSize,
+            0,
+            "Qwen3.5: half rotary_dim (%d) must be divisible by PackSize (%d)",
+            rotary_dim / 2,
+            kPackSize);
       } else {
-        // for glm partial rotary style
+        // for glm partial rotary style (head_dim=128,
+        // rotary_embs.dims()[4]==head_dim/4)
         PADDLE_ENFORCE_EQ(rotary_embs.dims()[4], head_dim / 4);
         rotary_dim = head_dim / 2;
       }
@@ -1444,6 +1462,7 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   DISPATCH_BOOL_DTYPE(enforce_fmul_rn, EnforceFmulRN, {
     if (use_neox_rotary_style) {
       if (rotary_dim == head_dim) {
+        // Qwen3 (head_dim=128): full neox rotation
         gqa_rotary_qk_split_variable_qwen3<data_t, EnforceFmulRN>(
             qkv_out.data<data_t>(),
             q.data<data_t>(),
@@ -1463,7 +1482,30 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
             head_dim,
             rope_3d,
             stream);
+      } else if (head_dim == 256) {
+        // Qwen3.5 (head_dim=256): partial neox rotation, rotary_dim < head_dim
+        gqa_neox_partial_rotary_qk_split_variable_qwen3_5<data_t,
+                                                          EnforceFmulRN>(
+            qkv_out.data<data_t>(),
+            q.data<data_t>(),
+            k.data<data_t>(),
+            v.data<data_t>(),
+            qkv.data<data_t>(),
+            rotary_embs.data<float>(),
+            batch_id_per_token.data<int>(),
+            seq_lens_encoder.data<int>(),
+            seq_lens_decoder.data<int>(),
+            cu_seqlens_q.data<int>(),
+            cu_seqlens_k.data<int>(),
+            token_num,
+            num_heads,
+            kv_num_heads,
+            max_seq_len,
+            head_dim,
+            rotary_dim,
+            stream);
       } else {
+        // GLM-like: partial neox rotation, head_dim=128
         gqa_neox_partial_rotary_qk_split_variable<data_t, EnforceFmulRN>(
             qkv_out.data<data_t>(),
             q.data<data_t>(),
@@ -1512,27 +1554,29 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   })
 
   if (token_num < kv_token_num) {
-    AppendCacheKV<data_t, 128, 64>(key_cache,
-                                   value_cache,
-                                   cache_k_quant_scales,
-                                   cache_v_quant_scales,
-                                   cache_k_dequant_scales,
-                                   cache_v_dequant_scales,
-                                   cache_k_zp.get(),
-                                   cache_v_zp.get(),
-                                   seq_lens_this_time,
-                                   seq_lens_decoder,
-                                   cu_seqlens_k,
-                                   block_tables,
-                                   cache_batch_ids,
-                                   cache_tile_ids,
-                                   cache_num_blocks,
-                                   max_blocks_per_seq,
-                                   kv_num_heads,
-                                   cache_quant_type,
-                                   &k,
-                                   &v,
-                                   stream);
+    DISPATCH_GQA_ROPE_HEAD_DIM(head_dim, HEAD_DIM, {
+      AppendCacheKV<data_t, HEAD_DIM, 64>(key_cache,
+                                          value_cache,
+                                          cache_k_quant_scales,
+                                          cache_v_quant_scales,
+                                          cache_k_dequant_scales,
+                                          cache_v_dequant_scales,
+                                          cache_k_zp.get(),
+                                          cache_v_zp.get(),
+                                          seq_lens_this_time,
+                                          seq_lens_decoder,
+                                          cu_seqlens_k,
+                                          block_tables,
+                                          cache_batch_ids,
+                                          cache_tile_ids,
+                                          cache_num_blocks,
+                                          max_blocks_per_seq,
+                                          kv_num_heads,
+                                          cache_quant_type,
+                                          &k,
+                                          &v,
+                                          stream);
+    })
   }
   // write cache
   if (cache_quant_type == "none") {
@@ -1551,49 +1595,55 @@ std::vector<paddle::Tensor> GQARopeWriteCacheKernel(
   } else if (cache_quant_type == "cache_int8" ||
              cache_quant_type == "cache_fp8" ||
              cache_quant_type == "block_wise_fp8") {
-    CascadeAppendWriteCacheKVC8QKV<data_t, 128, 64>(
-        meta_data,
-        *const_cast<paddle::Tensor *>(&key_cache),
-        *const_cast<paddle::Tensor *>(&value_cache),
-        qkv_out,
-        cache_k_quant_scales.get(),
-        cache_v_quant_scales.get(),
-        seq_lens_this_time,
-        seq_lens_decoder,
-        batch_id_per_token,
-        cu_seqlens_q,
-        block_tables,
-        kv_batch_ids,
-        kv_tile_ids,
-        kv_num_blocks_data,
-        max_seq_len,
-        false,  // is_scale_channel_wise
-        cache_quant_type,
-        stream,
-        const_cast<paddle::Tensor *>(&key_cache),
-        const_cast<paddle::Tensor *>(&value_cache));
+    const int kv_num_blocks_data = kv_num_blocks.data<int>()[0];
+    DISPATCH_GQA_ROPE_HEAD_DIM(head_dim, HEAD_DIM, {
+      CascadeAppendWriteCacheKVC8QKV<data_t, HEAD_DIM, 64>(
+          meta_data,
+          *const_cast<paddle::Tensor *>(&key_cache),
+          *const_cast<paddle::Tensor *>(&value_cache),
+          qkv_out,
+          cache_k_quant_scales.get(),
+          cache_v_quant_scales.get(),
+          seq_lens_this_time,
+          seq_lens_decoder,
+          batch_id_per_token,
+          cu_seqlens_q,
+          block_tables,
+          kv_batch_ids,
+          kv_tile_ids,
+          kv_num_blocks_data,
+          max_seq_len,
+          false,  // is_scale_channel_wise
+          cache_quant_type,
+          stream,
+          const_cast<paddle::Tensor *>(&key_cache),
+          const_cast<paddle::Tensor *>(&value_cache));
+    })
   } else if (cache_quant_type == "cache_int4_zp") {
-    CascadeAppendWriteCacheKVC4QKV<data_t, 128, 64>(
-        meta_data,
-        *const_cast<paddle::Tensor *>(&key_cache),
-        *const_cast<paddle::Tensor *>(&value_cache),
-        qkv_out,
-        cache_k_quant_scales.get(),
-        cache_v_quant_scales.get(),
-        cache_k_zp.get(),
-        cache_v_zp.get(),
-        seq_lens_this_time,
-        seq_lens_decoder,
-        batch_id_per_token,
-        cu_seqlens_q,
-        block_tables,
-        kv_batch_ids,
-        kv_tile_ids,
-        kv_num_blocks_data,
-        max_seq_len,
-        stream,
-        const_cast<paddle::Tensor *>(&key_cache),
-        const_cast<paddle::Tensor *>(&value_cache));
+    const int kv_num_blocks_data = kv_num_blocks.data<int>()[0];
+    DISPATCH_GQA_ROPE_HEAD_DIM(head_dim, HEAD_DIM, {
+      CascadeAppendWriteCacheKVC4QKV<data_t, HEAD_DIM, 64>(
+          meta_data,
+          *const_cast<paddle::Tensor *>(&key_cache),
+          *const_cast<paddle::Tensor *>(&value_cache),
+          qkv_out,
+          cache_k_quant_scales.get(),
+          cache_v_quant_scales.get(),
+          cache_k_zp.get(),
+          cache_v_zp.get(),
+          seq_lens_this_time,
+          seq_lens_decoder,
+          batch_id_per_token,
+          cu_seqlens_q,
+          block_tables,
+          kv_batch_ids,
+          kv_tile_ids,
+          kv_num_blocks_data,
+          max_seq_len,
+          stream,
+          const_cast<paddle::Tensor *>(&key_cache),
+          const_cast<paddle::Tensor *>(&value_cache));
+    })
   } else {
     PD_THROW(
         "cache_quant_type_str should be one of [none, cache_int8, cache_fp8, "
