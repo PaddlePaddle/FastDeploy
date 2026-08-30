@@ -149,6 +149,7 @@ class MetricsManager(MetricsManagerInterface):
     generation_tokens_total: "Counter"
     request_prefill_time: "Histogram"
     request_decode_time: "Histogram"
+    request_reschedule_time: "Histogram"
     request_generation_tokens: "Histogram"
     request_success_total: "Counter"
     spec_decode_draft_acceptance_rate: "Gauge"
@@ -392,6 +393,12 @@ class MetricsManager(MetricsManagerInterface):
             "type": Histogram,
             "name": "fastdeploy:request_decode_time_seconds",
             "description": "Time spent in decode phase (from first token to last token)",
+            "kwargs": {"buckets": REQUEST_LATENCY_BUCKETS},
+        },
+        "request_reschedule_time": {
+            "type": Histogram,
+            "name": "fastdeploy:request_reschedule_time_seconds",
+            "description": "Time spent in reschedule",
             "kwargs": {"buckets": REQUEST_LATENCY_BUCKETS},
         },
         "request_generation_tokens": {
