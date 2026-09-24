@@ -507,7 +507,12 @@ class CompletionRequest(BaseModel):
     # For logits and logprobs post processing
     temp_scaled_logprobs: bool = False
     top_p_normalized_logprobs: bool = False
-    max_tokens: Optional[int] = None
+    # remove max_tokens when field is removed from OpenAI API
+    max_tokens: Optional[int] = Field(
+        default=None,
+        deprecated="max_tokens is deprecated in favor of the max_completion_tokens field",
+    )
+    max_completion_tokens: Optional[int] = None
     n: Optional[int] = 1
     presence_penalty: Optional[float] = Field(default=None, ge=-2, le=2)
     seed: Optional[int] = Field(default=None, ge=0, le=922337203685477580)
@@ -567,6 +572,11 @@ class CompletionRequest(BaseModel):
         for key, value in self.dict().items():
             if value is not None:
                 req_dict[key] = value
+
+        # max_completion_tokens takes priority over deprecated max_tokens
+        req_dict["max_tokens"] = (
+            self.max_completion_tokens if self.max_completion_tokens is not None else self.max_tokens
+        )
 
         if request_id is not None:
             req_dict["request_id"] = request_id
@@ -745,7 +755,9 @@ class ChatCompletionRequest(BaseModel):
         """
         req_dict = {}
 
-        req_dict["max_tokens"] = self.max_completion_tokens or self.max_tokens
+        req_dict["max_tokens"] = (
+            self.max_completion_tokens if self.max_completion_tokens is not None else self.max_tokens
+        )
         req_dict["logprobs"] = self.top_logprobs if self.logprobs else None
         req_dict["prompt_logprobs"] = self.prompt_logprobs
         req_dict["temp_scaled_logprobs"] = self.temp_scaled_logprobs
