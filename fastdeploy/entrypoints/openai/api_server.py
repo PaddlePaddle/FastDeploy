@@ -14,7 +14,6 @@
 """
 
 import asyncio
-import json
 import os
 import signal
 import threading
@@ -570,29 +569,6 @@ async def metrics():
     """
     metrics_text = get_filtered_metrics()
     return Response(metrics_text, media_type="text/plain")
-
-
-@metrics_app.get("/config-info")
-def config_info() -> Response:
-    """
-    Get the current configuration of the API server.
-    """
-    global llm_engine
-    if llm_engine is None:
-        return Response("Engine not loaded", status_code=500)
-    cfg = llm_engine.cfg
-
-    def process_object(obj):
-        if hasattr(obj, "__dict__"):
-            # 处理有__dict__属性的对象
-            return obj.__dict__
-        return None  # 或其他默认处理
-
-    cfg_dict = {k: v for k, v in cfg.__dict__.items()}
-    env_dict = {k: v() for k, v in environment_variables.items()}
-    cfg_dict["env_config"] = env_dict
-    result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
-    return Response(result_content, media_type="application/json")
 
 
 def run_metrics_server():
