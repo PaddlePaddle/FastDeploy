@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 import paddle
 from paddle import nn
 from paddle.distributed import fleet
@@ -10,6 +12,10 @@ from paddle.distributed.fleet.meta_parallel import (
 from paddleformers.transformers.model_utils import PretrainedModel
 from paddleformers.utils.log import logger
 
+from fastdeploy import envs
+from fastdeploy.model_executor.graph_optimization.vit_cudagraph_runner import (
+    Qwen3ViTCudaGraphRunner,
+)
 from fastdeploy.model_executor.layers.utils import get_tensor
 from fastdeploy.model_executor.models.qwen2_5_vl.dfnrope.modeling import (
     VisionFlashAttention2,
@@ -279,6 +285,18 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
         )
 
         self.out_hidden_size = vision_config.out_hidden_size * (1 + len(self.deepstack_visual_indexes))
+        self.enable_vit_cudagraph = paddle.is_compiled_with_cuda() and bool(envs.FD_VIT_ENABLE_CUDAGRAPH)
+        self.vit_cudagraph_runner: Optional[Qwen3ViTCudaGraphRunner] = None
+        if self.enable_vit_cudagraph:
+            self.vit_cudagraph_runner = Qwen3ViTCudaGraphRunner(
+                self,
+                max_graph_entries=int(envs.FD_VIT_CUDAGRAPH_MAX_GRAPH_ENTRIES),
+            )
+        logger.info(
+            f"[ViT CG][Qwen3] FD_VIT_ENABLE_CUDAGRAPH={bool(envs.FD_VIT_ENABLE_CUDAGRAPH)}, "
+            f"FD_VIT_CUDAGRAPH_MAX_GRAPH_ENTRIES={int(envs.FD_VIT_CUDAGRAPH_MAX_GRAPH_ENTRIES)}, "
+            f"enable_vit_cudagraph={self.enable_vit_cudagraph}"
+        )
         # self._set_model_format_attrs(model_format)
 
     def _set_model_format_attrs(self, model_format):
@@ -398,16 +416,27 @@ class Qwen3VisionTransformerPretrainedModel(PretrainedModel):
         cu_seqlens = self._build_cu_seqlens(grid_list)
         max_seqlen = self.compute_attn_mask_seqlen(cu_seqlens)
 
-        deepstack_features = []
-        for layer_id, block in enumerate(self.blocks):
-            hidden_states = block(hidden_states, cu_seqlens, max_seqlen, rotary_pos_emb)
-            if layer_id in self.deepstack_visual_indexes:
-                ds_idx = self.deepstack_visual_indexes.index(layer_id)
-                deepstack_features.append(self.deepstack_merger_list[ds_idx](hidden_states))
+        use_vit_cudagraph = (
+            self.enable_vit_cudagraph and self.vit_cudagraph_runner is not None and hidden_states.place.is_gpu_place()
+        )
+        if use_vit_cudagraph:
+            hidden_states = self.vit_cudagraph_runner.run(
+                hidden_states=hidden_states,
+                cu_seqlens=cu_seqlens,
+                max_seqlen=max_seqlen,
+                rotary_pos_emb=rotary_pos_emb,
+            )
+        else:
+            deepstack_features = []
+            for layer_id, block in enumerate(self.blocks):
+                hidden_states = block(hidden_states, cu_seqlens, max_seqlen, rotary_pos_emb)
+                if layer_id in self.deepstack_visual_indexes:
+                    ds_idx = self.deepstack_visual_indexes.index(layer_id)
+                    deepstack_features.append(self.deepstack_merger_list[ds_idx](hidden_states))
 
-        hidden_states = self.merger(hidden_states)
-        if deepstack_features:
-            hidden_states = paddle.concat([hidden_states] + deepstack_features, axis=1)
+            hidden_states = self.merger(hidden_states)
+            if deepstack_features:
+                hidden_states = paddle.concat([hidden_states] + deepstack_features, axis=1)
         return hidden_states
 
     def extract_feature(self, hidden_states: paddle.Tensor, grid_thw: paddle.Tensor) -> paddle.Tensor:
