@@ -68,7 +68,8 @@ class Test(unittest.TestCase):
         presence_score = paddle.ones([self.num_seqs, 1]) * 0.3
         temperature = paddle.ones([self.num_seqs, 1]) * 0.8
 
-        bad_tokens = paddle.to_tensor([[-1]]).cast("int64")
+        bad_tokens = paddle.zeros([self.num_seqs, 10]).cast("int64")
+        bad_tokens_len = paddle.zeros([self.num_seqs, 1]).cast("int64")
         min_dec_len = paddle.ones([self.num_seqs, 1]).cast("int64")
         eos_token_id = paddle.to_tensor([[2]]).cast("int64")
 
@@ -79,6 +80,7 @@ class Test(unittest.TestCase):
             "step_idx": step_idx,
             "logits": logits,
             "bad_tokens": bad_tokens,
+            "bad_tokens_len": bad_tokens_len,
             "min_dec_len": min_dec_len,
             "eos_token_id": eos_token_id,
             "penalty_score": penalty_score,
@@ -102,10 +104,11 @@ class Test(unittest.TestCase):
                 logits[bi, input_data["eos_token_id"]] = -1e10
 
         # bad words exclusion
-        for token in input_data["bad_tokens"]:
-            if token < 0 or token > self.vocab_size:
-                continue
-            logits[:, token] = -1e10
+        for bi in range(self.num_seqs):
+            for j in range(input_data["bad_tokens_len"][bi]):
+                token = input_data["bad_tokens"][bi, j]
+                if token >= 0 and token <= self.vocab_size:
+                    logits[bi, token] = -1e10
         # all penalties
         prompt_ids = input_data["prompt_ids"]
         for i in range(self.num_seqs):
@@ -159,6 +162,7 @@ class Test(unittest.TestCase):
             self.input_data["presence_score"],
             self.input_data["temperature"],
             self.input_data["bad_tokens"],
+            self.input_data["bad_tokens_len"],
             self.input_data["step_idx"],
             self.input_data["min_dec_len"],
             self.input_data["eos_token_id"],
