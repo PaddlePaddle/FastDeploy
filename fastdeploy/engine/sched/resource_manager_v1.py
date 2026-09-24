@@ -450,6 +450,16 @@ class ResourceManagerV1(ResourceManager):
                         LoggingEventName.PREEMPTED, preempted_req.request_id, getattr(preempted_req, "user", "")
                     )
                     llm_logger.info(f"Preemption is triggered! Preempted request id: {preempted_req.request_id}")
+                preempted_req.metrics.rescheduler_recv_req_time = time.time()
+                if preempted_req.metrics.inference_start_time is not None:
+                    request_reschedule_time = (
+                        preempted_req.metrics.rescheduler_recv_req_time - preempted_req.metrics.inference_start_time
+                        if preempted_req.metrics.rescheduler_recv_req_time is not None
+                        else 0.0
+                    )
+                    if request_reschedule_time > 0:
+                        main_process_metrics.request_reschedule_time.observe(request_reschedule_time)
+
                 preempted_reqs.append(preempted_req)
                 batch_request.add_request(self._prepare_preempt_task(preempted_req))
 
