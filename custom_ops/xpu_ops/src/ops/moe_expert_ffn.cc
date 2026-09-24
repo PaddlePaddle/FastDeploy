@@ -195,8 +195,7 @@ std::vector<paddle::Tensor> MoeExpertFFNKernel(
     const paddle::optional<paddle::Tensor>& ffn2_shift,
     const paddle::optional<paddle::Tensor>& ffn2_smooth,
     const std::string& quant_method,
-    const int hadamard_blocksize,
-    const int valid_token_num) {
+    const int hadamard_blocksize) {
   using XPU_TX1 = typename XPUTypeTrait<TX1>::Type;
   using XPU_TX2 = typename XPUTypeTrait<TX2>::Type;
   using XPU_TW = typename XPUTypeTrait<TW>::Type;
@@ -301,146 +300,13 @@ std::vector<paddle::Tensor> MoeExpertFFNKernel(
   paddle::Tensor ffn1_in_dense;
   paddle::Tensor ffn1_in_scale_per_token;
   convert_to_lod(&xctx, &xtoken_num_info, &xtoken_num_lod, expert_num);
-  if (FLAGS_MOE_FFN_USE_DENSE_INPUT && is_padding_input) {
-    if (quant_method == "w_channelwise_int4_a_expertwise_int8" ||
-        quant_method == "w_channelwise_int4_a_tokenwise_int8") {
-      ffn1_in_scale_per_token = paddle::empty(
-          {valid_token_num}, paddle::DataType::FLOAT32, ffn_in.place());
-      ffn1_in_dense = paddle::empty({valid_token_num, hidden_dim},
-                                    paddle::DataType::INT8,
-                                    ffn_in.place());
-      xffn1_in = xftblock::Tensor(ffn1_in_dense.data<int8_t>(),
-                                  nullptr,
-                                  ffn1_in_scale_per_token.data<float>(),
-                                  xftblock::DataType::DT_INT8,
-                                  {valid_token_num, hidden_dim});
-      if (std::is_same<XPU_TX1, int8_t>::value) {
-        PD_CHECK(ffn1_act_scale_data != nullptr,
-                 "need ffn1_act_scale for x int8 per expert input");
-        ret = infer_ops::sequence_unpad<float, int>(
-            xpu_ctx->x_context(),
-            ffn1_act_scale_data,
-            ffn1_in_scale_per_token.data<float>(),
-            xtoken_num_lod.data<int>(),
-            expert_num,
-            input_shape[1],
-            1,
-            true);
-        PD_CHECK(ret == 0);
-        ret = infer_ops::sequence_unpad<int8_t, int>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<const int8_t*>(ffn_in.data<int8_t>()),
-            reinterpret_cast<int8_t*>(xffn1_in.data<int8_t>()),
-            xtoken_num_lod.data<int>(),
-            expert_num,
-            input_shape[1],
-            input_shape[2],
-            true);
-        PD_CHECK(ret == 0);
-      } else {
-        ret = infer_ops::quant2d_per_expert<XPU_TX1>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<const XPU_TX1*>(ffn_in.data<TX1>()),
-            ffn1_act_scale_data,
-            xtoken_num_lod.data<int>(),
-            reinterpret_cast<int8_t*>(xffn1_in.data<int8_t>()),
-            ffn1_in_scale_per_token.data<float>(),
-            expert_num,
-            valid_token_num,
-            hidden_dim,
-            true,
-            false,
-            input_shape[1]);
-        PD_CHECK(ret == 0);
-      }
-    } else if (quant_method == "w_channelwise_int8_a_expertwise_int8" ||
-               quant_method == "w_channelwise_int8_a_tokenwise_int8") {
-      ffn1_in_scale_per_token = paddle::empty(
-          {valid_token_num}, paddle::DataType::FLOAT32, ffn_in.place());
-      ffn1_in_dense = paddle::empty({valid_token_num, hidden_dim},
-                                    paddle::DataType::INT8,
-                                    ffn_in.place());
-      xffn1_in = xftblock::Tensor(ffn1_in_dense.data<int8_t>(),
-                                  nullptr,
-                                  ffn1_in_scale_per_token.data<float>(),
-                                  xftblock::DataType::DT_INT8,
-                                  {valid_token_num, hidden_dim});
-      if (std::is_same<XPU_TX1, int8_t>::value) {
-        PD_CHECK(ffn1_act_scale_data != nullptr,
-                 "need ffn1_act_scale for x int8 per expert input");
-        ret = infer_ops::sequence_unpad<float, int>(
-            xpu_ctx->x_context(),
-            ffn1_act_scale_data,
-            ffn1_in_scale_per_token.data<float>(),
-            xtoken_num_lod.data<int>(),
-            expert_num,
-            input_shape[1],
-            1,
-            true);
-        PD_CHECK(ret == 0);
-        ret = infer_ops::sequence_unpad<int8_t, int>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<const int8_t*>(ffn_in.data<int8_t>()),
-            reinterpret_cast<int8_t*>(xffn1_in.data<int8_t>()),
-            xtoken_num_lod.data<int>(),
-            expert_num,
-            input_shape[1],
-            input_shape[2],
-            true);
-        PD_CHECK(ret == 0);
-      } else {
-        auto ffn1_in_unpad = paddle::empty(
-            {valid_token_num, hidden_dim}, ffn_in.dtype(), ffn_in.place());
-        ret = infer_ops::sequence_unpad<XPU_TX1, int>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<const XPU_TX1*>(ffn_in.data<TX1>()),
-            reinterpret_cast<XPU_TX1*>(ffn1_in_unpad.data<TX1>()),
-            xtoken_num_lod.data<int>(),
-            expert_num,
-            input_shape[1],
-            input_shape[2],
-            true);
-        PD_CHECK(ret == 0);
-        ret = infer_ops::quant2d_per_token<XPU_TX1, float, int8_t>(
-            xpu_ctx->x_context(),
-            reinterpret_cast<const XPU_TX1*>(ffn1_in_unpad.data<TX1>()),
-            nullptr,
-            reinterpret_cast<int8_t*>(xffn1_in.data<int8_t>()),
-            ffn1_in_scale_per_token.data<float>(),
-            valid_token_num,
-            hidden_dim);
-        PD_CHECK(ret == api::SUCCESS);
-      }
-    } else {
-      ffn1_in_dense = paddle::empty(
-          {valid_token_num, hidden_dim}, ffn_in.dtype(), ffn_in.place());
-      xffn1_in = xftblock::Tensor(ffn1_in_dense.data<TX1>(),
-                                  nullptr,
-                                  ffn1_act_scale_data,
-                                  xftblock_tx1,
-                                  {valid_token_num, hidden_dim});
-      ret = infer_ops::sequence_unpad<XPU_TX1, int>(
-          xpu_ctx->x_context(),
-          reinterpret_cast<const XPU_TX1*>(ffn_in.data<TX1>()),
-          reinterpret_cast<XPU_TX1*>(xffn1_in.data<XPU_TX1>()),
-          xtoken_num_lod.data<int>(),
-          expert_num,
-          input_shape[1],
-          input_shape[2],
-          true);
-      PD_CHECK(ret == 0);
-    }
-    xffn2_out =
-        xftblock::Tensor(rt_guard, xftblock_tx2, {valid_token_num, hidden_dim});
-  } else {
-    xffn1_in = xftblock::Tensor(const_cast<TX1*>(ffn_in.data<TX1>()),
-                                nullptr,
-                                ffn1_act_scale_data,
-                                xftblock_tx1,
-                                input_shape);
-    xffn2_out = xftblock::Tensor(
-        ffn2_out.mutable_data<TX2>(), xftblock_tx2, input_shape);
-  }
+  xffn1_in = xftblock::Tensor(const_cast<TX1*>(ffn_in.data<TX1>()),
+                              nullptr,
+                              ffn1_act_scale_data,
+                              xftblock_tx1,
+                              input_shape);
+  xffn2_out =
+      xftblock::Tensor(ffn2_out.mutable_data<TX2>(), xftblock_tx2, input_shape);
 
 #define FFN_IMPL(TX1, TX2, TW, TGEMM)                        \
   MoeExpertFFNImpl<TX1, TX2, TW, TGEMM>(&xffn1_in,           \
@@ -515,9 +381,8 @@ std::vector<paddle::Tensor> MoeExpertFFN(
     const paddle::optional<paddle::Tensor>& ffn2_shift,
     const paddle::optional<paddle::Tensor>& ffn2_smooth,
     const std::string& quant_method,
-    const int hadamard_blocksize,
-    const int valid_token_num) {
-  if (ffn_in.numel() == 0 || valid_token_num == 0) {
+    const int hadamard_blocksize) {
+  if (ffn_in.numel() == 0) {
     paddle::Tensor ffn2_out =
         paddle::empty_like(ffn_in, paddle::DataType::BFLOAT16);
     return {ffn2_out};
@@ -526,22 +391,21 @@ std::vector<paddle::Tensor> MoeExpertFFN(
   const auto x_type = ffn_in.dtype();
   const auto w_type = ffn1_weight.dtype();
 
-#define APPLY_FFN_KERNEL(TX1, TX2, TW)                        \
-  return MoeExpertFFNKernel<TX1, TX2, TW>(ffn_in,             \
-                                          token_num_info,     \
-                                          ffn1_weight,        \
-                                          ffn2_weight,        \
-                                          ffn1_bias,          \
-                                          ffn2_bias,          \
-                                          ffn1_act_scale,     \
-                                          ffn2_act_scale,     \
-                                          ffn1_weight_scale,  \
-                                          ffn2_weight_scale,  \
-                                          ffn2_shift,         \
-                                          ffn2_smooth,        \
-                                          quant_method,       \
-                                          hadamard_blocksize, \
-                                          valid_token_num);
+#define APPLY_FFN_KERNEL(TX1, TX2, TW)                       \
+  return MoeExpertFFNKernel<TX1, TX2, TW>(ffn_in,            \
+                                          token_num_info,    \
+                                          ffn1_weight,       \
+                                          ffn2_weight,       \
+                                          ffn1_bias,         \
+                                          ffn2_bias,         \
+                                          ffn1_act_scale,    \
+                                          ffn2_act_scale,    \
+                                          ffn1_weight_scale, \
+                                          ffn2_weight_scale, \
+                                          ffn2_shift,        \
+                                          ffn2_smooth,       \
+                                          quant_method,      \
+                                          hadamard_blocksize);
   if (x_type == paddle::DataType::BFLOAT16 &&
       w_type == paddle::DataType::BFLOAT16) {
     APPLY_FFN_KERNEL(paddle::bfloat16, paddle::bfloat16, paddle::bfloat16);
@@ -611,9 +475,7 @@ PD_BUILD_STATIC_OP(moe_expert_ffn)
              paddle::Optional("ffn2_shift"),
              paddle::Optional("ffn2_smooth")})
     .Outputs({"ffn_out"})
-    .Attrs({"quant_method:std::string",
-            "hadamard_blocksize:int",
-            "valid_token_num:int"})
+    .Attrs({"quant_method:std::string", "hadamard_blocksize:int"})
     .SetKernelFn(PD_KERNEL(MoeExpertFFN))
     .SetInferShapeFn(PD_INFER_SHAPE(MoeExpertFFNInferShape))
     .SetInferDtypeFn(PD_INFER_DTYPE(MoeExpertFFNInferDtype));
