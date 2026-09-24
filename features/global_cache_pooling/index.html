@@ -1,0 +1,3459 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+        
+          <link rel="alternate" href="./" hreflang="en">
+        
+          <link rel="alternate" href="../../zh/features/global_cache_pooling/" hreflang="zh">
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Global cache pooling - FastDeploy: Large Language Model Deployment</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#global-cache-pooling" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="FastDeploy: Large Language Model Deployment" class="md-header__button md-logo" aria-label="FastDeploy: Large Language Model Deployment" data-md-component="logo">
+      
+  <img src="../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FastDeploy: Large Language Model Deployment
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Global cache pooling
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="Select language">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="../../zh/features/global_cache_pooling/" hreflang="zh" class="md-select__link">
+              简体中文
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PaddlePaddle/FastDeploy" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="FastDeploy: Large Language Model Deployment" class="md-nav__button md-logo" aria-label="FastDeploy: Large Language Model Deployment" data-md-component="logo">
+      
+  <img src="../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    FastDeploy: Large Language Model Deployment
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PaddlePaddle/FastDeploy" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FastDeploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quick Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Installation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/nvidia_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nvidia GPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/kunlunxin_xpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    KunlunXin XPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/intel_gaudi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Intel Gaudi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/hygon_dcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HYGON DCU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/Enflame_gcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enflame S60
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/iluvatar_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iluvatar CoreX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/metax_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metax C550
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment for ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/ernie-4.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/ernie-4.5-vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_qwen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For QWEN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_qwen25_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For QWEN2.5-VL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Serving
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Online Serving
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI-Compatible API Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitor Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/graceful_shutdown_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graceful Shutdown
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/router/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load-Balancing Scheduling Router
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../offline_inference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Offline Inference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Best Practices
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-0.3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-21B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-300B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-21B-A3B-Thinking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B-Thinking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/PaddleOCR-VL-0.9B/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleOCR-VL-0.9B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quantization
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quantization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/online_quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Quantization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/wint2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WINT2 Quantization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../prefix_caching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prefix Caching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../disaggregated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Disaggregation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../chunked_prefill/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chunked Prefill
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../load_balance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load Balance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../speculative_decoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speculative Decoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../structured_outputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Outputs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../reasoning_output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reasoning Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../thinking_budget/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Thinking Budget
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../early_stop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Early Stop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../paddleformers_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleFormers Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-node_deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MultiNode Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../graph_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graph Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../data_parallel_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Parallelism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../plas_attention/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PLAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supported_models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Usage
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Log Description
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/code_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/environment_variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/complete/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complete
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/collect-env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collect Env
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/run-batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/tokenizer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tokenizer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Overview">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-global-cache-pooling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is Global Cache Pooling?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#example-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Example Scripts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisites" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisites
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Prerequisites">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#hardware-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#software-requirements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Software Requirements
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#installation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Installation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#mooncake-configuration-file" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mooncake Configuration File
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#environment-variables" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment Variables
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-scenarios" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage Scenarios
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Usage Scenarios">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#scenario-1-multi-instance-cache-sharing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 1: Multi-Instance Cache Sharing
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-2-pd-disaggregation-with-global-cache" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 2: PD Disaggregation with Global Cache
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scenario-3-high-availability-ha-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scenario 3: High-Availability (HA) Deployment
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scenario 3: High-Availability (HA) Deployment">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#build-mooncake-from-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Build Mooncake from source
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-a-etcd-backend-run_hash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option A: etcd backend (run_ha.sh)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#option-b-redis-backend-run_ha_redissh" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Option B: redis backend (run_ha_redis.sh)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-ha-scripts-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the HA scripts verify
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#key-ha-master-parameters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Key HA Master Parameters
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fastdeploy-parameters-for-mooncake" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        FastDeploy Parameters for Mooncake
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Verification">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#check-cache-hit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Check Cache Hit
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#monitor-mooncake-master" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Monitor Mooncake Master
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#common-issues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debug-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debug Mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#more-resources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        More Resources
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="../zh/features/global_cache_pooling.md">中文文档</a> | English</p>
+<h1 id="global-cache-pooling">Global Cache Pooling</h1>
+<p>This document describes how to use MooncakeStore as the KV Cache storage backend for FastDeploy, enabling <strong>Global Cache Pooling</strong> across multiple inference instances.</p>
+<h2 id="overview">Overview</h2>
+<h3 id="what-is-global-cache-pooling">What is Global Cache Pooling?</h3>
+<p>Global Cache Pooling allows multiple FastDeploy instances to share KV Cache through a distributed storage layer. This enables:</p>
+<ul>
+<li><strong>Cross-instance cache reuse</strong>: KV Cache computed by one instance can be reused by another</li>
+<li><strong>PD Disaggregation optimization</strong>: Prefill and Decode instances can share cache seamlessly</li>
+<li><strong>Reduced computation</strong>: Avoid redundant prefix computation across requests</li>
+</ul>
+<h3 id="architecture">Architecture</h3>
+<pre><code>┌─────────────────────────────────────────────────────────────────┐
+│                     Mooncake Master Server                       │
+│              (Metadata &amp; Coordination Service)                   │
+└────────────────────────────┬────────────────────────────────────┘
+                             │
+         ┌───────────────────┼───────────────────┐
+         │                   │                   │
+         ▼                   ▼                   ▼
+┌─────────────────┐ ┌─────────────────┐ ┌─────────────────┐
+│  FastDeploy     │ │  FastDeploy     │ │  FastDeploy     │
+│  Instance P     │ │  Instance D     │ │  Instance X     │
+│  (Prefill)      │ │  (Decode)       │ │  (Standalone)   │
+└────────┬────────┘ └────────┬────────┘ └────────┬────────┘
+         │                   │                   │
+         └───────────────────┼───────────────────┘
+                             │
+                    ┌────────▼────────┐
+                    │  MooncakeStore  │
+                    │  (Shared KV     │
+                    │   Cache Pool)   │
+                    └─────────────────┘
+</code></pre>
+<h2 id="example-scripts">Example Scripts</h2>
+<p>Ready-to-use example scripts are available in <a href="../../../examples/cache_storage/">examples/cache_storage/</a>.</p>
+<table>
+<thead>
+<tr>
+<th>Script</th>
+<th>Scenario</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run.sh</code></td>
+<td>Multi-Instance</td>
+<td>Two standalone instances sharing cache</td>
+</tr>
+<tr>
+<td><code>run_03b_pd_storage.sh</code></td>
+<td>PD Disaggregation</td>
+<td>P+D instances with global cache pooling</td>
+</tr>
+<tr>
+<td><code>run_ha.sh</code></td>
+<td>High Availability (etcd)</td>
+<td>etcd + multi-master leader election, verifies failover after killing the leader</td>
+</tr>
+<tr>
+<td><code>run_ha_redis.sh</code></td>
+<td>High Availability (redis)</td>
+<td>single redis + multi-master leader election, verifies failover after killing the leader</td>
+</tr>
+</tbody>
+</table>
+<h2 id="prerequisites">Prerequisites</h2>
+<h3 id="hardware-requirements">Hardware Requirements</h3>
+<ul>
+<li>NVIDIA GPU with CUDA support</li>
+<li>RDMA network (recommended for production) or TCP</li>
+</ul>
+<h3 id="software-requirements">Software Requirements</h3>
+<ul>
+<li>Python 3.8+</li>
+<li>CUDA 11.8+</li>
+<li>FastDeploy (see installation below)</li>
+</ul>
+<h2 id="installation">Installation</h2>
+<p>Refer to <a href="https://paddlepaddle.github.io/FastDeploy/get_started/installation/nvidia_gpu/">NVIDIA CUDA GPU Installation</a> for FastDeploy installation.</p>
+<pre><code class="language-bash"># Option 1: Install from PyPI
+pip install fastdeploy-gpu
+
+# Option 2: Build from source
+bash build.sh
+pip install ./dist/fastdeploy*.whl
+</code></pre>
+<p>MooncakeStore is automatically installed when you install FastDeploy.</p>
+<h2 id="configuration">Configuration</h2>
+<p>We support two ways to configure MooncakeStore: via configuration file <code>mooncake_config.json</code> or via environment variables.</p>
+<h3 id="mooncake-configuration-file">Mooncake Configuration File</h3>
+<p>Create a <code>mooncake_config.json</code> file:</p>
+<pre><code class="language-json">{
+    &quot;metadata_server&quot;: &quot;http://0.0.0.0:15002/metadata&quot;,
+    &quot;master_server_addr&quot;: &quot;0.0.0.0:15001&quot;,
+    &quot;global_segment_size&quot;: 1000000000,
+    &quot;local_buffer_size&quot;: 1048576,
+    &quot;protocol&quot;: &quot;rdma&quot;,
+    &quot;rdma_devices&quot;: &quot;&quot;
+}
+</code></pre>
+<p>Set the <code>MOONCAKE_CONFIG_PATH</code> environment variable to enable the configuration:</p>
+<pre><code class="language-bash">export MOONCAKE_CONFIG_PATH=path/to/mooncake_config.json
+</code></pre>
+<p>Configuration parameters:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+<th>Default</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metadata_server</code></td>
+<td>HTTP metadata server URL</td>
+<td>Required</td>
+</tr>
+<tr>
+<td><code>master_server_addr</code></td>
+<td>Master server address</td>
+<td>Required</td>
+</tr>
+<tr>
+<td><code>global_segment_size</code></td>
+<td>Memory space each TP process shares to global shared memory (bytes)</td>
+<td>1GB</td>
+</tr>
+<tr>
+<td><code>local_buffer_size</code></td>
+<td>Local buffer size for data transfer (bytes)</td>
+<td>128MB</td>
+</tr>
+<tr>
+<td><code>protocol</code></td>
+<td>Transfer protocol: <code>rdma</code> or <code>tcp</code></td>
+<td><code>rdma</code></td>
+</tr>
+<tr>
+<td><code>rdma_devices</code></td>
+<td>RDMA device names (comma-separated)</td>
+<td>Auto-detect</td>
+</tr>
+</tbody>
+</table>
+<h3 id="environment-variables">Environment Variables</h3>
+<p>Mooncake can also be configured via environment variables:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>MOONCAKE_MASTER_SERVER_ADDR</code></td>
+<td>Master server address (e.g., <code>10.0.0.1:15001</code>)</td>
+</tr>
+<tr>
+<td><code>MOONCAKE_METADATA_SERVER</code></td>
+<td>Metadata server URL</td>
+</tr>
+<tr>
+<td><code>MOONCAKE_GLOBAL_SEGMENT_SIZE</code></td>
+<td>Memory space each TP process shares to global shared memory (bytes)</td>
+</tr>
+<tr>
+<td><code>MOONCAKE_LOCAL_BUFFER_SIZE</code></td>
+<td>Local buffer size (bytes)</td>
+</tr>
+<tr>
+<td><code>MOONCAKE_PROTOCOL</code></td>
+<td>Transfer protocol (<code>rdma</code> or <code>tcp</code>)</td>
+</tr>
+<tr>
+<td><code>MOONCAKE_RDMA_DEVICES</code></td>
+<td>RDMA device names</td>
+</tr>
+</tbody>
+</table>
+<h2 id="usage-scenarios">Usage Scenarios</h2>
+<h3 id="scenario-1-multi-instance-cache-sharing">Scenario 1: Multi-Instance Cache Sharing</h3>
+<p>Run multiple FastDeploy instances sharing a global KV Cache pool.</p>
+<p><strong>Step 1: Start Mooncake Master</strong></p>
+<pre><code class="language-bash">mooncake_master \
+    --port=15001 \
+    --enable_http_metadata_server=true \
+    --http_metadata_server_host=0.0.0.0 \
+    --http_metadata_server_port=15002 \
+    --metrics_port=15003
+</code></pre>
+<p><strong>Step 2: Start FastDeploy Instances</strong></p>
+<p>Instance 0:</p>
+<pre><code class="language-bash">export MOONCAKE_CONFIG_PATH=&quot;./mooncake_config.json&quot;
+export CUDA_VISIBLE_DEVICES=0
+
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model ${MODEL_NAME} \
+       --port 52700 \
+       --max-model-len 32768 \
+       --max-num-seqs 32 \
+       --kvcache-storage-backend mooncake
+</code></pre>
+<p>Instance 1:</p>
+<pre><code class="language-bash">export MOONCAKE_CONFIG_PATH=&quot;./mooncake_config.json&quot;
+export CUDA_VISIBLE_DEVICES=1
+
+python -m fastdeploy.entrypoints.openai.api_server \
+       --model ${MODEL_NAME} \
+       --port 52800 \
+       --max-model-len 32768 \
+       --max-num-seqs 32 \
+       --kvcache-storage-backend mooncake
+</code></pre>
+<p><strong>Step 3: Test Cache Reuse</strong></p>
+<p>Send the same prompt to both instances. The second instance should reuse the KV Cache computed by the first instance.</p>
+<pre><code class="language-bash"># Request to Instance 0
+curl -X POST &quot;http://0.0.0.0:52700/v1/chat/completions&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Hello, world!&quot;}], &quot;max_tokens&quot;: 50}'
+
+# Request to Instance 1 (should hit cached KV)
+curl -X POST &quot;http://0.0.0.0:52800/v1/chat/completions&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Hello, world!&quot;}], &quot;max_tokens&quot;: 50}'
+</code></pre>
+<h3 id="scenario-2-pd-disaggregation-with-global-cache">Scenario 2: PD Disaggregation with Global Cache</h3>
+<p>This scenario combines <strong>PD Disaggregation</strong> with <strong>Global Cache Pooling</strong>, enabling:</p>
+<ul>
+<li>Prefill instances to read Decode instances' output cache</li>
+<li>Optimal multi-turn conversation performance</li>
+</ul>
+<p><strong>Architecture:</strong></p>
+<pre><code>         ┌──────────────────────────────────────────┐
+         │              Router                       │
+         │         (Load Balancer)                   │
+         └─────────────────┬────────────────────────┘
+                           │
+           ┌───────────────┴───────────────┐
+           │                               │
+           ▼                               ▼
+    ┌─────────────┐                 ┌─────────────┐
+    │   Prefill   │                 │   Decode    │
+    │  Instance   │◄───────────────►│  Instance   │
+    │             │   KV Transfer   │             │
+    └──────┬──────┘                 └──────┬──────┘
+           │                               │
+           └───────────────┬───────────────┘
+                           │
+                  ┌────────▼────────┐
+                  │  MooncakeStore  │
+                  │  (Global Cache) │
+                  └─────────────────┘
+</code></pre>
+<p><strong>Step 1: Start Mooncake Master</strong></p>
+<pre><code class="language-bash">mooncake_master \
+    --port=15001 \
+    --enable_http_metadata_server=true \
+    --http_metadata_server_host=0.0.0.0 \
+    --http_metadata_server_port=15002
+</code></pre>
+<p><strong>Step 2: Start Router</strong></p>
+<pre><code class="language-bash">python -m fastdeploy.router.launch \
+    --port 52700 \
+    --splitwise
+</code></pre>
+<p><strong>Step 3: Start Prefill Instance</strong></p>
+<pre><code class="language-bash">export MOONCAKE_MASTER_SERVER_ADDR=&quot;127.0.0.1:15001&quot;
+export MOONCAKE_METADATA_SERVER=&quot;http://127.0.0.1:15002/metadata&quot;
+export MOONCAKE_PROTOCOL=&quot;rdma&quot;
+export CUDA_VISIBLE_DEVICES=0
+
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${MODEL_NAME} \
+    --port 52400 \
+    --max-model-len 32768 \
+    --max-num-seqs 32 \
+    --splitwise-role prefill \
+    --cache-transfer-protocol rdma \
+    --router &quot;0.0.0.0:52700&quot; \
+    --kvcache-storage-backend mooncake
+</code></pre>
+<p><strong>Step 4: Start Decode Instance</strong></p>
+<pre><code class="language-bash">export MOONCAKE_MASTER_SERVER_ADDR=&quot;127.0.0.1:15001&quot;
+export MOONCAKE_METADATA_SERVER=&quot;http://127.0.0.1:15002/metadata&quot;
+export MOONCAKE_PROTOCOL=&quot;rdma&quot;
+export CUDA_VISIBLE_DEVICES=1
+
+python -m fastdeploy.entrypoints.openai.api_server \
+    --model ${MODEL_NAME} \
+    --port 52500 \
+    --max-model-len 32768 \
+    --max-num-seqs 32 \
+    --splitwise-role decode \
+    --cache-transfer-protocol rdma \
+    --router &quot;0.0.0.0:52700&quot; \
+    --enable-output-caching \
+    --kvcache-storage-backend mooncake
+</code></pre>
+<p><strong>Step 5: Send Requests via Router</strong></p>
+<pre><code class="language-bash">curl -X POST &quot;http://0.0.0.0:52700/v1/chat/completions&quot; \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;messages&quot;: [{&quot;role&quot;: &quot;user&quot;, &quot;content&quot;: &quot;Hello!&quot;}], &quot;max_tokens&quot;: 50}'
+</code></pre>
+<h3 id="scenario-3-high-availability-ha-deployment">Scenario 3: High-Availability (HA) Deployment</h3>
+<p>A single master is a single point of failure; if it crashes, cluster operations pause. For production, run multiple <code>mooncake_master</code> instances that perform leader election through a coordination backend. When the leader fails, a standby is automatically re-elected, transparently to clients.</p>
+<p>Two coordination backends are supported:</p>
+<ul>
+<li><strong>etcd</strong> (<code>run_ha.sh</code>): a 3-node etcd cluster does election and metadata storage.</li>
+<li><strong>redis</strong> (<code>run_ha_redis.sh</code>): a single redis instance does lease-based election. Use this to avoid introducing etcd as an extra component.</li>
+</ul>
+<p><strong>Architecture:</strong></p>
+<pre><code>            ┌──────────────────────────────────────┐
+            │   coordination backend (etcd / redis) │
+            │     leader election (master_view)     │
+            └───────────────────┬──────────────────┘
+                                │ election (master_view)
+          ┌─────────────────────┼─────────────────────┐
+          ▼                     ▼                     ▼
+   ┌─────────────┐       ┌─────────────┐       ┌─────────────┐
+   │  master1    │       │  master2    │       │  master3    │
+   │ rpc:8081    │       │ rpc:8082    │       │ rpc:8083    │
+   │ (leader)    │       │ (standby)   │       │ (standby)   │
+   └──────┬──────┘       └─────────────┘       └─────────────┘
+          │  FastDeploy clients discover the current leader via the backend
+   ┌──────┴───────┐
+   ▼              ▼
+server_0      server_1
+</code></pre>
+<h4 id="build-mooncake-from-source">Build Mooncake from source</h4>
+<p>HA mode requires Mooncake built with the matching backend enabled:</p>
+<ul>
+<li>etcd: <code>-DSTORE_USE_ETCD=ON -DUSE_ETCD=ON</code></li>
+<li>redis: <code>-DSTORE_USE_REDIS=ON -DUSE_REDIS=ON</code> (build dependency: <code>libhiredis-dev</code>)</li>
+</ul>
+<pre><code class="language-bash">git clone https://github.com/kvcache-ai/Mooncake.git
+cd Mooncake
+bash dependencies.sh
+
+mkdir -p build &amp;&amp; cd build
+cmake .. -DSTORE_USE_ETCD=ON -DUSE_ETCD=ON   # add -DSTORE_USE_REDIS=ON -DUSE_REDIS=ON for redis
+make -j
+sudo make install
+cd ..
+
+./scripts/build_wheel.sh
+pip install mooncake-wheel/dist/*.whl
+</code></pre>
+<p>For the CUDA 13 build, use the following instead:</p>
+<pre><code class="language-bash">cd Mooncake
+export CU13_BUILD=1
+./scripts/build_wheel.sh
+pip install mooncake-wheel/dist/mooncake_transfer_engine_cuda13-*.whl
+</code></pre>
+<h4 id="option-a-etcd-backend-run_hash">Option A: etcd backend (<code>run_ha.sh</code>)</h4>
+<p><strong>1. Install etcd</strong></p>
+<p>Download and extract etcd (v3.5.30 in this example), then add <code>etcd</code> / <code>etcdctl</code> to <code>PATH</code>:</p>
+<pre><code class="language-bash">ETCD_VER=v3.5.30
+curl -L https://github.com/etcd-io/etcd/releases/download/${ETCD_VER}/etcd-${ETCD_VER}-linux-amd64.tar.gz \
+  -o etcd-${ETCD_VER}-linux-amd64.tar.gz
+tar -xzf etcd-${ETCD_VER}-linux-amd64.tar.gz
+export PATH=$PWD/etcd-${ETCD_VER}-linux-amd64:$PATH
+etcd --version
+</code></pre>
+<p><strong>2. Client configuration</strong> (<code>ha_mooncake_config.json</code>)</p>
+<p>Both <code>metadata_server</code> and <code>master_server_addr</code> use the <code>etcd://</code> prefix; clients discover the current leader through etcd:</p>
+<pre><code class="language-json">{
+  &quot;metadata_server&quot;: &quot;etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379&quot;,
+  &quot;global_segment_size&quot;: 1000000000,
+  &quot;local_buffer_size&quot;: 134217728,
+  &quot;protocol&quot;: &quot;rdma&quot;,
+  &quot;rdma_devices&quot;: &quot;&quot;,
+  &quot;master_server_addr&quot;: &quot;etcd://127.0.0.1:12379;127.0.0.1:22379;127.0.0.1:32379&quot;
+}
+</code></pre>
+<p><strong>3. Run</strong></p>
+<pre><code class="language-bash">cd examples/cache_storage
+bash run_ha.sh
+</code></pre>
+<p>The script starts a 3-node etcd cluster (client ports 12379/22379/32379), 3 HA masters (rpc 8081/8082/8083), and 2 FastDeploy instances; the leader address is written to the etcd key <code>mooncake-store/mooncake_cluster/master_view</code>.</p>
+<p>Inspect the current leader manually:</p>
+<pre><code class="language-bash">etcdctl --endpoints=http://127.0.0.1:12379,http://127.0.0.1:22379,http://127.0.0.1:32379 \
+  get &quot;mooncake-store/mooncake_cluster/master_view&quot; --print-value-only
+</code></pre>
+<h4 id="option-b-redis-backend-run_ha_redissh">Option B: redis backend (<code>run_ha_redis.sh</code>)</h4>
+<p><strong>1. Client configuration</strong> (<code>ha_redis_mooncake_config.json</code>)</p>
+<p>Both <code>metadata_server</code> and <code>master_server_addr</code> use the <code>redis://</code> prefix pointing to the single redis instance:</p>
+<pre><code class="language-json">{
+  &quot;metadata_server&quot;: &quot;redis://127.0.0.1:6399&quot;,
+  &quot;global_segment_size&quot;: 1000000000,
+  &quot;local_buffer_size&quot;: 134217728,
+  &quot;protocol&quot;: &quot;rdma&quot;,
+  &quot;rdma_devices&quot;: &quot;&quot;,
+  &quot;master_server_addr&quot;: &quot;redis://127.0.0.1:6399&quot;
+}
+</code></pre>
+<p><strong>2. Run</strong></p>
+<pre><code class="language-bash">cd examples/cache_storage
+bash run_ha_redis.sh
+</code></pre>
+<p>The script starts a single redis instance (port 6399), 3 HA masters (rpc 8081/8082/8083) launched with <code>--ha_backend_type redis --ha_backend_connstring redis://127.0.0.1:6399</code>, and 2 FastDeploy instances. The master_view is a redis HASH at <code>mooncake-store/{mooncake_cluster}/master_view</code>.</p>
+<p>Inspect the current leader manually:</p>
+<pre><code class="language-bash">redis-cli -p 6399 hget &quot;mooncake-store/{mooncake_cluster}/master_view&quot; leader_address
+</code></pre>
+<h4 id="what-the-ha-scripts-verify">What the HA scripts verify</h4>
+<p>Both scripts run the same flow and verify failover:</p>
+<ol>
+<li>Start the coordination backend (etcd cluster / single redis).</li>
+<li>Start 3 HA masters; one is elected leader and published to <code>master_view</code>.</li>
+<li>Start 2 FastDeploy instances, both joining the same cache pool with <code>--kvcache-storage-backend mooncake</code>.</li>
+<li><strong>Before failover</strong>: warm up prompt <strong>A</strong> on <code>server_0</code>, then send the same prompt to <code>server_1</code>, which should hit the global cache.</li>
+<li><strong>Kill the leader</strong>: read the current leader's <code>rpc_port</code> from the backend and <code>kill -9</code> it, triggering re-election.</li>
+<li><strong>After failover</strong>: once <code>master_view</code> updates to the new leader, warm up a <strong>brand-new</strong> prompt <strong>B</strong> on <code>server_0</code>, then reuse it on <code>server_1</code>. Using a fresh prompt ensures the hit can only come from the new leader's global pool, not stale local cache from step 4.</li>
+</ol>
+<p>Per-master roles can be seen in <code>log_master_1</code> / <code>log_master_2</code> / <code>log_master_3</code> (<code>role=leader</code> / <code>role=standby</code>).</p>
+<h4 id="key-ha-master-parameters">Key HA Master Parameters</h4>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--enable_ha</code></td>
+<td>Enable HA mode</td>
+</tr>
+<tr>
+<td><code>--ha_backend_type</code></td>
+<td>Coordination backend: <code>etcd</code> (default) or <code>redis</code></td>
+</tr>
+<tr>
+<td><code>--etcd_endpoints</code></td>
+<td>etcd endpoints, semicolon separated (when <code>ha_backend_type=etcd</code>)</td>
+</tr>
+<tr>
+<td><code>--ha_backend_connstring</code></td>
+<td>Backend connection string, e.g. <code>redis://127.0.0.1:6399</code> (when <code>ha_backend_type=redis</code>)</td>
+</tr>
+<tr>
+<td><code>--rpc_address</code> / <code>--rpc_port</code></td>
+<td>This master's reachable RPC address and port (must be unique per instance)</td>
+</tr>
+<tr>
+<td><code>--cluster_id</code></td>
+<td>Cluster identifier; masters in the same cluster must match</td>
+</tr>
+</tbody>
+</table>
+<h2 id="fastdeploy-parameters-for-mooncake">FastDeploy Parameters for Mooncake</h2>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--kvcache-storage-backend mooncake</code></td>
+<td>Enable Mooncake as KV Cache storage backend</td>
+</tr>
+<tr>
+<td><code>--enable-output-caching</code></td>
+<td>Enable output token caching (Decode instance recommended)</td>
+</tr>
+<tr>
+<td><code>--cache-transfer-protocol rdma</code></td>
+<td>Use RDMA for KV transfer between P and D</td>
+</tr>
+<tr>
+<td><code>--splitwise-role prefill/decode</code></td>
+<td>Set instance role in PD disaggregation</td>
+</tr>
+<tr>
+<td><code>--router</code></td>
+<td>Router address for PD disaggregation</td>
+</tr>
+</tbody>
+</table>
+<h2 id="verification">Verification</h2>
+<h3 id="check-cache-hit">Check Cache Hit</h3>
+<p>To verify cache hit in logs:</p>
+<pre><code class="language-bash"># For multi-instance scenario
+grep -E &quot;storage_cache_token_num&quot; log_*/api_server.log
+
+# For PD disaggregation scenario
+grep -E &quot;storage_cache_token_num&quot; log_prefill/api_server.log
+</code></pre>
+<p>If <code>storage_cache_token_num &gt; 0</code>, the instance successfully read cached KV blocks from the global pool.</p>
+<h3 id="monitor-mooncake-master">Monitor Mooncake Master</h3>
+<pre><code class="language-bash"># Check master status
+curl http://localhost:15002/metadata
+
+# Check metrics (if metrics_port is configured)
+curl http://localhost:15003/metrics
+</code></pre>
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="common-issues">Common Issues</h3>
+<p><strong>1. Port Already in Use</strong></p>
+<pre><code class="language-bash"># Check port usage
+ss -ltn | grep 15001
+
+# Kill existing process
+kill -9 $(lsof -t -i:15001)
+</code></pre>
+<p><strong>2. RDMA Connection Failed</strong></p>
+<ul>
+<li>Verify RDMA devices: <code>ibv_devices</code></li>
+<li>Check RDMA network: <code>ibv_devinfo</code></li>
+<li>Fallback to TCP: Set <code>MOONCAKE_PROTOCOL=tcp</code></li>
+</ul>
+<p><strong>3. Cache Not Being Shared</strong></p>
+<ul>
+<li>Verify all instances connect to the same Mooncake master</li>
+<li>Check metadata server URL is consistent</li>
+<li>Verify <code>global_segment_size</code> is large enough</li>
+</ul>
+<p><strong>4. Permission Denied on /dev/shm</strong></p>
+<pre><code class="language-bash"># Clean up stale shared memory files
+find /dev/shm -type f -print0 | xargs -0 rm -f
+</code></pre>
+<h3 id="debug-mode">Debug Mode</h3>
+<p>Enable debug logging:</p>
+<pre><code class="language-bash">export FD_DEBUG=1
+</code></pre>
+<h2 id="more-resources">More Resources</h2>
+<ul>
+<li><a href="https://github.com/kvcache-ai/Mooncake">Mooncake Official Documentation</a></li>
+<li><a href="https://github.com/kvcache-ai/Mooncake/blob/main/docs/source/troubleshooting/troubleshooting.md">Mooncake Troubleshooting Guide</a></li>
+<li><a href="https://paddlepaddle.github.io/FastDeploy/">FastDeploy Documentation</a></li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 Maintained by FastDeploy
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

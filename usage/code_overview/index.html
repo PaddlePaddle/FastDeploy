@@ -1,0 +1,4492 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+        <link rel="prev" href="../log/">
+      
+      
+        <link rel="next" href="../environment_variables/">
+      
+      
+        
+          <link rel="alternate" href="./" hreflang="en">
+        
+          <link rel="alternate" href="../../zh/usage/code_overview/" hreflang="zh">
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Code Overview - FastDeploy: Large Language Model Deployment</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#fastdeploy-code-structure-overview" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="FastDeploy: Large Language Model Deployment" class="md-header__button md-logo" aria-label="FastDeploy: Large Language Model Deployment" data-md-component="logo">
+      
+  <img src="../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            FastDeploy: Large Language Model Deployment
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Code Overview
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="Select language">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="../../zh/usage/code_overview/" hreflang="zh" class="md-select__link">
+              简体中文
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PaddlePaddle/FastDeploy" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="FastDeploy: Large Language Model Deployment" class="md-nav__button md-logo" aria-label="FastDeploy: Large Language Model Deployment" data-md-component="logo">
+      
+  <img src="../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    FastDeploy: Large Language Model Deployment
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PaddlePaddle/FastDeploy" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FastDeploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Start
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quick Start
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Installation
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/nvidia_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Nvidia GPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/kunlunxin_xpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    KunlunXin XPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/intel_gaudi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Intel Gaudi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/hygon_dcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    HYGON DCU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/Enflame_gcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Enflame S60
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/iluvatar_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Iluvatar CoreX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/metax_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Metax C550
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment for ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/ernie-4.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/ernie-4.5-vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_qwen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For QWEN
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_qwen25_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quick Deployment For QWEN2.5-VL
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Serving
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Online Serving
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    OpenAI-Compatible API Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Monitor Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scheduler
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/graceful_shutdown_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graceful Shutdown
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../online_serving/router/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load-Balancing Scheduling Router
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../offline_inference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Offline Inference
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Best Practices
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-0.3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-21B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-300B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-21B-A3B-Thinking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B-Thinking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/PaddleOCR-VL-0.9B/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleOCR-VL-0.9B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FAQ
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Quantization
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Quantization
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/online_quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Online Quantization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/wint2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WINT2 Quantization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Features
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Features
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/prefix_caching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Prefix Caching
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/disaggregated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Disaggregation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/chunked_prefill/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chunked Prefill
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/load_balance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load Balance
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/speculative_decoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Speculative Decoding
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/structured_outputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Structured Outputs
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/reasoning_output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Reasoning Output
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/thinking_budget/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Thinking Budget
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/early_stop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Early Stop
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plugins
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/paddleformers_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleFormers Backend
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sampling
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/multi-node_deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MultiNode Deployment
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/graph_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Graph Optimization
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/data_parallel_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Data Parallelism
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/plas_attention/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PLAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supported_models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Models
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Benchmark
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Usage
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Usage
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Log Description
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Overview
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Code Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#directory-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#i-core-code-directory-fastdeploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I. Core Code Directory (fastdeploy/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="I. Core Code Directory (fastdeploy/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-engine-core-engine-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. engine/ - Core Engine Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-model_executor-model-executor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. model_executor/ - Model Executor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. model_executor/ - Model Executor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-models-model-implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 models/ - Model Implementations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-layers-network-layer-implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 layers/ - Network Layer Implementations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-other-submodules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Other Submodules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-scheduler-scheduler-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. scheduler/ - Scheduler Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-entrypoints-api-entry-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. entrypoints/ - API Entry Points
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. entrypoints/ - API Entry Points">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-openai-openai-compatible-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 openai/ - OpenAI Compatible API
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-worker-worker-process-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. worker/ - Worker Process Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-input-input-processing-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. input/ - Input Processing Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-output-output-processing-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. output/ - Output Processing Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-cache_manager-cache-management-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. cache_manager/ - Cache Management Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-platforms-hardware-platform-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. platforms/ - Hardware Platform Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-metrics-monitoring-metrics-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. metrics/ - Monitoring Metrics Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-other-important-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Other Important Modules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-configuration-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Configuration Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ii-custom-operators-directory-custom_ops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        II. Custom Operators Directory (custom_ops/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="II. Custom Operators Directory (custom_ops/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gpu_ops-gpu-operator-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gpu_ops/ - GPU Operator Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-test-directory-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III. Test Directory (tests/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="III. Test Directory (tests/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-directory-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Directory Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iv-scripts-directory-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IV. Scripts Directory (scripts/)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v-other-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V. Other Directories
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="V. Other Directories">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#docs-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        docs/ - Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples-example-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        examples/ - Example Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmarks-performance-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmarks/ - Performance Benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tools-development-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tools/ - Development Tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dockerfiles-docker-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dockerfiles/ - Docker Images
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vi-quick-development-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VI. Quick Development Guide
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VI. Quick Development Guide">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-new-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-new-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-hardware-platform-adaptation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Hardware Platform Adaptation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimizing-inference-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizing Inference Performance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pd-disaggregation-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PD Disaggregation Deployment
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vii-configuration-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VII. Configuration System
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../environment_variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Environment Variables
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chat
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/complete/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complete
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/collect-env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collect Env
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/run-batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Batch
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/tokenizer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tokenizer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Observability
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Observability
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trace
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#directory-overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#i-core-code-directory-fastdeploy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        I. Core Code Directory (fastdeploy/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="I. Core Code Directory (fastdeploy/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-engine-core-engine-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. engine/ - Core Engine Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-model_executor-model-executor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. model_executor/ - Model Executor
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. model_executor/ - Model Executor">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#21-models-model-implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.1 models/ - Model Implementations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#22-layers-network-layer-implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.2 layers/ - Network Layer Implementations
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#23-other-submodules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2.3 Other Submodules
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-scheduler-scheduler-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. scheduler/ - Scheduler Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-entrypoints-api-entry-points" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. entrypoints/ - API Entry Points
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. entrypoints/ - API Entry Points">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#41-openai-openai-compatible-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4.1 openai/ - OpenAI Compatible API
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-worker-worker-process-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. worker/ - Worker Process Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-input-input-processing-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. input/ - Input Processing Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#7-output-output-processing-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. output/ - Output Processing Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#8-cache_manager-cache-management-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. cache_manager/ - Cache Management Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#9-platforms-hardware-platform-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. platforms/ - Hardware Platform Support
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#10-metrics-monitoring-metrics-module" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. metrics/ - Monitoring Metrics Module
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#11-other-important-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Other Important Modules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#12-configuration-files" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Configuration Files
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ii-custom-operators-directory-custom_ops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        II. Custom Operators Directory (custom_ops/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="II. Custom Operators Directory (custom_ops/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#gpu_ops-gpu-operator-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        gpu_ops/ - GPU Operator Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iii-test-directory-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        III. Test Directory (tests/)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="III. Test Directory (tests/)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#test-directory-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Directory Details
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#iv-scripts-directory-scripts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        IV. Scripts Directory (scripts/)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#v-other-directories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        V. Other Directories
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="V. Other Directories">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#docs-documentation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        docs/ - Documentation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#examples-example-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        examples/ - Example Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#benchmarks-performance-benchmarks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        benchmarks/ - Performance Benchmarks
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tools-development-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tools/ - Development Tools
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dockerfiles-docker-images" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        dockerfiles/ - Docker Images
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vi-quick-development-guide" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VI. Quick Development Guide
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="VI. Quick Development Guide">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-new-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#adding-a-new-operator" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Adding a New Operator
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#new-hardware-platform-adaptation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        New Hardware Platform Adaptation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#optimizing-inference-performance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Optimizing Inference Performance
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pd-disaggregation-deployment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PD Disaggregation Deployment
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#vii-configuration-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        VII. Configuration System
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="../zh/usage/code_overview.md">简体中文</a></p>
+<h1 id="fastdeploy-code-structure-overview">FastDeploy Code Structure Overview</h1>
+<p>This document provides a detailed overview of the FastDeploy codebase structure, helping developers quickly understand each module's functionality for development and feature extension.</p>
+<hr />
+<h2 id="directory-overview">Directory Overview</h2>
+<pre><code>FastDeploy/
+├── fastdeploy/          # Core code directory
+├── custom_ops/          # C++/CUDA custom operators
+├── tests/               # Unit tests
+├── scripts/             # Utility scripts
+├── tools/               # Development tools
+├── docs/                # Documentation
+├── examples/            # Example code
+├── benchmarks/          # Performance benchmarks
+├── dockerfiles/         # Docker image build files
+└── setup.py             # Python package installation script
+</code></pre>
+<hr />
+<h2 id="i-core-code-directory-fastdeploy">I. Core Code Directory (fastdeploy/)</h2>
+<p>The main entry file <code>fastdeploy/__init__.py</code> exports core classes:</p>
+<ul>
+<li><code>LLM</code> - Main entry class, offline inference interface</li>
+<li><code>SamplingParams</code> - Sampling parameter configuration</li>
+<li><code>ModelRegistry</code> - Model registry</li>
+<li><code>version</code> - Version information</li>
+</ul>
+<h3 id="1-engine-core-engine-module">1. engine/ - Core Engine Module</h3>
+<p><strong>Function</strong>: Manages LLM inference lifecycle and coordinates components.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>engine.py</code></td>
+<td><code>LLMEngine</code> core engine class, manages scheduler, preprocessor, resource manager</td>
+<td>Entry point for modifying engine behavior, adding new components</td>
+</tr>
+<tr>
+<td><code>async_llm.py</code></td>
+<td>Async LLM interface, <code>AsyncRequestQueue</code> request queue management</td>
+<td>Async inference, streaming output development</td>
+</tr>
+<tr>
+<td><code>request.py</code></td>
+<td>Core request data structures: <code>Request</code>, <code>RequestOutput</code>, <code>RequestStatus</code></td>
+<td>Adding request fields, modifying request processing logic</td>
+</tr>
+<tr>
+<td><code>sampling_params.py</code></td>
+<td><code>SamplingParams</code> sampling parameter configuration</td>
+<td>Adding new sampling strategy parameters</td>
+</tr>
+<tr>
+<td><code>args_utils.py</code></td>
+<td><code>EngineArgs</code> engine argument parsing</td>
+<td>Adding new engine configuration parameters</td>
+</tr>
+<tr>
+<td><code>resource_manager.py</code></td>
+<td>GPU/CPU resource management</td>
+<td>Resource allocation optimization</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Subdirectory</strong>:</p>
+<ul>
+<li><code>sched/</code> - Core scheduling implementation, contains <code>resource_manager_v1.py</code> (<strong>core scheduling logic</strong>)</li>
+</ul>
+<hr />
+<h3 id="2-model_executor-model-executor">2. model_executor/ - Model Executor</h3>
+<p><strong>Function</strong>: Core execution module for model inference, containing model definitions, layers, operators.</p>
+<h4 id="21-models-model-implementations">2.1 models/ - Model Implementations</h4>
+<table>
+<thead>
+<tr>
+<th>File/Directory</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_base.py</code></td>
+<td><code>ModelRegistry</code> model registration base class</td>
+<td><strong>Must read for adding new models</strong></td>
+</tr>
+<tr>
+<td><code>deepseek_v3.py</code></td>
+<td>DeepSeek V3 model</td>
+<td>MoE large model reference</td>
+</tr>
+<tr>
+<td><code>ernie4_5_moe.py</code></td>
+<td>ERNIE 4.5 MoE model</td>
+<td>Baidu's flagship model</td>
+</tr>
+<tr>
+<td><code>ernie4_5_mtp.py</code></td>
+<td>ERNIE 4.5 MTP multi-token prediction</td>
+<td>Speculative decoding model</td>
+</tr>
+<tr>
+<td><code>qwen2.py</code></td>
+<td>Qwen2 model</td>
+<td>General model reference</td>
+</tr>
+<tr>
+<td><code>qwen3.py</code></td>
+<td>Qwen3 model</td>
+<td>Latest model reference</td>
+</tr>
+<tr>
+<td><code>ernie4_5_vl/</code></td>
+<td>ERNIE 4.5 vision-language model</td>
+<td>Multimodal model development reference</td>
+</tr>
+<tr>
+<td><code>qwen2_5_vl/</code></td>
+<td>Qwen2.5 VL multimodal model</td>
+<td>VL model reference</td>
+</tr>
+<tr>
+<td><code>paddleocr_vl/</code></td>
+<td>PaddleOCR VL model</td>
+<td>OCR multimodal reference</td>
+</tr>
+</tbody>
+</table>
+<h4 id="22-layers-network-layer-implementations">2.2 layers/ - Network Layer Implementations</h4>
+<table>
+<thead>
+<tr>
+<th>Subdirectory/File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>attention/</code></td>
+<td>Attention mechanism implementations (flash_attn, append_attn, mla_attn)</td>
+<td><strong>First choice for attention performance optimization</strong></td>
+</tr>
+<tr>
+<td><code>moe/</code></td>
+<td>MoE layer implementations (Cutlass, Triton, DeepGEMM backends)</td>
+<td>MoE performance optimization</td>
+</tr>
+<tr>
+<td><code>quantization/</code></td>
+<td>Quantization layers (FP8, W4A8, WINT2, Weight-only)</td>
+<td>Quantization scheme development</td>
+</tr>
+<tr>
+<td><code>linear.py</code></td>
+<td>Linear layer implementation</td>
+<td>Matrix multiplication optimization</td>
+</tr>
+<tr>
+<td><code>embeddings.py</code></td>
+<td>Embedding layer implementation</td>
+<td>Word embedding modification</td>
+</tr>
+<tr>
+<td><code>normalization.py</code></td>
+<td>Normalization layers (RMSNorm, LayerNorm)</td>
+<td>Normalization optimization</td>
+</tr>
+<tr>
+<td><code>rotary_embedding.py</code></td>
+<td>Rotary Position Encoding ROPE</td>
+<td>Position encoding modification</td>
+</tr>
+<tr>
+<td><code>sample/</code></td>
+<td>Sampler implementation</td>
+<td>Sampling strategy development</td>
+</tr>
+<tr>
+<td><code>backends/</code></td>
+<td>Hardware backend implementations (cuda, xpu, dcu, hpu, metax, gcu, npu)</td>
+<td><strong>Entry point for new hardware adaptation</strong></td>
+</tr>
+</tbody>
+</table>
+<h4 id="23-other-submodules">2.3 Other Submodules</h4>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>model_loader/</code></td>
+<td>Model weight loader</td>
+<td>New model format support</td>
+</tr>
+<tr>
+<td><code>guided_decoding/</code></td>
+<td>Guided decoding (JSON/regex constrained output)</td>
+<td>Structured output development</td>
+</tr>
+<tr>
+<td><code>graph_optimization/</code></td>
+<td>Graph optimization (CUDA Graph)</td>
+<td>Inference performance optimization</td>
+</tr>
+<tr>
+<td><code>logits_processor/</code></td>
+<td>Logits processor</td>
+<td>Output control logic</td>
+</tr>
+<tr>
+<td><code>ops/</code></td>
+<td>Python-callable operators (organized by hardware platform)</td>
+<td>Operator call entry point</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Key Files</strong>:</p>
+<ul>
+<li><code>model_base.py</code> - Model base class, registry definition</li>
+<li><code>pre_and_post_process.py</code> - Pre/post processing utilities</li>
+</ul>
+<hr />
+<h3 id="3-scheduler-scheduler-module">3. scheduler/ - Scheduler Module</h3>
+<p><strong>Function</strong>: Request scheduling, supporting single-node, distributed, PD disaggregation scenarios.</p>
+<blockquote>
+<p><strong>Note</strong>:
+- Core scheduling logic is mainly implemented in <code>engine/sched/resource_manager_v1.py</code>
+- Schedulers in this directory are being <strong>gradually deprecated</strong>. For PD disaggregation scheduling, use <code>router/</code> or <code>golang_router/</code></p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>global_scheduler.py</code></td>
+<td><code>GlobalScheduler</code> distributed scheduler (Redis)</td>
+<td>(Being deprecated)</td>
+</tr>
+<tr>
+<td><code>local_scheduler.py</code></td>
+<td><code>LocalScheduler</code> local scheduler</td>
+<td>(Being deprecated)</td>
+</tr>
+<tr>
+<td><code>splitwise_scheduler.py</code></td>
+<td><code>SplitwiseScheduler</code> PD disaggregation scheduling</td>
+<td>(Being deprecated, use router)</td>
+</tr>
+<tr>
+<td><code>dp_scheduler.py</code></td>
+<td>Data parallel scheduler</td>
+<td>(Being deprecated)</td>
+</tr>
+<tr>
+<td><code>config.py</code></td>
+<td><code>SchedulerConfig</code> scheduling configuration</td>
+<td>Scheduling parameter adjustment</td>
+</tr>
+<tr>
+<td><code>storage.py</code></td>
+<td>Storage adapter, wraps Redis connection</td>
+<td>Storage layer modification</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Core Scheduling Implementation</strong> (<code>engine/sched/</code>):</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>resource_manager_v1.py</code></td>
+<td>Core scheduling logic, contains <code>ScheduledDecodeTask</code>, <code>ScheduledPreemptTask</code> task classes</td>
+<td><strong>First choice for scheduling strategy modification</strong></td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="4-entrypoints-api-entry-points">4. entrypoints/ - API Entry Points</h3>
+<p><strong>Function</strong>: External service interfaces, including offline inference and online API services.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>llm.py</code></td>
+<td><code>LLM</code> main entry class, offline inference interface</td>
+<td><strong>Entry point for using FastDeploy</strong></td>
+</tr>
+<tr>
+<td><code>engine_client.py</code></td>
+<td>Engine client</td>
+<td>Request forwarding logic modification</td>
+</tr>
+</tbody>
+</table>
+<h4 id="41-openai-openai-compatible-api">4.1 openai/ - OpenAI Compatible API</h4>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>api_server.py</code></td>
+<td>FastAPI server</td>
+<td><strong>Deployment service entry point</strong></td>
+</tr>
+<tr>
+<td><code>protocol.py</code></td>
+<td>OpenAI protocol definition</td>
+<td>API format modification</td>
+</tr>
+<tr>
+<td><code>serving_chat.py</code></td>
+<td>Chat Completion API</td>
+<td>Chat interface development</td>
+</tr>
+<tr>
+<td><code>serving_completion.py</code></td>
+<td>Completion API</td>
+<td>Completion interface development</td>
+</tr>
+<tr>
+<td><code>serving_embedding.py</code></td>
+<td>Embedding API</td>
+<td>Vectorization interface</td>
+</tr>
+<tr>
+<td><code>tool_parsers/</code></td>
+<td>Tool call parsers</td>
+<td>Function Calling development</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="5-worker-worker-process-module">5. worker/ - Worker Process Module</h3>
+<p><strong>Function</strong>: Actual execution process for model inference.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>gpu_model_runner.py</code></td>
+<td><strong>GPU model runner</strong> (core inference loop)</td>
+<td><strong>First choice for inference flow modification</strong></td>
+</tr>
+<tr>
+<td><code>gpu_worker.py</code></td>
+<td>GPU Worker process management</td>
+<td>Worker lifecycle management</td>
+</tr>
+<tr>
+<td><code>xpu_model_runner.py</code></td>
+<td>XPU model runner</td>
+<td>Kunlun chip adaptation</td>
+</tr>
+<tr>
+<td><code>hpu_model_runner.py</code></td>
+<td>HPU model runner</td>
+<td>Intel HPU adaptation</td>
+</tr>
+<tr>
+<td><code>worker_process.py</code></td>
+<td>Worker process base class</td>
+<td>Process management logic</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="6-input-input-processing-module">6. input/ - Input Processing Module</h3>
+<p><strong>Function</strong>: Input data preprocessing, including tokenization, multimodal input processing.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>text_processor.py</code></td>
+<td><code>BaseDataProcessor</code> text processor base class</td>
+<td>Input processing extension</td>
+</tr>
+<tr>
+<td><code>multimodal_processor.py</code></td>
+<td>Unified multimodal processor</td>
+<td>Multimodal input processing</td>
+</tr>
+<tr>
+<td><code>ernie4_5_tokenizer.py</code></td>
+<td>ERNIE 4.5 tokenizer</td>
+<td>Tokenization logic modification</td>
+</tr>
+<tr>
+<td><code>preprocess.py</code></td>
+<td>Input preprocessing utilities</td>
+<td>Preprocessing flow</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Multimodal Processing Subdirectories</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>Function</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>encodings/</code></td>
+<td>Model-specific encoding strategies (Ernie, Qwen, PaddleOCR)</td>
+</tr>
+<tr>
+<td><code>image_processors/</code></td>
+<td>Image preprocessing (Adaptive, Qwen, Qwen3, PaddleOCR)</td>
+</tr>
+<tr>
+<td><code>multimodal_processor.py</code></td>
+<td>Unified multimodal processor</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="7-output-output-processing-module">7. output/ - Output Processing Module</h3>
+<p><strong>Function</strong>: Inference result post-processing, streaming output management.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>token_processor.py</code></td>
+<td><code>TokenProcessor</code> token output processing</td>
+<td>Streaming output, speculative decoding</td>
+</tr>
+<tr>
+<td><code>pooler.py</code></td>
+<td>Pooling output processing</td>
+<td>Embedding output</td>
+</tr>
+<tr>
+<td><code>stream_transfer_data.py</code></td>
+<td>Streaming transfer data structure</td>
+<td>Data transfer format</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="8-cache_manager-cache-management-module">8. cache_manager/ - Cache Management Module</h3>
+<p><strong>Function</strong>: KV Cache management, supporting prefix caching, cross-device transfer.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>prefix_cache_manager.py</code></td>
+<td><code>PrefixCacheManager</code> prefix tree cache</td>
+<td><strong>First choice for KV Cache optimization</strong></td>
+</tr>
+<tr>
+<td><code>cache_transfer_manager.py</code></td>
+<td>KV Cache cross-device transfer</td>
+<td>PD disaggregation cache transfer</td>
+</tr>
+<tr>
+<td><code>cache_data.py</code></td>
+<td><code>BlockNode</code>, <code>CacheStatus</code> data structures</td>
+<td>Cache data definition</td>
+</tr>
+<tr>
+<td><code>multimodal_cache_manager.py</code></td>
+<td>Multimodal cache management</td>
+<td>Multimodal caching</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Subdirectory</strong>:</p>
+<ul>
+<li><code>transfer_factory/</code> - Cache transfer factory (IPC, RDMA)</li>
+</ul>
+<hr />
+<h3 id="9-platforms-hardware-platform-support">9. platforms/ - Hardware Platform Support</h3>
+<p><strong>Function</strong>: Multi-hardware platform adaptation, defining operators and features for each platform.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>base.py</code></td>
+<td><code>Platform</code> base class, <code>_Backend</code> enum</td>
+<td><strong>Entry point for new hardware adaptation</strong></td>
+</tr>
+<tr>
+<td><code>cuda.py</code></td>
+<td>NVIDIA CUDA platform</td>
+<td>GPU optimization</td>
+</tr>
+<tr>
+<td><code>xpu.py</code></td>
+<td>Baidu Kunlun XPU platform</td>
+<td>Kunlun chip adaptation</td>
+</tr>
+<tr>
+<td><code>dcu.py</code></td>
+<td>AMD DCU (ROCm) platform</td>
+<td>AMD GPU adaptation</td>
+</tr>
+<tr>
+<td><code>maca.py</code></td>
+<td>MetaX GPU (MACA) platform</td>
+<td>Biren GPU adaptation</td>
+</tr>
+<tr>
+<td><code>intel_hpu.py</code></td>
+<td>Intel HPU platform</td>
+<td>Intel Gaudi adaptation</td>
+</tr>
+<tr>
+<td><code>iluvatar.py</code></td>
+<td>Iluvatar GPU platform</td>
+<td>Iluvatar adaptation</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="10-metrics-monitoring-metrics-module">10. metrics/ - Monitoring Metrics Module</h3>
+<p><strong>Function</strong>: Prometheus metric collection, performance monitoring.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>metrics.py</code></td>
+<td>Prometheus metric definition</td>
+<td>Adding new monitoring metrics</td>
+</tr>
+<tr>
+<td><code>stats.py</code></td>
+<td>ZMQ metric statistics</td>
+<td>Distributed monitoring</td>
+</tr>
+<tr>
+<td><code>trace_util.py</code></td>
+<td>OpenTelemetry distributed tracing</td>
+<td>Link tracing</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="11-other-important-modules">11. Other Important Modules</h3>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>inter_communicator/</code></td>
+<td>Inter-process communication (ZMQ)</td>
+<td>Engine-Worker communication modification</td>
+</tr>
+<tr>
+<td><code>spec_decode/</code></td>
+<td>Speculative decoding (MTP, N-gram)</td>
+<td>Speculative decoding strategy development</td>
+</tr>
+<tr>
+<td><code>distributed/</code></td>
+<td>Distributed communication (AllReduce)</td>
+<td>Distributed inference development</td>
+</tr>
+<tr>
+<td><code>multimodal/</code></td>
+<td>Multimodal data processing</td>
+<td>Multimodal feature extension</td>
+</tr>
+<tr>
+<td><code>reasoning/</code></td>
+<td>Reasoning mode parsing (DeepSeek R1 style)</td>
+<td>Chain-of-thought parsing</td>
+</tr>
+<tr>
+<td><code>router/</code></td>
+<td>Request router, <strong>recommended for PD disaggregation</strong></td>
+<td><strong>First choice for PD disaggregation deployment</strong></td>
+</tr>
+<tr>
+<td><code>golang_router/</code></td>
+<td>Go-implemented router, better PD inter-scheduling performance</td>
+<td><strong>High-performance PD disaggregation scenarios</strong></td>
+</tr>
+<tr>
+<td><code>eplb/</code></td>
+<td>Expert Parallel load balancing</td>
+<td>MoE load balancing</td>
+</tr>
+<tr>
+<td><code>rl/</code></td>
+<td>Reinforcement learning Rollout</td>
+<td>RLHF scenarios</td>
+</tr>
+<tr>
+<td><code>plugins/</code></td>
+<td>Plugin system</td>
+<td>Custom extensions</td>
+</tr>
+<tr>
+<td><code>logger/</code></td>
+<td>Logging module</td>
+<td>Log format modification</td>
+</tr>
+<tr>
+<td><code>trace/</code></td>
+<td>Tracing module</td>
+<td>Performance analysis</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h3 id="12-configuration-files">12. Configuration Files</h3>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>config.py</code></td>
+<td><code>FDConfig</code> main configuration class</td>
+<td><strong>Entry point for configuration parameter modification</strong></td>
+</tr>
+<tr>
+<td><code>envs.py</code></td>
+<td>Environment variable configuration</td>
+<td>Adding new environment variables</td>
+</tr>
+<tr>
+<td><code>utils.py</code></td>
+<td>General utility functions</td>
+<td>Utility function reuse</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="ii-custom-operators-directory-custom_ops">II. Custom Operators Directory (custom_ops/)</h2>
+<p><strong>Function</strong>: C++/CUDA high-performance operator implementations, organized by hardware platform.</p>
+<pre><code>custom_ops/
+├── gpu_ops/           # NVIDIA GPU operators (main)
+├── cpu_ops/           # CPU operators
+├── xpu_ops/           # Baidu Kunlun XPU operators
+├── iluvatar_ops/      # Iluvatar GPU operators
+├── metax_ops/         # MetaX GPU operators
+├── utils/             # Common utilities
+└── third_party/       # Third-party libraries (cutlass, DeepGEMM)
+</code></pre>
+<h3 id="gpu_ops-gpu-operator-details">gpu_ops/ - GPU Operator Details</h3>
+<table>
+<thead>
+<tr>
+<th>Directory/File</th>
+<th>Function</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>append_attn/</code></td>
+<td>Append Attention implementation</td>
+<td><strong>First choice for attention optimization</strong></td>
+</tr>
+<tr>
+<td><code>moe/</code></td>
+<td>MoE operators (fused_moe, expert_dispatch)</td>
+<td>MoE performance optimization</td>
+</tr>
+<tr>
+<td><code>flash_mask_attn/</code></td>
+<td>Flash Mask Attention</td>
+<td>Attention mask optimization</td>
+</tr>
+<tr>
+<td><code>mla_attn/</code></td>
+<td>Multi-Head Latent Attention</td>
+<td>MLA model support</td>
+</tr>
+<tr>
+<td><code>machete/</code></td>
+<td>Machete GEMM</td>
+<td>Matrix multiplication optimization</td>
+</tr>
+<tr>
+<td><code>quantization/</code></td>
+<td>Quantization operators</td>
+<td>Quantization performance optimization</td>
+</tr>
+<tr>
+<td><code>sample_kernels/</code></td>
+<td>Sampling operators</td>
+<td>Sampling performance optimization</td>
+</tr>
+<tr>
+<td><code>speculate_decoding/</code></td>
+<td>Speculative decoding operators</td>
+<td>Speculative decoding optimization</td>
+</tr>
+<tr>
+<td><code>cutlass_kernels/</code></td>
+<td>CUTLASS kernels</td>
+<td>High-performance GEMM</td>
+</tr>
+<tr>
+<td><code>cpp_extensions.cc</code></td>
+<td>C++ extension entry</td>
+<td><strong>Entry point for new operator registration</strong></td>
+</tr>
+<tr>
+<td><code>append_attention.cu</code></td>
+<td>Append Attention core</td>
+<td>Attention core implementation</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Key Operator Files</strong>:</p>
+<ul>
+<li><code>fused_rotary_position_encoding.cu</code> - Fused rotary position encoding</li>
+<li><code>multi_head_latent_attention.cu</code> - MLA attention</li>
+<li><code>per_token_quant_fp8.cu</code> - FP8 quantization</li>
+</ul>
+<hr />
+<h2 id="iii-test-directory-tests">III. Test Directory (tests/)</h2>
+<p><strong>Function</strong>: Unit tests and end-to-end tests, organized by module.</p>
+<pre><code>tests/
+├── e2e/               # End-to-end service tests
+├── operators/         # Operator unit tests
+├── model_executor/    # Model executor tests
+├── model_loader/      # Model loading tests
+├── layers/            # Network layer tests
+├── scheduler/         # Scheduler tests
+├── cache_manager/     # Cache management tests
+├── entrypoints/       # API entry tests
+├── input/             # Input processing tests
+├── output/            # Output processing tests
+├── metrics/           # Metric tests
+├── distributed/       # Distributed tests
+├── graph_optimization/# Graph optimization tests
+├── quantization/      # Quantization tests
+├── multimodal/        # Multimodal tests
+├── xpu_ci/            # XPU CI tests
+├── ci_validation/     # CI validation tests
+├── ci_use/            # CI utility tests
+└── conftest.py        # pytest configuration
+</code></pre>
+<h3 id="test-directory-details">Test Directory Details</h3>
+<table>
+<thead>
+<tr>
+<th>Directory</th>
+<th>Content</th>
+<th>Development Guide</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>e2e/</code></td>
+<td>Complete service tests for each model (ERNIE, Qwen, DeepSeek, etc.)</td>
+<td><strong>Service integration testing</strong></td>
+</tr>
+<tr>
+<td><code>operators/</code></td>
+<td>Operator unit tests (<code>test_fused_moe.py</code>, <code>test_flash_mask_attn.py</code>, etc.)</td>
+<td><strong>Required tests for operator development</strong></td>
+</tr>
+<tr>
+<td><code>layers/</code></td>
+<td>Network layer tests (attention, moe, quantization)</td>
+<td>Network layer testing</td>
+</tr>
+<tr>
+<td><code>model_executor/</code></td>
+<td>Model execution flow tests</td>
+<td>Model execution testing</td>
+</tr>
+<tr>
+<td><code>scheduler/</code></td>
+<td>Scheduler function tests</td>
+<td>Scheduling logic verification</td>
+</tr>
+<tr>
+<td><code>cache_manager/</code></td>
+<td>Cache management tests</td>
+<td>Cache logic verification</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="iv-scripts-directory-scripts">IV. Scripts Directory (scripts/)</h2>
+<p><strong>Function</strong>: CI/CD, performance tuning, utility scripts.</p>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Function</th>
+<th>Usage Scenario</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>run_unittest.sh</code></td>
+<td>Unit test runner</td>
+<td>Local testing</td>
+</tr>
+<tr>
+<td><code>run_ci_xpu.sh</code></td>
+<td>XPU CI runner</td>
+<td>Kunlun CI</td>
+</tr>
+<tr>
+<td><code>run_ci_hpu.sh</code></td>
+<td>HPU CI runner</td>
+<td>Intel HPU CI</td>
+</tr>
+<tr>
+<td><code>run_ci_dcu.sh</code></td>
+<td>DCU CI runner</td>
+<td>AMD DCU CI</td>
+</tr>
+<tr>
+<td><code>coverage_run.sh</code></td>
+<td>Code coverage statistics</td>
+<td>Code quality</td>
+</tr>
+<tr>
+<td><code>tune_cublaslt_int8_gemm.py</code></td>
+<td>cuBLASLt INT8 GEMM tuning</td>
+<td>Performance tuning</td>
+</tr>
+<tr>
+<td><code>tune_cutlass_fp8_gemm.py</code></td>
+<td>CUTLASS FP8 GEMM tuning</td>
+<td>Performance tuning</td>
+</tr>
+<tr>
+<td><code>offline_w4a8.py</code></td>
+<td>Offline W4A8 quantization tool</td>
+<td>Model quantization</td>
+</tr>
+<tr>
+<td><code>extract_mtp_weight_from_safetensor.py</code></td>
+<td>MTP weight extraction</td>
+<td>Model processing</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="v-other-directories">V. Other Directories</h2>
+<h3 id="docs-documentation">docs/ - Documentation</h3>
+<ul>
+<li>Usage documentation, API documentation, architecture design documents</li>
+</ul>
+<h3 id="examples-example-code">examples/ - Example Code</h3>
+<ul>
+<li>Model usage examples, deployment examples</li>
+</ul>
+<h3 id="benchmarks-performance-benchmarks">benchmarks/ - Performance Benchmarks</h3>
+<ul>
+<li>Performance test scripts, benchmark data</li>
+</ul>
+<h3 id="tools-development-tools">tools/ - Development Tools</h3>
+<ul>
+<li><code>codestyle/</code> - Code style checking tools</li>
+<li><code>dockerfile/</code> - Docker build tools</li>
+</ul>
+<h3 id="dockerfiles-docker-images">dockerfiles/ - Docker Images</h3>
+<ul>
+<li>Dockerfiles for each platform runtime environment</li>
+</ul>
+<hr />
+<h2 id="vi-quick-development-guide">VI. Quick Development Guide</h2>
+<h3 id="adding-a-new-model">Adding a New Model</h3>
+<ol>
+<li>Reference <code>models/model_base.py</code> to understand model registration mechanism</li>
+<li>Create new model file under <code>models/</code></li>
+<li>Add corresponding input processor under <code>input/</code></li>
+<li>Add tests under <code>tests/model_executor/</code></li>
+</ol>
+<h3 id="adding-a-new-operator">Adding a New Operator</h3>
+<ol>
+<li>Implement CUDA operator under <code>custom_ops/gpu_ops/</code></li>
+<li>Register operator in <code>cpp_extensions.cc</code></li>
+<li>Add Python wrapper under <code>model_executor/ops/gpu/</code></li>
+<li>Add tests under <code>tests/operators/</code></li>
+</ol>
+<h3 id="new-hardware-platform-adaptation">New Hardware Platform Adaptation</h3>
+<ol>
+<li>Reference <code>platforms/base.py</code> to create new platform class</li>
+<li>Create hardware operator directory under <code>custom_ops/</code></li>
+<li>Create backend implementation under <code>model_executor/layers/backends/</code></li>
+<li>Create model runner under <code>worker/</code></li>
+</ol>
+<h3 id="optimizing-inference-performance">Optimizing Inference Performance</h3>
+<ol>
+<li>Attention optimization: <code>custom_ops/gpu_ops/append_attn/</code></li>
+<li>MoE optimization: <code>custom_ops/gpu_ops/moe/</code></li>
+<li>Graph optimization: <code>fastdeploy/model_executor/graph_optimization/</code></li>
+</ol>
+<h3 id="pd-disaggregation-deployment">PD Disaggregation Deployment</h3>
+<ol>
+<li>Router: <code>router/router.py</code> (Python implementation, recommended)</li>
+<li>High-performance router: <code>golang_router/</code> (Go implementation, better PD inter-scheduling performance)</li>
+<li>Cache transfer: <code>cache_manager/cache_transfer_manager.py</code></li>
+</ol>
+<hr />
+<h2 id="vii-configuration-system">VII. Configuration System</h2>
+<pre><code>FDConfig (config.py)
+├── ModelConfig      # Model configuration
+├── CacheConfig      # Cache configuration
+├── ParallelConfig   # Parallel configuration
+├── SchedulerConfig  # Scheduler configuration
+├── LoRAConfig       # LoRA configuration
+└── ...
+
+Environment Variable Configuration (envs.py)
+├── FD_* series environment variables
+└── Runtime behavior control
+</code></pre>
+<hr />
+<p>This document covers the main modules and key files of the FastDeploy codebase. It can be used as a code navigation and development reference. For questions, please refer to detailed documentation of each module or source code comments.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 Maintained by FastDeploy
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": [], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

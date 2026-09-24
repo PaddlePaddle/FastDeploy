@@ -1,0 +1,3377 @@
+
+<!doctype html>
+<html lang="zh" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+      
+      
+      
+      
+      
+        
+          <link rel="alternate" href="../../../online_serving/router_faq/" hreflang="en">
+        
+          <link rel="alternate" href="./" hreflang="zh">
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.ico">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Router faq - 飞桨大语言模型推理部署工具包</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#router" class="md-skip">
+          跳转至
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="页眉">
+    <a href="../../" title="飞桨大语言模型推理部署工具包" class="md-header__button md-logo" aria-label="飞桨大语言模型推理部署工具包" data-md-component="logo">
+      
+  <img src="../../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            飞桨大语言模型推理部署工具包
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Router faq
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="indigo"  aria-label="Switch to system preference"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to system preference" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+      <div class="md-header__option">
+  <div class="md-select">
+    
+    <button class="md-header__button md-icon" aria-label="选择当前语言">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12.87 15.07-2.54-2.51.03-.03A17.5 17.5 0 0 0 14.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2zm-2.62 7 1.62-4.33L19.12 17z"/></svg>
+    </button>
+    <div class="md-select__inner">
+      <ul class="md-select__list">
+        
+          <li class="md-select__item">
+            <a href="../../../online_serving/router_faq/" hreflang="en" class="md-select__link">
+              English
+            </a>
+          </li>
+        
+          <li class="md-select__item">
+            <a href="./" hreflang="zh" class="md-select__link">
+              简体中文
+            </a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+</div>
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="搜索" placeholder="搜索" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="查找">
+        
+        <button type="reset" class="md-search__icon md-icon" title="清空当前内容" aria-label="清空当前内容" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            正在初始化搜索引擎
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/PaddlePaddle/FastDeploy" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="导航栏" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../" title="飞桨大语言模型推理部署工具包" class="md-nav__button md-logo" aria-label="飞桨大语言模型推理部署工具包" data-md-component="logo">
+      
+  <img src="../../../assets/images/logo.jpg" alt="logo">
+
+    </a>
+    飞桨大语言模型推理部署工具包
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/PaddlePaddle/FastDeploy" title="前往仓库" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    FastDeploy
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    FastDeploy
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_2" id="__nav_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    快速入门
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    快速入门
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_2_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_2_1" id="__nav_2_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    安装
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_2_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_2_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    安装
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/nvidia_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    英伟达 GPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/kunlunxin_xpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    昆仑芯 XPU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/intel_gaudi/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    英特尔 Gaudi
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/hygon_dcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    海光 DCU
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/Enflame_gcu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    燧原 S60
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/iluvatar_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    天数 CoreX
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/installation/metax_gpu/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    沐曦 C550
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/ernie-4.5/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/ernie-4.5-vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_qwen/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen3-0.6b快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../get_started/quick_start_qwen25_vl/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen2.5-VL系列快速部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" >
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    在线服务
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    在线服务
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    兼容 OpenAI 协议的服务化部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../metrics/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    监控Metrics
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scheduler/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    调度器
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../graceful_shutdown_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    服务优雅关闭
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../router/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Load-Balancing Scheduling Router
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../offline_inference/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    离线推理
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_5" >
+        
+          
+          <label class="md-nav__link" for="__nav_5" id="__nav_5_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Best Practices
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_5_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_5">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Best Practices
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-0.3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-0.3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-21B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-300B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-300B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-21B-A3B-Thinking/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-21B-A3B-Thinking
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-VL-28B-A3B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-28B-A3B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/ERNIE-4.5-VL-424B-A47B-Paddle/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ERNIE-4.5-VL-424B-A47B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/PaddleOCR-VL-0.9B/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleOCR-VL-0.9B
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../best_practices/FAQ/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    常见问题
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_6" >
+        
+          
+          <label class="md-nav__link" for="__nav_6" id="__nav_6_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    量化
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_6_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_6">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    量化
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/online_quantization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    在线量化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../quantization/wint2/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    WINT2量化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_7" >
+        
+          
+          <label class="md-nav__link" for="__nav_7" id="__nav_7_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    特性
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_7_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_7">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    特性
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/prefix_caching/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    前缀缓存
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/disaggregated/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    分离式部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/chunked_prefill/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    分块预填充
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/load_balance/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    负载均衡
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/speculative_decoding/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    投机解码
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/structured_outputs/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    结构化输出
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/reasoning_output/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    思考链内容
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/thinking_budget/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    思考预算
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/early_stop/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    早停功能
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/plugins/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    插件机制
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/paddleformers_backend/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PaddleFormers 后端
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/sampling/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    采样策略
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/multi-node_deployment/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    多机部署
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/graph_optimization/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    图优化
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/data_parallel_service/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    数据并行
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../features/plas_attention/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    PLAS
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../supported_models/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    支持模型列表
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../benchmark/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    基准测试
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_10" >
+        
+          
+          <label class="md-nav__link" for="__nav_10" id="__nav_10_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    用法
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_10_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_10">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    用法
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/log/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    日志说明
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/code_overview/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    代码概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../usage/environment_variables/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    环境变量
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_11" id="__nav_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CLI 使用说明
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    CLI 使用说明
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    概述
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/chat/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Chat命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/complete/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Complete命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/serve/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Server命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/collect-env/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Collect Env命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/bench/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Bench命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/run-batch/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Run Batch命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../cli/tokenizer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tokenizer命令
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_12" id="__nav_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    可观测性
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    可观测性
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../observability/trace/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Trace服务
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="目录">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      目录
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        常见日志分析
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="常见日志分析">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#error" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error 级别日志
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#warn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Warn 级别日志
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#info" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Info 级别日志
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#debug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Debug 级别日志
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        常见返回输出分析
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="常见返回输出分析">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#v1chatcompletionsv1completions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        推理请求错误（/v1/chat/completions、/v1/completions）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        注册请求错误（/register）
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_3" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        常见注册参数校验错误
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#_4" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        常见问题排查方式
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="常见问题排查方式">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#_5" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        健康状况
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_6" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        调度策略
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_7" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        注册参数
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#_8" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        启动失败
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tokenizer-cache_aware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tokenizer 服务（cache_aware 策略）
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<p><a href="./">English</a></p>
+<h1 id="router">Router 常见问题排查</h1>
+<p>本文档基于 <a href="https://github.com/PaddlePaddle/FastDeploy/tree/develop/fastdeploy/golang_router">Golang Router</a> 的代码实现，汇总了 Router 在使用过程中常见的日志信息、返回输出及问题排查方法，帮助用户快速定位和解决问题。</p>
+<p>Router 的基本使用方式请参考 <a href="../router/">负载均衡调度 Router</a>。</p>
+<h2 id="_1">常见日志分析</h2>
+<blockquote>
+<p><strong>说明</strong>：<code>{}</code> 表示变量，实际日志中会替换为具体的值。</p>
+</blockquote>
+<h3 id="error">Error 级别日志</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">日志表现</th>
+<th style="text-align: left;">日志含义</th>
+<th style="text-align: left;">导致结果</th>
+<th style="text-align: left;">可排查内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Removed unhealthy prefill instance: {url}</code></td>
+<td style="text-align: left;">Prefill 实例健康检查失败，已被移除</td>
+<td style="text-align: left;">该 Prefill 实例不再参与调度</td>
+<td style="text-align: left;">健康状况</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Removed unhealthy decode instance: {url}</code></td>
+<td style="text-align: left;">Decode 实例健康检查失败，已被移除</td>
+<td style="text-align: left;">该 Decode 实例不再参与调度</td>
+<td style="text-align: left;">健康状况</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Removed unhealthy mixed instance: {url}</code></td>
+<td style="text-align: left;">Mixed 实例健康检查失败，已被移除</td>
+<td style="text-align: left;">该 Mixed 实例不再参与调度</td>
+<td style="text-align: left;">健康状况</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Failed to register instance: {error}</code></td>
+<td style="text-align: left;">实例注册失败</td>
+<td style="text-align: left;">Router 无法注册该实例</td>
+<td style="text-align: left;">健康状况、注册参数</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Failed to read YAML file {path}: {error}</code></td>
+<td style="text-align: left;">启动时无法读取注册配置文件</td>
+<td style="text-align: left;">配置文件中的实例无法被注册</td>
+<td style="text-align: left;">文件路径、文件权限</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Failed to unmarshal YAML file {path}: {error}</code></td>
+<td style="text-align: left;">注册配置文件格式解析错误</td>
+<td style="text-align: left;">配置文件中的实例无法被注册</td>
+<td style="text-align: left;">YAML 格式</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Failed to register instance from index {index}: {error}</code></td>
+<td style="text-align: left;">配置文件中第 {index} 个实例注册失败</td>
+<td style="text-align: left;">该实例未能成功注册</td>
+<td style="text-align: left;">健康状况、注册参数</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>failed to send request to {url} with error: {error}</code></td>
+<td style="text-align: left;">健康检查请求发送失败</td>
+<td style="text-align: left;">该实例可能被判定为不健康</td>
+<td style="text-align: left;">网络连通性、代理设置</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>scanner error: {error}</code></td>
+<td style="text-align: left;">读取后端流式响应时发生错误</td>
+<td style="text-align: left;">当前请求可能失败</td>
+<td style="text-align: left;">后端实例状态</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[prefill] scanner error: {error}, message={message}</code></td>
+<td style="text-align: left;">读取 Prefill 后端流式响应时发生错误</td>
+<td style="text-align: left;">当前 Prefill 请求可能失败</td>
+<td style="text-align: left;">后端实例状态</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[prefill] copy error: {error}, message={message}</code></td>
+<td style="text-align: left;">复制 Prefill 响应数据时发生错误</td>
+<td style="text-align: left;">当前 Prefill 请求可能失败</td>
+<td style="text-align: left;">后端实例状态</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Panic recovered: {error}</code></td>
+<td style="text-align: left;">请求处理过程中发生 panic 并被恢复</td>
+<td style="text-align: left;">当前请求失败，但服务继续运行</td>
+<td style="text-align: left;">后端实例状态、请求内容</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>empty baseURL provided</code></td>
+<td style="text-align: left;">健康检查时传入了空的基础 URL</td>
+<td style="text-align: left;">健康检查无法执行</td>
+<td style="text-align: left;">注册参数</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>failed to create request: {error}</code></td>
+<td style="text-align: left;">创建健康检查请求失败</td>
+<td style="text-align: left;">该实例可能被判定为不健康</td>
+<td style="text-align: left;">网络环境</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>failed to read response body: {error}</code></td>
+<td style="text-align: left;">读取健康检查响应体失败</td>
+<td style="text-align: left;">该实例可能被判定为不健康</td>
+<td style="text-align: left;">后端实例状态</td>
+</tr>
+</tbody>
+</table>
+<h3 id="warn">Warn 级别日志</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">日志表现</th>
+<th style="text-align: left;">日志含义</th>
+<th style="text-align: left;">导致结果</th>
+<th style="text-align: left;">可排查内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Server {url} is not healthy</code></td>
+<td style="text-align: left;">该 URL 对应的实例未通过健康检查</td>
+<td style="text-align: left;">Router 无法注册该实例，或将该实例从已注册列表中移除</td>
+<td style="text-align: left;">健康状况</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Instance {url} role is unknown</code></td>
+<td style="text-align: left;">实例角色无法识别</td>
+<td style="text-align: left;">该实例不会被加入调度列表</td>
+<td style="text-align: left;">注册参数</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware prefill: tokenizer failed, fallback to char tokens: {error}</code></td>
+<td style="text-align: left;">Tokenizer 服务调用失败，已自动回退至字符级分词</td>
+<td style="text-align: left;">cache_aware 策略仍然生效，使用字符级分词代替 Tokenizer 进行缓存匹配，不影响正常请求处理</td>
+<td style="text-align: left;">Tokenizer 服务状态</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware prefill: tokenize failed, fallback to process_tokens: {error}</code></td>
+<td style="text-align: left;">分词彻底失败（如输入为空），回退至 process_tokens 策略</td>
+<td style="text-align: left;">Prefill 调度暂时不使用 cache_aware 策略，不影响正常请求处理</td>
+<td style="text-align: left;">请求内容、Tokenizer 服务状态</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware prefill: final strategy: process_tokens, reason: tokenize failed: {error}. ts_ms={ts}</code></td>
+<td style="text-align: left;">分词失败（新格式），回退至 process_tokens 策略</td>
+<td style="text-align: left;">Prefill 调度暂时不使用 cache_aware 策略，不影响正常请求处理</td>
+<td style="text-align: left;">请求内容、Tokenizer 服务状态</td>
+</tr>
+</tbody>
+</table>
+<h3 id="info">Info 级别日志</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">日志表现</th>
+<th style="text-align: left;">日志含义</th>
+<th style="text-align: left;">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Starting server on {host:port}</code></td>
+<td style="text-align: left;">Router 服务正在启动</td>
+<td style="text-align: left;">正常启动日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Server {url} is healthy</code></td>
+<td style="text-align: left;">实例健康检查通过</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Successfully registered instance from index {index}</code></td>
+<td style="text-align: left;">配置文件中的实例注册成功</td>
+<td style="text-align: left;">正常启动日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>No instances found in config file {path}</code></td>
+<td style="text-align: left;">注册配置文件中未找到实例信息</td>
+<td style="text-align: left;">请检查 register.yaml 内容是否为空</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Request completed successfully.</code></td>
+<td style="text-align: left;">请求处理完成</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Request failed, retrying...</code></td>
+<td style="text-align: left;">请求失败，正在进行重试</td>
+<td style="text-align: left;">Router 最多重试 3 次</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>select worker (prefill): {url}, tokens: {tokens}</code></td>
+<td style="text-align: left;">Prefill 调度选中 Worker，显示当前 token 处理量</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>select worker ({type}): {url}, count: {count}</code></td>
+<td style="text-align: left;">Decode/Mixed 调度选中 Worker，显示当前请求并发数</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>release worker: {url}, count: {count}</code></td>
+<td style="text-align: left;">请求结束，释放 Worker 计数器</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>release prefill tokens: {url}, tokens: {tokens}</code></td>
+<td style="text-align: left;">Prefill 请求结束，释放 token 负载</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cleanup unhealthy worker counter: {url}</code></td>
+<td style="text-align: left;">清理不健康 Worker 的计数器</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>removed counters for {count} unhealthy workers: {urls}</code></td>
+<td style="text-align: left;">批量清理不健康 Worker 的计数器</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[stats] total_running={n}, workers: [{loads}], cache_hit_rate={rate}% (hits={hits}/total={total})</code></td>
+<td style="text-align: left;">周期性统计：总请求数、各 Worker 负载、缓存命中率</td>
+<td style="text-align: left;">正常运行日志，用于监控调优</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Parsing completed; starting worker selection.</code></td>
+<td style="text-align: left;">请求解析完成，开始选择 Worker</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>Request completed with an error.</code></td>
+<td style="text-align: left;">请求处理完成但发生错误</td>
+<td style="text-align: left;">请排查后端实例状态</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[SelectWorkerPair] decode selection failed, releasing prefill counter url={url}</code></td>
+<td style="text-align: left;">PD 分离模式下 Decode 选择失败，释放 Prefill 计数器</td>
+<td style="text-align: left;">异常处理日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[prefill] first chunk received, release counter url={url}</code></td>
+<td style="text-align: left;">Prefill 流式响应收到首个数据块，释放计数器</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[prefill] non-stream prefill response done, release counter url={url}</code></td>
+<td style="text-align: left;">Prefill 非流式响应完成，释放计数器</td>
+<td style="text-align: left;">正常运行日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[prefill] backendResp is nil or backendResp.Body is nil, url={url}</code></td>
+<td style="text-align: left;">Prefill 后端响应为空</td>
+<td style="text-align: left;">可能表示后端连接异常</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[prefill] release in defer (fallback) url={url}, isStream={bool}</code></td>
+<td style="text-align: left;">Prefill 请求异常退出时的兜底资源释放</td>
+<td style="text-align: left;">异常处理日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[prefill] release in CommonCompletions defer (error path) url={url}</code></td>
+<td style="text-align: left;">请求出错时释放 Prefill 资源</td>
+<td style="text-align: left;">异常处理日志</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware prefill: final strategy: process_tokens, reason: strategy not initialized</code></td>
+<td style="text-align: left;">cache_aware 策略未初始化，回退至 process_tokens</td>
+<td style="text-align: left;">请检查 cache_aware 相关配置</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware prefill: final strategy: process_tokens, reason: load imbalanced, loads={loads}. ts_ms={ts}</code></td>
+<td style="text-align: left;">实例间负载不均衡，回退至 process_tokens 策略</td>
+<td style="text-align: left;">正常运行日志，负载均衡自动切换</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware prefill: final strategy: cache_aware_scoring, selected={url}, loads={loads}, hitRatios={ratios}. ts_ms={ts}</code></td>
+<td style="text-align: left;">cache_aware 打分策略选中 Worker</td>
+<td style="text-align: left;">正常运行日志，显示负载和命中率</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>[{method}] {path} {proto} {status} {latency} {clientIP}</code></td>
+<td style="text-align: left;">HTTP 请求访问日志</td>
+<td style="text-align: left;">正常运行日志，记录每个请求的基本信息</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>before SelectWorker prefill. ts_ms={ts}</code></td>
+<td style="text-align: left;">PD 分离模式下开始选择 Prefill Worker</td>
+<td style="text-align: left;">正常运行日志，用于性能追踪</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>before SelectWorker decode, after prefill. ts_ms={ts}</code></td>
+<td style="text-align: left;">Prefill 选择完成后开始选择 Decode Worker</td>
+<td style="text-align: left;">正常运行日志，用于性能追踪</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>after SelectWorker decode, before return. ts_ms={ts}</code></td>
+<td style="text-align: left;">Decode Worker 选择完成</td>
+<td style="text-align: left;">正常运行日志，用于性能追踪</td>
+</tr>
+</tbody>
+</table>
+<h3 id="debug">Debug 级别日志</h3>
+<blockquote>
+<p>Debug 级别日志需要将日志级别设置为 <code>debug</code> 才会输出，通常用于开发调试。</p>
+</blockquote>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">日志表现</th>
+<th style="text-align: left;">日志含义</th>
+<th style="text-align: left;">说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>Healthy instances: prefill={urls}, decode={urls}, mixed={urls}</code></td>
+<td style="text-align: left;">列出当前各角色的健康实例列表</td>
+<td style="text-align: left;">用于确认实例发现是否正常</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware prefill: hashes={n} workers={n} load={loads} hit={hits}</code></td>
+<td style="text-align: left;">cache_aware 策略的 hash 数量、Worker 数量及负载信息</td>
+<td style="text-align: left;">用于调试缓存命中</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware prefill: tokenizer tokens={tokens}</code></td>
+<td style="text-align: left;">Tokenizer 分词结果</td>
+<td style="text-align: left;">用于调试分词结果</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>cache-aware score: worker={url} hit={hit} loadRatio={ratio} score={score}</code></td>
+<td style="text-align: left;">cache_aware 策略的打分详情</td>
+<td style="text-align: left;">用于调试调度决策</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>radix match: hashes={n} matched_len={n} node_children={n}</code></td>
+<td style="text-align: left;">前缀树匹配详情</td>
+<td style="text-align: left;">用于调试缓存匹配</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>radix record: worker={url} hashes={n} node_depth={n}</code></td>
+<td style="text-align: left;">前缀树记录详情</td>
+<td style="text-align: left;">用于调试缓存记录</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>radix eviction: removed={n} nodeCount={n}</code></td>
+<td style="text-align: left;">前缀树淘汰详情</td>
+<td style="text-align: left;">用于调试缓存淘汰</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_2">常见返回输出分析</h2>
+<h3 id="v1chatcompletionsv1completions">推理请求错误（/v1/chat/completions、/v1/completions）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">输出表现</th>
+<th style="text-align: center;">HTTP 状态码</th>
+<th style="text-align: left;">含义</th>
+<th style="text-align: left;">可排查内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>{"error": "No available prefill/decode workers"}</code></td>
+<td style="text-align: center;">503</td>
+<td style="text-align: left;">Prefill 或 Decode 实例全部不可用，没有已注册的健康实例</td>
+<td style="text-align: left;">健康状况</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"error": "Failed to select worker pair"}</code></td>
+<td style="text-align: center;">502</td>
+<td style="text-align: left;">PD 分离模式下选择 Worker 对失败</td>
+<td style="text-align: left;">健康状况、调度策略</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"error": "Failed to select worker"}</code></td>
+<td style="text-align: center;">502</td>
+<td style="text-align: left;">集中式模式下选择 Worker 失败</td>
+<td style="text-align: left;">健康状况、调度策略</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"error": "Failed to connect to backend service"}</code></td>
+<td style="text-align: center;">502</td>
+<td style="text-align: left;">连接后端推理实例失败（已重试 3 次仍失败）</td>
+<td style="text-align: left;">后端实例状态、网络连通性</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"error": "Failed to build disaggregate_info"}</code></td>
+<td style="text-align: center;">500</td>
+<td style="text-align: left;">构建 PD 分离通信信息失败</td>
+<td style="text-align: left;">注册参数（connector_port、device_ids 等）</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"error": "Invalid request body"}</code></td>
+<td style="text-align: center;">400</td>
+<td style="text-align: left;">请求体读取失败</td>
+<td style="text-align: left;">请求格式</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"error": "Invalid JSON format"}</code></td>
+<td style="text-align: center;">400</td>
+<td style="text-align: left;">请求体 JSON 解析失败</td>
+<td style="text-align: left;">请求格式</td>
+</tr>
+</tbody>
+</table>
+<h3 id="register">注册请求错误（/register）</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">输出表现</th>
+<th style="text-align: center;">HTTP 状态码</th>
+<th style="text-align: left;">含义</th>
+<th style="text-align: left;">可排查内容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>{"code": 503, "msg": "{url} service is not healthy"}</code></td>
+<td style="text-align: center;">503</td>
+<td style="text-align: left;">实例健康检查未通过，无法注册</td>
+<td style="text-align: left;">健康状况</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"code": 400, "msg": "Invalid request body"}</code></td>
+<td style="text-align: center;">400</td>
+<td style="text-align: left;">注册请求体读取失败</td>
+<td style="text-align: left;">请求格式</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"code": 400, "msg": "Invalid InstanceInfo JSON format: {error}"}</code></td>
+<td style="text-align: center;">400</td>
+<td style="text-align: left;">注册请求 JSON 格式错误</td>
+<td style="text-align: left;">请求格式</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"code": 400, "msg": "splitwise mode only supports PREFILL/DECODE instances"}</code></td>
+<td style="text-align: center;">400</td>
+<td style="text-align: left;">PD 分离模式下不允许注册 MIXED 实例</td>
+<td style="text-align: left;">部署模式、实例角色</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"code": 400, "msg": "only MIXED instances are allowed"}</code></td>
+<td style="text-align: center;">400</td>
+<td style="text-align: left;">集中式模式下只允许注册 MIXED 实例</td>
+<td style="text-align: left;">部署模式、实例角色</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"code": 400, "msg": "invalid InstanceInfo format: {error}"}</code></td>
+<td style="text-align: center;">400</td>
+<td style="text-align: left;">实例注册信息校验失败</td>
+<td style="text-align: left;">注册参数</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>{"code": 200, "msg": "Register success"}</code></td>
+<td style="text-align: center;">200</td>
+<td style="text-align: left;">注册成功</td>
+<td style="text-align: left;">—</td>
+</tr>
+</tbody>
+</table>
+<h3 id="_3">常见注册参数校验错误</h3>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">错误信息</th>
+<th style="text-align: left;">含义</th>
+<th style="text-align: left;">解决方法</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;"><code>role is required</code></td>
+<td style="text-align: left;">缺少 role 字段</td>
+<td style="text-align: left;">添加 role 字段，可选值：prefill / decode / mixed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>invalid role: {role}</code></td>
+<td style="text-align: left;">role 值不合法</td>
+<td style="text-align: left;">使用合法的 role 值：prefill / decode / mixed</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>host_ip is required</code></td>
+<td style="text-align: left;">缺少 host_ip 字段</td>
+<td style="text-align: left;">添加 host_ip 字段</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>invalid host_ip: {ip}</code></td>
+<td style="text-align: left;">host_ip 不是合法的 IP 地址</td>
+<td style="text-align: left;">填写正确的 IP 地址</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>port is required</code></td>
+<td style="text-align: left;">缺少 port 字段</td>
+<td style="text-align: left;">添加 port 字段</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>invalid port: {port}</code></td>
+<td style="text-align: left;">port 不是合法的端口号</td>
+<td style="text-align: left;">填写 1-65535 范围内的端口号</td>
+</tr>
+<tr>
+<td style="text-align: left;"><code>invalid protocol: {protocol}</code></td>
+<td style="text-align: left;">传输协议不合法</td>
+<td style="text-align: left;">使用合法的协议值：ipc / rdma</td>
+</tr>
+</tbody>
+</table>
+<h2 id="_4">常见问题排查方式</h2>
+<h3 id="_5">健康状况</h3>
+<p>实例健康检查是 Router 正常运行的基础。当出现实例无法注册或被移除的情况时，请按以下步骤排查：</p>
+<p><strong>1. 查看实例注册情况</strong></p>
+<p>查看 Router 当前已注册的实例列表和数量：</p>
+<pre><code class="language-bash"># 查看已注册实例列表
+curl -X GET http://{router_url}/registered
+
+# 查看已注册实例数量
+curl -X GET http://{router_url}/registered_number
+</code></pre>
+<p>确认所有预期实例是否都已注册成功。如果实例数量不符，说明部分实例注册失败或已被健康检查移除。</p>
+<p><strong>2. 检查实例健康状态与网络连通性</strong></p>
+<p>从 Router 所在机器直接访问推理实例的健康接口：</p>
+<pre><code class="language-bash">curl -X GET http://{server_url}/health
+</code></pre>
+<ul>
+<li>返回 HTTP 200 表示实例健康且网络连通</li>
+<li>无法访问或返回非 200 状态码，请进一步排查：</li>
+<li>实例是否已启动并监听在正确端口上</li>
+<li>Router 与实例之间是否存在代理干扰（尝试关闭代理：<code>unset http_proxy &amp;&amp; unset https_proxy</code>）</li>
+<li>是否存在防火墙限制</li>
+</ul>
+<p><strong>常见解决方式：</strong>
+- 关闭网络代理：<code>unset http_proxy &amp;&amp; unset https_proxy</code>
+- gunicorn 版本兼容问题：如果出现注册实例数不全的情况，可能是 gunicorn 与 FastDeploy 版本不兼容，回退至 <code>gunicorn==25.0.3</code> 可解决</p>
+<h3 id="_6">调度策略</h3>
+<p>当出现 <code>Failed to select worker</code> 或 <code>Failed to select worker pair</code> 错误时：</p>
+<p><strong>1. 确认已注册实例数</strong></p>
+<pre><code class="language-bash">curl -X GET http://{router_url}/registered_number
+</code></pre>
+<p>如果返回的实例数为 0，说明没有可用的健康实例，请先参考<a href="#健康状况">健康状况</a>排查。</p>
+<p><strong>2. 检查调度策略配置</strong></p>
+<p>确认 config.yaml 中的调度策略与部署模式匹配。Router 的默认调度策略如下：</p>
+<table>
+<thead>
+<tr>
+<th style="text-align: left;">部署模式</th>
+<th style="text-align: left;">配置项</th>
+<th style="text-align: left;">默认策略</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td style="text-align: left;">集中式模式</td>
+<td style="text-align: left;"><code>policy</code></td>
+<td style="text-align: left;"><code>request_num</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">PD 分离模式（Prefill 节点）</td>
+<td style="text-align: left;"><code>prefill-policy</code></td>
+<td style="text-align: left;"><code>process_tokens</code></td>
+</tr>
+<tr>
+<td style="text-align: left;">PD 分离模式（Decode 节点）</td>
+<td style="text-align: left;"><code>decode-policy</code></td>
+<td style="text-align: left;"><code>request_num</code></td>
+</tr>
+</tbody>
+</table>
+<p>如未通过配置文件指定策略，Router 将使用上述默认策略进行调度。如需使用 <code>cache_aware</code>、<code>fd_metrics_score</code> 等高级策略，请通过配置文件显式指定。各策略的详细说明请参考 <a href="../router/#调度策略说明">调度策略说明</a>。</p>
+<p><strong>3. 检查 fd_metrics_score 策略的依赖</strong></p>
+<p>使用 <code>fd_metrics_score</code> 策略时，Router 会实时从推理实例的 <code>/metrics</code> 接口获取 running/waiting 请求数进行打分调度。当 <code>/metrics</code> 接口不可用时（如实例未配置 <code>metrics_port</code> 或 metrics 服务异常），Router 会自动回退至内部请求计数器进行调度，不影响正常的请求处理，但调度精度会有所下降。</p>
+<p>如需确保 <code>fd_metrics_score</code> 策略获得最佳调度效果，请确认推理实例的 metrics 接口正常返回：</p>
+<pre><code class="language-bash">curl -X GET http://{server_url}/metrics
+</code></pre>
+<h3 id="_7">注册参数</h3>
+<p>当注册失败且返回参数校验错误时：</p>
+<p><strong>1. 检查部署模式与实例角色是否匹配</strong>
+- PD 分离模式（<code>--splitwise</code>）：只能注册 <code>prefill</code> 和 <code>decode</code> 角色的实例
+- 集中式模式（默认）：只能注册 <code>mixed</code> 角色的实例</p>
+<p><strong>2. 检查必填参数</strong></p>
+<p>注册请求必须包含以下字段：
+- <code>role</code>：实例角色（prefill / decode / mixed）
+- <code>host_ip</code>：实例 IP 地址
+- <code>port</code>：实例端口号</p>
+<p><strong>3. 检查 PD 分离模式下的可选参数</strong></p>
+<p>PD 分离模式下建议完整配置以下参数，以确保 KV Cache 传输正常：
+- <code>connector_port</code>：PD 通信端口
+- <code>transfer_protocol</code>：传输协议（ipc / rdma）
+- <code>device_ids</code>：GPU 设备 ID
+- <code>rdma_ports</code>：RDMA 端口（使用 rdma 协议时必填）</p>
+<h3 id="_8">启动失败</h3>
+<p><strong>1. 配置文件加载失败</strong></p>
+<p>启动时日志出现 <code>Failed to load config</code>，请检查：
+- <code>--config_path</code> 指向的文件路径是否正确
+- 配置文件是否为合法的 YAML 格式
+- 配置参数值是否合法</p>
+<p><strong>2. 端口被占用</strong></p>
+<p>启动时日志出现 <code>Failed to start server</code>，请检查：
+- <code>--port</code> 指定的端口是否已被其他进程占用
+- 可使用 <code>lsof -i:{port}</code> 或 <code>netstat -tlnp | grep {port}</code> 确认端口使用情况</p>
+<h3 id="tokenizer-cache_aware">Tokenizer 服务（cache_aware 策略）</h3>
+<p>使用 <code>cache_aware</code> 调度策略时，Router 会调用 Tokenizer 服务对请求进行分词以计算缓存命中率。当 Tokenizer 服务不可用时，Router 内置了两级退化机制：</p>
+<ol>
+<li><strong>回退至字符级分词</strong>（常见情况）：日志出现 <code>tokenizer failed, fallback to char tokens</code>。此时 cache_aware 策略仍然生效，只是使用字符级分词代替 Tokenizer 进行缓存匹配，缓存命中精度会有所下降，但不影响正常请求处理。</li>
+<li><strong>回退至 process_tokens 策略</strong>（极端情况）：当分词彻底失败（如请求内容为空）时，日志出现 <code>tokenize failed, fallback to process_tokens</code>。此时 cache_aware 策略暂时不生效，改为按 token 处理量进行调度，同样不影响正常请求处理。</li>
+</ol>
+<p>如需恢复 cache_aware 策略的完整功能：</p>
+<p><strong>1. 检查 Tokenizer 服务是否正常运行</strong></p>
+<pre><code class="language-bash">curl -X POST http://{tokenizer_url}/tokenize \
+  -H &quot;Content-Type: application/json&quot; \
+  -d '{&quot;text&quot;: &quot;hello&quot;}'
+</code></pre>
+<p><strong>2. 检查相关配置</strong>
+- 确认 config.yaml 中 <code>tokenizer-url</code> 配置正确
+- 如果 Tokenizer 服务响应较慢，可适当增大 <code>tokenizer-timeout-secs</code>（默认 2 秒）</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+    <div class="md-copyright__highlight">
+      Copyright &copy; 2025 Maintained by FastDeploy
+    </div>
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": [], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "\u5df2\u590d\u5236", "clipboard.copy": "\u590d\u5236", "search.result.more.one": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.more.other": "\u5728\u8be5\u9875\u4e0a\u8fd8\u6709 # \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.none": "\u6ca1\u6709\u627e\u5230\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.one": "\u627e\u5230 1 \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.other": "# \u4e2a\u7b26\u5408\u6761\u4ef6\u7684\u7ed3\u679c", "search.result.placeholder": "\u952e\u5165\u4ee5\u5f00\u59cb\u641c\u7d22", "search.result.term.missing": "\u7f3a\u5c11", "select.version": "\u9009\u62e9\u5f53\u524d\u7248\u672c"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
