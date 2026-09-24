@@ -561,9 +561,7 @@ class ResourceManagerV1(ResourceManager):
     def cache_output_tokens(self, request):
         if self.config.cache_config.enable_prefix_caching and self.config.cache_config.enable_output_caching:
             with self.lock:
-                self.cache_manager.update_cache_blocks(
-                    request, self.config.cache_config.block_size, request.num_total_tokens - 1
-                )
+                self.cache_manager.cache_output_blocks(request, self.config.cache_config.block_size)
 
     def _get_can_schedule_prefill_threshold_block(self, request, num_chunk_new_block):
         if self.can_relax_prefill_strategy:
