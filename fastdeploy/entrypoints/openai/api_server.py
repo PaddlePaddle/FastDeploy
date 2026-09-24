@@ -14,7 +14,6 @@
 """
 
 import asyncio
-import json
 import os
 import signal
 import threading
@@ -87,7 +86,6 @@ from fastdeploy.utils import (
     api_server_logger,
     console_logger,
     get_host_ip,
-    get_version_info,
     is_port_available,
     retrive_model_from_server,
 )
@@ -827,82 +825,6 @@ async def metrics():
     """
     metrics_text = get_filtered_metrics()
     return Response(metrics_text, media_type="text/plain")
-
-
-@metrics_app.get("/config-info")
-@tracing.trace_span("config-info")
-def config_info() -> Response:
-    """
-    Get the current configuration of the API server.
-    """
-    global llm_engine
-    if llm_engine is None:
-        return Response("Engine not loaded", status_code=500)
-    cfg = llm_engine.cfg
-
-    def process_object(obj):
-        if hasattr(obj, "__dict__"):
-            return obj.__dict__
-        if isinstance(obj, (set, frozenset)):
-            return list(obj)
-        return str(obj)
-
-    cfg_dict = {k: v for k, v in cfg.__dict__.items()}
-
-    # Version info
-    cfg_dict["version_info"] = get_version_info()
-
-    # Chat template
-    cfg_dict["chat_template"] = chat_template
-
-    # Server config from args
-    cfg_dict["server_config"] = {
-        "host": args.host,
-        "port": args.port,
-        "workers": args.workers,
-        "metrics_port": args.metrics_port,
-        "controller_port": args.controller_port,
-        "max_concurrency": args.max_concurrency,
-        "max_waiting_time": args.max_waiting_time,
-        "timeout": args.timeout,
-        "timeout_graceful_shutdown": args.timeout_graceful_shutdown,
-        "served_model_name": args.served_model_name,
-        "task": args.task,
-        "model_config_name": args.model_config_name,
-        "tokenizer_base_url": args.tokenizer_base_url,
-        "enable_mm_output": args.enable_mm_output,
-        "tool_call_parser": args.tool_call_parser,
-        "tool_parser_plugin": args.tool_parser_plugin,
-        "output_fallback": args.output_fallback,
-        "output_fallback_plugin": args.output_fallback_plugin,
-        "output_fallback_config": args.output_fallback_config,
-    }
-
-    # GPU info
-    try:
-        import paddle
-
-        from fastdeploy.platforms import current_platform
-
-        device_info = {}
-        device_info["device_type"] = current_platform.device_name
-        device_info["device_count"] = paddle.device.cuda.device_count()
-        device_ids = str(cfg.parallel_config.device_ids).split(",") if cfg.parallel_config else ["0"]
-        first_device = int(device_ids[0].strip()) - 1
-        props = paddle.device.cuda.get_device_properties(first_device)
-        device_info["device_name"] = props.name
-        device_info["device_total_memory"] = props.total_memory
-        device_info["device_multi_processor_count"] = props.multi_processor_count
-        device_info["device_major"] = props.major
-        device_info["device_minor"] = props.minor
-        cfg_dict["device_info"] = device_info
-    except Exception:
-        cfg_dict["device_info"] = None
-
-    env_dict = {k: v() for k, v in environment_variables.items()}
-    cfg_dict["env_config"] = env_dict
-    result_content = json.dumps(cfg_dict, default=process_object, ensure_ascii=False)
-    return Response(result_content, media_type="application/json")
 
 
 def run_metrics_server():
