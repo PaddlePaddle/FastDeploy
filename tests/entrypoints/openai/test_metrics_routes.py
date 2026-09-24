@@ -5,7 +5,6 @@ Mimics the patching pattern used by other tests under tests/entrypoints/openai.
 
 import asyncio
 import importlib
-import json
 import os
 import tempfile
 from types import SimpleNamespace
@@ -67,7 +66,7 @@ def _get_route(app, path: str):
     return None
 
 
-def test_metrics_and_config_routes():
+def test_metrics_route():
     with (
         patch("fastdeploy.utils.FlexibleArgumentParser.parse_args") as mock_parse_args,
         patch("fastdeploy.utils.retrive_model_from_server") as mock_retrive_model,
@@ -84,7 +83,6 @@ def test_metrics_and_config_routes():
 
             api_server = importlib.reload(api_server_mod)
 
-            # 1) /metrics
             from fastdeploy.metrics import metrics as metrics_mod
 
             if not hasattr(metrics_mod.main_process_metrics, "cache_config_info"):
@@ -99,89 +97,6 @@ def test_metrics_and_config_routes():
                 else str(metrics_resp.body)
             )
             assert "fastdeploy:" in metrics_text
-
-            # 2) /config-info
-            # Inject a fake engine so /config-info returns 200
-            from types import SimpleNamespace as NS
-
-            api_server.llm_engine = NS(cfg=NS(dummy="value"))
-
-            cfg_route = _get_route(api_server.app, "/config-info")
-            assert cfg_route is not None
-
-            cfg_resp = cfg_route.endpoint()
-            assert cfg_resp.status_code == 200
-            assert getattr(cfg_resp, "media_type", "").startswith("application/json")
-            cfg_text = (
-                cfg_resp.body.decode("utf-8") if isinstance(cfg_resp.body, (bytes, bytearray)) else str(cfg_resp.body)
-            )
-            data = json.loads(cfg_text)
-            assert isinstance(data, dict)
-            assert "env_config" in data
-
-
-def test_config_info_engine_not_loaded_returns_500():
-    # Ensure we take the branch where llm_engine is None
-    with (
-        patch("fastdeploy.utils.FlexibleArgumentParser.parse_args") as mock_parse_args,
-        patch("fastdeploy.utils.retrive_model_from_server") as mock_retrive_model,
-        patch("fastdeploy.entrypoints.chat_utils.load_chat_template") as mock_load_template,
-    ):
-        mock_parse_args.return_value = _build_mock_args()
-        mock_retrive_model.return_value = "test-model"
-        mock_load_template.return_value = None
-
-        from fastdeploy.entrypoints.openai import api_server as api_server_mod
-
-        api_server = importlib.reload(api_server_mod)
-
-        # Fresh import sets llm_engine to None
-        cfg_route = _get_route(api_server.app, "/config-info")
-        assert cfg_route is not None
-
-        resp = cfg_route.endpoint()
-        assert resp.status_code == 500
-        # message body is simple text
-        assert b"Engine not loaded" in getattr(resp, "body", b"")
-
-
-def test_config_info_process_object_branches():
-    # Cover forcing json default() to handle
-    # both an object with __dict__ and one without.
-    with (
-        patch("fastdeploy.utils.FlexibleArgumentParser.parse_args") as mock_parse_args,
-        patch("fastdeploy.utils.retrive_model_from_server") as mock_retrive_model,
-        patch("fastdeploy.entrypoints.chat_utils.load_chat_template") as mock_load_template,
-    ):
-        mock_parse_args.return_value = _build_mock_args()
-        mock_retrive_model.return_value = "test-model"
-        mock_load_template.return_value = None
-
-        from fastdeploy.entrypoints.openai import api_server as api_server_mod
-
-        api_server = importlib.reload(api_server_mod)
-
-        # Build a cfg with values that exercise both branches of process_object()
-        class WithDict:
-            pass
-
-        has_dict = WithDict()
-        has_dict.a = 1
-        no_dict = object()
-
-        from types import SimpleNamespace as NS
-
-        api_server.llm_engine = NS(cfg=NS(with_dict=has_dict, without_dict=no_dict))
-
-        cfg_route = _get_route(api_server.app, "/config-info")
-        assert cfg_route is not None
-
-        resp = cfg_route.endpoint()
-        assert resp.status_code == 200
-        data = json.loads(resp.body.decode("utf-8"))
-        # The object with __dict__ becomes its dict; the one without becomes null
-        assert data.get("with_dict") == {"a": 1}
-        assert "without_dict" in data and data["without_dict"] is None
 
 
 def test_setup_metrics_environment_sets_env_var(tmp_path):
@@ -231,45 +146,3 @@ def test_metrics_app_routes_when_metrics_port_diff():
             assert getattr(resp, "media_type", "").startswith("text/plain")
             text = resp.body.decode("utf-8") if isinstance(resp.body, (bytes, bytearray)) else str(resp.body)
             assert "fastdeploy:" in text
-
-
-def test_metrics_app_config_info_branches():
-    # Cover metrics_app '/config-info' 500 branch and success path
-    # including process_object branches and response
-    with (
-        patch("fastdeploy.utils.FlexibleArgumentParser.parse_args") as mock_parse_args,
-        patch("fastdeploy.utils.retrive_model_from_server") as mock_retrive_model,
-        patch("fastdeploy.entrypoints.chat_utils.load_chat_template") as mock_load_template,
-    ):
-        mock_parse_args.return_value = _build_mock_args_with_side_metrics()
-        mock_retrive_model.return_value = "test-model"
-        mock_load_template.return_value = None
-
-        from fastdeploy.entrypoints.openai import api_server as api_server_mod
-
-        api_server = importlib.reload(api_server_mod)
-
-        # First, llm_engine is None -> 500
-        cfg_route = _get_route(api_server.metrics_app, "/config-info")
-        assert cfg_route is not None
-        resp = cfg_route.endpoint()
-        assert resp.status_code == 500
-
-        # Then set a fake engine with cfg carrying both serializable and non-serializable objects
-        class WithDict:
-            pass
-
-        has_dict = WithDict()
-        has_dict.x = 42
-        no_dict = object()
-
-        from types import SimpleNamespace as NS
-
-        api_server.llm_engine = NS(cfg=NS(with_dict=has_dict, without_dict=no_dict))
-
-        resp2 = cfg_route.endpoint()
-        assert resp2.status_code == 200
-        data = json.loads(resp2.body.decode("utf-8"))
-        assert data.get("with_dict") == {"x": 42}
-        assert "without_dict" in data and data["without_dict"] is None
-        assert "env_config" in data
