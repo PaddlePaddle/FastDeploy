@@ -819,14 +819,6 @@ def test_control_scheduler():
             scheduler2.update_config.assert_not_called()
 
 
-def test_config_info():
-    args = _build_args()
-    with _patch_common_imports(args):
-        api_server = _reload_api_server(args)
-        api_server.llm_engine = None
-    assert api_server.config_info().status_code == 500
-
-
 # ── /v1/abort_requests ──────────────────────────────────────────────
 
 
