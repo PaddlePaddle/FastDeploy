@@ -18,7 +18,7 @@ import httpx
 import pytest
 import respx
 
-from fastdeploy.input.tokenzier_client import (
+from fastdeploy.input.tokenizer_client import (
     AsyncTokenizerClient,
     ImageEncodeRequest,
     VideoEncodeRequest,

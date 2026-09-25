@@ -18,7 +18,7 @@ import inspect
 from typing import Any, Dict, List, Optional
 
 from fastdeploy.entrypoints.openai.usage_calculator import count_tokens
-from fastdeploy.input.tokenzier_client import AsyncTokenizerClient, ImageDecodeRequest
+from fastdeploy.input.tokenizer_client import AsyncTokenizerClient, ImageDecodeRequest
 
 
 class ChatResponseProcessor:

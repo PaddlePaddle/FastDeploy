@@ -44,7 +44,7 @@ from fastdeploy.entrypoints.openai.v1.serving_base import (
     OpenAiServingBase,
     ServingResponseContext,
 )
-from fastdeploy.input.tokenzier_client import AsyncTokenizerClient, ImageDecodeRequest
+from fastdeploy.input.tokenizer_client import AsyncTokenizerClient, ImageDecodeRequest
 from fastdeploy.metrics.metrics import main_process_metrics
 from fastdeploy.utils import api_server_logger
 from fastdeploy.worker.output import LogprobsLists
