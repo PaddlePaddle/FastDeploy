@@ -1111,6 +1111,7 @@ class EngineService:
                 if self.engine_worker_queue.exist_tasks():
                     time.sleep(0.001)
                     continue
+
                 if self.cfg.scheduler_config.splitwise_role != "mixed":
                     if not is_fetching:
                         is_fetching = True
@@ -1132,7 +1133,10 @@ class EngineService:
                 if hasattr(self.resource_manager, "scheduler_unhandled_request_num"):
                     self.resource_manager.scheduler_unhandled_request_num = self._get_scheduler_unhandled_request_num()
                 # 2. Schedule requests
-                batch_request, error_tasks = self.resource_manager.schedule()
+                if self.cfg.scheduler_config.splitwise_role == "prefill":
+                    batch_request, error_tasks = self.resource_manager.prefill_schedule()
+                else:
+                    batch_request, error_tasks = self.resource_manager.schedule()
 
                 # 3. Send to engine
                 if len(batch_request) > 0:
