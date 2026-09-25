@@ -258,31 +258,6 @@ class AppendAttentionBackend(AttentionBackend):
         """get_attention_meta"""
         return self.attention_metadata
 
-    def _get_identity_rotary_embs(self, original_rotary_embs: paddle.Tensor) -> paddle.Tensor:
-        """
-        Create identity rotary embeddings (cos=1, sin=0) that make RoPE a no-op.
-
-        This is used when RoPE has already been applied externally (e.g., by PaddleFormers).
-        The identity transformation ensures: x * cos(0) + y * sin(0) = x, preserving the input.
-
-        NOTE: Shape can change between prefill/decode, so we check if cached shape matches.
-        """
-        # Check if we need to recreate (shape mismatch or not cached)
-        need_recreate = (
-            not hasattr(self, "_identity_rotary_embs")
-            or self._identity_rotary_embs is None
-            or self._identity_rotary_embs.shape != original_rotary_embs.shape
-        )
-
-        if need_recreate:
-            # Create identity RoPE: cos=1, sin=0
-            identity = paddle.zeros_like(original_rotary_embs)
-            identity[0] = 1.0  # cos = 1
-            identity[1] = 0.0  # sin = 0
-            self._identity_rotary_embs = identity
-
-        return self._identity_rotary_embs
-
     def get_kv_cache_shape(
         self,
         max_num_blocks: int,

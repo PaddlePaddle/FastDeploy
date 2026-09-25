@@ -40,6 +40,18 @@ class PaddleFormersForCausalLM(CausalLMMixin, PaddleFormersModelBase, ModelForCa
     def name(cls):
         return "PaddleFormersForCausalLM"
 
+    def __call__(self, inputs=None, forward_meta=None, **kwargs):
+        # Some model runners (e.g. xpu_model_runner.execute_model) call the model
+        # positionally, while support_graph_optimization installs a kwargs-only
+        # __call__. Bridge the two calling conventions.
+        if isinstance(inputs, dict):
+            kwargs.update(inputs)
+        elif inputs is not None:
+            kwargs["ids_remove_padding"] = inputs
+        if forward_meta is not None:
+            kwargs["forward_meta"] = forward_meta
+        return super().__call__(**kwargs)
+
 
 if is_paddlefleet_available():
     from .base_fleet import PaddleFleetModelBase
