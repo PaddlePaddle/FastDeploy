@@ -50,6 +50,7 @@ struct Converter<__nv_bfloat16> {
 
 struct ApplyRopeQKVParams {
   int head_dim;
+  int half_dim;  // head_dim / 2, used by rotate-half convention
   int token_stride;
   int head_stride;
   int q_stride;
@@ -61,37 +62,64 @@ struct ApplyRopeQKVParams {
   int kv_head_num;
 };
 
+// Rotate-half convention (used by SigLIP vision encoder and most HF models):
+//   for i < half_dim:  out[i] = x[i] * cos[i] - x[i + half_dim] * sin[i]
+//   for i >= half_dim: out[i] = x[i] * cos[i] + x[i - half_dim] * sin[i]
+// Equivalent to `x * cos + concat([-x[half:], x[:half]]) * sin`.
+// Each Vec4 at head_dim_idx loads its 4-element main chunk AND a paired Vec4
+// from the other half, then applies the rotate-half formula element-wise.
 template <typename T>
-__device__ __forceinline__ void RotateQKVec4(const T* qkv_ptr,
-                                             const T* rot_cos_ptr,
-                                             const T* rot_sin_ptr,
-                                             const int load_idx,
-                                             const int store_idx,
-                                             const int rot_base_idx,
-                                             T* out) {
+__device__ __forceinline__ void RotateQKVec4HalfStyle(const T* qkv_ptr,
+                                                      const T* rot_cos_ptr,
+                                                      const T* rot_sin_ptr,
+                                                      const int load_idx,
+                                                      const int store_idx,
+                                                      const int rot_base_idx,
+                                                      const int head_dim_idx,
+                                                      const int half_dim,
+                                                      T* out) {
   using VecT = AlignedVector<T, 4>;
 
   VecT qk_vec;
   Load(qkv_ptr + load_idx, &qk_vec);
-  VecT rot_half_vec = {-qk_vec[1], qk_vec[0], -qk_vec[3], qk_vec[2]};
+  // Load the paired Vec4 from the other half of head_dim for rotate_half.
+  // pair_load = load_idx + half_dim if first half, load_idx - half_dim if second.
+  const int pair_load =
+      load_idx + ((head_dim_idx < half_dim) ? half_dim : -half_dim);
+  VecT pair_vec;
+  Load(qkv_ptr + pair_load, &pair_vec);
+
   VecT cos_vec, sin_vec;
   Load(rot_cos_ptr + rot_base_idx, &cos_vec);
   Load(rot_sin_ptr + rot_base_idx, &sin_vec);
+
+  if (head_dim_idx < half_dim) {
+    // first half: out = x * cos - pair * sin
 #pragma unroll
-  for (int i = 0; i < 4; ++i) {
-    *(out + store_idx + i) =
-        qk_vec[i] * cos_vec[i] + rot_half_vec[i] * sin_vec[i];
+    for (int i = 0; i < 4; ++i) {
+      *(out + store_idx + i) =
+          qk_vec[i] * cos_vec[i] - pair_vec[i] * sin_vec[i];
+    }
+  } else {
+    // second half: out = x * cos + pair * sin
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      *(out + store_idx + i) =
+          qk_vec[i] * cos_vec[i] + pair_vec[i] * sin_vec[i];
+    }
   }
 }
 
 template <typename T>
-__device__ __forceinline__ void RotateQKVec4(const T* qkv_ptr,
-                                             const float* rot_cos_ptr,
-                                             const float* rot_sin_ptr,
-                                             const int load_idx,
-                                             const int store_idx,
-                                             const int rot_base_idx,
-                                             T* out) {
+__device__ __forceinline__ void RotateQKVec4HalfStyle(const T* qkv_ptr,
+                                                      const float* rot_cos_ptr,
+                                                      const float* rot_sin_ptr,
+                                                      const int load_idx,
+                                                      const int store_idx,
+                                                      const int rot_base_idx,
+                                                      const int head_dim_idx,
+                                                      const int half_dim,
+                                                      T* out) {
   using VecT = AlignedVector<T, 4>;
   using VecF = AlignedVector<float, 4>;
   auto to_float = [] __device__(T val) -> float {
@@ -103,17 +131,27 @@ __device__ __forceinline__ void RotateQKVec4(const T* qkv_ptr,
 
   VecT qk_vec;
   Load(qkv_ptr + load_idx, &qk_vec);
-  VecF rot_half_vec = {-to_float(qk_vec[1]),
-                       to_float(qk_vec[0]),
-                       -to_float(qk_vec[3]),
-                       to_float(qk_vec[2])};
+  const int pair_load =
+      load_idx + ((head_dim_idx < half_dim) ? half_dim : -half_dim);
+  VecT pair_vec;
+  Load(qkv_ptr + pair_load, &pair_vec);
+
   VecF cos_vec, sin_vec;
   Load(rot_cos_ptr + rot_base_idx, &cos_vec);
   Load(rot_sin_ptr + rot_base_idx, &sin_vec);
+
+  if (head_dim_idx < half_dim) {
 #pragma unroll
-  for (int i = 0; i < 4; ++i) {
-    *(out + store_idx + i) = from_float(to_float(qk_vec[i]) * cos_vec[i] +
-                                        rot_half_vec[i] * sin_vec[i]);
+    for (int i = 0; i < 4; ++i) {
+      *(out + store_idx + i) = from_float(to_float(qk_vec[i]) * cos_vec[i] -
+                                          to_float(pair_vec[i]) * sin_vec[i]);
+    }
+  } else {
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      *(out + store_idx + i) = from_float(to_float(qk_vec[i]) * cos_vec[i] +
+                                          to_float(pair_vec[i]) * sin_vec[i]);
+    }
   }
 }
 
@@ -148,7 +186,8 @@ __global__ void DispatchApplyRopeQKVVec4Kernel(const T* qkv,
                head_dim_idx;
     store_idx =
         token_idx * param.q_stride + head_idx * param.head_dim + head_dim_idx;
-    RotateQKVec4(qkv, rot_cos, rot_sin, load_idx, store_idx, rot_idx, q_out);
+    RotateQKVec4HalfStyle(qkv, rot_cos, rot_sin, load_idx, store_idx, rot_idx,
+                          head_dim_idx, param.half_dim, q_out);
   }
 
   if (head_idx < param.kv_head_num && head_dim_idx < param.head_dim) {  // kv
@@ -157,7 +196,8 @@ __global__ void DispatchApplyRopeQKVVec4Kernel(const T* qkv,
                head_dim_idx;
     store_idx =
         token_idx * param.kv_stride + head_idx * param.head_dim + head_dim_idx;
-    RotateQKVec4(qkv, rot_cos, rot_sin, load_idx, store_idx, rot_idx, k_out);
+    RotateQKVec4HalfStyle(qkv, rot_cos, rot_sin, load_idx, store_idx, rot_idx,
+                          head_dim_idx, param.half_dim, k_out);
     load_idx = token_idx * param.token_stride +
                (head_idx + param.v_head_offset) * param.head_stride +
                head_dim_idx;
@@ -196,6 +236,7 @@ void ApplyRopeQKVKernel(const paddle::Tensor& qkv,
 
   ApplyRopeQKVParams param;
   param.head_dim = head_dim;
+  param.half_dim = head_dim / 2;
   param.token_stride = all_num_head * head_dim;
   param.head_stride = head_dim;
   param.q_stride = q_head_num * head_dim;
