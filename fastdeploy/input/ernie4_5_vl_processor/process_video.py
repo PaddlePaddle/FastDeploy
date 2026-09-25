@@ -27,8 +27,8 @@ from .utils.io_utils import EXTRACTED_FRAME_DIR, get_filename
 from .utils.video_utils import VideoReaderWrapper
 
 
-def read_video_decord(video_path, save_to_disk):
-    """get reader and meta by decord"""
+def read_video_paddlecodec(video_path, save_to_disk):
+    """get reader and meta by paddlecodec"""
     # video_path = get_downloadable(video_path, save_to_disk=save_to_disk)
     if isinstance(video_path, VideoReaderWrapper):
         video_reader = video_path
@@ -113,7 +113,7 @@ def get_frame_indices(
     return frame_indices
 
 
-def read_frames_decord(
+def read_frames_paddlecodec(
     video_path,
     video_reader,
     video_meta,
@@ -126,7 +126,7 @@ def read_frames_decord(
     frame_indices=None,
     tol=10,
 ):
-    """get frames by decord"""
+    """get frames by paddlecodec"""
 
     if frame_indices is None:
         frame_indices = get_frame_indices(

@@ -38,7 +38,7 @@ from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
 
 from .image_preprocessor.image_preprocessor_adaptive import AdaptiveImageProcessor
-from .process_video import read_frames_decord, read_video_decord
+from .process_video import read_frames_paddlecodec, read_video_paddlecodec
 from .utils.render_timestamp import render_frame_timestamp
 
 
@@ -630,7 +630,7 @@ class DataProcessor(MMBaseDataProcessor):
         outputs["labels"] = labels
 
     def _load_and_process_video(self, url: str, item: Dict) -> List[Image.Image]:
-        reader, meta, path = read_video_decord(url, save_to_disk=False)
+        reader, meta, path = read_video_paddlecodec(url, save_to_disk=False)
 
         video_frame_args = dict()
         video_frame_args["fps"] = item.get("fps", self.fps)
@@ -641,7 +641,7 @@ class DataProcessor(MMBaseDataProcessor):
 
         video_frame_args = self._set_video_frame_args(video_frame_args, meta)
 
-        frames_data, _, timestamps = read_frames_decord(
+        frames_data, _, timestamps = read_frames_paddlecodec(
             path,
             reader,
             meta,

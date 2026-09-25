@@ -1,4 +1,4 @@
-﻿"""
+"""
 # Copyright (c) 2025 PaddlePaddle Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -932,8 +932,8 @@ class TestDataProcessor(unittest.TestCase):
         """Helper to mock video processing"""
         if mock_frames is None:
             mock_frames = [Image.new("RGB", (224, 224)) for _ in range(4)]
-        mock_read = patch("fastdeploy.input.ernie4_5_vl_processor.process.read_video_decord")
-        mock_frames_read = patch("fastdeploy.input.ernie4_5_vl_processor.process.read_frames_decord")
+        mock_read = patch("fastdeploy.input.ernie4_5_vl_processor.process.read_video_paddlecodec")
+        mock_frames_read = patch("fastdeploy.input.ernie4_5_vl_processor.process.read_frames_paddlecodec")
         mock_render = patch("fastdeploy.input.ernie4_5_vl_processor.process.render_frame_timestamp")
         return mock_read, mock_frames_read, mock_render, mock_frames
 

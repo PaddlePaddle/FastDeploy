@@ -27,8 +27,8 @@ from PIL import Image as PILImage
 import fastdeploy.input.ernie4_5_vl_processor.process_video as process_video_module
 from fastdeploy.input.ernie4_5_vl_processor.process_video import (
     get_frame_indices,
-    read_frames_decord,
-    read_video_decord,
+    read_frames_paddlecodec,
+    read_video_paddlecodec,
 )
 
 
@@ -93,7 +93,7 @@ class TestReadVideoDecord(unittest.TestCase):
         # Patch VideoReaderWrapper in the target module so isinstance checks use our mock class
         with patch.object(process_video_module, "VideoReaderWrapper", MockVideoReaderWrapper):
             mock_reader = MockVideoReaderWrapper("dummy", vlen=10, fps=5)
-            reader, meta, path = read_video_decord(mock_reader, save_to_disk=False)
+            reader, meta, path = read_video_paddlecodec(mock_reader, save_to_disk=False)
 
         self.assertIs(reader, mock_reader)
         self.assertEqual(meta["fps"], 5)
@@ -106,7 +106,7 @@ class TestReadVideoDecord(unittest.TestCase):
         """Test that bytes input is wrapped into BytesIO and passed to VideoReaderWrapper."""
         with patch.object(process_video_module, "VideoReaderWrapper", MockVideoReaderWrapper):
             data = b"\x00\x01\x02\x03"
-            reader, meta, path = read_video_decord(data, save_to_disk=False)
+            reader, meta, path = read_video_paddlecodec(data, save_to_disk=False)
 
         self.assertIsInstance(reader, MockVideoReaderWrapper)
         self.assertEqual(meta["fps"], 6)
@@ -261,7 +261,7 @@ class TestReadFramesDecord(unittest.TestCase):
         reader = MockVideoReaderWrapper("dummy", vlen=8, fps=4)
         meta = {"fps": 4, "duration": 8 / 4, "num_of_frame": 8}
 
-        ret, idxs, ts = read_frames_decord(
+        ret, idxs, ts = read_frames_paddlecodec(
             video_path="dummy",
             video_reader=reader,
             video_meta=meta,
@@ -294,7 +294,7 @@ class TestReadFramesDecord(unittest.TestCase):
                 return_value="det_id",
             ),
         ):
-            ret, idxs, ts = read_frames_decord(
+            ret, idxs, ts = read_frames_paddlecodec(
                 video_path="dummy",
                 video_reader=reader,
                 video_meta=meta,
@@ -316,7 +316,7 @@ class TestReadFramesDecord(unittest.TestCase):
         meta = {"fps": 5, "duration": 10 / 5, "num_of_frame": 10}
         idxs = [1, 2, 3, 6]
 
-        ret, new_idxs, ts = read_frames_decord(
+        ret, new_idxs, ts = read_frames_paddlecodec(
             video_path="dummy",
             video_reader=reader,
             video_meta=meta,
@@ -335,7 +335,7 @@ class TestReadFramesDecord(unittest.TestCase):
         meta = {"fps": 5, "duration": 10 / 5, "num_of_frame": 10}
         idxs = [1, 2, 3, 6]
 
-        ret, new_idxs, ts = read_frames_decord(
+        ret, new_idxs, ts = read_frames_paddlecodec(
             video_path="dummy",
             video_reader=reader,
             video_meta=meta,
@@ -371,7 +371,7 @@ class TestReadFramesDecord(unittest.TestCase):
         # Request 2 frames: index 0 succeeds, index 1 always fails,
         # and tol=0 disallows searching neighbors -> stack and length assertion should fail
         with self.assertRaises(AssertionError):
-            read_frames_decord(
+            read_frames_paddlecodec(
                 video_path="dummy",
                 video_reader=reader,
                 video_meta=meta,

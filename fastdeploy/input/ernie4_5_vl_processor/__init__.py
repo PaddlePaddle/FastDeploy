@@ -16,13 +16,13 @@
 
 from .ernie4_5_vl_processor import Ernie4_5_VLProcessor
 from .process import DataProcessor, fancy_print
-from .process_video import read_video_decord
+from .process_video import read_video_paddlecodec
 from .utils.video_utils import VideoReaderWrapper
 
 __all__ = [
     "DataProcessor",
     "fancy_print",
     "VideoReaderWrapper",
-    "read_video_decord",
+    "read_video_paddlecodec",
     "Ernie4_5_VLProcessor",
 ]

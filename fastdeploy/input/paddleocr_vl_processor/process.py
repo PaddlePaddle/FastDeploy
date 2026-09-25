@@ -28,7 +28,7 @@ from fastdeploy.engine.request import ImagePosition
 from fastdeploy.entrypoints.chat_utils import parse_chat_messages
 from fastdeploy.input.mm_data_processor import MMBaseDataProcessor
 from fastdeploy.input.utils import IDS_TYPE_FLAG
-from fastdeploy.input.video_utils import read_video_decord
+from fastdeploy.input.video_utils import read_video_paddlecodec
 from fastdeploy.input.video_utils import sample_frames_paddleocr as sample_frames
 from fastdeploy.multimodal.hasher import MultimodalHasher
 from fastdeploy.utils import data_processor_logger
@@ -530,7 +530,7 @@ class DataProcessor(MMBaseDataProcessor):
                 - frames: Processed video frames as numpy array
                 - metadata: Updated video metadata dictionary
         """
-        reader, meta, _ = read_video_decord(url, save_to_disk=False)
+        reader, meta, _ = read_video_paddlecodec(url, save_to_disk=False)
 
         # Apply frame sampling if fps or target_frames specified
         fps = item.get("fps", self.fps)
