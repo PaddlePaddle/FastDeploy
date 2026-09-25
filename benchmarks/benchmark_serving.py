@@ -409,6 +409,8 @@ async def benchmark(
     lora_modules: Optional[Iterable[str]],
     extra_body: Optional[dict],
     ip_list: Optional[list[str]] = None,
+    enable_session_control: bool = False,
+    session_control_url: Optional[str] = None,
 ):
     """Benchmarks an API endpoint using a given set of sample inputs and returns"""
     if backend in ASYNC_REQUEST_FUNCS:
@@ -471,6 +473,8 @@ async def benchmark(
         stream=args.stream,
         session_id=f"warmup-{uuid.uuid4().hex}",
         turn_idx=0,
+        enable_session_control=enable_session_control,
+        session_control_url=session_control_url,
     )
 
     if args.warmup:
@@ -585,6 +589,8 @@ async def benchmark(
                 tokenizer_model=args.tokenizer_model,
                 tokenizer_path=args.tokenizer_path,
                 stream=args.stream,
+                enable_session_control=enable_session_control,
+                session_control_url=session_control_url,
             )
             tasks.append(asyncio.create_task(limited_request_func(request_func_input=request_func_input, pbar=pbar)))
 
@@ -674,6 +680,8 @@ async def benchmark(
                     tokenizer_model=args.tokenizer_model,
                     tokenizer_path=args.tokenizer_path,
                     stream=args.stream,
+                    enable_session_control=enable_session_control,
+                    session_control_url=session_control_url,
                 )
 
                 tasks.append(asyncio.create_task(limited_request_func_per_ip(req_input, semaphore, pbar)))
@@ -1229,6 +1237,8 @@ def main(args: argparse.Namespace):
         np.random.seed(args.seed)
 
     backend = args.backend
+    if args.enable_session_control and not args.multi_turn:
+        raise ValueError("--enable-session-control requires --multi-turn.")
     # 支持多轮对话方式请求，仅支持chat接口
     if args.multi_turn:
         backend = "openai-chat-multi-turn"
@@ -1342,6 +1352,8 @@ def main(args: argparse.Namespace):
             lora_modules=args.lora_modules,
             extra_body=sampling_params,
             ip_list=ip_list,
+            enable_session_control=args.enable_session_control,
+            session_control_url=args.session_control_url,
         )
     )
 
@@ -1548,6 +1560,17 @@ if __name__ == "__main__":
         "--multi-turn",
         action="store_true",
         help="按多轮对话方式请求",
+    )
+    parser.add_argument(
+        "--enable-session-control",
+        action="store_true",
+        help="为 SGLang 多轮请求携带 session id，并在 session 结束后调用 close_session 释放 radix cache",
+    )
+    parser.add_argument(
+        "--session-control-url",
+        type=str,
+        default=None,
+        help="SGLang session 控制接口的 base URL；通过不代理 close_session 的 router 发压时需要指定",
     )
     parser.add_argument(
         "--no-warmup",
