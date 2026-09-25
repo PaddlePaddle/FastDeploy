@@ -1141,7 +1141,11 @@ class GPUModelRunner(ModelRunnerBase):
         raise NotImplementedError("GPUs only support KVCACHE SCHEDULER V1 in versions 2.6 and above.")
 
     def get_input_length_list(
-        self, num_tokens: int, batch_size: int, expected_decode_len: int, capture_prefill: bool = False
+        self,
+        num_tokens: int,
+        batch_size: int,
+        expected_decode_len: int,
+        capture_prefill: bool = False,
     ):
         """
         Generates some list for _dummy_prefill_inputs, when capture pure prefill or mtp,
@@ -1184,11 +1188,6 @@ class GPUModelRunner(ModelRunnerBase):
             num_tokens // (1 if capture_prefill else batch_size),
             self.model_config.max_model_len - max_dec_len,
         )
-
-        # NOTE(wanglongzhi): When the full length is too large, DeepEP's buffer size will not be enough to cause the result to appear nan.
-        # TODO(wanglongzhi): Figure out the accurate buffer size of DeepEP.
-        if self.fd_config.parallel_config.enable_expert_parallel:
-            input_length = min(input_length, 32)
 
         block_num = (
             input_length + self.cache_config.block_size - 1
@@ -1234,8 +1233,15 @@ class GPUModelRunner(ModelRunnerBase):
             idx = i
             input_length = input_length_list[i]
             max_dec_len = max_dec_len_list[i]
-            self.share_inputs["input_ids"][idx : idx + 1, :input_length] = np.array([5] * input_length)
-            self.share_inputs["token_ids_all"][idx : idx + 1, :input_length] = np.array([5] * input_length)
+            # When EP is enabled, input tokens may be routed to the same expert if the input ids consist entirely of 5s.
+            # This can lead to OOM, so random input ids should be used instead.
+            if self.fd_config.parallel_config.enable_expert_parallel:
+                input_ids = np.random.randint(5, 10000, size=input_length)
+            else:
+                input_ids = np.array([5] * input_length)
+
+            self.share_inputs["input_ids"][idx : idx + 1, :input_length] = input_ids
+            self.share_inputs["token_ids_all"][idx : idx + 1, :input_length] = input_ids
             self.share_inputs["eos_token_id"][:] = np.array(
                 [2] * self.model_config.eos_tokens_lens, dtype="int64"
             ).reshape(-1, 1)
