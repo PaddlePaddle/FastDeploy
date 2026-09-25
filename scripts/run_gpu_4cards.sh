@@ -44,7 +44,7 @@ for test_file in "${test_files[@]}"; do
 
         if [ -d "${REPO_ROOT}/log" ]; then
             echo ">>> grep error in ${REPO_ROOT}/log/"
-            grep -Rni --color=auto "error" "${REPO_ROOT}/log/" || true
+            grep -Rni --color=auto "error" "${REPO_ROOT}/log/" --exclude="pytest_*_error.log" || true
         else
             echo "${REPO_ROOT}/log directory not found"
         fi
