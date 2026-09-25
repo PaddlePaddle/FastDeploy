@@ -1,0 +1,80 @@
+#include "xpu/kernel/cluster.h"
+#include "xpu/kernel/cluster_partition.h"
+#include "xpu/kernel/cluster_primitive.h"
+
+namespace fd_xpu3 {
+
+#define MAX_BATCH_SIZE_ATTN 1024
+
+__global__ void get_attn_mask_q(int* startend_row_indices,
+                                const int* attn_mask_kv,
+                                const int* cu_seqlens_q,
+                                const int* cu_seqlens_k,
+                                const int kv_token_num,
+                                const int max_batch_size) {
+  int cid = core_id();
+  int ncores = core_num();
+  int clusterid = cluster_id();
+  int nclusters = cluster_num();
+
+  // Load cu_seqlens into shared memory (max_batch_size + 1 elements each)
+  __shared__ int sm_cu_seqlens_q[MAX_BATCH_SIZE_ATTN + 1];
+  __shared__ int sm_cu_seqlens_k[MAX_BATCH_SIZE_ATTN + 1];
+
+  if (cid == 0) {
+    GM2SM(cu_seqlens_q, sm_cu_seqlens_q, sizeof(int) * (max_batch_size + 1));
+    GM2SM(cu_seqlens_k, sm_cu_seqlens_k, sizeof(int) * (max_batch_size + 1));
+  }
+  sync_all();
+
+  // Each (cluster, core) handles a subset of kv positions
+  const int total_cores = nclusters * ncores;
+  const int global_cid = clusterid * ncores + cid;
+
+  for (int ku = global_cid; ku < kv_token_num; ku += total_cores) {
+    // Find batch_id by linear scan over sm_cu_seqlens_k
+    int batch_id = 0;
+    for (int i = 0; i < max_batch_size; ++i) {
+      if (ku >= sm_cu_seqlens_k[i] && ku < sm_cu_seqlens_k[i + 1]) {
+        batch_id = i;
+        break;
+      }
+    }
+
+    const int this_batch_q_start = sm_cu_seqlens_q[batch_id];
+    const int this_batch_q_end = sm_cu_seqlens_q[batch_id + 1];
+    const int this_batch_q_len = this_batch_q_end - this_batch_q_start;
+    const int kv_start = sm_cu_seqlens_k[batch_id];
+    const int kv_end = sm_cu_seqlens_k[batch_id + 1];
+    const int kv_len = kv_end - kv_start;
+    const int cache_k_idx = ku - kv_start;
+
+    int row_start = this_batch_q_end;
+    int row_end = this_batch_q_end;
+
+    for (int q_idx = this_batch_q_start; q_idx < this_batch_q_end; ++q_idx) {
+      int append_mask_k_end;
+      if (attn_mask_kv) {
+        int mask_val = 0;
+        GM2LM(attn_mask_kv + q_idx * 2 + 1, &mask_val, sizeof(int));
+        append_mask_k_end = mask_val - 1;
+      } else {
+        append_mask_k_end =
+            q_idx - this_batch_q_start + kv_len - this_batch_q_len;
+      }
+      if (cache_k_idx <= append_mask_k_end) {
+        if (q_idx < row_end) {
+          row_end = q_idx;
+        }
+        break;
+      }
+    }
+
+    int lm_out[2];
+    lm_out[0] = row_start;
+    lm_out[1] = row_end;
+    LM2GM(lm_out, startend_row_indices + ku * 2, sizeof(int) * 2);
+  }
+}
+
+}  // namespace fd_xpu3
