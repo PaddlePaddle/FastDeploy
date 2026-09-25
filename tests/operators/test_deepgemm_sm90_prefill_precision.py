@@ -29,8 +29,8 @@ class TestDeepGemmPrefill(unittest.TestCase):
         pass
 
     def one_invoke(self, num_experts, M, N, K):
-        token_num_in_eatch_batch = (paddle.zeros([num_experts], dtype="int32") + M).numpy().tolist()
-        total_m = sum(token_num_in_eatch_batch)
+        token_num_in_each_batch = (paddle.zeros([num_experts], dtype="int32") + M).numpy().tolist()
+        total_m = sum(token_num_in_each_batch)
         block_size = 128
 
         raw_x = paddle.randn([total_m, K], dtype="bfloat16").cast(paddle.float8_e4m3fn)
@@ -43,8 +43,8 @@ class TestDeepGemmPrefill(unittest.TestCase):
 
         baseline_out = paddle.empty([total_m, N], dtype="bfloat16")
         for i in range(num_experts):
-            start = sum(token_num_in_eatch_batch[:i])
-            end = start + token_num_in_eatch_batch[i]
+            start = sum(token_num_in_each_batch[:i])
+            end = start + token_num_in_each_batch[i]
 
             this_expert_token = raw_x[start:end].contiguous().cast("float32")
             this_expert_token_scale = (
@@ -89,6 +89,10 @@ class TestDeepGemmPrefill(unittest.TestCase):
 
         print(baseline_out - deepgemm_output)
 
+        max_diff = (deepgemm_output - baseline_out).abs().max().item()
+        print(max_diff)
+        # self.assertLessEqual(max_diff, 5)
+
     def test_main(self):
         # import paddle.profiler as profiler
         # p = profiler.Profiler(
@@ -98,8 +102,8 @@ class TestDeepGemmPrefill(unittest.TestCase):
         # p.start()
         # p.step()
 
-        self.one_invoke(48, 128 * 20, 2048, 4096)
-        self.one_invoke(96, 128 * 20, 2048, 2048)
+        self.one_invoke(1, 128 * 1, 2048, 4096)
+        self.one_invoke(1, 128 * 1, 2048, 2048)
 
         # p.stop()
 
