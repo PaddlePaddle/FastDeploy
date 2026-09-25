@@ -598,7 +598,13 @@ class TokenProcessor:
                     trace_print(LoggingEventName.CHECK_CACHE_TRANSFER_END, task_id, getattr(task, "user", ""))
                     result.metrics.send_request_output_to_decode_time = time.time()
                     self.split_connector.send_first_token(task.disaggregate_info, [result])
-                    if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    if envs.ENABLE_V2_KVCACHE_SCHEDULER:
+                        if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                            raise ValueError(
+                                "To enable v2 lock-free scheduler, v1 scheduler must be true (export ENABLE_V1_KVCACHE_SCHEDULER=1)."
+                            )
+                        self.resource_manager.finish_requests(task_id)
+                    elif envs.ENABLE_V1_KVCACHE_SCHEDULER:
                         self.resource_manager.finish_requests_async(task_id)
                     else:
                         self.resource_manager.stop_flags[index] = True
@@ -613,7 +619,13 @@ class TokenProcessor:
                         llm_logger.warning(f"wait for sending cache, {task_id}")
                     time.sleep(0.002)
         else:
-            if envs.ENABLE_V1_KVCACHE_SCHEDULER:
+            if envs.ENABLE_V2_KVCACHE_SCHEDULER:
+                if not envs.ENABLE_V1_KVCACHE_SCHEDULER:
+                    raise ValueError(
+                        "To enable v2 lock-free scheduler, v1 scheduler must be true (export ENABLE_V1_KVCACHE_SCHEDULER=1)."
+                    )
+                self.resource_manager.finish_requests(task_id)
+            elif envs.ENABLE_V1_KVCACHE_SCHEDULER:
                 self.resource_manager.finish_requests_async(task_id)
             else:
                 self.resource_manager.stop_flags[index] = True

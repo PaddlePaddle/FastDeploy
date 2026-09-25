@@ -13,3 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 """
+
+from fastdeploy.engine.sched.request_manager import RequestManager
+from fastdeploy.engine.sched.resource_manager_v1 import ResourceManagerV1
+from fastdeploy.engine.sched.resource_manager_v2 import ResourceManagerV2
+
+__all__ = ["RequestManager", "ResourceManagerV1", "ResourceManagerV2"]
