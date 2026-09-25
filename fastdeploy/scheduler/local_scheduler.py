@@ -130,11 +130,14 @@ class LocalScheduler:
         if request_id is not None:
             self.requests.pop(request_id, None)
             self.responses.pop(request_id, None)
-            idx = self.ids.index(request_id)
-            self.ids.pop(idx)
-            if idx < self.ids_read_cursor:
-                self.ids_read_cursor -= 1
-            scheduler_logger.debug(f"request_id : {request_id} has been recycled")
+            try:
+                idx = self.ids.index(request_id)
+                self.ids.pop(idx)
+                if idx < self.ids_read_cursor:
+                    self.ids_read_cursor -= 1
+            except ValueError:
+                scheduler_logger.warning(f"_recycle error, request_id:{request_id} is not found in ids")
+                pass
             return
 
         if self.max_size <= 0:
@@ -151,10 +154,10 @@ class LocalScheduler:
                 break
             expired_ids.append(request.request_id)
 
-        for i, expired_id in enumerate(expired_ids):
+        for expired_id in expired_ids:
             self.requests.pop(expired_id, None)
             self.responses.pop(expired_id, None)
-            self.ids.pop(i)
+        self.ids = self.ids[len(expired_ids) :]
 
         if len(expired_ids) > 0:
             if len(expired_ids) - 1 >= self.ids_read_cursor:
@@ -237,6 +240,9 @@ class LocalScheduler:
         return (token_num + block_size - 1) // block_size
 
     def get_unhandled_request_num(self):
+        scheduler_logger.debug(
+            f"get_unhandled_request_num len(self.ids):{len(self.ids)}, self.ids_read_cursor:{self.ids_read_cursor}"
+        )
         return len(self.ids) - self.ids_read_cursor
 
     def get_requests(
