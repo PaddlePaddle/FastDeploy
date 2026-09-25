@@ -183,6 +183,7 @@ def _make_manager(rsync_config=None, load_strategy="rsync"):
     manager.model_list = [_FakeModel()]
     manager.state_dict = {}
     manager.use_gdr_checkpoint_transfer = True
+    manager._gdr_ct_handle = None
     return manager
 
 
@@ -256,25 +257,33 @@ class TestDynamicWeightGDR(unittest.TestCase):
         class FakeCheckpointTransfer:
             def __init__(self, config):
                 self.config = config
+                self.step_ids = []
                 created.append(self)
 
             def receive_weights_sync(self, step_id, output_framework="paddle"):
-                self.step_id = step_id
+                self.step_ids.append(step_id)
                 self.output_framework = output_framework
-                yield "model.layers.0.weight", object()
+                yield f"model.layers.{len(self.step_ids)}.weight", object()
 
         manager = _make_manager()
 
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
             result = manager.update_weights_by_gdr(version="step-1")
+            second_result = manager.update_weights_by_gdr(version="step-2")
 
         self.assertEqual(result["version"], "step-1")
+        self.assertEqual(second_result["version"], "step-2")
         self.assertEqual(result["update_count"], 1)
+        self.assertEqual(second_result["update_count"], 1)
         self.assertIn("total_cost", result)
-        self.assertEqual(manager.model_list[0].loaded[0][0], "model.layers.0.weight")
+        self.assertEqual(
+            [name for name, _ in manager.model_list[0].loaded], ["model.layers.1.weight", "model.layers.2.weight"]
+        )
+        self.assertEqual(len(created), 1)
+        self.assertIs(manager._gdr_ct_handle, created[0])
         self.assertTrue(created[0].initialized)
-        self.assertTrue(created[0].cleaned)
-        self.assertEqual(created[0].step_id, "step-1")
+        self.assertFalse(hasattr(created[0], "cleaned"))
+        self.assertEqual(created[0].step_ids, ["step-1", "step-2"])
         self.assertEqual(created[0].output_framework, "paddle")
         self.assertEqual(created[0].config.kwargs["role"], _FakeRole.INFERENCE)
         self.assertEqual(created[0].config.kwargs["phase1_backend"], _FakePhase1Backend.GPU_DIRECT)
@@ -313,9 +322,11 @@ class TestDynamicWeightGDR(unittest.TestCase):
         self.assertEqual(created[0].config.kwargs["qsize"], 2)
 
     def test_gdr_checkpoint_transfer_receive_exception_propagates(self):
+        created = []
+
         class FakeCheckpointTransfer:
             def __init__(self, config):
-                pass
+                created.append(self)
 
             def receive_weights_sync(self, step_id, output_framework="paddle"):
                 yield "model.layers.0.weight", object()
@@ -332,6 +343,9 @@ class TestDynamicWeightGDR(unittest.TestCase):
         with _patch_gdr_checkpoint_transfer(FakeCheckpointTransfer):
             with self.assertRaisesRegex(RuntimeError, "receive failed"):
                 manager.update_weights_by_gdr(version="step-error")
+
+        self.assertTrue(created[0].cleaned)
+        self.assertIsNone(manager._gdr_ct_handle)
 
     def test_gdr_checkpoint_transfer_refreshes_state_dict_after_model_loader(self):
         loaded_param = object()

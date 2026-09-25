@@ -55,6 +55,7 @@ class DynamicWeightManager:
         self._capture_model_state()
         self.rdma_handle = None
         self.use_gdr_checkpoint_transfer = envs.FD_USE_GDR_CHECKPOINT_TRANSFER
+        self._gdr_ct_handle = None
 
         if self.use_gdr_checkpoint_transfer:
             self.update_weights_by_gdr()
@@ -175,14 +176,8 @@ class DynamicWeightManager:
             f"load_strategy:{self.load_config.load_strategy}, step_id:{step_id}"
         )
 
-        from checkpoint_transfer.transfer import CheckpointTransfer
-
-        transfer_config = self._build_ct_transfer_config(config)
-        logger.info(f"CheckpointTransfer config:{transfer_config}")
-        ct_handle = CheckpointTransfer(transfer_config)
-
         total_start = time.perf_counter()
-        asyncio.run(ct_handle.initialize())
+        ct_handle = self._ensure_gdr_handle(config)
         try:
             weights_iterator = ct_handle.receive_weights_sync(step_id=step_id, output_framework="paddle")
 
@@ -192,8 +187,9 @@ class DynamicWeightManager:
                         paddle.empty(target_param.shape, dtype=target_param.dtype)._share_buffer_to(target_param)
                         logger.debug(f"Restored cleared parameter storage before GDR checkpoint transfer load: {name}")
             update_count, mtp_cache_count = self._load_models_from_weight_iterator(weights_iterator)
-        finally:
-            asyncio.run(ct_handle.cleanup())
+        except Exception:
+            self._destroy_gdr_handle()
+            raise
         self._capture_model_state(log_params=False)
         total_cost = time.perf_counter() - total_start
         logger.info(
@@ -209,6 +205,32 @@ class DynamicWeightManager:
             "update_count": update_count,
             "mtp_cache_count": mtp_cache_count,
         }
+
+    def _ensure_gdr_handle(self, config: dict):
+        """Lazily create and initialize the CheckpointTransfer handle (once)."""
+        if self._gdr_ct_handle is not None:
+            return self._gdr_ct_handle
+
+        transfer_config = self._build_ct_transfer_config(config)
+        logger.info(f"CheckpointTransfer config:{transfer_config}")
+
+        from checkpoint_transfer.transfer import CheckpointTransfer
+
+        ct_handle = CheckpointTransfer(transfer_config)
+        asyncio.run(ct_handle.initialize())
+
+        self._gdr_ct_handle = ct_handle
+        logger.info("[GDR] CheckpointTransfer initialized and cached for reuse")
+        return ct_handle
+
+    def _destroy_gdr_handle(self):
+        """Destroy the cached GDR handle (e.g. on error)."""
+        if self._gdr_ct_handle is not None:
+            try:
+                asyncio.run(self._gdr_ct_handle.cleanup())
+            except Exception:
+                pass
+            self._gdr_ct_handle = None
 
     def _build_ct_transfer_config(self, config: dict):
         from dataclasses import fields
