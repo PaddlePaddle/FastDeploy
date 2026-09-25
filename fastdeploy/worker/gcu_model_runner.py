@@ -835,7 +835,7 @@ class GCUModelRunner(ModelRunnerBase):
             )
 
             post_process(
-                sampler_output=sampler_output,
+                sampler_or_pooler_output=sampler_output,
                 model_output=model_output_data,
                 share_inputs=self.share_inputs,
                 block_size=self.cache_config.block_size,
@@ -1071,7 +1071,7 @@ class GCUModelRunner(ModelRunnerBase):
         else:
             skip_save_output = False
         post_process(
-            sampler_output=sampler_output,
+            sampler_or_pooler_output=sampler_output,
             model_output=model_output_data,
             share_inputs=self.share_inputs,
             block_size=self.cache_config.block_size,
