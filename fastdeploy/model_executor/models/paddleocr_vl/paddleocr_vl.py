@@ -240,7 +240,7 @@ class PaddleOCRVLForConditionalGeneration(ModelForCasualLM):
         image_mask = ids_remove_padding == self.model.config.image_token_id
         image_token_num = image_mask.sum()
 
-        if image_token_num > 0:
+        if image_token_num > 0 and image_features is not None:
             input_embeddings[image_mask] = image_features.cast(self._dtype)
         return input_embeddings
 
