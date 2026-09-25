@@ -192,6 +192,7 @@ class CMakeBuild(build_ext):
             "-DPYTHON_VERSION=",
             f"-DPYTHON_INCLUDE_DIR={sys.prefix}/include/python{sys.version_info.major}.{sys.version_info.minor}",
             f"-DPYTHON_LIBRARY={sys.prefix}/lib/libpython{sys.version_info.major}.{sys.version_info.minor}.so",
+            f"-DDEVICE_TYPE={get_device_type()}",
         ]
         build_args = []
 
