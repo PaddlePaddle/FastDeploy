@@ -14,7 +14,7 @@ set(CMAKE_CXX_EXTENSIONS ON)
 set(CMAKE_BUILD_TYPE Release)
 
 set(CMAKE_CXX_COMPILER g++)
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Ofast -ffast-math -funroll-loops -march=native -std=c++11")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2 -Ofast -ffast-math -funroll-loops -march=x86-64-v2 -std=c++11")
 add_compile_options("-std=c++11")
 
 find_library(IBVERBS_LIBRARY ibverbs)
