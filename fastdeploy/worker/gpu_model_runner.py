@@ -887,6 +887,16 @@ class GPUModelRunner(ModelRunnerBase):
                             self.share_inputs["max_reply_lens"][idx : idx + 1, :] = -1
                             self.share_inputs["limit_think_status"][idx : idx + 1, :] = 0
 
+                if not isinstance(request.prompt_token_ids, (list, np.ndarray)):
+                    logger.error(
+                        f"Request {request.request_id} has invalid prompt_token_ids type: "
+                        f"{type(request.prompt_token_ids)}, expected list or np.ndarray. Aborting request."
+                    )
+                    async_set_value(self.share_inputs["stop_flags"][idx : idx + 1], True)
+                    async_set_value(self.share_inputs["seq_lens_this_time_buffer"][idx : idx + 1], 0)
+                    async_set_value(self.share_inputs["seq_lens_encoder"][idx : idx + 1], 0)
+                    continue
+
                 if isinstance(request.prompt_token_ids, np.ndarray):
                     prompt_token_ids = request.prompt_token_ids.tolist()
                 else:
