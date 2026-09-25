@@ -16,13 +16,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Dict, Optional
 
 import paddle
 from paddleformers.utils.log import logger
 
-from fastdeploy.config import FDConfig
+from fastdeploy.config import FDConfig, validate_thinking_token_sequences
 from fastdeploy.model_executor.logits_processor.base import LogitsProcessor
 
 
@@ -37,6 +37,11 @@ class _ThinkingState:
     stop_sentence_token_ids: Optional[list[int]] = None
     stop_sentence_pos: int = 0
     prompt_checked: bool = False
+    # Multi-token marker mode: partial-match buffers and forced-emission progress
+    start_buffer: list[int] = field(default_factory=list)
+    end_buffer: list[int] = field(default_factory=list)
+    forcing: bool = False
+    forcing_pos: int = 0
 
 
 class ThinkingBudgetLogitsProcessor(LogitsProcessor):
@@ -50,7 +55,11 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
         {"thinking_budget": <int>}
 
     Requires model_config to provide think_start_id and think_end_id. If any of
-    these are missing or invalid (-1), the processor will be disabled.
+    these are missing or invalid (-1), the processor falls back to multi-token
+    marker sequences from model_config.think_token_sequences (a dict with
+    required "start"/"end" sequence lists and a "forced_end" id list), which
+    supports tokenizers where <think>/</think> are not single vocab tokens.
+    Without either form of markers, the processor is disabled.
     """
 
     def __init__(self, fd_config: FDConfig) -> None:
@@ -62,7 +71,21 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
         self.think_start_token_id = think_start_id if isinstance(think_start_id, int) and think_start_id >= 0 else -1
         self.think_end_token_id = think_end_id if isinstance(think_end_id, int) and think_end_id >= 0 else -1
         self.line_break_token_id = line_break_id if isinstance(line_break_id, int) and line_break_id >= 0 else -1
-        self._enabled = self.think_start_token_id >= 0 and self.think_end_token_id >= 0
+        self._single_token_mode = self.think_start_token_id >= 0 and self.think_end_token_id >= 0
+        sequences = validate_thinking_token_sequences(
+            getattr(fd_config.model_config, "think_token_sequences", None), fd_config.model_config.vocab_size
+        )
+        self.think_start_sequences: tuple[tuple[int, ...], ...] = ()
+        self.think_end_sequences: tuple[tuple[int, ...], ...] = ()
+        self.think_forced_end_ids: list[int] = []
+        if sequences is not None:
+            if self._single_token_mode:
+                raise ValueError("Configure either single-token thinking markers or think_token_sequences, not both")
+            self.think_start_sequences = tuple(dict.fromkeys(tuple(sequence) for sequence in sequences["start"]))
+            self.think_end_sequences = tuple(dict.fromkeys(tuple(sequence) for sequence in sequences["end"]))
+            self.think_forced_end_ids = list(sequences["forced_end"])
+        self._sequence_mode = sequences is not None
+        self._enabled = self._single_token_mode or self._sequence_mode
         if not self._enabled:
             logger.warning(
                 "ThinkingBudgetLogitsProcessor disabled: missing token ids "
@@ -73,6 +96,106 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
         self._active_req_ids: list[str] = []
         self._active_budgets: list[int] = []
         self._active_slots: list[int] = []
+
+    def _resolve_thinking_budget(self, logit_proc_args, slot_id: int, share_inputs: dict) -> Optional[int]:
+        """Per-request thinking budget hook; model wrappers may override the source."""
+        thinking_budget = logit_proc_args.get("thinking_budget") if logit_proc_args else None
+        if thinking_budget is None or not isinstance(thinking_budget, int) or thinking_budget < 0:
+            return None
+        return thinking_budget
+
+    @staticmethod
+    def _buffer_match(buffer: list[int], sequences: tuple[tuple[int, ...], ...]) -> int:
+        """2 = buffer exactly matches a sequence, 1 = proper prefix, 0 = mismatch."""
+        is_prefix = False
+        for sequence in sequences:
+            if list(sequence[: len(buffer)]) == buffer:
+                if len(sequence) == len(buffer):
+                    return 2
+                is_prefix = True
+        return 1 if is_prefix else 0
+
+    def _consume_token_sequences(self, state: _ThinkingState, token_id: int) -> None:
+        """Advance the multi-token marker state machine by one token.
+
+        Tokens held in a prefix buffer are only counted as thinking content once
+        they are ruled out as marker candidates, mirroring single-token mode
+        where marker tokens never consume the budget.
+        """
+        if state.forcing:
+            forced_sequence = (state.stop_sentence_token_ids or []) + self.think_forced_end_ids
+            expected_token_id = forced_sequence[state.forcing_pos]
+            if token_id != expected_token_id:
+                raise RuntimeError(
+                    "Forced thinking-end token mismatch: " f"expected {expected_token_id}, received {token_id}"
+                )
+            state.forcing_pos += 1
+            if state.forcing_pos == len(forced_sequence):
+                state.forcing = False
+                state.forcing_pos = 0
+                state.ended = True
+                state.start_buffer.clear()
+                state.end_buffer.clear()
+            return
+        if state.started and not state.ended:
+            state.end_buffer.append(token_id)
+            while state.end_buffer:
+                status = self._buffer_match(state.end_buffer, self.think_end_sequences)
+                if status == 2:
+                    state.ended = True
+                    state.forcing = False
+                    state.forcing_pos = 0
+                    state.end_buffer.clear()
+                    state.start_buffer.clear()
+                    return
+                if status == 1:
+                    return
+                state.end_buffer.pop(0)
+                state.tokens_after_start += 1
+            return
+        state.start_buffer.append(token_id)
+        while state.start_buffer:
+            status = self._buffer_match(state.start_buffer, self.think_start_sequences)
+            if status == 2:
+                # Matches in both idle and ended phase, so a new thinking round
+                # after a natural end restarts the budget.
+                state.started = True
+                state.ended = False
+                state.tokens_after_start = 0
+                state.stop_sentence_pos = 0
+                state.forcing = False
+                state.forcing_pos = 0
+                state.start_buffer.clear()
+                state.end_buffer.clear()
+                return
+            if status == 1:
+                return
+            state.start_buffer.pop(0)
+
+    def _scan_prompt_state_sequences(self, state: _ThinkingState, prompt_slice: list) -> None:
+        """Replay the prompt through the sequence matcher; prompt tokens never
+        consume the budget, and a partial marker at the prompt tail stays buffered."""
+        for token_id in prompt_slice:
+            token_id = int(token_id)
+            if token_id >= 0:
+                self._consume_token_sequences(state, token_id)
+        state.tokens_after_start = 0
+        if prompt_slice:
+            state.last_token_id = int(prompt_slice[-1])
+
+    def _consume_decode_token_sequences(
+        self, state: _ThinkingState, last_token_id: int, current_step_idx: Optional[int]
+    ) -> None:
+        # Without step indices, repeated identical tokens cannot be told apart from
+        # duplicate update_state calls, so fall back to value-based dedup there.
+        if current_step_idx is None:
+            if state.forcing or last_token_id != state.last_token_id:
+                state.last_token_id = last_token_id
+                self._consume_token_sequences(state, last_token_id)
+        elif current_step_idx != state.last_step_idx:
+            state.last_step_idx = current_step_idx
+            state.last_token_id = last_token_id
+            self._consume_token_sequences(state, last_token_id)
 
     def _scan_prompt_state(self, prompt_slice: list[int]) -> tuple[bool, bool, int, Optional[int]]:
         started = False
@@ -112,17 +235,6 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
         self._active_budgets = []
         self._active_slots = []
 
-        active_req_ids = []
-        for req_id, stop_flag in zip(req_ids, stop_flags_list):
-            if stop_flag:
-                continue
-            if req_id:
-                active_req_ids.append(req_id)
-
-        inactive_req_ids = set(self._states.keys()) - set(active_req_ids)
-        for req_id in inactive_req_ids:
-            self._states.pop(req_id, None)
-
         candidate_slots = []
         candidate_req_ids = []
         candidate_args = []
@@ -133,14 +245,18 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
             if stop_flag or not req_id:
                 continue
 
-            thinking_budget = logit_proc_args.get("thinking_budget") if logit_proc_args else None
-            if thinking_budget is None or not isinstance(thinking_budget, int) or thinking_budget < 0:
+            thinking_budget = self._resolve_thinking_budget(logit_proc_args, slot_id, share_inputs)
+            if thinking_budget is None:
                 continue
 
             candidate_slots.append(slot_id)
             candidate_req_ids.append(req_id)
             candidate_args.append(logit_proc_args)
             candidate_budgets.append(thinking_budget)
+
+        inactive_req_ids = set(self._states) - set(candidate_req_ids)
+        for req_id in inactive_req_ids:
+            del self._states[req_id]
 
         if not candidate_slots:
             return
@@ -176,6 +292,7 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
             thinking_budget = candidate_budgets[idx]
 
             state = self._states.setdefault(req_id, _ThinkingState())
+            prompt_initialized = False
             if logit_proc_args:
                 stop_sentence_token_ids = logit_proc_args.get("think_stop_sentence_token_ids")
                 if isinstance(stop_sentence_token_ids, list) and all(
@@ -202,6 +319,7 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
                     if isinstance(prompt_last_token_id, int) and prompt_last_token_id >= 0:
                         state.last_token_id = prompt_last_token_id
                     state.prompt_checked = True
+                    prompt_initialized = True
 
             current_step_idx = step_idx_by_slot.get(slot_id)
             state.current_step_idx = current_step_idx
@@ -221,17 +339,23 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
                         prompt_slice = list(prompt_slice)
                     if prompt_ids is None:
                         prompt_slice = [int(token_id) for token_id in prompt_slice if int(token_id) >= 0]
-                    prompt_started, prompt_ended, prompt_tokens_after_start, prompt_last_token_id = (
-                        self._scan_prompt_state(prompt_slice)
-                    )
-                    if prompt_started:
-                        state.started = True
-                        state.ended = prompt_ended
-                        state.tokens_after_start = prompt_tokens_after_start
-                        state.last_token_id = prompt_last_token_id
+                    if self._sequence_mode:
+                        self._scan_prompt_state_sequences(state, prompt_slice)
                         if current_step_idx is not None and state.last_step_idx is None:
                             state.last_step_idx = current_step_idx
+                    else:
+                        prompt_started, prompt_ended, prompt_tokens_after_start, prompt_last_token_id = (
+                            self._scan_prompt_state(prompt_slice)
+                        )
+                        if prompt_started:
+                            state.started = True
+                            state.ended = prompt_ended
+                            state.tokens_after_start = prompt_tokens_after_start
+                            state.last_token_id = prompt_last_token_id
+                            if current_step_idx is not None and state.last_step_idx is None:
+                                state.last_step_idx = current_step_idx
                     state.prompt_checked = True
+                    prompt_initialized = True
 
             last_token_id = next_token_by_slot.get(slot_id)
 
@@ -247,8 +371,10 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
                     else:
                         last_token_id = int(slot_pre_ids[-1].item())
 
-            if last_token_id is not None and last_token_id >= 0:
-                if not state.started and last_token_id == self.think_start_token_id:
+            if last_token_id is not None and last_token_id >= 0 and not (self._sequence_mode and prompt_initialized):
+                if self._sequence_mode:
+                    self._consume_decode_token_sequences(state, last_token_id, current_step_idx)
+                elif not state.started and last_token_id == self.think_start_token_id:
                     state.started = True
                     state.tokens_after_start = 0
                     state.last_token_id = last_token_id
@@ -259,7 +385,7 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
                         self._active_budgets.append(thinking_budget)
                         self._active_slots.append(slot_id)
                     continue
-                if current_step_idx is None:
+                elif current_step_idx is None:
                     if last_token_id != state.last_token_id:
                         state.last_token_id = last_token_id
                         if state.started and not state.ended:
@@ -301,6 +427,21 @@ class ThinkingBudgetLogitsProcessor(LogitsProcessor):
             slot_id = self._active_slots[active_idx]
             stop_sentence_token_ids = state.stop_sentence_token_ids or []
             stop_sentence_len = len(stop_sentence_token_ids)
+            if self._sequence_mode:
+                if not state.forcing:
+                    if state.tokens_after_start < max(budget - stop_sentence_len, 0):
+                        continue
+                    state.forcing = True
+                    state.forcing_pos = 0
+                forced_sequence = stop_sentence_token_ids + self.think_forced_end_ids
+                force_token_id = forced_sequence[state.forcing_pos]
+                if force_token_id >= logits.shape[1]:
+                    raise ValueError(
+                        f"Forced thinking-end token {force_token_id} exceeds vocabulary size {logits.shape[1]}"
+                    )
+                logits[slot_id, :] = -float("inf")
+                logits[slot_id, force_token_id] = 0.0
+                continue
             if stop_sentence_len > 0:
                 budget_threshold = budget - stop_sentence_len
                 if budget_threshold < 0:

@@ -76,8 +76,12 @@ class CUDAPlatform(Platform):
         elif selected_backend == _Backend.DECODE_UNIFIED_ATTN:
             logger.info("Using DECODE UNIFIED ATTN backend.")
             return "fastdeploy.model_executor.layers.attention.DecodeUnifiedAttentionBackend"
+        elif selected_backend == _Backend.INFLLMV2_ATTN:
+            logger.info("Using INFLLMV2 ATTN backend.")
+            return "fastdeploy.model_executor.layers.attention.InfLLMV2AttentionBackend"
         else:
             raise ValueError(
                 "Invalid attention backend you specified.\n"
-                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN, DECODE_UNIFIED_ATTN, FLASH_ATTN] in cuda place."
+                "Now only support [NATIVE_ATTN, MLA_ATTN, APPEND_ATTN, DECODE_UNIFIED_ATTN, "
+                "INFLLMV2_ATTN, FLASH_ATTN] in cuda place."
             )

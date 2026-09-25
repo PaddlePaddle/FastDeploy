@@ -716,6 +716,7 @@ class PaddleDisWorkerProc:
         """Load weights and create model"""
 
         self.worker.load_model()
+        self.worker.model_runner.register_model_logits_processors()
         loaded_model_signal_data = np.zeros(shape=[1], dtype=np.int32)
         self.loaded_model_signal = IPCSignal(
             name="loaded_model_signal",
@@ -886,6 +887,7 @@ def parse_args():
     parser.add_argument("--ori_vocab_size", type=int, default=None)
     parser.add_argument("--think_start_id", type=int, default=-1)
     parser.add_argument("--think_end_id", type=int, default=-1)
+    parser.add_argument("--think_token_sequences", type=json.loads, default=None)
     parser.add_argument("--image_patch_id", type=int, default=-1)
     parser.add_argument("--line_break_id", type=int, default=-1)
     parser.add_argument("--think_truncate_prompt_ids", type=json.loads, default=[])

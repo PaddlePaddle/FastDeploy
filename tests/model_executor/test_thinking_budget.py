@@ -129,6 +129,7 @@ class TestThinkingBudgetLogitsProcessor(unittest.TestCase):
         mock_model_config.think_start_id = THINKING_START_TOKEN_ID
         mock_model_config.think_end_id = THINKING_END_TOKEN_ID
         mock_model_config.line_break_id = NEW_LINE_TOKEN_ID
+        mock_model_config.think_token_sequences = None
 
         cache_config = CacheConfig(args_dict_from_engine_args)
         parallel_config = ParallelConfig(args_dict_from_engine_args)
@@ -670,6 +671,300 @@ class TestThinkingBudgetLogitsProcessor(unittest.TestCase):
         # Req 3: budget 1 reached after one generated token, should now force THINKING_END.
         self.assertEqual(processed_batch_logits[2, THINKING_END_TOKEN_ID].item(), 0.0)
         self.assertEqual(paddle.argmax(processed_batch_logits[2], axis=-1).item(), THINKING_END_TOKEN_ID)
+
+
+class TestThinkingBudgetTokenSequences(unittest.TestCase):
+    """Multi-token marker mode for tokenizers where <think>/</think> are sequences."""
+
+    START_SEQUENCES = [[10, 11], [12, 11]]
+    END_SEQUENCES = [[20, 11], [21, 11]]
+    FORCED_END_IDS = [30, 21, 11, 31]
+    SEQ_VOCAB_SIZE = 40
+
+    def setUp(self):
+        engine_args = EngineArgs(max_num_seqs=4)
+        args_dict_from_engine_args = asdict(engine_args)
+
+        self._fdconfig_patches = [
+            patch.object(FDConfig, "read_from_config", return_value=None),
+            patch.object(FDConfig, "postprocess", return_value=None),
+            patch.object(FDConfig, "init_pd_info", return_value=None),
+            patch.object(FDConfig, "check", return_value=None),
+        ]
+        for patcher in self._fdconfig_patches:
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+        mock_model_config = MagicMock()
+        mock_model_config.dtype = "float32"
+        mock_model_config.vocab_size = self.SEQ_VOCAB_SIZE
+        mock_model_config.paddle_dtype = paddle.float32
+        mock_model_config.max_model_len = 512
+        mock_model_config.think_start_id = -1
+        mock_model_config.think_end_id = -1
+        mock_model_config.line_break_id = -1
+        mock_model_config.think_token_sequences = {
+            "start": self.START_SEQUENCES,
+            "end": self.END_SEQUENCES,
+            "forced_end": self.FORCED_END_IDS,
+        }
+
+        self.fd_config = FDConfig(
+            model_config=mock_model_config,
+            cache_config=CacheConfig(args_dict_from_engine_args),
+            parallel_config=ParallelConfig(args_dict_from_engine_args),
+            speculative_config=SpeculativeConfig(args_dict_from_engine_args),
+            scheduler_config=SchedulerConfig(args_dict_from_engine_args),
+            load_config=LoadConfig(args_dict_from_engine_args),
+            graph_opt_config=GraphOptimizationConfig(args_dict_from_engine_args),
+            structured_outputs_config=StructuredOutputsConfig(args_dict_from_engine_args),
+            router_config=MagicMock(),
+            test_mode=True,
+        )
+
+    def _get_initial_logits(self, batch_size):
+        logits = paddle.full((batch_size, self.SEQ_VOCAB_SIZE), -10.0, dtype=paddle.float32)
+        logits[:, 0] = 0.0
+        return logits
+
+    def _make_processor(self):
+        return ThinkingBudgetLogitsProcessor(self.fd_config)
+
+    def test_sequence_mode_enabled(self):
+        processor = self._make_processor()
+        self.assertTrue(processor._enabled)
+        self.assertTrue(processor._sequence_mode)
+        self.assertEqual(processor.think_start_sequences, ((10, 11), (12, 11)))
+        self.assertEqual(processor.think_end_sequences, ((20, 11), (21, 11)))
+        self.assertEqual(processor.think_forced_end_ids, [30, 21, 11, 31])
+
+    def test_sequence_mode_rejects_non_dict_config(self):
+        self.fd_config.model_config.think_token_sequences = []
+
+        with self.assertRaisesRegex(ValueError, "must be a dict"):
+            self._make_processor()
+
+    def test_sequence_mode_requires_exact_keys(self):
+        self.fd_config.model_config.think_token_sequences = {
+            "start": self.START_SEQUENCES,
+            "end": self.END_SEQUENCES,
+        }
+
+        with self.assertRaisesRegex(ValueError, "exactly start, end, and forced_end"):
+            self._make_processor()
+
+    def test_sequence_mode_rejects_invalid_and_out_of_vocab_ids(self):
+        self.fd_config.model_config.think_token_sequences = {
+            "start": [[10, -11]],
+            "end": self.END_SEQUENCES,
+            "forced_end": self.FORCED_END_IDS,
+        }
+        with self.assertRaisesRegex(ValueError, "vocabulary range"):
+            self._make_processor()
+
+        self.fd_config.model_config.think_token_sequences = {
+            "start": self.START_SEQUENCES,
+            "end": self.END_SEQUENCES,
+            "forced_end": [self.SEQ_VOCAB_SIZE],
+        }
+        with self.assertRaisesRegex(ValueError, "vocabulary range"):
+            self._make_processor()
+
+    def test_sequence_prompt_scan_detects_contextual_start_variant(self):
+        req_id = "req_seq_prompt"
+        prompt_ids = [1, 12, 11, 5]
+        sampling_params = SamplingParams(logits_processors_args={"thinking_budget": 4})
+        mock_req = MockRequest(req_id, prompt_ids, sampling_params)
+
+        mock_runner = MockModelRunner(self.fd_config, max_num_seqs=1)
+        mock_runner.update_request_state(0, mock_req, pre_id=prompt_ids[-1])
+
+        processor = self._make_processor()
+        processor.update_state(mock_runner.share_inputs)
+
+        self.assertTrue(processor._states[req_id].started)
+        self.assertFalse(processor._states[req_id].ended)
+        self.assertEqual(processor._states[req_id].tokens_after_start, 0)
+
+    def test_sequence_natural_end_excludes_marker_tokens_from_budget(self):
+        req_id = "req_seq_natural_end"
+        prompt_ids = [10, 11]
+        sampling_params = SamplingParams(logits_processors_args={"thinking_budget": 8})
+        mock_req = MockRequest(req_id, prompt_ids, sampling_params)
+
+        mock_runner = MockModelRunner(self.fd_config, max_num_seqs=1)
+        mock_runner.update_request_state(0, mock_req, pre_id=prompt_ids[-1])
+
+        processor = self._make_processor()
+        processor.update_state(mock_runner.share_inputs)
+        self.assertTrue(processor._states[req_id].started)
+
+        for token in (5, 20, 11):
+            mock_runner.update_request_state(0, mock_req, pre_id=token)
+            processor.update_state(mock_runner.share_inputs)
+
+        state = processor._states[req_id]
+        self.assertTrue(state.ended)
+        # Only the payload token counts; the two end-marker tokens do not.
+        self.assertEqual(state.tokens_after_start, 1)
+
+        logits = self._get_initial_logits(1)
+        processor.update_state(mock_runner.share_inputs)
+        processed_logits = processor.apply(logits)
+        self.assertEqual(paddle.argmax(processed_logits, axis=-1).item(), 0)
+
+    def test_sequence_budget_forces_full_forced_end_sequence(self):
+        req_id = "req_seq_budget"
+        prompt_ids = [10, 11]
+        sampling_params = SamplingParams(logits_processors_args={"thinking_budget": 2})
+        mock_req = MockRequest(req_id, prompt_ids, sampling_params)
+
+        mock_runner = MockModelRunner(self.fd_config, max_num_seqs=1)
+        mock_runner.update_request_state(0, mock_req, pre_id=prompt_ids[-1])
+
+        processor = self._make_processor()
+        processor.update_state(mock_runner.share_inputs)
+
+        for token in (5, 6):
+            mock_runner.update_request_state(0, mock_req, pre_id=token)
+            processor.update_state(mock_runner.share_inputs)
+
+        forced_emissions = []
+        for _ in self.FORCED_END_IDS:
+            logits = self._get_initial_logits(1)
+            processor.update_state(mock_runner.share_inputs)
+            processed_logits = processor.apply(logits)
+            next_token = mock_runner.generate_next_token(processed_logits)[0]
+            forced_emissions.append(next_token)
+            mock_runner.update_request_state(0, mock_req, pre_id=next_token)
+
+        self.assertEqual(forced_emissions, self.FORCED_END_IDS)
+
+        processor.update_state(mock_runner.share_inputs)
+        self.assertTrue(processor._states[req_id].ended)
+        logits = self._get_initial_logits(1)
+        processor.update_state(mock_runner.share_inputs)
+        processed_logits = processor.apply(logits)
+        self.assertEqual(paddle.argmax(processed_logits, axis=-1).item(), 0)
+
+    def test_sequence_decode_time_start_detection(self):
+        req_id = "req_seq_decode_start"
+        prompt_ids = [1, 2, 3]
+        sampling_params = SamplingParams(logits_processors_args={"thinking_budget": 2})
+        mock_req = MockRequest(req_id, prompt_ids, sampling_params)
+
+        mock_runner = MockModelRunner(self.fd_config, max_num_seqs=1)
+        mock_runner.update_request_state(0, mock_req, pre_id=prompt_ids[-1], set_next_token=False)
+
+        processor = self._make_processor()
+        processor.update_state(mock_runner.share_inputs)
+        self.assertFalse(processor._states[req_id].started)
+
+        mock_runner.update_request_state(0, mock_req, pre_id=12)
+        processor.update_state(mock_runner.share_inputs)
+        self.assertFalse(processor._states[req_id].started)
+
+        mock_runner.update_request_state(0, mock_req, pre_id=11)
+        processor.update_state(mock_runner.share_inputs)
+        self.assertTrue(processor._states[req_id].started)
+        self.assertEqual(processor._states[req_id].tokens_after_start, 0)
+
+    def test_sequence_prompt_tail_prefix_is_not_consumed_twice(self):
+        self.fd_config.model_config.think_token_sequences = {
+            "start": [[10, 10]],
+            "end": self.END_SEQUENCES,
+            "forced_end": self.FORCED_END_IDS,
+        }
+        req_id = "req_seq_prompt_prefix"
+        sampling_params = SamplingParams(logits_processors_args={"thinking_budget": 2})
+        mock_req = MockRequest(req_id, [10], sampling_params)
+        mock_runner = MockModelRunner(self.fd_config, max_num_seqs=1)
+        mock_runner.update_request_state(0, mock_req, pre_id=10)
+        processor = self._make_processor()
+
+        processor.update_state(mock_runner.share_inputs)
+
+        self.assertFalse(processor._states[req_id].started)
+        self.assertEqual(processor._states[req_id].start_buffer, [10])
+
+        mock_runner.update_request_state(0, mock_req, pre_id=10)
+        processor.update_state(mock_runner.share_inputs)
+        self.assertTrue(processor._states[req_id].started)
+
+    def test_sequence_forcing_rejects_sampled_token_mismatch(self):
+        req_id = "req_seq_force_mismatch"
+        sampling_params = SamplingParams(logits_processors_args={"thinking_budget": 0})
+        mock_req = MockRequest(req_id, [10, 11], sampling_params)
+        mock_runner = MockModelRunner(self.fd_config, max_num_seqs=1)
+        mock_runner.update_request_state(0, mock_req, pre_id=11)
+        processor = self._make_processor()
+        processor.update_state(mock_runner.share_inputs)
+        processor.apply(self._get_initial_logits(1))
+
+        mock_runner.update_request_state(0, mock_req, pre_id=9)
+
+        with self.assertRaisesRegex(RuntimeError, "expected 30, received 9"):
+            processor.update_state(mock_runner.share_inputs)
+
+    def test_sequence_stop_sentence_then_forced_end(self):
+        req_id = "req_seq_stop_sentence"
+        prompt_ids = [10, 11]
+        sampling_params = SamplingParams(
+            logits_processors_args={
+                "thinking_budget": 3,
+                "think_stop_sentence_token_ids": [7, 8],
+            }
+        )
+        mock_req = MockRequest(req_id, prompt_ids, sampling_params)
+
+        mock_runner = MockModelRunner(self.fd_config, max_num_seqs=1)
+        mock_runner.update_request_state(0, mock_req, pre_id=prompt_ids[-1])
+
+        processor = self._make_processor()
+        processor.update_state(mock_runner.share_inputs)
+
+        mock_runner.update_request_state(0, mock_req, pre_id=5)
+        processor.update_state(mock_runner.share_inputs)
+
+        expected = [7, 8] + self.FORCED_END_IDS
+        for expected_token in expected:
+            logits = self._get_initial_logits(1)
+            processor.update_state(mock_runner.share_inputs)
+            processed_logits = processor.apply(logits)
+            next_token = mock_runner.generate_next_token(processed_logits)[0]
+            self.assertEqual(next_token, expected_token)
+            mock_runner.update_request_state(0, mock_req, pre_id=next_token)
+
+        processor.update_state(mock_runner.share_inputs)
+        self.assertTrue(processor._states[req_id].ended)
+
+    def test_sequence_new_round_resets_stop_sentence_progress(self):
+        req_id = "req_seq_stop_sentence_restart"
+        sampling_params = SamplingParams(
+            logits_processors_args={
+                "thinking_budget": 1,
+                "think_stop_sentence_token_ids": [7, 8],
+            }
+        )
+        mock_req = MockRequest(req_id, [10, 11], sampling_params)
+        mock_runner = MockModelRunner(self.fd_config, max_num_seqs=1)
+        mock_runner.update_request_state(0, mock_req, pre_id=11)
+        processor = self._make_processor()
+        processor.update_state(mock_runner.share_inputs)
+
+        for expected_token in [7, 8] + self.FORCED_END_IDS:
+            logits = processor.apply(self._get_initial_logits(1))
+            next_token = mock_runner.generate_next_token(logits)[0]
+            self.assertEqual(next_token, expected_token)
+            mock_runner.update_request_state(0, mock_req, pre_id=next_token)
+            processor.update_state(mock_runner.share_inputs)
+
+        for token in (12, 11):
+            mock_runner.update_request_state(0, mock_req, pre_id=token)
+            processor.update_state(mock_runner.share_inputs)
+
+        logits = processor.apply(self._get_initial_logits(1))
+        self.assertEqual(mock_runner.generate_next_token(logits)[0], 7)
 
 
 class DummyTokenizerForTextProcessor:

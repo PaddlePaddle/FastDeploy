@@ -13,15 +13,27 @@
 
 ## 工作原理
 
-1. **请求侧预计算（DataProcessor）**：当请求中包含 `thinking_budget`，会基于 prompt 的 token ids 计算是否已进入思考段、是否已结束，以及已有的思考长度。
+1. **请求侧预计算（DataProcessor）**：当请求中包含 `thinking_budget`，会基于 prompt 的 token ids 计算是否已进入思考段、是否已结束，以及已有的思考长度。单token标记可由 `DataProcessor` 预计算；多 token 标记由logits processor回放，以保留未完成的标记前缀。
 2. **每步更新**：解码过程中跟踪 `last_token_id` 与 `tokens_after_start`。
 3. **预算约束**：达到预算后，默认直接强制 `</think>`；如果配置了 `think_stop_sentence`，则先逐 token
    强制输出该文案，再输出 `</think>`。
 
 ## 前置要求
 
-- 模型需提供有效的 `think_start_id`、`think_end_id`（来自 `ModelConfig`）。
-- 若其中任意 id 无效，处理器会禁用，`thinking_budget` 不生效。
+- 模型必须提供有效的 `think_start_id`、`think_end_id`，或完整的 `think_token_sequences` 配置。
+- 两种模式都未配置时，通用处理器禁用，`thinking_budget` 不生效；显式声明多token marker能力的模型若推导失败，则启动直接失败。
+
+### 多 token 思考标记（`think_token_sequences`）
+
+部分模型（如 MiniCPM4.1）的 tokenizer 词表中没有单 token 的 `<think>`/`</think>`，
+思考标记会被切成多个 token，且序列随上下文不同（词首与文中变体不同）。此类模型显式提供
+tokenizer 序列构建 hook；引擎在启动时调用该 hook，并通过
+`ModelConfig.think_token_sequences`（结构：`{"start": [[...]], "end": [[...]], "forced_end": [...]}`）
+传递给处理器：
+
+- 思考段检测按 token 序列匹配，序列前缀不计入预算；
+- 预算达到后逐 token 强制输出必填的 `forced_end` 序列，并在下一 decode step 校验实际 token；
+- 是否推导由显式模型 hook 决定，而不是宽泛的 `REASONING` 类别；构建或配置错误会直接阻止启动。
 
 ## 请求参数
 
