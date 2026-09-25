@@ -497,6 +497,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.has_cache_scale = True
         self.manager.swap_space_ready_signal = DummySignal()
         self.manager.value_cache_shape = [2, 1, 1, 1]
+        self.manager.cache_scale_shape = [self.manager.num_gpu_blocks, self.manager.head_num, self.manager.block_size]
 
         with (
             patch(
@@ -663,6 +664,7 @@ class TestCacheTransferManager(unittest.TestCase):
         self.manager.head_dim = 2
         self.manager.num_layers = 1
         self.manager.num_extra_layers = 0
+        self.manager.cache_scale_shape = [self.manager.num_gpu_blocks, self.manager.head_num, self.manager.block_size]
 
         with patch("fastdeploy.cache_manager.cache_transfer_manager.cuda_host_alloc", side_effect=[10, 20, 30, 40]):
             self.manager._init_storage_buffer(args)
