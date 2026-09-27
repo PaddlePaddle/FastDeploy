@@ -243,6 +243,28 @@ class LLMEngine:
         """
         return self.engine.scheduler.get_results()
 
+    def _get_generated_tokens(self, req_id):
+        """
+        Yield RequestOutput objects for a specific request until finished.
+
+        This function is called by generate() to stream results for a single
+        request. It repeatedly calls _get_generated_result() and filters
+        by the given req_id.
+
+        Args:
+            req_id: The request ID to yield results for.
+
+        Yields:
+            RequestOutput: Each partial or final result for the request.
+        """
+        while True:
+            results = self._get_generated_result()
+            if req_id in results:
+                for output in results[req_id]:
+                    yield output
+                    if output.finished:
+                        return
+
     # _insert_task_to_worker moved to CommonEngine
 
     def _has_guided_input(self, request):
