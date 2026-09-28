@@ -935,6 +935,35 @@ class ResourceManagerV1(ResourceManager):
                     return error_msg
             return result_list
 
+        def check_result_shape(features):
+            """Check if all features in the result list have consistent shape dimension.
+            Valid: all 2D or all 4D. Invalid: mixed 2D and 4D, or any other dimension.
+            Returns True if valid, otherwise sets error and returns None.
+            """
+            dims = set()
+            for i, feature in enumerate(features):
+                if not isinstance(feature, np.ndarray) or len(feature.shape) not in (2, 4):
+                    shape_info = feature.shape if isinstance(feature, np.ndarray) else type(feature).__name__
+                    error_msg = (
+                        f"request {request.request_id} feature shape check failed: "
+                        f"feature[{i}] has shape {shape_info}, expected 2D or 4D"
+                    )
+                    llm_logger.error(error_msg)
+                    request.error_message = error_msg
+                    request.error_code = 530
+                    return None
+                dims.add(len(feature.shape))
+            if len(dims) > 1:
+                error_msg = (
+                    f"request {request.request_id} feature shape check failed: "
+                    f"mixed dimensions {dims} in feature list, expected all 2D or all 4D"
+                )
+                llm_logger.error(error_msg)
+                request.error_message = error_msg
+                request.error_code = 530
+                return None
+            return True
+
         if not self._has_features_info(request):
             return None
 
@@ -948,12 +977,16 @@ class ResourceManagerV1(ResourceManager):
                 request.error_message = result
                 request.error_code = 530
                 return None
+            if check_result_shape(result) is None:
+                return None
             inputs["video_features"] = result
         if inputs.get("image_feature_urls") is not None and len(inputs["image_feature_urls"]) > 0:
             result = download_bos_features(self.bos_client, inputs["image_feature_urls"])
             if isinstance(result, str):  # download error
                 request.error_message = result
                 request.error_code = 530
+                return None
+            if check_result_shape(result) is None:
                 return None
             inputs["image_features"] = result
         if inputs.get("audio_feature_urls") is not None and len(inputs["audio_feature_urls"]) > 0:

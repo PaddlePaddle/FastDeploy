@@ -157,6 +157,80 @@ class TestResourceManagerV1(unittest.TestCase):
         )
         self.assertEqual(self.request.error_code, 530)
 
+    def test_check_result_shape_all_2d_success(self):
+        """Test check_result_shape passes when all features are 2D"""
+        mock_client = MagicMock()
+        mock_client.get_object_as_string.side_effect = [
+            pickle.dumps(np.array([[1, 2, 3]], dtype=np.float32)),
+            pickle.dumps(np.array([[4, 5, 6]], dtype=np.float32)),
+        ]
+
+        self.request.multimodal_inputs = {
+            "video_feature_urls": ["bos://bucket-name/path/to/obj1", "bos://bucket-name/path/to/obj2"]
+        }
+
+        self.manager.bos_client = mock_client
+        result = self.manager._download_features(self.request)
+        self.assertIsNone(result)
+        self.assertIn("video_features", self.request.multimodal_inputs)
+        self.assertEqual(len(self.request.multimodal_inputs["video_features"]), 2)
+        self.assertFalse(hasattr(self.request, "error_code") and self.request.error_code == 530)
+
+    def test_check_result_shape_all_4d_success(self):
+        """Test check_result_shape passes when all features are 4D"""
+        mock_client = MagicMock()
+        mock_client.get_object_as_string.side_effect = [
+            pickle.dumps(np.ones((1, 3, 224, 224), dtype=np.float32)),
+            pickle.dumps(np.ones((2, 3, 112, 112), dtype=np.float32)),
+        ]
+
+        self.request.multimodal_inputs = {
+            "image_feature_urls": ["bos://bucket-name/path/to/obj1", "bos://bucket-name/path/to/obj2"]
+        }
+
+        self.manager.bos_client = mock_client
+        result = self.manager._download_features(self.request)
+        self.assertIsNone(result)
+        self.assertIn("image_features", self.request.multimodal_inputs)
+        self.assertEqual(len(self.request.multimodal_inputs["image_features"]), 2)
+
+    def test_check_result_shape_mixed_2d_4d_fails(self):
+        """Test check_result_shape fails when 2D and 4D features are mixed"""
+        mock_client = MagicMock()
+        mock_client.get_object_as_string.side_effect = [
+            pickle.dumps(np.array([[1, 2, 3]], dtype=np.float32)),           # 2D
+            pickle.dumps(np.ones((1, 3, 224, 224), dtype=np.float32)),       # 4D
+        ]
+
+        self.request.multimodal_inputs = {
+            "video_feature_urls": ["bos://bucket-name/path/to/obj1", "bos://bucket-name/path/to/obj2"]
+        }
+
+        self.manager.bos_client = mock_client
+        result = self.manager._download_features(self.request)
+        self.assertIsNone(result)
+        self.assertIn("feature shape check failed", self.request.error_message)
+        self.assertIn("mixed dimensions", self.request.error_message)
+        self.assertEqual(self.request.error_code, 530)
+
+    def test_check_result_shape_1d_fails(self):
+        """Test check_result_shape fails when feature is 1D"""
+        mock_client = MagicMock()
+        mock_client.get_object_as_string.side_effect = [
+            pickle.dumps(np.array([1, 2, 3], dtype=np.float32)),             # 1D
+        ]
+
+        self.request.multimodal_inputs = {
+            "video_feature_urls": ["bos://bucket-name/path/to/obj1"]
+        }
+
+        self.manager.bos_client = mock_client
+        result = self.manager._download_features(self.request)
+        self.assertIsNone(result)
+        self.assertIn("feature shape check failed", self.request.error_message)
+        self.assertIn("expected 2D or 4D", self.request.error_message)
+        self.assertEqual(self.request.error_code, 530)
+
     def test_download_features_retry(self):
         """Test image feature download with error"""
         mock_client = MagicMock()
