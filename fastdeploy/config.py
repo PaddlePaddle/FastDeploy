@@ -2006,6 +2006,10 @@ class FDConfig:
                 self.speculative_config.num_speculative_tokens = 1
                 self.speculative_config.num_model_steps = 1
 
+        # Adjustment RoutingReplayConfig
+        if self.routing_replay_config is not None and self.routing_replay_config.enable_routing_replay:
+            assert self.cache_config.swap_space is None, "RolloutRoutingReplay can not enable with cpu cache!"
+
         if self.scheduler_config.splitwise_role == "mixed":
             self._disable_sequence_parallel_moe_if_needed("Mixed")
             self.model_config.moe_phase = MoEPhase(phase="prefill")
